@@ -15,7 +15,7 @@
  *  - A higher-priority requirement enqueued behind a lower one runs FIRST
  *    (the queue re-sorts on every enqueue; only an explicit release aborts
  *    in-flight foreground scheduler work).
- *  - `release()` removes queued work or aborts an active foreground drain;
+ *  - `release()` removes queued work or aborts an active foreground execution;
  *    either way `ready` resolves `{ action: 'released' }`.
  *
  * Query-shaped requirements over TARGETED collections without ids are caller
@@ -45,11 +45,11 @@ import {
 	seedOrderSchedulerTasks,
 	seedTargetedOrderSchedulerTask,
 } from './scheduler/rx-order-scheduler-task-seeder';
-import { seedSearchSchedulerTask } from './scheduler/rx-scheduler-search-task-seeder';
 import { parseOrderBrowserSchedulerDescriptor } from './scheduler/order-browser-scheduler-descriptor';
 import {
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	runEngineSchedulerDrain,
+	runEngineSchedulerTask,
 	type SchedulerDrainDatabase,
 } from './scheduler/engine-scheduler-drain';
 
@@ -58,11 +58,12 @@ import type { EngineSourceFetcher } from './change-signal/change-signal-source';
 import type { RxCollection, RxDatabase } from 'rxdb';
 import type { PersistedSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
 import type { LocalCoverage } from './local-coverage/local-coverage';
+import type { FetchTask } from './scheduler/replication-policy';
 
 const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
 
 export type EngineRequirement = {
-	/** Caller-chosen id (diagnostics only — requirements are not deduped here). */
+	/** Caller-chosen id (diagnostics only; concurrent identical searches coalesce regardless of id). */
 	id: string;
 	collection: SyncCollectionName;
 	/**
@@ -72,8 +73,8 @@ export type EngineRequirement = {
 	 * own the wire grammar (`products:search:<enc>` vs `customers:search=<enc>:limit=<n>`,
 	 * which diverge per collection). Keeping it a separate kind holds that grammar
 	 * behind the public door — the caller declares `{ collection, kind:'search', term }`
-	 * and never constructs a queryKey — and mirrors the existing per-kind branching
-	 * in executeOne, routing to the SAME scheduler search tasks the drain executes.
+	 * and never constructs a queryKey. The engine constructs the SAME in-memory task
+	 * shape while invoking the registered scheduler fetcher directly.
 	 */
 	kind: 'targeted-records' | 'query' | 'refresh' | 'search';
 	/** Required for 'targeted-records'. */
@@ -121,11 +122,17 @@ type QueuedRequirement = {
 	requirement: EngineRequirement;
 	priority: number;
 	seq: number;
-	resolve: (outcome: CoverageOutcome) => void;
-	reject: (error: unknown) => void;
+	subscribers: Set<RequirementSubscriber>;
+	searchDedupeKey: string | null;
 	released: boolean;
 	started: boolean;
 	abortController: AbortController;
+};
+
+type RequirementSubscriber = {
+	resolve: (outcome: CoverageOutcome) => void;
+	reject: (error: unknown) => void;
+	released: boolean;
 };
 
 export type RequirePlane = {
@@ -134,8 +141,19 @@ export type RequirePlane = {
 
 export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const queue: QueuedRequirement[] = [];
+	const activeSearches = new Map<string, QueuedRequirement>();
 	let seq = 0;
 	let running = false;
+	const defaultSearchLimit = 25;
+	const searchDedupeKey = (requirement: EngineRequirement): string | null =>
+		requirement.kind === 'search'
+			? `${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.limit ?? defaultSearchLimit}`
+			: null;
+	const forgetSearch = (item: QueuedRequirement): void => {
+		if (item.searchDedupeKey && activeSearches.get(item.searchDedupeKey) === item) {
+			activeSearches.delete(item.searchDedupeKey);
+		}
+	};
 	const progressObserver = (requirement: EngineRequirement) => {
 		let documents = 0;
 		let requests = 0;
@@ -357,9 +375,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			}
 
 			if (item.requirement.kind === 'search') {
-				// Products/customers search: seed the SAME `products:search:` / `customers:search=…:limit=…`
-				// scheduler task the drain already executes, drain it, resolve ready on completion. The
-				// engine owns the wire grammar (rxSchedulerSearchTaskSeeder); the caller passes a raw term.
+				// Products/customers search is UI-anchored (#473): construct the same FetchTask shape
+				// in memory and invoke only its registered fetcher. It never enters durable scheduler
+				// state, so a periodic drain cannot reclaim it after the declarers release it.
 				const searchCollection = item.requirement.collection;
 				if (searchCollection !== 'products' && searchCollection !== 'customers') {
 					throw new Error(
@@ -370,57 +388,46 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				if (term.length === 0) {
 					throw new Error("require: 'search' needs a non-empty term");
 				}
-				let drainResult = emptyDrainResult();
-				let skippedActive = false;
+				const limit = item.requirement.limit ?? defaultSearchLimit;
+				if (!Number.isSafeInteger(limit) || limit <= 0) {
+					throw new Error("require: 'search' limit must be a positive integer");
+				}
+				const encodedTerm = encodeURIComponent(term);
+				const queryKey =
+					searchCollection === 'products'
+						? `products:search:${encodedTerm}`
+						: `customers:search=${encodedTerm}:limit=${limit}`;
+				const task: FetchTask = {
+					id: `${queryKey}:windowed`,
+					requirementId: item.requirement.id,
+					collection: searchCollection,
+					queryKey,
+					limit,
+					priority: item.priority,
+					mode: 'windowed',
+				};
+				let result: Awaited<ReturnType<typeof runEngineSchedulerTask>> | undefined;
 				const applied = await bound.guardWrite(async () => {
-					const seedResult = await seedSearchSchedulerTask({
-						collection: searchCollection,
-						term,
-						priority: item.priority,
-						limit: item.requirement.limit,
-						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
-						getRepository: async () => ({ getDatabase: () => database as never }),
-					});
-					if (seedResult.skippedActive > 0) {
-						skippedActive = true;
-						return;
-					}
-					drainResult = await runEngineSchedulerDrain({
+					result = await runEngineSchedulerTask({
 						db: database as unknown as SchedulerDrainDatabase,
 						coverage,
 						baseUrl: deps.syncBaseUrl,
-						ownerId: 'require-plane',
 						fetcher: boundFetch as never,
 						signal: item.abortController.signal,
+						task,
 						onProgress: progressObserver(item.requirement),
 					});
 				});
 				if (applied === 'dropped')
 					throw new Error('require: scope moved mid-search (writes dropped)');
-				if (skippedActive)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: `${searchCollection} search already in progress`,
-					};
-				if (drainResult.failed > 0)
-					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
-				const lost = drainLostOutcomeCount(drainResult);
-				// Claim loss means another owner is completing the durable task — release, don't fail.
-				if (lost > 0)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'claim lost to another owner',
-						documents: drainResult.totalDocuments,
-						requests: drainResult.totalRequests,
-					};
+				if (item.abortController.signal.aborted) return releasedOutcome();
+				if (!result) throw new Error('require: search completed without a fetch result');
 				return {
 					action: 'fetched',
 					missingRecordIds: [],
-					reason: `drained ${searchCollection} search "${term}"`,
-					documents: drainResult.totalDocuments,
-					requests: drainResult.totalRequests,
+					reason: `fetched ${searchCollection} search`,
+					documents: result.documentCount,
+					requests: result.requestCount,
 				};
 			}
 
@@ -605,6 +612,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				const next = queue.shift();
 				if (!next) return;
 				if (next.released) {
+					forgetSearch(next);
 					continue; // release() already resolved it — just drop the entry.
 				}
 				next.started = true;
@@ -632,7 +640,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							fields: { requirementId: next.requirement.id, kind: next.requirement.kind },
 						});
 					}
-					next.resolve(outcome);
+					for (const subscriber of next.subscribers) {
+						if (!subscriber.released) subscriber.resolve(outcome);
+					}
 				} catch (error) {
 					const message =
 						error instanceof Error && error.message.startsWith('require: ')
@@ -651,7 +661,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							durationMs: Date.now() - startedAt,
 						},
 					});
-					next.reject(error);
+					for (const subscriber of next.subscribers) {
+						if (!subscriber.released) subscriber.reject(error);
+					}
+				} finally {
+					forgetSearch(next);
 				}
 			}
 		} finally {
@@ -661,36 +675,54 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 
 	return {
 		require: (requirement) => {
-			let entry: QueuedRequirement;
+			const dedupeKey = searchDedupeKey(requirement);
+			let entry = dedupeKey ? activeSearches.get(dedupeKey) : undefined;
+			let subscriber: RequirementSubscriber;
 			const ready = new Promise<CoverageOutcome>((resolve, reject) => {
+				subscriber = {
+					resolve,
+					reject,
+					released: false,
+				};
+			});
+			if (entry) {
+				entry.subscribers.add(subscriber!);
+				entry.priority = Math.max(entry.priority, requirement.priority ?? 500);
+			} else {
 				entry = {
 					requirement,
 					priority: requirement.priority ?? 500,
 					seq: (seq += 1),
-					resolve,
-					reject,
+					subscribers: new Set([subscriber!]),
+					searchDedupeKey: dedupeKey,
 					released: false,
 					started: false,
 					abortController: new AbortController(),
 				};
-			});
-			queue.push(entry!);
-			void pump();
+				if (dedupeKey) activeSearches.set(dedupeKey, entry);
+				queue.push(entry);
+				void pump();
+			}
 			return {
 				ready,
 				release: () => {
-					if (entry.released) return;
-					entry.released = true;
-					entry.abortController.abort(
-						new DOMException('Requirement released during drain', 'AbortError')
-					);
+					if (subscriber.released) return;
+					subscriber.released = true;
+					entry.subscribers.delete(subscriber);
 					// Resolve NOW — a released (unmounting) caller must not wait for
 					// whatever is in flight ahead of it. The pump drops the entry later.
-					entry.resolve({
+					subscriber.resolve({
 						action: 'released',
 						missingRecordIds: [],
 						reason: entry.started ? 'released during drain' : 'released before execution',
 					});
+					if (entry.subscribers.size === 0) {
+						entry.released = true;
+						forgetSearch(entry);
+						entry.abortController.abort(
+							new DOMException('Requirement released during drain', 'AbortError')
+						);
+					}
 				},
 			};
 		},
