@@ -6,7 +6,16 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import { CollectionReplicationState } from './data-fetcher';
-import { engineCollectionNameFor, isMappedCollection } from './engine-adapter/collection-map';
+import {
+	engineCollectionNameFor,
+	isMappedCollection,
+	LEGACY_COLLECTION_NAMES,
+	type LegacyCollectionName,
+} from './engine-adapter/collection-map';
+import {
+	createPendingEngineCollection,
+	type PendingEngineCollection,
+} from './engine-adapter/pending-collection';
 import { Query } from './query-state';
 import { Registry } from './registry';
 import { RelationalQuery } from './relational-query-state';
@@ -58,6 +67,15 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	/** Live engine requirement handles per query id (the demand plane). */
 	private readonly demandByQuery = new Map<string, QueryDemand>();
 
+	/**
+	 * Stable per-collection stand-ins used while the engine database is still
+	 * opening (`engine.active()` is null). Cached so repeated `getCollection`
+	 * calls return the SAME reference — `registerQuery`'s identity check then
+	 * treats the pending query as unchanged (no per-render churn) and swaps it
+	 * for the live collection only once the engine opens.
+	 */
+	private readonly pendingCollections = new Map<string, PendingEngineCollection>();
+
 	private static instance: Manager<any>;
 
 	private constructor(
@@ -76,6 +94,36 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				queryLogger.error('Manager cancel on db close failed', { context: { error } })
 			);
 		});
+
+		// Cold start: queries registered before the engine database opens bind to a
+		// pending stand-in and render empty. Once `engine.ready` settles the live
+		// collections exist — nudge the local `reset$` bridge so every engine-backed
+		// `useQuery` re-registers and rebinds to the live collection (going live).
+		// A failed initial open leaves the app degraded (empty), never dead.
+		void this.engine.ready
+			.then(() => this.nudgeEngineCollectionsReady())
+			.catch((error) =>
+				queryLogger.debug('Engine ready rejected — queries stay degraded (empty)', {
+					context: { error },
+				})
+			);
+	}
+
+	/**
+	 * Signal every engine-backed collection as "reset" so bound queries
+	 * re-register and rebind from their pending stand-in to the now-open live
+	 * collection. Idempotent: a query already bound to the live collection
+	 * re-registers to the same instance and is returned unchanged.
+	 */
+	private nudgeEngineCollectionsReady(): void {
+		this.pendingCollections.clear();
+		const resetSubject = (this.localDB as any).reset$;
+		if (!resetSubject || typeof resetSubject.next !== 'function') {
+			return;
+		}
+		for (const collectionName of LEGACY_COLLECTION_NAMES) {
+			resetSubject.next({ name: collectionName });
+		}
 	}
 
 	public static getInstance<TDatabase extends RxDatabase>(
@@ -133,14 +181,15 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		if (isMappedCollection(collectionName)) {
 			const active = this.engine.active();
 			const collection = active?.database.collections[engineCollectionNameFor(collectionName)];
-			if (!collection) {
-				queryLogger.error(`Engine collection for "${collectionName}" not available.`, {
-					showToast: false,
-					saveToDb: false,
-					context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
-				});
+			if (collection) {
+				return collection;
 			}
-			return collection;
+			// The engine database is still opening (`active()` is null) or hasn't
+			// created this collection yet. Return a STABLE pending stand-in so the
+			// query is constructible and degrades to empty results — never undefined
+			// (which crashed screens reading `query.resource`). Rebound to the live
+			// collection when `engine.ready` settles (see nudgeEngineCollectionsReady).
+			return this.getPendingEngineCollection(collectionName);
 		}
 		const local = (this.localDB as any).collections[collectionName];
 		if (!local) {
@@ -151,6 +200,22 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			});
 		}
 		return local;
+	}
+
+	/**
+	 * Return (and cache) the stable pending stand-in for an engine-backed
+	 * collection. Cached so the reference is identity-stable across renders while
+	 * the engine opens; cleared on `nudgeEngineCollectionsReady`.
+	 */
+	private getPendingEngineCollection(
+		collectionName: LegacyCollectionName
+	): PendingEngineCollection {
+		let pending = this.pendingCollections.get(collectionName);
+		if (!pending) {
+			pending = createPendingEngineCollection(this.engine, collectionName);
+			this.pendingCollections.set(collectionName, pending);
+		}
+		return pending;
 	}
 
 	registerQuery({

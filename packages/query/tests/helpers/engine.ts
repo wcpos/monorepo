@@ -223,3 +223,83 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 
 	return engine;
 }
+
+export interface PendingFakeEngine {
+	engine: FakeEngine;
+	/**
+	 * Resolve the engine's initial open: `active()` starts returning the scope and
+	 * `ready` resolves — the production transition after `switchScope` settles.
+	 */
+	open(): void;
+}
+
+/**
+ * A fake engine that models the REAL app's cold start: the RxDB database opens
+ * asynchronously, so `active()` returns `null` and `ready` is pending until the
+ * initial scope switch settles. Bootstrap/lane fetches (the E2E `wc-rxdb-sync/v1`
+ * 404s) are async and non-fatal — modelled here by a `require()` handle that
+ * rejects. The query surface must DEGRADE (constructible queries, empty results)
+ * across this window, then go live once `open()` is called.
+ */
+export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine {
+	const requireCalls: EngineRequirement[] = [];
+	const resetCalls: string[] = [];
+	const syncCalls: (string | undefined)[] = [];
+	const activeScope = {
+		identity: { site: 'https://test', storeId: '1', cashierId: '1' },
+		scopeId: 'test-scope',
+		database,
+	};
+
+	let opened = false;
+	let resolveReady!: (scope: typeof activeScope) => void;
+	const ready = new Promise<typeof activeScope>((resolve) => {
+		resolveReady = resolve;
+	});
+
+	const engine = {
+		database,
+		requireCalls,
+		resetCalls,
+		syncCalls,
+		ready,
+		active: () => (opened ? activeScope : null),
+		db$: () => () => undefined,
+		scope: {
+			switch: async () => activeScope,
+			resetCollection: async (name: string) => {
+				resetCalls.push(name);
+				return 'reset' as const;
+			},
+		},
+		require: (requirement: EngineRequirement): RequirementHandle => {
+			requireCalls.push(requirement);
+			// A bootstrap/lane fetch that 404s (server surface absent) — rejected,
+			// never fatal.
+			return {
+				ready: Promise.reject(new Error('404: wc-rxdb-sync/v1 not found')),
+				release: () => undefined,
+			};
+		},
+		sync: async (lane?: string) => {
+			syncCalls.push(lane);
+			return { lane: (lane ?? 'all') as never, status: 'ran' as const };
+		},
+		events: () => () => undefined,
+		onScopeEvent: () => () => undefined,
+		status: () => ({}) as never,
+		stats: () => ({}) as never,
+		write: async () => ({ mutationId: 'm', recordId: 'r' }),
+		conflicts: async () => [],
+		resolveConflict: async () => undefined,
+		dispose: async () => undefined,
+	} as unknown as FakeEngine;
+
+	return {
+		engine,
+		open: () => {
+			opened = true;
+			resolveReady(activeScope);
+		},
+	};
+}

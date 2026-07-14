@@ -112,7 +112,13 @@ export function executeAdapterQuery({
 	const engineCollectionName = collectionMap[collection].engineCollection;
 	const engineCollection = database.collections[engineCollectionName];
 	if (!engineCollection) {
-		throw new Error(`Engine collection "${engineCollectionName}" is not open`);
+		// DEGRADE, don't die: the engine database hasn't opened this collection
+		// yet (cold start, before `engine.ready` settles). Emit an empty result so
+		// a bound query stays constructible and renders; the Manager rebinds it to
+		// the live collection once the engine opens (ADR 0023 increment 1b).
+		return new Observable<AdapterQueryResult>((subscriber) => {
+			subscriber.next({ hits: [], count: 0, elapsed: 0 });
+		});
 	}
 	const query = engineCollection.find({ selector: prefilter });
 
