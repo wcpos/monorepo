@@ -1,6 +1,7 @@
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject } from 'rxjs';
 import { filter } from 'rxjs/operators';
 
+import { coverageLaneSchema, queryTotalCacheSchema } from '@wcpos/sync-engine/testing';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { httpClientMock } from './__mocks__/http';
@@ -26,6 +27,8 @@ describe('Manager', () => {
 		firstValueFrom(
 			query.rxQuery$.pipe(filter((rxQuery) => rxQuery?.other?.search?.searchTerm === term))
 		);
+	const hasSearchResult = (result: { count?: number }, term: string, count: number) =>
+		(result as { searchTerm?: string }).searchTerm === term && result.count === count;
 
 	beforeEach(async () => {
 		localDB = await createStoreDatabase();
@@ -55,7 +58,11 @@ describe('Manager', () => {
 
 		it('should return true if query exists', () => {
 			const queryKeys = ['testQuery'];
-			manager.registerQuery({ queryKeys, collectionName: 'products', initialParams: {} });
+			manager.registerQuery({
+				queryKeys,
+				collectionName: 'products',
+				initialParams: {},
+			});
 			expect(manager.hasQuery(queryKeys)).toBe(true);
 		});
 
@@ -73,7 +80,11 @@ describe('Manager', () => {
 
 		it('should retrieve an existing query', () => {
 			const queryKeys = ['existingQuery'];
-			manager.registerQuery({ queryKeys, collectionName: 'products', initialParams: {} });
+			manager.registerQuery({
+				queryKeys,
+				collectionName: 'products',
+				initialParams: {},
+			});
 			expect(manager.getQuery(queryKeys)).toBeDefined();
 		});
 
@@ -89,7 +100,11 @@ describe('Manager', () => {
 
 		it('should deregister a query', async () => {
 			const queryKeys = ['queryToRemove'];
-			manager.registerQuery({ queryKeys, collectionName: 'products', initialParams: {} });
+			manager.registerQuery({
+				queryKeys,
+				collectionName: 'products',
+				initialParams: {},
+			});
 			await manager.deregisterQuery(manager.stringify(queryKeys));
 			expect(manager.hasQuery(queryKeys)).toBe(false);
 		});
@@ -109,7 +124,7 @@ describe('Manager', () => {
 			type SearchCollection = RxCollection & {
 				initSearch(locale: string): Promise<{
 					collection: RxCollection;
-					find(term: string): Promise<{ uuid: string }[]>;
+					find(term: string): Promise<SearchDocument[]>;
 				}>;
 			};
 
@@ -118,15 +133,60 @@ describe('Manager', () => {
 				find: async (term: string) => {
 					const normalized = term.toLocaleLowerCase();
 					const documents = (await collection.find().exec()) as unknown as SearchDocument[];
-					return documents
-						.filter((document) =>
-							fields.some((field) =>
-								String(document.get(field)).toLocaleLowerCase().includes(normalized)
-							)
+					return documents.filter((document) =>
+						fields.some((field) =>
+							String(document.get(field)).toLocaleLowerCase().includes(normalized)
 						)
-						.map((document) => ({ uuid: document.primary }));
+					);
 				},
 			});
+		};
+
+		const installSnapshotAwareSearch = (collection: RxCollection): void => {
+			type SearchInitOptions = {
+				searchFields?: string[];
+				documentSnapshot(document: unknown): Record<string, unknown>;
+			};
+			type SearchCollection = RxCollection & {
+				initSearch(
+					locale: string,
+					options: SearchInitOptions
+				): Promise<{
+					collection: RxCollection;
+					find(term: string): Promise<unknown[]>;
+				}>;
+			};
+
+			(collection as SearchCollection).initSearch = async (_locale, options) => {
+				const indexed = new Map<string, { document: unknown; text: string }>();
+				const indexChanges = new Subject<void>();
+				const indexDocument = (document: { primary: string }) => {
+					const snapshot = options.documentSnapshot(document);
+					indexed.set(document.primary, {
+						document,
+						text: (options.searchFields ?? [])
+							.map((field) => String(snapshot[field] ?? ''))
+							.join(' ')
+							.toLocaleLowerCase(),
+					});
+				};
+				const documents = await collection.find().exec();
+				documents.forEach(indexDocument);
+				collection.find().$.subscribe((nextDocuments) => {
+					indexed.clear();
+					nextDocuments.forEach(indexDocument);
+					indexChanges.next();
+				});
+				return {
+					collection: { $: indexChanges } as unknown as RxCollection,
+					find: async (term) => {
+						const normalized = term.toLocaleLowerCase();
+						return [...indexed.values()]
+							.filter(({ text }) => text.includes(normalized))
+							.map(({ document }) => document);
+					},
+				};
+			};
 		};
 
 		it('declares a targeted-records requirement for a finite-ID selector', async () => {
@@ -146,7 +206,10 @@ describe('Manager', () => {
 			manager.registerQuery({
 				queryKeys: ['orders'],
 				collectionName: 'orders',
-				initialParams: { selector: { status: 'processing' }, sort: [{ date_created_gmt: 'desc' }] },
+				initialParams: {
+					selector: { status: 'processing' },
+					sort: [{ date_created_gmt: 'desc' }],
+				},
 			});
 			const orderQuery = engine.requireCalls.find((req) => req.kind === 'query');
 			expect(orderQuery?.collection).toBe('orders');
@@ -175,7 +238,9 @@ describe('Manager', () => {
 			const searchExecution = nextSearchExecution(query, 'keyboard');
 			query.search('keyboard');
 			await searchExecution;
-			expect(query.currentRxQuery.other.search).toEqual({ searchTerm: 'keyboard' });
+			expect(query.currentRxQuery.other.search).toEqual({
+				searchTerm: 'keyboard',
+			});
 
 			expect(engine.searchRequireCalls).toHaveLength(1);
 			expect(engine.searchRequireCalls[0]?.requirement).toMatchObject({
@@ -185,10 +250,14 @@ describe('Manager', () => {
 			});
 
 			const remoteResult = firstValueFrom(
-				query.result$.pipe(filter((result) => result.searchActive && result.count === 1))
+				query.result$.pipe(filter((result) => hasSearchResult(result, 'keyboard', 1)))
 			);
 			await engineDB.collections.products.insert(
-				engineProduct({ uuid: 'product-keyboard', id: 101, name: 'Mechanical Keyboard' })
+				engineProduct({
+					uuid: 'product-keyboard',
+					id: 101,
+					name: 'Mechanical Keyboard',
+				})
 			);
 			const result = await remoteResult;
 
@@ -196,6 +265,201 @@ describe('Manager', () => {
 				'Mechanical Keyboard'
 			);
 			expect(engine.searchRequireCalls).toHaveLength(1);
+		});
+
+		it('indexes engine documents through the legacy snapshot and updates after payload changes', async () => {
+			installSnapshotAwareSearch(engineDB.collections.products);
+			const product = await engineDB.collections.products.insert(
+				engineProduct({
+					uuid: 'renamed-product',
+					id: 109,
+					name: 'Mechanical Mouse',
+					sku: 'M-1',
+				})
+			);
+			const query = manager.registerQuery({
+				queryKeys: ['projected-product-search'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			if (!query) throw new Error('product query was not registered');
+
+			query.search('keyboard');
+			await firstValueFrom(
+				query.result$.pipe(
+					filter(
+						(result) =>
+							(result as unknown as { searchTerm?: string }).searchTerm === 'keyboard' &&
+							result.count === 0
+					)
+				)
+			);
+
+			const updatedResult = firstValueFrom(
+				query.result$.pipe(
+					filter(
+						(result) =>
+							(result as unknown as { searchTerm?: string }).searchTerm === 'keyboard' &&
+							result.count === 1
+					)
+				)
+			);
+			await product.incrementalPatch({
+				payload: { ...product.payload, name: 'Mechanical Keyboard' },
+			});
+
+			const result = await updatedResult;
+			expect(result.hits[0]?.id).toBe('renamed-product');
+			expect((result.hits[0]?.document as unknown as { name?: string }).name).toBe(
+				'Mechanical Keyboard'
+			);
+		});
+
+		it('settles fluent searchActive with the engine search requirement handle', async () => {
+			installSnapshotAwareSearch(engineDB.collections.products);
+			await engineDB.collections.products.insert(
+				engineProduct({
+					uuid: 'pending-search',
+					id: 110,
+					name: 'Pending Keyboard',
+				})
+			);
+
+			let settleSearch!: (value: {
+				action: 'fetched';
+				missingRecordIds: number[];
+				reason: string;
+			}) => void;
+			const searchReady = new Promise<{
+				action: 'fetched';
+				missingRecordIds: number[];
+				reason: string;
+			}>((resolve) => {
+				settleSearch = resolve;
+			});
+			const originalRequire = engine.require.bind(engine);
+			engine.require = (requirement) =>
+				requirement.kind === 'search'
+					? { ready: searchReady, release: () => undefined }
+					: originalRequire(requirement);
+
+			const query = manager.registerQuery({
+				queryKeys: ['settled-search-active'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			if (!query) throw new Error('product query was not registered');
+			query.search('keyboard');
+
+			await firstValueFrom(
+				query.result$.pipe(
+					filter(
+						(result) =>
+							(result as unknown as { searchTerm?: string }).searchTerm === 'keyboard' &&
+							result.searchActive
+					)
+				)
+			);
+			const settledResult = firstValueFrom(
+				query.result$.pipe(
+					filter(
+						(result) =>
+							(result as unknown as { searchTerm?: string }).searchTerm === 'keyboard' &&
+							!result.searchActive
+					)
+				)
+			);
+			settleSearch({
+				action: 'fetched',
+				missingRecordIds: [],
+				reason: 'search complete',
+			});
+
+			expect((await settledResult).count).toBe(1);
+		});
+
+		it('tracks an order search query handle as fluent searchActive', async () => {
+			installSnapshotAwareSearch(engineDB.collections.orders);
+			let settleSearch!: () => void;
+			const searchReady = new Promise<void>((resolve) => {
+				settleSearch = resolve;
+			});
+			let searchStarted = false;
+			let searchRequirement: { kind: string } | undefined;
+			const originalRequire = engine.require.bind(engine);
+			engine.require = (requirement) => {
+				if (!searchStarted) {
+					return originalRequire(requirement);
+				}
+				searchRequirement = requirement;
+				return { ready: searchReady, release: () => undefined };
+			};
+
+			const query = manager.registerQuery({
+				queryKeys: ['settled-order-search-active'],
+				collectionName: 'orders',
+				initialParams: {},
+			});
+			if (!query) throw new Error('order query was not registered');
+			searchStarted = true;
+			query.search('smith');
+
+			await firstValueFrom(
+				query.result$.pipe(
+					filter(
+						(result) =>
+							(result as unknown as { searchTerm?: string }).searchTerm === 'smith' &&
+							result.searchActive
+					)
+				)
+			);
+			expect(searchRequirement?.kind).toBe('query');
+			const settledResult = firstValueFrom(
+				query.result$.pipe(
+					filter(
+						(result) =>
+							(result as unknown as { searchTerm?: string }).searchTerm === 'smith' &&
+							!result.searchActive
+					)
+				)
+			);
+			settleSearch();
+
+			await settledResult;
+		});
+
+		it('drops released search generations from searchActive immediately', async () => {
+			installSnapshotAwareSearch(engineDB.collections.products);
+			const neverSettles = new Promise<never>(() => undefined);
+			const release = jest.fn();
+			const originalRequire = engine.require.bind(engine);
+			engine.require = (requirement) =>
+				requirement.kind === 'search'
+					? { ready: neverSettles, release }
+					: originalRequire(requirement);
+
+			const query = manager.registerQuery({
+				queryKeys: ['released-search-active'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			if (!query) throw new Error('product query was not registered');
+			query.search('keyboard');
+			await firstValueFrom(query.result$.pipe(filter((result) => result.searchActive)));
+
+			const cleared = firstValueFrom(
+				query.result$.pipe(
+					filter(
+						(result) =>
+							!result.searchActive &&
+							(result as unknown as { searchTerm?: string }).searchTerm === undefined
+					)
+				)
+			);
+			query.search('');
+
+			await cleared;
+			expect(release).toHaveBeenCalledTimes(1);
 		});
 
 		it('widens product search demand when loadMore grows the bounded query window', async () => {
@@ -226,10 +490,14 @@ describe('Manager', () => {
 			});
 
 			const laterMatch = firstValueFrom(
-				query.result$.pipe(filter((result) => result.searchActive && result.count === 1))
+				query.result$.pipe(filter((result) => hasSearchResult(result, 'keyboard', 1)))
 			);
 			await engineDB.collections.products.insert(
-				engineProduct({ uuid: 'later-keyboard', id: 150, name: 'Later Keyboard' })
+				engineProduct({
+					uuid: 'later-keyboard',
+					id: 150,
+					name: 'Later Keyboard',
+				})
 			);
 
 			expect((await laterMatch).hits[0]?.id).toBe('later-keyboard');
@@ -295,11 +563,15 @@ describe('Manager', () => {
 			const keyboardExecution = nextSearchExecution(query, 'keyboard');
 			query.search('keyboard');
 			await keyboardExecution;
-			expect(query.currentRxQuery.other.search).toEqual({ searchTerm: 'keyboard' });
+			expect(query.currentRxQuery.other.search).toEqual({
+				searchTerm: 'keyboard',
+			});
 			const mouseExecution = nextSearchExecution(query, 'mouse');
 			query.search('mouse');
 			await mouseExecution;
-			expect(query.currentRxQuery.other.search).toEqual({ searchTerm: 'mouse' });
+			expect(query.currentRxQuery.other.search).toEqual({
+				searchTerm: 'mouse',
+			});
 
 			expect(engine.searchRequireCalls).toHaveLength(2);
 			expect(engine.searchRequireCalls[0]?.released).toBe(true);
@@ -323,16 +595,22 @@ describe('Manager', () => {
 			const searchExecution = nextSearchExecution(query, 'keyboard');
 			query.search('keyboard');
 			await searchExecution;
-			expect(query.currentRxQuery.other.search).toEqual({ searchTerm: 'keyboard' });
+			expect(query.currentRxQuery.other.search).toEqual({
+				searchTerm: 'keyboard',
+			});
 			manager.maybePauseQueryReplications(query);
 
 			expect(engine.searchRequireCalls[0]?.released).toBe(true);
 
 			const staleEmission = firstValueFrom(
-				query.result$.pipe(filter((result) => result.searchActive && result.count === 1))
+				query.result$.pipe(filter((result) => hasSearchResult(result, 'keyboard', 1)))
 			);
 			await engineDB.collections.products.insert(
-				engineProduct({ uuid: 'paused-keyboard', id: 151, name: 'Paused Keyboard' })
+				engineProduct({
+					uuid: 'paused-keyboard',
+					id: 151,
+					name: 'Paused Keyboard',
+				})
 			);
 			await staleEmission;
 
@@ -342,7 +620,11 @@ describe('Manager', () => {
 		it('keeps serving local search results when search demand rejects', async () => {
 			installLocalSearch(engineDB.collections.products, ['payload.name']);
 			await engineDB.collections.products.insert(
-				engineProduct({ uuid: 'local-keyboard', id: 102, name: 'Local Keyboard' })
+				engineProduct({
+					uuid: 'local-keyboard',
+					id: 102,
+					name: 'Local Keyboard',
+				})
 			);
 			await engineDB.collections.products.insert(
 				engineProduct({ uuid: 'local-mouse', id: 104, name: 'Local Mouse' })
@@ -357,7 +639,7 @@ describe('Manager', () => {
 
 			query.search('keyboard');
 			const result = await firstValueFrom(
-				query.result$.pipe(filter((next) => next.searchActive && next.count === 1))
+				query.result$.pipe(filter((next) => hasSearchResult(next, 'keyboard', 1)))
 			);
 
 			expect((result.hits[0]?.document as unknown as { name?: string }).name).toBe(
@@ -367,7 +649,10 @@ describe('Manager', () => {
 			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
 				'Search requirement failed; continuing with local results',
 				expect.objectContaining({
-					context: expect.objectContaining({ collection: 'products', termLength: 8 }),
+					context: expect.objectContaining({
+						collection: 'products',
+						termLength: 8,
+					}),
 				})
 			);
 		});
@@ -425,7 +710,7 @@ describe('Manager', () => {
 			});
 
 			const remoteResult = firstValueFrom(
-				query.result$.pipe(filter((result) => result.searchActive && result.count === 1))
+				query.result$.pipe(filter((result) => hasSearchResult(result, 'ada', 1)))
 			);
 			await engineDB.collections.customers.insert({
 				id: 'customer-ada',
@@ -440,6 +725,154 @@ describe('Manager', () => {
 				'Ada'
 			);
 			expect(engine.searchRequireCalls).toHaveLength(1);
+		});
+	});
+
+	describe('Coverage-aware replication totals', () => {
+		const addCoverageCollections = async () => {
+			await engineDB.addCollections({
+				coverageLanes: { schema: coverageLaneSchema },
+				queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+			} as never);
+		};
+
+		it('uses a fresh complete product browse lane total instead of the resident count', async () => {
+			await addCoverageCollections();
+			await engineDB.collections.products.insert(
+				engineProduct({ uuid: 'resident-product', id: 120, name: 'Resident' })
+			);
+			const query = manager.registerQuery({
+				queryKeys: ['coverage-products'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			if (!query) throw new Error('product query was not registered');
+
+			await engineDB.collections.coverageLanes.insert({
+				laneKey: 'products::products:browse-window:limit=100',
+				collectionName: 'products',
+				queryKey: 'products:browse-window:limit=100',
+				complete: true,
+				expectedRecordIds: ['woo-product:120', 'woo-product:121', 'woo-product:122'],
+				freshUntilMs: Date.now() + 60_000,
+				updatedAtMs: Date.now(),
+				schemaVersion: 2,
+			});
+
+			const total$ = manager.replicationTotal$(query.id);
+			if (!total$) throw new Error('product total projection was not created');
+			await expect(firstValueFrom(total$.pipe(filter((total) => total === 3)))).resolves.toBe(3);
+		});
+
+		it('falls back to the resident count when an idle coverage lane expires', async () => {
+			await addCoverageCollections();
+			await engineDB.collections.products.insert(
+				engineProduct({ uuid: 'expiring-resident', id: 121, name: 'Resident' })
+			);
+			await engineDB.collections.coverageLanes.insert({
+				laneKey: 'products::products:browse-window:limit=100',
+				collectionName: 'products',
+				queryKey: 'products:browse-window:limit=100',
+				complete: true,
+				expectedRecordIds: ['woo-product:121', 'woo-product:122'],
+				freshUntilMs: Date.now() + 100,
+				updatedAtMs: Date.now(),
+				schemaVersion: 2,
+			});
+			const query = manager.registerQuery({
+				queryKeys: ['expiring-coverage-products'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			if (!query) throw new Error('product query was not registered');
+			const total$ = manager.replicationTotal$(query.id);
+			if (!total$) throw new Error('product total projection was not created');
+
+			await firstValueFrom(total$.pipe(filter((total) => total === 2)));
+			await expect(firstValueFrom(total$.pipe(filter((total) => total === 1)))).resolves.toBe(1);
+		});
+
+		it('uses a fresh query-total projection for the exact orders lane', async () => {
+			await addCoverageCollections();
+			const query = manager.registerQuery({
+				queryKeys: ['coverage-orders'],
+				collectionName: 'orders',
+				initialParams: { selector: { status: 'processing' }, limit: 25 },
+			});
+			if (!query) throw new Error('orders query was not registered');
+			const queryKey = engine.requireCalls.find(
+				(requirement) => requirement.collection === 'orders' && requirement.kind === 'query'
+			)?.queryKey;
+			if (!queryKey) throw new Error('orders query requirement was not declared');
+
+			await engineDB.collections.queryTotalCacheEntries.insert({
+				queryKey,
+				totalMatchingRecords: 42,
+				freshUntilMs: Date.now() + 60_000,
+				updatedAtMs: Date.now(),
+				schemaVersion: 1,
+			});
+
+			const total$ = manager.replicationTotal$(query.id);
+			if (!total$) throw new Error('orders total projection was not created');
+			await expect(firstValueFrom(total$.pipe(filter((total) => total === 42)))).resolves.toBe(42);
+		});
+
+		it('falls back to the local count when an orders selector has undescribed predicates', async () => {
+			await addCoverageCollections();
+			const query = manager.registerQuery({
+				queryKeys: ['filtered-coverage-orders'],
+				collectionName: 'orders',
+				initialParams: { selector: { created_via: 'woocommerce-pos' }, limit: 25 },
+			});
+			if (!query) throw new Error('orders query was not registered');
+			const queryKey = engine.requireCalls.find(
+				(requirement) => requirement.collection === 'orders' && requirement.kind === 'query'
+			)?.queryKey;
+			if (!queryKey) throw new Error('orders query requirement was not declared');
+
+			await engineDB.collections.queryTotalCacheEntries.insert({
+				queryKey,
+				totalMatchingRecords: 42,
+				freshUntilMs: Date.now() + 60_000,
+				updatedAtMs: Date.now(),
+				schemaVersion: 1,
+			});
+
+			const total$ = manager.replicationTotal$(query.id);
+			if (!total$) throw new Error('orders total projection was not created');
+			await expect(firstValueFrom(total$)).resolves.toBe(0);
+		});
+
+		it('keeps customer totals on the local-count fallback', async () => {
+			await addCoverageCollections();
+			await engineDB.collections.customers.insert({
+				id: 'resident-customer',
+				wooCustomerId: 130,
+				payload: { id: 130, first_name: 'Resident' },
+				sync: { revision: '1', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
+			});
+			await engineDB.collections.coverageLanes.insert({
+				laneKey: 'customers::customers:search=resident:limit=10',
+				collectionName: 'customers',
+				queryKey: 'customers:search=resident:limit=10',
+				complete: true,
+				expectedRecordIds: Array.from({ length: 9 }, (_, index) => `customer-${index}`),
+				freshUntilMs: Date.now() + 60_000,
+				updatedAtMs: Date.now(),
+				schemaVersion: 2,
+			});
+			const query = manager.registerQuery({
+				queryKeys: ['coverage-customers'],
+				collectionName: 'customers',
+				initialParams: {},
+			});
+			if (!query) throw new Error('customer query was not registered');
+
+			const total$ = manager.replicationTotal$(query.id);
+			if (!total$) throw new Error('customer total projection was not created');
+			await expect(firstValueFrom(total$.pipe(filter((total) => total === 1)))).resolves.toBe(1);
 		});
 	});
 

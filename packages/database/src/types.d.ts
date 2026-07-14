@@ -13,6 +13,14 @@ export interface FlexSearchInstance {
 	search(query: string): Promise<string[]>;
 }
 
+/** Optional per-collection search source override used by engine-backed query adapters. */
+export interface SearchInitializationOptions {
+	/** Legacy field paths consumed by the existing FlexSearch configuration. */
+	searchFields?: string[];
+	/** Project a stored document into the snapshot whose field paths are indexed. */
+	documentSnapshot?(document: unknown): unknown;
+}
+
 /**
  * Extensions added by plugins to RxCollection.
  * Augmented on RxCollectionBase so that the generic type alias
@@ -38,7 +46,10 @@ declare module 'rxdb' {
 		 * Returns null if collection has no searchFields configured.
 		 * Added by the search plugin.
 		 */
-		initSearch?(locale?: string): Promise<FlexSearchInstance | null>;
+		initSearch?(
+			locale?: string,
+			options?: SearchInitializationOptions
+		): Promise<FlexSearchInstance | null>;
 
 		/**
 		 * Set the active locale for searching.
@@ -76,6 +87,9 @@ declare module 'rxdb' {
 
 		/** Internal: Order of locales for LRU eviction */
 		_localeLRU?: string[];
+
+		/** Internal: locale-specific snapshot/field configuration used by recreation. */
+		_searchInitializationOptions?: Map<string, SearchInitializationOptions>;
 	}
 
 	interface RxDatabaseBase {

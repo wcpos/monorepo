@@ -61,6 +61,30 @@ export async function waitForAuthEntry(page: Page): Promise<void> {
 	}
 }
 
+export async function waitForOAuthCallback(page: Page, appOrigin: string): Promise<void> {
+	const callback = page.waitForURL(
+		(url) =>
+			url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.origin === appOrigin,
+		{ timeout: 60_000 }
+	);
+	const logPermissionFailure = page
+		.waitForFunction(
+			() => {
+				const text = document.body?.innerText || '';
+				return text.includes('/wp-content/uploads/wc-logs/') && text.includes('Permission denied');
+			},
+			undefined,
+			{ timeout: 60_000 }
+		)
+		.then(() => {
+			throw new Error(
+				'WordPress cannot write to wp-content/uploads/wc-logs, so OAuth callback headers cannot be sent. Restore the dev server directory ownership/permissions and rerun E2E.'
+			);
+		});
+
+	await Promise.race([callback, logPermissionFailure]);
+}
+
 /**
  * Get the store URL from the project config, with env var override.
  */
@@ -288,11 +312,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	// After login, the page redirects back with auth tokens.
 	// Locally this goes to localhost; in CI it redirects to the Expo deployment URL.
 	const appOrigin = new URL(page.url()).origin;
-	await loginPage.waitForURL(
-		(url) =>
-			url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.origin === appOrigin,
-		{ timeout: 60_000 }
-	);
+	await waitForOAuthCallback(loginPage, appOrigin);
 
 	const callbackUrl = loginPage.url();
 	// Log only the origin to avoid exposing tokens in CI logs

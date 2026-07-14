@@ -5,7 +5,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import type { RxCollection, RxPlugin } from 'rxdb';
-import type { FlexSearchInstance } from '../types.d';
+import type { FlexSearchInstance, SearchInitializationOptions } from '../types.d';
 
 const searchLogger = getLogger(['wcpos', 'db', 'search']);
 
@@ -86,9 +86,11 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
  */
 async function createSearchInstance(
 	collection: RxCollection,
-	locale: string
+	locale: string,
+	options?: SearchInitializationOptions
 ): Promise<FlexSearchInstance> {
-	const searchFields = collection.options?.searchFields;
+	const searchFields = options?.searchFields ?? collection.options?.searchFields;
+	const documentSnapshot = options?.documentSnapshot ?? ((document: unknown) => document);
 	// FlexSearch appends _flexsearch to the identifier (note: underscore, not hyphen)
 	const searchCollectionName = `${collection.name}-search-${locale}_flexsearch`;
 	const database = collection.database;
@@ -123,8 +125,9 @@ async function createSearchInstance(
 		identifier: `${collection.name}-search-${locale}`,
 		collection,
 		docToString: (doc: any) => {
+			const snapshot = documentSnapshot(doc);
 			// Fields can be nested, so we use lodash get to access them
-			return searchFields.map((field: string) => get(doc, field) || '').join(' ');
+			return searchFields.map((field: string) => get(snapshot, field) || '').join(' ');
 		},
 		initialization: 'lazy',
 		indexOptions: {
@@ -207,13 +210,23 @@ export const searchPlugin: RxPlugin = {
 			 * @param locale - The locale for search (e.g., 'en', 'de', 'zh')
 			 * @returns The FlexSearch instance, or null if no searchFields configured
 			 */
-			proto.initSearch = async function (locale = 'en'): Promise<FlexSearchInstance | null> {
+			proto.initSearch = async function (
+				locale = 'en',
+				options?: SearchInitializationOptions
+			): Promise<FlexSearchInstance | null> {
 				// Check if collection has searchFields configured
-				if (!Array.isArray(this.options?.searchFields)) {
+				if (!Array.isArray(options?.searchFields ?? this.options?.searchFields)) {
 					return null;
 				}
 
 				locale = normalizeLocale(locale);
+				if (!this._searchInitializationOptions) {
+					this._searchInitializationOptions = new Map<string, SearchInitializationOptions>();
+				}
+				if (options) {
+					this._searchInitializationOptions.set(locale, options);
+				}
+				const initializationOptions = this._searchInitializationOptions.get(locale);
 
 				// Initialize maps if needed
 				if (!this._searchInstances) {
@@ -237,7 +250,7 @@ export const searchPlugin: RxPlugin = {
 				// Create initialization promise
 				const searchPromise = (async (): Promise<FlexSearchInstance> => {
 					try {
-						const searchInstance = await createSearchInstance(this, locale);
+						const searchInstance = await createSearchInstance(this, locale, initializationOptions);
 
 						// Store instance and update LRU
 						this._searchInstances.set(locale, searchInstance);
@@ -270,7 +283,11 @@ export const searchPlugin: RxPlugin = {
 						const destroyed = await destroySearchCollection(this, locale);
 						if (destroyed) {
 							try {
-								const searchInstance = await createSearchInstance(this, locale);
+								const searchInstance = await createSearchInstance(
+									this,
+									locale,
+									initializationOptions
+								);
 								this._searchInstances.set(locale, searchInstance);
 								touchLRU(this, locale);
 								await evictLRUIfNeeded(this);
@@ -329,6 +346,7 @@ export const searchPlugin: RxPlugin = {
 							if (this._localeLRU) {
 								this._localeLRU = [];
 							}
+							this._searchInitializationOptions?.clear();
 							return;
 						}
 
@@ -430,6 +448,7 @@ export const searchPlugin: RxPlugin = {
 						if (this._localeLRU) {
 							this._localeLRU = [];
 						}
+						this._searchInitializationOptions?.clear();
 					});
 				}
 
@@ -480,11 +499,13 @@ export const searchPlugin: RxPlugin = {
 			 */
 			proto.recreateSearch = async function (locale?: string): Promise<FlexSearchInstance | null> {
 				// Check if collection has searchFields configured
-				if (!Array.isArray(this.options?.searchFields)) {
+				const normalizedLocale = normalizeLocale(locale || this._activeLocale || 'en');
+				const initializationOptions = this._searchInitializationOptions?.get(normalizedLocale);
+				if (!Array.isArray(initializationOptions?.searchFields ?? this.options?.searchFields)) {
 					return null;
 				}
 
-				locale = normalizeLocale(locale || this._activeLocale || 'en');
+				locale = normalizedLocale;
 
 				searchLogger.info('Recreating search index', {
 					context: { collection: this.name, locale },
@@ -523,7 +544,11 @@ export const searchPlugin: RxPlugin = {
 
 				// Create fresh instance
 				try {
-					const searchInstance = await createSearchInstance(this, locale);
+					const searchInstance = await createSearchInstance(
+						this,
+						locale,
+						this._searchInitializationOptions?.get(locale)
+					);
 
 					// Store and track
 					if (!this._searchInstances) {

@@ -8,7 +8,7 @@ export { userCollections, storeCollections, syncCollections } from './collection
 export { sanitizeWPCredentialsData } from './collections/wp-credentials';
 export { clearAllDB } from './clear-all-db';
 export type { ClearDBResult } from './clear-all-db';
-export type { FlexSearchInstance } from './types.d';
+export type { FlexSearchInstance, SearchInitializationOptions } from './types.d';
 
 /**
  * Re-export some rxdb helpers
