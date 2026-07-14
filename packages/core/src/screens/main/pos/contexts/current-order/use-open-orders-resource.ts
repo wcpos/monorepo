@@ -10,6 +10,7 @@ import {
 	resolveLegacyField,
 } from '@wcpos/query/engine-adapter/collection-map';
 import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
+import { declareRequirements, requirementsForQuery } from '@wcpos/query/requirement-bridge';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
@@ -77,9 +78,21 @@ export function useOpenOrdersResource(
 	}, [cashierID, manager, storeID]);
 
 	React.useEffect(() => {
-		// ObservableResource owns the db$/RxDB subscriptions and must release them on rebind/unmount.
-		return () => resource.destroy();
-	}, [resource]);
+		// Keep remote demand and the resident subscription bound to the same resource lifetime.
+		const handles = declareRequirements(
+			manager.engine,
+			requirementsForQuery({
+				id: 'pos:open-orders',
+				collectionName: 'orders',
+				selector: { status: 'pos-open' },
+				limit: undefined,
+			})
+		);
+		return () => {
+			for (const handle of handles) handle.release();
+			resource.destroy();
+		};
+	}, [manager, resource]);
 
 	return resource;
 }

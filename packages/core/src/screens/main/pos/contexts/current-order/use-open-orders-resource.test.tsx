@@ -21,6 +21,11 @@ type FakeDatabase = {
 
 let activeDatabase: FakeDatabase | null;
 const databaseSubscribers = new Set<(database: FakeDatabase | null) => void>();
+const releaseRequirement = jest.fn();
+const requireOrders = jest.fn(() => ({
+	ready: Promise.reject(new Error('demand unavailable')),
+	release: releaseRequirement,
+}));
 
 const engine = {
 	db$: (subscriber: (database: FakeDatabase | null) => void) => {
@@ -28,6 +33,7 @@ const engine = {
 		subscriber(activeDatabase);
 		return () => databaseSubscribers.delete(subscriber);
 	},
+	require: requireOrders,
 };
 const manager = { engine };
 
@@ -83,6 +89,7 @@ function emitDatabase(database: FakeDatabase) {
 
 describe('useOpenOrdersResource', () => {
 	beforeEach(() => {
+		jest.clearAllMocks();
 		activeDatabase = null;
 		databaseSubscribers.clear();
 	});
@@ -115,5 +122,27 @@ describe('useOpenOrdersResource', () => {
 		const nextOrders$ = new BehaviorSubject([order('next-scope', 10, '2026-07-14T14:00:00', 7, 2)]);
 		act(() => emitDatabase(databaseWith(nextOrders$)));
 		expect(result.current.read().map((hit: Hit) => hit.id)).toEqual(['next-scope']);
+	});
+
+	it('holds pos-open order demand for its lifetime without coupling demand failures to residents', async () => {
+		const orders$ = new BehaviorSubject([order('resident', 2, '2026-07-14T10:00:00', 7, 2)]);
+		activeDatabase = databaseWith(orders$);
+
+		const { result, unmount } = renderHook(() => useOpenOrdersResource(7, 2));
+
+		expect(requireOrders).toHaveBeenCalledWith({
+			id: 'pos:open-orders:orders-query',
+			collection: 'orders',
+			kind: 'query',
+			queryKey: 'orders:browser:status=pos-open:search=:limit=10',
+		});
+
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['resident']);
+
+		unmount();
+		expect(releaseRequirement).toHaveBeenCalledTimes(1);
 	});
 });

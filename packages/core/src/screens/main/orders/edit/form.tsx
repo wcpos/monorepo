@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableEagerState, useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
+import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
@@ -69,11 +70,22 @@ export function EditOrderForm({ order }: Props) {
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
 	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
+	const customerIdForLookup = customerIdToLoad ?? 0;
 	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
 		'customers',
-		customerIdToLoad ?? 0
+		customerIdForLookup
 	);
-	const engineCustomer = useObservableEagerState(customerResource.valueRef$$)?.current;
+	const customerLookup$ = React.useMemo(
+		() =>
+			customerResource.valueRef$$.pipe(
+				map((valueRef) => ({
+					requestedId: customerIdForLookup,
+					document: valueRef?.current,
+				}))
+			),
+		[customerIdForLookup, customerResource]
+	);
+	const customerLookup = useObservableEagerState(customerLookup$);
 	const guestCustomer = useGuestCustomer();
 
 	if (!order) {
@@ -230,7 +242,12 @@ export function EditOrderForm({ order }: Props) {
 	 */
 	React.useEffect(() => {
 		if (customerIdToLoad === null) return;
-		const selectedCustomer = customerIdToLoad === 0 ? guestCustomer : engineCustomer;
+		const selectedCustomer =
+			customerIdToLoad === 0
+				? guestCustomer
+				: customerLookup?.requestedId === customerIdToLoad
+					? customerLookup.document
+					: undefined;
 		if (selectedCustomer === undefined) return;
 		if (selectedCustomer === null) {
 			mutationLogger.error('Error fetching customer', {
@@ -245,7 +262,7 @@ export function EditOrderForm({ order }: Props) {
 		}
 		handleCustomerChange(customerIdToLoad, selectedCustomer);
 		setCustomerIdToLoad(null);
-	}, [customerIdToLoad, engineCustomer, guestCustomer, handleCustomerChange, t]);
+	}, [customerIdToLoad, customerLookup, guestCustomer, handleCustomerChange, t]);
 
 	/**
 	 * Watch the customer fields to compute the customer label
