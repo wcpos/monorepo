@@ -11,6 +11,8 @@ import { LogsScreen } from './index';
 import type { QueryStateOf } from '../../../query';
 
 const mockSync = jest.fn(async () => undefined);
+const mockLogsCount$ = of(31);
+const mockLogsCount = jest.fn(() => ({ $: mockLogsCount$ }));
 const mockBinding = {
 	resource: { kind: 'logs-resource' },
 	active$: of(false),
@@ -33,6 +35,9 @@ jest.mock('../../../query', () => {
 });
 
 jest.mock('@wcpos/query', () => ({
+	useQueryManager: () => ({
+		localDB: { collections: { logs: { count: mockLogsCount } } },
+	}),
 	useLocalQuery: () => {
 		throw new Error('legacy useLocalQuery reached');
 	},
@@ -137,10 +142,11 @@ describe('LogsScreen query-state wiring', () => {
 		expect(mockDataTableProps).toMatchObject({
 			resource: mockBinding.resource,
 			active$: mockBinding.active$,
-			total$: mockBinding.total$,
+			total$: mockLogsCount$,
 			totalSource$: mockBinding.totalSource$,
 			sync: mockBinding.sync,
 		});
+		expect(mockLogsCount).toHaveBeenCalledWith({});
 		expect(mockDataTableProps).not.toHaveProperty('query');
 	});
 

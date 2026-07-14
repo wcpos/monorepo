@@ -10,6 +10,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
 import { Suspense } from '@wcpos/components/suspense';
+import { useQueryManager } from '@wcpos/query';
 
 import { Context } from './cells/context';
 import { Date } from './cells/date';
@@ -35,6 +36,7 @@ import type { QueryStateActions, QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type LogDocument = import('@wcpos/database').LogDocument;
+type LogCollection = import('@wcpos/database').LogCollection;
 
 const cells = {
 	context: Context,
@@ -108,6 +110,9 @@ function LogsScreenContent() {
 	const state = useQueryState<'logs'>();
 	const actions = useQueryStateActions<'logs'>();
 	const binding = useCollectionBinding('logs', state);
+	const manager = useQueryManager();
+	const logs = manager.localDB.collections.logs as LogCollection;
+	const total$ = React.useMemo(() => logs.count({}).$, [logs]);
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'logs'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -152,7 +157,7 @@ function LogsScreenContent() {
 								resource={binding.resource}
 								actions={tableActions}
 								active$={binding.active$}
-								total$={binding.total$}
+								total$={total$}
 								totalSource$={binding.totalSource$}
 								sync={binding.sync}
 								renderCell={renderCell}
