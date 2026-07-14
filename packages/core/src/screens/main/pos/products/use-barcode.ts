@@ -7,8 +7,8 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
-import { useCollection } from '../../hooks/use-collection';
+import { useBarcodeDetection } from '../../hooks/barcodes';
+import { useBarcodeSearch } from '../../hooks/barcodes/use-barcode-search';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 
@@ -58,6 +58,12 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
 
+function isVariationDocument(
+	document: ProductDocument | ProductVariationDocument
+): document is ProductVariationDocument {
+	return document.collection.name === 'variations';
+}
+
 interface SearchInputRef {
 	setSearch: (search: string) => void;
 	onSearch: (search: string) => void;
@@ -68,12 +74,11 @@ export const useBarcode = (
 	querySearchInputRef: React.RefObject<SearchInputRef | null>
 ) => {
 	const { barcode$, onKeyPress } = useBarcodeDetection();
-	const { barcodeSearch } = useBarcodeSearch();
+	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
 	const manager = useQueryManager();
 	const t = useT();
-	const { collection: productCollection } = useCollection('products');
 	const { uiSettings } = useUISettings('pos-products');
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 
@@ -84,6 +89,7 @@ export const useBarcode = (
 		const barcodeStr = String(barcode);
 		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
 		let results = await barcodeSearch(barcodeStr);
+		let onlineParentRequired = false;
 
 		const showAmbiguousResults = (count: number) => {
 			barcodeLogger.error(text1, {
@@ -259,6 +265,7 @@ export const useBarcode = (
 								forceRefresh: true,
 							})
 						);
+						onlineParentRequired = true;
 					}
 					await Promise.all(handles.map((handle) => handle.ready));
 				} catch (error) {
@@ -307,7 +314,7 @@ export const useBarcode = (
 			return;
 		}
 
-		if (product.collection.name === 'variations') {
+		if (isVariationDocument(product)) {
 			/**
 			 * Hack: we need to get the parent product
 			 * - parent_id was added recently to the variation schema, so older variations don't have it
@@ -319,7 +326,31 @@ export const useBarcode = (
 				return;
 			}
 
-			const parent = await productCollection.findOne({ selector: { id: parent_id } }).exec();
+			let parent = await findProductById(parent_id);
+			if (!parent && !onlineParentRequired) {
+				try {
+					const handle = manager.engine.require({
+						id: `barcode:${barcodeStr}:product:${parent_id}`,
+						collection: 'products',
+						kind: 'targeted-records',
+						wooIds: [parent_id],
+						forceRefresh: true,
+					});
+					try {
+						await handle.ready;
+						parent = await findProductById(parent_id);
+					} finally {
+						handle.release();
+					}
+				} catch (error) {
+					showOnlineFailure(
+						t('common.barcode_online_lookup_failed'),
+						ERROR_CODES.CONNECTION_REFUSED,
+						error instanceof Error ? error.message : String(error)
+					);
+					return;
+				}
+			}
 			if (!parent) {
 				productQuery.search(barcodeStr);
 				(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
@@ -336,9 +367,9 @@ export const useBarcode = (
 				}
 			);
 
-			addVariation(product as ProductVariationDocument, parent, metaData);
+			addVariation(product, parent, metaData);
 		} else {
-			addProduct(product as ProductDocument);
+			addProduct(product);
 		}
 
 		/**
