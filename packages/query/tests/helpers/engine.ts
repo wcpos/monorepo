@@ -66,8 +66,15 @@ export async function createEngineDatabase(
 export interface FakeEngine extends RxdbSyncEngine {
 	database: RxDatabase;
 	requireCalls: EngineRequirement[];
+	searchRequireCalls: RecordedSearchRequirement[];
+	searchFailure?: Error;
 	resetCalls: string[];
 	syncCalls: (string | undefined)[];
+}
+
+export interface RecordedSearchRequirement {
+	requirement: EngineRequirement;
+	released: boolean;
 }
 
 const num = (value: unknown): number => {
@@ -168,6 +175,7 @@ export function engineVariation(input: {
 
 export function createFakeEngine(database: RxDatabase): FakeEngine {
 	const requireCalls: EngineRequirement[] = [];
+	const searchRequireCalls: RecordedSearchRequirement[] = [];
 	const resetCalls: string[] = [];
 	const syncCalls: (string | undefined)[] = [];
 	const activeScope = {
@@ -179,6 +187,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 	const engine = {
 		database,
 		requireCalls,
+		searchRequireCalls,
 		resetCalls,
 		syncCalls,
 		ready: Promise.resolve(activeScope),
@@ -198,13 +207,25 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		},
 		require: (requirement: EngineRequirement): RequirementHandle => {
 			requireCalls.push(requirement);
+			const recordedSearch =
+				requirement.kind === 'search' ? { requirement, released: false } : undefined;
+			if (recordedSearch) {
+				searchRequireCalls.push(recordedSearch);
+			}
 			return {
-				ready: Promise.resolve({
-					action: 'serve-local' as const,
-					missingRecordIds: [],
-					reason: 'fake',
-				}),
-				release: () => undefined,
+				ready:
+					requirement.kind === 'search' && engine.searchFailure
+						? Promise.reject(engine.searchFailure)
+						: Promise.resolve({
+								action: 'serve-local' as const,
+								missingRecordIds: [],
+								reason: 'fake',
+							}),
+				release: () => {
+					if (recordedSearch) {
+						recordedSearch.released = true;
+					}
+				},
 			};
 		},
 		sync: async (lane?: string) => {

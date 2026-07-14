@@ -1,9 +1,10 @@
 import cloneDeep from 'lodash/cloneDeep';
+import isEqual from 'lodash/isEqual';
 import { BehaviorSubject as RxBehaviorSubject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
-import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { EngineRequirement, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import { CollectionReplicationState } from './data-fetcher';
 import {
@@ -47,6 +48,7 @@ export interface RegisterQueryConfig {
  */
 interface QueryDemand {
 	handles: RequirementHandle[];
+	requirements: EngineRequirement[];
 	active$: BehaviorSubject<boolean>;
 	inFlight: number;
 }
@@ -399,6 +401,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 		const demand: QueryDemand = {
 			handles: [],
+			requirements: [],
 			active$: new RxBehaviorSubject<boolean>(false),
 			inFlight: 0,
 		};
@@ -432,21 +435,35 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			selector.search = search;
 		}
 
-		// Release the previous generation before declaring the new one.
-		for (const handle of demand.handles) {
-			handle.release();
-		}
-
 		const requirements = requirementsForQuery({
 			id: queryState.id,
 			collectionName: queryState.collectionName,
 			selector,
 			limit: mango.limit,
 		});
-		demand.handles = declareRequirements(this.engine, requirements);
+		if (isEqual(demand.requirements, requirements)) {
+			return;
+		}
+
+		// Release the previous generation before declaring the changed demand.
+		for (const handle of demand.handles) {
+			handle.release();
+		}
+
+		demand.requirements = requirements;
+		const handles = declareRequirements(this.engine, requirements);
+		demand.handles = handles;
+		for (const handle of handles) {
+			void handle.ready.catch(() => {
+				// A rejected generation must not suppress an identical retry.
+				if (demand.handles === handles) {
+					demand.requirements = [];
+				}
+			});
+		}
 		this.trackInFlight(
 			demand,
-			demand.handles.map((handle) => handle.ready)
+			handles.map((handle) => handle.ready)
 		);
 	}
 
@@ -504,6 +521,12 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 		const mango = cloneDeep(query.currentRxQuery?.mangoQuery ?? {});
 		const selector = (mango.selector ?? {}) as Record<string, unknown>;
+		const search =
+			query.currentRxQuery?.other?.search?.searchTerm ??
+			query.currentRxQuery?.other?.relationalSearch?.searchTerm;
+		if (search) {
+			selector.search = search;
+		}
 		const requirements = requirementsForQuery({
 			id: `${queryId}:sync`,
 			collectionName: query.collectionName,

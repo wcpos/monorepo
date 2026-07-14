@@ -8,6 +8,8 @@
  *    targeted collections (products, variations, customers, orders) →
  *    `engine.require({kind: 'targeted-records', wooIds})`. Covers parent
  *    variations, grouped products and the default-customer lookup.
+ *  - **search demand** (products/customers with a non-empty search term) →
+ *    `engine.require({collection, kind: 'search', term, limit})`.
  *  - **order query descriptors** (unbounded orders browse) →
  *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
  *    `orders:browser:status=…:search=…:limit=…` descriptor the engine parses.
@@ -17,15 +19,9 @@
  * `greedy`/`endpoint` keys no longer create remote work; they are accepted and
  * ignored (deleted at convergence).
  *
- * NOT translated here (see PR notes / STOP-AND-REPORT): product search and
- * customer-name search. Those "search task paths" exist in the engine scheduler
- * but are unreachable through the public `require()` surface (executeOne only
- * routes `kind:'query'` for orders), so a query-shaped requirement over a
- * targeted collection without ids is caller misuse the facade rejects. They stay
- * local-only until the engine exposes a query verb (the lane-lifecycle work of
- * increment 5 / ticket #537).
  */
 
+import { getLogger } from '@wcpos/utils/logger';
 import type { EngineRequirement, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import {
@@ -41,6 +37,10 @@ const TARGETED_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
 	'customers',
 	'orders',
 ]);
+
+const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>(['products', 'customers']);
+
+const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
 
 /** The web scheduler's browse-lane cap; the engine rejects larger order descriptors. */
 const ORDER_BROWSE_MAX_LIMIT = 200;
@@ -111,19 +111,35 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 		return [];
 	}
 	const engineCollection = engineCollectionNameFor(collectionName);
+	const requirements: EngineRequirement[] = [];
 
 	const wooIds = finiteWooIds(selector);
 	if (wooIds && TARGETED_ENGINE_COLLECTIONS.has(engineCollection)) {
-		return [
-			{
-				id: `${input.id}:targeted`,
-				collection: engineCollection,
-				kind: 'targeted-records',
-				wooIds,
-				...(input.priority !== undefined ? { priority: input.priority } : {}),
-				...(input.forceRefresh ? { forceRefresh: true } : {}),
-			},
-		];
+		requirements.push({
+			id: `${input.id}:targeted`,
+			collection: engineCollection,
+			kind: 'targeted-records',
+			wooIds,
+			...(input.priority !== undefined ? { priority: input.priority } : {}),
+			...(input.forceRefresh ? { forceRefresh: true } : {}),
+		});
+	}
+
+	const rawSearchTerm = typeof selector?.search === 'string' ? selector.search : '';
+	if (rawSearchTerm.trim() && SEARCH_ENGINE_COLLECTIONS.has(engineCollection)) {
+		requirements.push({
+			id: `${input.id}:search`,
+			collection: engineCollection,
+			kind: 'search',
+			term: rawSearchTerm,
+			...(limit !== undefined ? { limit } : {}),
+			...(input.priority !== undefined ? { priority: input.priority } : {}),
+			...(input.forceRefresh ? { forceRefresh: true } : {}),
+		});
+	}
+
+	if (requirements.length > 0) {
+		return requirements;
 	}
 
 	if (engineCollection === 'orders') {
@@ -154,7 +170,17 @@ export function declareRequirements(
 ): RequirementHandle[] {
 	return requirements.map((requirement) => {
 		const handle = engine.require(requirement);
-		handle.ready.catch(() => undefined);
+		handle.ready.catch((error) => {
+			if (requirement.kind === 'search') {
+				requirementLogger.warn('Search requirement failed; continuing with local results', {
+					context: {
+						collection: requirement.collection,
+						termLength: requirement.term?.length ?? 0,
+						error,
+					},
+				});
+			}
+		});
 		return handle;
 	});
 }
