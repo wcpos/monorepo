@@ -372,7 +372,7 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 		await engine.sync();
 
 		const ticks = Object.values(engine.status().lanes).map((lane) => lane.lastTick?.atMs ?? 0);
-		expect(ticks).toHaveLength(9);
+		expect(ticks).toHaveLength(10);
 		expect(ticks.every((tick) => tick > 0)).toBe(true);
 		expect(ticks).toEqual([...ticks].sort((a, b) => a - b));
 		await engine.dispose();

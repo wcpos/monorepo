@@ -6,6 +6,10 @@
  *  - ORDER OPEN-RECENT WINDOW SEED: orders aren't covered by the change
  *    signal, so the open/recent window is re-seeded on an interval (windowed
  *    lane, one bounded fetch — never a bulk pull; guardrail G3).
+ *  - PRODUCT BROWSE-WINDOW SEED (ADR 0027 §2): so a cold grid shows products
+ *    without a search, a bounded first page by the POS default catalog sort is
+ *    re-seeded on an interval (windowed lane, one bounded fetch — never a bulk
+ *    pull; guardrail G3). Below the reference lanes and the orders window.
  *  - REFERENCE RE-SEED (F11): a completed greedy task is terminal, so a
  *    mid-session category/brand/tag/coupon edit never reaches a running POS
  *    without a periodic re-seed → re-pull → set-difference prune.
@@ -26,6 +30,7 @@
 import type { StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 
 import { seedOrderFilterSchedulerTask } from '../scheduler/rx-order-scheduler-task-seeder';
+import { seedProductBrowseWindowSchedulerTask } from '../scheduler/rx-scheduler-product-task-seeder';
 import { seedReferenceLanes } from '../scheduler/rx-pos-bootstrap-seeder';
 import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
@@ -49,6 +54,7 @@ import type { RxDatabase } from 'rxdb';
 export type MaintenanceLaneName =
 	| 'scheduler-drain'
 	| 'order-window-seed'
+	| 'product-browse-window-seed'
 	| 'reference-seed'
 	| 'query-total-retry'
 	| 'coverage-compaction'
@@ -77,6 +83,13 @@ export type QueryTotalCacheEvent = { type: 'query-total-cache'; entries: QueryTo
 export const ORDER_OPEN_RECENT_STATUS = 'pending,processing,on-hold';
 export const ORDER_OPEN_RECENT_LIMIT = 200;
 export const ORDER_OPEN_RECENT_PRIORITY = 600;
+// The products browse-window seed (ADR 0027 §2): one first page, default 100 (the Woo
+// per-page ceiling — no remote pagination). Priority 500 sits BELOW the Tier-0 reference
+// lanes (1000–920) and the orders open-recent window (600): a cold browse grid is a
+// convenience seed, never a sell-blocker, so it drains after them. 500 (not 599) leaves
+// headroom for any future intermediate seed between it and the orders window.
+export const PRODUCT_BROWSE_WINDOW_LIMIT = 100;
+export const PRODUCT_BROWSE_WINDOW_PRIORITY = 500;
 export const REFERENCE_REFRESH_DEDUPE_MS = 4 * 60_000;
 export const COVERAGE_COMPACTION_INTERVAL_MS = 5 * 60 * 1_000;
 export const COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS = 5 * 60 * 1_000;
@@ -110,6 +123,7 @@ export type MaintenanceLanes = {
 	/** The persisted scheduler drain (slice 5e): fetch queued tasks through the per-collection fetchers. */
 	schedulerDrain: MaintenanceLane;
 	orderWindowSeed: MaintenanceLane;
+	productBrowseWindowSeed: MaintenanceLane;
 	referenceSeed: MaintenanceLane;
 	/** Null when the host provided no query-total port — the lane never arms. */
 	queryTotalRetry: MaintenanceLane | null;
@@ -327,6 +341,17 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		return seedSummary('Orders open-recent window seed (windowed, not a bulk pull)', result);
 	});
 
+	const productBrowseWindowSeed = lane('product-browse-window-seed', async (db) => {
+		const result = await seedProductBrowseWindowSchedulerTask({
+			limit: PRODUCT_BROWSE_WINDOW_LIMIT,
+			priority: PRODUCT_BROWSE_WINDOW_PRIORITY,
+			getRepository: scopeResolverFor(db),
+			// Same one-clock rule as the order window seed above.
+			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
+		});
+		return seedSummary('Products browse-window seed (windowed, not a bulk pull)', result);
+	});
+
 	const referenceSeed = lane('reference-seed', async (db) => {
 		const result = await seedReferenceLanes({
 			completedDedupeForMs: REFERENCE_REFRESH_DEDUPE_MS,
@@ -432,6 +457,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	return {
 		schedulerDrain,
 		orderWindowSeed,
+		productBrowseWindowSeed,
 		referenceSeed,
 		queryTotalRetry,
 		coverageCompaction,

@@ -60,6 +60,7 @@ const SUPPORTED_ORDER_QUERY_KEY = 'orders:custom-pull';
 const SUPPORTED_TARGETED_ORDER_QUERY_KEY_PREFIX = 'orders:ids:';
 const SUPPORTED_TARGETED_PRODUCT_QUERY_KEY_PREFIX = 'products:ids:';
 const SUPPORTED_PRODUCT_SEARCH_QUERY_KEY_PATTERN = /^products:search:.+$/;
+const SUPPORTED_PRODUCT_BROWSE_WINDOW_QUERY_KEY_PATTERN = /^products:browse-window:limit=\d+$/;
 const SUPPORTED_TARGETED_CUSTOMER_QUERY_KEY_PREFIX = 'customers:ids:';
 const SUPPORTED_CUSTOMER_SEARCH_QUERY_KEY_PATTERN = /^customers:search=([^:]*):limit=(\d+)$/;
 const SUPPORTED_TAX_RATE_QUERY_KEY = 'taxRates:all';
@@ -90,6 +91,9 @@ export function isSupportedProductSchedulerTask(task: SchedulerTaskSupportCandid
 	if (task.collection !== 'products') return false;
 	if (task.queryKey.startsWith(SUPPORTED_TARGETED_PRODUCT_QUERY_KEY_PREFIX)) {
 		return hasTargetedIds(task);
+	}
+	if (SUPPORTED_PRODUCT_BROWSE_WINDOW_QUERY_KEY_PATTERN.test(task.queryKey)) {
+		return hasNoTargetedIds(task);
 	}
 	return SUPPORTED_PRODUCT_SEARCH_QUERY_KEY_PATTERN.test(task.queryKey) && hasNoTargetedIds(task);
 }

@@ -14,10 +14,24 @@
  * the tick — the lane already exists; this seeder is the entry point.
  */
 
+import {
+	PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT,
+	productBrowseWindowQueryKey,
+} from './product-browse-window-descriptor';
+import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
+import {
+	seedPersistedSchedulerTasks,
+	type SeedPersistedSchedulerTasksResult,
+} from './rx-scheduler-task-seeder';
+import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 
-import type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
 import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
+
+/** Default lane priority for the browse-window seed; the maintenance lane overrides it. */
+const PRODUCT_BROWSE_WINDOW_SCHEDULER_PRIORITY = 500;
+/** Re-seedable window: a completed task re-runs on the next lane tick past this dedupe. */
+const PRODUCT_BROWSE_WINDOW_COMPLETED_DEDUPE_FOR_MS = 30_000;
 
 const PRODUCT_TARGETED_LANE: TargetedLaneDescriptor = {
 	collection: 'products',
@@ -38,6 +52,55 @@ export type SeedTargetedProductSchedulerTaskInput = {
 	nowMs?: number;
 	getRepository: SchedulerScopeResolver;
 };
+
+export type SeedProductBrowseWindowSchedulerTaskInput = {
+	/** Window size (first page). Defaults to the descriptor's per-page ceiling. */
+	limit?: number;
+	priority?: number;
+	completedDedupeForMs?: number;
+	nowMs?: number;
+	getRepository: SchedulerScopeResolver;
+};
+
+/**
+ * Seed the products browse-window task (ADR 0027 §2) — the products mirror of
+ * seedOrderFilterSchedulerTask. One WINDOWED task keyed `products:browse-window:limit=<N>`,
+ * which the drain routes to fetchProductBrowseWindow (first page by the POS default catalog
+ * sort). Low priority (default 500 — below the Tier-0 reference lanes and the orders window);
+ * NOT durable (a re-seedable refresh), NOT filter-aware, NO remote pagination.
+ */
+export async function seedProductBrowseWindowSchedulerTask(
+	input: SeedProductBrowseWindowSchedulerTaskInput
+): Promise<SeedPersistedSchedulerTasksResult> {
+	const limit = input.limit ?? PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT;
+	if (!Number.isSafeInteger(limit) || limit <= 0 || limit > WOO_REST_MAX_PER_PAGE) {
+		throw new Error(
+			`Product browse-window scheduler limit must be a positive integer within the Woo per-page ceiling (${WOO_REST_MAX_PER_PAGE})`
+		);
+	}
+	const queryKey = productBrowseWindowQueryKey(limit);
+	const repository = await input.getRepository();
+	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
+	const nowMs = input.nowMs ?? Date.now();
+
+	return seedPersistedSchedulerTasks({
+		repository: schedulerRepository,
+		tasks: [
+			{
+				id: `${queryKey}:windowed`,
+				requirementId: `products.browse-window.limit.${limit}`,
+				collection: 'products',
+				queryKey,
+				limit,
+				priority: input.priority ?? PRODUCT_BROWSE_WINDOW_SCHEDULER_PRIORITY,
+				mode: 'windowed',
+			},
+		],
+		nowMs,
+		completedDedupeForMs:
+			input.completedDedupeForMs ?? PRODUCT_BROWSE_WINDOW_COMPLETED_DEDUPE_FOR_MS,
+	});
+}
 
 export async function seedTargetedProductSchedulerTask(
 	input: SeedTargetedProductSchedulerTaskInput

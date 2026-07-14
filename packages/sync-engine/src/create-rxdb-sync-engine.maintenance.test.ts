@@ -118,6 +118,39 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
+	it('product-browse-window-seed persists the windowed browse task into a cold scope database', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		const report = await engine.sync('product-browse-window-seed');
+		expect(report.status).toBe('ran');
+
+		const rows = await taskRows(engine);
+		const windowed = rows.find(
+			(row) => row['collectionName'] === 'products' && row['mode'] === 'windowed'
+		);
+		expect(windowed).toBeDefined();
+		expect(windowed!['priority']).toBe(500);
+		expect(String(windowed!['queryKey'])).toContain('products:browse-window:limit=100');
+		await engine.dispose();
+	});
+
+	it('orders the browse window below the orders open-recent window at drain time', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		expect((await engine.sync('order-window-seed')).status).toBe('ran');
+		expect((await engine.sync('product-browse-window-seed')).status).toBe('ran');
+
+		const rows = await taskRows(engine);
+		const orderWindow = rows.find(
+			(row) => row['collectionName'] === 'orders' && row['mode'] === 'windowed'
+		);
+		const browseWindow = rows.find(
+			(row) => row['collectionName'] === 'products' && row['mode'] === 'windowed'
+		);
+		expect(Number(browseWindow!['priority'])).toBeLessThan(Number(orderWindow!['priority']));
+		await engine.dispose();
+	});
+
 	it('reference-seed persists all four greedy reference lanes', async () => {
 		const engine = engineWith();
 		await engine.ready;
@@ -328,11 +361,66 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
+	it('emits a lane-start before a lane-finish carrying the tick outcome', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+
+		const report = await engine.sync('reference-seed');
+		expect(report.status).toBe('ran');
+		const lifecycle = events.filter(
+			(event) => event.type === 'lane-start' || event.type === 'lane-finish'
+		);
+		expect(lifecycle).toEqual([
+			{ type: 'lane-start', lane: 'reference-seed' },
+			{ type: 'lane-finish', lane: 'reference-seed', status: 'ran' },
+		]);
+		await engine.dispose();
+	});
+
+	it('a failing lane still emits lane-finish with an error outcome, after its lane-start', async () => {
+		const engine = engineWith();
+		await engine.ready;
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		// Poison the seed's first persisted read so the browse-window seed lane throws — the
+		// lane wrapper turns that into a status:'error' tick, and the lifecycle pair must still
+		// close with lane-finish(error).
+		const collection = scope.database.collections.schedulerTaskStates as { find: unknown };
+		const originalFind = collection.find;
+		collection.find = () => {
+			throw new Error('poisoned scheduler read');
+		};
+
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		const report = await engine.sync('product-browse-window-seed');
+		collection.find = originalFind;
+		expect(report.status).toBe('error');
+
+		const startIndex = events.findIndex(
+			(event) => event.type === 'lane-start' && event.lane === 'product-browse-window-seed'
+		);
+		const finishIndex = events.findIndex(
+			(event) => event.type === 'lane-finish' && event.lane === 'product-browse-window-seed'
+		);
+		expect(startIndex).toBeGreaterThanOrEqual(0);
+		expect(finishIndex).toBeGreaterThan(startIndex);
+		expect(events[finishIndex]).toMatchObject({
+			type: 'lane-finish',
+			lane: 'product-browse-window-seed',
+			status: 'error',
+		});
+		await engine.dispose();
+	});
+
 	it('maintenance lanes skip while offline', async () => {
 		const engine = engineWith({ connectivity: () => 'offline' });
 		await engine.ready;
 		for (const lane of [
 			'order-window-seed',
+			'product-browse-window-seed',
 			'reference-seed',
 			'coverage-compaction',
 			'existence-prime',
