@@ -285,6 +285,7 @@
 	"common.shop_base_address": "Shop base address",
 	"common.show_out-of-stock_products": "Show out-of-stock products",
 	"common.showing_of": "Showing {shown} of {total}",
+	"common.showing_local_items": "showing local items",
 	"common.site_not_reachable": "Site not reachable",
 	"common.sku": "SKU",
 	"common.sort_by": "Sort By",

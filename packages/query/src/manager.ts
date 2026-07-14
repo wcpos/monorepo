@@ -7,10 +7,13 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type {
 	CoverageLaneDocument,
+	EngineEvent,
+	EngineLane,
 	EngineRequirement,
 	QueryTotalCacheDocument,
 	RequirementHandle,
 	RxdbSyncEngine,
+	SyncCollectionName,
 } from '@wcpos/sync-engine';
 
 import {
@@ -42,6 +45,18 @@ const COMPLETE_COLLECTION_LANES: Partial<Record<LegacyCollectionName, string>> =
 	'products/tags': 'tags:all',
 	'products/brands': 'brands:all',
 	coupons: 'coupons:all',
+};
+
+const LANE_ACTIVITY_SAFETY_MS = 60_000;
+
+/**
+ * Only fixed-coverage engine lanes belong here. Scheduler/change/write lanes can
+ * target dynamic work and stay attributable through their requirement handles.
+ */
+const FIXED_COLLECTIONS_BY_LANE: Partial<Record<EngineLane, readonly SyncCollectionName[]>> = {
+	'reference-seed': ['categories', 'brands', 'tags', 'coupons'],
+	'product-browse-window-seed': ['products'],
+	'order-window-seed': ['orders'],
 };
 
 function selectorWithSearch(rxQuery: RxQuery | undefined): Record<string, unknown> {
@@ -143,21 +158,28 @@ function coverageFreshnessTicks(
 	);
 }
 
+export type ReplicationTotalSource = 'coverage' | 'local';
+
+type ReplicationTotalProjection = {
+	total: number;
+	source: ReplicationTotalSource;
+};
+
 function projectedCoverageTotal(input: {
 	localCount: number;
 	queryKey: string | null;
 	lanes: CoverageLaneDocument[];
 	queryTotals: QueryTotalCacheDocument[];
 	nowMs: number;
-}): number {
+}): ReplicationTotalProjection {
 	if (input.queryKey === null) {
-		return input.localCount;
+		return { total: input.localCount, source: 'local' };
 	}
 	const queryTotal = input.queryTotals.find(
 		(candidate) => candidate.queryKey === input.queryKey && candidate.freshUntilMs > input.nowMs
 	);
 	if (queryTotal) {
-		return queryTotal.totalMatchingRecords;
+		return { total: queryTotal.totalMatchingRecords, source: 'coverage' };
 	}
 	const lane = input.lanes.find(
 		(candidate) =>
@@ -165,7 +187,9 @@ function projectedCoverageTotal(input: {
 			candidate.complete &&
 			candidate.freshUntilMs > input.nowMs
 	);
-	return lane ? lane.expectedRecordIds.length : input.localCount;
+	return lane
+		? { total: lane.expectedRecordIds.length, source: 'coverage' }
+		: { total: input.localCount, source: 'local' };
 }
 
 export interface RegisterQueryConfig {
@@ -181,9 +205,8 @@ export interface RegisterQueryConfig {
 /**
  * Per-query demand-plane bookkeeping (ADR 0027). `handles` are the live engine
  * requirement handles this surface declared; `active$` reflects whether any of
- * them (or a `sync()` promise) are in flight — the honest 1b projection of the
- * old per-query `active$`. Lane start/finish events now exist but do not carry
- * query-surface attribution, so lane-wide activity remains increment 5 work.
+ * them (or a `sync()` promise) are in flight. Fixed-coverage lane activity is
+ * composed separately because it applies collection-wide, not to one demand.
  */
 interface QueryDemand {
 	handles: RequirementHandle[];
@@ -207,6 +230,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	public readonly queryStates: Registry<string, Query<RxCollection>>;
 	/** Live engine requirement handles per query id (the demand plane). */
 	private readonly demandByQuery = new Map<string, QueryDemand>();
+	/** Nesting-safe start timestamps for the engine's fixed-coverage lanes. */
+	private readonly laneStarts = new Map<EngineLane, number[]>();
+	/** Engine collection names currently covered by a live fixed-coverage lane. */
+	private readonly laneActiveCollections$ = new RxBehaviorSubject<ReadonlySet<SyncCollectionName>>(
+		new Set()
+	);
+	private laneSafetyTimer: ReturnType<typeof setTimeout> | undefined;
 
 	/**
 	 * Stable per-collection stand-ins used while the engine database is still
@@ -227,6 +257,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	) {
 		super();
 		this.queryStates = new Registry();
+		this.subjects['lane-active-collections'] = this.laneActiveCollections$;
+		this.addSub('engine-lane-events', {
+			unsubscribe: this.engine.events((event) => this.onEngineEvent(event)),
+		});
 
 		(this.localDB as any).onClose.push(() => {
 			void this.cancel().catch((error) =>
@@ -246,6 +280,80 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					context: { error },
 				})
 			);
+	}
+
+	private onEngineEvent(event: EngineEvent): void {
+		if (event.type !== 'lane-start' && event.type !== 'lane-finish') {
+			return;
+		}
+		const nowMs = Date.now();
+		this.pruneExpiredLaneStarts(nowMs);
+		if (event.type === 'lane-start') {
+			const starts = this.laneStarts.get(event.lane) ?? [];
+			starts.push(nowMs);
+			this.laneStarts.set(event.lane, starts);
+		} else {
+			const starts = this.laneStarts.get(event.lane);
+			starts?.pop();
+			if (starts?.length === 0) {
+				this.laneStarts.delete(event.lane);
+			}
+		}
+		this.publishLaneActivity();
+		this.scheduleLaneSafetyCheck();
+	}
+
+	private pruneExpiredLaneStarts(nowMs: number): void {
+		for (const [lane, starts] of this.laneStarts) {
+			const freshStarts = starts.filter(
+				(startedAtMs) => nowMs - startedAtMs <= LANE_ACTIVITY_SAFETY_MS
+			);
+			if (freshStarts.length === 0) {
+				this.laneStarts.delete(lane);
+			} else if (freshStarts.length !== starts.length) {
+				this.laneStarts.set(lane, freshStarts);
+			}
+		}
+	}
+
+	private publishLaneActivity(): void {
+		const activeCollections = new Set<SyncCollectionName>();
+		for (const [lane, starts] of this.laneStarts) {
+			if (starts.length === 0) continue;
+			for (const collection of FIXED_COLLECTIONS_BY_LANE[lane] ?? []) {
+				activeCollections.add(collection);
+			}
+		}
+		const previous = this.laneActiveCollections$.value;
+		if (
+			previous.size !== activeCollections.size ||
+			[...previous].some((collection) => !activeCollections.has(collection))
+		) {
+			this.laneActiveCollections$.next(activeCollections);
+		}
+	}
+
+	private scheduleLaneSafetyCheck(): void {
+		if (this.laneSafetyTimer !== undefined) {
+			clearTimeout(this.laneSafetyTimer);
+			this.laneSafetyTimer = undefined;
+		}
+		let oldestStart: number | undefined;
+		for (const starts of this.laneStarts.values()) {
+			for (const startedAtMs of starts) {
+				if (oldestStart === undefined || startedAtMs < oldestStart) oldestStart = startedAtMs;
+			}
+		}
+		if (oldestStart === undefined) {
+			return;
+		}
+		const delayMs = Math.max(0, oldestStart + LANE_ACTIVITY_SAFETY_MS - Date.now() + 1);
+		this.laneSafetyTimer = setTimeout(() => {
+			this.laneSafetyTimer = undefined;
+			this.pruneExpiredLaneStarts(Date.now());
+			this.publishLaneActivity();
+			this.scheduleLaneSafetyCheck();
+		}, delayMs);
 	}
 
 	/**
@@ -761,11 +869,22 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	/**
-	 * The `use-replication-state` projection surfaces (best-effort 1b semantics).
-	 * `active$` reflects in-flight demand THIS surface initiated.
+	 * In-flight demand THIS surface initiated OR fixed-coverage lane activity for
+	 * its collection. Dynamic scheduler work remains handle-attributable only.
 	 */
-	replicationActive$(queryId: string): BehaviorSubject<boolean> | undefined {
-		return this.demandByQuery.get(queryId)?.active$;
+	replicationActive$(queryId: string): Observable<boolean> | undefined {
+		const query = this.queryStates.get(queryId);
+		const demand = this.demandByQuery.get(queryId);
+		if (!query || !demand || !query.collectionName || !isMappedCollection(query.collectionName)) {
+			return demand?.active$.pipe(distinctUntilChanged());
+		}
+		const engineCollection = engineCollectionNameFor(query.collectionName);
+		return combineLatest([demand.active$, this.laneActiveCollections$]).pipe(
+			map(
+				([demandActive, laneCollections]) => demandActive || laneCollections.has(engineCollection)
+			),
+			distinctUntilChanged()
+		);
 	}
 
 	/**
@@ -789,13 +908,33 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 * as the fallback for every other case.
 	 */
 	replicationTotal$(queryId: string): Observable<number> | undefined {
+		return this.replicationTotalProjection$(queryId)?.pipe(
+			map(({ total }) => total),
+			distinctUntilChanged()
+		);
+	}
+
+	/** Whether the displayed total is verified coverage or a local-count fallback. */
+	replicationTotalSource$(queryId: string): Observable<ReplicationTotalSource> | undefined {
+		return this.replicationTotalProjection$(queryId)?.pipe(
+			map(({ source }) => source),
+			distinctUntilChanged()
+		);
+	}
+
+	private replicationTotalProjection$(
+		queryId: string
+	): Observable<ReplicationTotalProjection> | undefined {
 		const query = this.queryStates.get(queryId);
 		if (!query) {
 			return undefined;
 		}
 		const localCount$ = query.result$.pipe(map((result) => result.count ?? 0));
 		if (!query.isEngineBacked) {
-			return localCount$.pipe(distinctUntilChanged());
+			return localCount$.pipe(
+				map((total) => ({ total, source: 'local' as const })),
+				distinctUntilChanged((previous, current) => previous.total === current.total)
+			);
 		}
 
 		const database = query.collection.database as RxDatabase;
@@ -806,7 +945,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			| RxCollection<QueryTotalCacheDocument>
 			| undefined;
 		if (!coverageLanes || !queryTotalCacheEntries) {
-			return localCount$.pipe(distinctUntilChanged());
+			return localCount$.pipe(
+				map((total) => ({ total, source: 'local' as const })),
+				distinctUntilChanged((previous, current) => previous.total === current.total)
+			);
 		}
 
 		const lanes$ = coverageLanes
@@ -843,14 +985,17 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					nowMs,
 				})
 			),
-			distinctUntilChanged()
+			distinctUntilChanged(
+				(previous, current) =>
+					previous.total === current.total && previous.source === current.source
+			)
 		);
 	}
 
 	/**
 	 * `sync()` for a bound query: force a re-declaration of its requirement
 	 * (forceRefresh) then drain — never a bare scheduler drain (completed tasks
-	 * no-op). The full lane-lifecycle projection lands at increment 5 (ticket #537).
+	 * no-op). Engine lane lifecycle is composed into `replicationActive$` above.
 	 */
 	async syncQuery(queryId: string): Promise<void> {
 		const query = this.queryStates.get(queryId);
@@ -896,6 +1041,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	async cancel(): Promise<void> {
+		if (this.laneSafetyTimer !== undefined) {
+			clearTimeout(this.laneSafetyTimer);
+			this.laneSafetyTimer = undefined;
+		}
 		await super.cancel();
 
 		const queryPromises: Promise<void>[] = [];

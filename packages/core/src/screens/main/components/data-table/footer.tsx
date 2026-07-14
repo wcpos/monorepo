@@ -21,10 +21,11 @@ interface Props {
  *
  */
 export function DataTableFooter({ children, query, count }: Props) {
-	const { sync, active$, total$ } = useReplicationState(query);
+	const { sync, active$, total$, totalSource$ } = useReplicationState(query);
 	const { clearAndSync } = useCollectionReset(query.collection.name);
 	const loading = useObservableEagerState(active$);
 	const total = useObservableState(total$ ?? of(0), 0);
+	const totalSource = useObservableState(totalSource$, 'local');
 	const t = useT();
 
 	return (
@@ -34,6 +35,11 @@ export function DataTableFooter({ children, query, count }: Props) {
 				<Text testID="data-table-count" className="text-xs">
 					{t('common.showing_of', { shown: count, total })}
 				</Text>
+				{totalSource === 'local' ? (
+					<Text className="text-muted-foreground ml-1 text-[10px]">
+						{t('common.showing_local_items')}
+					</Text>
+				) : null}
 				<SyncButton sync={sync} clearAndSync={clearAndSync} active={loading} />
 			</HStack>
 		</HStack>

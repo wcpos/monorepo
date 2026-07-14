@@ -781,6 +781,112 @@ describe('Manager', () => {
 		});
 	});
 
+	describe('Lane-wide replication activity', () => {
+		const registerLaneQuery = (collectionName: string, key: string, initialParams = {}) => {
+			const query = manager.registerQuery({
+				queryKeys: [key],
+				collectionName,
+				initialParams,
+			});
+			if (!query) throw new Error(`${collectionName} query was not registered`);
+			return query;
+		};
+		const observeActive = (query: Query<RxCollection>): boolean[] => {
+			const states: boolean[] = [];
+			manager.replicationActive$(query.id)?.subscribe((active) => states.push(active));
+			return states;
+		};
+
+		it('projects mapped lane start/finish pairs to queries for that collection only', () => {
+			const productStates = observeActive(registerLaneQuery('products', 'lane-products'));
+			const customerStates = observeActive(registerLaneQuery('customers', 'lane-customers'));
+
+			engine.emit({ type: 'lane-start', lane: 'product-browse-window-seed' });
+			engine.emit({
+				type: 'lane-finish',
+				lane: 'product-browse-window-seed',
+				status: 'ran',
+			});
+
+			expect(productStates).toEqual([false, true, false]);
+			expect(customerStates).toEqual([false]);
+		});
+
+		it.each(['products/categories', 'products/brands', 'products/tags', 'coupons'] as const)(
+			'maps reference-seed activity to %s',
+			(collectionName) => {
+				const states = observeActive(
+					registerLaneQuery(collectionName, `reference-${collectionName}`)
+				);
+
+				engine.emit({ type: 'lane-start', lane: 'reference-seed' });
+				engine.emit({ type: 'lane-finish', lane: 'reference-seed', status: 'ran' });
+
+				expect(states).toEqual([false, true, false]);
+			}
+		);
+
+		it('keeps a nested lane active until every matching start has finished', async () => {
+			const query = registerLaneQuery('orders', 'nested-order-lane');
+			await Promise.resolve();
+			await Promise.resolve();
+			const states = observeActive(query);
+
+			engine.emit({ type: 'lane-start', lane: 'order-window-seed' });
+			engine.emit({ type: 'lane-start', lane: 'order-window-seed' });
+			engine.emit({ type: 'lane-finish', lane: 'order-window-seed', status: 'ran' });
+			expect(states).toEqual([false, true]);
+
+			engine.emit({ type: 'lane-finish', lane: 'order-window-seed', status: 'ran' });
+			expect(states).toEqual([false, true, false]);
+		});
+
+		it('expires an unmatched lane start after the 60 second safety window', () => {
+			jest.useFakeTimers();
+			try {
+				const states = observeActive(registerLaneQuery('products', 'stale-product-lane'));
+
+				engine.emit({ type: 'lane-start', lane: 'product-browse-window-seed' });
+				jest.advanceTimersByTime(60_001);
+
+				expect(states).toEqual([false, true, false]);
+			} finally {
+				jest.useRealTimers();
+			}
+		});
+
+		it('stays active while either attributable demand or a mapped lane is active', async () => {
+			let settleDemand!: () => void;
+			const demandReady = new Promise<void>((resolve) => {
+				settleDemand = resolve;
+			});
+			engine.require = () => ({ ready: demandReady, release: () => undefined });
+			const query = registerLaneQuery('products', 'handle-or-lane', { selector: { id: 17 } });
+			const states = observeActive(query);
+
+			engine.emit({ type: 'lane-start', lane: 'product-browse-window-seed' });
+			settleDemand();
+			await demandReady;
+			await Promise.resolve();
+			expect(states.at(-1)).toBe(true);
+
+			engine.emit({
+				type: 'lane-finish',
+				lane: 'product-browse-window-seed',
+				status: 'ran',
+			});
+			expect(states).toEqual([true, false]);
+		});
+
+		it('subscribes once per manager and removes the engine listener on cancel', async () => {
+			expect(engine.eventListenerCount()).toBe(1);
+
+			await manager.cancel();
+
+			expect(engine.eventListenerCount()).toBe(0);
+		});
+	});
+
 	describe('Coverage-aware replication totals', () => {
 		const addCoverageCollections = async () => {
 			await engineDB.addCollections({
