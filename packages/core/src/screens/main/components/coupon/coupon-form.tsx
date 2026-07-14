@@ -112,6 +112,12 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 								{ value: 'fixed_product', label: t('coupons.amount_off_products') },
 							]}
 							{...field}
+							onChange={(value) => {
+								field.onChange(value);
+								if (value === 'fixed_cart') {
+									form.setValue('limit_usage_to_x_items', 0, { shouldDirty: true });
+								}
+							}}
 						/>
 					)}
 				/>
