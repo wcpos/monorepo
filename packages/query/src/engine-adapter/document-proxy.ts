@@ -47,10 +47,10 @@ function legacySnapshot(
 }
 
 /** Wrap an engine RxDocument with the legacy read contract. Writes intentionally fail loudly. */
-export function wrapEngineDocument(
+export function wrapEngineDocument<TDocument extends object = Record<string, unknown>>(
 	collection: LegacyCollectionName,
 	rxDocument: RxDocument<EngineDocument>
-): Record<string, unknown> {
+): TDocument {
 	return new Proxy<Record<string, unknown>>(
 		{},
 		{
@@ -113,5 +113,5 @@ export function wrapEngineDocument(
 				return readLegacyField(collection, engineDocument(rxDocument), property);
 			},
 		}
-	);
+	) as TDocument;
 }

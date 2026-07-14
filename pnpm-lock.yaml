@@ -714,6 +714,9 @@ importers:
       '@wcpos/query':
         specifier: workspace:*
         version: link:../query
+      '@wcpos/sync-core':
+        specifier: workspace:*
+        version: link:../sync-core
       '@wcpos/utils':
         specifier: workspace:*
         version: link:../utils
