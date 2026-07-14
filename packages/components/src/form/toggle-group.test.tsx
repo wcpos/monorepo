@@ -20,23 +20,34 @@ jest.mock('./context', () => ({
 	}),
 }));
 
-jest.mock('../toggle-group', () => {
+// Mirrors the real Tabs contract: a trigger always fires onValueChange with its
+// own value on press, including when it is already the active tab.
+jest.mock('../tabs', () => {
 	const React = require('react');
 	return {
-		ToggleGroup: ({ children, value, onValueChange }: any) =>
+		Tabs: ({ children, value, onValueChange }: any) =>
 			React.createElement(
 				'div',
 				{ role: 'group', 'data-value': value },
 				React.Children.map(children, (child: any) =>
-					React.cloneElement(child, { __groupValue: value, __onValueChange: onValueChange })
+					React.cloneElement(child, { __rootValue: value, __onValueChange: onValueChange })
 				)
 			),
-		ToggleGroupItem: ({ children, value, __groupValue, __onValueChange }: any) =>
+		TabsList: ({ children, testID, __rootValue, __onValueChange }: any) =>
+			React.createElement(
+				'div',
+				{ 'data-testid': testID },
+				React.Children.map(children, (child: any) =>
+					React.cloneElement(child, { __rootValue, __onValueChange })
+				)
+			),
+		TabsTrigger: ({ children, value, testID, __rootValue, __onValueChange }: any) =>
 			React.createElement(
 				'button',
 				{
-					'aria-pressed': __groupValue === value,
-					onClick: () => __onValueChange(__groupValue === value ? undefined : value),
+					'data-testid': testID,
+					'aria-pressed': __rootValue === value,
+					onClick: () => __onValueChange(value),
 				},
 				children
 			),
@@ -98,5 +109,23 @@ describe('FormToggleGroup', () => {
 		);
 		fireEvent.click(screen.getByText('Percentage'));
 		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	it('derives per-option testIDs from the group testID', () => {
+		render(
+			<FormToggleGroup
+				name="type"
+				onBlur={jest.fn()}
+				value="percent"
+				onChange={jest.fn()}
+				options={OPTIONS}
+				testID="coupon-discount-type"
+			/>
+		);
+		expect(screen.getByTestId('coupon-discount-type')).toBeInTheDocument();
+		expect(screen.getByTestId('coupon-discount-type-percent')).toHaveTextContent('Percentage');
+		expect(screen.getByTestId('coupon-discount-type-fixed_cart')).toHaveTextContent(
+			'Amount off order'
+		);
 	});
 });
