@@ -21,6 +21,7 @@ import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { UISettingsDialog } from '../components/ui-settings';
+import { useUISettings } from '../contexts/ui-settings';
 import { TextCell } from '../components/text-cell';
 import { LogsFooter } from './footer';
 import {
@@ -30,7 +31,8 @@ import {
 	useQueryStateActions,
 } from '../../../query';
 
-import type { QueryStateActions } from '../../../query';
+import type { QueryStateActions, QueryStateOf } from '../../../query';
+import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 
@@ -42,6 +44,22 @@ const cells = {
 };
 
 const LOGS_PAGE_SIZE = 10;
+const LOG_SORT_FIELDS = [
+	'timestamp',
+	'level',
+	'code',
+] as const satisfies readonly SortFieldsByCollection['logs'][];
+const DEFAULT_LOG_SORT = { field: 'timestamp', direction: 'desc' } as const;
+
+function isLogSortField(field: unknown): field is SortFieldsByCollection['logs'] {
+	return LOG_SORT_FIELDS.some((sortField) => sortField === field);
+}
+
+function getInitialLogSort(sortBy: unknown, sortDirection: unknown): QueryStateOf<'logs'>['sort'] {
+	if (!isLogSortField(sortBy)) return DEFAULT_LOG_SORT;
+
+	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
+}
 
 function renderCell(columnKey: string, info: Record<string, unknown>) {
 	const Renderer = cells[columnKey as keyof typeof cells];
@@ -151,11 +169,14 @@ function LogsScreenContent() {
 }
 
 export function LogsScreen() {
+	const { uiSettings } = useUISettings('logs');
+	const initialSort = getInitialLogSort(uiSettings.sortBy, uiSettings.sortDirection);
+
 	return (
 		<QueryStateProvider
 			collection="logs"
 			initialPageSize={LOGS_PAGE_SIZE}
-			initialSort={{ field: 'timestamp', direction: 'desc' }}
+			initialSort={initialSort}
 			initialFilters={{ level: DEFAULT_LOG_LEVELS }}
 		>
 			<LogsScreenContent />

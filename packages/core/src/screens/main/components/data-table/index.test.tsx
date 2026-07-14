@@ -137,6 +137,7 @@ describe('DataTable binding contract', () => {
 		fireEvent.click(screen.getByTestId('sort-level'));
 		fireEvent.click(screen.getByTestId('end-reached'));
 
+		expect(mockPatchUI).toHaveBeenCalledWith({ sortBy: 'level', sortDirection: 'asc' });
 		expect(mockSetSort).toHaveBeenCalledWith('level', 'asc');
 		expect(mockExtendLimit).toHaveBeenCalledTimes(1);
 		expect(mockTableMeta).toEqual({ actions: { setFilter: mockSetFilter } });

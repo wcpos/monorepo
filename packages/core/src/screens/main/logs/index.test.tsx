@@ -20,6 +20,8 @@ const mockBinding = {
 };
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
 let mockDataTableProps: Record<string, unknown> = {};
+let mockSortBy = 'timestamp';
+let mockSortDirection = 'desc';
 
 jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
@@ -88,7 +90,7 @@ jest.mock('../components/ui-settings', () => ({
 }));
 jest.mock('../contexts/ui-settings', () => ({
 	useUISettings: () => ({
-		uiSettings: { sortBy: 'timestamp', sortDirection: 'desc' },
+		uiSettings: { sortBy: mockSortBy, sortDirection: mockSortDirection },
 	}),
 }));
 jest.mock('../../../contexts/translations', () => ({
@@ -117,6 +119,8 @@ describe('LogsScreen query-state wiring', () => {
 		jest.useFakeTimers();
 		jest.clearAllMocks();
 		mockDataTableProps = {};
+		mockSortBy = 'timestamp';
+		mockSortDirection = 'desc';
 	});
 
 	afterEach(() => jest.useRealTimers());
@@ -138,6 +142,24 @@ describe('LogsScreen query-state wiring', () => {
 			sync: mockBinding.sync,
 		});
 		expect(mockDataTableProps).not.toHaveProperty('query');
+	});
+
+	it('initializes the binding sort from persisted logs settings', () => {
+		mockSortBy = 'level';
+		mockSortDirection = 'asc';
+
+		render(<LogsScreen />);
+
+		expect(latestState().sort).toEqual({ field: 'level', direction: 'asc' });
+	});
+
+	it('falls back to timestamp descending when the persisted sort field is invalid', () => {
+		mockSortBy = 'message';
+		mockSortDirection = 'asc';
+
+		render(<LogsScreen />);
+
+		expect(latestState().sort).toEqual({ field: 'timestamp', direction: 'desc' });
 	});
 
 	it('commits search through the store only after the input debounce', () => {
