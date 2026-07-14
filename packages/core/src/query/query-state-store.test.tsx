@@ -164,4 +164,34 @@ describe('QueryStateProvider', () => {
 
 		expect(state?.limit).toBe(40);
 	});
+
+	it('clears an optional filter instead of restoring its initial screen value', () => {
+		let actions: QueryStateActions<'logs'> | undefined;
+		let state: QueryStateOf<'logs'> | undefined;
+
+		function Subscriber() {
+			state = useQueryState<'logs'>();
+			actions = useQueryStateActions<'logs'>();
+			return null;
+		}
+
+		render(
+			<QueryStateProvider
+				collection="logs"
+				initialPageSize={10}
+				initialSort={{ field: 'timestamp', direction: 'desc' }}
+				initialFilters={{ level: ['error', 'warn', 'info', 'success'] }}
+			>
+				<Subscriber />
+			</QueryStateProvider>
+		);
+
+		act(() => actions?.clearFilter('level'));
+
+		expect(state?.filters).toEqual({});
+		expect(state?.limit).toBe(10);
+
+		act(() => actions?.resetFilters());
+		expect(state?.filters).toEqual({ level: ['error', 'warn', 'info', 'success'] });
+	});
 });

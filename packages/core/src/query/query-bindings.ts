@@ -9,7 +9,7 @@
 import * as React from 'react';
 
 import { of } from 'rxjs';
-import { distinctUntilChanged, map } from 'rxjs/operators';
+import { distinctUntilChanged, filter, switchMap } from 'rxjs/operators';
 
 import { useQueryManager, useReplicationState } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -17,6 +17,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { translateQueryState } from './query-state-translator';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
+import type { RxQuery } from 'rxdb';
 
 type Manager = ReturnType<typeof useQueryManager>;
 type RegisteredQuery = NonNullable<ReturnType<Manager['registerQuery']>>;
@@ -80,34 +81,15 @@ function useBindingOutput(query: RegisteredQuery) {
 
 const LOCAL_TOTAL_SOURCE$ = of('local' as const);
 
-function useLogsTotalQuery(input: {
-	collection: CollectionKey;
-	params: QueryParams;
-	search: string;
-}): RegisteredQuery | null {
-	const manager = useQueryManager();
-	const bindingId = React.useId();
-	const epoch = useEngineEpoch(manager);
-	const key = JSON.stringify(input);
-	const query = React.useMemo(() => {
-		void epoch;
-		const stable = JSON.parse(key) as typeof input;
-		if (stable.collection !== 'logs') return null;
-		const registered = manager.registerQuery({
-			queryKeys: ['query-binding', bindingId, 'logs-total', key],
-			collectionName: 'logs',
-			initialParams: stable.params,
-		});
-		if (!registered) throw new Error('Unable to bind logs total');
-		if (stable.search) registered.search(stable.search);
-		return registered;
-	}, [manager, bindingId, epoch, key]);
-	React.useEffect(() => {
-		return () => {
-			if (query) deregisterOwnedQuery(manager, query);
-		};
-	}, [manager, query]);
-	return query;
+function useLogsTotal(collection: CollectionKey, query: RegisteredQuery) {
+	return React.useMemo(() => {
+		if (collection !== 'logs') return null;
+		return query.rxQuery$.pipe(
+			filter((rxQuery): rxQuery is RxQuery => rxQuery !== undefined),
+			switchMap((rxQuery) => query.collection.count({ selector: rxQuery.mangoQuery.selector }).$),
+			distinctUntilChanged()
+		);
+	}, [collection, query]);
 }
 
 export function useCollectionBinding<C extends CollectionKey>(
@@ -122,22 +104,8 @@ export function useCollectionBinding<C extends CollectionKey>(
 		identity: 'collection',
 	});
 	const output = useBindingOutput(query);
-	const logsTotalQuery = useLogsTotalQuery({
-		collection,
-		params: { selector: translated.selector, sort: translated.sort },
-		search: translated.search,
-	});
-	const logsTotal$ = React.useMemo(
-		() =>
-			logsTotalQuery?.result$.pipe(
-				map((result) => result.count ?? 0),
-				distinctUntilChanged()
-			),
-		[logsTotalQuery]
-	);
-	return logsTotalQuery
-		? { ...output, total$: logsTotal$!, totalSource$: LOCAL_TOTAL_SOURCE$ }
-		: output;
+	const logsTotal = useLogsTotal(collection, query);
+	return logsTotal ? { ...output, total$: logsTotal, totalSource$: LOCAL_TOTAL_SOURCE$ } : output;
 }
 
 export function useRelationalCollectionBinding(state: QueryStateOf<'products'>) {

@@ -2,12 +2,19 @@ import { useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { Query } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 
-export function LogsFooter({ query, count }: { query: Query<any>; count: number }) {
-	const total = useObservableState(query.collection.count({}).$, 0);
+import type { useCollectionBinding } from '../../../query';
+
+type LogsBinding = ReturnType<typeof useCollectionBinding<'logs'>>;
+
+interface LogsFooterProps extends Pick<LogsBinding, 'active$' | 'sync' | 'total$'> {
+	count: number;
+}
+
+export function LogsFooter({ total$, count }: LogsFooterProps) {
+	const total = useObservableState(total$, 0);
 	const t = useT();
 
 	/**

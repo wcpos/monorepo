@@ -3,7 +3,8 @@ import * as React from 'react';
 import { CellContext } from '@tanstack/react-table';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import type { Query } from '@wcpos/query';
+
+import type { QueryStateActions } from '../../../../query';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 
@@ -21,15 +22,12 @@ const variantMap: Record<string, string> = {
  */
 export function Level({ row, table }: CellContext<{ document: LogDocument }, 'level'>) {
 	const log = row.original.document;
-	const query = (table.options.meta as Record<string, unknown> | undefined)?.query as
-		| Query<any>
-		| undefined;
+	const actions = (table.options.meta as { actions?: Pick<QueryStateActions<'logs'>, 'setFilter'> })
+		?.actions;
 
 	const handlePress = React.useCallback(() => {
-		if (query) {
-			query.where('level').in([log.level]).exec();
-		}
-	}, [query, log.level]);
+		if (log.level) actions?.setFilter('level', [log.level]);
+	}, [actions, log.level]);
 
 	return (
 		<ButtonPill

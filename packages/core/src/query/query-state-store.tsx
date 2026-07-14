@@ -48,7 +48,8 @@ function shallowEqual(left: unknown, right: unknown): boolean {
 
 function createStore<C extends CollectionKey>(
 	initial: QueryStateOf<C>,
-	initialFilters: FiltersOf<C>,
+	clearFilters: FiltersOf<C>,
+	resetFilters: FiltersOf<C>,
 	pageSize: number
 ): Store<C> {
 	let state = initial;
@@ -74,11 +75,11 @@ function createStore<C extends CollectionKey>(
 			setFilter: (field, value) => resultChange({ filters: { ...state.filters, [field]: value } }),
 			clearFilter: (field) => {
 				const filters = { ...state.filters };
-				if (field in initialFilters) filters[field] = initialFilters[field];
+				if (field in clearFilters) filters[field] = clearFilters[field];
 				else delete filters[field];
 				resultChange({ filters });
 			},
-			resetFilters: () => resultChange({ filters: clone(initialFilters) }),
+			resetFilters: () => resultChange({ filters: clone(resetFilters) }),
 			setSort: (field, direction) => resultChange({ sort: { field, direction } }),
 			extendLimit: () => publish({ ...state, limit: state.limit + pageSize }),
 		},
@@ -102,9 +103,11 @@ export function QueryStateProvider<C extends CollectionKey>({
 		throw new Error('QueryStateProvider initialPageSize must be a positive integer');
 	}
 	const [store] = React.useState<Store<C>>(() => {
-		const filters = { ...clone(DEFAULT_FILTERS[collection]), ...initialFilters } as FiltersOf<C>;
+		const clearFilters = clone(DEFAULT_FILTERS[collection]);
+		const filters = { ...clearFilters, ...initialFilters } as FiltersOf<C>;
 		return createStore(
 			{ search: '', filters, sort: initialSort, limit: initialPageSize },
+			clearFilters,
 			filters,
 			initialPageSize
 		);
