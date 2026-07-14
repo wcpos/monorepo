@@ -18,7 +18,7 @@ export function StatusSelect({ value, ...props }: SelectSingleRootProps) {
 
 	const options = React.useMemo(
 		() => [
-			{ label: t('coupons.publish'), value: 'publish' },
+			{ label: t('coupons.active'), value: 'publish' },
 			{ label: t('coupons.draft'), value: 'draft' },
 			{ label: t('coupons.pending'), value: 'pending' },
 		],

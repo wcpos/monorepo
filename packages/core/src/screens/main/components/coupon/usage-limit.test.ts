@@ -3,7 +3,14 @@
  *
  * Tests for the coupon usage-limit conversion helpers.
  */
-import { fromUsageLimit, NO_USAGE_LIMIT, toUsageLimit } from './usage-limit';
+import {
+	fromUsageLimit,
+	isOneTimeUse,
+	NO_USAGE_LIMIT,
+	ONE_TIME_USE,
+	toggleOneTimeUse,
+	toUsageLimit,
+} from './usage-limit';
 
 describe('toUsageLimit', () => {
 	it('clears the limit with 0 rather than null when the field is emptied', () => {
@@ -74,5 +81,21 @@ describe('usage limit round trip', () => {
 
 	it('preserves a typed limit through display and submit', () => {
 		expect(fromUsageLimit(toUsageLimit('50'))).toBe('50');
+	});
+});
+
+describe('one-time use mapping', () => {
+	it('recognizes exactly usage_limit === 1 as one-time use', () => {
+		expect(isOneTimeUse(1)).toBe(true);
+		expect(isOneTimeUse(0)).toBe(false);
+		expect(isOneTimeUse(2)).toBe(false);
+		expect(isOneTimeUse(null)).toBe(false);
+		expect(isOneTimeUse(undefined)).toBe(false);
+	});
+
+	it('toggling on writes 1; toggling off writes the clearing sentinel, not null', () => {
+		expect(toggleOneTimeUse(true)).toBe(ONE_TIME_USE);
+		expect(toggleOneTimeUse(false)).toBe(NO_USAGE_LIMIT);
+		expect(toggleOneTimeUse(false)).not.toBeNull();
 	});
 });

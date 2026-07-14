@@ -11,10 +11,12 @@ import { FormRadioGroup } from './radio-group';
 import { FormSelect } from './select';
 import { FormSwitch } from './switch';
 import { FormTextarea } from './textarea';
+import { FormToggleGroup } from './toggle-group';
 import { FormTreeCombobox } from './tree-combobox';
 import { useFormChangeHandler } from './use-form-change-handler';
 
 import type { FormItemProps } from './common';
+import type { FormToggleGroupOption } from './toggle-group';
 
 const Form = FormProvider;
 
@@ -44,8 +46,10 @@ export {
 	FormSelect,
 	FormSwitch,
 	FormTextarea,
+	FormToggleGroup,
 	FormTreeCombobox,
 	useFormField,
 	useFormChangeHandler,
 	type FormItemProps,
+	type FormToggleGroupOption,
 };

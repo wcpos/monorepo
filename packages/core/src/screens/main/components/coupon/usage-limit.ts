@@ -31,3 +31,18 @@ export function toUsageLimit(text: string | number | undefined | null): number {
 export function fromUsageLimit(value: number | null | undefined): string {
 	return value == null || value === NO_USAGE_LIMIT ? '' : String(value);
 }
+
+/**
+ * The "One-time use" switch is a convenience view over `usage_limit`: exactly 1
+ * means one-time. Turning it off writes the clearing sentinel (0), because
+ * WooCommerce ignores `null` on write — see NO_USAGE_LIMIT above.
+ */
+export const ONE_TIME_USE = 1;
+
+export function isOneTimeUse(value: number | null | undefined): boolean {
+	return value === ONE_TIME_USE;
+}
+
+export function toggleOneTimeUse(checked: boolean): number {
+	return checked ? ONE_TIME_USE : NO_USAGE_LIMIT;
+}
