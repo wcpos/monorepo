@@ -249,8 +249,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				);
 			} else {
 				const existingDemand = existingQuery && this.demandByQuery.get(existingQuery.id);
-				if (existingDemand) {
+				if (existingDemand?.paused) {
 					existingDemand.paused = false;
+					existingDemand.requirements = [];
 				}
 				return existingQuery;
 			}
@@ -315,8 +316,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				);
 			} else {
 				const existingDemand = existingQuery && this.demandByQuery.get(existingQuery.id);
-				if (existingDemand) {
+				if (existingDemand?.paused) {
 					existingDemand.paused = false;
+					existingDemand.requirements = [];
 				}
 				return existingQuery;
 			}
@@ -622,7 +624,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			handle.release();
 		}
 		demand.handles = [];
-		demand.requirements = [];
 		demand.paused = true;
 	}
 

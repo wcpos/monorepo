@@ -362,6 +362,12 @@ describe('Manager', () => {
 			manager.maybePauseQueryReplications(query);
 
 			expect(engine.searchRequireCalls[0]?.released).toBe(true);
+			const demand = (
+				manager as unknown as {
+					demandByQuery: Map<string, { requirements: unknown[] }>;
+				}
+			).demandByQuery.get(query.id);
+			expect(demand?.requirements).toHaveLength(1);
 		});
 
 		it('keeps serving local search results when search demand rejects', async () => {
