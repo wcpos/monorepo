@@ -3,15 +3,20 @@ import * as React from 'react';
 import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
+import { useQueryManager } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { buildEnrichedProductCategories } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
+import {
+	readEngineCategories,
+	readEngineCoupons,
+	readEngineProductsByWooId,
+} from './engine-coupon-data';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { parsePosData } from './utils';
 import { useT } from '../../../../contexts/translations';
-import { useCollection } from '../../hooks/use-collection';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -22,7 +27,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 /**
  * Hook for adding a coupon to the current order.
  *
- * Looks up the coupon code in the local RxDB coupons collection,
+ * Looks up the coupon code in the engine coupons collection,
  * validates it against the current cart state, calculates the discount,
  * and adds it to the order's coupon_lines.
  */
@@ -30,9 +35,7 @@ export const useAddCoupon = () => {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const { currentOrder } = useCurrentOrder();
-	const { collection: couponCollection } = useCollection('coupons');
-	const { collection: productCollection } = useCollection('products');
-	const { collection: categoryCollection } = useCollection('products/categories');
+	const manager = useQueryManager();
 	const { recalculate } = useRecalculateCoupons();
 
 	const orderLogger = React.useMemo(
@@ -48,10 +51,12 @@ export const useAddCoupon = () => {
 	const addCoupon = React.useCallback(
 		async (couponCode: string) => {
 			try {
-				// 1. Look up coupon in local DB (case-insensitive)
-				const coupon = await couponCollection
-					.findOne({ selector: { code: couponCode.toLowerCase().trim() } })
-					.exec();
+				// 1. Preserve the legacy selector semantics: normalize only the input value,
+				// then match payload.code exactly against the resident Tier-0 coupon scan.
+				const coupons = await readEngineCoupons(manager);
+				const coupon = coupons.find(
+					(document) => document.code === couponCode.toLowerCase().trim()
+				);
 
 				if (!coupon) {
 					return {
@@ -70,9 +75,7 @@ export const useAddCoupon = () => {
 				// 2. Look up applied coupons that have individual_use for reverse check
 				const appliedCouponsWithIndividualUse: string[] = [];
 				for (const cl of appliedCouponLines) {
-					const appliedCouponDoc = await couponCollection
-						.findOne({ selector: { code: cl.code } })
-						.exec();
+					const appliedCouponDoc = coupons.find((document) => document.code === cl.code);
 					if (appliedCouponDoc?.toJSON().individual_use && cl.code) {
 						appliedCouponsWithIndividualUse.push(cl.code);
 					}
@@ -81,9 +84,7 @@ export const useAddCoupon = () => {
 				// 3. Look up products for category/on_sale info
 				const productIds = lineItems.map((item: any) => item.product_id).filter(Boolean);
 				const products =
-					productIds.length > 0
-						? await productCollection.find({ selector: { id: { $in: productIds } } }).exec()
-						: [];
+					productIds.length > 0 ? await readEngineProductsByWooId(manager, productIds) : [];
 				const productMap = new Map(products.map((p: any) => [p.id, p]));
 
 				// Build ancestor-enriched category map for coupon restriction matching.
@@ -94,10 +95,8 @@ export const useAddCoupon = () => {
 						productCategoriesMap.set(p.id as number, (p.categories || []) as { id: number }[]);
 					}
 				}
-				productCategoriesMap = await buildEnrichedProductCategories(
-					productCategoriesMap,
-					categoryCollection
-				);
+				const categories = await readEngineCategories(manager);
+				productCategoriesMap = buildEnrichedProductCategories(productCategoriesMap, categories);
 
 				// 4. Build validation context
 				// Use POS data to determine on_sale — this matches recalculateCoupons'
@@ -176,7 +175,7 @@ export const useAddCoupon = () => {
 
 				const allCouponLines = [...(order.coupon_lines || []), newCouponLine];
 
-				// Note: recalculate() re-queries coupon/product docs from RxDB, so
+				// Note: recalculate() re-queries coupon/product docs from the engine, so
 				// there's a theoretical TOCTOU gap if a background sync changes docs
 				// between validateCoupon() and recalculate(). In practice the window
 				// is milliseconds and the server will re-validate on sync. A full fix
@@ -185,7 +184,7 @@ export const useAddCoupon = () => {
 				const result = await recalculate(order.line_items || [], allCouponLines);
 
 				// Re-check freshness after async recalculate — the order may have
-				// changed during RxDB lookups inside recalculate()
+				// changed during engine lookups inside recalculate()
 				const latestOrder = currentOrder.getLatest();
 				if (
 					!isEqual(cartSnapshot, {
@@ -250,16 +249,7 @@ export const useAddCoupon = () => {
 				};
 			}
 		},
-		[
-			couponCollection,
-			productCollection,
-			categoryCollection,
-			currentOrder,
-			localPatch,
-			t,
-			orderLogger,
-			recalculate,
-		]
+		[manager, currentOrder, localPatch, t, orderLogger, recalculate]
 	);
 
 	return { addCoupon };

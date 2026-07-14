@@ -51,7 +51,7 @@ export function TagPill({ query, resource, selectedID }: Props) {
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.where('tags').removeElemMatch('tags', { id: tag?.id }).exec()}
+					onRemove={() => query.where('tags').removeElemMatch('tags', { id: selectedID }).exec()}
 				>
 					<ButtonText decodeHtml>
 						{isActive ? tag?.name || t('common.id_2', { id: selectedID }) : t('common.tag')}

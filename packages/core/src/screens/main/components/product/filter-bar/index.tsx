@@ -1,9 +1,7 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
-import { of } from 'rxjs';
-import { map, switchMap, tap } from 'rxjs/operators';
+import { useObservableEagerState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
@@ -15,8 +13,7 @@ import { FeaturedPill } from './featured-pill';
 import { OnSalePill } from './on-sale-pill';
 import { StockStatusPill } from './stock-status-pill';
 import { TagPill } from './tag-pill';
-import { usePullDocument } from '../../../contexts/use-pull-document';
-import { useCollection } from '../../../hooks/use-collection';
+import { useEngineDocumentByWooId } from '../../../hooks/use-engine-document';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 
@@ -28,63 +25,18 @@ interface Props {
  *
  */
 export function FilterBar({ query }: Props) {
-	const pullDocument = usePullDocument();
-	const { collection: tagCollection } = useCollection('products/tags');
-	const { collection: brandCollection } = useCollection('products/brands');
 	const selectedTagID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getElemMatchId('tags')))
 	);
 	const selectedBrandID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getElemMatchId('brands')))
 	);
-
-	const selectedTag$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id, tagCollection, pullDocument]) => {
-					if (!id) {
-						return of(undefined);
-					}
-					return tagCollection.findOne({ selector: { id } }).$.pipe(
-						tap((doc) => {
-							if (!isRxDocument(doc)) {
-								pullDocument(id, tagCollection as any);
-							}
-						})
-					);
-				})
-			),
-		[selectedTagID, tagCollection, pullDocument]
-	);
-
-	const selectedTagResource = React.useMemo(
-		() => new ObservableResource(selectedTag$),
-		[selectedTag$]
-	);
-
-	const selectedBrand$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id, brandCollection, pullDocument]) => {
-					if (!id) {
-						return of(undefined);
-					}
-					return brandCollection.findOne({ selector: { id } }).$.pipe(
-						tap((doc) => {
-							if (!isRxDocument(doc)) {
-								pullDocument(id, brandCollection as any);
-							}
-						})
-					);
-				})
-			),
-		[selectedBrandID, brandCollection, pullDocument]
-	);
-
-	const selectedBrandResource = React.useMemo(
-		() => new ObservableResource(selectedBrand$),
-		[selectedBrand$]
-	);
+	const selectedTagResource = useEngineDocumentByWooId<
+		import('@wcpos/database').ProductTagDocument
+	>('products/tags', selectedTagID ?? 0);
+	const selectedBrandResource = useEngineDocumentByWooId<
+		import('@wcpos/database').ProductCategoryDocument
+	>('products/brands', selectedBrandID ?? 0);
 
 	/**
 	 *
@@ -96,14 +48,10 @@ export function FilterBar({ query }: Props) {
 			<OnSalePill query={query} />
 			<CategoryPill query={query} />
 			<Suspense>
-				<TagPill query={query} resource={selectedTagResource as any} selectedID={selectedTagID} />
+				<TagPill query={query} resource={selectedTagResource} selectedID={selectedTagID} />
 			</Suspense>
 			<Suspense>
-				<BrandsPill
-					query={query}
-					resource={selectedBrandResource as any}
-					selectedID={selectedBrandID}
-				/>
+				<BrandsPill query={query} resource={selectedBrandResource} selectedID={selectedBrandID} />
 			</Suspense>
 		</HStack>
 	);

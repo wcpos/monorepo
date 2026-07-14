@@ -6,8 +6,9 @@ import { map, tap } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import { useQuery } from '@wcpos/query';
+import { useQuery, useQueryManager } from '@wcpos/query';
 
+import { forceRefreshFilterCustomer } from './force-refresh-filter-customer';
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';
@@ -16,13 +17,7 @@ import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { normalizeSelectedCustomerID } from '../components/order/filter-bar/customer-filter-utils';
 import { createSelectedEntityFromInputs$ } from '../components/filter-bar/selected-entity';
-import { pullDocumentSafely } from '../components/filter-bar/pull-document-safely';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
-import { usePullDocument } from '../contexts/use-pull-document';
-import { useCollection } from '../hooks/use-collection';
-
-type CustomerCollection = import('@wcpos/database').CustomerCollection;
-type PullCustomerDocument = (id: number, collection: CustomerCollection) => Promise<unknown>;
 
 /**
  *
@@ -44,9 +39,7 @@ export function FilterBar({
 		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
 	);
 	const { wpCredentials } = useAppState();
-	const pullDocument = usePullDocument();
-	const pullCustomerDocument = pullDocument as PullCustomerDocument;
-	const { collection: customerCollection } = useCollection('customers');
+	const manager = useQueryManager();
 
 	/**
 	 *
@@ -90,11 +83,7 @@ export function FilterBar({
 								result$?.pipe(
 									tap((result) => {
 										if (id && id !== 0 && result.hits.length === 0) {
-											void pullDocumentSafely(
-												pullCustomerDocument,
-												toNumber(id),
-												customerCollection
-											);
+											void forceRefreshFilterCustomer(manager, toNumber(id), 'customer');
 										}
 									})
 								),
@@ -108,8 +97,7 @@ export function FilterBar({
 			customerID as string | number | null | undefined,
 			customerQuery?.result$,
 			guestCustomer,
-			pullCustomerDocument,
-			customerCollection,
+			manager,
 		]
 	);
 
@@ -135,11 +123,7 @@ export function FilterBar({
 								result$?.pipe(
 									tap((result) => {
 										if (id && result.hits.length === 0) {
-											void pullDocumentSafely(
-												pullCustomerDocument,
-												toNumber(id),
-												customerCollection
-											);
+											void forceRefreshFilterCustomer(manager, toNumber(id), 'cashier');
 										}
 									})
 								),
@@ -149,13 +133,7 @@ export function FilterBar({
 					)
 				)
 			),
-		[
-			cashierID as string | number | null | undefined,
-			cashierQuery?.result$,
-			undefined,
-			pullCustomerDocument,
-			customerCollection,
-		]
+		[cashierID as string | number | null | undefined, cashierQuery?.result$, undefined, manager]
 	);
 
 	/**
