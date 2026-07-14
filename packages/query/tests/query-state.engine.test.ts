@@ -1,5 +1,5 @@
 import { firstValueFrom, type Observable } from 'rxjs';
-import { filter, take } from 'rxjs/operators';
+import { filter, take, timeout } from 'rxjs/operators';
 
 import { createEngineDatabase, engineProduct } from './helpers/engine';
 import { Query } from '../src/query-state';
@@ -158,5 +158,35 @@ describe('Query (engine-backed via the adapter)', () => {
 			'direct-match',
 		]);
 		await Promise.all([query.cancel(), childQuery.cancel(), parentLookupQuery.cancel()]);
+	});
+
+	it('emits relational child-count changes after search demand settles', async () => {
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'parent', id: 7, name: 'Shirt' })
+		);
+		const query = newQuery({});
+		query.currentRxQuery.other.relationalSearch = {
+			searchTerm: 'blue',
+			countsByParent: { 7: 1 },
+		};
+		query.exec();
+		await firstValueFrom(
+			query.result$.pipe(filter((result) => result.hits[0]?.childrenSearchCount === 1))
+		);
+
+		const updated = firstValueFrom(
+			query.result$.pipe(
+				filter((result) => result.hits[0]?.childrenSearchCount === 2),
+				timeout(500)
+			)
+		);
+		query.currentRxQuery.other.relationalSearch = {
+			searchTerm: 'blue',
+			countsByParent: { 7: 2 },
+		};
+		query.exec();
+
+		await expect(updated).resolves.toMatchObject({ searchActive: false });
+		await query.cancel();
 	});
 });

@@ -297,8 +297,11 @@ export class Query<T extends RxCollection>
 							prev.hits.map((hit: any) => hit.id),
 							next.hits.map((hit: any) => hit.id)
 						);
+						const hasRelationalMetadata = next.hits.some(
+							(hit: any) => 'parentSearchTerm' in hit || 'childrenSearchCount' in hit
+						);
 						let childrenAreEqual = true;
-						if (idsAreEqual && next.searchActive) {
+						if (idsAreEqual && hasRelationalMetadata) {
 							childrenAreEqual = prev.hits.every((hit: any, index: any) => {
 								const nextHit = next.hits[index];
 								return (
