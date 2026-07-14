@@ -17,7 +17,7 @@ interface QueryProviderProps<T extends RxDatabase> {
 	/** The sync engine every fluent read is served from (ADR 0023 increment 1b). */
 	engine: RxdbSyncEngine;
 	locale: string;
-	/** @deprecated increment-3 — transitional wc/v3 seam for Core mutation callers. */
+	/** Host HTTP client used only by the dedicated templates fetch target. */
 	http?: any;
 	children: React.ReactNode;
 }

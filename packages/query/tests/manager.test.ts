@@ -32,7 +32,13 @@ describe('Manager', () => {
 
 	beforeEach(async () => {
 		localDB = await createStoreDatabase();
-		engineDB = await createEngineDatabase(['products', 'variations', 'orders', 'customers']);
+		engineDB = await createEngineDatabase([
+			'products',
+			'variations',
+			'orders',
+			'customers',
+			'categories',
+		]);
 		engine = createFakeEngine(engineDB);
 		manager = Manager.getInstance(localDB, engine, 'en', httpClientMock);
 	});
@@ -529,6 +535,53 @@ describe('Manager', () => {
 			expect(engine.syncCalls).toContain('scheduler-drain');
 		});
 
+		it('re-seeds a reset reference collection before draining records back into it', async () => {
+			let referenceSeeded = false;
+			engine.sync = jest.fn(async (lane) => {
+				engine.syncCalls.push(lane);
+				if (lane === 'reference-seed') referenceSeeded = true;
+				if (lane === 'scheduler-drain' && referenceSeeded) {
+					await engineDB.collections.categories.insert({
+						id: 'woo-category:7',
+						wooId: 7,
+						payload: { id: 7, name: 'Refilled' },
+						sync: { revision: 'rev-7', partial: false, source: 'woo-rest' },
+						local: { dirty: false, pendingMutationIds: [] },
+					});
+				}
+				return { lane: (lane ?? 'all') as never, status: 'ran' as const };
+			});
+			const refill = manager.prepareCollectionResetRefill(['products/categories']);
+
+			await engine.scope.resetCollection('categories');
+			await refill();
+
+			expect(engine.syncCalls).toEqual(['reference-seed', 'scheduler-drain']);
+			await expect(engineDB.collections.categories.count().exec()).resolves.toBe(1);
+		});
+
+		it('re-seeds the product browse window and force-refreshes captured active demand', async () => {
+			const query = manager.registerQuery({
+				queryKeys: ['reset-targeted-product'],
+				collectionName: 'products',
+				initialParams: { selector: { id: 17 } },
+			});
+			if (!query) throw new Error('targeted product query was not registered');
+			const refill = manager.prepareCollectionResetRefill(['products']);
+
+			await manager.onCollectionReset(engineDB.collections.products);
+			await refill();
+
+			expect(engine.requireCalls.at(-1)).toMatchObject({
+				collection: 'products',
+				kind: 'targeted-records',
+				wooIds: [17],
+				forceRefresh: true,
+				priority: 1000,
+			});
+			expect(engine.syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
+		});
+
 		it('retries an identical search declaration after its requirement rejects', async () => {
 			installLocalSearch(engineDB.collections.products, ['payload.name']);
 			engine.searchFailure = new Error('remote search unavailable');
@@ -912,37 +965,21 @@ describe('Manager', () => {
 		});
 	});
 
-	describe('Transitional mutation remnant', () => {
-		it('registerCollectionReplication returns the wc/v3 mutation surface Core calls', () => {
-			const replication = manager.registerCollectionReplication({
-				collection: localDB.collections.products as any,
-				endpoint: 'products',
-			});
-			expect(typeof replication.remotePatch).toBe('function');
-			expect(typeof replication.remoteCreate).toBe('function');
-			expect(typeof replication.sync).toBe('function');
-			expect(manager.replicationStates.has('products')).toBe(true);
-		});
-
-		it('sync({include}) maps to a targeted-records engine requirement', () => {
-			const replication = manager.registerCollectionReplication({
-				collection: engineDB.collections.products as any,
-				endpoint: 'products',
-			});
-			replication.sync({ include: [5, 6], force: true });
-			const targeted = engine.requireCalls.find(
-				(req) => req.kind === 'targeted-records' && req.wooIds?.includes(5)
-			);
-			expect(targeted).toBeDefined();
-			expect(targeted?.forceRefresh).toBe(true);
-		});
-	});
-
 	describe('stringify error handling', () => {
 		it('returns an empty string for a circular reference', () => {
 			const circular: any = { a: 1 };
 			circular.self = circular;
 			expect(manager.stringify(circular)).toBe('');
+		});
+	});
+
+	describe('engine-owned mutation surface', () => {
+		it('does not expose the transitional replication-state registry', () => {
+			expect(manager).not.toHaveProperty('replicationStates');
+		});
+
+		it('does not expose the transitional collection-replication factory', () => {
+			expect(manager).not.toHaveProperty('registerCollectionReplication');
 		});
 	});
 });

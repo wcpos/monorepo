@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -151,8 +152,20 @@ export const useAddCoupon = () => {
 					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidv4() }],
 				};
 
-				// Bail if cart changed during async coupon lookups to avoid stale writes
-				if (currentOrder.getLatest() !== order) {
+				const cartSnapshot = {
+					line_items: order.line_items,
+					coupon_lines: order.coupon_lines,
+				};
+
+				// Adapter getLatest() returns a fresh proxy, so compare the cart fields rather than
+				// proxy object identity when detecting an intervening edit.
+				const latestBeforeRecalculate = currentOrder.getLatest();
+				if (
+					!isEqual(cartSnapshot, {
+						line_items: latestBeforeRecalculate.line_items,
+						coupon_lines: latestBeforeRecalculate.coupon_lines,
+					})
+				) {
 					return {
 						success: false,
 						error: t('pos_cart.cart_changed', {
@@ -173,7 +186,13 @@ export const useAddCoupon = () => {
 
 				// Re-check freshness after async recalculate — the order may have
 				// changed during RxDB lookups inside recalculate()
-				if (currentOrder.getLatest() !== order) {
+				const latestOrder = currentOrder.getLatest();
+				if (
+					!isEqual(cartSnapshot, {
+						line_items: latestOrder.line_items,
+						coupon_lines: latestOrder.coupon_lines,
+					})
+				) {
 					return {
 						success: false,
 						error: t('pos_cart.cart_changed', {

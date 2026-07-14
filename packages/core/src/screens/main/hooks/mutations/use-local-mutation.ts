@@ -11,11 +11,14 @@ import type {
 	ProductDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
+import { useQueryManager } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
+
+import type { RxDocument } from 'rxdb';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 
@@ -26,83 +29,350 @@ type Document =
 	| ProductVariationDocument
 	| CouponDocument;
 
-// Generic interface for LocalPatchProps, where T extends Document.
+type WriteableCollection = 'orders' | 'products' | 'variations' | 'customers' | 'coupons';
+
+const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>([
+	'orders',
+	'products',
+	'variations',
+	'customers',
+	'coupons',
+]);
+
+const ADAPTER_DERIVED_FIELDS = new Set([
+	'uuid',
+	'sortable_price',
+	'sortable_total',
+	'active',
+	'cashier',
+	'select',
+]);
+
+type QueryManager = ReturnType<typeof useQueryManager>;
+type EngineResident = RxDocument<Record<string, unknown>>;
+
+class ActiveScopeChangedTwiceError extends Error {
+	public constructor(collection: WriteableCollection) {
+		super(`Active engine scope changed twice during ${collection} mutation`);
+		this.name = 'ActiveScopeChangedTwiceError';
+	}
+}
+
 interface LocalPatchProps<T extends Document> {
 	document: T;
 	data: Partial<T>;
 }
 
+function writeableCollection(name: string | undefined): WriteableCollection | null {
+	return name && WRITEABLE_COLLECTIONS.has(name as WriteableCollection)
+		? (name as WriteableCollection)
+		: null;
+}
+
+export function documentRecordId(document: unknown): string | null {
+	if (!document || typeof document !== 'object') return null;
+	const value = document as Record<string, unknown>;
+	const identity = value.uuid ?? value.id;
+	return typeof identity === 'string' && identity.length > 0 ? identity : null;
+}
+
+function finiteOrNull(value: unknown): number | null {
+	if (value === null || value === undefined || value === '') return null;
+	const numeric = Number(value);
+	return Number.isFinite(numeric) ? numeric : null;
+}
+
+function taxonomyIds(value: unknown): number[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((entry) => Number((entry as { id?: unknown } | null)?.id ?? entry))
+		.filter((id) => Number.isFinite(id) && id > 0);
+}
+
+function variationAttributes(value: unknown): { id: number; name: string; option: string }[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((entry) => ({
+			id: Number((entry as { id?: unknown } | null)?.id) || 0,
+			name: String((entry as { name?: unknown } | null)?.name ?? ''),
+			option: String((entry as { option?: unknown } | null)?.option ?? ''),
+		}))
+		.filter(({ name, option }) => name !== '' && option !== '');
+}
+
+function withPromotedFields(
+	collection: WriteableCollection,
+	resident: Record<string, unknown>
+): Record<string, unknown> {
+	const payload = (resident.payload ?? {}) as Record<string, unknown>;
+	switch (collection) {
+		case 'orders':
+			return {
+				...resident,
+				number: String(payload.number ?? ''),
+				dateCreatedGmt: String(payload.date_created_gmt ?? ''),
+				status: String(payload.status ?? ''),
+				total: String(payload.total ?? ''),
+				customerId: Number(payload.customer_id ?? 0),
+			};
+		case 'products':
+			return {
+				...resident,
+				price: Math.max(0, Math.round((Number(payload.price) || 0) * 100) / 100),
+				stockStatus: String(payload.stock_status ?? ''),
+				type: String(payload.type ?? ''),
+				categoryIds: taxonomyIds(payload.categories),
+				brandIds: taxonomyIds(payload.brands),
+				onSale: Boolean(payload.on_sale),
+				featured: Boolean(payload.featured),
+				stockQuantity: finiteOrNull(payload.stock_quantity),
+			};
+		case 'variations':
+			return {
+				...resident,
+				parentId: finiteOrNull(payload.parent_id),
+				price: Number(payload.price) || 0,
+				stockStatus: String(payload.stock_status ?? ''),
+				attributes: variationAttributes(payload.attributes),
+				stockQuantity: finiteOrNull(payload.stock_quantity),
+			};
+		default:
+			return resident;
+	}
+}
+
+function syncableChanges(changes: Record<string, unknown>): Record<string, unknown> {
+	return Object.fromEntries(
+		Object.entries(changes).filter(([field]) => !ADAPTER_DERIVED_FIELDS.has(field))
+	);
+}
+
+function ensureRecordMetadata(
+	payload: Record<string, unknown>,
+	recordId: string
+): Record<string, unknown> {
+	const metadata = Array.isArray(payload.meta_data)
+		? [...(payload.meta_data as Record<string, unknown>[])]
+		: [];
+	const index = metadata.findIndex((entry) => entry.key === '_woocommerce_pos_uuid');
+	const identity = { key: '_woocommerce_pos_uuid', value: recordId };
+	if (index === -1) metadata.push(identity);
+	else metadata[index] = { ...metadata[index], ...identity };
+	return { ...payload, meta_data: metadata };
+}
+
+async function activeCollection(manager: QueryManager, collection: WriteableCollection) {
+	const scope = manager.engine.active() ?? (await manager.engine.ready);
+	const residentCollection = scope.database.collections[collection];
+	if (!residentCollection) {
+		throw new Error(`Engine collection "${collection}" is unavailable`);
+	}
+	return residentCollection;
+}
+
+export async function findEngineResident(
+	manager: QueryManager,
+	collection: WriteableCollection,
+	recordId: string
+): Promise<EngineResident | null> {
+	const residentCollection = await activeCollection(manager, collection);
+	return (await residentCollection.findOne(recordId).exec()) as EngineResident | null;
+}
+
+export async function patchEngineResident(input: {
+	manager: QueryManager;
+	collection: WriteableCollection;
+	recordId: string;
+	changes: Record<string, unknown>;
+}): Promise<EngineResident> {
+	const resident = await findEngineResident(input.manager, input.collection, input.recordId);
+	if (!resident) {
+		throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
+	}
+	return applyEngineResidentChanges(resident, input.collection, input.changes);
+}
+
+async function applyEngineResidentChanges(
+	resident: EngineResident,
+	collection: WriteableCollection,
+	changes: Record<string, unknown>
+): Promise<EngineResident> {
+	return (await resident.incrementalModify((old) => {
+		const payload = cloneDeep((old.payload ?? {}) as Record<string, unknown>);
+		for (const [field, value] of Object.entries(syncableChanges(changes))) {
+			set(payload, field, value);
+		}
+		return withPromotedFields(collection, { ...old, payload });
+	})) as EngineResident;
+}
+
+async function patchAndEnqueueEngineResident(input: {
+	manager: QueryManager;
+	collection: WriteableCollection;
+	recordId: string;
+	changes: Record<string, unknown>;
+}): Promise<void> {
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		const scopeId = input.manager.engine.status().activeScopeId;
+		const resident = await findEngineResident(input.manager, input.collection, input.recordId);
+		if (!resident) {
+			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
+		}
+		const previousResident = cloneDeep(resident.toJSON());
+		await applyEngineResidentChanges(resident, input.collection, input.changes);
+
+		let writeError: unknown;
+		try {
+			await input.manager.engine.write({
+				collection: input.collection,
+				// Creation funnels insert the resident and enqueue the create first.
+				// Later local edits are updates; the write plane folds create + update
+				// into the pending create, or queues behind an in-flight create.
+				operation: 'update',
+				recordId: input.recordId,
+				payload: input.changes,
+			});
+		} catch (error) {
+			writeError = error;
+		}
+
+		if (input.manager.engine.status().activeScopeId !== scopeId) {
+			await resident.incrementalModify(() => previousResident);
+			if (attempt === 1) {
+				throw new ActiveScopeChangedTwiceError(input.collection);
+			}
+			continue;
+		}
+
+		if (writeError) {
+			await resident.incrementalModify(() => previousResident);
+			throw writeError;
+		}
+		return;
+	}
+}
+
+export async function insertEngineResident(input: {
+	manager: QueryManager;
+	collection: WriteableCollection;
+	recordId: string;
+	payload: Record<string, unknown>;
+}): Promise<EngineResident> {
+	const residentCollection = await activeCollection(input.manager, input.collection);
+	const payload = ensureRecordMetadata(syncableChanges(input.payload), input.recordId);
+	const common: Record<string, unknown> = {
+		id: input.recordId,
+		payload,
+		sync: {
+			revision: '',
+			partial: false,
+			source: input.collection === 'orders' ? 'skeleton' : 'local',
+		},
+		local: { dirty: false, pendingMutationIds: [] },
+	};
+	const remoteId = Number(payload.id);
+	const resident = withPromotedFields(input.collection, {
+		...common,
+		...(input.collection === 'orders'
+			? { wooOrderId: remoteId > 0 ? remoteId : null }
+			: input.collection === 'products'
+				? { wooProductId: remoteId > 0 ? remoteId : null }
+				: input.collection === 'customers'
+					? { wooCustomerId: remoteId > 0 ? remoteId : null }
+					: { wooId: remoteId > 0 ? remoteId : null }),
+	});
+	return (await residentCollection.insert(resident)) as EngineResident;
+}
+
+async function patchLocalResident<T extends Document>(
+	document: T,
+	changes: Record<string, unknown>
+): Promise<T> {
+	return (await document.incrementalModify(((old: Record<string, unknown>) => ({
+		...old,
+		...changes,
+	})) as never)) as T;
+}
+
 /**
- * Hook that provides a function for locally mutating documents and ensuring the date_modified_gmt is updated.
+ * Local mutation has an intentional per-field split:
+ * - fields on engine-writeable documents are applied optimistically to the resident payload and
+ *   sent through durable write-intents, except adapter-derived identity/computed fields;
+ * - genuinely local documents (for example store settings) are written through
+ *   `patchLocalResident` and never enter the sync queue.
  */
 export const useLocalMutation = () => {
 	const t = useT();
+	const manager = useQueryManager();
 
-	/**
-	 * Function to patch local documents and ensure the date_modified_gmt field is updated.
-	 */
 	const localPatch = React.useCallback(
 		async <T extends Document>({ document, data }: LocalPatchProps<T>) => {
 			try {
 				const patchData = { ...(data as Record<string, unknown>) };
-
-				// check schema for date_modified_gmt field
-				const hasDate = get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
-
+				const collectionName = document.collection?.name;
+				const engineCollection = writeableCollection(collectionName);
+				const isTemporaryOrder =
+					engineCollection === 'orders' &&
+					Boolean((document as unknown as { isNew?: boolean }).isNew);
+				const hasDate =
+					engineCollection && !isTemporaryOrder
+						? true
+						: get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
 				if (hasDate) {
 					patchData.date_modified_gmt = convertLocalDateToUTCString(new Date());
 				}
 
-				const latest = document.getLatest(); // This seems to be required, else rxdb gives conflict error.
+				const latest = document.getLatest();
 				const patchEntries = Object.entries(patchData).filter(([, value]) => value !== undefined);
-
-				// Ignore no-op patches (eg: undefined form values) to avoid schema validation errors.
 				if (patchEntries.length === 0) {
 					return { changes: {}, document: latest };
 				}
 
-				/**
-				 * Data from Form component can be nested in dot notation, so we need use lodash set.
-				 * - This is a bit messy, but I'm not sure how use to handle things like arrays using patch.
-				 * - We want to use patch so we can minimal changes locally and then sync patch to server.
-				 *
-				 * NOTE: rxdb only sets the root key
-				 */
+				const snapshot = latest.toMutableJSON?.() ?? (latest as unknown as Record<string, unknown>);
 				const changes: Record<string, unknown> = {};
-				const doc = await latest.incrementalModify(((old: Record<string, unknown>) => {
-					patchEntries.forEach(([key, value]) => {
-						const path = key.split('.');
-						const root = path.shift()!;
-						if (path.length === 0) {
-							old[root] = value;
-							changes[root] = value;
-						} else {
-							// Handle nested keys for both objects and arrays
-							if (Array.isArray(old[root])) {
-								const updatedArray = cloneDeep(old[root]);
-								set(updatedArray, path, value);
-								old[root] = updatedArray;
-								changes[root] = updatedArray;
-							} else {
-								const updatedObject = set(
-									cloneDeep(old[root]) as Record<string, unknown>,
-									path,
-									value
-								);
-								old[root] = updatedObject;
-								changes[root] = updatedObject;
-							}
-						}
-					});
-					return old;
-				}) as never);
+				for (const [key, value] of patchEntries) {
+					const [root, ...path] = key.split('.');
+					if (path.length === 0) {
+						changes[root] = value;
+						continue;
+					}
+					const rootValue = cloneDeep((snapshot as Record<string, unknown>)[root]);
+					changes[root] = set(
+						(rootValue ?? (Number.isInteger(Number(path[0])) ? [] : {})) as object,
+						path,
+						value
+					);
+				}
 
+				if (engineCollection && !isTemporaryOrder) {
+					const recordId = documentRecordId(document);
+					if (!recordId) throw new Error(`Missing uuid for ${engineCollection} mutation`);
+					const syncChanges = syncableChanges(changes);
+					if (Object.keys(syncChanges).length > 0) {
+						await patchAndEnqueueEngineResident({
+							manager,
+							collection: engineCollection,
+							recordId,
+							changes: syncChanges,
+						});
+					} else {
+						await patchEngineResident({
+							manager,
+							collection: engineCollection,
+							recordId,
+							changes: syncChanges,
+						});
+					}
+					return { changes, document: document.getLatest() };
+				}
+
+				const doc = await patchLocalResident(latest, changes);
 				return { changes, document: doc };
 			} catch (error) {
 				const err = error as Record<string, unknown>;
 				let message = error instanceof Error ? error.message : String(error);
 				let errorCode: string = ERROR_CODES.TRANSACTION_FAILED;
-				if (err?.rxdb) {
+				if (err.rxdb) {
 					message = 'rxdb ' + String(err.code);
 					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
 				}
@@ -113,12 +383,15 @@ export const useLocalMutation = () => {
 						errorCode,
 						documentId: document.id,
 						collectionName: document.collection?.name,
-						error: error instanceof Error ? error.message : String(error),
+						error: message,
 					},
 				});
+				if (error instanceof ActiveScopeChangedTwiceError) {
+					throw error;
+				}
 			}
 		},
-		[t]
+		[manager, t]
 	);
 
 	return { localPatch };

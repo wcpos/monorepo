@@ -2,8 +2,14 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { useQueryManager } from '@wcpos/query';
+
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
-import { useCollection } from '../../hooks/use-collection';
+import {
+	documentRecordId,
+	insertEngineResident,
+	useLocalMutation,
+} from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -15,7 +21,9 @@ type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_line
 
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
-	const { collection } = useCollection('orders');
+	const manager = useQueryManager();
+	const { localPatch } = useLocalMutation();
+	const appendChains = React.useRef(new Map<string, Promise<void>>());
 
 	/**
 	 *
@@ -25,19 +33,30 @@ export const useAddItemToOrder = () => {
 			const order = currentOrder.getLatest();
 			const date_created_gmt = convertLocalDateToUTCString(new Date());
 
-			const orderJSON = {
+			const orderJSON: Record<string, unknown> = {
 				...order.toJSON(),
 				date_created_gmt,
 				[type]: [data],
 			};
-
-			order.remove();
-
-			const newOrder = await collection.insert(orderJSON as any);
-			setCurrentOrderID(newOrder.uuid!);
-			return newOrder;
+			const recordId = documentRecordId(order);
+			if (!recordId) throw new Error('New order is missing its uuid');
+			const resident = await insertEngineResident({
+				manager,
+				collection: 'orders',
+				recordId,
+				payload: orderJSON,
+			});
+			await manager.engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId,
+				payload: resident.get('payload') as Record<string, unknown>,
+			});
+			await order.remove();
+			setCurrentOrderID(recordId);
+			return resident;
 		},
-		[collection, currentOrder, setCurrentOrderID]
+		[currentOrder, manager, setCurrentOrderID]
 	);
 
 	/**
@@ -61,15 +80,33 @@ export const useAddItemToOrder = () => {
 
 			if ((order as unknown as { isNew?: boolean }).isNew) {
 				return saveNewOrder(type, data);
-			} else {
-				return order.incrementalUpdate({
-					$push: {
-						[type]: data,
-					},
-				});
 			}
+
+			const recordId = documentRecordId(order);
+			if (!recordId) throw new Error('Order is missing its uuid');
+			const previous = appendChains.current.get(recordId) ?? Promise.resolve();
+			const append = previous.then(async () => {
+				const latest = order.getLatest();
+				return localPatch({
+					document: latest,
+					data: {
+						[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
+					} as never,
+				});
+			});
+			const tail = append.then(
+				() => undefined,
+				() => undefined
+			);
+			appendChains.current.set(recordId, tail);
+			void tail.then(() => {
+				if (appendChains.current.get(recordId) === tail) {
+					appendChains.current.delete(recordId);
+				}
+			});
+			return append;
 		},
-		[currentOrder, saveNewOrder]
+		[currentOrder, localPatch, saveNewOrder]
 	);
 
 	return { addItemToOrder };

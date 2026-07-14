@@ -23,11 +23,11 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
+import { useQueryManager } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { useDeleteDocument } from '../../contexts/use-delete-document';
 import { usePullDocument } from '../../contexts/use-pull-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
@@ -66,7 +66,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
 	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
-	const deleteDocument = useDeleteDocument();
+	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
 	const canRefund = orderHasID && !!status && REFUNDABLE_STATUSES.includes(status);
 
@@ -95,17 +95,12 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		try {
-			const latest = order.getLatest();
-
-			if (latest.id) {
-				await deleteDocument(latest.id, latest.collection as never);
-			}
-			await latest.remove();
-		} finally {
-			//
-		}
-	}, [deleteDocument, order]);
+		await manager.engine.write({
+			collection: 'orders',
+			operation: 'delete',
+			recordId: order.uuid!,
+		});
+	}, [manager, order.uuid]);
 
 	if (readOnly) {
 		return null;

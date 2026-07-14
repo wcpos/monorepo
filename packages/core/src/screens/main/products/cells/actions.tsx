@@ -22,10 +22,10 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
+import { useQueryManager } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { useDeleteDocument } from '../../contexts/use-delete-document';
 import { usePullDocument } from '../../contexts/use-pull-document';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -38,22 +38,19 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const pullDocument = usePullDocument();
 	const t = useT();
-	const deleteDocument = useDeleteDocument();
+	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		try {
-			if (product.id) {
-				await deleteDocument(product.id, product.collection);
-			}
-			await product.remove();
-		} finally {
-			//
-		}
-	}, [product, deleteDocument]);
+		await manager.engine.write({
+			collection: 'products',
+			operation: 'delete',
+			recordId: product.uuid!,
+		});
+	}, [manager, product.uuid]);
 
 	if (readOnly) {
 		return null;

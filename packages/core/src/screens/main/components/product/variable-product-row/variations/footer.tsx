@@ -1,14 +1,14 @@
 import * as React from 'react';
 
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useReplicationState } from '@wcpos/query';
+import { useQueryManager, useReplicationState } from '@wcpos/query';
 import type { ProductDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 
-import { useAppState } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
 import { SyncButton } from '../../../../components/sync-button';
 
@@ -22,30 +22,32 @@ interface VariationTableFooterProps {
  *
  */
 export function VariationTableFooter({ query, parent, count }: VariationTableFooterProps) {
-	const { fastStoreDB, storeDB } = useAppState();
-	const { sync, active$ } = useReplicationState(query);
+	const manager = useQueryManager();
+	const { sync, active$, total$ } = useReplicationState(query);
 	const loading = useObservableEagerState(active$);
 
 	/**
 	 *
 	 */
 	const handleClearVariations = React.useCallback(async () => {
-		await storeDB.collections.variations.find({ selector: { parent_id: parent.id } }).remove();
-		await fastStoreDB.collections.variations
-			.find({ selector: { endpoint: 'products/' + parent.id + '/variations' } })
-			.remove();
+		const scope = manager.engine.active() ?? (await manager.engine.ready);
+		const variations = await scope.database.collections.variations
+			.find({ selector: { parentId: parent.id } })
+			.exec();
+		for (const variation of variations) {
+			await manager.engine.write({
+				collection: 'variations',
+				operation: 'delete',
+				recordId: String(variation.primary),
+			});
+		}
 		return sync();
-	}, [fastStoreDB, storeDB, parent.id, sync]);
+	}, [manager, parent.id, sync]);
 
 	/**
 	 * Get total from sync collection
 	 */
-	const total = useObservableState(
-		fastStoreDB.collections.variations.count({
-			selector: { endpoint: 'products/' + parent.id + '/variations' },
-		}).$,
-		0
-	);
+	const total = useObservableState(total$ ?? of(0), 0);
 	const t = useT();
 
 	return (

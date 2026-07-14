@@ -211,7 +211,8 @@ function DataTable<TData>({
 
 function getRowTestID(item: any) {
 	const document = item?.original?.document;
-	const stableId = document?.slug ?? document?.id ?? item?.id;
+	// Woo numeric ids can appear after a create ack; the adapter uuid/hit id is stable for the row.
+	const stableId = document?.slug ?? document?.uuid ?? item?.id;
 	return stableId !== null && stableId !== undefined && stableId !== ''
 		? `data-table-row-${stableId}`
 		: undefined;
