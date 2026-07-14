@@ -225,59 +225,53 @@ function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax
 	const unitSubtotalExcl = toNum(
 		src.unit_subtotal_excl ?? src.unit_subtotal ?? (qty !== 0 ? lineSubtotalExcl / qty : 0)
 	);
-	const readNullable = (variant: string, bare: string, fallback: number | null) =>
-		variant in src
-			? toNullableNum(src[variant])
-			: bare in src
-				? toNullableNum(src[bare])
-				: fallback;
-	const regularPriceIncl = readNullable('regular_price_incl', 'regular_price', null);
-	const regularPriceExcl = readNullable('regular_price_excl', 'regular_price', null);
-	const sellingPriceIncl = readNullable('selling_price_incl', 'selling_price', unitSubtotalIncl);
-	const sellingPriceExcl = readNullable('selling_price_excl', 'selling_price', unitSubtotalExcl);
+	const readNullable = (variant: string, fallback: number | null) =>
+		variant in src ? toNullableNum(src[variant]) : fallback;
+	const regularPriceIncl = readNullable('regular_price_incl', null);
+	const regularPriceExcl = readNullable('regular_price_excl', null);
+	const sellingPriceIncl = readNullable('selling_price_incl', unitSubtotalIncl);
+	const sellingPriceExcl = readNullable('selling_price_excl', unitSubtotalExcl);
 	const unitSavingsIncl =
-		'unit_savings_incl' in src || 'unit_savings' in src
-			? readNullable('unit_savings_incl', 'unit_savings', null)
-			: regularPriceIncl === null
+		'unit_savings_incl' in src
+			? readNullable('unit_savings_incl', null)
+			: regularPriceIncl === null || sellingPriceIncl === null
 				? null
-				: Math.max(0, regularPriceIncl - (sellingPriceIncl ?? 0));
+				: Math.max(0, regularPriceIncl - sellingPriceIncl);
 	const unitSavingsExcl =
-		'unit_savings_excl' in src || 'unit_savings' in src
-			? readNullable('unit_savings_excl', 'unit_savings', null)
-			: regularPriceExcl === null
+		'unit_savings_excl' in src
+			? readNullable('unit_savings_excl', null)
+			: regularPriceExcl === null || sellingPriceExcl === null
 				? null
-				: Math.max(0, regularPriceExcl - (sellingPriceExcl ?? 0));
+				: Math.max(0, regularPriceExcl - sellingPriceExcl);
 	const lineRegularTotalIncl =
-		'line_regular_total_incl' in src || 'line_regular_total' in src
-			? readNullable('line_regular_total_incl', 'line_regular_total', null)
+		'line_regular_total_incl' in src
+			? readNullable('line_regular_total_incl', null)
 			: regularPriceIncl === null
 				? null
 				: regularPriceIncl * qty;
 	const lineRegularTotalExcl =
-		'line_regular_total_excl' in src || 'line_regular_total' in src
-			? readNullable('line_regular_total_excl', 'line_regular_total', null)
+		'line_regular_total_excl' in src
+			? readNullable('line_regular_total_excl', null)
 			: regularPriceExcl === null
 				? null
 				: regularPriceExcl * qty;
 	const lineSellingTotalIncl = readNullable(
 		'line_selling_total_incl',
-		'line_selling_total',
 		sellingPriceIncl === null ? null : sellingPriceIncl * qty
 	);
 	const lineSellingTotalExcl = readNullable(
 		'line_selling_total_excl',
-		'line_selling_total',
 		sellingPriceExcl === null ? null : sellingPriceExcl * qty
 	);
 	const lineSavingsIncl =
-		'line_savings_incl' in src || 'line_savings' in src
-			? readNullable('line_savings_incl', 'line_savings', null)
+		'line_savings_incl' in src
+			? readNullable('line_savings_incl', null)
 			: unitSavingsIncl === null
 				? null
 				: unitSavingsIncl * qty;
 	const lineSavingsExcl =
-		'line_savings_excl' in src || 'line_savings' in src
-			? readNullable('line_savings_excl', 'line_savings', null)
+		'line_savings_excl' in src
+			? readNullable('line_savings_excl', null)
 			: unitSavingsExcl === null
 				? null
 				: unitSavingsExcl * qty;
@@ -477,12 +471,11 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 	const subtotal = displayTax === 'excl' ? subtotalExcl : subtotalIncl;
 	const discountTotal = displayTax === 'excl' ? discountTotalExcl : discountTotalIncl;
 	const grandTotal = displayTax === 'excl' ? grandTotalExcl : grandTotalIncl;
-	const readNullable = (variant: string, bare: string) =>
-		variant in src ? toNullableNum(src[variant]) : bare in src ? toNullableNum(src[bare]) : null;
-	const saleSavingsTotalIncl = readNullable('sale_savings_total_incl', 'sale_savings_total');
-	const saleSavingsTotalExcl = readNullable('sale_savings_total_excl', 'sale_savings_total');
-	const totalSavedIncl = readNullable('total_saved_incl', 'total_saved');
-	const totalSavedExcl = readNullable('total_saved_excl', 'total_saved');
+	const readNullable = (variant: string) => (variant in src ? toNullableNum(src[variant]) : null);
+	const saleSavingsTotalIncl = readNullable('sale_savings_total_incl');
+	const saleSavingsTotalExcl = readNullable('sale_savings_total_excl');
+	const totalSavedIncl = readNullable('total_saved_incl');
+	const totalSavedExcl = readNullable('total_saved_excl');
 	const saleSavingsTotal =
 		'sale_savings_total' in src
 			? toNullableNum(src.sale_savings_total)
