@@ -111,9 +111,7 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		})),
 		total_fmt: formatMoney(data.totals.total_incl, currency, dp),
 		has_total_saved:
-			data.totals.total_saved_complete === true &&
-			totalSavedIncl !== null &&
-			totalSavedIncl > 0,
+			data.totals.total_saved_complete === true && totalSavedIncl !== null && totalSavedIncl > 0,
 		total_saved_fmt: formatMoney(totalSavedIncl ?? 0, currency, dp),
 		payments: data.payments.map((payment) => ({
 			method_title: payment.method_title,
