@@ -78,4 +78,15 @@ describe('query-state translator', () => {
 		});
 		expect(translated.search).toBe('smith');
 	});
+
+	it('sorts order totals through the numeric adapter field', () => {
+		const translated = translateQueryState('orders', {
+			search: '',
+			filters: {},
+			sort: { field: 'total', direction: 'asc' },
+			limit: 50,
+		} satisfies QueryStateOf<'orders'>);
+
+		expect(translated.sort).toEqual([{ sortable_total: 'asc' }]);
+	});
 });

@@ -77,7 +77,7 @@ const sortPaths = {
 		status: 'status',
 		number: 'number',
 		customer_id: 'customerId',
-		total: 'total',
+		total: 'sortable_total',
 		date_created_gmt: 'dateCreatedGmt',
 		date_modified_gmt: 'payload.date_modified_gmt',
 		date_completed_gmt: 'payload.date_completed_gmt',
@@ -174,10 +174,12 @@ export function translateQueryState<C extends CollectionKey>(
 		.filter((condition): condition is Record<string, unknown> => condition !== undefined);
 	const selector = conditions.length === 0 ? {} : { $and: conditions };
 	const sortField = state.sort.field as string;
+	const adapterSortField =
+		collection === 'orders' && sortField === 'total' ? sortPaths.orders.total : sortField;
 	return {
 		collectionName: collection === 'tax-rates' ? 'taxes' : collection,
 		selector,
-		sort: [{ [sortField]: state.sort.direction }],
+		sort: [{ [adapterSortField]: state.sort.direction }],
 		sortEnginePath: (sortPaths[collection] as Record<string, string>)[sortField],
 		limit: state.limit,
 		search: state.search.trim(),
