@@ -65,7 +65,7 @@ export function AddNewCustomer() {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const savedDoc = await create({ data });
+				const savedDoc = await create({ data, requireCustomerId: true });
 				if (savedDoc) {
 					cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 						showToast: true,
@@ -166,7 +166,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const savedDoc = await create({ data });
+				const savedDoc = await create({ data, requireCustomerId: true });
 				if (savedDoc) {
 					cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 						showToast: true,

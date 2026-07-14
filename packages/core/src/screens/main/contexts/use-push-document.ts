@@ -1,11 +1,19 @@
 import * as React from 'react';
 
+import cloneDeep from 'lodash/cloneDeep';
+
 import { useQueryManager } from '@wcpos/query';
+import type { LegacyCollectionName } from '@wcpos/query/engine-adapter/collection-map';
+import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
-import { documentRecordId, patchEngineResident } from '../hooks/mutations/use-local-mutation';
+import {
+	documentRecordId,
+	findEngineResident,
+	patchEngineResident,
+} from '../hooks/mutations/use-local-mutation';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'push']);
 
@@ -41,7 +49,7 @@ export const usePushDocument = () => {
 	const t = useT();
 
 	return React.useCallback(
-		async (document: AnyRxDocument) => {
+		async (document: AnyRxDocument, options?: { requireRemoteId?: boolean }) => {
 			const latest = document.getLatest();
 			const collectionName = latest.collection.name;
 			if (!isWriteableCollection(collectionName)) {
@@ -50,25 +58,55 @@ export const usePushDocument = () => {
 			const recordId = documentRecordId(latest);
 			if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
 			const payload = latest.toJSON() as Record<string, unknown>;
+			const operation = Number(payload.id) > 0 ? 'update' : 'create';
 
 			try {
-				const resident = await patchEngineResident({
-					manager,
-					collection: collectionName,
-					recordId,
-					changes: payload,
-				});
-				const remoteId =
-					typeof resident.get === 'function'
-						? resident.get(REMOTE_ID_FIELD[collectionName])
-						: (resident as unknown as Record<string, unknown>)[REMOTE_ID_FIELD[collectionName]];
-				await manager.engine.write({
-					collection: collectionName,
-					operation: remoteId == null ? 'create' : 'update',
-					recordId,
-					payload: resident.get('payload') as Record<string, unknown>,
-				});
-				return latest;
+				const prepared: {
+					resident?: Awaited<ReturnType<typeof patchEngineResident>>;
+					previousResident?: Record<string, unknown>;
+				} = {};
+				const writePayload: Record<string, unknown> = {};
+				await manager.engine.write(
+					{
+						collection: collectionName,
+						operation,
+						recordId,
+						payload: writePayload,
+					},
+					{
+						prepare: async (scope) => {
+							const current = await findEngineResident(manager, collectionName, recordId, scope);
+							if (!current) {
+								throw new Error(
+									`Engine resident "${recordId}" is missing from "${collectionName}"`
+								);
+							}
+							prepared.previousResident = cloneDeep(current.toJSON());
+							prepared.resident = await patchEngineResident({
+								manager,
+								collection: collectionName,
+								recordId,
+								changes: payload,
+								scope,
+							});
+							Object.assign(writePayload, prepared.resident.get('payload'));
+						},
+						rollback: async () => {
+							if (prepared.resident && prepared.previousResident) {
+								await prepared.resident.incrementalModify(() => prepared.previousResident!);
+							}
+						},
+					}
+				);
+				if (!prepared.resident) throw new Error(`Engine resident "${recordId}" was not prepared`);
+				if (operation === 'create' && options?.requireRemoteId) {
+					await manager.engine.sync('write-drain');
+					prepared.resident = prepared.resident.getLatest();
+					if (prepared.resident.get(REMOTE_ID_FIELD[collectionName]) == null) {
+						throw new Error(`Server did not acknowledge ${collectionName} create`);
+					}
+				}
+				return wrapEngineDocument(collectionName as LegacyCollectionName, prepared.resident);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				syncLogger.error(t('common.failed_to_send_to_server'), {

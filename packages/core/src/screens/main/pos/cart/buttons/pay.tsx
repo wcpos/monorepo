@@ -42,7 +42,7 @@ export function PayButton() {
 		});
 
 		try {
-			await pushDocument(currentOrder).then((savedDoc) => {
+			await pushDocument(currentOrder, { requireRemoteId: true }).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
 					// Log checkout started
 					orderLogger.info(t('pos_cart.checkout_started'), {

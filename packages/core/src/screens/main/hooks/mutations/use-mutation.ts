@@ -15,7 +15,7 @@ import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { insertEngineResident, useLocalMutation } from './use-local-mutation';
+import { findEngineResident, insertEngineResident, useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { CollectionKey, useCollection } from '../use-collection';
@@ -98,7 +98,13 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	);
 
 	const create = React.useCallback(
-		async ({ data }: { data: Record<string, unknown> }) => {
+		async ({
+			data,
+			requireCustomerId,
+		}: {
+			data: Record<string, unknown>;
+			requireCustomerId?: boolean;
+		}) => {
 			if (!isWriteableCollection(collectionName)) {
 				const error = new Error(`Collection "${collectionName}" is not engine-writeable`);
 				handleError(error);
@@ -113,27 +119,45 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					...(data.date_created_gmt === undefined ? { date_created_gmt: now } : {}),
 					...(data.date_modified_gmt === undefined ? { date_modified_gmt: now } : {}),
 				};
-				const resident = await insertEngineResident({
-					manager,
-					collection: collectionName,
-					recordId,
-					payload,
-				});
-				const residentPayload = resident.get('payload') as Record<string, unknown>;
-				try {
-					await manager.engine.write({
+				const prepared: {
+					resident?: Awaited<ReturnType<typeof insertEngineResident>>;
+				} = {};
+				const residentPayload: Record<string, unknown> = {};
+				await manager.engine.write(
+					{
 						collection: collectionName,
 						operation: 'create',
 						recordId,
 						payload: residentPayload,
-					});
-				} catch (error) {
-					await resident.remove();
-					throw error;
+					},
+					{
+						prepare: async (scope) => {
+							prepared.resident = await insertEngineResident({
+								manager,
+								collection: collectionName,
+								recordId,
+								payload,
+								scope,
+							});
+							Object.assign(residentPayload, prepared.resident.get('payload'));
+						},
+						rollback: async () => {
+							await prepared.resident?.remove();
+						},
+					}
+				);
+				if (!prepared.resident) throw new Error(`Engine resident "${recordId}" was not prepared`);
+				if (collectionName === 'customers' && requireCustomerId) {
+					await manager.engine.sync('write-drain');
+					prepared.resident =
+						(await findEngineResident(manager, collectionName, recordId)) ?? undefined;
+					if (!prepared.resident || prepared.resident.get('wooCustomerId') == null) {
+						throw new Error('Server did not acknowledge customer create');
+					}
 				}
 				const document = wrapEngineDocument(
 					collectionName as LegacyCollectionName,
-					resident as never
+					prepared.resident as never
 				);
 				handleSuccess(document);
 				return document;
