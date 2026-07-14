@@ -6,7 +6,7 @@ import isEqual from 'lodash/isEqual';
 import pick from 'lodash/pick';
 import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject, from, Observable, ReplaySubject, Subject } from 'rxjs';
+import { BehaviorSubject, combineLatest, from, Observable, ReplaySubject, Subject } from 'rxjs';
 import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -70,6 +70,8 @@ export interface QueryConfig<T> {
 	autoExec?: boolean;
 	infiniteScroll?: boolean;
 	pageSize?: number;
+	/** Legacy field paths used when an engine collection builds its FlexSearch index. */
+	searchFields?: string[];
 }
 
 export interface QueryResult<T> {
@@ -157,6 +159,7 @@ export class Query<T extends RxCollection>
 		rxQuery: new BehaviorSubject<RxQuery | undefined>(undefined),
 		result: new ReplaySubject<QueryResult<T>>(1),
 		loadMore: new Subject<void>(),
+		searchDemandActive: new BehaviorSubject<boolean>(false),
 	};
 
 	/**
@@ -191,6 +194,7 @@ export class Query<T extends RxCollection>
 		autoExec = true,
 		infiniteScroll = false,
 		pageSize = 10,
+		searchFields,
 	}: QueryConfig<T>) {
 		super();
 		this.id = id;
@@ -201,7 +205,18 @@ export class Query<T extends RxCollection>
 		// document's primary `id` holds the uuid); local paths (logs/templates)
 		// use the collection's own primary path.
 		this.primaryKey = this.isEngineBacked ? 'uuid' : (collection as any).schema.primaryPath;
-		this.searchInstancePromise = (collection as any).initSearch(locale);
+		this.searchInstancePromise = this.isEngineBacked
+			? (collection as any).initSearch(locale, {
+					searchFields,
+					documentSnapshot: (document: unknown) =>
+						(
+							wrapEngineDocument(
+								collectionName as LegacyCollectionName,
+								document as RxDocument<EngineDocument>
+							).toJSON as () => Record<string, unknown>
+						)(),
+				})
+			: (collection as any).initSearch(locale);
 		this.locale = locale;
 		this.endpoint = endpoint; // @FIXME - this is used in the replication state but not in this class
 		this.greedy = greedy;
@@ -293,7 +308,12 @@ export class Query<T extends RxCollection>
 								);
 							});
 						}
-						return idsAreEqual && childrenAreEqual;
+						return (
+							idsAreEqual &&
+							childrenAreEqual &&
+							prev.count === next.count &&
+							prev.searchActive === next.searchActive
+						);
 					})
 				)
 				.subscribe((result) => {
@@ -312,7 +332,8 @@ export class Query<T extends RxCollection>
 		rxQuery: RxQuery | undefined,
 		documents: any[],
 		count: number,
-		elapsed: number
+		elapsed: number,
+		searchDemandActive = false
 	): QueryResult<T> {
 		const search = get(rxQuery, ['other', 'search']);
 		const relationalSearch = get(rxQuery, ['other', 'relationalSearch']);
@@ -320,7 +341,7 @@ export class Query<T extends RxCollection>
 		if (relationalSearch) {
 			return {
 				elapsed,
-				searchActive: true,
+				searchActive: this.isEngineBacked ? searchDemandActive : true,
 				searchTerm: relationalSearch?.searchTerm,
 				count,
 				hits: documents.map((doc: any) => ({
@@ -335,7 +356,7 @@ export class Query<T extends RxCollection>
 		if (search) {
 			return {
 				elapsed,
-				searchActive: true,
+				searchActive: this.isEngineBacked ? searchDemandActive : true,
 				searchTerm: search.searchTerm,
 				count,
 				hits: documents.map((doc: any) => ({
@@ -365,8 +386,8 @@ export class Query<T extends RxCollection>
 	private get _engineFind$(): Observable<QueryResult<T>> {
 		const database = (this.collection as any).database as AdapterDatabase;
 		const legacyCollection = this.collectionName as LegacyCollectionName;
-		return this.rxQuery$.pipe(
-			switchMap((rxQuery) => {
+		return combineLatest([this.rxQuery$, this.subjects.searchDemandActive]).pipe(
+			switchMap(([rxQuery, searchDemandActive]) => {
 				const startTime = performance.now();
 				const mango = rxQuery?.mangoQuery ?? {};
 				return executeAdapterQuery({
@@ -382,11 +403,24 @@ export class Query<T extends RxCollection>
 						const documents = adapterResult.hits.map((hit) =>
 							wrapEngineDocument(legacyCollection, hit)
 						);
-						return this.buildResult(rxQuery, documents, adapterResult.count, elapsed);
+						return this.buildResult(
+							rxQuery,
+							documents,
+							adapterResult.count,
+							elapsed,
+							searchDemandActive
+						);
 					})
 				);
 			})
 		);
+	}
+
+	/** Manager-owned projection of the public engine search requirement handles. */
+	public setSearchDemandActive(active: boolean): void {
+		if (this.subjects.searchDemandActive.value !== active) {
+			this.subjects.searchDemandActive.next(active);
+		}
 	}
 
 	/**
@@ -652,8 +686,20 @@ export class Query<T extends RxCollection>
 						)
 					)
 				)
-				.subscribe((results: any) => {
-					const uuids = results.map((result: any) => result[this.primaryKey]);
+				.subscribe((value: unknown) => {
+					const results = Array.isArray(value) ? value : [];
+					const uuids = results.map((result) => {
+						if (!this.isEngineBacked) {
+							return (result as Record<string, unknown>)[this.primaryKey];
+						}
+						const snapshot = (
+							wrapEngineDocument(
+								this.collectionName as LegacyCollectionName,
+								result as unknown as RxDocument<EngineDocument>
+							).toJSON as () => Record<string, unknown>
+						)();
+						return snapshot[this.primaryKey];
+					});
 					/**
 					 * @NOTE - don't reset the pagination when we're getting search updates
 					 */

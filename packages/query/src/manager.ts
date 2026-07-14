@@ -1,10 +1,17 @@
 import cloneDeep from 'lodash/cloneDeep';
 import isEqual from 'lodash/isEqual';
-import { BehaviorSubject as RxBehaviorSubject } from 'rxjs';
+import { combineLatest, EMPTY, of, BehaviorSubject as RxBehaviorSubject, timer } from 'rxjs';
+import { distinctUntilChanged, expand, map, switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
-import type { EngineRequirement, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type {
+	CoverageLaneDocument,
+	EngineRequirement,
+	QueryTotalCacheDocument,
+	RequirementHandle,
+	RxdbSyncEngine,
+} from '@wcpos/sync-engine';
 
 import { CollectionReplicationState } from './data-fetcher';
 import {
@@ -25,10 +32,102 @@ import { SubscribableBase } from './subscribable-base';
 import { syncTemplates } from './templates';
 
 import type { QueryParams } from './query-state';
-import type { BehaviorSubject } from 'rxjs';
-import type { RxCollection, RxDatabase } from 'rxdb';
+import type { BehaviorSubject, Observable } from 'rxjs';
+import type { RxCollection, RxDatabase, RxDocument, RxQuery } from 'rxdb';
 
 const queryLogger = getLogger(['wcpos', 'query', 'manager']);
+
+const COMPLETE_COLLECTION_LANES: Partial<Record<LegacyCollectionName, string>> = {
+	taxes: 'taxRates:all',
+	'products/categories': 'categories:all',
+	'products/tags': 'tags:all',
+	'products/brands': 'brands:all',
+	coupons: 'coupons:all',
+};
+
+function selectorWithSearch(rxQuery: RxQuery | undefined): Record<string, unknown> {
+	const mango = cloneDeep(rxQuery?.mangoQuery ?? {});
+	const selector = (mango.selector ?? {}) as Record<string, unknown>;
+	const search = rxQuery?.other?.search?.searchTerm ?? rxQuery?.other?.relationalSearch?.searchTerm;
+	if (search) {
+		selector.search = search;
+	}
+	return selector;
+}
+
+function coverageQueryKey(input: {
+	query: Query<RxCollection>;
+	rxQuery: RxQuery | undefined;
+}): string | null {
+	const { query, rxQuery } = input;
+	if (!query.collectionName || !isMappedCollection(query.collectionName)) {
+		return null;
+	}
+	const selector = selectorWithSearch(rxQuery);
+	const requirement = requirementsForQuery({
+		id: query.id,
+		collectionName: query.collectionName,
+		selector,
+		limit: rxQuery?.mangoQuery?.limit,
+	}).find((candidate) => candidate.kind === 'query' && candidate.queryKey);
+	if (requirement?.queryKey) {
+		return requirement.queryKey;
+	}
+
+	// The products browse-window lane covers only the unfiltered default browse.
+	// Filter/search/targeted product results retain their local-count fallback.
+	if (query.collectionName === 'products' && Object.keys(selector).length === 0) {
+		return 'products:browse-window:limit=100';
+	}
+	if (Object.keys(selector).length > 0) {
+		return null;
+	}
+	return COMPLETE_COLLECTION_LANES[query.collectionName] ?? null;
+}
+
+/** Emit at each exact freshness boundary so an idle total cannot remain stale. */
+function coverageFreshnessTicks(
+	lanes: CoverageLaneDocument[],
+	queryTotals: QueryTotalCacheDocument[]
+): Observable<number> {
+	const expiries = [...lanes, ...queryTotals].map(({ freshUntilMs }) => freshUntilMs);
+	return of(Date.now()).pipe(
+		expand((nowMs) => {
+			const nextExpiry = expiries.reduce<number | undefined>(
+				(next, expiry) => (expiry > nowMs && (next === undefined || expiry < next) ? expiry : next),
+				undefined
+			);
+			return nextExpiry === undefined
+				? EMPTY
+				: timer(Math.max(0, nextExpiry - nowMs + 1)).pipe(map(() => Date.now()));
+		})
+	);
+}
+
+function projectedCoverageTotal(input: {
+	localCount: number;
+	queryKey: string | null;
+	lanes: CoverageLaneDocument[];
+	queryTotals: QueryTotalCacheDocument[];
+	nowMs: number;
+}): number {
+	if (input.queryKey === null) {
+		return input.localCount;
+	}
+	const queryTotal = input.queryTotals.find(
+		(candidate) => candidate.queryKey === input.queryKey && candidate.freshUntilMs > input.nowMs
+	);
+	if (queryTotal) {
+		return queryTotal.totalMatchingRecords;
+	}
+	const lane = input.lanes.find(
+		(candidate) =>
+			candidate.queryKey === input.queryKey &&
+			candidate.complete &&
+			candidate.freshUntilMs > input.nowMs
+	);
+	return lane ? lane.expectedRecordIds.length : input.localCount;
+}
 
 export interface RegisterQueryConfig {
 	queryKeys: (string | number | object)[];
@@ -44,13 +143,18 @@ export interface RegisterQueryConfig {
  * Per-query demand-plane bookkeeping (ADR 0027). `handles` are the live engine
  * requirement handles this surface declared; `active$` reflects whether any of
  * them (or a `sync()` promise) are in flight — the honest 1b projection of the
- * old per-query `active$` until `events()` gains start/finish (ticket #537).
+ * old per-query `active$`. Lane start/finish events now exist but do not carry
+ * query-surface attribution, so lane-wide activity remains increment 5 work.
  */
 interface QueryDemand {
 	handles: RequirementHandle[];
 	requirements: EngineRequirement[];
 	active$: BehaviorSubject<boolean>;
 	inFlight: number;
+	searchActive$: BehaviorSubject<boolean>;
+	searchInFlight: number;
+	searchGeneration: number;
+	searchSyncInFlight: number;
 }
 
 /**
@@ -220,6 +324,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		return pending;
 	}
 
+	/** Read the unchanged legacy collection recipe that owns the search field paths. */
+	private searchFieldsFor(collectionName: string): string[] | undefined {
+		const collection = this.localDB.collections[collectionName] as RxCollection | undefined;
+		const fields = collection?.options?.searchFields;
+		return Array.isArray(fields) ? [...fields] : undefined;
+	}
+
 	registerQuery({
 		queryKeys,
 		collectionName,
@@ -270,6 +381,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			locale: this.locale,
 			infiniteScroll,
 			pageSize,
+			searchFields: this.searchFieldsFor(collectionName),
 		});
 
 		this.queryStates.set(key, queryState);
@@ -333,6 +445,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				locale: this.locale,
 				infiniteScroll,
 				pageSize,
+				searchFields: this.searchFieldsFor(collectionName),
 			},
 			childQuery,
 			parentLookupQuery
@@ -404,8 +517,16 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			requirements: [],
 			active$: new RxBehaviorSubject<boolean>(false),
 			inFlight: 0,
+			searchActive$: new RxBehaviorSubject<boolean>(false),
+			searchInFlight: 0,
+			searchGeneration: 0,
+			searchSyncInFlight: 0,
 		};
 		this.demandByQuery.set(queryState.id, demand);
+		queryState.addSub(
+			'search-demand-active',
+			demand.searchActive$.subscribe((active) => queryState.setSearchDemandActive(active))
+		);
 
 		queryState.addSub(
 			'query-requirements',
@@ -422,7 +543,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		);
 	}
 
-	private declareQueryRequirements(queryState: Query<RxCollection>, rxQuery: any): void {
+	private declareQueryRequirements(
+		queryState: Query<RxCollection>,
+		rxQuery: RxQuery | undefined
+	): void {
 		const demand = this.demandByQuery.get(queryState.id);
 		if (!demand || !queryState.collectionName) {
 			return;
@@ -465,6 +589,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			demand,
 			handles.map((handle) => handle.ready)
 		);
+		this.trackSearchGeneration(demand, search ? handles.map((handle) => handle.ready) : []);
 	}
 
 	private trackInFlight(demand: QueryDemand, promises: Promise<unknown>[]): void {
@@ -488,6 +613,53 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 	}
 
+	private trackSearchGeneration(demand: QueryDemand, promises: Promise<unknown>[]): void {
+		const generation = (demand.searchGeneration += 1);
+		demand.searchInFlight = promises.length;
+		this.updateSearchActive(demand);
+		for (const promise of promises) {
+			void promise.then(
+				() => this.settleSearchGeneration(demand, generation),
+				() => this.settleSearchGeneration(demand, generation)
+			);
+		}
+	}
+
+	private settleSearchGeneration(demand: QueryDemand, generation: number): void {
+		if (generation !== demand.searchGeneration) {
+			return;
+		}
+		demand.searchInFlight = Math.max(0, demand.searchInFlight - 1);
+		this.updateSearchActive(demand);
+	}
+
+	private trackSyncSearchInFlight(demand: QueryDemand, promise: Promise<unknown>): void {
+		demand.searchSyncInFlight += 1;
+		this.updateSearchActive(demand);
+		void promise.then(
+			() => this.settleSyncSearchInFlight(demand),
+			() => this.settleSyncSearchInFlight(demand)
+		);
+	}
+
+	private settleSyncSearchInFlight(demand: QueryDemand): void {
+		demand.searchSyncInFlight = Math.max(0, demand.searchSyncInFlight - 1);
+		this.updateSearchActive(demand);
+	}
+
+	private updateSearchActive(demand: QueryDemand): void {
+		const active = demand.searchInFlight + demand.searchSyncInFlight > 0;
+		if (demand.searchActive$.value !== active) {
+			demand.searchActive$.next(active);
+		}
+	}
+
+	private invalidateSearchGeneration(demand: QueryDemand): void {
+		demand.searchGeneration += 1;
+		demand.searchInFlight = 0;
+		this.updateSearchActive(demand);
+	}
+
 	private releaseDemand(queryId: string): void {
 		const demand = this.demandByQuery.get(queryId);
 		if (!demand) {
@@ -496,7 +668,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		for (const handle of demand.handles) {
 			handle.release();
 		}
+		this.invalidateSearchGeneration(demand);
 		demand.active$.complete();
+		demand.searchActive$.complete();
 		this.demandByQuery.delete(queryId);
 	}
 
@@ -506,6 +680,85 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 */
 	replicationActive$(queryId: string): BehaviorSubject<boolean> | undefined {
 		return this.demandByQuery.get(queryId)?.active$;
+	}
+
+	/**
+	 * Coverage-aware `total$` source table (ADR 0023 increment 2 / ADR 0027):
+	 *
+	 * - `orders`: a fresh `queryTotalCacheEntries` value for the exact public
+	 *   query requirement key; otherwise a fresh complete matching coverage lane;
+	 *   otherwise the fluent local result count.
+	 * - `products`: a fresh complete `products:browse-window:limit=100` lane only
+	 *   for an unfiltered browse; filtered/search/targeted queries use local count.
+	 * - `taxes`, `products/categories`, `products/tags`, `products/brands`, and
+	 *   `coupons`: their fresh complete `*:all` greedy coverage lane; otherwise
+	 *   local count (filtered/search views also fall back locally).
+	 * - `variations` and `customers`: local count. Their public targeted/search
+	 *   requirements deliberately hide the engine-owned lane query-key grammar.
+	 * - local-only `logs` and `templates`: direct local count.
+	 *
+	 * Query-total cache rows outrank lane cardinality because they are the engine's
+	 * explicit `totalMatchingRecords` projection. A lane cardinality is trusted
+	 * only while the lane is both complete and fresh; ADR 0027 keeps local counts
+	 * as the fallback for every other case.
+	 */
+	replicationTotal$(queryId: string): Observable<number> | undefined {
+		const query = this.queryStates.get(queryId);
+		if (!query) {
+			return undefined;
+		}
+		const localCount$ = query.result$.pipe(map((result) => result.count ?? 0));
+		if (!query.isEngineBacked) {
+			return localCount$.pipe(distinctUntilChanged());
+		}
+
+		const database = query.collection.database as RxDatabase;
+		const coverageLanes = database.collections.coverageLanes as
+			| RxCollection<CoverageLaneDocument>
+			| undefined;
+		const queryTotalCacheEntries = database.collections.queryTotalCacheEntries as
+			| RxCollection<QueryTotalCacheDocument>
+			| undefined;
+		if (!coverageLanes || !queryTotalCacheEntries) {
+			return localCount$.pipe(distinctUntilChanged());
+		}
+
+		const lanes$ = coverageLanes
+			.find()
+			.$.pipe(
+				map((documents: RxDocument<CoverageLaneDocument>[]) =>
+					documents.map((document) => document.toJSON() as unknown as CoverageLaneDocument)
+				)
+			);
+		const queryTotals$ = queryTotalCacheEntries
+			.find()
+			.$.pipe(
+				map((documents: RxDocument<QueryTotalCacheDocument>[]) =>
+					query.collectionName === 'orders'
+						? documents.map((document) => document.toJSON() as unknown as QueryTotalCacheDocument)
+						: []
+				)
+			);
+		const coverageState$ = combineLatest([lanes$, queryTotals$]).pipe(
+			switchMap(([lanes, queryTotals]) =>
+				coverageFreshnessTicks(lanes, queryTotals).pipe(
+					map((nowMs) => ({ lanes, queryTotals, nowMs }))
+				)
+			)
+		);
+
+		return combineLatest([localCount$, query.rxQuery$, coverageState$]).pipe(
+			map(([localCount, rxQuery, { lanes, queryTotals, nowMs }]) =>
+				projectedCoverageTotal({
+					localCount,
+					queryKey: coverageQueryKey({ query, rxQuery }),
+					lanes,
+					queryTotals,
+					nowMs,
+				})
+			),
+			distinctUntilChanged()
+		);
 	}
 
 	/**
@@ -541,6 +794,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			() => undefined
 		);
 		this.trackInFlight(demand, [ready]);
+		if (search) {
+			this.trackSyncSearchInFlight(demand, ready);
+		}
 		await ready;
 		for (const handle of handles) {
 			handle.release();
@@ -605,6 +861,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			handle.release();
 		}
 		demand.handles = [];
+		this.invalidateSearchGeneration(demand);
 	}
 
 	async cancel(): Promise<void> {

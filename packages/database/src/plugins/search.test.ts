@@ -10,6 +10,8 @@
 // Mock the FlexSearch plugin
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
+import { searchPlugin } from './search';
+
 import type { RxCollection } from 'rxdb';
 
 let shouldFailOnCreate = false;
@@ -270,6 +272,45 @@ describe('search plugin', () => {
 	});
 
 	describe('FlexSearch initialization', () => {
+		it('indexes a caller-provided legacy snapshot instead of the raw engine document', async () => {
+			const collectionPrototype: Record<string, unknown> = {};
+			const install = searchPlugin.prototypes?.RxCollection;
+			if (!install) throw new Error('search plugin RxCollection prototype is missing');
+			install(collectionPrototype as unknown as RxCollection);
+
+			const collection = Object.assign(Object.create(collectionPrototype), {
+				name: 'products',
+				options: {},
+				database: { collections: {} },
+				onClose: [],
+			});
+			const documentSnapshot = (document: Record<string, unknown>) => ({
+				...(document.payload as Record<string, unknown>),
+				uuid: document.id,
+			});
+
+			await collection.initSearch('en', {
+				searchFields: ['name', 'sku'],
+				documentSnapshot,
+			});
+
+			const config = (addFulltextSearch as jest.Mock).mock.calls[0][0] as {
+				docToString(document: Record<string, unknown>): string;
+			};
+			expect(
+				config.docToString({
+					id: 'product-1',
+					payload: { name: 'Payload Keyboard', sku: 'KB-1' },
+				})
+			).toBe('Payload Keyboard KB-1');
+			expect(
+				config.docToString({
+					id: 'product-1',
+					payload: { name: 'Renamed Keyboard', sku: 'KB-1' },
+				})
+			).toBe('Renamed Keyboard KB-1');
+		});
+
 		it('should call addFulltextSearch with correct config', async () => {
 			const mockCollection = {
 				name: 'products',
