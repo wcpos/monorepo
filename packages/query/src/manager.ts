@@ -13,7 +13,6 @@ import type {
 	RxdbSyncEngine,
 } from '@wcpos/sync-engine';
 
-import { CollectionReplicationState } from './data-fetcher';
 import {
 	engineCollectionNameFor,
 	isMappedCollection,
@@ -179,15 +178,11 @@ interface QueryDemand {
  * The Manager holds an ENGINE, not an http client / fast-local db (ADR 0023
  * increment 1b). `localDB` survives ONLY for the local-only `logs` collection
  * (and the dedicated `templates` fetch target); every fluent read is served from
- * the engine database through the engine-adapter. `httpClient` is a TRANSITIONAL
- * field kept solely for the `use-mutation` / `use-stock-adjustment` remnant
- * (`@deprecated` increment-3).
+ * the engine database through the engine-adapter. `httpClient` remains only for
+ * the dedicated templates fetch target.
  */
 export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	public readonly queryStates: Registry<string, Query<RxCollection>>;
-	/** Transitional per-endpoint replication remnant (Core mutation callers). */
-	public readonly replicationStates: Registry<string, CollectionReplicationState>;
-
 	/** Live engine requirement handles per query id (the demand plane). */
 	private readonly demandByQuery = new Map<string, QueryDemand>();
 
@@ -206,12 +201,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		public localDB: TDatabase,
 		public engine: RxdbSyncEngine,
 		public locale: string,
-		/** @deprecated increment-3 — transitional wc/v3 seam for Core mutations. */
 		public httpClient?: any
 	) {
 		super();
 		this.queryStates = new Registry();
-		this.replicationStates = new Registry();
 
 		(this.localDB as any).onClose.push(() => {
 			void this.cancel().catch((error) =>
@@ -827,46 +820,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	/**
-	 * TRANSITIONAL — `@deprecated` increment-3. Returns the per-endpoint mutation
-	 * remnant `use-mutation` / `use-stock-adjustment` call directly. No polling
-	 * machine backs it: `remotePatch` / `remoteCreate` funnel to wc/v3, and
-	 * `sync({include})` maps to the engine's targeted-records demand.
-	 */
-	registerCollectionReplication({
-		collection,
-		endpoint,
-	}: {
-		collection: RxCollection;
-		endpoint: string;
-	}): CollectionReplicationState {
-		const existing = this.replicationStates.get(endpoint);
-		if (existing && (existing.collection as any) === collection) {
-			return existing;
-		}
-		if (existing) {
-			void existing.cancel();
-			this.replicationStates.delete(endpoint);
-		}
-		const replication = new CollectionReplicationState({
-			httpClient: this.httpClient,
-			collection,
-			endpoint,
-			engine: this.engine,
-		});
-		(collection as any).onRemove?.push(() => this.onCollectionReset(collection));
-		this.replicationStates.set(endpoint, replication);
-		return replication;
-	}
-
-	async deregisterReplication(endpoint: string): Promise<void> {
-		const replicationState = this.replicationStates.get(endpoint);
-		if (replicationState) {
-			this.replicationStates.delete(endpoint);
-			await replicationState.cancel();
-		}
-	}
-
-	/**
 	 * On useQuery unmount: release the query's demand handles so the engine can
 	 * demote/abort in-flight foreground work for a surface no one is watching.
 	 */
@@ -893,11 +846,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			this.releaseDemand(queryId);
 		}
 
-		const replicationPromises: Promise<void>[] = [];
-		this.replicationStates.forEach((replication) => {
-			replicationPromises.push(replication.cancel());
-		});
-
-		await Promise.all([...queryPromises, ...replicationPromises]);
+		await Promise.all(queryPromises);
 	}
 }

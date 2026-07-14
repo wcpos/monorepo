@@ -148,9 +148,7 @@ describe('wrapEngineDocument', () => {
 			>;
 
 			expect(() => proxy[method]()).toThrow(EngineAdapterReadOnlyError);
-			expect(() => proxy[method]()).toThrow(
-				`"${method}" is read-only until the increment-3 write funnel`
-			);
+			expect(() => proxy[method]()).toThrow('useMutation, useLocalMutation, or usePushDocument');
 		}
 	);
 

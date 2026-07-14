@@ -21,7 +21,7 @@ const MUTATION_METHODS = new Set([
 export class EngineAdapterReadOnlyError extends Error {
 	public constructor(method: string) {
 		super(
-			`Engine adapter method "${method}" is read-only until the increment-3 write funnel is available`
+			`Engine adapter method "${method}" is read-only. Use useMutation, useLocalMutation, or usePushDocument instead.`
 		);
 		this.name = 'EngineAdapterReadOnlyError';
 	}

@@ -21,10 +21,10 @@ import {
 } from '@wcpos/components/dropdown-menu';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import { useQueryManager } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { useDeleteDocument } from '../../contexts/use-delete-document';
 import { usePullDocument } from '../../contexts/use-pull-document';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -44,22 +44,19 @@ export function VariationActions({
 	const router = useRouter();
 	const pullDocument = usePullDocument();
 	const t = useT();
-	const deleteDocument = useDeleteDocument();
+	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		try {
-			if (variation.id) {
-				await deleteDocument(variation.id, variation.collection);
-			}
-			await variation.remove();
-		} finally {
-			//
-		}
-	}, [variation, deleteDocument]);
+		await manager.engine.write({
+			collection: 'variations',
+			operation: 'delete',
+			recordId: variation.uuid!,
+		});
+	}, [manager, variation.uuid]);
 
 	if (readOnly) {
 		return null;

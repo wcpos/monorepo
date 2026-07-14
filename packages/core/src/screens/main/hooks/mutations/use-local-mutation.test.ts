@@ -7,6 +7,23 @@ import { useLocalMutation } from './use-local-mutation';
 
 const mockUseT = jest.fn();
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
+const mockWrite = jest.fn();
+const mockFindOneExec = jest.fn();
+
+jest.mock('@wcpos/query', () => ({
+	useQueryManager: () => ({
+		engine: {
+			active: () => ({
+				database: {
+					collections: {
+						orders: { findOne: () => ({ exec: mockFindOneExec }) },
+					},
+				},
+			}),
+			write: mockWrite,
+		},
+	}),
+}));
 
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => mockUseT(),
@@ -19,6 +36,7 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 describe('useLocalMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
 		mockUseT.mockReturnValue((_key: string, options?: Record<string, unknown>) =>
 			String(options?.message || '')
 		);
@@ -66,5 +84,99 @@ describe('useLocalMutation', () => {
 		expect(persistedDoc.barcode_scanning_prefix).toBe('');
 		expect(patchResult?.changes).not.toHaveProperty('barcode_scanning_prefix');
 		expect(mockConvertLocalDateToUTCString).toHaveBeenCalledTimes(1);
+	});
+
+	it('optimistically patches a server-born resident and enqueues syncable fields', async () => {
+		const stored: Record<string, unknown> = {
+			id: 'order-uuid',
+			wooOrderId: 42,
+			status: 'pending',
+			payload: { id: 42, status: 'pending' },
+			sync: { revision: 'rev-1' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		const incrementalModify = jest.fn(
+			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
+				Object.assign(stored, modifier(stored));
+				return stored;
+			}
+		);
+		mockFindOneExec.mockResolvedValue({ ...stored, incrementalModify });
+		const document = {
+			uuid: 'order-uuid',
+			id: 42,
+			collection: { name: 'orders' },
+			getLatest: () => document,
+		};
+
+		const { result } = renderHook(() => useLocalMutation());
+		const patchResult = await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { status: 'processing' } as never,
+			})
+		);
+
+		expect(stored).toMatchObject({
+			status: 'processing',
+			payload: {
+				status: 'processing',
+				date_modified_gmt: '2026-03-02T00:00:00',
+			},
+		});
+		expect(mockWrite).toHaveBeenCalledWith({
+			collection: 'orders',
+			operation: 'update',
+			recordId: 'order-uuid',
+			payload: {
+				status: 'processing',
+				date_modified_gmt: '2026-03-02T00:00:00',
+			},
+		});
+		expect(patchResult?.changes).toEqual({
+			status: 'processing',
+			date_modified_gmt: '2026-03-02T00:00:00',
+		});
+	});
+
+	it('enqueues born-local edits as updates for the write plane to fold into the pending create', async () => {
+		const stored: Record<string, unknown> = {
+			id: 'order-uuid',
+			wooOrderId: null,
+			status: 'pos-open',
+			payload: { status: 'pos-open', line_items: [] },
+			sync: { revision: '' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		const incrementalModify = jest.fn(
+			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
+				Object.assign(stored, modifier(stored));
+				return stored;
+			}
+		);
+		mockFindOneExec.mockResolvedValue({ ...stored, incrementalModify });
+		const document = {
+			uuid: 'order-uuid',
+			id: null,
+			collection: { name: 'orders' },
+			getLatest: () => document,
+		};
+
+		const { result } = renderHook(() => useLocalMutation());
+		await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { line_items: [{ product_id: 7 }] } as never,
+			})
+		);
+
+		expect(mockWrite).toHaveBeenCalledWith({
+			collection: 'orders',
+			operation: 'update',
+			recordId: 'order-uuid',
+			payload: expect.objectContaining({
+				line_items: [{ product_id: 7 }],
+			}),
+		});
 	});
 });

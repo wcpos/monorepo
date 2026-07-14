@@ -5,49 +5,64 @@ import { act, renderHook } from '@testing-library/react';
 
 import { usePushDocument } from './use-push-document';
 
-const mockPost = jest.fn();
+const mockWrite = jest.fn();
+const mockFindOneExec = jest.fn();
 const mockTranslate = jest.fn((_key: string, options?: Record<string, unknown>) =>
 	String(options?.error || options?.message || '')
 );
+
+jest.mock('@wcpos/query', () => ({
+	useQueryManager: () => ({
+		engine: {
+			active: () => ({
+				database: {
+					collections: {
+						orders: { findOne: () => ({ exec: mockFindOneExec }) },
+					},
+				},
+			}),
+			write: mockWrite,
+		},
+	}),
+}));
 
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => mockTranslate,
 }));
 
-jest.mock('../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({
-		post: mockPost,
-	}),
+jest.mock('../../../hooks/use-local-date', () => ({
+	convertLocalDateToUTCString: () => '2026-03-02T00:00:00',
 }));
 
 describe('usePushDocument', () => {
 	beforeEach(() => {
-		jest.resetAllMocks();
+		jest.clearAllMocks();
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
 	});
 
-	it('sends line item images to the server unchanged', async () => {
-		const image = { id: 77, src: 'https://example.com/local-product.jpg' };
+	it('enqueues an update for a server-born resident document', async () => {
 		const json = {
+			uuid: 'order-uuid',
 			id: 123,
-			line_items: [{ id: 1, product_id: 42, quantity: 1, image }],
+			status: 'processing',
+			line_items: [{ id: 1, product_id: 42, quantity: 1 }],
 		};
-		const incrementalPatch = jest.fn(async (data: unknown) => data);
-		const latestDoc = {
-			id: 123,
-			collection: {
-				name: 'orders',
-				parseRestResponse: jest.fn((data) => data),
-			},
-			toJSON: () => json,
-			incrementalPatch,
+		const resident: Record<string, unknown> & { incrementalModify?: jest.Mock } = {
+			wooOrderId: 123,
+			payload: { status: 'pending' },
 		};
+		resident.get = (field: string) => resident[field];
+		resident.incrementalModify = jest.fn(async (modifier) => {
+			Object.assign(resident, modifier(resident));
+			return resident;
+		});
+		mockFindOneExec.mockResolvedValue(resident);
 		const doc = {
-			collection: latestDoc.collection,
-			getLatest: () => latestDoc,
+			uuid: 'order-uuid',
 			id: 123,
+			collection: { name: 'orders' },
+			getLatest: () => ({ ...doc, toJSON: () => json }),
 		};
-
-		mockPost.mockResolvedValueOnce({ data: json });
 
 		const { result } = renderHook(() => usePushDocument());
 
@@ -55,30 +70,35 @@ describe('usePushDocument', () => {
 			await result.current(doc as never);
 		});
 
-		expect(mockPost).toHaveBeenCalledWith('orders/123', json);
+		expect(mockWrite).toHaveBeenCalledWith({
+			collection: 'orders',
+			operation: 'update',
+			recordId: 'order-uuid',
+			payload: expect.objectContaining({
+				status: 'processing',
+				line_items: [{ id: 1, product_id: 42, quantity: 1 }],
+			}),
+		});
 	});
 
-	it('sends order GMT dates to the server unchanged', async () => {
-		const json = {
-			date_created_gmt: '2026-05-07T15:53:05',
-			date_modified_gmt: '2026-05-07T15:54:05',
-			line_items: [],
+	it('enqueues a create when the resident document was born locally', async () => {
+		const json = { uuid: 'order-uuid', id: 0, status: 'pos-open', line_items: [] };
+		const resident: Record<string, unknown> & { incrementalModify?: jest.Mock } = {
+			wooOrderId: null,
+			payload: json,
 		};
-		const incrementalPatch = jest.fn(async (data: unknown) => data);
-		const latestDoc = {
-			collection: {
-				name: 'orders',
-				parseRestResponse: jest.fn((data) => data),
-			},
-			toJSON: () => json,
-			incrementalPatch,
-		};
+		resident.get = (field: string) => resident[field];
+		resident.incrementalModify = jest.fn(async (modifier) => {
+			Object.assign(resident, modifier(resident));
+			return resident;
+		});
+		mockFindOneExec.mockResolvedValue(resident);
 		const doc = {
-			collection: latestDoc.collection,
-			getLatest: () => latestDoc,
+			uuid: 'order-uuid',
+			id: 0,
+			collection: { name: 'orders' },
+			getLatest: () => ({ ...doc, toJSON: () => json }),
 		};
-
-		mockPost.mockResolvedValueOnce({ data: json });
 
 		const { result } = renderHook(() => usePushDocument());
 
@@ -86,92 +106,14 @@ describe('usePushDocument', () => {
 			await result.current(doc as never);
 		});
 
-		expect(mockPost).toHaveBeenCalledWith('orders', json);
-		expect(incrementalPatch).toHaveBeenCalledWith(json);
-	});
-
-	it('retries order creation with a UTC suffix for older server date_created_gmt validators', async () => {
-		const json = {
-			date_created_gmt: '2026-05-07T15:53:05',
-			date_modified_gmt: '2026-05-07T15:54:05',
-			line_items: [],
-		};
-		const legacyJson = {
-			...json,
-			date_created_gmt: '2026-05-07T15:53:05Z',
-		};
-		const incrementalPatch = jest.fn(async (data: unknown) => data);
-		const latestDoc = {
-			collection: {
-				name: 'orders',
-				parseRestResponse: jest.fn((data) => data),
-			},
-			toJSON: () => json,
-			incrementalPatch,
-		};
-		const doc = {
-			collection: latestDoc.collection,
-			getLatest: () => latestDoc,
-		};
-		const legacyDateError = {
-			response: {
-				data: {
-					code: 'woocommerce_pos_rest_invalid_date_created_gmt',
-					message: 'date_created_gmt must be a valid ISO 8601 UTC date.',
-				},
-			},
-		};
-
-		mockPost.mockRejectedValueOnce(legacyDateError).mockResolvedValueOnce({ data: legacyJson });
-
-		const { result } = renderHook(() => usePushDocument());
-
-		await act(async () => {
-			await result.current(doc as never);
+		expect(mockWrite).toHaveBeenCalledWith({
+			collection: 'orders',
+			operation: 'create',
+			recordId: 'order-uuid',
+			payload: expect.objectContaining({
+				status: 'pos-open',
+				line_items: [],
+			}),
 		});
-
-		expect(mockPost).toHaveBeenNthCalledWith(1, 'orders', json);
-		expect(mockPost).toHaveBeenNthCalledWith(2, 'orders', legacyJson);
-		expect(incrementalPatch).toHaveBeenCalledWith(legacyJson);
-	});
-
-	it('reconciles local line item images with the server-populated response', async () => {
-		const sentImage = { id: 77, src: 'https://example.com/local-product.jpg' };
-		const serverImage = { id: 88, src: 'https://example.com/server-product.jpg' };
-		const json = {
-			id: 123,
-			line_items: [{ id: 1, product_id: 42, quantity: 1, image: sentImage }],
-		};
-		const parsedServerData = {
-			id: 123,
-			line_items: [{ id: 1, product_id: 42, quantity: 1, image: serverImage }],
-		};
-		const incrementalPatch = jest.fn(async (data: unknown) => data);
-		const parseRestResponse = jest.fn(() => parsedServerData);
-		const latestDoc = {
-			id: 123,
-			collection: {
-				name: 'orders',
-				parseRestResponse,
-			},
-			toJSON: () => json,
-			incrementalPatch,
-		};
-		const doc = {
-			collection: latestDoc.collection,
-			getLatest: () => latestDoc,
-			id: 123,
-		};
-
-		mockPost.mockResolvedValueOnce({ data: parsedServerData });
-
-		const { result } = renderHook(() => usePushDocument());
-
-		await act(async () => {
-			await result.current(doc as never);
-		});
-
-		expect(parseRestResponse).toHaveBeenCalledWith(parsedServerData);
-		expect(incrementalPatch).toHaveBeenCalledWith(parsedServerData);
 	});
 });

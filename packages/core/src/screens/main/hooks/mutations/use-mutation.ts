@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import { RxDocument } from 'rxdb';
+import { v4 as uuidv4 } from 'uuid';
 
 import type {
 	CouponDocument,
@@ -11,10 +10,12 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
+import type { LegacyCollectionName } from '@wcpos/query/engine-adapter/collection-map';
+import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { useLocalMutation } from './use-local-mutation';
+import { insertEngineResident, useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { CollectionKey, useCollection } from '../use-collection';
@@ -27,100 +28,36 @@ type Document =
 	| CustomerDocument
 	| ProductVariationDocument
 	| CouponDocument;
+type WriteableCollection = 'orders' | 'products' | 'variations' | 'customers' | 'coupons';
 
 interface Props {
 	collectionName: CollectionKey;
 	endpoint?: string;
 }
 
-/**
- * This is a temporary hack. When new docs are created in RxDB, it should fill out the root fields?
- */
-function generateEmptyJSON(schema: any): Record<string, any> {
-	const result: Record<string, any> = {};
-
-	if (schema.type === 'object' && schema.properties) {
-		for (const key in schema.properties) {
-			if (key.startsWith('_')) {
-				continue;
-			}
-
-			const property = schema.properties[key];
-			switch (property.type) {
-				case 'string':
-					result[key] = '';
-					break;
-				case 'array':
-					result[key] = [];
-					break;
-				case 'object':
-					result[key] = {};
-					break;
-				case 'boolean':
-					result[key] = undefined;
-					break;
-				case 'number':
-				case 'integer':
-					result[key] = undefined;
-					break;
-				default:
-					result[key] = undefined;
-			}
-		}
-	}
-
-	return result;
+function isWriteableCollection(name: string): name is WriteableCollection {
+	return ['orders', 'products', 'variations', 'customers', 'coupons'].includes(name);
 }
 
 /**
- * Hook for creating and updating documents with optimistic local updates and server sync.
- *
- * Flow:
- * 1. Apply changes locally (optimistic update)
- * 2. Send to server
- * 3. Server response becomes source of truth (overwrites local)
- * 4. On error: rollback local changes (patch) or remove local doc (create)
+ * Create/update funnel for writeable Woo records. Resident changes are optimistic; engine.write
+ * owns durable queue bookkeeping and later acknowledgements/conflicts. There is deliberately no
+ * rollback: a rejected remote outcome remains visible through the engine conflict surface.
  */
 export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const manager = useQueryManager();
 	const t = useT();
-	const { collection, collectionLabel } = useCollection(collectionName);
+	const { collectionLabel } = useCollection(collectionName);
 	const { localPatch } = useLocalMutation();
 
-	/**
-	 * Handle mutation errors with appropriate error codes
-	 */
 	const handleError = React.useCallback(
-		(error: Error | any, context?: Record<string, unknown>) => {
-			let errorCode: string = ERROR_CODES.TRANSACTION_FAILED;
-			let message = error.message || String(error);
-
-			if (error?.rxdb) {
-				// Handle RxDB specific errors with appropriate codes
-				switch (error.code) {
-					case 'RX1':
-						errorCode = ERROR_CODES.DUPLICATE_RECORD;
-						message = 'Record already exists';
-						break;
-					case 'RX2':
-						errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
-						message = 'Database constraint violation';
-						break;
-					case 'RX3':
-						errorCode = ERROR_CODES.INVALID_DATA_TYPE;
-						message = 'Invalid data format';
-						break;
-					default:
-						errorCode = ERROR_CODES.TRANSACTION_FAILED;
-						message = `Database error: ${error.code || 'unknown'}`;
-				}
-			}
-
+		(error: unknown, context?: Record<string, unknown>) => {
+			const message = error instanceof Error ? error.message : String(error);
 			mutationLogger.error(message, {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode,
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
 					collectionName,
 					endpoint,
 					operation: 'mutation',
@@ -131,17 +68,13 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 		[collectionName, endpoint]
 	);
 
-	/**
-	 * Handle successful mutations
-	 */
 	const handleSuccess = React.useCallback(
-		(doc: RxDocument) => {
-			const docId = (doc as unknown as Record<string, unknown>).id;
-			mutationLogger.success(t('common.saved_2', { id: docId, title: collectionLabel }), {
+		(document: Record<string, unknown>) => {
+			mutationLogger.success(t('common.saved_2', { id: document.id, title: collectionLabel }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					documentId: docId,
+					documentId: document.id,
 					collectionName,
 					collectionLabel,
 				},
@@ -150,144 +83,60 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 		[collectionLabel, collectionName, t]
 	);
 
-	/**
-	 * Patch an existing document.
-	 *
-	 * 1. Save original values for rollback
-	 * 2. Apply changes locally (optimistic)
-	 * 3. Send to server
-	 * 4. Server response overwrites local (source of truth)
-	 * 5. On error: rollback to original values
-	 */
 	const patch = React.useCallback(
 		async ({ document, data }: { document: Document; data: Record<string, unknown> }) => {
-			// Save original values for potential rollback
-			const originalValues: Record<string, unknown> = {};
-			for (const key of Object.keys(data)) {
-				const rootKey = key.split('.')[0];
-				if (!(rootKey in originalValues)) {
-					originalValues[rootKey] = (document as any)[rootKey];
-				}
+			const result = await localPatch({ document, data: data as never });
+			if (result?.document) {
+				handleSuccess(result.document as unknown as Record<string, unknown>);
+				return result.document;
 			}
-
-			// Apply optimistic local update
-			const result = await localPatch({ document, data });
-			if (!result) {
-				return; // localPatch already handles/logs errors
-			}
-
-			const { document: doc, changes } = result;
-
-			try {
-				const replicationState = manager.registerCollectionReplication({
-					collection,
-					endpoint: endpoint ?? collectionName,
-				});
-
-				if (!replicationState) {
-					throw new Error('replicationState not found');
-				}
-
-				// Send to server - server response becomes source of truth
-				const updatedDoc = await replicationState.remotePatch(doc, changes);
-
-				if (updatedDoc) {
-					handleSuccess(updatedDoc as RxDocument);
-					return updatedDoc;
-				} else {
-					// Server returned an error or invalid response - rollback local changes
-					await doc.getLatest().incrementalPatch(originalValues);
-					handleError(new Error(t('common.not_updated', { title: collectionLabel })), {
-						documentId: doc.id,
-					});
-				}
-			} catch (error) {
-				// Rollback local changes on error
-				try {
-					await doc.getLatest().incrementalPatch(originalValues);
-				} catch (rollbackError) {
-					mutationLogger.debug('Failed to rollback local changes', {
-						context: { documentId: doc.id, error: String(rollbackError) },
-					});
-				}
-				handleError(error, { documentId: doc.id });
-			}
+			handleError(new Error(t('common.not_updated', { title: collectionLabel })), {
+				documentId: document.id,
+			});
 		},
-		[
-			collection,
-			collectionLabel,
-			collectionName,
-			endpoint,
-			handleError,
-			handleSuccess,
-			localPatch,
-			manager,
-			t,
-		]
+		[collectionLabel, handleError, handleSuccess, localPatch, t]
 	);
 
-	/**
-	 * Create a new document.
-	 *
-	 * 1. Create locally with generated fields
-	 * 2. Send to server
-	 * 3. Server response overwrites local (source of truth - includes server-generated ID)
-	 * 4. On error: remove local document
-	 */
 	const create = React.useCallback(
 		async ({ data }: { data: Record<string, unknown> }) => {
-			let localDoc: RxDocument<any> | null = null;
+			if (!isWriteableCollection(collectionName)) {
+				const error = new Error(`Collection "${collectionName}" is not engine-writeable`);
+				handleError(error);
+				return;
+			}
 
 			try {
-				// Create local document with empty fields and provided data
-				const emptyJSON = generateEmptyJSON(collection.schema.jsonSchema);
-				const hasCreatedDate = get(collection, 'schema.jsonSchema.properties.date_created_gmt');
-				const hasModifiedDate = get(collection, 'schema.jsonSchema.properties.date_modified_gmt');
-
-				if (hasCreatedDate) {
-					emptyJSON.date_created_gmt = convertLocalDateToUTCString(new Date());
-					if (hasModifiedDate) {
-						emptyJSON.date_modified_gmt = emptyJSON.date_created_gmt;
-					}
-				}
-
-				localDoc = await collection.insert({ ...emptyJSON, ...data } as any);
-
-				const replicationState = manager.registerCollectionReplication({
-					collection,
-					endpoint: endpoint ?? collectionName,
+				const recordId = uuidv4();
+				const now = convertLocalDateToUTCString(new Date());
+				const payload = {
+					...data,
+					...(data.date_created_gmt === undefined ? { date_created_gmt: now } : {}),
+					...(data.date_modified_gmt === undefined ? { date_modified_gmt: now } : {}),
+				};
+				const resident = await insertEngineResident({
+					manager,
+					collection: collectionName,
+					recordId,
+					payload,
 				});
-
-				if (!replicationState) {
-					throw new Error('replicationState not found');
-				}
-
-				// Send to server - server response becomes source of truth (includes real ID)
-				const serverDoc = await replicationState.remoteCreate(localDoc!.toJSON());
-
-				if (serverDoc) {
-					handleSuccess(serverDoc as RxDocument);
-					return serverDoc;
-				} else {
-					// Server returned an error or invalid response - remove local document
-					await localDoc!.getLatest().remove();
-					handleError(new Error(t('common.not_created', { title: collectionLabel })));
-				}
+				const residentPayload = resident.get('payload') as Record<string, unknown>;
+				await manager.engine.write({
+					collection: collectionName,
+					operation: 'create',
+					recordId,
+					payload: residentPayload,
+				});
+				const document = wrapEngineDocument(
+					collectionName as LegacyCollectionName,
+					resident as never
+				);
+				handleSuccess(document);
+				return document;
 			} catch (error) {
-				// Remove local document on error
-				if (localDoc) {
-					try {
-						await localDoc.getLatest().remove();
-					} catch (removeError) {
-						mutationLogger.debug('Failed to remove local document after create error', {
-							context: { error: String(removeError) },
-						});
-					}
-				}
 				handleError(error);
 			}
 		},
-		[collection, collectionLabel, collectionName, endpoint, handleError, handleSuccess, manager, t]
+		[collectionName, handleError, handleSuccess, manager]
 	);
 
 	return { patch, create };

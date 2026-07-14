@@ -1,62 +1,59 @@
 import * as React from 'react';
 
-import { CollectionReplicationState, useQueryManager } from '@wcpos/query';
-
-import { useCollection } from './use-collection';
+import { useQueryManager } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 type LineItems = import('@wcpos/database').OrderDocument['line_items'];
 
-/**
- *
- */
+const stockLogger = getLogger(['wcpos', 'stock-adjustment']);
+
 export const useStockAdjustment = () => {
-	const { collection: productsCollection } = useCollection('products');
-	const { collection: variationsCollection } = useCollection('variations');
 	const manager = useQueryManager();
 
-	/**
-	 *
-	 */
-	const productsReplicationState = manager.registerCollectionReplication({
-		collection: productsCollection,
-		endpoint: 'products',
-	}) as CollectionReplicationState<typeof productsCollection>;
-
-	/**
-	 * Variations could be from any parent, so we need to use the generic endpoint
-	 */
-	const variationsReplicationState = manager.registerCollectionReplication({
-		collection: variationsCollection,
-		endpoint: 'products/variations',
-	}) as CollectionReplicationState<typeof variationsCollection>;
-
-	/**
-	 * Helper function to fetch updated products and variations
-	 */
 	const stockAdjustment = React.useCallback(
 		(lineItems: LineItems) => {
-			if (Array.isArray(lineItems) && lineItems.length > 0) {
-				const productIds = lineItems
-					.filter((product) => product.variation_id === 0)
-					.map((product) => product.product_id)
-					.filter((id): id is number => id != null);
-				const variationIds = lineItems
-					.filter((product) => product.variation_id !== 0)
-					.map((product) => product.variation_id)
-					.filter((id): id is number => id != null);
+			if (!Array.isArray(lineItems) || lineItems.length === 0) return;
+			const requests = [
+				{
+					collection: 'products' as const,
+					wooIds: lineItems
+						.filter((item) => item.variation_id === 0)
+						.map((item) => item.product_id)
+						.filter((id): id is number => id != null),
+				},
+				{
+					collection: 'variations' as const,
+					wooIds: lineItems
+						.filter((item) => item.variation_id !== 0)
+						.map((item) => item.variation_id)
+						.filter((id): id is number => id != null),
+				},
+			];
 
-				/**
-				 * @TODO - this needs to be greedy if array.length > 10
-				 */
-				try {
-					productsReplicationState.sync({ include: productIds, force: true, greedy: true });
-					variationsReplicationState.sync({ include: variationIds, force: true, greedy: true });
-				} catch (error) {
-					console.error(error);
-				}
+			for (const request of requests) {
+				if (request.wooIds.length === 0) continue;
+				const handle = manager.engine.require({
+					id: `stock-adjustment:${request.collection}:${request.wooIds.join(',')}`,
+					collection: request.collection,
+					kind: 'targeted-records',
+					wooIds: request.wooIds,
+					forceRefresh: true,
+				});
+				void handle.ready.then(
+					() => handle.release(),
+					(error) => {
+						handle.release();
+						stockLogger.error('Stock refresh failed', {
+							context: {
+								collection: request.collection,
+								error: error instanceof Error ? error.message : String(error),
+							},
+						});
+					}
+				);
 			}
 		},
-		[productsReplicationState, variationsReplicationState]
+		[manager]
 	);
 
 	return { stockAdjustment };

@@ -26,10 +26,10 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useQueryManager } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { useDeleteDocument } from '../../contexts/use-delete-document';
 import { usePullDocument } from '../../contexts/use-pull-document';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -44,20 +44,16 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 	const t = useT();
 	const initialForce = !coupon.id;
 	const [force, setForce] = React.useState(initialForce);
-	const deleteDocument = useDeleteDocument();
+	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
 
 	const handleDelete = React.useCallback(async () => {
-		if (coupon.id) {
-			const deletedRemotely = await deleteDocument(coupon.id, coupon.collection as never, {
-				force,
-			});
-			if (!deletedRemotely) {
-				return;
-			}
-		}
-		await coupon.getLatest().remove();
-	}, [coupon, deleteDocument, force]);
+		await manager.engine.write({
+			collection: 'coupons',
+			operation: 'delete',
+			recordId: coupon.uuid!,
+		});
+	}, [coupon.uuid, manager]);
 
 	if (readOnly) {
 		return null;

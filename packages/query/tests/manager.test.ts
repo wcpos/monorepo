@@ -912,37 +912,21 @@ describe('Manager', () => {
 		});
 	});
 
-	describe('Transitional mutation remnant', () => {
-		it('registerCollectionReplication returns the wc/v3 mutation surface Core calls', () => {
-			const replication = manager.registerCollectionReplication({
-				collection: localDB.collections.products as any,
-				endpoint: 'products',
-			});
-			expect(typeof replication.remotePatch).toBe('function');
-			expect(typeof replication.remoteCreate).toBe('function');
-			expect(typeof replication.sync).toBe('function');
-			expect(manager.replicationStates.has('products')).toBe(true);
-		});
-
-		it('sync({include}) maps to a targeted-records engine requirement', () => {
-			const replication = manager.registerCollectionReplication({
-				collection: engineDB.collections.products as any,
-				endpoint: 'products',
-			});
-			replication.sync({ include: [5, 6], force: true });
-			const targeted = engine.requireCalls.find(
-				(req) => req.kind === 'targeted-records' && req.wooIds?.includes(5)
-			);
-			expect(targeted).toBeDefined();
-			expect(targeted?.forceRefresh).toBe(true);
-		});
-	});
-
 	describe('stringify error handling', () => {
 		it('returns an empty string for a circular reference', () => {
 			const circular: any = { a: 1 };
 			circular.self = circular;
 			expect(manager.stringify(circular)).toBe('');
+		});
+	});
+
+	describe('engine-owned mutation surface', () => {
+		it('does not expose the transitional replication-state registry', () => {
+			expect(manager).not.toHaveProperty('replicationStates');
+		});
+
+		it('does not expose the transitional collection-replication factory', () => {
+			expect(manager).not.toHaveProperty('registerCollectionReplication');
 		});
 	});
 });

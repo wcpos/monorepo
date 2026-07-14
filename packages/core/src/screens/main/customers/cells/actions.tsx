@@ -26,10 +26,10 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useQueryManager } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { useDeleteDocument } from '../../contexts/use-delete-document';
 import { usePullDocument } from '../../contexts/use-pull-document';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
@@ -48,23 +48,19 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 	const t = useT();
 	const { format } = useCustomerNameFormat();
 	const [force, setForce] = React.useState(!customer.id);
-	const deleteDocument = useDeleteDocument();
+	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		try {
-			if (customer.id) {
-				await deleteDocument(customer.id, customer.collection as never, { force });
-			}
-			await customer.getLatest().remove();
-		} finally {
-			// @TODO - add button loading state and close
-			// setDeleteDialogOpened(false);
-		}
-	}, [customer, deleteDocument, force]);
+		await manager.engine.write({
+			collection: 'customers',
+			operation: 'delete',
+			recordId: customer.uuid!,
+		});
+	}, [customer.uuid, manager]);
 
 	if (readOnly) {
 		return null;
