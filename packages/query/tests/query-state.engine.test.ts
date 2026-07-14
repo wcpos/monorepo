@@ -1,8 +1,9 @@
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, type Observable } from 'rxjs';
 import { filter, take } from 'rxjs/operators';
 
 import { createEngineDatabase, engineProduct } from './helpers/engine';
 import { Query } from '../src/query-state';
+import { RelationalQuery } from '../src/relational-query-state';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -129,5 +130,33 @@ describe('Query (engine-backed via the adapter)', () => {
 		);
 		expect(result.hits.map((hit) => hit.id)).toEqual(['a', 'b']);
 		await query.cancel();
+	});
+
+	it('extracts legacy UUIDs from engine documents during direct relational search', async () => {
+		const collection = engineDB.collections.products;
+		const product = await collection.insert(
+			engineProduct({ uuid: 'direct-match', id: 7, name: 'Blue Shirt' })
+		);
+		collection.initSearch = async () => ({ collection, find: async () => [product] });
+		const childQuery = newQuery({});
+		const parentLookupQuery = newQuery({ selector: { id: { $in: [] } } });
+		const query = new RelationalQuery(
+			{
+				id: 'relational-engine-query',
+				collection,
+				collectionName: 'products',
+				initialParams: {},
+			},
+			childQuery,
+			parentLookupQuery
+		);
+		const directSearch = query as unknown as {
+			searchParentsDirect(term: string): Observable<string[]>;
+		};
+
+		await expect(firstValueFrom(directSearch.searchParentsDirect('shirt'))).resolves.toEqual([
+			'direct-match',
+		]);
+		await Promise.all([query.cancel(), childQuery.cancel(), parentLookupQuery.cancel()]);
 	});
 });

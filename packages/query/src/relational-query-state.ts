@@ -5,10 +5,12 @@ import { map, startWith, switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { type EngineDocument, type LegacyCollectionName } from './engine-adapter/collection-map';
+import { wrapEngineDocument } from './engine-adapter/document-proxy';
 import { Query } from './query-state';
 
 import type { QueryConfig } from './query-state';
-import type { RxCollection } from 'rxdb';
+import type { RxCollection, RxDocument } from 'rxdb';
 
 const relationalLogger = getLogger(['wcpos', 'query', 'relational']);
 
@@ -174,7 +176,18 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 					switchMap(() => searchInstance.find(searchTerm) as Observable<any[]>)
 				)
 			),
-			map((documents: any[]) => documents.map(({ uuid }: any) => uuid))
+			map((documents: Record<string, unknown>[]) =>
+				documents.map((document) => {
+					if (!this.isEngineBacked) return document.uuid as string;
+					const snapshot = (
+						wrapEngineDocument(
+							this.collectionName as LegacyCollectionName,
+							document as RxDocument<EngineDocument>
+						).toJSON as () => Record<string, unknown>
+					)();
+					return snapshot[this.primaryKey] as string;
+				})
+			)
 		);
 	}
 
