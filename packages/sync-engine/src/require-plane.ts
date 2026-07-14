@@ -45,6 +45,7 @@ import {
 	seedOrderSchedulerTasks,
 	seedTargetedOrderSchedulerTask,
 } from './scheduler/rx-order-scheduler-task-seeder';
+import { seedSearchSchedulerTask } from './scheduler/rx-scheduler-search-task-seeder';
 import { parseOrderBrowserSchedulerDescriptor } from './scheduler/order-browser-scheduler-descriptor';
 import {
 	ORDER_SCHEDULER_LEASE_FOR_MS,
@@ -64,9 +65,21 @@ export type EngineRequirement = {
 	/** Caller-chosen id (diagnostics only — requirements are not deduped here). */
 	id: string;
 	collection: SyncCollectionName;
-	kind: 'targeted-records' | 'query' | 'refresh';
+	/**
+	 * `search` is a DEDICATED kind rather than an overload of `query`: the orders
+	 * `query` path carries an OPAQUE `queryKey` descriptor (the order-browser
+	 * grammar), whereas search takes a RAW, user-typed `term` and lets the engine
+	 * own the wire grammar (`products:search:<enc>` vs `customers:search=<enc>:limit=<n>`,
+	 * which diverge per collection). Keeping it a separate kind holds that grammar
+	 * behind the public door — the caller declares `{ collection, kind:'search', term }`
+	 * and never constructs a queryKey — and mirrors the existing per-kind branching
+	 * in executeOne, routing to the SAME scheduler search tasks the drain executes.
+	 */
+	kind: 'targeted-records' | 'query' | 'refresh' | 'search';
 	/** Required for 'targeted-records'. */
 	wooIds?: number[];
+	/** Raw user search term for kind:'search' (products/customers only). */
+	term?: string;
 	/** Higher runs first. Default 500 (the web scheduler's browse-lane band). */
 	priority?: number;
 	/** Re-fetch targeted records even when they are already resident. Used by
@@ -338,6 +351,74 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					action: 'fetched',
 					missingRecordIds: [],
 					reason: 'drained full order refresh',
+					documents: drainResult.totalDocuments,
+					requests: drainResult.totalRequests,
+				};
+			}
+
+			if (item.requirement.kind === 'search') {
+				// Products/customers search: seed the SAME `products:search:` / `customers:search=…:limit=…`
+				// scheduler task the drain already executes, drain it, resolve ready on completion. The
+				// engine owns the wire grammar (rxSchedulerSearchTaskSeeder); the caller passes a raw term.
+				const searchCollection = item.requirement.collection;
+				if (searchCollection !== 'products' && searchCollection !== 'customers') {
+					throw new Error(
+						`require: 'search' supports products/customers; "${searchCollection}" is unsupported`
+					);
+				}
+				const term = (item.requirement.term ?? '').trim();
+				if (term.length === 0) {
+					throw new Error("require: 'search' needs a non-empty term");
+				}
+				let drainResult = emptyDrainResult();
+				let skippedActive = false;
+				const applied = await bound.guardWrite(async () => {
+					const seedResult = await seedSearchSchedulerTask({
+						collection: searchCollection,
+						term,
+						priority: item.priority,
+						limit: item.requirement.limit,
+						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
+						getRepository: async () => ({ getDatabase: () => database as never }),
+					});
+					if (seedResult.skippedActive > 0) {
+						skippedActive = true;
+						return;
+					}
+					drainResult = await runEngineSchedulerDrain({
+						db: database as unknown as SchedulerDrainDatabase,
+						coverage,
+						baseUrl: deps.syncBaseUrl,
+						ownerId: 'require-plane',
+						fetcher: boundFetch as never,
+						signal: item.abortController.signal,
+						onProgress: progressObserver(item.requirement),
+					});
+				});
+				if (applied === 'dropped')
+					throw new Error('require: scope moved mid-search (writes dropped)');
+				if (skippedActive)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: `${searchCollection} search already in progress`,
+					};
+				if (drainResult.failed > 0)
+					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
+				const lost = drainLostOutcomeCount(drainResult);
+				// Claim loss means another owner is completing the durable task — release, don't fail.
+				if (lost > 0)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'claim lost to another owner',
+						documents: drainResult.totalDocuments,
+						requests: drainResult.totalRequests,
+					};
+				return {
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: `drained ${searchCollection} search "${term}"`,
 					documents: drainResult.totalDocuments,
 					requests: drainResult.totalRequests,
 				};
