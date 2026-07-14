@@ -54,6 +54,18 @@ describe('DEFAULT_THERMAL_TEMPLATE Total saved row', () => {
 		expect(text).not.toContain('Total saved');
 	});
 
+	it('hides the row when a positive total is incomplete', () => {
+		const text = encodeToText(
+			withTotals({
+				total_saved: 10.28,
+				total_saved_incl: 10.28,
+				total_saved_excl: 9.35,
+				total_saved_complete: false,
+			})
+		);
+		expect(text).not.toContain('Total saved');
+	});
+
 	it('hides the row when the total is incomplete (null on legacy orders)', () => {
 		const text = encodeToText(
 			withTotals({
