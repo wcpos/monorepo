@@ -811,14 +811,28 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	const storeData = { ...storeSource };
 	delete storeData.tax_id;
 	delete storeData.tax_ids;
-	if (!storeData.address || typeof storeData.address !== 'object') delete storeData.address;
+	if (
+		!storeData.address ||
+		typeof storeData.address !== 'object' ||
+		Array.isArray(storeData.address)
+	) {
+		delete storeData.address;
+	}
 	const customerData = { ...customerSource };
 	delete customerData.tax_id;
 	delete customerData.tax_ids;
-	if (!customerData.billing_address || typeof customerData.billing_address !== 'object') {
+	if (
+		!customerData.billing_address ||
+		typeof customerData.billing_address !== 'object' ||
+		Array.isArray(customerData.billing_address)
+	) {
 		delete customerData.billing_address;
 	}
-	if (!customerData.shipping_address || typeof customerData.shipping_address !== 'object') {
+	if (
+		!customerData.shipping_address ||
+		typeof customerData.shipping_address !== 'object' ||
+		Array.isArray(customerData.shipping_address)
+	) {
 		delete customerData.shipping_address;
 	}
 	const normalizedStore = mapStore(storeSource);
