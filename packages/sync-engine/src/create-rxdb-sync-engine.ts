@@ -109,6 +109,7 @@ import {
 } from './local-coverage/local-coverage';
 import { enqueueWriteIntent, queueFor, type WriteIntent } from './write-path/write-intents';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
+import { hasPendingLocalWork } from './write-path/local-work-guard';
 import { CHANGE_SIGNAL_STATE_ID } from './change-signal/change-signal-state-schema';
 import { pullTargetedByIds } from './change-signal/change-signal-handlers';
 import {
@@ -147,7 +148,7 @@ export type SyncReport = {
 	rejected?: number;
 };
 
-// Versioned schemas (orders v1, products/variations v2) need the migration
+// Versioned sync schemas need the migration
 // plugin at collection-create time. Idempotent — RxDB skips re-adds.
 addRxPlugin(RxDBMigrationSchemaPlugin);
 
@@ -539,12 +540,23 @@ export function createRxdbSyncEngine(
 				const docs = await db.collections[name]
 					.find({ selector: { [field]: { $in: wooIds } } as never })
 					.exec();
-				if (docs.length > 0)
+				const protectedWooIds = new Set<number>();
+				const removable = docs.filter((doc) => {
+					const row = doc.toJSON() as Record<string, unknown>;
+					if (!hasPendingLocalWork(row)) return true;
+					const wooId = row[field];
+					if (typeof wooId === 'number') protectedWooIds.add(wooId);
+					return false;
+				});
+				if (removable.length > 0)
 					assertBulkSuccess(
-						await db.collections[name].bulkRemove(docs.map((doc) => doc.primary)),
+						await db.collections[name].bulkRemove(removable.map((doc) => doc.primary)),
 						'create-rxdb-sync-engine remove'
 					);
-				await removeManifestByWooIds(manifest, wooIds);
+				await removeManifestByWooIds(
+					manifest,
+					wooIds.filter((wooId) => !protectedWooIds.has(wooId))
+				);
 			};
 			const pullTargetedAndPopulateManifest = async (
 				descriptor: (typeof targeted)[keyof typeof targeted],
@@ -988,6 +1000,7 @@ export function createRxdbSyncEngine(
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		fetcher,
 		wpJsonRoot: ports.site.wpJsonRoot,
+		syncBaseUrl: ports.site.syncBaseUrl,
 		connectivity: () => {
 			try {
 				return connectivity();
@@ -1221,7 +1234,7 @@ export function createRxdbSyncEngine(
 			assertNotDisposed();
 			if (!writeFacetFor(intent.collection)) {
 				throw new Error(
-					`write: collection "${intent.collection}" is not client-writeable (no push/ack contract) — orders is the writeable collection today`
+					`write: collection "${intent.collection}" is not client-writeable (no push/ack contract) — writeable collections: orders, products, variations, customers, coupons`
 				);
 			}
 			await readySettledForSync;
@@ -1330,29 +1343,74 @@ export function createRxdbSyncEngine(
 				if (resolution === 'retry-with-server-base') {
 					serverBase = entry.conflictRevision ?? null;
 					if (!serverBase) {
-						if (entry.collectionName !== 'orders') {
+						const facet = writeFacetFor(entry.collectionName);
+						if (!facet) {
 							throw new Error(
 								`resolveConflict: no server revision on "${mutationId}" and no refresh seam for "${entry.collectionName}" — discard instead`
 							);
 						}
 						const row = (
-							await database.collections.orders?.findOne(entry.recordId).exec()
-						)?.toJSON() as { wooOrderId?: number | null } | undefined;
-						if (typeof row?.wooOrderId !== 'number') {
+							await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
+						)?.toJSON() as Record<string, unknown> | undefined;
+						const remoteId = row?.[facet.remoteIdField];
+						if (typeof remoteId !== 'number') {
 							throw new Error(
 								`resolveConflict: cannot refresh the server revision for "${mutationId}" — the record has no server identity; discard instead`
 							);
 						}
-						serverBase = await fetchOrderServerRevision({
-							fetch: bound.bindFetch(fetcher as never) as never,
-							wpJsonRoot: ports.site.wpJsonRoot,
-							wooOrderId: row.wooOrderId,
-						});
+						if (entry.collectionName === 'orders') {
+							serverBase = await fetchOrderServerRevision({
+								fetch: bound.bindFetch(fetcher as never) as never,
+								wpJsonRoot: ports.site.wpJsonRoot,
+								wooOrderId: remoteId,
+							});
+						} else {
+							const serverDocument = await facet.fetchServerDocument({
+								fetch: bound.bindFetch(fetcher as never),
+								syncBaseUrl: ports.site.syncBaseUrl,
+								remoteId,
+							});
+							const refreshedRevision = (serverDocument?.sync as { revision?: unknown } | undefined)
+								?.revision;
+							serverBase =
+								typeof refreshedRevision === 'string' && refreshedRevision !== ''
+									? refreshedRevision
+									: null;
+						}
 						if (!serverBase) {
 							throw new Error(
-								`resolveConflict: the server no longer returns record ${row.wooOrderId} — the row stays parked; retry later or discard`
+								`resolveConflict: the server no longer returns record ${remoteId} — the row stays parked; retry later or discard`
 							);
 						}
+					}
+				}
+				let discardServerDocument: Record<string, unknown> | null = null;
+				let discardRemovesResident = false;
+				if (resolution === 'discard' && entry.collectionName !== 'orders') {
+					const facet = writeFacetFor(entry.collectionName);
+					if (!facet) {
+						throw new Error(
+							`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
+						);
+					}
+					const row = (
+						await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
+					)?.toJSON() as Record<string, unknown> | undefined;
+					const remoteId =
+						row?.[facet.remoteIdField] ??
+						(entry.payload as Record<string, unknown>).id ??
+						(entry.conflictDocument as Record<string, unknown> | undefined)?.id;
+					if (typeof remoteId === 'number') {
+						discardServerDocument = await facet.fetchServerDocument({
+							fetch: bound.bindFetch(fetcher as never),
+							syncBaseUrl: ports.site.syncBaseUrl,
+							remoteId,
+						});
+						discardRemovesResident = discardServerDocument === null;
+					} else if (entry.operation === 'create') {
+						// A rejected born-local create has no remote identity because it
+						// never existed server-side. Discard therefore means tombstone.
+						discardRemovesResident = true;
 					}
 				}
 				const applied = await bound.guardWrite(async () => {
@@ -1397,6 +1455,7 @@ export function createRxdbSyncEngine(
 							incrementalModify(
 								fn: (data: Record<string, unknown>) => Record<string, unknown>
 							): Promise<unknown>;
+							remove(): Promise<unknown>;
 						} | null;
 						const row = doc?.toJSON() as { wooOrderId?: number | null } | undefined;
 						// #516 item 5: queue the server-truth re-pull DURABLY *before*
@@ -1414,8 +1473,70 @@ export function createRxdbSyncEngine(
 								getRepository: async () => ({ getDatabase: () => database as never }),
 							});
 						}
+						if (entry.collectionName !== 'orders' && discardServerDocument) {
+							const facet = writeFacetFor(entry.collectionName);
+							if (!facet) {
+								throw new Error(
+									`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
+								);
+							}
+							let documentToApply = discardServerDocument;
+							const successors = (await queue.pending()).filter(
+								(mutation) =>
+									mutation.collectionName === entry.collectionName &&
+									mutation.recordId === entry.recordId &&
+									mutation.mutationId !== mutationId
+							);
+							if (successors.length > 0) {
+								const resident = doc?.toJSON();
+								const serverPayload = (discardServerDocument.payload ?? {}) as Record<
+									string,
+									unknown
+								>;
+								const optimistic =
+									resident ??
+									facet.documentFromServerPayload(
+										successors.reduce<Record<string, unknown>>(
+											(payload, mutation) =>
+												mutation.operation === 'delete'
+													? payload
+													: { ...payload, ...mutation.payload },
+											serverPayload
+										)
+									);
+								const local = (optimistic.local ?? {}) as {
+									dirty?: boolean;
+									pendingMutationIds?: string[];
+								};
+								const pendingMutationIds = [
+									...new Set([
+										...(Array.isArray(local.pendingMutationIds)
+											? local.pendingMutationIds.filter((id) => id !== mutationId)
+											: []),
+										...successors.map((mutation) => mutation.mutationId),
+									]),
+								];
+								documentToApply = {
+									...discardServerDocument,
+									...optimistic,
+									[facet.remoteIdField]: discardServerDocument[facet.remoteIdField],
+									payload: optimistic.payload,
+									sync: {
+										...((optimistic.sync ?? {}) as object),
+										...((discardServerDocument.sync ?? {}) as object),
+									},
+									local: { ...local, pendingMutationIds, dirty: true },
+								};
+							}
+							// Apply server truth BEFORE removing the terminal queue row. If
+							// storage fails or the process stops, the durable conflict remains
+							// retryable; there is no state where discard reports success while
+							// the local row still poses as synced stale truth.
+							await facet.upsertServerDocument(database, documentToApply);
+						}
+						if (discardRemovesResident && doc) await doc.remove();
 						await queue.remove([mutationId]);
-						if (doc) {
+						if (doc && !discardRemovesResident) {
 							await doc.incrementalModify((data) => {
 								const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
 								const pendingMutationIds = (local.pendingMutationIds ?? []).filter(

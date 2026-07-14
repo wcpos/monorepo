@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import responseFixtures from '../contracts/write-contract/fixtures/responses.json';
+import validFixtures from '../contracts/write-contract/fixtures/valid-envelopes.json';
 import { RECORD_UUID_META_KEY } from './recordIdentity';
 import { createFakeWriteServer, type PushEnvelope } from './fakeWriteServer';
 import { pushEndpointResolver, pushRecordMutation } from './recordPushAdapter';
@@ -279,6 +281,46 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 			permanent: false,
 			reason: 'woo_rxdb_sync_precondition_required',
 		});
+	});
+
+	it('serves the canonical variation create and parent failure fixtures', async () => {
+		const server = createFakeWriteServer();
+		const create = validFixtures.find(({ name }) => name === 'variation-create-with-parent')!;
+		const createdResponse = await server.fetch(
+			'https://shop.example/wp-json/wc-rxdb-sync/v1/push/variations',
+			{ method: 'POST', body: JSON.stringify(create.envelope) }
+		);
+		expect(createdResponse.status).toBe(201);
+
+		const missingParent = validFixtures.find(
+			({ name }) => name === 'variation-parent-precondition-428'
+		)!;
+		const expectedMissingParent = responseFixtures.find(
+			({ name }) => name === 'variation-parent-precondition-428'
+		)!;
+		const missingResponse = await server.fetch(
+			'https://shop.example/wp-json/wc-rxdb-sync/v1/push/variations',
+			{ method: 'POST', body: JSON.stringify(missingParent.envelope) }
+		);
+		expect(missingResponse.status).toBe(expectedMissingParent.status);
+		expect(await missingResponse.json()).toEqual(expectedMissingParent.body);
+
+		const mismatch = validFixtures.find(({ name }) => name === 'variation-parent-mismatch-409')!;
+		const expectedMismatch = responseFixtures.find(
+			({ name }) => name === 'variation-parent-mismatch-409'
+		)!;
+		server.seed(mismatch.envelope.recordId, {
+			id: 77,
+			revision: mismatch.envelope.baseRevision!,
+			collection: 'variations',
+			payload: { parent_id: 100 },
+		});
+		const mismatchResponse = await server.fetch(
+			'https://shop.example/wp-json/wc-rxdb-sync/v1/push/variations',
+			{ method: 'POST', body: JSON.stringify(mismatch.envelope) }
+		);
+		expect(mismatchResponse.status).toBe(expectedMismatch.status);
+		expect(await mismatchResponse.json()).toEqual(expectedMismatch.body);
 	});
 
 	describe('ADR 0011 header mirror (faithful to Header_Mirror::assert)', () => {

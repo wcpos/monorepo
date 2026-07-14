@@ -235,7 +235,7 @@ describe('drainMutationQueue', () => {
 		expect((await q.all())[0]).toMatchObject({ status: 'needs-revision' });
 	});
 
-	it('gate2 item 4: parks as needs-revision when the post-refresh retry 428s again (no same-base retry loop)', async () => {
+	it('dead-letters when the one post-refresh retry still returns 428', async () => {
 		const q = await queueWith(
 			mut({ mutationId: 'm-428-again', operation: 'update', baseRevision: null })
 		);
@@ -248,10 +248,11 @@ describe('drainMutationQueue', () => {
 			refreshRevision: async () => 'sha256:repulled',
 		});
 
-		expect(push).toHaveBeenCalledTimes(2); // one refresh-restamped retry, then park — never a loop
-		expect(result.conflicts).toHaveLength(1);
+		expect(push).toHaveBeenCalledTimes(2); // one refresh-restamped retry, then dead-letter — never a loop
+		expect(result.rejected.map((mutation) => mutation.mutationId)).toEqual(['m-428-again']);
+		expect(result.conflicts).toEqual([]);
 		expect((await q.all())[0]).toMatchObject({
-			status: 'needs-revision',
+			status: 'rejected',
 			baseRevision: 'sha256:repulled',
 		});
 	});

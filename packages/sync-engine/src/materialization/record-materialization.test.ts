@@ -46,10 +46,20 @@ describe('record materialization seam', () => {
 		expect(
 			materializeTargeted('variations', { id: 7, parent_id: 3, attributes: [], meta_data })
 				.storedDocument
-		).toMatchObject({ id: uuid, wooId: 7, parentId: 3, attributes: [] });
+		).toMatchObject({
+			id: uuid,
+			wooId: 7,
+			parentId: 3,
+			attributes: [],
+			local: { dirty: false, pendingMutationIds: [] },
+		});
 		expect(
 			materializeGreedyPrunable({ id: 7, name: 'Term', meta_data }).storedDocument
-		).toMatchObject({ id: uuid, wooId: 7 });
+		).toMatchObject({
+			id: uuid,
+			wooId: 7,
+			local: { dirty: false, pendingMutationIds: [] },
+		});
 		expect(materializeUpsertRefresh({ id: 7 } as never).storedDocument).toMatchObject({
 			id: 'woo-tax-rate:7',
 			wooTaxRateId: 7,

@@ -32,13 +32,16 @@
  * transitional fallback for proxies that predate the stamp.
  */
 
-import type { HybridCollection, ReferenceCollection } from '@wcpos/sync-core';
+import { assertBulkSuccess } from '@wcpos/sync-core';
+import type { Fetcher, HybridCollection, ReferenceCollection } from '@wcpos/sync-core';
 
 import {
 	materializeGreedyPrunable,
+	materializeLocalOnly,
 	materializeTargeted,
 	materializeUpsertRefresh,
 } from '../materialization/record-materialization';
+import { EngineOrderRepository } from '../write-path/engine-order-repository';
 import { taxRateDocumentId, type WooTaxRatePayload } from './tax-rate-schema';
 
 import type { RxDatabase } from 'rxdb';
@@ -65,6 +68,7 @@ export type TargetedDescriptor = {
 	 */
 	parse: (body: unknown) => WooPayload[];
 	project: (payload: WooPayload) => Record<string, unknown>;
+	write: CollectionWriteFacet;
 };
 
 /** The bare wc/v3 array envelope (/products, /customers). */
@@ -108,6 +112,7 @@ export type GreedyPrunableDescriptor = {
 	hybrid: ReferenceCollection;
 	refreshPath: string;
 	project: (payload: WooPayload) => Record<string, unknown>;
+	write?: CollectionWriteFacet;
 };
 
 /** shape: 'upsert-refresh' — refresh never prunes; deletes tombstone by id. */
@@ -132,9 +137,26 @@ export type WriteAck = {
  * The write facet (slice 4): a collection is client-writeable ONLY when its
  * descriptor carries this — the push route existing server-side is not
  * enough; the ack write-back contract must exist too. Orthogonal to `shape`
- * (orders are change-signal 'local-only' AND the one writeable collection).
+ * (writeability is explicit and independent of the change-signal shape).
  */
 export type CollectionWriteFacet = {
+	collection: Extract<
+		SyncCollectionName,
+		'orders' | 'products' | 'variations' | 'customers' | 'coupons'
+	>;
+	/** Stored field carrying the server numeric identity used by targeted refresh. */
+	remoteIdField: 'wooOrderId' | 'wooProductId' | 'wooId' | 'wooCustomerId';
+	/** Read one server document through this collection's existing include-pull shape. */
+	fetchServerDocument: (input: {
+		fetch: Fetcher;
+		syncBaseUrl: string;
+		remoteId: number;
+		signal?: AbortSignal;
+	}) => Promise<Record<string, unknown> | null>;
+	/** Pull/ack payload → the exact stored shape used by ordinary materialization. */
+	documentFromServerPayload: (payload: Record<string, unknown>) => Record<string, unknown>;
+	/** Missing-row ack/discard write-back through the collection's repository seam. */
+	upsertServerDocument: (db: RxDatabase, document: Record<string, unknown>) => Promise<void>;
 	/** Create/update ack: re-anchor sync.revision, capture the remote id, drop
 	 * the drained mutationId, clear dirty when nothing is pending. */
 	reconcile: (db: RxDatabase, ack: WriteAck, signal?: AbortSignal) => Promise<void>;
@@ -150,7 +172,7 @@ export type CollectionWriteFacet = {
 export type LocalOnlyDescriptor = {
 	shape: 'local-only';
 	collection: Extract<SyncCollectionName, 'orders'>;
-	write?: CollectionWriteFacet;
+	write: CollectionWriteFacet;
 };
 
 type AckDoc = {
@@ -160,42 +182,49 @@ type AckDoc = {
 	remove(): Promise<unknown>;
 };
 
-/**
- * The orders ack write-back — a faithful port of the web host's
- * applyOrderWriteAck/applyOrderDeleteAck (apps/web/src/db/orderWriteIntents.ts,
- * kept until #430): capture the server-assigned numeric id on create (the
- * uuid PK is never re-keyed), re-anchor `sync.revision` as the next edit's
- * baseRevision, drop the drained mutationId, clear dirty once nothing pends.
- */
-const ordersWriteFacet: CollectionWriteFacet = {
-	reconcile: async (db, ack, signal) => {
-		if (signal?.aborted) return;
-		const doc = (await db.collections.orders.findOne(ack.recordId).exec()) as AckDoc | null;
-		if (!doc || signal?.aborted) return; // gone, or the scope switched — nothing to reconcile
-		await doc.incrementalModify((data) => {
-			const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
-			const pending = (
-				Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
-			).filter((id) => id !== ack.mutation.mutationId);
-			const sync = (data.sync ?? {}) as { revision?: string };
-			return {
-				...data,
-				wooOrderId:
-					ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
-						? ack.remoteId
-						: data.wooOrderId,
-				sync: { ...sync, revision: ack.currentRevision ?? sync.revision },
-				local: { ...local, pendingMutationIds: pending, dirty: pending.length > 0 },
-			};
-		});
-	},
-	onDeleteAck: async (db, mutation, signal) => {
-		if (signal?.aborted) return;
-		const doc = (await db.collections.orders.findOne(mutation.recordId).exec()) as AckDoc | null;
-		if (!doc || signal?.aborted) return; // already removed, or the scope switched
-		await doc.remove();
-	},
-};
+function ackBookkeeping(
+	collection: CollectionWriteFacet['collection'],
+	remoteIdField: CollectionWriteFacet['remoteIdField'],
+	createAckSource?: 'woo-rest'
+): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
+	return {
+		reconcile: async (db, ack, signal) => {
+			if (signal?.aborted) return;
+			const doc = (await db.collections[collection].findOne(ack.recordId).exec()) as AckDoc | null;
+			if (!doc || signal?.aborted) return; // gone, or the scope switched — nothing to reconcile
+			await doc.incrementalModify((data) => {
+				const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
+				const pending = (
+					Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
+				).filter((id) => id !== ack.mutation.mutationId);
+				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
+				return {
+					...data,
+					[remoteIdField]:
+						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
+							? ack.remoteId
+							: data[remoteIdField],
+					sync: {
+						...sync,
+						revision: ack.currentRevision ?? sync.revision,
+						...(ack.mutation.operation === 'create' && createAckSource
+							? { source: createAckSource }
+							: {}),
+					},
+					local: { ...local, pendingMutationIds: pending, dirty: pending.length > 0 },
+				};
+			});
+		},
+		onDeleteAck: async (db, mutation, signal) => {
+			if (signal?.aborted) return;
+			const doc = (await db.collections[collection]
+				.findOne(mutation.recordId)
+				.exec()) as AckDoc | null;
+			if (!doc || signal?.aborted) return; // already removed, or the scope switched
+			await doc.remove();
+		},
+	};
+}
 
 export type CollectionDescriptor =
 	| TargetedDescriptor
@@ -223,6 +252,96 @@ function taxRateDocument(rawPayload: WooPayload): Record<string, unknown> {
 	return materializeUpsertRefresh(rawPayload as WooTaxRatePayload).storedDocument;
 }
 
+function orderDocument(rawPayload: WooPayload): Record<string, unknown> {
+	return materializeLocalOnly(rawPayload as never).storedDocument as Record<string, unknown>;
+}
+
+function createWriteFacet(input: {
+	collection: CollectionWriteFacet['collection'];
+	remoteIdField: CollectionWriteFacet['remoteIdField'];
+	pullPath: string;
+	parse: (body: unknown) => WooPayload[];
+	project: (payload: WooPayload) => Record<string, unknown>;
+	createAckSource?: 'woo-rest';
+	upsert?: CollectionWriteFacet['upsertServerDocument'];
+}): CollectionWriteFacet {
+	return {
+		collection: input.collection,
+		remoteIdField: input.remoteIdField,
+		documentFromServerPayload: (payload) => input.project(payload as WooPayload),
+		fetchServerDocument: async ({ fetch, syncBaseUrl, remoteId, signal }) => {
+			const search = new URLSearchParams({
+				include: String(remoteId),
+				per_page: '1',
+			});
+			const response = await fetch(`${syncBaseUrl}${input.pullPath}?${search.toString()}`, {
+				...(signal ? { signal } : {}),
+			});
+			if (!response.ok) {
+				throw new Error(`${input.pullPath} revision refresh failed: HTTP ${response.status}`);
+			}
+			const [payload] = input.parse(await response.json());
+			return payload ? input.project(payload) : null;
+		},
+		upsertServerDocument:
+			input.upsert ??
+			(async (db, document) => {
+				const collection = db.collections[input.collection];
+				if (!collection) {
+					throw new Error(`Engine scope database is missing collection "${input.collection}"`);
+				}
+				assertBulkSuccess(
+					await collection.bulkUpsert([document] as never[]),
+					`write facet ${input.collection} upsert`
+				);
+			}),
+		...ackBookkeeping(input.collection, input.remoteIdField, input.createAckSource),
+	};
+}
+
+const productsWriteFacet = createWriteFacet({
+	collection: 'products',
+	remoteIdField: 'wooProductId',
+	pullPath: '/products',
+	parse: parseBareArray,
+	project: productDocument,
+});
+const variationsWriteFacet = createWriteFacet({
+	collection: 'variations',
+	remoteIdField: 'wooId',
+	pullPath: '/variations',
+	parse: parseVariationsEnvelope,
+	project: variationDocument,
+});
+const customersWriteFacet = createWriteFacet({
+	collection: 'customers',
+	remoteIdField: 'wooCustomerId',
+	pullPath: '/customers',
+	parse: parseBareArray,
+	project: customerDocument,
+});
+const couponsWriteFacet = createWriteFacet({
+	collection: 'coupons',
+	remoteIdField: 'wooId',
+	pullPath: '/coupons',
+	parse: parseBareArray,
+	project: referenceDocument,
+	// Greedy reference pruning recognizes only server-sourced rows. Once Woo
+	// assigns the create's id, the coupon participates in authoritative pruning.
+	createAckSource: 'woo-rest',
+});
+/** The order facet retains its repository and pull-side materializer byte-for-byte. */
+const ordersWriteFacet = createWriteFacet({
+	collection: 'orders',
+	remoteIdField: 'wooOrderId',
+	pullPath: '/orders',
+	parse: parseBareArray,
+	project: orderDocument,
+	upsert: async (db, document) => {
+		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
+	},
+});
+
 /** THE descriptor table — one row per syncable collection, keyed by shape. */
 export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 	{
@@ -233,6 +352,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		wooIdField: 'wooProductId',
 		parse: parseBareArray,
 		project: productDocument,
+		write: productsWriteFacet,
 	},
 	{
 		shape: 'targeted',
@@ -242,6 +362,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		wooIdField: 'wooId',
 		parse: parseVariationsEnvelope,
 		project: variationDocument,
+		write: variationsWriteFacet,
 	},
 	{
 		shape: 'targeted',
@@ -251,6 +372,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		wooIdField: 'wooCustomerId',
 		parse: parseBareArray,
 		project: customerDocument,
+		write: customersWriteFacet,
 	},
 	{
 		shape: 'upsert-refresh',
@@ -287,6 +409,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		hybrid: 'coupons',
 		refreshPath: '/coupons',
 		project: referenceDocument,
+		write: couponsWriteFacet,
 	},
 	{ shape: 'local-only', collection: 'orders', write: ordersWriteFacet },
 ] as const;
@@ -294,6 +417,6 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 /** The write dispatch: descriptor lookup by collection, null when not writeable. */
 export function writeFacetFor(collection: string): CollectionWriteFacet | null {
 	const descriptor = COLLECTION_DESCRIPTORS.find((d) => d.collection === collection);
-	if (!descriptor || descriptor.shape !== 'local-only' || !descriptor.write) return null;
+	if (!descriptor || !('write' in descriptor) || !descriptor.write) return null;
 	return descriptor.write;
 }

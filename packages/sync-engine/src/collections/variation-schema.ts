@@ -21,6 +21,10 @@ export type LocalVariationDocument = {
 		partial: boolean;
 		source: 'woo-rest';
 	};
+	local: {
+		dirty: boolean;
+		pendingMutationIds: string[];
+	};
 };
 
 /** A normalized variation attribute. The WooCommerce "Any <attribute>" case is modeled as ABSENCE
@@ -74,7 +78,7 @@ export function withVariationColumns<T extends { payload: WooVariationPayload }>
 
 export const variationSchema = {
 	title: 'Woo product-variation document schema',
-	version: 2,
+	version: 3,
 	primaryKey: 'id',
 	type: 'object',
 	properties: {
@@ -100,6 +104,7 @@ export const variationSchema = {
 		stockQuantity: { type: ['number', 'null'] },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
+		local: { type: 'object', additionalProperties: true },
 	},
 	required: [
 		'id',
@@ -111,6 +116,7 @@ export const variationSchema = {
 		'stockQuantity',
 		'payload',
 		'sync',
+		'local',
 	],
 } as const;
 
@@ -119,4 +125,6 @@ export const variationMigrationStrategies: MigrationStrategies = {
 	1: (doc) => ({ ...doc, ...promotedVariationColumns(doc.payload) }),
 	/** v1 → v2: additive — backfill the new decimal stockQuantity column from the payload. */
 	2: (doc) => ({ ...doc, stockQuantity: promotedVariationColumns(doc.payload).stockQuantity }),
+	/** v2 → v3: write facets need the same durable local bookkeeping as products/customers. */
+	3: (doc) => ({ ...doc, local: { dirty: false, pendingMutationIds: [] } }),
 };

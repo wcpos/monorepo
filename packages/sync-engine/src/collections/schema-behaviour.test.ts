@@ -48,6 +48,7 @@ import {
 	brandSchema,
 	categorySchema,
 	couponSchema,
+	referenceCollectionMigrationStrategies,
 	referenceDocumentId,
 	tagSchema,
 } from './reference-collection-schema';
@@ -170,6 +171,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 				parentId: 9,
 				payload: VARIATION_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
 			}),
 		});
 	});
@@ -209,11 +211,13 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 	] as const)('%s', async (_name, schema, prefix) => {
 		await expectRoundTrip({
 			schema,
+			migrationStrategies: referenceCollectionMigrationStrategies,
 			document: {
 				id: referenceDocumentId(prefix, 3),
 				wooId: 3,
 				payload: { id: 3, name: 'Ref' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
 			},
 		});
 	});
@@ -396,7 +400,7 @@ describe('stored documents migrate through every schema version', () => {
 		expect(migrated.stockQuantity).toBe(3.6); // strategy 2 alone did this
 	});
 
-	it('variations v0 → v2 backfills promoted columns and null stockQuantity', async () => {
+	it('variations v0 → v3 backfills promoted columns, stockQuantity, and local write bookkeeping', async () => {
 		const migrated = await migrate({
 			fixtureSchema: {
 				title: 'variation v0 fixture',
@@ -424,7 +428,37 @@ describe('stored documents migrate through every schema version', () => {
 		});
 		expect(migrated).toMatchObject(promotedVariationColumns(VARIATION_PAYLOAD));
 		expect(migrated.stockQuantity).toBeNull(); // stock management off → null, not 0
+		expect(migrated.local).toEqual({ dirty: false, pendingMutationIds: [] });
 		expect(migrated.payload).toEqual(VARIATION_PAYLOAD);
+	});
+
+	it('reference collections v0 → v1 add local write bookkeeping without changing payload bytes', async () => {
+		const payload = { id: 3, code: 'SAVE10' };
+		const migrated = await migrate({
+			fixtureSchema: {
+				title: 'reference v0 fixture',
+				version: 0,
+				primaryKey: 'id',
+				type: 'object',
+				properties: {
+					id: { type: 'string', maxLength: 128 },
+					wooId: { type: ['number', 'null'] },
+					payload: { type: 'object', additionalProperties: true },
+					sync: { type: 'object', additionalProperties: true },
+				},
+				required: ['id', 'wooId', 'payload', 'sync'],
+			},
+			oldDocument: {
+				id: 'woo-coupon:3',
+				wooId: 3,
+				payload,
+				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
+			},
+			currentSchema: couponSchema,
+			migrationStrategies: referenceCollectionMigrationStrategies,
+		});
+		expect(migrated.local).toEqual({ dirty: false, pendingMutationIds: [] });
+		expect(migrated.payload).toEqual(payload);
 	});
 
 	it('syncCheckpoints v0 → v1 keeps pre-epoch checkpoints valid (epoch stays absent)', async () => {

@@ -233,6 +233,42 @@ describe('pushRecordMutation', () => {
 		).rejects.toMatchObject({ permanent: false });
 	});
 
+	it('maps variation parent-mismatch 409 to the ordinary missing-revision conflict path', async () => {
+		const result = await pushRecordMutation({
+			mutation: mut({ collectionName: 'variations', operation: 'update' }),
+			resolveEndpoint,
+			fetcher: async () =>
+				jsonResponse(409, {
+					code: 'woo_rxdb_sync_parent_mismatch',
+					message: 'invalid parent',
+				}),
+		});
+
+		expect(result).toMatchObject({
+			outcome: 'conflict',
+			currentRevision: null,
+			conflict: { current: null, currentRevision: null },
+		});
+	});
+
+	it('keeps variation parent-required 428 non-permanent at the wire layer', async () => {
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ collectionName: 'variations', operation: 'create' }),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(428, {
+						code: 'woo_rxdb_sync_parent_required',
+						message: 'invalid parent',
+					}),
+			})
+		).rejects.toMatchObject({
+			status: 428,
+			reason: 'woo_rxdb_sync_parent_required',
+			permanent: false,
+		});
+	});
+
 	it('non-ok: throws RecordPushError carrying the status, emits push.error', async () => {
 		const events: SyncEvent[] = [];
 		await expect(

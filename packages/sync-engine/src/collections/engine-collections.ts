@@ -39,6 +39,7 @@ import {
 	brandSchema,
 	categorySchema,
 	couponSchema,
+	referenceCollectionMigrationStrategies,
 	tagSchema,
 } from './reference-collection-schema';
 import { existenceManifestSchema } from '../local-coverage/existence-manifest-schema';
@@ -125,10 +126,13 @@ const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = 
 	variations: { schema: variationSchema, migrationStrategies: variationMigrationStrategies },
 	customers: { schema: customerSchema },
 	taxRates: { schema: taxRateSchema },
-	categories: { schema: categorySchema },
-	brands: { schema: brandSchema },
-	tags: { schema: tagSchema },
-	coupons: { schema: couponSchema },
+	categories: {
+		schema: categorySchema,
+		migrationStrategies: referenceCollectionMigrationStrategies,
+	},
+	brands: { schema: brandSchema, migrationStrategies: referenceCollectionMigrationStrategies },
+	tags: { schema: tagSchema, migrationStrategies: referenceCollectionMigrationStrategies },
+	coupons: { schema: couponSchema, migrationStrategies: referenceCollectionMigrationStrategies },
 };
 
 /** Deliberate `/testing` seam for hosts that open schema-canary databases. */

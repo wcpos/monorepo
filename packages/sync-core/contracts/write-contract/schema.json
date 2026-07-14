@@ -34,7 +34,9 @@
             "orders",
             "customers",
             "categories",
-            "brands"
+            "brands",
+            "variations",
+            "coupons"
           ]
         },
         "recordId": {
@@ -156,6 +158,40 @@
         ]
       },
       "additionalProperties": true
+    },
+    "parentRequiredResponse": {
+      "description": "428 response when a variation create has no live parent product.",
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "const": "woo_rxdb_sync_parent_required"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "parentMismatchResponse": {
+      "description": "409 response when an update payload contradicts the stored variation parent.",
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "const": "woo_rxdb_sync_parent_mismatch"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "oneOf": [

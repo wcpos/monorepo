@@ -7,10 +7,8 @@
  * dispatch is the engine-internal analogue of createRegistryWriteReconcile.
  *
  * Only collections whose descriptor carries a `write` facet are writeable —
- * orders today (the sole collection with a push route AND an ack write-back
- * contract; the #438 registry's wider write-capable set is server-side
- * aspiration until the per-collection reconciles exist). `write()` on any
- * other collection is caller misuse: an exception (invariant 5).
+ * orders, products, variations, customers, and coupons today. `write()` on
+ * any other collection is caller misuse: an exception (invariant 5).
  *
  * Same-record coalescing (#507, tightened by gate2 #516): the incoming intent
  * coalesces into the LAST (highest-seq) PENDING queue entry for the record —

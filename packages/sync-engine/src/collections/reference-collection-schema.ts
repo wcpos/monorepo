@@ -8,6 +8,8 @@
  * groups categories with tax rates).
  */
 
+import type { MigrationStrategies } from 'rxdb';
+
 export type WooReferencePayload = Record<string, unknown> & { id?: number };
 
 export type LocalReferenceDocument = {
@@ -22,6 +24,10 @@ export type LocalReferenceDocument = {
 		// that depends on it) stays type-safe without a cast.
 		source: 'woo-rest' | 'local';
 	};
+	local: {
+		dirty: boolean;
+		pendingMutationIds: string[];
+	};
 };
 
 /** `woo-category:<n>` / `woo-brand:<n>` / `woo-tag:<n>` — the stable document id derived from the Woo id. */
@@ -31,7 +37,7 @@ export function referenceDocumentId(prefix: string, wooId: number): string {
 
 export const categorySchema = {
 	title: 'Woo product-category document schema',
-	version: 0,
+	version: 1,
 	primaryKey: 'id',
 	type: 'object',
 	properties: {
@@ -39,13 +45,14 @@ export const categorySchema = {
 		wooId: { type: ['number', 'null'] },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
+		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooId', 'payload', 'sync'],
+	required: ['id', 'wooId', 'payload', 'sync', 'local'],
 } as const;
 
 export const brandSchema = {
 	title: 'Woo product-brand document schema',
-	version: 0,
+	version: 1,
 	primaryKey: 'id',
 	type: 'object',
 	properties: {
@@ -53,13 +60,14 @@ export const brandSchema = {
 		wooId: { type: ['number', 'null'] },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
+		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooId', 'payload', 'sync'],
+	required: ['id', 'wooId', 'payload', 'sync', 'local'],
 } as const;
 
 export const tagSchema = {
 	title: 'Woo product-tag document schema',
-	version: 0,
+	version: 1,
 	primaryKey: 'id',
 	type: 'object',
 	properties: {
@@ -67,8 +75,9 @@ export const tagSchema = {
 		wooId: { type: ['number', 'null'] },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
+		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooId', 'payload', 'sync'],
+	required: ['id', 'wooId', 'payload', 'sync', 'local'],
 } as const;
 
 // Coupons are not a taxonomy term — they are a WC_Data resource (`shop_coupon`) — but
@@ -77,7 +86,7 @@ export const tagSchema = {
 // stamper (not the term adapter), same shape the client consumes.
 export const couponSchema = {
 	title: 'Woo coupon document schema',
-	version: 0,
+	version: 1,
 	primaryKey: 'id',
 	type: 'object',
 	properties: {
@@ -85,6 +94,15 @@ export const couponSchema = {
 		wooId: { type: ['number', 'null'] },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
+		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['id', 'wooId', 'payload', 'sync'],
+	required: ['id', 'wooId', 'payload', 'sync', 'local'],
 } as const;
+
+/** v0 → v1: every reference collection gains the same harmless write bookkeeping. */
+export const referenceCollectionMigrationStrategies: MigrationStrategies = {
+	1: (doc) => ({
+		...doc,
+		local: { dirty: false, pendingMutationIds: [] },
+	}),
+};

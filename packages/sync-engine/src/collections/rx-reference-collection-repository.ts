@@ -9,11 +9,16 @@ import { assertBulkSuccess } from '@wcpos/sync-core';
  * fetcher stays storage-free and this concrete wiring can be integration-tested
  * against a real RxDB collection.
  */
+import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
+
 import type { LocalReferenceDocument } from './reference-collection-schema';
 
 export type ReferenceRxCollection = {
 	bulkUpsert(documents: LocalReferenceDocument[]): Promise<unknown>;
 	bulkRemove(ids: string[]): Promise<unknown>;
+	findByIds(ids: string[]): {
+		exec(): Promise<Map<string, { toJSON(): unknown }>>;
+	};
 	find(): { exec(): Promise<{ toJSON(): LocalReferenceDocument }[]> };
 };
 
@@ -33,17 +38,21 @@ export function referenceCollectionRepository(
 ): ReferenceCollectionRepository {
 	return {
 		async upsertMany(documents: LocalReferenceDocument[]): Promise<void> {
-			assertBulkSuccess(
-				await collection.bulkUpsert(documents),
-				'rx-reference-collection-repository upsert'
-			);
+			const applicable = await withoutLocallyProtected(collection, documents);
+			if (applicable.length > 0)
+				assertBulkSuccess(
+					await collection.bulkUpsert(applicable),
+					'rx-reference-collection-repository upsert'
+				);
 		},
 		async pruneServerSourcedAbsent(keptDocumentIds: readonly string[]): Promise<string[]> {
 			const kept = new Set(keptDocumentIds);
 			const docs = await collection.find().exec();
 			const toRemove = docs
 				.map((doc) => doc.toJSON())
-				.filter((doc) => doc.sync?.source === 'woo-rest' && !kept.has(doc.id))
+				.filter(
+					(doc) => doc.sync?.source === 'woo-rest' && !hasPendingLocalWork(doc) && !kept.has(doc.id)
+				)
 				.map((doc) => doc.id);
 			if (toRemove.length > 0)
 				assertBulkSuccess(

@@ -40,10 +40,13 @@ import type { PushResult } from './recordPushAdapter';
  *    moves it. Later mutations for the same record stay held while one of its
  *    mutations is conflicted;
  *  - 428 precondition required → ONE targeted `refreshRevision` + re-push with
- *    the observed revision; when no revision can be determined (no refresh
- *    port, refresh finds nothing, or the retry 428s again) the row parks as
- *    durable status 'needs-revision' (gate2 #516 item 4) — resolved only by an
- *    explicit resolution that first refreshes the revision, or a discard;
+ *    the observed revision. A born-local CREATE with no refreshable server
+ *    identity is permanently rejected; when no update/delete revision can be
+ *    determined (no refresh port or refresh finds nothing), the row parks as durable status
+ *    'needs-revision' (gate2 #516 item 4) — resolved only by an explicit
+ *    resolution that first refreshes the revision, or a discard. If the one
+ *    post-refresh retry still returns 428, it is dead-lettered rather than
+ *    looped or parked on a revision already proven ineffective;
  *  - permanent 4xx → dead-lettered as durable status 'rejected' (persists for
  *    the conflicts() surface; leaves pending() so the record is syncable again);
  *  - error → back to 'pending' with backoff; left queued to retry next drain;
@@ -109,7 +112,8 @@ export async function drainMutationQueue(input: {
 	currentRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
 	/** On a 428 precondition failure, performs one targeted server refresh and
 	 * returns the record's newly observed revision. The drain retries once with
-	 * that revision; a missing revision is parked as a conflict. */
+	 * that revision; a missing revision parks update/delete, while an unrefreshable
+	 * create is permanently rejected. */
 	refreshRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
 }): Promise<DrainResult> {
 	const emit = (event: SyncEvent): void => {
@@ -277,10 +281,13 @@ export async function drainMutationQueue(input: {
 				break;
 			}
 			if ((error as { status?: unknown } | null)?.status === 428) {
-				// Precondition required — the SAME recovery for every operation, deletes
-				// included (gate2 #516 item 4): one targeted revision refresh, one retry.
+				// Attempt the existing one-refresh, one-retry policy when a remote
+				// identity exists. A born-local create has no such identity; the null
+				// refresh result below makes its 428 a permanent rejection instead of
+				// an unsettleable needs-revision row.
 				if (!input.refreshRevision) {
-					await parkNeedsRevision(draining);
+					if (draining.operation === 'create') await deadLetter(draining, error);
+					else await parkNeedsRevision(draining);
 					continue;
 				}
 				let revision: string | null | undefined;
@@ -304,7 +311,10 @@ export async function drainMutationQueue(input: {
 							break;
 						}
 						if ((retryError as { status?: unknown } | null)?.status === 428) {
-							await parkNeedsRevision(restamped);
+							// The targeted refresh produced a revision and the server still rejected
+							// the one allowed retry. That revision has now been proven ineffective;
+							// dead-letter instead of creating a same-base resolution loop.
+							await deadLetter(restamped, retryError);
 							continue;
 						} else if (isNonRetryable(retryError)) {
 							await deadLetter(restamped, retryError);
@@ -317,7 +327,11 @@ export async function drainMutationQueue(input: {
 						}
 					}
 				} else {
-					await parkNeedsRevision(draining);
+					// A born-local create has no remote identity, so refreshRevision
+					// returns no revision without a request. It can never satisfy a 428
+					// precondition through conflict resolution; reject it permanently.
+					if (draining.operation === 'create') await deadLetter(draining, error);
+					else await parkNeedsRevision(draining);
 					continue;
 				}
 			} else if (isNonRetryable(error)) {
