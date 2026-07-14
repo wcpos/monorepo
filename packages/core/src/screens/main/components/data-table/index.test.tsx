@@ -14,6 +14,7 @@ const mockSetFilter = jest.fn();
 const mockPatchUI = jest.fn();
 let mockTableMeta: Record<string, unknown> | undefined;
 let mockFooterProps: Record<string, unknown> | undefined;
+let mockDefaultFooterProps: Record<string, unknown> | undefined;
 
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => [{ key: 'level', show: true }],
@@ -89,7 +90,12 @@ jest.mock('./header', () => ({
 		/>
 	),
 }));
-jest.mock('./footer', () => ({ DataTableFooter: () => null }));
+jest.mock('./footer', () => ({
+	DataTableFooter: (props: Record<string, unknown>) => {
+		mockDefaultFooterProps = props;
+		return null;
+	},
+}));
 jest.mock('./list-footer', () => ({ ListFooterComponent: () => null }));
 jest.mock('../../components/text-cell', () => ({ TextCell: () => null }));
 
@@ -103,6 +109,7 @@ describe('DataTable binding contract', () => {
 		jest.clearAllMocks();
 		mockTableMeta = undefined;
 		mockFooterProps = undefined;
+		mockDefaultFooterProps = undefined;
 	});
 
 	it('uses binding actions for sorting and pagination and publishes only filter actions to cells', () => {
@@ -150,5 +157,40 @@ describe('DataTable binding contract', () => {
 			sync,
 		});
 		expect(mockFooterProps).not.toHaveProperty('query');
+	});
+
+	it('renders the default footer from binding projections', () => {
+		const resource = { kind: 'resource' };
+		const active$ = of(false);
+		const total$ = of(27);
+		const totalSource$ = of('coverage' as const);
+		const sync = jest.fn(async () => undefined);
+		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
+
+		render(
+			<BindingDataTable
+				id="coupons"
+				resource={resource}
+				actions={{
+					setSort: mockSetSort,
+					extendLimit: mockExtendLimit,
+					setFilter: mockSetFilter,
+				}}
+				active$={active$}
+				total$={total$}
+				totalSource$={totalSource$}
+				sync={sync}
+			/>
+		);
+
+		expect(mockDefaultFooterProps).toMatchObject({
+			collectionName: 'coupons',
+			count: 1,
+			active$,
+			total$,
+			totalSource$,
+			sync,
+		});
+		expect(mockDefaultFooterProps).not.toHaveProperty('query');
 	});
 });

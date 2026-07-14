@@ -1,16 +1,13 @@
 import * as React from 'react';
 
 import { endOfDay, isSameDay, isToday, isYesterday, startOfDay } from 'date-fns';
-import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import type { DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
-import type { CouponCollection } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
 
 import { DateRangeCalendar } from '../../components/order/filter-bar/calendar';
+import { useQueryState, useQueryStateActions } from '../../../../query';
 import { useT } from '../../../../contexts/translations';
 import {
 	convertLocalDateToUTCString,
@@ -18,17 +15,14 @@ import {
 	useLocalDate,
 } from '../../../../hooks/use-local-date';
 
-interface Props {
-	query: Query<CouponCollection>;
-}
-
-export function DateRangePill({ query }: Props) {
+export function DateRangePill() {
 	const t = useT();
 	const triggerRef = React.useRef<{ close: () => void }>(null);
-	const selectedDateRange = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('date_expires_gmt')))
+	const selectedDateRange = useQueryState<'coupons', { from: string; to: string } | undefined>(
+		(state) => state.filters.dateRange
 	);
-	const isActive = !!(selectedDateRange && selectedDateRange?.$gte && selectedDateRange?.$lte);
+	const { setFilter, clearFilter } = useQueryStateActions<'coupons'>();
+	const isActive = !!selectedDateRange;
 	const { formatDate } = useLocalDate();
 
 	const label = React.useMemo(() => {
@@ -36,8 +30,8 @@ export function DateRangePill({ query }: Props) {
 			return t('coupons.expiry_date');
 		}
 
-		const from = convertUTCStringToLocalDate(selectedDateRange.$gte as string);
-		const to = convertUTCStringToLocalDate(selectedDateRange.$lte as string);
+		const from = convertUTCStringToLocalDate(selectedDateRange.from);
+		const to = convertUTCStringToLocalDate(selectedDateRange.to);
 
 		if (isSameDay(from, to)) {
 			if (isToday(from)) {
@@ -62,15 +56,14 @@ export function DateRangePill({ query }: Props) {
 
 			const { from, to } = range;
 
-			query
-				.where('date_expires_gmt')
-				.gte(convertLocalDateToUTCString(startOfDay(from)))
-				.lte(convertLocalDateToUTCString(endOfDay(to)))
-				.exec();
+			setFilter('dateRange', {
+				from: convertLocalDateToUTCString(startOfDay(from)),
+				to: convertLocalDateToUTCString(endOfDay(to)),
+			});
 
 			triggerRef.current?.close();
 		},
-		[query]
+		[setFilter]
 	);
 
 	return (
@@ -85,7 +78,7 @@ export function DateRangePill({ query }: Props) {
 					leftIcon="calendarDays"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.removeWhere('date_expires_gmt').exec()}
+					onRemove={() => clearFilter('dateRange')}
 				>
 					<ButtonText>{label}</ButtonText>
 				</ButtonPill>

@@ -73,13 +73,20 @@ describe('query bindings', () => {
 	beforeEach(async () => {
 		manager = undefined;
 		localDB = await createStoreDatabase();
-		engineDB = await createEngineDatabase(['products', 'variations', 'customers', 'categories']);
+		engineDB = await createEngineDatabase([
+			'products',
+			'variations',
+			'customers',
+			'categories',
+			'coupons',
+		]);
 		engine = createFakeEngine(engineDB);
 		installResidentSearch(localDB.collections.logs);
 		installResidentSearch(engineDB.collections.products);
 		installResidentSearch(engineDB.collections.variations);
 		installResidentSearch(engineDB.collections.customers);
 		installResidentSearch(engineDB.collections.categories);
+		installResidentSearch(engineDB.collections.coupons);
 	});
 
 	afterEach(async () => {
@@ -191,6 +198,62 @@ describe('query bindings', () => {
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 		await act(async () => result.current.sync());
 		expect(engine.syncCalls).toContain('scheduler-drain');
+	});
+
+	it('uses coupons:all coverage only for the unfiltered reference lane', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.coupons.insert({
+			id: 'coupon-1',
+			wooId: 1,
+			payload: {
+				id: 1,
+				code: 'SUMMER',
+				discount_type: 'percent',
+				status: 'publish',
+				date_created_gmt: '2026-07-01T00:00:00',
+			},
+			sync: { revision: '1', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: 'coupons::coupons:all',
+			collectionName: 'coupons',
+			queryKey: 'coupons:all',
+			complete: true,
+			expectedRecordIds: ['coupon-1', 'coupon-2', 'coupon-3'],
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 2,
+		});
+		const base: QueryStateOf<'coupons'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 1,
+		};
+		const { result, rerender } = renderHook(({ state }) => useCollectionBinding('coupons', state), {
+			wrapper: Provider,
+			initialProps: { state: base },
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 3)))
+		).resolves.toBe(3);
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
+		).resolves.toBe('coverage');
+
+		rerender({ state: { ...base, filters: { status: 'publish' } } });
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
+		).resolves.toBe(1);
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
+		).resolves.toBe('local');
 	});
 
 	it('uses the full matching local logs count instead of the loaded window', async () => {

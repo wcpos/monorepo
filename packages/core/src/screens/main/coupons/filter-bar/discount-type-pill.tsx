@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
@@ -10,20 +7,15 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
-import type { Query } from '@wcpos/query';
 
+import { useQueryState, useQueryStateActions } from '../../../../query';
 import { useT } from '../../../../contexts/translations';
 
-type CouponCollection = import('@wcpos/database').CouponCollection;
-
-interface Props {
-	query: Query<CouponCollection>;
-}
-
-export function DiscountTypePill({ query }: Props) {
-	const selected = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('discount_type') as string | undefined))
+export function DiscountTypePill() {
+	const selected = useQueryState<'coupons', string | undefined>(
+		(state) => state.filters.discount_type
 	);
+	const { setFilter, clearFilter } = useQueryStateActions<'coupons'>();
 	const t = useT();
 	const isActive = !!selected;
 
@@ -44,7 +36,7 @@ export function DiscountTypePill({ query }: Props) {
 	return (
 		<Select
 			value={value}
-			onValueChange={(option) => option && query.where('discount_type').equals(option.value).exec()}
+			onValueChange={(option) => option && setFilter('discount_type', option.value)}
 		>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
@@ -52,7 +44,7 @@ export function DiscountTypePill({ query }: Props) {
 					leftIcon="percent"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.removeWhere('discount_type').exec()}
+					onRemove={() => clearFilter('discount_type')}
 				>
 					<ButtonText>{value?.label || t('coupons.discount_type')}</ButtonText>
 				</ButtonPill>
