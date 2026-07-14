@@ -9,7 +9,7 @@
  *    `engine.require({kind: 'targeted-records', wooIds})`. Covers parent
  *    variations, grouped products and the default-customer lookup.
  *  - **search demand** (products/customers with a non-empty search term) →
- *    `engine.require({collection, kind: 'search', term})`.
+ *    `engine.require({collection, kind: 'search', term, limit})`.
  *  - **order query descriptors** (unbounded orders browse) →
  *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
  *    `orders:browser:status=…:search=…:limit=…` descriptor the engine parses.
@@ -132,6 +132,7 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 			collection: engineCollection,
 			kind: 'search',
 			term: rawSearchTerm,
+			...(limit !== undefined ? { limit } : {}),
 			...(input.priority !== undefined ? { priority: input.priority } : {}),
 			...(input.forceRefresh ? { forceRefresh: true } : {}),
 		});
@@ -172,7 +173,11 @@ export function declareRequirements(
 		handle.ready.catch((error) => {
 			if (requirement.kind === 'search') {
 				requirementLogger.warn('Search requirement failed; continuing with local results', {
-					context: { collection: requirement.collection, term: requirement.term, error },
+					context: {
+						collection: requirement.collection,
+						termLength: requirement.term?.length ?? 0,
+						error,
+					},
 				});
 			}
 		});

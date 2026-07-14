@@ -198,6 +198,91 @@ describe('Manager', () => {
 			expect(engine.searchRequireCalls).toHaveLength(1);
 		});
 
+		it('widens product search demand when loadMore grows the bounded query window', async () => {
+			installLocalSearch(engineDB.collections.products, ['payload.name']);
+			const query = manager.registerQuery({
+				queryKeys: ['paginated-product-search'],
+				collectionName: 'products',
+				initialParams: {},
+				infiniteScroll: true,
+				pageSize: 25,
+			});
+			if (!query) throw new Error('paginated product query was not registered');
+
+			const searchExecution = nextSearchExecution(query, 'keyboard');
+			query.search('keyboard');
+			await searchExecution;
+			expect(engine.searchRequireCalls[0]?.requirement.limit).toBe(25);
+
+			query.loadMore();
+
+			expect(engine.searchRequireCalls).toHaveLength(2);
+			expect(engine.searchRequireCalls[0]?.released).toBe(true);
+			expect(engine.searchRequireCalls[1]?.requirement).toMatchObject({
+				collection: 'products',
+				kind: 'search',
+				term: 'keyboard',
+				limit: 50,
+			});
+
+			const laterMatch = firstValueFrom(
+				query.result$.pipe(filter((result) => result.searchActive && result.count === 1))
+			);
+			await engineDB.collections.products.insert(
+				engineProduct({ uuid: 'later-keyboard', id: 150, name: 'Later Keyboard' })
+			);
+
+			expect((await laterMatch).hits[0]?.id).toBe('later-keyboard');
+			expect(engine.searchRequireCalls).toHaveLength(2);
+		});
+
+		it('force-refreshes the active search requirement when the query syncs', async () => {
+			installLocalSearch(engineDB.collections.products, ['payload.name']);
+			const query = manager.registerQuery({
+				queryKeys: ['synced-product-search'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			if (!query) throw new Error('synced product query was not registered');
+
+			const searchExecution = nextSearchExecution(query, 'keyboard');
+			query.search('keyboard');
+			await searchExecution;
+			await manager.syncQuery(query.id);
+
+			expect(engine.searchRequireCalls).toHaveLength(2);
+			expect(engine.searchRequireCalls[1]?.requirement).toMatchObject({
+				collection: 'products',
+				kind: 'search',
+				term: 'keyboard',
+				forceRefresh: true,
+				priority: 1000,
+			});
+			expect(engine.syncCalls).toContain('scheduler-drain');
+		});
+
+		it('retries an identical search declaration after its requirement rejects', async () => {
+			installLocalSearch(engineDB.collections.products, ['payload.name']);
+			engine.searchFailure = new Error('remote search unavailable');
+			const query = manager.registerQuery({
+				queryKeys: ['retried-product-search'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			if (!query) throw new Error('retried product query was not registered');
+
+			const searchExecution = nextSearchExecution(query, 'keyboard');
+			query.search('keyboard');
+			await searchExecution;
+			expect(engine.searchRequireCalls).toHaveLength(1);
+
+			engine.searchFailure = undefined;
+			query.exec();
+
+			expect(engine.searchRequireCalls).toHaveLength(2);
+			expect(engine.searchRequireCalls[1]?.requirement.term).toBe('keyboard');
+		});
+
 		it('releases product search demand when the term changes and when search clears', async () => {
 			installLocalSearch(engineDB.collections.products, ['payload.name']);
 			const query = manager.registerQuery({
@@ -272,8 +357,37 @@ describe('Manager', () => {
 			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
 				'Search requirement failed; continuing with local results',
 				expect.objectContaining({
-					context: expect.objectContaining({ collection: 'products', term: 'keyboard' }),
+					context: expect.objectContaining({ collection: 'products', termLength: 8 }),
 				})
+			);
+		});
+
+		it('does not log the raw customer search term when search demand rejects', async () => {
+			const searchTerm = 'Ada Lovelace';
+			installLocalSearch(engineDB.collections.customers, ['payload.first_name']);
+			engine.searchFailure = new Error('remote search unavailable');
+			const query = manager.registerQuery({
+				queryKeys: ['private-customer-search'],
+				collectionName: 'customers',
+				initialParams: {},
+			});
+			if (!query) throw new Error('customer query was not registered');
+
+			const searchExecution = nextSearchExecution(query, searchTerm);
+			query.search(searchTerm);
+			await searchExecution;
+
+			expect(getLogger(['test']).warn).toHaveBeenCalledWith(
+				'Search requirement failed; continuing with local results',
+				expect.objectContaining({
+					context: expect.objectContaining({
+						collection: 'customers',
+						termLength: searchTerm.length,
+					}),
+				})
+			);
+			expect(JSON.stringify((getLogger(['test']).warn as jest.Mock).mock.calls)).not.toContain(
+				searchTerm
 			);
 		});
 

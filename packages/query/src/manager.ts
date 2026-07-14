@@ -451,10 +451,19 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		demand.requirements = requirements;
-		demand.handles = declareRequirements(this.engine, requirements);
+		const handles = declareRequirements(this.engine, requirements);
+		demand.handles = handles;
+		for (const handle of handles) {
+			void handle.ready.catch(() => {
+				// A rejected generation must not suppress an identical retry.
+				if (demand.handles === handles) {
+					demand.requirements = [];
+				}
+			});
+		}
 		this.trackInFlight(
 			demand,
-			demand.handles.map((handle) => handle.ready)
+			handles.map((handle) => handle.ready)
 		);
 	}
 
@@ -512,6 +521,12 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 		const mango = cloneDeep(query.currentRxQuery?.mangoQuery ?? {});
 		const selector = (mango.selector ?? {}) as Record<string, unknown>;
+		const search =
+			query.currentRxQuery?.other?.search?.searchTerm ??
+			query.currentRxQuery?.other?.relationalSearch?.searchTerm;
+		if (search) {
+			selector.search = search;
+		}
 		const requirements = requirementsForQuery({
 			id: `${queryId}:sync`,
 			collectionName: query.collectionName,
