@@ -11,9 +11,9 @@ import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 const AUTH_STATE_DIR = path.join(__dirname, '.auth-state');
 
 const FREE_STORE_URL =
-	process.env.E2E_STORE_URL_FREE || process.env.E2E_STORE_URL || 'https://dev-free.wcpos.com';
+	process.env.E2E_STORE_URL_FREE || process.env.E2E_STORE_URL || 'https://dev-next.wcpos.com';
 const PRO_STORE_URL =
-	process.env.E2E_STORE_URL_PRO || process.env.E2E_STORE_URL || 'https://dev-pro.wcpos.com';
+	process.env.E2E_STORE_URL_PRO || process.env.E2E_STORE_URL || 'https://dev-next.wcpos.com';
 const STUB_UPLOADS_IN_CROSS_ORIGIN_E2E = process.env.E2E_STUB_UPLOADS !== 'false';
 const TRANSPARENT_PNG_BASE64 =
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sM7nDUAAAAASUVORK5CYII=';

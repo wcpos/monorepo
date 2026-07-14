@@ -1,13 +1,12 @@
 /**
  * The ONE place the engine's sync base URL is derived (ADR 0023 increment 1b).
  *
- * For now the engine talks to the site's `wc-rxdb-sync/v1` root. The flip to
- * `wcpos/v1/sync` at server port increment 3 is a one-line constant change here
- * — every caller derives its base URL through this function.
+ * The engine talks to the production plugin's merged namespace: the sync
+ * surface lives at `wcpos/v1/sync/*` on woocommerce-pos@next (server port
+ * increments 1–2b), which is what the next-train server (dev-next.wcpos.com)
+ * runs. The lab's `wc-rxdb-sync/v1` namespace never ships to production.
  */
-
-/** @todo increment-3 — flip to `wcpos/v1/sync` when the server port lands. */
-export const SYNC_NAMESPACE = 'wc-rxdb-sync/v1';
+export const SYNC_NAMESPACE = 'wcpos/v1/sync';
 
 export interface SyncSite {
 	syncBaseUrl: string;

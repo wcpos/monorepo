@@ -10,8 +10,8 @@ export interface WcposTestOptions {
 	storeUrl: string;
 }
 
-const FREE_STORE_URL = 'https://dev-free.wcpos.com';
-const PRO_STORE_URL = 'https://dev-pro.wcpos.com';
+const FREE_STORE_URL = process.env.E2E_STORE_URL_FREE || 'https://dev-next.wcpos.com';
+const PRO_STORE_URL = process.env.E2E_STORE_URL_PRO || 'https://dev-next.wcpos.com';
 
 /**
  * Playwright configuration for WCPOS E2E tests
