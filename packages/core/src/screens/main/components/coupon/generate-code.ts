@@ -14,7 +14,11 @@ const CODE_PREFIX = 'POS-';
 export function generateCouponCode(random: () => number = Math.random): string {
 	let out = '';
 	for (let i = 0; i < CODE_LENGTH; i++) {
-		out += CODE_CHARS[Math.floor(random() * CODE_CHARS.length)];
+		const sample = random();
+		if (!Number.isFinite(sample) || sample < 0 || sample >= 1) {
+			throw new RangeError('random() must return a value in [0, 1)');
+		}
+		out += CODE_CHARS[Math.floor(sample * CODE_CHARS.length)];
 	}
 	return `${CODE_PREFIX}${out}`;
 }

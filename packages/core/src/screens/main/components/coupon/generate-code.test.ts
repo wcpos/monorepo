@@ -24,4 +24,14 @@ describe('generateCouponCode', () => {
 			`POS-${CODE_CHARS[CODE_CHARS.length - 1].repeat(4)}`
 		);
 	});
+
+	it.each([1, -Number.EPSILON, NaN, Infinity])(
+		'throws when any random sample is outside [0, 1): %s',
+		(invalidSample) => {
+			let calls = 0;
+			expect(() => generateCouponCode(() => (calls++ === 0 ? 0 : invalidSample))).toThrow(
+				RangeError
+			);
+		}
+	);
 });
