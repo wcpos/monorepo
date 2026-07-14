@@ -1,4 +1,4 @@
-import { isRouteTeardownError, waitForAuthEntry } from '../e2e/fixtures';
+import { isRouteTeardownError, waitForAuthEntry, waitForOAuthCallback } from '../e2e/fixtures';
 
 describe('isRouteTeardownError', () => {
 	it('recognizes Playwright route callbacks that fail because the page closed', () => {
@@ -32,5 +32,18 @@ describe('waitForAuthEntry', () => {
 
 		expect(page.goto).toHaveBeenCalledTimes(2);
 		expect(page.waitForTimeout).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('waitForOAuthCallback', () => {
+	it('reports the WordPress log permission failure instead of a callback timeout', async () => {
+		const page = {
+			waitForURL: jest.fn().mockReturnValue(new Promise(() => {})),
+			waitForFunction: jest.fn().mockResolvedValue(undefined),
+		};
+
+		await expect(
+			waitForOAuthCallback(page as never, 'https://preview.example.com')
+		).rejects.toThrow('WordPress cannot write to wp-content/uploads/wc-logs');
 	});
 });
