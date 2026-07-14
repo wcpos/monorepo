@@ -34,6 +34,7 @@
 		"jest": "^30.4.2",
 		"jest-environment-jsdom": "^30.4.1",
 		"rxjs-marbles": "^7.0.1",
-		"ts-jest": "^29.4.11"
+		"ts-jest": "^29.4.11",
+		"@wcpos/sync-engine": "workspace:*"
 	}
 }
