@@ -15,6 +15,55 @@ describe('template-studio randomizer', () => {
 		if (!parsed.success) throw new Error(parsed.error.message);
 	});
 
+	it('generates arithmetically consistent sale savings and full-price lines', () => {
+		const result = createRandomReceipt({
+			seed: 'receipt-v11-savings',
+			overrides: { emptyCart: false, cartSize: 3, hasDiscounts: true },
+		});
+
+		expect(result.data.lines.some((line) => (line.unit_savings_incl ?? 0) > 0)).toBe(true);
+		expect(result.data.lines.some((line) => line.unit_savings_incl === 0)).toBe(true);
+		for (const line of result.data.lines) {
+			expect(line.line_savings_incl).toBe(
+				Math.round((line.unit_savings_incl ?? 0) * line.qty * 100) / 100
+			);
+			expect(line.line_savings_excl).toBe(
+				Math.round((line.unit_savings_excl ?? 0) * line.qty * 100) / 100
+			);
+		}
+		const saleSavingsIncl =
+			Math.round(
+				result.data.lines.reduce((sum, line) => sum + (line.line_savings_incl ?? 0), 0) * 100
+			) / 100;
+		const additionalSavingsIncl =
+			Math.round(
+				result.data.lines.reduce(
+					(sum, line) => sum + (line.savings_in_discounts ? 0 : (line.line_savings_incl ?? 0)),
+					0
+				) * 100
+			) / 100;
+
+		expect(result.data.totals.sale_savings_total_incl).toBe(saleSavingsIncl);
+		expect(result.data.totals.total_saved_incl).toBe(
+			Math.round((result.data.totals.discount_total_incl + additionalSavingsIncl) * 100) / 100
+		);
+		expect(result.data.totals.total_saved_complete).toBe(true);
+	});
+
+	it('occasionally generates a legacy savings line', () => {
+		let legacy: ReturnType<typeof createRandomReceipt> | undefined;
+		for (let seed = 1; seed < 200 && !legacy; seed += 1) {
+			const candidate = createRandomReceipt({
+				seed,
+				overrides: { emptyCart: false, cartSize: 3 },
+			});
+			if (candidate.data.lines.some((line) => line.savings_in_discounts)) legacy = candidate;
+		}
+
+		expect(legacy).toBeDefined();
+		expect(legacy?.data.lines.some((line) => line.savings_in_discounts)).toBe(true);
+	});
+
 	it('populates payment-state fields on generated order data', () => {
 		const result = createRandomReceipt({ seed: 'seed-default' });
 

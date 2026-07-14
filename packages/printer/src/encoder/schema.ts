@@ -207,6 +207,80 @@ export const ReceiptLineItemSchema = z.object({
 	name: z.string().describe('Product / line display name'),
 	qty: z.number().describe('Quantity (negative for refund lines)'),
 	qty_refunded: z.number().optional().describe('Quantity refunded (positive number)'),
+	regular_price: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Display-side recorded regular unit price'),
+	regular_price_incl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Recorded regular unit price tax-inclusive'),
+	regular_price_excl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Recorded regular unit price tax-exclusive'),
+	selling_price: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Display-side selling unit price before coupons'),
+	selling_price_incl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Selling unit price before coupons, tax-inclusive'),
+	selling_price_excl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Selling unit price before coupons, tax-exclusive'),
+	unit_savings: z.number().nullable().optional().describe('Display-side savings per unit'),
+	unit_savings_incl: z.number().nullable().optional().describe('Savings per unit tax-inclusive'),
+	unit_savings_excl: z.number().nullable().optional().describe('Savings per unit tax-exclusive'),
+	line_regular_total: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Display-side regular-price line total'),
+	line_regular_total_incl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Regular-price line total tax-inclusive'),
+	line_regular_total_excl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Regular-price line total tax-exclusive'),
+	line_selling_total: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Display-side selling-price line total before coupons'),
+	line_selling_total_incl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Selling-price line total before coupons, tax-inclusive'),
+	line_selling_total_excl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Selling-price line total before coupons, tax-exclusive'),
+	line_savings: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Display-side total savings for this line'),
+	line_savings_incl: z.number().nullable().optional().describe('Total line savings tax-inclusive'),
+	line_savings_excl: z.number().nullable().optional().describe('Total line savings tax-exclusive'),
+	savings_in_discounts: z
+		.boolean()
+		.optional()
+		.describe('Whether savings are already included in WooCommerce discounts'),
 	unit_subtotal: z.number().optional().describe('Display-side per-unit subtotal (pre-discount)'),
 	unit_subtotal_incl: z.number().optional().describe('Per-unit subtotal tax-inclusive'),
 	unit_subtotal_excl: z.number().optional().describe('Per-unit subtotal tax-exclusive'),
@@ -314,6 +388,36 @@ export const ReceiptTotalsSchema = z.object({
 		.describe(
 			'Discount total tax-exclusive as a positive magnitude; templates may prepend "-" for display'
 		),
+	sale_savings_total: z.number().nullable().optional().describe('Display-side sale savings total'),
+	sale_savings_total_incl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Sale savings total tax-inclusive'),
+	sale_savings_total_excl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Sale savings total tax-exclusive'),
+	total_saved: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Display-side combined discounts and non-overlapping sale savings'),
+	total_saved_incl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Combined discounts and non-overlapping sale savings, tax-inclusive'),
+	total_saved_excl: z
+		.number()
+		.nullable()
+		.optional()
+		.describe('Combined discounts and non-overlapping sale savings, tax-exclusive'),
+	total_saved_complete: z
+		.boolean()
+		.optional()
+		.describe('Whether the display-side savings total is complete'),
 	tax_total: z.number().describe('Total tax amount'),
 	total: z.number().optional().describe('Display-side grand total'),
 	total_incl: z.number().describe('Grand total tax-inclusive'),

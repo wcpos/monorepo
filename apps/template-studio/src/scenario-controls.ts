@@ -233,6 +233,25 @@ function buildDefaultLine(): ReceiptLineItem {
 		sku: 'SCENARIO-1',
 		name: 'Espresso Beans 250g',
 		qty: 1,
+		regular_price: totalIncl,
+		regular_price_incl: totalIncl,
+		regular_price_excl: totalExcl,
+		selling_price: totalIncl,
+		selling_price_incl: totalIncl,
+		selling_price_excl: totalExcl,
+		unit_savings: 0,
+		unit_savings_incl: 0,
+		unit_savings_excl: 0,
+		line_regular_total: totalIncl,
+		line_regular_total_incl: totalIncl,
+		line_regular_total_excl: totalExcl,
+		line_selling_total: totalIncl,
+		line_selling_total_incl: totalIncl,
+		line_selling_total_excl: totalExcl,
+		line_savings: 0,
+		line_savings_incl: 0,
+		line_savings_excl: 0,
+		savings_in_discounts: false,
 		unit_subtotal: totalIncl,
 		unit_subtotal_incl: totalIncl,
 		unit_subtotal_excl: totalExcl,
@@ -297,6 +316,13 @@ function emptyTotals(): ReceiptTotals {
 		discount_total: 0,
 		discount_total_incl: 0,
 		discount_total_excl: 0,
+		sale_savings_total: 0,
+		sale_savings_total_incl: 0,
+		sale_savings_total_excl: 0,
+		total_saved: 0,
+		total_saved_incl: 0,
+		total_saved_excl: 0,
+		total_saved_complete: true,
 		tax_total: 0,
 		total: 0,
 		total_incl: 0,
@@ -338,6 +364,40 @@ function computeTotals(
 		lineDiscountExcl + discounts.reduce((sum, discount) => sum + discount.total_excl, 0);
 	const grandIncl = round(subtotalIncl + feeIncl + shippingIncl - discountIncl);
 	const grandExcl = round(subtotalExcl + feeExcl + shippingExcl - discountExcl);
+	const savingsCompleteIncl = lines.every(
+		(line) =>
+			line.line_savings_incl !== null &&
+			(line.savings_in_discounts ||
+				line.line_savings_incl <= 0 ||
+				(line.line_selling_total_incl !== null &&
+					round(Math.abs(line.line_subtotal_incl - line.line_selling_total_incl)) === 0))
+	);
+	const savingsCompleteExcl = lines.every(
+		(line) =>
+			line.line_savings_excl !== null &&
+			(line.savings_in_discounts ||
+				line.line_savings_excl <= 0 ||
+				(line.line_selling_total_excl !== null &&
+					round(Math.abs(line.line_subtotal_excl - line.line_selling_total_excl)) === 0))
+	);
+	const saleSavingsIncl = savingsCompleteIncl
+		? round(lines.reduce((sum, line) => sum + (line.line_savings_incl ?? 0), 0))
+		: null;
+	const saleSavingsExcl = savingsCompleteExcl
+		? round(lines.reduce((sum, line) => sum + (line.line_savings_excl ?? 0), 0))
+		: null;
+	const additionalSavingsIncl = round(
+		lines.reduce(
+			(sum, line) => sum + (line.savings_in_discounts ? 0 : (line.line_savings_incl ?? 0)),
+			0
+		)
+	);
+	const additionalSavingsExcl = round(
+		lines.reduce(
+			(sum, line) => sum + (line.savings_in_discounts ? 0 : (line.line_savings_excl ?? 0)),
+			0
+		)
+	);
 	const totals: ReceiptTotals = {
 		subtotal: subtotalIncl,
 		subtotal_incl: subtotalIncl,
@@ -345,6 +405,13 @@ function computeTotals(
 		discount_total: round(discountIncl),
 		discount_total_incl: round(discountIncl),
 		discount_total_excl: round(discountExcl),
+		sale_savings_total: saleSavingsIncl,
+		sale_savings_total_incl: saleSavingsIncl,
+		sale_savings_total_excl: saleSavingsExcl,
+		total_saved: savingsCompleteIncl ? round(discountIncl + additionalSavingsIncl) : null,
+		total_saved_incl: savingsCompleteIncl ? round(discountIncl + additionalSavingsIncl) : null,
+		total_saved_excl: savingsCompleteExcl ? round(discountExcl + additionalSavingsExcl) : null,
+		total_saved_complete: savingsCompleteIncl,
 		tax_total: round(grandIncl - grandExcl),
 		total: grandIncl,
 		total_incl: grandIncl,
