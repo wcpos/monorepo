@@ -22,6 +22,7 @@ export {
 	type EngineConnectivity,
 	type EngineEvent,
 	type EngineFetcher,
+	type EngineHostTransport,
 	type EngineStatus,
 	type EngineScopeEvent,
 	type EngineStats,

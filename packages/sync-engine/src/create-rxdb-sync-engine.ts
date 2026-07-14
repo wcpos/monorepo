@@ -164,6 +164,16 @@ export type EngineConnectivity = 'online' | 'offline' | 'degraded';
 /** RAW transport, never pre-scoped — the engine binds scope tickets inside. */
 export type EngineFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
+/**
+ * Read-only reflection of the transport the host configured on the engine.
+ * This does not add a transport or change engine behavior; it lets host-adjacent
+ * consumers reuse the exact authenticated fetcher and sync namespace already in use.
+ */
+export type EngineHostTransport = Readonly<{
+	syncBaseUrl: string;
+	fetcher: EngineFetcher;
+}>;
+
 /** Host-provided checkpoint persistence. Async-first so a collection-backed
  * store fits; a synchronous store (localStorage) wraps trivially. */
 export type EngineStringStore = {
@@ -416,6 +426,11 @@ export type RxdbSyncEngine = {
 	 * (serve-local without a fetch when every record is resident), priority
 	 * preemption over queued demand work, release() demotion. */
 	require(requirement: EngineRequirement): RequirementHandle;
+	/**
+	 * Reflect the host-configured transport through a frozen, read-only view.
+	 * This is host transport reflection only, not a second engine transport.
+	 */
+	hostTransport(): EngineHostTransport;
 	/** One deterministic guarded tick of the named lane. When omitted, runs
 	 * every registered lane in documented dependency order. Never throws for
 	 * periodic-class failures — a failed tick reports { status: 'error' } and
@@ -449,6 +464,10 @@ export function createRxdbSyncEngine(
 		}
 	};
 	const fetcher: EngineFetcher = ports.fetcher ?? ((url, init) => globalThis.fetch(url, init));
+	const hostTransport: EngineHostTransport = Object.freeze({
+		syncBaseUrl: ports.site.syncBaseUrl,
+		fetcher,
+	});
 	const uuid = ports.uuid ?? webCryptoUuid;
 	const initialSiteKey = canonicalSiteKey(initialScope.site);
 
@@ -1259,6 +1278,7 @@ export function createRxdbSyncEngine(
 				return null;
 			}
 		},
+		hostTransport: () => hostTransport,
 		db$: (cb) => {
 			assertNotDisposed();
 			dbSubscribers.add(cb);

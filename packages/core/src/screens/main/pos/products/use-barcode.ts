@@ -1,5 +1,7 @@
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
+import { useQueryManager } from '@wcpos/query';
+import { resolveScan } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -30,6 +32,7 @@ export const useBarcode = (
 	const { barcodeSearch } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
+	const manager = useQueryManager();
 	const t = useT();
 	const { collection: productCollection } = useCollection('products');
 	const { uiSettings } = useUISettings('pos-products');
@@ -41,24 +44,138 @@ export const useBarcode = (
 	useSubscription(barcode$, async (barcode: unknown) => {
 		const barcodeStr = String(barcode);
 		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
-		const results = await barcodeSearch(barcodeStr);
+		let results = await barcodeSearch(barcodeStr);
 
-		if (results.length !== 1) {
+		const showAmbiguousResults = (count: number) => {
 			barcodeLogger.error(text1, {
 				showToast: true,
 				saveToDb: true,
 				toast: {
-					text2: t('common.product_found_locally', { count: results.length }),
+					text2: t('common.product_found_locally', { count }),
 				},
 				context: {
 					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
 					barcode: barcodeStr,
-					resultsCount: results.length,
+					resultsCount: count,
 				},
 			});
 			productQuery.search(barcodeStr);
 			(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
+		};
+
+		const showOnlineFailure = (text2: string, errorCode: string, error?: string) => {
+			barcodeLogger.error(text1, {
+				showToast: true,
+				saveToDb: true,
+				toast: { text2 },
+				context: {
+					errorCode,
+					barcode: barcodeStr,
+					...(error ? { error } : {}),
+				},
+			});
+			productQuery.search(barcodeStr);
+			(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
+		};
+
+		if (results.length > 1) {
+			showAmbiguousResults(results.length);
 			return;
+		}
+
+		if (results.length === 0) {
+			const { fetcher, syncBaseUrl } = manager.engine.hostTransport();
+			const resolution = await resolveScan({
+				code: barcodeStr,
+				index: new Map(),
+				syncBaseUrl,
+				fetcher,
+				now: Date.now,
+				onEvent: (event) => {
+					if (event.type === 'searching-online') {
+						barcodeLogger.info(text1, {
+							showToast: true,
+							toast: { text2: t('common.barcode_searching_online') },
+							context: { barcode: barcodeStr },
+						});
+					}
+				},
+			});
+
+			if (resolution.outcome === 'not-found') {
+				showOnlineFailure(t('common.product_not_found_online'), ERROR_CODES.RECORD_NOT_FOUND);
+				return;
+			}
+
+			if (resolution.outcome === 'error') {
+				showOnlineFailure(
+					t('common.barcode_online_lookup_failed'),
+					ERROR_CODES.CONNECTION_REFUSED,
+					resolution.message
+				);
+				return;
+			}
+
+			if (resolution.outcome === 'online') {
+				if (resolution.ambiguous.length > 0) {
+					showAmbiguousResults(resolution.ambiguous.length + 1);
+					return;
+				}
+
+				const match = resolution.match;
+				if (match.type === 'variation' && !match.parent_id) {
+					showOnlineFailure(
+						t('common.barcode_online_lookup_failed'),
+						ERROR_CODES.MISSING_RESPONSE_DATA,
+						'resolve/barcode returned a variation without parent_id'
+					);
+					return;
+				}
+
+				const handles = [];
+				try {
+					handles.push(
+						manager.engine.require({
+							id: `barcode:${barcodeStr}:${match.type}:${match.id}`,
+							collection: match.type === 'variation' ? 'variations' : 'products',
+							kind: 'targeted-records',
+							wooIds: [match.id],
+						})
+					);
+					if (match.type === 'variation') {
+						handles.push(
+							manager.engine.require({
+								id: `barcode:${barcodeStr}:product:${match.parent_id}`,
+								collection: 'products',
+								kind: 'targeted-records',
+								wooIds: [match.parent_id!],
+							})
+						);
+					}
+					await Promise.all(handles.map((handle) => handle.ready));
+				} catch (error) {
+					showOnlineFailure(
+						t('common.barcode_online_lookup_failed'),
+						ERROR_CODES.CONNECTION_REFUSED,
+						error instanceof Error ? error.message : String(error)
+					);
+					return;
+				} finally {
+					for (const handle of handles) {
+						handle.release();
+					}
+				}
+
+				results = await barcodeSearch(barcodeStr);
+				if (results.length === 0) {
+					showOnlineFailure(t('common.product_not_found_online'), ERROR_CODES.RECORD_NOT_FOUND);
+					return;
+				}
+				if (results.length > 1) {
+					showAmbiguousResults(results.length);
+					return;
+				}
+			}
 		}
 
 		const [product] = results;
