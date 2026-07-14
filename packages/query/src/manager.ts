@@ -51,8 +51,6 @@ interface QueryDemand {
 	requirements: EngineRequirement[];
 	active$: BehaviorSubject<boolean>;
 	inFlight: number;
-	/** Set on unmount-pause: stale emissions must not restart remote work. */
-	paused: boolean;
 }
 
 /**
@@ -248,11 +246,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					})
 				);
 			} else {
-				const existingDemand = existingQuery && this.demandByQuery.get(existingQuery.id);
-				if (existingDemand?.paused) {
-					existingDemand.paused = false;
-					existingDemand.requirements = [];
-				}
 				return existingQuery;
 			}
 		}
@@ -315,11 +308,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					})
 				);
 			} else {
-				const existingDemand = existingQuery && this.demandByQuery.get(existingQuery.id);
-				if (existingDemand?.paused) {
-					existingDemand.paused = false;
-					existingDemand.requirements = [];
-				}
 				return existingQuery;
 			}
 		}
@@ -416,7 +404,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			requirements: [],
 			active$: new RxBehaviorSubject<boolean>(false),
 			inFlight: 0,
-			paused: false,
 		};
 		this.demandByQuery.set(queryState.id, demand);
 
@@ -438,12 +425,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	private declareQueryRequirements(queryState: Query<RxCollection>, rxQuery: any): void {
 		const demand = this.demandByQuery.get(queryState.id);
 		if (!demand || !queryState.collectionName) {
-			return;
-		}
-		if (demand.paused) {
-			// Unmounted surfaces must not restart remote work: the Query stays
-			// registered and stale emissions (e.g. a search-index change) still
-			// arrive here — a mounted consumer clears the pause on register.
 			return;
 		}
 		const mango = cloneDeep(rxQuery?.mangoQuery ?? {});
@@ -624,7 +605,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			handle.release();
 		}
 		demand.handles = [];
-		demand.paused = true;
 	}
 
 	async cancel(): Promise<void> {

@@ -163,41 +163,6 @@ describe('Manager', () => {
 			expect(engine.searchRequireCalls).toHaveLength(0);
 		});
 
-		it('a stale emission after unmount-pause declares nothing; re-register resumes', async () => {
-			installLocalSearch(engineDB.collections.products, ['payload.name', 'payload.sku']);
-			const query = manager.registerQuery({
-				queryKeys: ['products', 'pause-gate'],
-				collectionName: 'products',
-				initialParams: {},
-			});
-			if (!query) throw new Error('query was not registered');
-
-			let execution = nextSearchExecution(query, 'mug');
-			query.search('mug');
-			await execution;
-			const declaredBefore = engine.searchRequireCalls.length;
-			expect(declaredBefore).toBeGreaterThan(0);
-
-			manager.maybePauseQueryReplications(query);
-			// A stale emission on the still-registered query (e.g. a search-index change).
-			execution = nextSearchExecution(query, 'mug again');
-			query.search('mug again');
-			await execution;
-			expect(engine.searchRequireCalls.length).toBe(declaredBefore);
-
-			// A mounted consumer re-registers the same key: demand resumes.
-			const again = manager.registerQuery({
-				queryKeys: ['products', 'pause-gate'],
-				collectionName: 'products',
-				initialParams: {},
-			});
-			if (!again) throw new Error('query was not re-registered');
-			execution = nextSearchExecution(again, 'teapot');
-			again.search('teapot');
-			await execution;
-			expect(engine.searchRequireCalls.length).toBeGreaterThan(declaredBefore);
-		});
-
 		it('declares product search demand and re-emits when a remote match lands locally', async () => {
 			installLocalSearch(engineDB.collections.products, ['payload.name', 'payload.sku']);
 			const query = manager.registerQuery({
@@ -362,12 +327,16 @@ describe('Manager', () => {
 			manager.maybePauseQueryReplications(query);
 
 			expect(engine.searchRequireCalls[0]?.released).toBe(true);
-			const demand = (
-				manager as unknown as {
-					demandByQuery: Map<string, { requirements: unknown[] }>;
-				}
-			).demandByQuery.get(query.id);
-			expect(demand?.requirements).toHaveLength(1);
+
+			const staleEmission = firstValueFrom(
+				query.result$.pipe(filter((result) => result.searchActive && result.count === 1))
+			);
+			await engineDB.collections.products.insert(
+				engineProduct({ uuid: 'paused-keyboard', id: 151, name: 'Paused Keyboard' })
+			);
+			await staleEmission;
+
+			expect(engine.searchRequireCalls).toHaveLength(1);
 		});
 
 		it('keeps serving local search results when search demand rejects', async () => {
