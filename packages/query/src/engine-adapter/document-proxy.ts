@@ -95,6 +95,11 @@ export function wrapEngineDocument<TDocument extends object = Record<string, unk
 				if (property === 'getLatest') {
 					return () => wrapEngineDocument(collection, rxDocument.getLatest());
 				}
+				if (property === '$') {
+					return rxDocument.$.pipe(
+						map((nextDocument) => wrapEngineDocument(collection, nextDocument))
+					);
+				}
 				if (MUTATION_METHODS.has(property)) {
 					return () => {
 						throw new EngineAdapterReadOnlyError(property);

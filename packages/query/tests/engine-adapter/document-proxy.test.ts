@@ -1,4 +1,5 @@
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, type Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import {
 	EngineAdapterReadOnlyError,
@@ -11,13 +12,13 @@ import type {
 	FieldMapEntry,
 	LegacyCollectionName,
 } from '../../src/engine-adapter/collection-map';
-import type { Observable } from 'rxjs';
 import type { RxDocument } from 'rxdb';
 
 type LegacyProxy = Record<string, unknown> & {
 	uuid: string;
 	id: number;
 	name: string;
+	$: Observable<LegacyProxy>;
 	name$: Observable<unknown>;
 	toJSON(): Record<string, unknown>;
 	toMutableJSON(): Record<string, unknown>;
@@ -31,14 +32,16 @@ function fakeRxDocument(initial: EngineDocument) {
 		latest = document;
 	});
 	const collection = { name: 'products' };
+	let revisions$: Observable<RxDocument<EngineDocument>>;
 	const makeDocument = (document: EngineDocument): RxDocument<EngineDocument> =>
 		({
 			...document,
-			$: state.asObservable(),
+			$: revisions$,
 			collection,
 			getLatest: () => makeDocument(latest),
 			toJSON: () => document,
 		}) as unknown as RxDocument<EngineDocument>;
+	revisions$ = state.pipe(map((document) => makeDocument(document)));
 	return { document: makeDocument(initial), state, collection };
 }
 
@@ -99,6 +102,29 @@ describe('wrapEngineDocument', () => {
 		expect(observer).toHaveBeenCalledTimes(2);
 		expect(observer).toHaveBeenNthCalledWith(1, 'Coffee');
 		expect(observer).toHaveBeenNthCalledWith(2, 'Tea');
+		subscription.unsubscribe();
+	});
+
+	it('exposes the root document observable with every revision re-wrapped as a proxy', () => {
+		const source = fakeRxDocument({
+			id: 'product-uuid',
+			wooProductId: 42,
+			payload: { name: 'Coffee' },
+		});
+		const proxy = wrapEngineDocument('products', source.document) as LegacyProxy;
+		const revisions: LegacyProxy[] = [];
+		const subscription = proxy.$.subscribe((revision) => revisions.push(revision));
+
+		source.state.next({
+			id: 'product-uuid',
+			wooProductId: 42,
+			payload: { name: 'Tea' },
+		});
+
+		expect(revisions).toHaveLength(2);
+		expect(revisions.map((revision) => revision.name)).toEqual(['Coffee', 'Tea']);
+		expect(revisions[1]).not.toBe(proxy);
+		expect(revisions[1].getLatest().name).toBe('Tea');
 		subscription.unsubscribe();
 	});
 

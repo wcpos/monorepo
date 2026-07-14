@@ -136,10 +136,15 @@ describe('useEngineDocument', () => {
 		expect(current(result.current)).toBeNull();
 	});
 
-	it('degrades to null while there is no active scope', () => {
+	it('stays pending until a database opens, then emits null for a missing record', () => {
 		const { result } = renderHook(() =>
 			useEngineDocument<Record<string, unknown>>('products', 'product-uuid')
 		);
+
+		expect(current(result.current)).toBeUndefined();
+
+		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(null);
+		act(() => emitDatabase(databaseWith(document$)));
 
 		expect(current(result.current)).toBeNull();
 	});

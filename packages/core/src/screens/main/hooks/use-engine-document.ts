@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { Observable, of } from 'rxjs';
+import { NEVER, Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
 import { useQueryManager } from '@wcpos/query';
@@ -20,6 +20,10 @@ type EngineCollection = {
 	};
 };
 
+type EngineDatabase = {
+	collections: Record<string, unknown>;
+};
+
 type DocumentKey = { type: 'uuid'; value: string } | { type: 'woo-id'; value: number };
 
 function engineDocument$(
@@ -27,13 +31,16 @@ function engineDocument$(
 	collectionName: LegacyCollectionName,
 	key: DocumentKey
 ): Observable<EngineRxDocument | null> {
-	return new Observable((subscriber) =>
-		manager.engine.db$(() => subscriber.next(manager.engine.active()?.database ?? null))
+	return new Observable<EngineDatabase | null>((subscriber) =>
+		manager.engine.db$((database) => subscriber.next(database as unknown as EngineDatabase | null))
 	).pipe(
-		switchMap(() => {
+		switchMap((database) => {
+			if (!database) {
+				return NEVER;
+			}
+
 			// Resolve after every db$ emission: scope moves and resets replace collection residents.
-			const database = manager.engine.active()?.database;
-			const collection = database?.collections[
+			const collection = database.collections[
 				engineCollectionNameFor(collectionName)
 			] as unknown as EngineCollection | undefined;
 			if (!collection) {

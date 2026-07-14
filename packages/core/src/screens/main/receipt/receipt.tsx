@@ -68,6 +68,26 @@ const CHECKOUT_ROUTE_NAMES = ['Checkout', '(modals)/cart/[orderId]/checkout'] as
 export function Receipt({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
+
+	if (!isRxDocument(order)) {
+		return (
+			<Modal>
+				<ModalContent size="lg">
+					<ModalHeader>
+						<ModalTitle>
+							<Text>{t('common.no_order_found')}</Text>
+						</ModalTitle>
+					</ModalHeader>
+				</ModalContent>
+			</Modal>
+		);
+	}
+
+	return <ReceiptDocument order={order} />;
+}
+
+function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocument }) {
+	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
 	const { store } = useAppState();
 	const cloudHttp = useRestHttpClient();
@@ -214,23 +234,6 @@ export function Receipt({ resource }: Props) {
 			print();
 		}
 	};
-
-	/**
-	 *
-	 */
-	if (!isRxDocument(order)) {
-		return (
-			<Modal>
-				<ModalContent size="lg">
-					<ModalHeader>
-						<ModalTitle>
-							<Text>{t('common.no_order_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
-		);
-	}
 
 	/**
 	 *
