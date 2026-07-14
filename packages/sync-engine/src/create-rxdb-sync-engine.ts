@@ -1000,6 +1000,7 @@ export function createRxdbSyncEngine(
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		fetcher,
 		wpJsonRoot: ports.site.wpJsonRoot,
+		syncBaseUrl: ports.site.syncBaseUrl,
 		connectivity: () => {
 			try {
 				return connectivity();
@@ -1395,7 +1396,10 @@ export function createRxdbSyncEngine(
 					const row = (
 						await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
 					)?.toJSON() as Record<string, unknown> | undefined;
-					const remoteId = row?.[facet.remoteIdField];
+					const remoteId =
+						row?.[facet.remoteIdField] ??
+						(entry.payload as Record<string, unknown>).id ??
+						(entry.conflictDocument as Record<string, unknown> | undefined)?.id;
 					if (typeof remoteId === 'number') {
 						discardServerDocument = await facet.fetchServerDocument({
 							fetch: bound.bindFetch(fetcher as never),
@@ -1483,9 +1487,24 @@ export function createRxdbSyncEngine(
 									mutation.recordId === entry.recordId &&
 									mutation.mutationId !== mutationId
 							);
-							if (doc && successors.length > 0) {
-								const resident = doc.toJSON();
-								const local = (resident.local ?? {}) as {
+							if (successors.length > 0) {
+								const resident = doc?.toJSON();
+								const serverPayload = (discardServerDocument.payload ?? {}) as Record<
+									string,
+									unknown
+								>;
+								const optimistic =
+									resident ??
+									facet.documentFromServerPayload(
+										successors.reduce<Record<string, unknown>>(
+											(payload, mutation) =>
+												mutation.operation === 'delete'
+													? payload
+													: { ...payload, ...mutation.payload },
+											serverPayload
+										)
+									);
+								const local = (optimistic.local ?? {}) as {
 									dirty?: boolean;
 									pendingMutationIds?: string[];
 								};
@@ -1499,11 +1518,11 @@ export function createRxdbSyncEngine(
 								];
 								documentToApply = {
 									...discardServerDocument,
-									...resident,
+									...optimistic,
 									[facet.remoteIdField]: discardServerDocument[facet.remoteIdField],
-									payload: resident.payload,
+									payload: optimistic.payload,
 									sync: {
-										...((resident.sync ?? {}) as object),
+										...((optimistic.sync ?? {}) as object),
 										...((discardServerDocument.sync ?? {}) as object),
 									},
 									local: { ...local, pendingMutationIds, dirty: true },

@@ -109,6 +109,8 @@ export type WriteDrainLaneDeps = {
 	fetcher: EngineSourceFetcher;
 	/** The wp-json ROOT — the push resolver builds /wc-rxdb-sync/v1/push/{collection} from it. */
 	wpJsonRoot: string;
+	/** Configured namespaced read base used by targeted revision refreshes. */
+	syncBaseUrl: string;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
 	emitWriteEvent: (event: WriteOutcomeEvent) => void;
@@ -188,7 +190,17 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						tickAbort.signal.removeEventListener('abort', abort);
 					}
 				};
-				const boundFetch = bound.bindFetch(tickFetcher);
+				const rawBoundFetch = bound.bindFetch(tickFetcher);
+				// Pull helpers thread the tick signal for between-request cancellation,
+				// but a scope-bound fetcher must not receive it: scopedFetch would use
+				// AbortSignal.any, which RN/Expo does not provide. tickFetcher already
+				// merges the scope ticket with tickAbort below bindFetch.
+				const boundFetch: Fetcher = (url, init) => {
+					const { signal: _absorbed, ...rest } = (init ?? {}) as {
+						signal?: AbortSignal;
+					} & Record<string, unknown>;
+					return rawBoundFetch(url, rest as never);
+				};
 				// Ack events fire only AFTER the drain durably removed the mutation:
 				// an ack whose queue-remove failed stays queued and re-pushes (the
 				// server dedupes on mutationId) — eventing it early would announce an
@@ -228,7 +240,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										: revisionOf(
 												await facet.fetchServerDocument({
 													fetch: boundFetch,
-													syncBaseUrl: `${deps.wpJsonRoot}/wc-rxdb-sync/v1`,
+													syncBaseUrl: deps.syncBaseUrl,
 													remoteId,
 													signal: tickAbort.signal,
 												})

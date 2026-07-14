@@ -10,6 +10,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { createFakeWriteServer } from '@wcpos/sync-core/testing';
+
 import {
 	createRxdbSyncEngine,
 	type RxdbSyncEngine,
@@ -57,10 +59,13 @@ function scriptedOrderProxy() {
 	return { state, fetch };
 }
 
-function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>): RxdbSyncEngine {
+function engineWith(
+	fetch: (url: string, init?: RequestInit) => Promise<Response>,
+	site = { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` }
+): RxdbSyncEngine {
 	return createRxdbSyncEngine(
 		{
-			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
+			site,
 			storage: memoryEngineStorage(),
 			fetcher: (url, init) => fetch(url, init),
 			mode: 'manual',
@@ -176,6 +181,70 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 		expect(pushes).toBeGreaterThan(0);
 		expect(report.error ?? '').not.toContain('AbortSignal.any');
 		await engine.dispose();
+	});
+
+	it('a non-order 428 refresh uses the configured sync base without AbortSignal.any', async () => {
+		const syncBaseUrl = `${SITE}/configured-sync`;
+		const server = createFakeWriteServer();
+		const truth = {
+			id: 501,
+			name: 'Server product',
+			type: 'simple',
+			price: '12.50',
+			stock_status: 'instock',
+			stock_quantity: null,
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_1 }],
+			_rxdb_revision: 'sha256:fresh',
+		};
+		server.seed(UUID_1, {
+			id: 501,
+			revision: 'sha256:fresh',
+			collection: 'products',
+			payload: truth,
+		});
+		let pushAttempts = 0;
+		server.script(() => {
+			pushAttempts += 1;
+			return pushAttempts === 1 ? { kind: 'precondition_required' } : undefined;
+		});
+		const refreshUrls: string[] = [];
+		const subject = engineWith(
+			async (url, init) => {
+				if (url.includes('/push/')) return server.fetch(url, init);
+				refreshUrls.push(url);
+				return Response.json([truth]);
+			},
+			{ syncBaseUrl, wpJsonRoot: `${SITE}/wp-json` }
+		);
+		await subject.ready;
+		const scope = subject.active();
+		if (!scope) throw new Error('no active scope');
+		await scope.database.collections.products.insert({
+			id: UUID_1,
+			wooProductId: 501,
+			price: 12.5,
+			stockStatus: 'instock',
+			type: 'simple',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { ...truth, name: 'Local product' },
+			sync: { revision: 'sha256:stale', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		await subject.write({
+			collection: 'products',
+			operation: 'update',
+			recordId: UUID_1,
+			payload: { ...truth, name: 'Updated product' },
+		});
+
+		expect(await subject.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+		expect(refreshUrls).toEqual([`${syncBaseUrl}/products?include=501&per_page=1`]);
+		expect(server.received).toHaveLength(2);
+		await subject.dispose();
 	});
 
 	it('a caller abort mid-flight still cancels the request through the manual composite', async () => {

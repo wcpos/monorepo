@@ -184,7 +184,8 @@ type AckDoc = {
 
 function ackBookkeeping(
 	collection: CollectionWriteFacet['collection'],
-	remoteIdField: CollectionWriteFacet['remoteIdField']
+	remoteIdField: CollectionWriteFacet['remoteIdField'],
+	createAckSource?: 'woo-rest'
 ): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
 	return {
 		reconcile: async (db, ack, signal) => {
@@ -196,14 +197,20 @@ function ackBookkeeping(
 				const pending = (
 					Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
 				).filter((id) => id !== ack.mutation.mutationId);
-				const sync = (data.sync ?? {}) as { revision?: string };
+				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
 				return {
 					...data,
 					[remoteIdField]:
 						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
 							? ack.remoteId
 							: data[remoteIdField],
-					sync: { ...sync, revision: ack.currentRevision ?? sync.revision },
+					sync: {
+						...sync,
+						revision: ack.currentRevision ?? sync.revision,
+						...(ack.mutation.operation === 'create' && createAckSource
+							? { source: createAckSource }
+							: {}),
+					},
 					local: { ...local, pendingMutationIds: pending, dirty: pending.length > 0 },
 				};
 			});
@@ -255,6 +262,7 @@ function createWriteFacet(input: {
 	pullPath: string;
 	parse: (body: unknown) => WooPayload[];
 	project: (payload: WooPayload) => Record<string, unknown>;
+	createAckSource?: 'woo-rest';
 	upsert?: CollectionWriteFacet['upsertServerDocument'];
 }): CollectionWriteFacet {
 	return {
@@ -287,7 +295,7 @@ function createWriteFacet(input: {
 					`write facet ${input.collection} upsert`
 				);
 			}),
-		...ackBookkeeping(input.collection, input.remoteIdField),
+		...ackBookkeeping(input.collection, input.remoteIdField, input.createAckSource),
 	};
 }
 
@@ -318,6 +326,9 @@ const couponsWriteFacet = createWriteFacet({
 	pullPath: '/coupons',
 	parse: parseBareArray,
 	project: referenceDocument,
+	// Greedy reference pruning recognizes only server-sourced rows. Once Woo
+	// assigns the create's id, the coupon participates in authoritative pruning.
+	createAckSource: 'woo-rest',
 });
 /** The order facet retains its repository and pull-side materializer byte-for-byte. */
 const ordersWriteFacet = createWriteFacet({

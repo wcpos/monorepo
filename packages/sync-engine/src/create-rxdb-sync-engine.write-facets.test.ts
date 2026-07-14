@@ -345,6 +345,29 @@ describe('write facets beyond orders', () => {
 		}
 	);
 
+	it('a coupon create ack becomes server-sourced so an absent authoritative refresh prunes it', async () => {
+		const spec = FACETS.find(({ collection }) => collection === 'coupons')!;
+		const route = routedServer(spec, () => null);
+		const subject = engine(route.fetch);
+		await subject.ready;
+		await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'created' }));
+		await subject.write({
+			collection: spec.collection,
+			operation: 'create',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'created'),
+		});
+
+		expect(await subject.sync('write-drain')).toMatchObject({ pushed: 1 });
+		expect(await record(subject, spec, UUID_A)).toMatchObject({
+			sync: { source: 'woo-rest' },
+		});
+
+		await applyFacetPrune(subject, spec);
+		expect(await record(subject, spec, UUID_A)).toBeNull();
+		await subject.dispose();
+	});
+
 	it.each(FACETS)(
 		'$collection rematerializes a missing ack target through its pull-side mapper',
 		async (spec) => {
@@ -636,6 +659,69 @@ describe('write facets beyond orders', () => {
 			await subject.dispose();
 		}
 	);
+
+	it('discard rematerializes a missing resident as dirty when a successor is still queued', async () => {
+		const spec = FACETS[0];
+		const truth = {
+			...payload(spec, UUID_A, 'server-truth', spec.remoteId),
+			_rxdb_revision: 'sha256:server-base',
+		};
+		const route = routedServer(spec, () => truth);
+		route.server.seed(UUID_A, {
+			id: spec.remoteId,
+			revision: 'sha256:server-base',
+			collection: spec.collection,
+			payload: truth,
+		});
+		const subject = engine(route.fetch);
+		await subject.ready;
+		await insert(
+			subject,
+			spec,
+			storedDocument({
+				spec,
+				id: UUID_A,
+				label: 'local-a',
+				remoteId: spec.remoteId,
+				revision: 'sha256:stale',
+			})
+		);
+		const conflicted = await subject.write({
+			collection: spec.collection,
+			operation: 'update',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'local-a', spec.remoteId),
+		});
+		await subject.sync('write-drain');
+		await replaceResident(
+			subject,
+			spec,
+			UUID_A,
+			storedDocument({
+				spec,
+				id: UUID_A,
+				label: 'local-b',
+				remoteId: spec.remoteId,
+				revision: 'sha256:stale',
+			})
+		);
+		const successor = await subject.write({
+			collection: spec.collection,
+			operation: 'update',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'local-b', spec.remoteId),
+		});
+		await remove(subject, spec, UUID_A);
+
+		await subject.resolveConflict(conflicted.mutationId, 'discard');
+
+		expect(await record(subject, spec, UUID_A)).toMatchObject({
+			payload: { name: 'local-b' },
+			sync: { revision: 'sha256:server-base' },
+			local: { dirty: true, pendingMutationIds: [successor.mutationId] },
+		});
+		await subject.dispose();
+	});
 
 	it('discard tombstones a resident update when the server no longer returns it', async () => {
 		const spec = FACETS[0];
