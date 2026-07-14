@@ -569,7 +569,7 @@ export function buildReceiptData(
 		subtotal: Record<TaxBasis, number>;
 	}[] = [];
 	const mappedLines: ReceiptLine[] = lineItems.map((item: Record<string, any>) => {
-		const quantity = Math.max(0, toNum(item.quantity));
+		const quantity = toNum(item.quantity);
 		const subtotalExcl = toNum(item.subtotal);
 		const subtotalIncl = subtotalExcl + toNum(item.subtotal_tax);
 		const totalExcl = toNum(item.total);

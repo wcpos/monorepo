@@ -594,6 +594,33 @@ describe('buildReceiptData', () => {
 			value: JSON.stringify({ price, regular_price: regularPrice, tax_status: taxStatus }),
 		});
 
+		it('preserves signed refund quantities in lines and totals', () => {
+			const result = buildReceiptData(
+				{
+					...aliasOrder,
+					line_items: [
+						{
+							...aliasOrder.line_items[0],
+							quantity: -2,
+							meta_data: [posData(15, 18)],
+						},
+					],
+				},
+				inclStore
+			);
+
+			expect(result.lines[0]).toMatchObject({
+				quantity: -2,
+				unit_price: '0.00',
+				line_regular_total: '-36.00',
+				line_savings: '-6.00',
+			});
+			expect(result.totals).toMatchObject({
+				total_qty: -2,
+				sale_savings_total: '-6.00',
+			});
+		});
+
 		it('builds on-sale prices and savings on both tax bases and parses canonically', () => {
 			const result = buildReceiptData(
 				{
