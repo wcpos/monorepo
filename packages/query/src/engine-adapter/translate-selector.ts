@@ -363,7 +363,7 @@ function buildPrefilter(
 			(mapping.kind === 'promoted' || mapping.kind === 'identifier') &&
 			(mapping.readEnginePath === undefined ||
 				(collection === 'variations' && field === 'attributes')) &&
-			!(isRecord(condition) && '$allMatch' in condition)
+			!(isRecord(condition) && ('$all' in condition || '$allMatch' in condition))
 		) {
 			result[mapping.enginePath] = condition;
 		}

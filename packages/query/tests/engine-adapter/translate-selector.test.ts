@@ -237,6 +237,21 @@ describe('query-builder operators (codex round 2)', () => {
 		expect(residual({ id: 'b', payload: { tag_ids: [1, 3] } } as any)).toBe(false);
 	});
 
+	it('keeps $all out of the RxDB prefilter', () => {
+		const translated = translateSelector('variations', {
+			attributes: { $all: [{ name: 'Color', option: 'Red' }] },
+		} as any);
+
+		expect(translated.prefilter).toEqual({});
+		expect(
+			translated.residual({
+				id: 'variation-1',
+				attributes: [{ name: 'Color', option: 'Red' }],
+				payload: {},
+			})
+		).toBe(true);
+	});
+
 	it('evaluates $size on payload arrays', () => {
 		const { residual } = translateSelector('products', { tag_ids: { $size: 2 } } as any);
 		expect(residual({ id: 'a', payload: { tag_ids: [1, 2] } } as any)).toBe(true);
