@@ -41,9 +41,11 @@ import type { PushResult } from './recordPushAdapter';
  *    mutations is conflicted;
  *  - 428 precondition required → ONE targeted `refreshRevision` + re-push with
  *    the observed revision; when no revision can be determined (no refresh
- *    port, refresh finds nothing, or the retry 428s again) the row parks as
- *    durable status 'needs-revision' (gate2 #516 item 4) — resolved only by an
- *    explicit resolution that first refreshes the revision, or a discard;
+ *    port or refresh finds nothing) the row parks as durable status
+ *    'needs-revision' (gate2 #516 item 4) — resolved only by an explicit
+ *    resolution that first refreshes the revision, or a discard. If the one
+ *    post-refresh retry still returns 428, it is dead-lettered rather than
+ *    looped or parked on a revision already proven ineffective;
  *  - permanent 4xx → dead-lettered as durable status 'rejected' (persists for
  *    the conflicts() surface; leaves pending() so the record is syncable again);
  *  - error → back to 'pending' with backoff; left queued to retry next drain;
@@ -304,7 +306,10 @@ export async function drainMutationQueue(input: {
 							break;
 						}
 						if ((retryError as { status?: unknown } | null)?.status === 428) {
-							await parkNeedsRevision(restamped);
+							// The targeted refresh produced a revision and the server still rejected
+							// the one allowed retry. That revision has now been proven ineffective;
+							// dead-letter instead of creating a same-base resolution loop.
+							await deadLetter(restamped, retryError);
 							continue;
 						} else if (isNonRetryable(retryError)) {
 							await deadLetter(restamped, retryError);

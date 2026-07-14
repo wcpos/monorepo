@@ -153,7 +153,7 @@ describe('existence maintenance lanes through the public facade', () => {
 			attributes: [],
 			stockQuantity: null,
 			payload: { id: 11 },
-			sync: common.sync,
+			...common,
 		});
 		await seed(db.customers as never, {
 			id: 'c20',

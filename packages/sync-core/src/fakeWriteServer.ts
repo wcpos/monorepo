@@ -1,3 +1,4 @@
+import responseFixtures from '../contracts/write-contract/fixtures/responses.json';
 import { RECORD_UUID_META_KEY } from './recordIdentity';
 
 /**
@@ -47,7 +48,9 @@ export type FakeWriteServerFault =
 	| { kind: 'in_progress' }
 	| { kind: 'record_locked' }
 	| { kind: 'precondition_required' }
-	| { kind: 'identity_ambiguous' };
+	| { kind: 'identity_ambiguous' }
+	| { kind: 'parent_required' }
+	| { kind: 'parent_mismatch' };
 
 export type FakeWriteServer = {
 	/** The fetcher to hand to `pushRecordMutation` / the drain tick. */
@@ -59,7 +62,15 @@ export type FakeWriteServer = {
 	 */
 	script: (predicate: (env: PushEnvelope) => FakeWriteServerFault | undefined) => void;
 	/** Pre-establish an existing server record so update/delete flows can be exercised. */
-	seed: (recordId: string, state: { id: number; revision: string }) => void;
+	seed: (
+		recordId: string,
+		state: {
+			id: number;
+			revision: string;
+			collection?: string;
+			payload?: Record<string, unknown>;
+		}
+	) => void;
 	/** Every envelope received, in order (for call-count / idempotency assertions). */
 	readonly received: PushEnvelope[];
 	/** Every request URL received, in order (for endpoint/namespace assertions). */
@@ -75,6 +86,12 @@ export type FakeWriteServerOptions = {
 
 const NAMESPACE = '/wc-rxdb-sync/v1/';
 const PUSH_MARKER = '/wc-rxdb-sync/v1/push/';
+
+function canonicalResponse(name: string): { status: number; body: unknown } {
+	const fixture = responseFixtures.find((candidate) => candidate.name === name);
+	if (!fixture) throw new Error(`Missing canonical write-contract response fixture "${name}"`);
+	return { status: fixture.status, body: fixture.body };
+}
 
 /** Parse + validate a push URL: the namespace must appear exactly once and the path must end in a
  * single `push/{collection}` segment. Returns the decoded collection, or null for a bad route. */
@@ -125,6 +142,7 @@ function unquoteEntityTag(value: string | null): string | null {
 export function createFakeWriteServer(options: FakeWriteServerOptions = {}): FakeWriteServer {
 	let nextId = options.firstId ?? 500;
 	const records = new Map<string, { id: number; revision: string }>();
+	const recordPayloads = new Map<string, Record<string, unknown>>();
 	const writesByRecord = new Map<string, number>();
 	const received: PushEnvelope[] = [];
 	const receivedUrls: string[] = [];
@@ -141,8 +159,18 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 		return `sha256:${recordId.slice(0, 8)}-r${writes}`;
 	};
 
-	const successBody = (id: number, recordId: string, revision: string) => ({
-		document: { id, meta_data: [{ key: RECORD_UUID_META_KEY, value: recordId }] },
+	const successBody = (
+		id: number,
+		recordId: string,
+		revision: string,
+		payload: Record<string, unknown> = {}
+	) => ({
+		document: {
+			...payload,
+			id,
+			meta_data: [{ key: RECORD_UUID_META_KEY, value: recordId }],
+			_rxdb_revision: revision,
+		},
 		currentRevision: revision,
 	});
 
@@ -181,6 +209,10 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 						data: { status: 409 },
 					},
 				};
+			case 'parent_required':
+				return canonicalResponse('variation-parent-precondition-428');
+			case 'parent_mismatch':
+				return canonicalResponse('variation-parent-mismatch-409');
 		}
 	};
 
@@ -205,7 +237,8 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 			scriptFn = predicate;
 		},
 		seed: (recordId, state) => {
-			records.set(recordId, state);
+			records.set(recordId, { id: state.id, revision: state.revision });
+			if (state.payload) recordPayloads.set(recordId, { ...state.payload });
 			if (state.id >= nextId) nextId = state.id + 1;
 		},
 		fetch: async (url: string, init?: RequestInit) => {
@@ -256,6 +289,26 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 			}
 
 			const existing = records.get(env.recordId);
+			const existingPayload = recordPayloads.get(env.recordId) ?? {};
+			if (env.collection === 'variations') {
+				const parentId = Number(env.payload?.parent_id);
+				if (env.operation === 'create' && (!Number.isSafeInteger(parentId) || parentId <= 0)) {
+					const { status, body } = faultBody({ kind: 'parent_required' }, env);
+					return asResponse(status, body);
+				}
+				const existingParentId = Number(existingPayload.parent_id);
+				if (
+					existing &&
+					Number.isSafeInteger(existingParentId) &&
+					existingParentId > 0 &&
+					Number.isSafeInteger(parentId) &&
+					parentId > 0 &&
+					parentId !== existingParentId
+				) {
+					const { status, body } = faultBody({ kind: 'parent_mismatch' }, env);
+					return asResponse(status, body);
+				}
+			}
 			const remember = (status: number, body: unknown): Response => {
 				memoByMutation.set(env.mutationId, { status, body });
 				return asResponse(status, body);
@@ -268,6 +321,7 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 					return asResponse(c.status, c.body);
 				}
 				records.delete(env.recordId);
+				recordPayloads.delete(env.recordId);
 				return remember(200, {});
 			}
 
@@ -279,19 +333,26 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 				}
 				const revision = advanceRevision(env.recordId);
 				records.set(env.recordId, { id: existing.id, revision });
-				return remember(200, successBody(existing.id, env.recordId, revision));
+				const payload = { ...existingPayload, ...(env.payload ?? {}) };
+				recordPayloads.set(env.recordId, payload);
+				return remember(200, successBody(existing.id, env.recordId, revision, payload));
 			}
 
 			// create
 			if (existing) {
 				// A create for a uuid the server already knows is idempotent (the real server dedupes on the
 				// uuid / mutationId) — return the existing id/revision rather than allocating a second.
-				return remember(200, successBody(existing.id, env.recordId, existing.revision));
+				return remember(
+					200,
+					successBody(existing.id, env.recordId, existing.revision, existingPayload)
+				);
 			}
 			const id = nextId++;
 			const revision = advanceRevision(env.recordId);
 			records.set(env.recordId, { id, revision });
-			return remember(201, successBody(id, env.recordId, revision));
+			const payload = { ...(env.payload ?? {}) };
+			recordPayloads.set(env.recordId, payload);
+			return remember(201, successBody(id, env.recordId, revision, payload));
 		},
 	};
 }

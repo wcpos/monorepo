@@ -147,7 +147,7 @@ export type SyncReport = {
 	rejected?: number;
 };
 
-// Versioned schemas (orders v1, products/variations v2) need the migration
+// Versioned sync schemas need the migration
 // plugin at collection-create time. Idempotent — RxDB skips re-adds.
 addRxPlugin(RxDBMigrationSchemaPlugin);
 
@@ -1221,7 +1221,7 @@ export function createRxdbSyncEngine(
 			assertNotDisposed();
 			if (!writeFacetFor(intent.collection)) {
 				throw new Error(
-					`write: collection "${intent.collection}" is not client-writeable (no push/ack contract) — orders is the writeable collection today`
+					`write: collection "${intent.collection}" is not client-writeable (no push/ack contract) — writeable collections: orders, products, variations, customers, coupons`
 				);
 			}
 			await readySettledForSync;
@@ -1330,27 +1330,68 @@ export function createRxdbSyncEngine(
 				if (resolution === 'retry-with-server-base') {
 					serverBase = entry.conflictRevision ?? null;
 					if (!serverBase) {
-						if (entry.collectionName !== 'orders') {
+						const facet = writeFacetFor(entry.collectionName);
+						if (!facet) {
 							throw new Error(
 								`resolveConflict: no server revision on "${mutationId}" and no refresh seam for "${entry.collectionName}" — discard instead`
 							);
 						}
 						const row = (
-							await database.collections.orders?.findOne(entry.recordId).exec()
-						)?.toJSON() as { wooOrderId?: number | null } | undefined;
-						if (typeof row?.wooOrderId !== 'number') {
+							await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
+						)?.toJSON() as Record<string, unknown> | undefined;
+						const remoteId = row?.[facet.remoteIdField];
+						if (typeof remoteId !== 'number') {
 							throw new Error(
 								`resolveConflict: cannot refresh the server revision for "${mutationId}" — the record has no server identity; discard instead`
 							);
 						}
-						serverBase = await fetchOrderServerRevision({
-							fetch: bound.bindFetch(fetcher as never) as never,
-							wpJsonRoot: ports.site.wpJsonRoot,
-							wooOrderId: row.wooOrderId,
-						});
+						if (entry.collectionName === 'orders') {
+							serverBase = await fetchOrderServerRevision({
+								fetch: bound.bindFetch(fetcher as never) as never,
+								wpJsonRoot: ports.site.wpJsonRoot,
+								wooOrderId: remoteId,
+							});
+						} else {
+							const serverDocument = await facet.fetchServerDocument({
+								fetch: bound.bindFetch(fetcher as never),
+								syncBaseUrl: ports.site.syncBaseUrl,
+								remoteId,
+							});
+							const refreshedRevision = (serverDocument?.sync as { revision?: unknown } | undefined)
+								?.revision;
+							serverBase =
+								typeof refreshedRevision === 'string' && refreshedRevision !== ''
+									? refreshedRevision
+									: null;
+						}
 						if (!serverBase) {
 							throw new Error(
-								`resolveConflict: the server no longer returns record ${row.wooOrderId} — the row stays parked; retry later or discard`
+								`resolveConflict: the server no longer returns record ${remoteId} — the row stays parked; retry later or discard`
+							);
+						}
+					}
+				}
+				let discardServerDocument: Record<string, unknown> | null = null;
+				if (resolution === 'discard' && entry.collectionName !== 'orders') {
+					const facet = writeFacetFor(entry.collectionName);
+					if (!facet) {
+						throw new Error(
+							`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
+						);
+					}
+					const row = (
+						await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
+					)?.toJSON() as Record<string, unknown> | undefined;
+					const remoteId = row?.[facet.remoteIdField];
+					if (typeof remoteId === 'number') {
+						discardServerDocument = await facet.fetchServerDocument({
+							fetch: bound.bindFetch(fetcher as never),
+							syncBaseUrl: ports.site.syncBaseUrl,
+							remoteId,
+						});
+						if (!discardServerDocument) {
+							throw new Error(
+								`resolveConflict: the server no longer returns record ${remoteId} — the row stays parked`
 							);
 						}
 					}
@@ -1413,6 +1454,19 @@ export function createRxdbSyncEngine(
 								...(ports.now !== undefined ? { nowMs: ports.now() } : {}),
 								getRepository: async () => ({ getDatabase: () => database as never }),
 							});
+						}
+						if (entry.collectionName !== 'orders' && discardServerDocument) {
+							const facet = writeFacetFor(entry.collectionName);
+							if (!facet) {
+								throw new Error(
+									`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
+								);
+							}
+							// Apply server truth BEFORE removing the terminal queue row. If
+							// storage fails or the process stops, the durable conflict remains
+							// retryable; there is no state where discard reports success while
+							// the local row still poses as synced stale truth.
+							await facet.upsertServerDocument(database, discardServerDocument);
 						}
 						await queue.remove([mutationId]);
 						if (doc) {

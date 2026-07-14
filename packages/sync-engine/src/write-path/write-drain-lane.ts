@@ -13,9 +13,10 @@
  * stale-revision conflict transitions the row to durable 'conflicted' (server
  * truth stored on it — the facade's conflicts()/resolveConflict surface) and
  * LEAVES the drain, holding later edits to the record; an unrecoverable 428
- * (the revision refresh below finds nothing, or the retry 428s again) parks
+ * (the revision refresh below finds nothing) parks
  * as durable 'needs-revision' on the same surface (#516 item 4 — resolution
- * refreshes the revision first, never a same-base retry); a permanent 4xx
+ * refreshes the revision first, never a same-base retry); a 428 that persists
+ * after the one targeted refresh/retry is dead-lettered. A permanent 4xx also
  * dead-letters to durable 'rejected' — this lane then clears the record's
  * pendingMutationIds/dirty bookkeeping so the record is syncable again, while
  * the row persists into conflicts() with discard as its resolution; transient
@@ -36,7 +37,6 @@ import type { Fetcher, StoreScopeManager, SyncObserver } from '@wcpos/sync-core'
 import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-intents';
 import { orderDocumentFromWooPayload } from '../scheduler/rx-scheduler-order-fetcher';
-import { EngineOrderRepository } from './engine-order-repository';
 
 import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
 import type { RxDatabase } from 'rxdb';
@@ -60,6 +60,11 @@ export async function fetchOrderServerRevision(input: {
 	const [payload] = (await response.json()) as Record<string, unknown>[];
 	if (!payload) return null;
 	return orderDocumentFromWooPayload(payload as never).sync.revision || null;
+}
+
+function revisionOf(document: Record<string, unknown> | null): string | null {
+	const revision = (document?.sync as { revision?: unknown } | undefined)?.revision;
+	return typeof revision === 'string' && revision !== '' ? revision : null;
 }
 
 export type WriteOutcomeEvent =
@@ -203,15 +208,31 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								return row?.sync?.revision;
 							},
 							refreshRevision: async (mutation) => {
-								if (mutation.collectionName !== 'orders') return null;
-								const doc = await database.collections.orders?.findOne(mutation.recordId).exec();
-								const row = doc?.toJSON() as { wooOrderId?: number | null } | undefined;
-								if (typeof row?.wooOrderId !== 'number') return null;
-								const revision = await fetchOrderServerRevision({
-									fetch: boundFetch,
-									wpJsonRoot: deps.wpJsonRoot,
-									wooOrderId: row.wooOrderId,
-								});
+								const facet = writeFacetFor(mutation.collectionName);
+								if (!facet) {
+									throw new Error(`No refresh seam for collection "${mutation.collectionName}"`);
+								}
+								const doc = await database.collections[mutation.collectionName]
+									?.findOne(mutation.recordId)
+									.exec();
+								const row = doc?.toJSON() as Record<string, unknown> | undefined;
+								const remoteId = row?.[facet.remoteIdField];
+								if (typeof remoteId !== 'number') return null;
+								const revision =
+									mutation.collectionName === 'orders'
+										? await fetchOrderServerRevision({
+												fetch: boundFetch,
+												wpJsonRoot: deps.wpJsonRoot,
+												wooOrderId: remoteId,
+											})
+										: revisionOf(
+												await facet.fetchServerDocument({
+													fetch: boundFetch,
+													syncBaseUrl: `${deps.wpJsonRoot}/wc-rxdb-sync/v1`,
+													remoteId,
+													signal: tickAbort.signal,
+												})
+											);
 								if (!revision) return null;
 								await doc?.incrementalModify((data: Record<string, unknown>) => ({
 									...data,
@@ -255,14 +276,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										?.findOne(recordId)
 										.exec();
 									if (!resident) {
-										if (mutation.collectionName !== 'orders' || !pushResult.document) {
+										if (!pushResult.document) {
 											throw new Error(
 												`Cannot reconcile ${mutation.collectionName}/${recordId}: ack target is not resident and no materializable server document was returned`
 											);
 										}
-										await new EngineOrderRepository(database.collections as never).upsertMany([
-											orderDocumentFromWooPayload(pushResult.document as never),
-										]);
+										await facet.upsertServerDocument(
+											database,
+											facet.documentFromServerPayload(pushResult.document)
+										);
 										ackCandidates.push({
 											type: 'write-ack-rematerialized',
 											collection: mutation.collectionName,

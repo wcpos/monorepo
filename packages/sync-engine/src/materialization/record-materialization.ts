@@ -114,6 +114,7 @@ export function materializeTargeted(
 					? Number(identified.payload.parent_id)
 					: null,
 				...promotedVariationColumns(identified.payload as WooVariationPayload),
+				local: { dirty: false, pendingMutationIds: [] },
 			},
 			manifestRow
 		);
@@ -139,6 +140,7 @@ export function materializeGreedyPrunable(
 			wooId,
 			payload: identified.payload,
 			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
 		},
 	};
 }

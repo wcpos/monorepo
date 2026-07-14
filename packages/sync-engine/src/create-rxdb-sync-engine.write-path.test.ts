@@ -474,7 +474,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
 		await engine.ready;
 		await expect(
-			engine.write({ collection: 'products', operation: 'create', recordId: 'x', payload: {} })
+			engine.write({ collection: 'tags', operation: 'create', recordId: 'x', payload: {} })
 		).rejects.toThrow(/not client-writeable/i);
 		await engine.dispose();
 	});
