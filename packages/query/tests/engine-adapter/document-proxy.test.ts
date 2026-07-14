@@ -215,3 +215,30 @@ describe('wrapEngineDocument', () => {
 		expect(product.sortable_price).toBe(1.004);
 	});
 });
+
+describe('rxdocument identity contract (codex round 1)', () => {
+	const source = () =>
+		fakeRxDocument({
+			id: 'product-uuid',
+			wooProductId: 42,
+			stockStatus: 'instock',
+			payload: { id: 42, name: 'Coffee', price: '12.345' },
+		});
+
+	it('satisfies the isRxDocument shape check and in-guards', () => {
+		const proxy = wrapEngineDocument('products', source().document) as Record<string, unknown>;
+		expect('isInstanceOfRxDocument' in proxy).toBe(true);
+		expect(proxy.isInstanceOfRxDocument).toBe(true);
+		expect('name' in proxy).toBe(true);
+		expect('missing_field' in proxy).toBe(false);
+		expect(proxy.primary).toBe('product-uuid');
+	});
+
+	it('exposes get(path) reads through the translation map', () => {
+		const proxy = wrapEngineDocument('products', source().document) as Record<string, unknown>;
+		const get = proxy.get as (path: string) => unknown;
+		expect(get('name')).toBe('Coffee');
+		expect(get('uuid')).toBe('product-uuid');
+		expect(get('id')).toBe(42);
+	});
+});

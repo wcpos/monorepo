@@ -31,6 +31,8 @@ function engineDocument(rxDocument: RxDocument<EngineDocument>): EngineDocument 
 	return rxDocument as EngineDocument;
 }
 
+const READ_METHODS = new Set(['toJSON', 'toMutableJSON', 'getLatest', 'get', 'collection']);
+
 function legacySnapshot(
 	collection: LegacyCollectionName,
 	rxDocument: RxDocument<EngineDocument>
@@ -52,9 +54,34 @@ export function wrapEngineDocument(
 	return new Proxy<Record<string, unknown>>(
 		{},
 		{
+			// RxDB's isRxDocument() checks `'isInstanceOfRxDocument' in obj`, and
+			// consumers use `'field' in doc` guards — the empty target needs a
+			// deliberate `has` answer or unchanged screens take not-found branches.
+			has: (_target, property) => {
+				if (typeof property !== 'string') {
+					return false;
+				}
+				return (
+					property === 'isInstanceOfRxDocument' ||
+					property === 'primary' ||
+					READ_METHODS.has(property) ||
+					MUTATION_METHODS.has(property) ||
+					property.endsWith('$') ||
+					readLegacyField(collection, engineDocument(rxDocument), property) !== undefined
+				);
+			},
 			get: (_target, property) => {
 				if (typeof property !== 'string') {
 					return undefined;
+				}
+				if (property === 'isInstanceOfRxDocument') {
+					return true;
+				}
+				if (property === 'primary') {
+					return readLegacyField(collection, engineDocument(rxDocument), 'uuid');
+				}
+				if (property === 'get') {
+					return (path: string) => readLegacyField(collection, engineDocument(rxDocument), path);
 				}
 				if (property === 'collection') {
 					return rxDocument.collection;

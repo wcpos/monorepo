@@ -65,7 +65,15 @@ function compareValues(left: unknown, right: unknown): number {
 	if (typeof left === 'number' && typeof right === 'number') {
 		return left < right ? -1 : 1;
 	}
-	return String(left).localeCompare(String(right));
+	// RxDB's comparator uses plain `<` ordering for strings (code-unit order,
+	// 'Zoo' before 'apple') — localeCompare would silently reorder after the
+	// engine swap.
+	const leftString = String(left);
+	const rightString = String(right);
+	if (leftString === rightString) {
+		return 0;
+	}
+	return leftString < rightString ? -1 : 1;
 }
 
 function sortDocuments(
