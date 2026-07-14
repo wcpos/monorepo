@@ -4,7 +4,12 @@ import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { Subject } from 'rxjs';
 
 import { engineSyncCollectionCreators, memoryEngineStorage } from '@wcpos/sync-engine/testing';
-import type { EngineRequirement, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type {
+	EngineEvent,
+	EngineRequirement,
+	RequirementHandle,
+	RxdbSyncEngine,
+} from '@wcpos/sync-engine';
 
 import { searchPlugin } from './search';
 
@@ -20,17 +25,16 @@ let sequence = 0;
  * The engine data collections a fluent query reads through the adapter.
  * `orders`/`taxRates`/etc. are added on demand by the callers that need them.
  */
-const DATA_COLLECTIONS = [
-	'products',
-	'variations',
-	'orders',
-	'customers',
-	'taxRates',
-	'categories',
-	'tags',
-	'brands',
-	'coupons',
-] as const;
+type DataCollection =
+	| 'products'
+	| 'variations'
+	| 'orders'
+	| 'customers'
+	| 'taxRates'
+	| 'categories'
+	| 'tags'
+	| 'brands'
+	| 'coupons';
 
 /**
  * A standalone RxDB database carrying the ENGINE schemas — the same recipe the
@@ -38,7 +42,7 @@ const DATA_COLLECTIONS = [
  * speed. This is what `executeAdapterQuery` reads (`collection.database`).
  */
 export async function createEngineDatabase(
-	collections: readonly (typeof DATA_COLLECTIONS)[number][] = ['products', 'variations', 'orders']
+	collections: readonly DataCollection[] = ['products', 'variations', 'orders']
 ): Promise<RxDatabase> {
 	const database = await createRxDatabase({
 		name: `query-engine-${(sequence += 1)}`,
@@ -70,6 +74,8 @@ export interface FakeEngine extends RxdbSyncEngine {
 	searchFailure?: Error;
 	resetCalls: string[];
 	syncCalls: (string | undefined)[];
+	emit(event: EngineEvent): void;
+	eventListenerCount(): number;
 }
 
 export interface RecordedSearchRequirement {
@@ -178,6 +184,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 	const searchRequireCalls: RecordedSearchRequirement[] = [];
 	const resetCalls: string[] = [];
 	const syncCalls: (string | undefined)[] = [];
+	const eventListeners = new Set<(event: EngineEvent) => void>();
 	const activeScope = {
 		identity: { site: 'https://test', storeId: '1', cashierId: '1' },
 		scopeId: 'test-scope',
@@ -232,7 +239,14 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 			syncCalls.push(lane);
 			return { lane: (lane ?? 'all') as never, status: 'ran' as const };
 		},
-		events: () => () => undefined,
+		events: (listener: (event: EngineEvent) => void) => {
+			eventListeners.add(listener);
+			return () => eventListeners.delete(listener);
+		},
+		emit: (event: EngineEvent) => {
+			for (const listener of eventListeners) listener(event);
+		},
+		eventListenerCount: () => eventListeners.size,
 		onScopeEvent: () => () => undefined,
 		status: () => ({}) as never,
 		stats: () => ({}) as never,
