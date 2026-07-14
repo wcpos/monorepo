@@ -156,7 +156,7 @@ importers:
         version: 2.2.0(eslint-config-expo@56.0.4(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)))(eslint-plugin-prettier@5.5.6(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))(prettier@3.8.4))(eslint@9.39.4(jiti@2.7.0))(prettier-plugin-tailwindcss@0.8.0(prettier@3.8.4))(prettier@3.8.4)
       concurrently:
         specifier: ^9.2.1
-        version: 9.2.3
+        version: 9.2.4
       electron:
         specifier: 41.7.1
         version: 41.7.1
@@ -226,6 +226,9 @@ importers:
       '@wcpos/query':
         specifier: workspace:*
         version: link:../../packages/query
+      '@wcpos/sync-engine':
+        specifier: workspace:*
+        version: link:../../packages/sync-engine
       '@wcpos/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -1053,6 +1056,9 @@ importers:
 
   packages/query:
     dependencies:
+      '@wcpos/sync-engine':
+        specifier: workspace:*
+        version: link:../sync-engine
       lodash:
         specifier: ^4.18.1
         version: 4.18.1
@@ -1078,9 +1084,6 @@ importers:
       '@types/lodash':
         specifier: ^4.17.24
         version: 4.17.24
-      '@wcpos/sync-engine':
-        specifier: workspace:*
-        version: link:../sync-engine
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@25.9.3)(ts-node@10.9.2(@types/node@25.9.3)(typescript@5.9.3))
@@ -6598,8 +6601,8 @@ packages:
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
-  concurrently@9.2.3:
-    resolution: {integrity: sha512-ihjs0E2SxvDgq/MK418hX6YycQgKhsqxpbZuZbHo0yKfqDWdymWMjWYIpCIzqDDLLKClHlXev8whW/8WXmJ0BA==}
+  concurrently@9.2.4:
+    resolution: {integrity: sha512-TZ0CEhyzvFjgtAvHTusDMgj7wNdihCh7LLLrzdUOXIhdlnL2JBBGA9eJxR24rtqgmdjh3OA3hrN1rCHj6HM8qA==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -7257,8 +7260,8 @@ packages:
   es-module-lexer@2.1.0:
     resolution: {integrity: sha512-n27zTYMjYu1aj4MjCWzSP7G9r75utsaoc8m61weK+W8JMBGGQybd43GstCXZ3WNmSFtGT9wi59qQTW6mhTR5LQ==}
 
-  es-module-lexer@2.3.0:
-    resolution: {integrity: sha512-KLdwQm2NvGLDkQDCGvmiQrhkd0JbMzXthwQAUgWjQuQdBLFa3eiBP5arXZyA+f8x+x7OXgud6bq2rxjGtHV2tw==}
+  es-module-lexer@2.3.1:
+    resolution: {integrity: sha512-shc1dbU90Yl/xq1QrC7QRtfcwURZuVRfPhZbDoldJ1cn1gzDvBaBWlv0eFolj5+0znnPJz5TXLxsN77X/12KTA==}
 
   es-object-atoms@1.1.2:
     resolution: {integrity: sha512-HWcBoN6NileqtSydK2FqHbS/LoDd2pqrnQHLyJzBj4kOp/ky2MWMN694xOfkK8/SnUsW2DH7EfyVlydKCsm1Zw==}
@@ -19556,7 +19559,7 @@ snapshots:
 
   concat-map@0.0.1: {}
 
-  concurrently@9.2.3:
+  concurrently@9.2.4:
     dependencies:
       chalk: 4.1.2
       rxjs: 7.8.2
@@ -20372,7 +20375,7 @@ snapshots:
 
   es-module-lexer@2.1.0: {}
 
-  es-module-lexer@2.3.0: {}
+  es-module-lexer@2.3.1: {}
 
   es-object-atoms@1.1.2:
     dependencies:
@@ -21950,7 +21953,7 @@ snapshots:
   import-in-the-middle@3.3.1:
     dependencies:
       cjs-module-lexer: 2.2.0
-      es-module-lexer: 2.3.0
+      es-module-lexer: 2.3.1
       module-details-from-path: 1.0.4
 
   import-local@3.2.0:

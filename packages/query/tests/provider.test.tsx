@@ -1,90 +1,89 @@
 import * as React from 'react';
 
-import { render, cleanup } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 
 import { httpClientMock } from './__mocks__/http';
-import { createStoreDatabase, createSyncDatabase } from './helpers/db';
+import { createStoreDatabase } from './helpers/db';
+import { createEngineDatabase, createFakeEngine } from './helpers/engine';
 import { QueryProvider, useQueryManager } from '../src/provider';
 import { useQuery } from '../src/use-query';
 
+import type { FakeEngine } from './helpers/engine';
 import type { RxDatabase } from 'rxdb';
 
 // Mock the logger module
 jest.mock('@wcpos/utils/src/logger');
 
 describe('QueryProvider', () => {
-	let storeDatabase: RxDatabase;
-	let syncDatabase: RxDatabase;
+	let localDB: RxDatabase;
+	let engineDB: RxDatabase;
+	let engine: FakeEngine;
 
 	beforeEach(async () => {
-		storeDatabase = await createStoreDatabase();
-		syncDatabase = await createSyncDatabase();
+		localDB = await createStoreDatabase();
+		engineDB = await createEngineDatabase();
+		engine = createFakeEngine(engineDB);
 	});
 
 	afterEach(async () => {
-		if (storeDatabase && !storeDatabase.destroyed) {
-			await storeDatabase.remove();
+		if (localDB && !localDB.destroyed) {
+			await localDB.remove();
 		}
-		if (syncDatabase && !syncDatabase.destroyed) {
-			await syncDatabase.remove();
+		if (engineDB && !engineDB.destroyed) {
+			await engineDB.remove();
 		}
 		cleanup();
 		jest.clearAllMocks();
 	});
 
-	it('should provide a Manager instance', () => {
-		const TestComponent = () => {
+	function Provider({ children }: { children: React.ReactNode }) {
+		return (
+			<QueryProvider localDB={localDB} engine={engine} http={httpClientMock} locale="">
+				{children}
+			</QueryProvider>
+		);
+	}
+
+	it('should provide a Manager instance holding the engine', () => {
+		function TestComponent() {
 			const manager = useQueryManager();
 			expect(manager).toBeDefined();
+			expect(manager.engine).toBe(engine);
 			return <div>Test</div>;
-		};
+		}
 
 		render(
-			<QueryProvider
-				localDB={storeDatabase}
-				fastLocalDB={syncDatabase}
-				http={httpClientMock}
-				locale=""
-			>
+			<Provider>
 				<TestComponent />
-			</QueryProvider>
+			</Provider>
 		);
 	});
 
-	it('should create and retrieve a query instance', async () => {
-		// TestComponent1 uses useQuery to create a query
-		const TestComponent1 = () => {
+	it('should create and retrieve a query instance', () => {
+		function TestComponent1() {
 			const query = useQuery({ queryKeys: ['myQuery'], collectionName: 'products' });
 			expect(query).toBeDefined();
 			return <div />;
-		};
-
-		// TestComponent2 attempts to retrieve the same query
-		const TestComponent2 = () => {
+		}
+		function TestComponent2() {
 			const manager = useQueryManager();
 			const query = manager.getQuery(['myQuery']);
 			expect(query).toBeDefined();
 			return <div />;
-		};
+		}
 
 		render(
-			<QueryProvider
-				localDB={storeDatabase}
-				fastLocalDB={syncDatabase}
-				http={httpClientMock}
-				locale=""
-			>
+			<Provider>
 				<TestComponent1 />
 				<TestComponent2 />
-			</QueryProvider>
+			</Provider>
 		);
 	});
 
 	it('should have initial values for query.rxQuery$ and query.result$', (done) => {
-		const TestComponent = () => {
+		function TestComponent() {
 			const query = useQuery({ queryKeys: ['myQuery'], collectionName: 'products' });
 
-			// Query has rxQuery$ and result$, not params$
 			query.rxQuery$.subscribe((rxQuery) => {
 				expect(rxQuery).toBeDefined();
 			});
@@ -101,71 +100,44 @@ describe('QueryProvider', () => {
 			});
 
 			return <div />;
-		};
+		}
 
 		render(
-			<QueryProvider
-				localDB={storeDatabase}
-				fastLocalDB={syncDatabase}
-				http={httpClientMock}
-				locale=""
-			>
+			<Provider>
 				<TestComponent />
-			</QueryProvider>
+			</Provider>
 		);
 	});
 
 	/**
-	 * Critical test: useQuery must NEVER return undefined.
-	 * Components access query.result$ immediately - undefined causes crashes.
-	 * This test catches the bug where useObservableState returns undefined
-	 * before the observable emits.
+	 * Critical: useQuery must NEVER return undefined on the initial render.
 	 */
 	it('useQuery must never return undefined on initial render', () => {
 		let queryOnFirstRender: any = 'not-set';
 		let renderCount = 0;
 
-		const TestComponent = () => {
+		function TestComponent() {
 			const query = useQuery({ queryKeys: ['neverUndefined'], collectionName: 'products' });
-
-			// Capture query on every render
 			renderCount++;
 			if (renderCount === 1) {
 				queryOnFirstRender = query;
 			}
-
-			// This simulates what real components do - they access query properties immediately
-			// If query is undefined, this would throw "Cannot read properties of undefined"
 			if (query === undefined) {
 				throw new Error('useQuery returned undefined - this breaks components');
 			}
-
-			// Access properties that real components use
 			const hasResult$ = query.result$ !== undefined;
 			const hasRxQuery$ = query.rxQuery$ !== undefined;
+			return <div>{hasResult$ && hasRxQuery$ ? 'valid' : 'invalid'}</div>;
+		}
 
-			return (
-				<div>
-					{hasResult$ && hasRxQuery$ ? 'valid' : 'invalid'}
-				</div>
-			);
-		};
-
-		// This should not throw
 		expect(() => {
 			render(
-				<QueryProvider
-					localDB={storeDatabase}
-					fastLocalDB={syncDatabase}
-					http={httpClientMock}
-					locale=""
-				>
+				<Provider>
 					<TestComponent />
-				</QueryProvider>
+				</Provider>
 			);
 		}).not.toThrow();
 
-		// Query should have been defined on first render
 		expect(queryOnFirstRender).not.toBe('not-set');
 		expect(queryOnFirstRender).not.toBe(undefined);
 		expect(queryOnFirstRender).not.toBe(null);
