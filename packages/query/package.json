@@ -21,6 +21,7 @@
 		"typecheck": "bash -c '! tsc --noEmit 2>&1 | grep -q \"^src/.*error TS\"'"
 	},
 	"dependencies": {
+		"@wcpos/sync-engine": "workspace:*",
 		"lodash": "^4.18.1",
 		"observable-hooks": "^4.2.4",
 		"rxdb": "17.2.0",

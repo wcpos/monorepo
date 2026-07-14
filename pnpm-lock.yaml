@@ -1053,6 +1053,9 @@ importers:
 
   packages/query:
     dependencies:
+      '@wcpos/sync-engine':
+        specifier: workspace:*
+        version: link:../sync-engine
       lodash:
         specifier: ^4.18.1
         version: 4.18.1
