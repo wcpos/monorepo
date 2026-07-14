@@ -133,7 +133,7 @@ export type { WriteIntent } from './write-path/write-intents';
 
 export type EngineLane = 'change-signal' | 'write-drain' | MaintenanceLaneName;
 
-/** One deterministic tick's outcome. A full sync() (no lane) runs all nine
+/** One deterministic tick's outcome. A full sync() (no lane) runs all ten
  * registered lanes in dependency order and reports their aggregate worst
  * status and write-drain counters. */
 export type SyncReport = {
@@ -222,6 +222,8 @@ export type EngineIntervals = {
 	schedulerDrainMs: number;
 	/** Orders open-recent window re-seed cadence. Default 5min (the web host's). */
 	orderWindowSeedMs: number;
+	/** Products browse-window (ADR 0027) re-seed cadence. Default 5min (matches the order window). */
+	productBrowseWindowSeedMs: number;
 	/** Reference-lane (F11) re-seed cadence. Default 5min (the web host's). */
 	referenceSeedMs: number;
 	/** Query-total retry scan cadence (armed only with ports.queryTotal). Default 30s. */
@@ -239,6 +241,7 @@ const DEFAULT_INTERVALS: EngineIntervals = {
 	writeDrainPollMs: 10_000,
 	schedulerDrainMs: 30_000,
 	orderWindowSeedMs: 5 * 60_000,
+	productBrowseWindowSeedMs: 5 * 60_000,
 	referenceSeedMs: 5 * 60_000,
 	queryTotalRetryScanMs: 30_000,
 	coverageCompactionScanMs: 60_000,
@@ -294,6 +297,13 @@ export type EngineEvent =
 	// Fresh query totals persisted by the retry lane (slice 5d) — the host
 	// hydrates its UI caches from these.
 	| QueryTotalCacheEvent
+	// Lane lifecycle (ADR 0027 §4) — the PUBLIC host/UI activity contract. `lane-start`
+	// fires as a lane's work BEGINS (before any network); `lane-finish` is the completion
+	// signal carrying the tick outcome. Emitted as a pair around every lane run (manual
+	// sync() and the mode:'auto' timers). Deliberately NOT the SyncObserver diagnostics
+	// port: UI state (active$) must not become best-effort when a host omits diagnostics.
+	| { type: 'lane-start'; lane: EngineLane }
+	| { type: 'lane-finish'; lane: EngineLane; status: SyncReport['status']; detail?: string }
 	| {
 			type: 'write-conflict';
 			collection: string;
@@ -1048,6 +1058,64 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 
+	// The lane dispatch table (name → tick), shared by manual sync() and the auto
+	// timers so every lane runs through ONE runner — the choke point where the
+	// lane-start/lane-finish lifecycle pair is emitted.
+	const MAINTENANCE_LANES: Record<
+		MaintenanceLaneName,
+		(signal?: AbortSignal) => Promise<SyncReport>
+	> = {
+		'scheduler-drain': (signal) => maintenanceLanes.schedulerDrain.tick(signal),
+		'order-window-seed': (signal) => maintenanceLanes.orderWindowSeed.tick(signal),
+		'product-browse-window-seed': (signal) => maintenanceLanes.productBrowseWindowSeed.tick(signal),
+		'reference-seed': (signal) => maintenanceLanes.referenceSeed.tick(signal),
+		'query-total-retry': async (signal) =>
+			maintenanceLanes.queryTotalRetry !== null
+				? maintenanceLanes.queryTotalRetry.tick(signal)
+				: { lane: 'query-total-retry', status: 'skipped', reason: 'no queryTotal port provided' },
+		'coverage-compaction': (signal) => maintenanceLanes.coverageCompaction.tick(signal),
+		'existence-prime': (signal) => maintenanceLanes.existencePrime.tick(signal),
+		'existence-reconcile': (signal) => maintenanceLanes.existenceReconcile.tick(signal),
+	};
+	const dispatchLaneTick = (name: EngineLane, signal?: AbortSignal): Promise<SyncReport> => {
+		if (name === 'change-signal') return changeSignalLane.tick(signal);
+		if (name === 'write-drain') return writeDrainLane.tick(signal);
+		return MAINTENANCE_LANES[name](signal);
+	};
+	// Every lane runs through here: emit lane-start before the work begins (before any
+	// network), run the tick, then emit lane-finish carrying the outcome. Lanes are
+	// contracted to RESOLVE with a status (never throw) — the catch only guarantees the
+	// finish half if that contract is ever broken, then re-raises.
+	const tickLaneWithEvents = async (
+		name: EngineLane,
+		signal?: AbortSignal
+	): Promise<SyncReport> => {
+		emitEngineEvent({ type: 'lane-start', lane: name });
+		let report: SyncReport;
+		try {
+			report = await dispatchLaneTick(name, signal);
+		} catch (error) {
+			emitEngineEvent({
+				type: 'lane-finish',
+				lane: name,
+				status: 'error',
+				detail: error instanceof Error ? error.message : String(error),
+			});
+			throw error;
+		}
+		emitEngineEvent({
+			type: 'lane-finish',
+			lane: name,
+			status: report.status,
+			...(report.reason !== undefined
+				? { detail: report.reason }
+				: report.error !== undefined
+					? { detail: report.error }
+					: {}),
+		});
+		return report;
+	};
+
 	// The unified change-signal cursor spans every hybrid collection: resetting
 	// ANY of them prunes the in-memory engine AND clears the persisted blob,
 	// inside the manager's serialized reset (invariant 2). Orders are
@@ -1126,48 +1194,52 @@ export function createRxdbSyncEngine(
 			() => {
 				if (disposed) return;
 				changeSignalTimer = setInterval(() => {
-					void runAutomaticTick(() => changeSignalLane.tick());
+					void runAutomaticTick(() => tickLaneWithEvents('change-signal'));
 				}, intervals.changeSignalPollMs);
 				writeDrainTimer = setInterval(() => {
-					void runAutomaticTick(() => writeDrainLane.tick());
+					void runAutomaticTick(() => tickLaneWithEvents('write-drain'));
 				}, intervals.writeDrainPollMs);
 				maintenanceTimers.push(
 					setInterval(() => {
-						void runAutomaticTick(() => maintenanceLanes.schedulerDrain.tick());
+						void runAutomaticTick(() => tickLaneWithEvents('scheduler-drain'));
 					}, intervals.schedulerDrainMs)
 				);
 				maintenanceTimers.push(
 					setInterval(() => {
-						void runAutomaticTick(() => maintenanceLanes.orderWindowSeed.tick());
+						void runAutomaticTick(() => tickLaneWithEvents('order-window-seed'));
 					}, intervals.orderWindowSeedMs)
 				);
 				maintenanceTimers.push(
 					setInterval(() => {
-						void runAutomaticTick(() => maintenanceLanes.referenceSeed.tick());
+						void runAutomaticTick(() => tickLaneWithEvents('product-browse-window-seed'));
+					}, intervals.productBrowseWindowSeedMs)
+				);
+				maintenanceTimers.push(
+					setInterval(() => {
+						void runAutomaticTick(() => tickLaneWithEvents('reference-seed'));
 					}, intervals.referenceSeedMs)
 				);
 				if (maintenanceLanes.queryTotalRetry !== null) {
-					const queryTotalRetry = maintenanceLanes.queryTotalRetry;
-					void runAutomaticTick(() => queryTotalRetry.tick());
+					void runAutomaticTick(() => tickLaneWithEvents('query-total-retry'));
 					maintenanceTimers.push(
 						setInterval(() => {
-							void runAutomaticTick(() => queryTotalRetry.tick());
+							void runAutomaticTick(() => tickLaneWithEvents('query-total-retry'));
 						}, intervals.queryTotalRetryScanMs)
 					);
 				}
 				maintenanceTimers.push(
 					setInterval(() => {
-						void runAutomaticTick(() => maintenanceLanes.coverageCompaction.tick());
+						void runAutomaticTick(() => tickLaneWithEvents('coverage-compaction'));
 					}, intervals.coverageCompactionScanMs)
 				);
 				maintenanceTimers.push(
 					setInterval(() => {
-						void runAutomaticTick(() => maintenanceLanes.existencePrime.tick());
+						void runAutomaticTick(() => tickLaneWithEvents('existence-prime'));
 					}, intervals.existencePrimeMs)
 				);
 				maintenanceTimers.push(
 					setInterval(() => {
-						void runAutomaticTick(() => maintenanceLanes.existenceReconcile.tick());
+						void runAutomaticTick(() => tickLaneWithEvents('existence-reconcile'));
 					}, intervals.existenceReconcileMs)
 				);
 			},
@@ -1626,25 +1698,6 @@ export function createRxdbSyncEngine(
 				});
 				return report;
 			};
-			const MAINTENANCE_LANES: Record<
-				MaintenanceLaneName,
-				(signal?: AbortSignal) => Promise<SyncReport>
-			> = {
-				'scheduler-drain': (signal) => maintenanceLanes.schedulerDrain.tick(signal),
-				'order-window-seed': (signal) => maintenanceLanes.orderWindowSeed.tick(signal),
-				'reference-seed': (signal) => maintenanceLanes.referenceSeed.tick(signal),
-				'query-total-retry': async (signal) =>
-					maintenanceLanes.queryTotalRetry !== null
-						? maintenanceLanes.queryTotalRetry.tick(signal)
-						: {
-								lane: 'query-total-retry',
-								status: 'skipped',
-								reason: 'no queryTotal port provided',
-							},
-				'coverage-compaction': (signal) => maintenanceLanes.coverageCompaction.tick(signal),
-				'existence-prime': (signal) => maintenanceLanes.existencePrime.tick(signal),
-				'existence-reconcile': (signal) => maintenanceLanes.existenceReconcile.tick(signal),
-			};
 			if (
 				lane !== undefined &&
 				lane !== 'change-signal' &&
@@ -1664,9 +1717,7 @@ export function createRxdbSyncEngine(
 					reason: 'lifecycle operation pending',
 				});
 			}
-			if (lane === 'change-signal') return finish(await changeSignalLane.tick(options?.signal));
-			if (lane === 'write-drain') return finish(await writeDrainLane.tick(options?.signal));
-			if (lane !== undefined) return finish(await MAINTENANCE_LANES[lane](options?.signal));
+			if (lane !== undefined) return finish(await tickLaneWithEvents(lane, options?.signal));
 			// ADR 0018 all-lane tick order is stable: detection, write drain, then
 			// maintenance in dependency order — SEEDS BEFORE the scheduler drain
 			// (gate2 #516 item 6): the seeds only ENQUEUE persisted tasks, so a
@@ -1676,6 +1727,7 @@ export function createRxdbSyncEngine(
 				'change-signal',
 				'write-drain',
 				'order-window-seed',
+				'product-browse-window-seed',
 				'reference-seed',
 				'scheduler-drain',
 				'query-total-retry',
@@ -1685,12 +1737,7 @@ export function createRxdbSyncEngine(
 			];
 			const reports: SyncReport[] = [];
 			for (const name of ordered) {
-				const report =
-					name === 'change-signal'
-						? await changeSignalLane.tick(options?.signal)
-						: name === 'write-drain'
-							? await writeDrainLane.tick(options?.signal)
-							: await MAINTENANCE_LANES[name](options?.signal);
+				const report = await tickLaneWithEvents(name, options?.signal);
 				laneLastTick.set(name, {
 					atMs: ports.now !== undefined ? ports.now() : Date.now(),
 					status: report.status,
@@ -1789,6 +1836,10 @@ export function createRxdbSyncEngine(
 					'order-window-seed': laneStatus(
 						'order-window-seed',
 						maintenanceLanes.orderWindowSeed.lastError()
+					),
+					'product-browse-window-seed': laneStatus(
+						'product-browse-window-seed',
+						maintenanceLanes.productBrowseWindowSeed.lastError()
 					),
 					'reference-seed': laneStatus(
 						'reference-seed',

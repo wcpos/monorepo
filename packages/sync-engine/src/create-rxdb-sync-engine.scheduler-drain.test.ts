@@ -63,6 +63,30 @@ function scriptedOrderServer() {
 	return { state, fetch };
 }
 
+const PRODUCT_UUID_55 = '55555555-5555-4555-8555-555555555555';
+
+/** A scripted server for the products browse-window lane: the /products proxy returns the
+ * scripted catalog page (uuid-stamped meta — the projection keys by it); everything else
+ * throws (the greedy bootstrap reference lanes fail harmlessly, as in the order case). */
+function scriptedProductServer(page: Record<string, unknown>[]) {
+	const state = { productPulls: 0, urls: [] as string[] };
+	const json = (body: unknown) =>
+		new Response(JSON.stringify(body), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		});
+	const fetch = async (url: string): Promise<Response> => {
+		state.urls.push(url);
+		const u = new URL(url);
+		if (u.pathname.endsWith('/products')) {
+			state.productPulls += 1;
+			return json(page);
+		}
+		throw new Error(`scripted product server: unexpected ${u.pathname}`);
+	};
+	return { state, fetch };
+}
+
 function engineWith(
 	fetch: (url: string) => Promise<Response>,
 	overrides?: Partial<RxdbSyncEnginePorts>
@@ -152,6 +176,82 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		expect(
 			(await scope.database.collections.existenceManifestCustomers.findOne('41').exec())?.toJSON()
 		).toMatchObject({ wooId: 41, objectType: 'customer', digest: 'customer-digest-41' });
+		await engine.dispose();
+	});
+
+	it('seed → drain: the products browse-window task lands a cold-grid page through the transport port', async () => {
+		const server = scriptedProductServer([
+			{
+				id: 77,
+				name: 'Apron',
+				date_modified_gmt: '2026-07-10T00:00:01',
+				meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: PRODUCT_UUID_55 }],
+			},
+		]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+
+		expect((await engine.sync('product-browse-window-seed')).status).toBe('ran');
+		const drained = await engine.sync('scheduler-drain');
+		expect(drained.status).toBe('ran');
+		expect(server.state.productPulls).toBeGreaterThan(0);
+		// One first page by the POS default catalog sort — no search, no page walk.
+		expect(
+			server.state.urls.some((url) =>
+				url.includes('/products?per_page=100&page=1&orderby=title&order=asc')
+			)
+		).toBe(true);
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const product = await scope.database.collections.products.findOne(PRODUCT_UUID_55).exec();
+		expect(product?.toJSON()).toMatchObject({ wooProductId: 77, payload: { name: 'Apron' } });
+		await engine.dispose();
+	});
+
+	it('#637 dirty-guard: the browse-window refresh does not clobber a locally-dirty product', async () => {
+		// The server returns the same record (same uuid) with a server-side name; the resident
+		// carries queued local work (local.dirty). withoutLocallyProtected must drop the pulled
+		// row so the dirty local copy survives the window refresh.
+		const server = scriptedProductServer([
+			{
+				id: 77,
+				name: 'Server Name',
+				date_modified_gmt: '2026-07-10T00:00:01',
+				meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: PRODUCT_UUID_55 }],
+			},
+		]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		await scope.database.collections.products.insert({
+			id: PRODUCT_UUID_55,
+			wooProductId: 77,
+			price: 0,
+			stockStatus: '',
+			type: '',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { id: 77, name: 'Local Edit' },
+			sync: { revision: '2026-07-10T00:00:00', partial: false, source: 'local' },
+			local: { dirty: true, pendingMutationIds: ['m-1'] },
+		} as never);
+
+		expect((await engine.sync('product-browse-window-seed')).status).toBe('ran');
+		expect((await engine.sync('scheduler-drain')).status).toBe('ran');
+		expect(server.state.productPulls).toBeGreaterThan(0);
+
+		const product = await scope.database.collections.products.findOne(PRODUCT_UUID_55).exec();
+		// The locally-dirty copy stays resident — the pulled server row was dropped.
+		expect(product?.toJSON()).toMatchObject({
+			payload: { name: 'Local Edit' },
+			local: { dirty: true },
+		});
 		await engine.dispose();
 	});
 

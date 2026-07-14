@@ -98,6 +98,98 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
+	it('fetches the browse-window task as one first page by the POS default catalog sort', async () => {
+		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const fetcher = vi.fn(async () =>
+			response([
+				{
+					id: 321,
+					name: 'Apron',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(321),
+				},
+			])
+		);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:browse-window:limit=100:windowed',
+				requirementId: 'products.browse-window.limit.100',
+				queryKey: 'products:browse-window:limit=100',
+				limit: 100,
+			})
+		);
+
+		// One page over the servable set the existing product paths request, sorted by the POS
+		// default catalog sort (orderby=title&order=asc) — no search, no status, no page walk.
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(fetcher).toHaveBeenCalledWith(
+			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?per_page=100&page=1&orderby=title&order=asc'
+		);
+		expect(repository.upsertMany).toHaveBeenCalledWith([
+			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),
+		]);
+		// A page below the ceiling exhausts the servable set → complete coverage.
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
+			collection: 'products',
+			queryKey: 'products:browse-window:limit=100',
+			records: [{ id: 'woo-product:321' }],
+			complete: true,
+			nowMs: 5_000,
+			freshForMs: 60_000,
+		});
+		expect(result).toEqual({
+			taskId: 'products:browse-window:limit=100:windowed',
+			documentCount: 1,
+			requestCount: 1,
+			completed: true,
+		});
+	});
+
+	it('records incomplete browse-window coverage when the first page fills the window', async () => {
+		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const products = Array.from({ length: 2 }, (_, index) => ({
+			id: index + 1,
+			date_modified_gmt: '2026-05-20T10:10:00',
+			meta_data: posMeta(index + 1),
+		}));
+		const fetcher = vi.fn(async () => response(products));
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:browse-window:limit=2:windowed',
+				queryKey: 'products:browse-window:limit=2',
+				limit: 2,
+			})
+		);
+
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey: 'products:browse-window:limit=2',
+				complete: false,
+			})
+		);
+		expect(result.completed).toBe(false);
+	});
+
 	it('populates the Leg-3 manifest from _rxdb_digest and strips it from the stored payload', async () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const manifestSink = vi.fn(async () => undefined);

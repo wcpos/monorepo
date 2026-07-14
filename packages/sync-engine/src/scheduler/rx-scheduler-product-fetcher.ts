@@ -16,6 +16,11 @@ import {
 import { type Materialized, materializeTargeted } from '../materialization/record-materialization';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
+	parseProductBrowseWindowLimit,
+	PRODUCT_BROWSE_WINDOW_ORDER,
+	PRODUCT_BROWSE_WINDOW_ORDERBY,
+} from './product-browse-window-descriptor';
+import {
 	assertReturnedRequestedIds,
 	chunk,
 	type CollectionSchedulerCoverageRepository,
@@ -197,6 +202,42 @@ function uniqueProductPayloads(payloads: WooProductPayload[]): WooProductPayload
 	return [...byId.values()];
 }
 
+/**
+ * The products browse-window seed (ADR 0027 §2): ONE bounded first page over the servable
+ * set the existing product paths already request, sorted by the POS default catalog sort
+ * (orderby=title&order=asc). No filters, no remote pagination — a cold-grid seed, not a
+ * query engine. Reuses fetchProductQuery + productDocumentFromWooPayload (the shared
+ * materialization path) and the shared collection repository, so the #637 pull guard
+ * (withoutLocallyProtected) protects a locally-dirty product from the window refresh.
+ */
+async function fetchProductBrowseWindow(
+	input: ProductsSchedulerFetcherInput,
+	task: FetchTask,
+	limit: number,
+	context?: SchedulerFetcherContext
+): Promise<FetchTaskResult> {
+	const query = new URLSearchParams();
+	query.set('per_page', String(limit));
+	query.set('page', '1');
+	query.set('orderby', PRODUCT_BROWSE_WINDOW_ORDERBY);
+	query.set('order', PRODUCT_BROWSE_WINDOW_ORDER);
+	const payloads = await fetchProductQuery(input, query, context);
+	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
+	await persistProductDocuments(input, documents);
+	// A page below the window ceiling means the servable set is exhausted (complete);
+	// a full page means there is more the seed deliberately does not walk (incomplete).
+	const complete = payloads.length < limit;
+	await recordCoverage(
+		'products',
+		input,
+		task,
+		documents.map(({ storedDocument }) => coverageRecordId(storedDocument as ProductDocument)),
+		complete
+	);
+
+	return { taskId: task.id, documentCount: documents.length, requestCount: 1, completed: complete };
+}
+
 async function fetchProductSearch(
 	input: ProductsSchedulerFetcherInput,
 	task: FetchTask,
@@ -233,6 +274,11 @@ export function createProductsSchedulerFetcher(
 
 		if (task.ids && task.ids.length > 0) {
 			return fetchTargetedProducts(input, task, context);
+		}
+
+		const browseWindowLimit = parseProductBrowseWindowLimit(task.queryKey);
+		if (browseWindowLimit !== null) {
+			return fetchProductBrowseWindow(input, task, browseWindowLimit, context);
 		}
 
 		const search = productSearchTerm(task);
