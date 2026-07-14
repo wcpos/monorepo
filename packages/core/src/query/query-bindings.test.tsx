@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+/* eslint-disable react-compiler/react-compiler */
 import { webcrypto } from 'node:crypto';
 import { TextDecoder, TextEncoder } from 'node:util';
 
@@ -9,7 +10,7 @@ import * as React from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { filter, firstValueFrom } from 'rxjs';
 
-import { QueryProvider } from '@wcpos/query';
+import { QueryProvider, useQueryManager } from '@wcpos/query';
 import type { QueryResult } from '@wcpos/query';
 
 import { coverageLaneSchema, queryTotalCacheSchema } from '../../../sync-engine/src/testing';
@@ -62,8 +63,15 @@ describe('query bindings', () => {
 	let localDB: RxDatabase;
 	let engineDB: RxDatabase;
 	let engine: FakeEngine;
+	let manager: ReturnType<typeof useQueryManager> | undefined;
+
+	function ManagerCapture() {
+		manager = useQueryManager();
+		return null;
+	}
 
 	beforeEach(async () => {
+		manager = undefined;
 		localDB = await createStoreDatabase();
 		engineDB = await createEngineDatabase(['products', 'variations', 'customers', 'categories']);
 		engine = createFakeEngine(engineDB);
@@ -89,6 +97,7 @@ describe('query bindings', () => {
 	}) {
 		return (
 			<QueryProvider localDB={localDB} engine={value} locale="en">
+				<ManagerCapture />
 				{children}
 			</QueryProvider>
 		);
@@ -248,6 +257,46 @@ describe('query bindings', () => {
 		await secondDB.remove();
 	});
 
+	it('deregisters superseded collection bindings and the final binding on unmount', async () => {
+		const base: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 10,
+		};
+		const { rerender, unmount } = renderHook(
+			({ state }) => useCollectionBinding('products', state),
+			{ wrapper: Provider, initialProps: { state: base } }
+		);
+		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
+
+		for (let index = 1; index <= 5; index += 1) {
+			rerender({ state: { ...base, search: `term-${index}` } });
+			await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
+		}
+
+		unmount();
+		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(0));
+	});
+
+	it('keeps identical mounted binding registrations independently owned', async () => {
+		const state: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 10,
+		};
+		const first = renderHook(() => useCollectionBinding('products', state), { wrapper: Provider });
+		const second = renderHook(() => useCollectionBinding('products', state), { wrapper: Provider });
+		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(2));
+
+		first.unmount();
+		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
+
+		second.unmount();
+		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(0));
+	});
+
 	it('binds the relational products-to-variations search pair', async () => {
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'shirt', id: 10, name: 'Shirt' })
@@ -309,6 +358,52 @@ describe('query bindings', () => {
 
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['alpha-shirt'])
+		);
+	});
+
+	it('searches every matching child before applying the parent result limit', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'first-shirt', id: 10, name: 'First Shirt' }),
+			engineProduct({ uuid: 'later-shirt', id: 20, name: 'Later Shirt' }),
+		]);
+		await engineDB.collections.variations.bulkInsert([
+			engineVariation({
+				uuid: 'first-shirt-small',
+				id: 11,
+				parent_id: 10,
+				name: 'First Shirt - Small',
+				sku: 'matching-small',
+			}),
+			engineVariation({
+				uuid: 'first-shirt-large',
+				id: 12,
+				parent_id: 10,
+				name: 'First Shirt - Large',
+				sku: 'matching-large',
+			}),
+			engineVariation({
+				uuid: 'later-shirt-only-match',
+				id: 13,
+				parent_id: 20,
+				name: 'Later Shirt - Only Match',
+				sku: 'matching-later',
+			}),
+		]);
+		const state: QueryStateOf<'products'> = {
+			search: 'matching',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 2,
+		};
+		const { result } = renderHook(() => useRelationalCollectionBinding(state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
+				'first-shirt',
+				'later-shirt',
+			])
 		);
 	});
 

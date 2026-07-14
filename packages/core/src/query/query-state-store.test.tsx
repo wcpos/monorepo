@@ -60,6 +60,42 @@ describe('QueryStateProvider', () => {
 		expect(filterRenders).toBe(1);
 	});
 
+	it('caches object selector snapshots until the selected slice changes', () => {
+		let actions: QueryStateActions<'products'> | undefined;
+		let selected: { search: string } | undefined;
+		let renders = 0;
+
+		function ObjectSubscriber() {
+			selected = useQueryState<'products', { search: string }>((state) => ({
+				search: state.search,
+			}));
+			renders += 1;
+			return null;
+		}
+
+		function ActionsSubscriber() {
+			actions = useQueryStateActions<'products'>();
+			return null;
+		}
+
+		render(
+			wrapper(
+				<>
+					<ObjectSubscriber />
+					<ActionsSubscriber />
+				</>
+			)
+		);
+		expect(renders).toBe(1);
+
+		act(() => actions?.setFilter('featured', true));
+		expect(renders).toBe(1);
+
+		act(() => actions?.setSearch('coffee'));
+		expect(renders).toBe(2);
+		expect(selected).toEqual({ search: 'coffee' });
+	});
+
 	it('publishes a changed result key and reset window atomically', () => {
 		let actions: QueryStateActions<'products'> | undefined;
 		const observed: QueryStateOf<'products'>[] = [];

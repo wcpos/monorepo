@@ -27,6 +27,25 @@ const QueryStateContext = React.createContext<Store<CollectionKey> | null>(null)
 const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
+function shallowEqual(left: unknown, right: unknown): boolean {
+	if (Object.is(left, right)) return true;
+	if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) {
+		return false;
+	}
+	const leftRecord = left as Record<string, unknown>;
+	const rightRecord = right as Record<string, unknown>;
+	const leftKeys = Object.keys(leftRecord);
+	const rightKeys = Object.keys(rightRecord);
+	return (
+		leftKeys.length === rightKeys.length &&
+		leftKeys.every(
+			(key) =>
+				Object.prototype.hasOwnProperty.call(rightRecord, key) &&
+				Object.is(leftRecord[key], rightRecord[key])
+		)
+	);
+}
+
 function createStore<C extends CollectionKey>(
 	initial: QueryStateOf<C>,
 	initialFilters: FiltersOf<C>,
@@ -107,7 +126,28 @@ export function useQueryState<C extends CollectionKey, S = QueryStateOf<C>>(
 	selector: (state: QueryStateOf<C>) => S = (state) => state as unknown as S
 ): S {
 	const store = useStore<C>();
-	return React.useSyncExternalStore(store.subscribe, () => selector(store.getState()));
+	const cache = React.useRef<
+		| {
+				state: QueryStateOf<C>;
+				selector: (state: QueryStateOf<C>) => S;
+				selected: S;
+		  }
+		| undefined
+	>(undefined);
+	const getSnapshot = React.useCallback(() => {
+		const state = store.getState();
+		if (cache.current?.state === state && cache.current.selector === selector) {
+			return cache.current.selected;
+		}
+		const selected = selector(state);
+		if (cache.current && shallowEqual(cache.current.selected, selected)) {
+			cache.current = { state, selector, selected: cache.current.selected };
+			return cache.current.selected;
+		}
+		cache.current = { state, selector, selected };
+		return selected;
+	}, [selector, store]);
+	return React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
 }
 
 export function useQueryStateActions<C extends CollectionKey>(): QueryStateActions<C> {

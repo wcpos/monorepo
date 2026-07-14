@@ -23,6 +23,9 @@ const entry = (
 	operator: Operator = 'value'
 ): FilterTranslator => ({ legacyPath, enginePath, storage, operator });
 
+// requirementsForQuery reads these predicates directly from the selector root.
+const REQUIREMENT_TOP_LEVEL_FIELDS = new Set(['status']);
+
 export const FILTER_TRANSLATORS = {
 	products: {
 		categories: entry('categories', 'categoryIds', 'promoted', 'taxonomy-many'),
@@ -169,10 +172,21 @@ export function translateQueryState<C extends CollectionKey>(
 	state: QueryStateOf<C>
 ) {
 	const translators = FILTER_TRANSLATORS[collection] as Record<string, FilterTranslator>;
-	const conditions = Object.entries(state.filters)
-		.map(([field, value]) => compile(translators[field], value))
-		.filter((condition): condition is Record<string, unknown> => condition !== undefined);
-	const selector = conditions.length === 0 ? {} : { $and: conditions };
+	const topLevelConditions: Record<string, unknown> = {};
+	const nestedConditions: Record<string, unknown>[] = [];
+	Object.entries(state.filters).forEach(([field, value]) => {
+		const condition = compile(translators[field], value);
+		if (!condition) return;
+		if (collection === 'orders' && REQUIREMENT_TOP_LEVEL_FIELDS.has(field)) {
+			Object.assign(topLevelConditions, condition);
+		} else {
+			nestedConditions.push(condition);
+		}
+	});
+	const selector = {
+		...topLevelConditions,
+		...(nestedConditions.length > 0 ? { $and: nestedConditions } : {}),
+	};
 	const sortField = state.sort.field as string;
 	const adapterSortField =
 		collection === 'orders' && sortField === 'total' ? sortPaths.orders.total : sortField;

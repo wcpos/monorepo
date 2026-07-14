@@ -1,3 +1,5 @@
+import { requirementsForQuery } from '@wcpos/query/requirement-bridge';
+
 import { FILTER_TRANSLATORS, translateQueryState } from './query-state-translator';
 
 import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
@@ -68,8 +70,8 @@ describe('query-state translator', () => {
 		} satisfies QueryStateOf<'orders'>);
 
 		expect(translated.selector).toEqual({
+			status: 'processing',
 			$and: [
-				{ status: 'processing' },
 				{ customer_id: 42 },
 				{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
 				{ meta_data: { $elemMatch: { key: '_pos_store', value: '3' } } },
@@ -88,5 +90,26 @@ describe('query-state translator', () => {
 		} satisfies QueryStateOf<'orders'>);
 
 		expect(translated.sort).toEqual([{ sortable_total: 'asc' }]);
+	});
+
+	it('keeps order demand fields visible to the requirement bridge', () => {
+		const translated = translateQueryState('orders', {
+			search: '',
+			filters: {
+				status: 'processing',
+				dateRange: { from: '2026-07-01', to: '2026-07-14' },
+			},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 50,
+		} satisfies QueryStateOf<'orders'>);
+		const requirementInput = {
+			id: 'orders-binding',
+			collectionName: translated.collectionName,
+			limit: translated.limit,
+		};
+
+		expect(requirementsForQuery({ ...requirementInput, selector: translated.selector })).toEqual(
+			requirementsForQuery({ ...requirementInput, selector: { status: 'processing' } })
+		);
 	});
 });
