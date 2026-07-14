@@ -217,6 +217,9 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
+		expect(
+			[...manager!.queryStates.getAll().values()].filter((query) => query.collectionName === 'logs')
+		).toHaveLength(1);
 		await expect(firstValueFrom(result.current.totalSource$)).resolves.toBe('local');
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 
