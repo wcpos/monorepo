@@ -8,6 +8,7 @@ import { useReplicationState } from '@wcpos/query';
 import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useQueryStateActions } from '../../../../query';
 import { useCollectionReset } from '../../hooks/use-collection-reset';
 import { SyncButton } from '../sync-button';
 
@@ -87,7 +88,14 @@ function LegacyDataTableFooter({ query, ...props }: LegacyProps) {
 
 function BindingDataTableFooter({ collectionName, ...props }: BindingProps) {
 	const { clearAndSync } = useCollectionReset(collectionName);
-	return <FooterContent {...props} clearAndSync={clearAndSync} />;
+	const { clearSearch, resetFilters } = useQueryStateActions();
+	const resetQueryAndCollection = React.useCallback(() => {
+		clearSearch();
+		resetFilters();
+		return clearAndSync();
+	}, [clearAndSync, clearSearch, resetFilters]);
+
+	return <FooterContent {...props} clearAndSync={resetQueryAndCollection} />;
 }
 
 export function DataTableFooter(props: Props) {

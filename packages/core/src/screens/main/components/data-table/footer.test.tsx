@@ -7,6 +7,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { DataTableFooter } from './footer';
+import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../../query';
+
+import type { QueryStateOf } from '../../../../query';
 
 const mockClearAndSync = jest.fn(async () => undefined);
 const mockSync = jest.fn(async () => undefined);
@@ -52,15 +55,45 @@ jest.mock('../../../../contexts/translations', () => ({
 function renderBindingFooter(source: 'coverage' | 'local') {
 	const BindingFooter = DataTableFooter as unknown as React.ComponentType<Record<string, unknown>>;
 	return render(
-		<BindingFooter
-			collectionName="coupons"
-			count={10}
-			total$={of(27)}
-			totalSource$={of(source)}
-			active$={of(false)}
-			sync={mockSync}
-		/>
+		<QueryStateProvider
+			collection="coupons"
+			initialPageSize={10}
+			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+		>
+			<BindingFooter
+				collectionName="coupons"
+				count={10}
+				total$={of(27)}
+				totalSource$={of(source)}
+				active$={of(false)}
+				sync={mockSync}
+			/>
+		</QueryStateProvider>
 	);
+}
+
+function CouponQueryStateProbe() {
+	const state = useQueryState<'coupons'>();
+	const actions = useQueryStateActions<'coupons'>();
+
+	return (
+		<>
+			<button
+				data-testid="activate-query"
+				onClick={() => {
+					actions.setSearch('summer');
+					actions.setFilter('status', 'expired');
+					actions.setFilter('discount_type', 'fixed_cart');
+					actions.extendLimit();
+				}}
+			/>
+			<output data-testid="query-state">{JSON.stringify(state)}</output>
+		</>
+	);
+}
+
+function currentCouponQueryState(): QueryStateOf<'coupons'> {
+	return JSON.parse(screen.getByTestId('query-state').textContent ?? '') as QueryStateOf<'coupons'>;
 }
 
 describe('DataTableFooter binding projections', () => {
@@ -81,6 +114,48 @@ describe('DataTableFooter binding projections', () => {
 		fireEvent.click(screen.getByTestId('sync'));
 		fireEvent.click(screen.getByTestId('clear-and-sync'));
 		expect(mockSync).toHaveBeenCalledTimes(1);
+		expect(mockClearAndSync).toHaveBeenCalledTimes(1);
+	});
+
+	it('restores provider search and filter initials before clearing and syncing', () => {
+		const BindingFooter = DataTableFooter as unknown as React.ComponentType<
+			Record<string, unknown>
+		>;
+		render(
+			<QueryStateProvider
+				collection="coupons"
+				initialPageSize={10}
+				initialSort={{ field: 'amount', direction: 'asc' }}
+				initialFilters={{ status: 'future' }}
+			>
+				<CouponQueryStateProbe />
+				<BindingFooter
+					collectionName="coupons"
+					count={0}
+					total$={of(27)}
+					totalSource$={of('coverage')}
+					active$={of(false)}
+					sync={mockSync}
+				/>
+			</QueryStateProvider>
+		);
+
+		fireEvent.click(screen.getByTestId('activate-query'));
+		expect(currentCouponQueryState()).toEqual({
+			search: 'summer',
+			filters: { status: 'expired', discount_type: 'fixed_cart' },
+			sort: { field: 'amount', direction: 'asc' },
+			limit: 20,
+		});
+
+		const providerInitials: QueryStateOf<'coupons'> = {
+			search: '',
+			filters: { status: 'future' },
+			sort: { field: 'amount', direction: 'asc' },
+			limit: 10,
+		};
+		fireEvent.click(screen.getByTestId('clear-and-sync'));
+		expect(currentCouponQueryState()).toEqual(providerInitials);
 		expect(mockClearAndSync).toHaveBeenCalledTimes(1);
 	});
 });
