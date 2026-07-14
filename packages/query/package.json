@@ -21,7 +21,6 @@
 		"typecheck": "bash -c '! tsc --noEmit 2>&1 | grep -q \"^src/.*error TS\"'"
 	},
 	"dependencies": {
-		"@wcpos/sync-engine": "workspace:*",
 		"lodash": "^4.18.1",
 		"observable-hooks": "^4.2.4",
 		"rxdb": "17.2.0",
@@ -35,6 +34,7 @@
 		"jest": "^30.4.2",
 		"jest-environment-jsdom": "^30.4.1",
 		"rxjs-marbles": "^7.0.1",
-		"ts-jest": "^29.4.11"
+		"ts-jest": "^29.4.11",
+		"@wcpos/sync-engine": "workspace:*"
 	}
 }

@@ -32,9 +32,12 @@ const FIELD_OPERATORS = new Set([
 	'$exists',
 	'$regex',
 	'$options',
+	'$all',
+	'$size',
+	'$mod',
 ]);
 
-const ROOT_OPERATORS = new Set(['$and', '$or', '$not']);
+const ROOT_OPERATORS = new Set(['$and', '$or', '$not', '$nor']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -183,6 +186,24 @@ function matchesFieldCondition(actual: unknown, condition: unknown): boolean {
 				return !matchesFieldCondition(actual, operand);
 			case '$allMatch':
 				return genericAllMatch(actual, operand);
+			case '$all':
+				return (
+					Array.isArray(actual) &&
+					Array.isArray(operand) &&
+					operand.every((item) => actual.some((entry) => equal(entry, item)))
+				);
+			case '$size':
+				return Array.isArray(actual) && actual.length === Number(operand);
+			case '$mod': {
+				if (!Array.isArray(operand) || operand.length !== 2) {
+					return false;
+				}
+				const numeric = Number(actual);
+				const divisor = Number(operand[0]);
+				return (
+					Number.isFinite(numeric) && divisor !== 0 && numeric % divisor === Number(operand[1])
+				);
+			}
 			default:
 				throw new EngineAdapterSelectorError(operator);
 		}
@@ -254,6 +275,14 @@ function matchesLegacySelector(
 		}
 		if (field === '$not') {
 			return isRecord(condition) && !matchesLegacySelector(collection, document, condition);
+		}
+		if (field === '$nor') {
+			return (
+				Array.isArray(condition) &&
+				!condition.some(
+					(branch) => isRecord(branch) && matchesLegacySelector(collection, document, branch)
+				)
+			);
 		}
 
 		const actual = legacyValue(collection, document, field);

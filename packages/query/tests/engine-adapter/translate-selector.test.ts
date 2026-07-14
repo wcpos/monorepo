@@ -229,3 +229,31 @@ describe('translateSelector', () => {
 		expect(translateSelector(collection, selector).residual(document)).toBe(true);
 	});
 });
+
+describe('query-builder operators (codex round 2)', () => {
+	it('evaluates $all on payload arrays', () => {
+		const { residual } = translateSelector('products', { tag_ids: { $all: [1, 2] } } as any);
+		expect(residual({ id: 'a', payload: { tag_ids: [1, 2, 3] } } as any)).toBe(true);
+		expect(residual({ id: 'b', payload: { tag_ids: [1, 3] } } as any)).toBe(false);
+	});
+
+	it('evaluates $size on payload arrays', () => {
+		const { residual } = translateSelector('products', { tag_ids: { $size: 2 } } as any);
+		expect(residual({ id: 'a', payload: { tag_ids: [1, 2] } } as any)).toBe(true);
+		expect(residual({ id: 'b', payload: { tag_ids: [1] } } as any)).toBe(false);
+	});
+
+	it('evaluates $mod on numeric payload fields', () => {
+		const { residual } = translateSelector('products', { menu_order: { $mod: [2, 0] } } as any);
+		expect(residual({ id: 'a', payload: { menu_order: 4 } } as any)).toBe(true);
+		expect(residual({ id: 'b', payload: { menu_order: 5 } } as any)).toBe(false);
+	});
+
+	it('evaluates root $nor', () => {
+		const { residual } = translateSelector('products', {
+			$nor: [{ status: 'draft' }, { status: 'pending' }],
+		} as any);
+		expect(residual({ id: 'a', payload: { status: 'publish' } } as any)).toBe(true);
+		expect(residual({ id: 'b', payload: { status: 'draft' } } as any)).toBe(false);
+	});
+});
