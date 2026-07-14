@@ -37,9 +37,16 @@ interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
 	onSortingChange: (sort: SortingChange) => void;
 }
 
-interface Props {
+type ReplicationBinding = ReturnType<typeof import('@wcpos/query').useReplicationState>;
+
+interface BindingActions<TSortField extends string> {
+	setSort(field: TSortField, direction: 'asc' | 'desc'): void;
+	extendLimit(): void;
+	setFilter: (...args: never[]) => void;
+}
+
+interface CommonProps {
 	id: UISettingID;
-	query: Query<any>;
 	noDataMessage?: string;
 	estimatedItemSize?: number;
 	showFooter?: boolean;
@@ -56,6 +63,30 @@ interface Props {
 	TableFooterComponent?: React.ComponentType<any>;
 }
 
+type LegacyQueryProps = {
+	query: Query<any>;
+	resource?: never;
+	actions?: never;
+	active$?: never;
+	total$?: never;
+	totalSource$?: never;
+	sync?: never;
+};
+
+type BindingProps<TSortField extends string> = {
+	query?: never;
+	resource: Query<import('rxdb').RxCollection>['resource'];
+	actions: BindingActions<TSortField>;
+} & Pick<ReplicationBinding, 'active$' | 'total$' | 'totalSource$' | 'sync'>;
+
+type Props<TSortField extends string> = CommonProps & (LegacyQueryProps | BindingProps<TSortField>);
+
+function isBindingProps<TSortField extends string>(
+	props: Props<TSortField>
+): props is CommonProps & BindingProps<TSortField> {
+	return props.resource !== undefined;
+}
+
 /**
  * React Compiler breaks tanstack/react-table
  * https://github.com/facebook/react/issues/33057
@@ -65,26 +96,29 @@ function useReactTableWrapper(...args: Parameters<typeof useReactTable>) {
 	return { ...useReactTable(...args) };
 }
 
-function DataTable<TData>({
-	id,
-	query,
-	noDataMessage,
-	estimatedItemSize,
-	showFooter = true,
-	renderItem,
-	renderCell,
-	renderHeader,
-	tableConfig,
-	getItemType,
-	ListFooterComponent,
-	TableFooterComponent,
-}: Props) {
+function DataTable<TData, TSortField extends string = string>(props: Props<TSortField>) {
+	const {
+		id,
+		noDataMessage,
+		estimatedItemSize,
+		showFooter = true,
+		renderItem,
+		renderCell,
+		renderHeader,
+		tableConfig,
+		getItemType,
+		ListFooterComponent,
+		TableFooterComponent,
+	} = props;
+	const binding = isBindingProps(props) ? props : undefined;
+	const query = binding ? undefined : props.query;
+	const resource = binding ? binding.resource : query!.resource;
 	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
 	const uiColumns = useObservableEagerState(
 		uiSettings.columns$ as import('rxjs').Observable<Record<string, unknown>[]>
 	);
 	const t = useT();
-	const result = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(resource);
 	const deferredResult = React.useDeferredValue(result);
 
 	const columns = React.useMemo(
@@ -103,16 +137,22 @@ function DataTable<TData>({
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }: SortingChange) => {
 			patchUI({ sortBy, sortDirection });
-			query.sort([{ [sortBy]: sortDirection }]).exec();
+			if (binding) {
+				binding.actions.setSort(sortBy as TSortField, sortDirection);
+			} else {
+				query!.sort([{ [sortBy]: sortDirection }]).exec();
+			}
 		},
-		[patchUI, query]
+		[binding, patchUI, query]
 	);
 
 	const handleEndReached = React.useCallback(() => {
-		if (query.infiniteScroll) {
-			query.loadMore();
+		if (binding) {
+			binding.actions.extendLimit();
+		} else if (query!.infiniteScroll) {
+			query!.loadMore();
 		}
-	}, [query]);
+	}, [binding, query]);
 
 	const table = useReactTableWrapper({
 		columns,
@@ -121,10 +161,15 @@ function DataTable<TData>({
 		getCoreRowModel: getCoreRowModel(),
 		...tableConfig,
 		state: { columnVisibility, ...tableConfig?.state },
-		meta: {
-			query,
-			...tableConfig?.meta,
-		},
+		meta: binding
+			? {
+					...tableConfig?.meta,
+					actions: { setFilter: binding.actions.setFilter },
+				}
+			: {
+					query,
+					...tableConfig?.meta,
+				},
 	});
 
 	/**
@@ -190,8 +235,18 @@ function DataTable<TData>({
 					)}
 					ListFooterComponent={
 						ListFooterComponent
-							? () => <ListFooterComponent query={query} />
-							: () => <DefaultListFooterComponent query={query} />
+							? () =>
+									binding ? (
+										<ListFooterComponent active$={binding.active$} />
+									) : (
+										<ListFooterComponent query={query} />
+									)
+							: () =>
+									binding ? (
+										<DefaultListFooterComponent active$={binding.active$} />
+									) : (
+										<DefaultListFooterComponent query={query!} />
+									)
 					}
 					extraData={extraData}
 				/>
@@ -199,10 +254,20 @@ function DataTable<TData>({
 			{showFooter && (
 				<TableFooter>
 					{TableFooterComponent ? (
-						<TableFooterComponent query={query} count={result.hits.length} />
-					) : (
+						binding ? (
+							<TableFooterComponent
+								active$={binding.active$}
+								total$={binding.total$}
+								totalSource$={binding.totalSource$}
+								sync={binding.sync}
+								count={result.hits.length}
+							/>
+						) : (
+							<TableFooterComponent query={query} count={result.hits.length} />
+						)
+					) : query ? (
 						<DataTableFooter query={query} count={result.hits.length} />
-					)}
+					) : null}
 				</TableFooter>
 			)}
 		</Table>

@@ -1,14 +1,15 @@
 import React from 'react';
 import { View } from 'react-native';
 
+import debounce from 'lodash/debounce';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { VStack } from '@wcpos/components/vstack';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
+import { Input } from '@wcpos/components/input';
 import { Suspense } from '@wcpos/components/suspense';
-import { useLocalQuery } from '@wcpos/query';
 
 import { Context } from './cells/context';
 import { Date } from './cells/date';
@@ -20,10 +21,16 @@ import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { UISettingsDialog } from '../components/ui-settings';
-import { useUISettings } from '../contexts/ui-settings';
 import { TextCell } from '../components/text-cell';
 import { LogsFooter } from './footer';
-import { QuerySearchInput } from '../components/query-search-input';
+import {
+	QueryStateProvider,
+	useCollectionBinding,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../query';
+
+import type { QueryStateActions } from '../../../query';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 
@@ -33,6 +40,8 @@ const cells = {
 	level: Level,
 	code: Code,
 };
+
+const LOGS_PAGE_SIZE = 10;
 
 function renderCell(columnKey: string, info: Record<string, unknown>) {
 	const Renderer = cells[columnKey as keyof typeof cells];
@@ -46,25 +55,53 @@ function renderCell(columnKey: string, info: Record<string, unknown>) {
 /**
  *
  */
-export function LogsScreen() {
-	const { uiSettings } = useUISettings('logs');
+function LogsSearchInput() {
+	const { setSearch } = useQueryStateActions<'logs'>();
+	const [search, setInputSearch] = React.useState('');
+	const commitSearch = React.useMemo(() => debounce(setSearch, 250), [setSearch]);
+
+	React.useEffect(() => {
+		// The input owns the debounce timer, so cancel it if the screen unmounts before a commit.
+		return () => commitSearch.cancel();
+	}, [commitSearch]);
+
+	const handleSearch = React.useCallback(
+		(value: string) => {
+			setInputSearch(value);
+			commitSearch(value);
+		},
+		[commitSearch]
+	);
+	const t = useT();
+
+	return (
+		<Input
+			value={search}
+			onChangeText={handleSearch}
+			placeholder={t('logs.search_logs')}
+			className="flex-1"
+			testID="search-logs"
+			clearable
+		/>
+	);
+}
+
+function LogsScreenContent() {
+	const state = useQueryState<'logs'>();
+	const actions = useQueryStateActions<'logs'>();
+	const binding = useCollectionBinding('logs', state);
+	const tableActions = React.useMemo<
+		Pick<QueryStateActions<'logs'>, 'setSort' | 'extendLimit' | 'setFilter'>
+	>(
+		() => ({
+			setSort: actions.setSort,
+			extendLimit: actions.extendLimit,
+			setFilter: actions.setFilter,
+		}),
+		[actions]
+	);
 	const t = useT();
 	const { bottom } = useSafeAreaInsets();
-
-	/**
-	 *
-	 */
-	const query = useLocalQuery({
-		queryKeys: ['logs'],
-		collectionName: 'logs',
-		initialParams: {
-			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection } as Record<string, 'asc' | 'desc'>],
-			selector: {
-				level: { $in: DEFAULT_LOG_LEVELS },
-			},
-		},
-		infiniteScroll: true,
-	});
 
 	/**
 	 *
@@ -79,18 +116,13 @@ export function LogsScreen() {
 				<CardHeader className="bg-card-header p-2">
 					<VStack>
 						<HStack>
-							<QuerySearchInput
-								query={query}
-								placeholder={t('logs.search_logs')}
-								className="flex-1"
-								testID="search-logs"
-							/>
+							<LogsSearchInput />
 							<UISettingsDialog title={t('logs.logs_settings')}>
 								<UISettingsForm />
 							</UISettingsDialog>
 						</HStack>
 						<ErrorBoundary>
-							<FilterBar query={query} />
+							<FilterBar />
 						</ErrorBoundary>
 					</VStack>
 				</CardHeader>
@@ -99,7 +131,12 @@ export function LogsScreen() {
 						<Suspense fallback={<DataTableSkeleton id="logs" />}>
 							<DataTable<LogDocument>
 								id="logs"
-								query={query!}
+								resource={binding.resource}
+								actions={tableActions}
+								active$={binding.active$}
+								total$={binding.total$}
+								totalSource$={binding.totalSource$}
+								sync={binding.sync}
 								renderCell={renderCell}
 								noDataMessage={t('logs.no_logs_found')}
 								estimatedItemSize={100}
@@ -110,5 +147,18 @@ export function LogsScreen() {
 				</CardContent>
 			</Card>
 		</View>
+	);
+}
+
+export function LogsScreen() {
+	return (
+		<QueryStateProvider
+			collection="logs"
+			initialPageSize={LOGS_PAGE_SIZE}
+			initialSort={{ field: 'timestamp', direction: 'desc' }}
+			initialFilters={{ level: DEFAULT_LOG_LEVELS }}
+		>
+			<LogsScreenContent />
+		</QueryStateProvider>
 	);
 }

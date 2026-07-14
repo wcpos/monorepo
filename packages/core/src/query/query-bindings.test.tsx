@@ -75,6 +75,7 @@ describe('query bindings', () => {
 		localDB = await createStoreDatabase();
 		engineDB = await createEngineDatabase(['products', 'variations', 'customers', 'categories']);
 		engine = createFakeEngine(engineDB);
+		installResidentSearch(localDB.collections.logs);
 		installResidentSearch(engineDB.collections.products);
 		installResidentSearch(engineDB.collections.variations);
 		installResidentSearch(engineDB.collections.customers);
@@ -204,9 +205,10 @@ describe('query bindings', () => {
 			sort: { field: 'timestamp', direction: 'desc' },
 			limit: 1,
 		};
-		const { result } = renderHook(() => useCollectionBinding('logs', state), {
-			wrapper: Provider,
-		});
+		const { result, rerender } = renderHook(
+			({ currentState }) => useCollectionBinding('logs', currentState),
+			{ wrapper: Provider, initialProps: { currentState: state } }
+		);
 		await waitFor(() =>
 			expect(
 				(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits
@@ -216,6 +218,21 @@ describe('query bindings', () => {
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
 		await expect(firstValueFrom(result.current.totalSource$)).resolves.toBe('local');
+		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
+
+		const syncCalls = [...engine.syncCalls];
+		await act(async () => result.current.sync());
+		expect(engine.syncCalls).toEqual(syncCalls);
+
+		rerender({ currentState: { ...state, search: 'three', filters: {} } });
+		await waitFor(() =>
+			expect(
+				(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits
+			).toHaveLength(1)
+		);
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
+		).resolves.toBe(1);
 	});
 
 	it('rebinds residents when engine db$ moves to another scope', async () => {
