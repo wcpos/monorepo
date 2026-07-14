@@ -1,11 +1,13 @@
 import * as React from 'react';
 
-import { useQueryManager } from '@wcpos/query';
+import { awaitWriteOutcome, useQueryManager } from '@wcpos/query';
+import type { LegacyCollectionName } from '@wcpos/query/engine-adapter/collection-map';
+import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
-import { documentRecordId, patchEngineResident } from '../hooks/mutations/use-local-mutation';
+import { documentRecordId, findEngineResident } from '../hooks/mutations/use-local-mutation';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'push']);
 
@@ -15,7 +17,6 @@ type AnyRxDocument = {
 	uuid?: string;
 	collection: { name: string };
 	getLatest(): AnyRxDocument;
-	toJSON(): Record<string, unknown>;
 };
 
 const REMOTE_ID_FIELD: Record<WriteableCollection, string> = {
@@ -31,10 +32,9 @@ function isWriteableCollection(name: string): name is WriteableCollection {
 }
 
 /**
- * Enqueue the document snapshot through the engine write plane. The resident was already updated
- * optimistically by the editing funnel; this final patch refreshes it from the caller's latest
- * snapshot before enqueueing. Push outcomes reconcile asynchronously through the engine, and
- * conflicts remain durable instead of rolling the optimistic snapshot back.
+ * Enqueue the current engine resident through the write plane. The passed legacy document is used
+ * only for identity: its fields may be stale after an optimistic resident patch. Order pushes wait
+ * for a terminal outcome because checkout requires the rematerialized Woo id.
  */
 export const usePushDocument = () => {
 	const manager = useQueryManager();
@@ -49,26 +49,34 @@ export const usePushDocument = () => {
 			}
 			const recordId = documentRecordId(latest);
 			if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
-			const payload = latest.toJSON() as Record<string, unknown>;
 
 			try {
-				const resident = await patchEngineResident({
-					manager,
-					collection: collectionName,
-					recordId,
-					changes: payload,
-				});
+				const resident = await findEngineResident(manager, collectionName, recordId);
+				if (!resident) {
+					throw new Error(`Engine resident "${recordId}" is missing from "${collectionName}"`);
+				}
 				const remoteId =
 					typeof resident.get === 'function'
 						? resident.get(REMOTE_ID_FIELD[collectionName])
 						: (resident as unknown as Record<string, unknown>)[REMOTE_ID_FIELD[collectionName]];
-				await manager.engine.write({
+				const receipt = await manager.engine.write({
 					collection: collectionName,
 					operation: remoteId == null ? 'create' : 'update',
 					recordId,
 					payload: resident.get('payload') as Record<string, unknown>,
 				});
-				return latest;
+
+				let currentResident = resident;
+				if (collectionName === 'orders') {
+					await awaitWriteOutcome(manager.engine, receipt.mutationId);
+					const refreshed = await findEngineResident(manager, collectionName, recordId);
+					if (!refreshed) {
+						throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
+					}
+					currentResident = refreshed;
+				}
+
+				return wrapEngineDocument(collectionName as LegacyCollectionName, currentResident as never);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				syncLogger.error(t('common.failed_to_send_to_server'), {

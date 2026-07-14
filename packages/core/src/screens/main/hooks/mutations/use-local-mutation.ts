@@ -51,6 +51,13 @@ const ADAPTER_DERIVED_FIELDS = new Set([
 type QueryManager = ReturnType<typeof useQueryManager>;
 type EngineResident = RxDocument<Record<string, unknown>>;
 
+class ActiveScopeChangedTwiceError extends Error {
+	public constructor(collection: WriteableCollection) {
+		super(`Active engine scope changed twice during ${collection} mutation`);
+		this.name = 'ActiveScopeChangedTwiceError';
+	}
+}
+
 interface LocalPatchProps<T extends Document> {
 	document: T;
 	data: Partial<T>;
@@ -182,13 +189,67 @@ export async function patchEngineResident(input: {
 	if (!resident) {
 		throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 	}
+	return applyEngineResidentChanges(resident, input.collection, input.changes);
+}
+
+async function applyEngineResidentChanges(
+	resident: EngineResident,
+	collection: WriteableCollection,
+	changes: Record<string, unknown>
+): Promise<EngineResident> {
 	return (await resident.incrementalModify((old) => {
 		const payload = cloneDeep((old.payload ?? {}) as Record<string, unknown>);
-		for (const [field, value] of Object.entries(syncableChanges(input.changes))) {
+		for (const [field, value] of Object.entries(syncableChanges(changes))) {
 			set(payload, field, value);
 		}
-		return withPromotedFields(input.collection, { ...old, payload });
+		return withPromotedFields(collection, { ...old, payload });
 	})) as EngineResident;
+}
+
+async function patchAndEnqueueEngineResident(input: {
+	manager: QueryManager;
+	collection: WriteableCollection;
+	recordId: string;
+	changes: Record<string, unknown>;
+}): Promise<void> {
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		const scopeId = input.manager.engine.status().activeScopeId;
+		const resident = await findEngineResident(input.manager, input.collection, input.recordId);
+		if (!resident) {
+			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
+		}
+		const previousResident = cloneDeep(resident.toJSON());
+		await applyEngineResidentChanges(resident, input.collection, input.changes);
+
+		let writeError: unknown;
+		try {
+			await input.manager.engine.write({
+				collection: input.collection,
+				// Creation funnels insert the resident and enqueue the create first.
+				// Later local edits are updates; the write plane folds create + update
+				// into the pending create, or queues behind an in-flight create.
+				operation: 'update',
+				recordId: input.recordId,
+				payload: input.changes,
+			});
+		} catch (error) {
+			writeError = error;
+		}
+
+		if (input.manager.engine.status().activeScopeId !== scopeId) {
+			await resident.incrementalModify(() => previousResident);
+			if (attempt === 1) {
+				throw new ActiveScopeChangedTwiceError(input.collection);
+			}
+			continue;
+		}
+
+		if (writeError) {
+			await resident.incrementalModify(() => previousResident);
+			throw writeError;
+		}
+		return;
+	}
 }
 
 export async function insertEngineResident(input: {
@@ -250,9 +311,13 @@ export const useLocalMutation = () => {
 				const patchData = { ...(data as Record<string, unknown>) };
 				const collectionName = document.collection?.name;
 				const engineCollection = writeableCollection(collectionName);
-				const hasDate = engineCollection
-					? true
-					: get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
+				const isTemporaryOrder =
+					engineCollection === 'orders' &&
+					Boolean((document as unknown as { isNew?: boolean }).isNew);
+				const hasDate =
+					engineCollection && !isTemporaryOrder
+						? true
+						: get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
 				if (hasDate) {
 					patchData.date_modified_gmt = convertLocalDateToUTCString(new Date());
 				}
@@ -279,36 +344,24 @@ export const useLocalMutation = () => {
 					);
 				}
 
-				if (engineCollection) {
+				if (engineCollection && !isTemporaryOrder) {
 					const recordId = documentRecordId(document);
 					if (!recordId) throw new Error(`Missing uuid for ${engineCollection} mutation`);
 					const syncChanges = syncableChanges(changes);
-					const resident = await findEngineResident(manager, engineCollection, recordId);
-					if (!resident) {
-						throw new Error(`Engine resident "${recordId}" is missing from "${engineCollection}"`);
-					}
-					const previousResident = cloneDeep(resident.toJSON());
-					await patchEngineResident({
-						manager,
-						collection: engineCollection,
-						recordId,
-						changes: syncChanges,
-					});
 					if (Object.keys(syncChanges).length > 0) {
-						try {
-							await manager.engine.write({
-								collection: engineCollection,
-								// Creation funnels insert the resident and enqueue the create first.
-								// Later local edits are updates; the write plane folds create + update
-								// into the pending create, or queues behind an in-flight create.
-								operation: 'update',
-								recordId,
-								payload: syncChanges,
-							});
-						} catch (error) {
-							await resident.incrementalModify(() => previousResident);
-							throw error;
-						}
+						await patchAndEnqueueEngineResident({
+							manager,
+							collection: engineCollection,
+							recordId,
+							changes: syncChanges,
+						});
+					} else {
+						await patchEngineResident({
+							manager,
+							collection: engineCollection,
+							recordId,
+							changes: syncChanges,
+						});
 					}
 					return { changes, document: document.getLatest() };
 				}
@@ -333,6 +386,9 @@ export const useLocalMutation = () => {
 						error: message,
 					},
 				});
+				if (error instanceof ActiveScopeChangedTwiceError) {
+					throw error;
+				}
 			}
 		},
 		[manager, t]

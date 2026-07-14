@@ -5,6 +5,7 @@ export { useQuery } from './use-query';
 export { useLocalQuery } from './use-local-query';
 export { useRelationalQuery } from './use-relational-query';
 export { useReplicationState } from './use-replication-state';
+export { awaitWriteOutcome, type AwaitedWriteOutcome } from './await-write-outcome';
 export { swapCollection, swapCollections } from './collection-swap';
 export { yieldToEventLoop, processInChunks, chunkedIterator } from './yield';
 export type { RelationalQuery } from './relational-query-state';

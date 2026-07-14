@@ -9,13 +9,13 @@ import type {
 	ProductDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
-import { useQueryManager } from '@wcpos/query';
+import { awaitWriteOutcome, useQueryManager } from '@wcpos/query';
 import type { LegacyCollectionName } from '@wcpos/query/engine-adapter/collection-map';
 import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { insertEngineResident, useLocalMutation } from './use-local-mutation';
+import { findEngineResident, insertEngineResident, useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { CollectionKey, useCollection } from '../use-collection';
@@ -33,6 +33,13 @@ type WriteableCollection = 'orders' | 'products' | 'variations' | 'customers' | 
 interface Props {
 	collectionName: CollectionKey;
 	endpoint?: string;
+}
+
+class ActiveScopeChangedTwiceError extends Error {
+	public constructor(collection: WriteableCollection) {
+		super(`Active engine scope changed twice during ${collection} create`);
+		this.name = 'ActiveScopeChangedTwiceError';
+	}
 }
 
 function isWriteableCollection(name: string): name is WriteableCollection {
@@ -98,7 +105,13 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	);
 
 	const create = React.useCallback(
-		async ({ data }: { data: Record<string, unknown> }) => {
+		async ({
+			data,
+			awaitRemoteId = false,
+		}: {
+			data: Record<string, unknown>;
+			awaitRemoteId?: boolean;
+		}) => {
 			if (!isWriteableCollection(collectionName)) {
 				const error = new Error(`Collection "${collectionName}" is not engine-writeable`);
 				handleError(error);
@@ -113,32 +126,69 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					...(data.date_created_gmt === undefined ? { date_created_gmt: now } : {}),
 					...(data.date_modified_gmt === undefined ? { date_modified_gmt: now } : {}),
 				};
-				const resident = await insertEngineResident({
-					manager,
-					collection: collectionName,
-					recordId,
-					payload,
-				});
-				const residentPayload = resident.get('payload') as Record<string, unknown>;
-				try {
-					await manager.engine.write({
+				let resident: Awaited<ReturnType<typeof insertEngineResident>> | undefined;
+				let receipt: Awaited<ReturnType<typeof manager.engine.write>> | undefined;
+
+				for (let attempt = 0; attempt < 2; attempt += 1) {
+					const scopeId = manager.engine.status().activeScopeId;
+					resident = await insertEngineResident({
+						manager,
 						collection: collectionName,
-						operation: 'create',
 						recordId,
-						payload: residentPayload,
+						payload,
 					});
-				} catch (error) {
-					await resident.remove();
-					throw error;
+					const residentPayload = resident.get('payload') as Record<string, unknown>;
+					let writeError: unknown;
+					try {
+						receipt = await manager.engine.write({
+							collection: collectionName,
+							operation: 'create',
+							recordId,
+							payload: residentPayload,
+						});
+					} catch (error) {
+						writeError = error;
+					}
+
+					if (manager.engine.status().activeScopeId !== scopeId) {
+						await resident.remove();
+						if (attempt === 1) {
+							throw new ActiveScopeChangedTwiceError(collectionName);
+						}
+						continue;
+					}
+
+					if (writeError) {
+						await resident.remove();
+						throw writeError;
+					}
+					break;
+				}
+
+				if (!resident || !receipt) {
+					throw new Error(`Failed to enqueue ${collectionName} create`);
+				}
+
+				let currentResident = resident;
+				if (awaitRemoteId) {
+					await awaitWriteOutcome(manager.engine, receipt.mutationId);
+					const refreshed = await findEngineResident(manager, collectionName, recordId);
+					if (!refreshed) {
+						throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
+					}
+					currentResident = refreshed;
 				}
 				const document = wrapEngineDocument(
 					collectionName as LegacyCollectionName,
-					resident as never
+					currentResident as never
 				);
 				handleSuccess(document);
 				return document;
 			} catch (error) {
 				handleError(error);
+				if (awaitRemoteId || error instanceof ActiveScopeChangedTwiceError) {
+					throw error;
+				}
 			}
 		},
 		[collectionName, handleError, handleSuccess, manager]
