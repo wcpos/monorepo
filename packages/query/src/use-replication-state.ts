@@ -46,10 +46,13 @@ export const useReplicationState = (
 	const active$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(([id]) => manager.replicationActive$(id as string) ?? of(false)),
+				switchMap(
+					([id, , managerInput]) =>
+						(managerInput as typeof manager).replicationActive$(id as string) ?? of(false)
+				),
 				distinctUntilChanged()
 			),
-		[queryID]
+		[queryID, directQuery, manager]
 	);
 
 	// total$: coverage-aware where the engine exposes a matching lane; local fallback.
@@ -57,24 +60,28 @@ export const useReplicationState = (
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(
-					([id, queryState]) =>
-						manager.replicationTotal$(id as string) ??
+					([id, queryState, managerInput]) =>
+						(managerInput as typeof manager).replicationTotal$(id as string) ??
 						(queryState
 							? (queryState as Query<any>).result$.pipe(map((result) => result.count ?? 0))
 							: of(0))
 				),
 				distinctUntilChanged()
 			),
-		[queryID, directQuery]
+		[queryID, directQuery, manager]
 	);
 
 	const totalSource$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(([id]) => manager.replicationTotalSource$(id as string) ?? of('local' as const)),
+				switchMap(
+					([id, , managerInput]) =>
+						(managerInput as typeof manager).replicationTotalSource$(id as string) ??
+						of('local' as const)
+				),
 				distinctUntilChanged()
 			),
-		[queryID]
+		[queryID, directQuery, manager]
 	);
 
 	const sync = React.useCallback(async () => {
