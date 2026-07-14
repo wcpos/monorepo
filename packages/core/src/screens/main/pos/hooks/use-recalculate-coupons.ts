@@ -2,11 +2,17 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import { useQueryManager } from '@wcpos/query';
+
 import { buildEnrichedProductCategories } from './coupon-helpers';
 import { recalculateCoupons, type RecalculateResult } from './coupon-recalculate';
+import {
+	readEngineCategories,
+	readEngineCoupons,
+	readEngineProductsByWooId,
+} from './engine-coupon-data';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTaxRates } from '../../contexts/tax-rates';
-import { useCollection } from '../../hooks/use-collection';
 
 import type { CouponDiscountConfig } from './coupon-discount';
 
@@ -14,7 +20,7 @@ type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items'
 type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
 
 /**
- * Hook that wraps the pure recalculateCoupons() function with RxDB lookups
+ * Hook that wraps the pure recalculateCoupons() function with engine lookups
  * for coupon configs, product categories, and tax context.
  *
  * Returns a callback that takes line items and coupon lines, looks up all
@@ -28,9 +34,7 @@ export const useRecalculateCoupons = () => {
 	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
 	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
-	const { collection: couponCollection } = useCollection('coupons');
-	const { collection: productCollection } = useCollection('products');
-	const { collection: categoryCollection } = useCollection('products/categories');
+	const manager = useQueryManager();
 	const { rates: taxRates, pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
 
 	const recalculate = React.useCallback(
@@ -40,10 +44,11 @@ export const useRecalculateCoupons = () => {
 				.filter((cl): cl is CouponLine & { code: string } => cl.code != null)
 				.map((cl) => cl.code.toLowerCase());
 
-			// Build couponConfigs from RxDB
+			// Tier-0 coupons are resident in the engine; payload.code remains an exact scan.
+			const coupons = await readEngineCoupons(manager);
 			const couponConfigs = new Map<string, CouponDiscountConfig>();
 			for (const code of activeCodes) {
-				const couponDoc = await couponCollection.findOne({ selector: { code } }).exec();
+				const couponDoc = coupons.find((document) => document.code === code);
 				if (!couponDoc) {
 					// Fail the recalculation when an active coupon is missing locally.
 					// Returning stale lineItems with mutated couponLines would persist
@@ -70,9 +75,10 @@ export const useRecalculateCoupons = () => {
 				.map((item) => item.product_id)
 				.filter((id): id is number => id != null);
 			if (productIds.length > 0) {
-				const products = await productCollection
-					.find({ selector: { id: { $in: productIds } } })
-					.exec();
+				const [products, categories] = await Promise.all([
+					readEngineProductsByWooId(manager, productIds),
+					readEngineCategories(manager),
+				]);
 				for (const p of products) {
 					if (p.id != null) {
 						productCategories.set(p.id, (p.categories || []) as { id: number }[]);
@@ -80,10 +86,7 @@ export const useRecalculateCoupons = () => {
 				}
 
 				// Enrich with ancestor categories from the category tree
-				productCategories = await buildEnrichedProductCategories(
-					productCategories,
-					categoryCollection
-				);
+				productCategories = buildEnrichedProductCategories(productCategories, categories);
 			}
 
 			return recalculateCoupons({
@@ -99,9 +102,7 @@ export const useRecalculateCoupons = () => {
 			});
 		},
 		[
-			couponCollection,
-			productCollection,
-			categoryCollection,
+			manager,
 			taxRates,
 			pricesIncludeTax,
 			calcDiscountsSequentially,

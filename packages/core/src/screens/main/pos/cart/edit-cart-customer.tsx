@@ -22,8 +22,8 @@ import { FormErrors } from '../../components/form-errors';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
-import { useCollection } from '../../hooks/use-collection';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useEngineDocumentByWooId } from '../../hooks/use-engine-document';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
@@ -58,7 +58,11 @@ export function EditCartCustomerForm() {
 	const { localPatch } = useLocalMutation();
 	const { patch } = useMutation({ collectionName: 'customers' });
 	const { onOpenChange } = useRootContext();
-	const { collection: customerCollection } = useCollection('customers');
+	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
+		'customers',
+		Number(customerID ?? 0)
+	);
+	const customer = useObservableEagerState(customerResource.valueRef$$)?.current;
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 
@@ -93,7 +97,6 @@ export function EditCartCustomerForm() {
 	 */
 	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
 		await handleSaveToOrder(data);
-		const customer = await customerCollection.findOne({ selector: { id: customerID } }).exec();
 		if (!customer) {
 			cartLogger.error(t('common.no_customer_found'), {
 				showToast: true,

@@ -7,6 +7,8 @@ import { Platform } from '@wcpos/utils/platform';
 
 import { useNewOrder } from './use-new-order';
 
+export { useOpenOrdersResource } from './use-open-orders-resource';
+
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProps {

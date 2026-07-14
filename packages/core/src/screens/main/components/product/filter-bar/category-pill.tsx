@@ -3,11 +3,10 @@ import * as React from 'react';
 import toNumber from 'lodash/toNumber';
 import {
 	ObservableResource,
-	useObservable,
 	useObservableEagerState,
 	useObservableSuspense,
 } from 'observable-hooks';
-import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
@@ -20,13 +19,11 @@ import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { Option } from '@wcpos/components/combobox/types';
 
 import { useT } from '../../../../../contexts/translations';
-import { usePullDocument } from '../../../contexts/use-pull-document';
-import { useCollection } from '../../../hooks/use-collection';
+import { useEngineDocumentsByWooId } from '../../../hooks/use-engine-document';
 import { CategoryTreeLoader } from '../category-select';
-import { createSelectedCategoryOptions$ } from './selected-categories';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
-type ProductCategoryCollection = import('@wcpos/database').ProductCategoryCollection;
+type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
 
 interface Props {
 	query: Query<ProductCollection>;
@@ -64,14 +61,14 @@ function CategoryPillLabel({
 	resource,
 	fallbackLabel,
 }: {
-	resource: ObservableResource<Option[]>;
+	resource: ObservableResource<ProductCategoryDocument[]>;
 	fallbackLabel: string;
 }) {
 	const selected = useObservableSuspense(resource);
 	const displayText = React.useMemo(() => {
 		if (selected.length === 0) return fallbackLabel;
-		if (selected.length === 1) return selected[0].label;
-		return `${selected[0].label} +${selected.length - 1}`;
+		if (selected.length === 1) return selected[0].name;
+		return `${selected[0].name} +${selected.length - 1}`;
 	}, [fallbackLabel, selected]);
 
 	return <ButtonText decodeHtml>{displayText}</ButtonText>;
@@ -83,8 +80,6 @@ function CategoryPillLabel({
 export function CategoryPill({ query }: Props) {
 	const t = useT();
 	const [options, setOptions] = React.useState<HierarchicalOption[]>([]);
-	const { collection } = useCollection('products/categories');
-	const pullDocument = usePullDocument();
 
 	const activeCategoryIds$ = React.useMemo(
 		() =>
@@ -95,27 +90,9 @@ export function CategoryPill({ query }: Props) {
 		[query]
 	);
 	const activeCategoryIds = useObservableEagerState(activeCategoryIds$);
-
-	const selectedCategories$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([ids, categoryCollection, pullSelectedCategory, loadingLabel]) =>
-					createSelectedCategoryOptions$({
-						ids,
-						collection: categoryCollection as ProductCategoryCollection,
-						pullDocument: pullSelectedCategory as (
-							id: number,
-							collection: ProductCategoryCollection
-						) => Promise<unknown>,
-						loadingLabel,
-					})
-				)
-			),
-		[activeCategoryIds, collection, pullDocument, t('common.loading')]
-	);
-	const selectedCategoriesResource = React.useMemo(
-		() => new ObservableResource(selectedCategories$),
-		[selectedCategories$]
+	const selectedCategoriesResource = useEngineDocumentsByWooId<ProductCategoryDocument>(
+		'products/categories',
+		activeCategoryIds
 	);
 	const selected = React.useMemo<Option[]>(() => {
 		if (!activeCategoryIds || activeCategoryIds.length === 0) return [];

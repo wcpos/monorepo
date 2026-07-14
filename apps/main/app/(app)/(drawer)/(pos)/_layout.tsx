@@ -2,20 +2,18 @@ import React from 'react';
 import { View } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
-import { ObservableResource, useObservableEagerState } from 'observable-hooks';
-import { distinctUntilChanged, map } from 'rxjs/operators';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
-import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import {
 	CurrentOrderProvider,
 	useCurrentOrder,
+	useOpenOrdersResource,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
-import type { OrderDocument } from '@wcpos/database';
 import { useQuery } from '@wcpos/query';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
@@ -29,7 +27,6 @@ export default function POSLayout() {
 	const { wpCredentials, store } = useAppState();
 	const cashierID = useObservableEagerState(wpCredentials.id$);
 	const storeID = useObservableEagerState(store.id$);
-	const { collection: ordersCollection } = useCollection('orders');
 	const segments = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();
@@ -72,41 +69,7 @@ export default function POSLayout() {
 	 * there are too many edge cases, ie: cashier is not set, store is not set, etc.
 	 * For now, we'll just filter the results.
 	 */
-	const resource = React.useMemo(
-		() =>
-			new ObservableResource(
-				ordersCollection.find({ selector: { status: 'pos-open' } }).$.pipe(
-					map((docs) => {
-						const filteredDocs = docs.filter((doc) => {
-							const metaData = doc.meta_data ?? [];
-							const _pos_user = metaData.find((item) => item.key === '_pos_user')?.value;
-							const _pos_store = metaData.find((item) => item.key === '_pos_store')?.value;
-							if (storeID === 0) {
-								return _pos_user === String(cashierID);
-							}
-							return _pos_user === String(cashierID) && _pos_store === String(storeID);
-						});
-						const filteredAndSortedDocs = filteredDocs.sort((a, b) =>
-							(a.date_created_gmt ?? '').localeCompare(b.date_created_gmt ?? '')
-						);
-						return filteredAndSortedDocs.map((doc) => ({
-							id: doc.uuid!,
-							document: doc as OrderDocument,
-						}));
-					}),
-					distinctUntilChanged(
-						(
-							prev: { id: string; document: OrderDocument }[],
-							next: { id: string; document: OrderDocument }[]
-						) => prev.length === next.length
-					)
-				)
-			) as ObservableResource<
-				{ id: string; document: OrderDocument }[],
-				{ id: string; document: OrderDocument }[]
-			>,
-		[cashierID, ordersCollection, storeID]
-	);
+	const resource = useOpenOrdersResource(cashierID, storeID);
 
 	return (
 		<Suspense>

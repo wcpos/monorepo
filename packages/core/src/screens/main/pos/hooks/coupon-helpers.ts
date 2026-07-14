@@ -10,4 +10,4 @@ export {
 	computeDiscountedLineItems,
 	calculateCouponDiscountTaxSplit,
 } from '@wcpos/order-math/internal';
-export { buildEnrichedProductCategories } from './coupon-helpers-rxdb';
+export { buildEnrichedProductCategories } from './coupon-helpers-engine';

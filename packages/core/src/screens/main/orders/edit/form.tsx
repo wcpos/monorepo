@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservablePickState } from 'observable-hooks';
+import { useObservableEagerState, useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
@@ -34,8 +34,8 @@ import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useCollection } from '../../hooks/use-collection';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useEngineDocumentByWooId } from '../../hooks/use-engine-document';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
@@ -68,8 +68,12 @@ export function EditOrderForm({ order }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
-	const previousCustomerId = React.useRef<number | undefined>(order?.getLatest().customer_id);
-	const { collection } = useCollection('customers');
+	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
+	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
+		'customers',
+		customerIdToLoad ?? 0
+	);
+	const engineCustomer = useObservableEagerState(customerResource.valueRef$$)?.current;
 	const guestCustomer = useGuestCustomer();
 
 	if (!order) {
@@ -173,25 +177,17 @@ export function EditOrderForm({ order }: Props) {
 	 * Fetch customer record and update form fields.
 	 */
 	const handleCustomerChange = React.useCallback(
-		async (customerId: number) => {
+		(
+			customerId: number,
+			selectedCustomer:
+				| import('@wcpos/database').CustomerDocument
+				| ReturnType<typeof useGuestCustomer>
+		) => {
 			// customerId can be 0
 			if (customerId === undefined || customerId === null) return;
 
 			try {
-				let customer;
-				if (customerId === 0) {
-					customer = guestCustomer;
-				} else {
-					customer = await collection.findOne({ selector: { id: customerId } }).exec();
-					// this is not needed, because the customer must be local to be selected, right?
-					// if (!customer) {
-					// 	customer = await pullDocument(customerId, collection);
-					// }
-				}
-
-				if (!customer) {
-					throw new Error(t('orders.customer_not_found'));
-				}
+				const customer = customerId === 0 ? guestCustomer : selectedCustomer;
 
 				/**
 				 * @FIXME - this is similar to the transformCustomerJSONToOrderJSON function
@@ -226,25 +222,30 @@ export function EditOrderForm({ order }: Props) {
 				});
 			}
 		},
-		[form, collection, guestCustomer, t]
+		[form, guestCustomer]
 	);
 
 	/**
-	 * Watch for changes in `customer_id` and call handleCustomerChange only if it changes.
+	 * Apply the selected external engine customer after its reactive lookup resolves.
 	 */
 	React.useEffect(() => {
-		const subscription = form.watch((values) => {
-			if (
-				values.customer_id !== undefined &&
-				values.customer_id !== null &&
-				previousCustomerId.current !== values.customer_id
-			) {
-				previousCustomerId.current = values.customer_id;
-				handleCustomerChange(values.customer_id);
-			}
-		});
-		return () => subscription.unsubscribe();
-	}, [form, handleCustomerChange]);
+		if (customerIdToLoad === null) return;
+		const selectedCustomer = customerIdToLoad === 0 ? guestCustomer : engineCustomer;
+		if (selectedCustomer === undefined) return;
+		if (selectedCustomer === null) {
+			mutationLogger.error('Error fetching customer', {
+				context: {
+					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+					customerId: customerIdToLoad,
+					error: t('orders.customer_not_found'),
+				},
+			});
+			setCustomerIdToLoad(null);
+			return;
+		}
+		handleCustomerChange(customerIdToLoad, selectedCustomer);
+		setCustomerIdToLoad(null);
+	}, [customerIdToLoad, engineCustomer, guestCustomer, handleCustomerChange, t]);
 
 	/**
 	 * Watch the customer fields to compute the customer label
@@ -305,6 +306,11 @@ export function EditOrderForm({ order }: Props) {
 										label: t('common.customer'),
 										withGuest: true,
 										...field,
+										onChange: (value: string) => {
+											const customerId = Number(value);
+											field.onChange(customerId);
+											setCustomerIdToLoad(customerId);
+										},
 										value: {
 											value: String(field.value),
 											label: customerLabel,
