@@ -10,8 +10,10 @@ import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 const AUTH_STATE_DIR = path.join(__dirname, '.auth-state');
 
-const FREE_STORE_URL =
-	process.env.E2E_STORE_URL_FREE || process.env.E2E_STORE_URL || 'https://dev-next.wcpos.com';
+// No default free target: dev-next is a PRO store and the free matrix is
+// mutually exclusive with it (playwright.config gates the free projects on
+// this same env var).
+const FREE_STORE_URL = process.env.E2E_STORE_URL_FREE || process.env.E2E_STORE_URL || '';
 const PRO_STORE_URL =
 	process.env.E2E_STORE_URL_PRO || process.env.E2E_STORE_URL || 'https://dev-next.wcpos.com';
 const STUB_UPLOADS_IN_CROSS_ORIGIN_E2E = process.env.E2E_STUB_UPLOADS !== 'false';
@@ -219,7 +221,9 @@ async function globalSetup() {
 	fs.mkdirSync(AUTH_STATE_DIR, { recursive: true });
 
 	// Auth both variants in sequence (parallel would contend on the same stores)
-	await setupVariant('free', FREE_STORE_URL, baseURL);
+	if (FREE_STORE_URL) {
+		await setupVariant('free', FREE_STORE_URL, baseURL);
+	}
 	await setupVariant('pro', PRO_STORE_URL, baseURL);
 
 	console.log('[global-setup] All variants authenticated and saved.');

@@ -45,6 +45,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
 		const token = options.credentials.getLatest().access_token;
 		const headers = new Headers(init?.headers ?? {});
+		// The wcpos/v1 namespace only constructs for POS-flagged requests
+		// (woocommerce_pos_request()) — without this header every sync route
+		// answers rest_no_route and the engine stays degraded-empty.
+		headers.set('X-WCPOS', '1');
 		let finalUrl = url;
 		if (token) {
 			if (options.useJwtAsParam) {
