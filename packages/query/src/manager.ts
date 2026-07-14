@@ -55,6 +55,21 @@ function selectorWithSearch(rxQuery: RxQuery | undefined): Record<string, unknow
 	return selector;
 }
 
+function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boolean {
+	return Object.entries(selector).every(([field, value]) => {
+		if (field === 'search') return typeof value === 'string';
+		if (field !== 'status') return false;
+		if (typeof value === 'string') return value.length > 0;
+		const status = value as Record<string, unknown> | null;
+		return (
+			status !== null &&
+			typeof status === 'object' &&
+			Object.keys(status).length === 1 &&
+			typeof status.$eq === 'string'
+		);
+	});
+}
+
 function coverageQueryKey(input: {
 	query: Query<RxCollection>;
 	rxQuery: RxQuery | undefined;
@@ -64,6 +79,9 @@ function coverageQueryKey(input: {
 		return null;
 	}
 	const selector = selectorWithSearch(rxQuery);
+	if (query.collectionName === 'orders' && !isFullyRepresentedOrderSelector(selector)) {
+		return null;
+	}
 	const requirement = requirementsForQuery({
 		id: query.id,
 		collectionName: query.collectionName,

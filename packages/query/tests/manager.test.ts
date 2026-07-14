@@ -818,6 +818,32 @@ describe('Manager', () => {
 			await expect(firstValueFrom(total$.pipe(filter((total) => total === 42)))).resolves.toBe(42);
 		});
 
+		it('falls back to the local count when an orders selector has undescribed predicates', async () => {
+			await addCoverageCollections();
+			const query = manager.registerQuery({
+				queryKeys: ['filtered-coverage-orders'],
+				collectionName: 'orders',
+				initialParams: { selector: { created_via: 'woocommerce-pos' }, limit: 25 },
+			});
+			if (!query) throw new Error('orders query was not registered');
+			const queryKey = engine.requireCalls.find(
+				(requirement) => requirement.collection === 'orders' && requirement.kind === 'query'
+			)?.queryKey;
+			if (!queryKey) throw new Error('orders query requirement was not declared');
+
+			await engineDB.collections.queryTotalCacheEntries.insert({
+				queryKey,
+				totalMatchingRecords: 42,
+				freshUntilMs: Date.now() + 60_000,
+				updatedAtMs: Date.now(),
+				schemaVersion: 1,
+			});
+
+			const total$ = manager.replicationTotal$(query.id);
+			if (!total$) throw new Error('orders total projection was not created');
+			await expect(firstValueFrom(total$)).resolves.toBe(0);
+		});
+
 		it('keeps customer totals on the local-count fallback', async () => {
 			await addCoverageCollections();
 			await engineDB.collections.customers.insert({
