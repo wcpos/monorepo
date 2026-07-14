@@ -10,8 +10,12 @@ export interface WcposTestOptions {
 	storeUrl: string;
 }
 
-const FREE_STORE_URL = 'https://dev-free.wcpos.com';
-const PRO_STORE_URL = 'https://dev-pro.wcpos.com';
+// dev-next is a PRO store: the free matrix (upgrade-gate expectations) is
+// mutually exclusive with it, so the free project only runs when an explicit
+// free next-train target is provided.
+const FREE_STORE_URL = process.env.E2E_STORE_URL_FREE || '';
+const PRO_STORE_URL = process.env.E2E_STORE_URL_PRO || 'https://dev-next.wcpos.com';
+const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
 
 /**
  * Playwright configuration for WCPOS E2E tests
@@ -51,25 +55,29 @@ export default defineConfig<WcposTestOptions>({
 	},
 
 	projects: [
-		// Free store
-		{
-			name: 'free-unauthenticated',
-			testMatch: /auth\.spec\.ts/,
-			use: {
-				...devices['Desktop Chrome'],
-				storeVariant: 'free',
-				storeUrl: FREE_STORE_URL,
-			},
-		},
-		{
-			name: 'free-authenticated',
-			testIgnore: /auth\.spec\.ts/,
-			use: {
-				...devices['Desktop Chrome'],
-				storeVariant: 'free',
-				storeUrl: FREE_STORE_URL,
-			},
-		},
+		// Free store — only when an explicit free next-train target exists (see above).
+		...(FREE_PROJECT_ENABLED
+			? [
+					{
+						name: 'free-unauthenticated',
+						testMatch: /auth\.spec\.ts/,
+						use: {
+							...devices['Desktop Chrome'],
+							storeVariant: 'free' as const,
+							storeUrl: FREE_STORE_URL,
+						},
+					},
+					{
+						name: 'free-authenticated',
+						testIgnore: /auth\.spec\.ts/,
+						use: {
+							...devices['Desktop Chrome'],
+							storeVariant: 'free' as const,
+							storeUrl: FREE_STORE_URL,
+						},
+					},
+				]
+			: []),
 		// Pro store
 		{
 			name: 'pro-unauthenticated',
