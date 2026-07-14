@@ -161,6 +161,58 @@ function routedFetch(
 }
 
 describe('write() + sync("write-drain") through the public handle', () => {
+	it('runs resident preparation in the guarded write turn after a pending reset settles', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		let releaseReset: (() => void) | undefined;
+		const resetPaused = new Promise<void>((resolve) => {
+			releaseReset = resolve;
+		});
+		try {
+			await engine.ready;
+			const reset = engine.scope.resetCollection('orders', { beforeDrop: () => resetPaused });
+			const write = engine.write(
+				{
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pos-open' },
+				},
+				{
+					prepare: async (active) => {
+						await (
+							active.database.collections.orders as {
+								insert(doc: unknown): Promise<unknown>;
+							}
+						).insert({
+							id: UUID_A,
+							wooOrderId: null,
+							number: '',
+							dateCreatedGmt: '2026-07-10T00:00:00',
+							status: 'pos-open',
+							total: '0.00',
+							customerId: 0,
+							payload: { status: 'pos-open' },
+							sync: { revision: '', partial: false, source: 'skeleton' },
+							local: { dirty: false, pendingMutationIds: [] },
+						});
+					},
+				}
+			);
+
+			releaseReset?.();
+			await expect(reset).resolves.toBe('reset');
+			await expect(write).resolves.toMatchObject({ recordId: UUID_A });
+			expect(await orderJson(engine, UUID_A)).toMatchObject({
+				id: UUID_A,
+				local: { dirty: true },
+			});
+			expect(await queueRows(engine)).toHaveLength(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('uses the host UUID generator for queued mutation identity', async () => {
 		const server = createFakeWriteServer();
 		const engine = engineWith({

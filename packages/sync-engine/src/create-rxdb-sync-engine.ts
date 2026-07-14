@@ -372,9 +372,15 @@ export type RxdbSyncEngine = {
 	 * LOCAL terminal outcome, write-annihilated (a delete that cancelled a
 	 * never-pushed local chain: the resident row is removed, nothing is sent,
 	 * and the receipt's `annihilated` flag is set). Only collections with a
-	 * write facet (orders today) — anything else throws (invariant 5). */
+	 * write facet (orders today) — anything else throws (invariant 5).
+	 * `prepare`, when supplied, mutates the active resident inside the same
+	 * scope-guarded turn immediately before enqueue. */
 	write(
-		intent: WriteIntent
+		intent: WriteIntent,
+		options?: {
+			prepare?: (active: ActiveScope) => Promise<void>;
+			rollback?: () => Promise<void>;
+		}
 	): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }>;
 	/**
 	 * The terminal write entries awaiting an explicit caller decision — there
@@ -1302,7 +1308,7 @@ export function createRxdbSyncEngine(
 				});
 			},
 		},
-		write: async (intent) => {
+		write: async (intent, options) => {
 			assertNotDisposed();
 			if (!writeFacetFor(intent.collection)) {
 				throw new Error(
@@ -1328,14 +1334,20 @@ export function createRxdbSyncEngine(
 				if (!database) throw new Error('write: scope database not open');
 				let result: { mutationId: string; recordId: string; annihilated?: boolean } | null = null;
 				const wrote = await bound.guardWrite(async () => {
-					result = await enqueueWriteIntent({
-						db: database,
-						intent,
-						mintUuid: uuid,
-						now: () => new Date(ports.now !== undefined ? ports.now() : Date.now()).toISOString(),
-						observe: diagnostics,
-					});
-					writeDrainLane.noteQueueDepth((await queueFor(database).pending()).length);
+					try {
+						await options?.prepare?.(activeScopeOf(bound.scopeId));
+						result = await enqueueWriteIntent({
+							db: database,
+							intent,
+							mintUuid: uuid,
+							now: () => new Date(ports.now !== undefined ? ports.now() : Date.now()).toISOString(),
+							observe: diagnostics,
+						});
+						writeDrainLane.noteQueueDepth((await queueFor(database).pending()).length);
+					} catch (error) {
+						await options?.rollback?.();
+						throw error;
+					}
 				});
 				if (wrote === 'dropped' || result === null) {
 					throw new Error('write: scope moved during enqueue — retry against the settled scope');
