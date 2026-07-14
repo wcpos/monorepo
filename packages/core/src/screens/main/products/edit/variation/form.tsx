@@ -94,11 +94,12 @@ export function EditVariationForm({ variation }: Props) {
 			}
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: variation,
 					data: data as Partial<import('@wcpos/database').ProductVariationDocument>,
 				});
-				await pushDocument(variation).then((savedDoc) => {
+				if (!patched?.document) throw new Error('Local patch failed');
+				await pushDocument(patched.document).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(t('common.saved', { name: variation.name }), {
 							showToast: true,

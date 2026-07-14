@@ -12,6 +12,8 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
+import type { LegacyCollectionName } from '@wcpos/query/engine-adapter/collection-map';
+import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -49,6 +51,7 @@ const ADAPTER_DERIVED_FIELDS = new Set([
 ]);
 
 type QueryManager = ReturnType<typeof useQueryManager>;
+type EngineScope = NonNullable<ReturnType<QueryManager['engine']['active']>>;
 type EngineResident = RxDocument<Record<string, unknown>>;
 
 interface LocalPatchProps<T extends Document> {
@@ -154,9 +157,13 @@ function ensureRecordMetadata(
 	return { ...payload, meta_data: metadata };
 }
 
-async function activeCollection(manager: QueryManager, collection: WriteableCollection) {
-	const scope = manager.engine.active() ?? (await manager.engine.ready);
-	const residentCollection = scope.database.collections[collection];
+async function activeCollection(
+	manager: QueryManager,
+	collection: WriteableCollection,
+	scope?: EngineScope
+) {
+	const active = scope ?? manager.engine.active() ?? (await manager.engine.ready);
+	const residentCollection = active.database.collections[collection];
 	if (!residentCollection) {
 		throw new Error(`Engine collection "${collection}" is unavailable`);
 	}
@@ -166,9 +173,10 @@ async function activeCollection(manager: QueryManager, collection: WriteableColl
 export async function findEngineResident(
 	manager: QueryManager,
 	collection: WriteableCollection,
-	recordId: string
+	recordId: string,
+	scope?: EngineScope
 ): Promise<EngineResident | null> {
-	const residentCollection = await activeCollection(manager, collection);
+	const residentCollection = await activeCollection(manager, collection, scope);
 	return (await residentCollection.findOne(recordId).exec()) as EngineResident | null;
 }
 
@@ -177,8 +185,14 @@ export async function patchEngineResident(input: {
 	collection: WriteableCollection;
 	recordId: string;
 	changes: Record<string, unknown>;
+	scope?: EngineScope;
 }): Promise<EngineResident> {
-	const resident = await findEngineResident(input.manager, input.collection, input.recordId);
+	const resident = await findEngineResident(
+		input.manager,
+		input.collection,
+		input.recordId,
+		input.scope
+	);
 	if (!resident) {
 		throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 	}
@@ -196,8 +210,9 @@ export async function insertEngineResident(input: {
 	collection: WriteableCollection;
 	recordId: string;
 	payload: Record<string, unknown>;
+	scope?: EngineScope;
 }): Promise<EngineResident> {
-	const residentCollection = await activeCollection(input.manager, input.collection);
+	const residentCollection = await activeCollection(input.manager, input.collection, input.scope);
 	const payload = ensureRecordMetadata(syncableChanges(input.payload), input.recordId);
 	const common: Record<string, unknown> = {
 		id: input.recordId,
@@ -250,6 +265,9 @@ export const useLocalMutation = () => {
 				const patchData = { ...(data as Record<string, unknown>) };
 				const collectionName = document.collection?.name;
 				const engineCollection = writeableCollection(collectionName);
+				const isTemporaryOrder =
+					engineCollection === 'orders' &&
+					(document as unknown as { isNew?: boolean }).isNew === true;
 				const hasDate = engineCollection
 					? true
 					: get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
@@ -279,24 +297,17 @@ export const useLocalMutation = () => {
 					);
 				}
 
-				if (engineCollection) {
+				if (engineCollection && !isTemporaryOrder) {
 					const recordId = documentRecordId(document);
 					if (!recordId) throw new Error(`Missing uuid for ${engineCollection} mutation`);
 					const syncChanges = syncableChanges(changes);
-					const resident = await findEngineResident(manager, engineCollection, recordId);
-					if (!resident) {
-						throw new Error(`Engine resident "${recordId}" is missing from "${engineCollection}"`);
-					}
-					const previousResident = cloneDeep(resident.toJSON());
-					await patchEngineResident({
-						manager,
-						collection: engineCollection,
-						recordId,
-						changes: syncChanges,
-					});
+					const prepared: {
+						resident?: EngineResident;
+						previousResident?: Record<string, unknown>;
+					} = {};
 					if (Object.keys(syncChanges).length > 0) {
-						try {
-							await manager.engine.write({
+						await manager.engine.write(
+							{
 								collection: engineCollection,
 								// Creation funnels insert the resident and enqueue the create first.
 								// Later local edits are updates; the write plane folds create + update
@@ -304,13 +315,47 @@ export const useLocalMutation = () => {
 								operation: 'update',
 								recordId,
 								payload: syncChanges,
-							});
-						} catch (error) {
-							await resident.incrementalModify(() => previousResident);
-							throw error;
-						}
+							},
+							{
+								prepare: async (scope) => {
+									prepared.resident =
+										(await findEngineResident(manager, engineCollection, recordId, scope)) ??
+										undefined;
+									if (!prepared.resident) {
+										throw new Error(
+											`Engine resident "${recordId}" is missing from "${engineCollection}"`
+										);
+									}
+									prepared.previousResident = cloneDeep(prepared.resident.toJSON());
+									prepared.resident = await patchEngineResident({
+										manager,
+										collection: engineCollection,
+										recordId,
+										changes: syncChanges,
+										scope,
+									});
+								},
+								rollback: async () => {
+									if (prepared.resident && prepared.previousResident) {
+										await prepared.resident.incrementalModify(() => prepared.previousResident!);
+									}
+								},
+							}
+						);
+					} else {
+						prepared.resident =
+							(await findEngineResident(manager, engineCollection, recordId)) ?? undefined;
 					}
-					return { changes, document: document.getLatest() };
+					if (!prepared.resident) {
+						throw new Error(`Engine resident "${recordId}" is missing from "${engineCollection}"`);
+					}
+					return {
+						changes,
+						document: wrapEngineDocument(
+							engineCollection as LegacyCollectionName,
+							prepared.resident
+						) as T,
+					};
 				}
 
 				const doc = await patchLocalResident(latest, changes);

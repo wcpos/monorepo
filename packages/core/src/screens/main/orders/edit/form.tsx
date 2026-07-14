@@ -129,11 +129,12 @@ export function EditOrderForm({ order }: Props) {
 		async (data: z.infer<typeof formSchema>) => {
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: order,
 					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
 				});
-				await pushDocument(order).then((savedDoc) => {
+				if (!patched?.document) throw new Error('Local patch failed');
+				await pushDocument(patched.document).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						const doc = savedDoc as unknown as { id?: number; number?: string };
 						mutationLogger.success(t('common.order_saved', { number: doc.number }), {

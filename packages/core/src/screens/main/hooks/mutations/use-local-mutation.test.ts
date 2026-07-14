@@ -9,20 +9,27 @@ const mockUseT = jest.fn();
 const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:00:00');
 const mockWrite = jest.fn();
 const mockFindOneExec = jest.fn();
+const mockWrapEngineDocument = jest.fn((_collection: string, resident: unknown) => ({ resident }));
+
+const activeScope = {
+	database: {
+		collections: {
+			orders: { findOne: () => ({ exec: mockFindOneExec }) },
+		},
+	},
+};
 
 jest.mock('@wcpos/query', () => ({
 	useQueryManager: () => ({
 		engine: {
-			active: () => ({
-				database: {
-					collections: {
-						orders: { findOne: () => ({ exec: mockFindOneExec }) },
-					},
-				},
-			}),
+			active: () => activeScope,
 			write: mockWrite,
 		},
 	}),
+}));
+
+jest.mock('@wcpos/query/engine-adapter/document-proxy', () => ({
+	wrapEngineDocument: (...args: [string, unknown]) => mockWrapEngineDocument(...args),
 }));
 
 jest.mock('../../../../contexts/translations', () => ({
@@ -36,10 +43,47 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 describe('useLocalMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
+		mockWrite.mockImplementation(async (_intent, options) => {
+			await options?.prepare?.(activeScope);
+			return { mutationId: 'mutation-1', recordId: 'order-uuid' };
+		});
 		mockUseT.mockReturnValue((_key: string, options?: Record<string, unknown>) =>
 			String(options?.message || '')
 		);
+	});
+
+	it('keeps a temporary new order on the local RxDB patch path', async () => {
+		const stored: Record<string, unknown> = {
+			uuid: 'temporary-order',
+			status: 'pos-open',
+		};
+		const incrementalModify = jest.fn(
+			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
+				Object.assign(stored, modifier(stored));
+				return stored;
+			}
+		);
+		const latest = { incrementalModify };
+		const document = {
+			uuid: 'temporary-order',
+			id: null,
+			isNew: true,
+			collection: { name: 'orders' },
+			getLatest: () => latest,
+		};
+
+		const { result } = renderHook(() => useLocalMutation());
+		const patched = await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { customer_id: 77 } as never,
+			})
+		);
+
+		expect(stored).toMatchObject({ customer_id: 77 });
+		expect(mockFindOneExec).not.toHaveBeenCalled();
+		expect(mockWrite).not.toHaveBeenCalled();
+		expect(patched?.document).toBe(stored);
 	});
 
 	it('ignores undefined values in patch data', async () => {
@@ -127,19 +171,24 @@ describe('useLocalMutation', () => {
 				date_modified_gmt: '2026-03-02T00:00:00',
 			},
 		});
-		expect(mockWrite).toHaveBeenCalledWith({
-			collection: 'orders',
-			operation: 'update',
-			recordId: 'order-uuid',
-			payload: {
-				status: 'processing',
-				date_modified_gmt: '2026-03-02T00:00:00',
+		expect(mockWrite).toHaveBeenCalledWith(
+			{
+				collection: 'orders',
+				operation: 'update',
+				recordId: 'order-uuid',
+				payload: {
+					status: 'processing',
+					date_modified_gmt: '2026-03-02T00:00:00',
+				},
 			},
-		});
+			expect.objectContaining({ prepare: expect.any(Function), rollback: expect.any(Function) })
+		);
 		expect(patchResult?.changes).toEqual({
 			status: 'processing',
 			date_modified_gmt: '2026-03-02T00:00:00',
 		});
+		expect(mockWrapEngineDocument).toHaveBeenCalledWith('orders', stored);
+		expect(patchResult?.document).toEqual({ resident: stored });
 	});
 
 	it('enqueues born-local edits as updates for the write plane to fold into the pending create', async () => {
@@ -176,14 +225,17 @@ describe('useLocalMutation', () => {
 			})
 		);
 
-		expect(mockWrite).toHaveBeenCalledWith({
-			collection: 'orders',
-			operation: 'update',
-			recordId: 'order-uuid',
-			payload: expect.objectContaining({
-				line_items: [{ product_id: 7 }],
-			}),
-		});
+		expect(mockWrite).toHaveBeenCalledWith(
+			{
+				collection: 'orders',
+				operation: 'update',
+				recordId: 'order-uuid',
+				payload: expect.objectContaining({
+					line_items: [{ product_id: 7 }],
+				}),
+			},
+			expect.objectContaining({ prepare: expect.any(Function), rollback: expect.any(Function) })
+		);
 	});
 
 	it('restores the resident snapshot when the write intent cannot be enqueued', async () => {
@@ -205,7 +257,11 @@ describe('useLocalMutation', () => {
 			incrementalModify,
 			toJSON: () => JSON.parse(JSON.stringify(stored)),
 		});
-		mockWrite.mockRejectedValue(new Error('queue unavailable'));
+		mockWrite.mockImplementationOnce(async (_intent, options) => {
+			await options?.prepare?.(activeScope);
+			await options?.rollback?.();
+			throw new Error('queue unavailable');
+		});
 		const document = {
 			uuid: 'order-uuid',
 			id: 42,

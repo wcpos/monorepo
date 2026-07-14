@@ -123,11 +123,12 @@ export function EditProductForm({ product }: Props) {
 			} as any;
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: product,
 					data: patchData,
 				});
-				await pushDocument(product).then((savedDoc) => {
+				if (!patched?.document) throw new Error('Local patch failed');
+				await pushDocument(patched.document).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(t('common.saved', { name: product.name }), {
 							showToast: true,
