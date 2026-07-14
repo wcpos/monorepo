@@ -36,6 +36,7 @@ import {
 } from '../collections/collection-descriptors';
 import { manifestRowOf } from '../materialization/record-materialization';
 import { upsertManifestRows } from '../local-coverage/rx-existence-manifest-repository';
+import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
 
@@ -135,13 +136,18 @@ async function pullByIds(
 			);
 		}
 		const documents = payloads.map((payload) => d.project(payload));
-		if (persist) await persist(documents);
+		const applicable = await withoutLocallyProtected(
+			collection as never,
+			documents as { id: string }[]
+		);
+		if (persist) await persist(applicable);
 		else {
-			assertBulkSuccess(
-				await collection.bulkUpsert(documents as never[]),
-				'change-signal-handlers upsert'
-			);
-			const rows = documents.flatMap((document) =>
+			if (applicable.length > 0)
+				assertBulkSuccess(
+					await collection.bulkUpsert(applicable as never[]),
+					'change-signal-handlers upsert'
+				);
+			const rows = applicable.flatMap((document) =>
 				manifestRowOf(document) ? [manifestRowOf(document)!] : []
 			);
 			if (rows.length > 0) {
@@ -165,9 +171,10 @@ async function removeByWooIds(
 	if (ids.length === 0) return 0;
 	const collection = collectionOf(ctx, name);
 	const docs = await collection.find({ selector: { [wooIdField]: { $in: ids } } as never }).exec();
-	if (docs.length > 0) {
+	const removable = docs.filter((doc) => !hasPendingLocalWork(doc.toJSON()));
+	if (removable.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkRemove(docs.map((doc) => (doc as { primary: string }).primary)),
+			await collection.bulkRemove(removable.map((doc) => (doc as { primary: string }).primary)),
 			'change-signal-handlers remove'
 		);
 	}
@@ -193,9 +200,13 @@ async function fetchAll(ctx: HandlerContext, path: string): Promise<Record<strin
 async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): Promise<void> {
 	const collection = collectionOf(ctx, d.collection);
 	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) => d.project(payload));
-	if (documents.length > 0) {
+	const applicable = await withoutLocallyProtected(
+		collection as never,
+		documents as { id: string }[]
+	);
+	if (applicable.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkUpsert(documents as never[]),
+			await collection.bulkUpsert(applicable as never[]),
 			'change-signal-handlers upsert'
 		);
 	}
@@ -205,9 +216,13 @@ async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): P
 async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor): Promise<void> {
 	const collection = collectionOf(ctx, d.collection);
 	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) => d.project(payload));
-	if (documents.length > 0) {
+	const applicable = await withoutLocallyProtected(
+		collection as never,
+		documents as { id: string }[]
+	);
+	if (applicable.length > 0) {
 		assertBulkSuccess(
-			await collection.bulkUpsert(documents as never[]),
+			await collection.bulkUpsert(applicable as never[]),
 			'change-signal-handlers upsert'
 		);
 	}
@@ -216,6 +231,7 @@ async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor)
 	const kept = new Set(documents.map((doc) => String((doc as { id: string }).id)));
 	const existing = await collection.find().exec();
 	const doomed = existing
+		.filter((doc) => !hasPendingLocalWork(doc.toJSON()))
 		.map((doc) => (doc as { primary: string }).primary)
 		.filter((id) => !kept.has(id));
 	if (doomed.length > 0) {

@@ -109,6 +109,7 @@ import {
 } from './local-coverage/local-coverage';
 import { enqueueWriteIntent, queueFor, type WriteIntent } from './write-path/write-intents';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
+import { hasPendingLocalWork } from './write-path/local-work-guard';
 import { CHANGE_SIGNAL_STATE_ID } from './change-signal/change-signal-state-schema';
 import { pullTargetedByIds } from './change-signal/change-signal-handlers';
 import {
@@ -539,12 +540,23 @@ export function createRxdbSyncEngine(
 				const docs = await db.collections[name]
 					.find({ selector: { [field]: { $in: wooIds } } as never })
 					.exec();
-				if (docs.length > 0)
+				const protectedWooIds = new Set<number>();
+				const removable = docs.filter((doc) => {
+					const row = doc.toJSON() as Record<string, unknown>;
+					if (!hasPendingLocalWork(row)) return true;
+					const wooId = row[field];
+					if (typeof wooId === 'number') protectedWooIds.add(wooId);
+					return false;
+				});
+				if (removable.length > 0)
 					assertBulkSuccess(
-						await db.collections[name].bulkRemove(docs.map((doc) => doc.primary)),
+						await db.collections[name].bulkRemove(removable.map((doc) => doc.primary)),
 						'create-rxdb-sync-engine remove'
 					);
-				await removeManifestByWooIds(manifest, wooIds);
+				await removeManifestByWooIds(
+					manifest,
+					wooIds.filter((wooId) => !protectedWooIds.has(wooId))
+				);
 			};
 			const pullTargetedAndPopulateManifest = async (
 				descriptor: (typeof targeted)[keyof typeof targeted],
@@ -1372,6 +1384,7 @@ export function createRxdbSyncEngine(
 					}
 				}
 				let discardServerDocument: Record<string, unknown> | null = null;
+				let discardRemovesResident = false;
 				if (resolution === 'discard' && entry.collectionName !== 'orders') {
 					const facet = writeFacetFor(entry.collectionName);
 					if (!facet) {
@@ -1389,11 +1402,11 @@ export function createRxdbSyncEngine(
 							syncBaseUrl: ports.site.syncBaseUrl,
 							remoteId,
 						});
-						if (!discardServerDocument) {
-							throw new Error(
-								`resolveConflict: the server no longer returns record ${remoteId} — the row stays parked`
-							);
-						}
+						discardRemovesResident = discardServerDocument === null;
+					} else if (entry.operation === 'create') {
+						// A rejected born-local create has no remote identity because it
+						// never existed server-side. Discard therefore means tombstone.
+						discardRemovesResident = true;
 					}
 				}
 				const applied = await bound.guardWrite(async () => {
@@ -1438,6 +1451,7 @@ export function createRxdbSyncEngine(
 							incrementalModify(
 								fn: (data: Record<string, unknown>) => Record<string, unknown>
 							): Promise<unknown>;
+							remove(): Promise<unknown>;
 						} | null;
 						const row = doc?.toJSON() as { wooOrderId?: number | null } | undefined;
 						// #516 item 5: queue the server-truth re-pull DURABLY *before*
@@ -1462,14 +1476,48 @@ export function createRxdbSyncEngine(
 									`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
 								);
 							}
+							let documentToApply = discardServerDocument;
+							const successors = (await queue.pending()).filter(
+								(mutation) =>
+									mutation.collectionName === entry.collectionName &&
+									mutation.recordId === entry.recordId &&
+									mutation.mutationId !== mutationId
+							);
+							if (doc && successors.length > 0) {
+								const resident = doc.toJSON();
+								const local = (resident.local ?? {}) as {
+									dirty?: boolean;
+									pendingMutationIds?: string[];
+								};
+								const pendingMutationIds = [
+									...new Set([
+										...(Array.isArray(local.pendingMutationIds)
+											? local.pendingMutationIds.filter((id) => id !== mutationId)
+											: []),
+										...successors.map((mutation) => mutation.mutationId),
+									]),
+								];
+								documentToApply = {
+									...discardServerDocument,
+									...resident,
+									[facet.remoteIdField]: discardServerDocument[facet.remoteIdField],
+									payload: resident.payload,
+									sync: {
+										...((resident.sync ?? {}) as object),
+										...((discardServerDocument.sync ?? {}) as object),
+									},
+									local: { ...local, pendingMutationIds, dirty: true },
+								};
+							}
 							// Apply server truth BEFORE removing the terminal queue row. If
 							// storage fails or the process stops, the durable conflict remains
 							// retryable; there is no state where discard reports success while
 							// the local row still poses as synced stale truth.
-							await facet.upsertServerDocument(database, discardServerDocument);
+							await facet.upsertServerDocument(database, documentToApply);
 						}
+						if (discardRemovesResident && doc) await doc.remove();
 						await queue.remove([mutationId]);
-						if (doc) {
+						if (doc && !discardRemovesResident) {
 							await doc.incrementalModify((data) => {
 								const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
 								const pendingMutationIds = (local.pendingMutationIds ?? []).filter(

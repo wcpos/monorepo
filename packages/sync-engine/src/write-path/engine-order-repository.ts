@@ -29,6 +29,7 @@ import {
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
+import { hasPendingLocalWork, withoutLocallyProtected } from './local-work-guard';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
 
@@ -69,7 +70,7 @@ export class EngineOrderRepository {
 		// of the adapter-level pending-set filter, which can't see a row that is `local.dirty` (or holds
 		// `pendingMutationIds`) without being in the passed pending set. This is the same protection
 		// `resetForResync` (F8) and `removeDeletedOrders` (F6) already apply via `unprotectedOrders`.
-		const applicable = await this.withoutLocallyProtected(documents);
+		const applicable = await withoutLocallyProtected(this.db.orders, documents);
 		if (applicable.length === 0) return;
 		// Leg-3 (ADR 0015): seed the order existence manifest (its OWN collection) from each pull's
 		// `_rxdb_digest`, and strip the digest from the stored payload so it never pollutes the order doc.
@@ -92,23 +93,6 @@ export class EngineOrderRepository {
 		if (manifestRows.length > 0) {
 			await upsertManifestRows(this.db.existenceManifestOrders, manifestRows);
 		}
-	}
-
-	/**
-	 * Drop any incoming order whose ALREADY-STORED counterpart carries un-drained local work
-	 * (`local.dirty` or a non-empty `pendingMutationIds`) so a re-pull can't overwrite it. A brand-new
-	 * id (not yet stored) is always applied. Mirrors the `unprotectedOrders` predicate so upsert,
-	 * delete (F6) and resync (F8) all honour the same local-work protection. Targeted `findByIds` keeps
-	 * this to one bounded read of just the incoming ids, not a full-collection scan.
-	 */
-	private async withoutLocallyProtected(documents: OrderDocument[]): Promise<OrderDocument[]> {
-		const stored = await this.db.orders.findByIds(documents.map((doc) => doc.id)).exec();
-		if (stored.size === 0) return documents;
-		return documents.filter((doc) => {
-			const local = (stored.get(doc.id)?.toJSON() as unknown as OrderDocument | undefined)?.local;
-			const pendingIds = Array.isArray(local?.pendingMutationIds) ? local.pendingMutationIds : [];
-			return !(local?.dirty || pendingIds.length > 0);
-		});
 	}
 
 	async count(): Promise<number> {
@@ -167,10 +151,7 @@ export class EngineOrderRepository {
 			(doc) => doc.toJSON() as unknown as OrderDocument
 		);
 		return docs.filter((doc) => {
-			const pendingIds = Array.isArray(doc.local?.pendingMutationIds)
-				? doc.local.pendingMutationIds
-				: [];
-			if (doc.local?.dirty || pendingIds.length > 0) return false;
+			if (hasPendingLocalWork(doc)) return false;
 			if (pendingMutationOrderIds?.has(doc.id)) return false;
 			if (doc.wooOrderId !== null && pendingMutationOrderIds?.has(doc.wooOrderId)) return false;
 			return true;

@@ -4,6 +4,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
+import { buildReplicationHandlers } from './change-signal/change-signal-handlers';
 import { createRxdbSyncEngine, type RxdbSyncEngine } from './create-rxdb-sync-engine';
 import { memoryEngineStorage } from './testing';
 
@@ -217,6 +218,77 @@ async function remove(engine: RxdbSyncEngine, spec: FacetSpec, id: string): Prom
 	await doc?.remove();
 }
 
+async function replaceResident(
+	engine: RxdbSyncEngine,
+	spec: FacetSpec,
+	id: string,
+	document: Record<string, unknown>
+): Promise<void> {
+	const scope = engine.active();
+	if (!scope) throw new Error('no active scope');
+	const doc = await scope.database.collections[spec.collection].findOne(id).exec();
+	if (!doc) throw new Error(`no resident ${spec.collection}/${id}`);
+	await doc.incrementalModify((data: Record<string, unknown>) => ({
+		...data,
+		...document,
+		local: data.local,
+	}));
+}
+
+async function applyFacetPull(
+	engine: RxdbSyncEngine,
+	spec: FacetSpec,
+	fetch: (url: string, init?: RequestInit) => Promise<Response>
+): Promise<void> {
+	const scope = engine.active();
+	if (!scope) throw new Error('no active scope');
+	const handlers = buildReplicationHandlers({
+		database: scope.database,
+		fetch: fetch as never,
+		syncBaseUrl: `${SITE}/wp-json/wc-rxdb-sync/v1`,
+		persistState: async () => undefined,
+		log: () => undefined,
+	});
+	switch (spec.collection) {
+		case 'products':
+			await handlers.pullProducts([spec.remoteId]);
+			return;
+		case 'variations':
+			await handlers.pullVariations([spec.remoteId]);
+			return;
+		case 'customers':
+			await handlers.pullCustomers([spec.remoteId]);
+			return;
+		case 'coupons':
+			await handlers.refreshReferenceCollection('coupons');
+	}
+}
+
+async function applyFacetPrune(engine: RxdbSyncEngine, spec: FacetSpec): Promise<void> {
+	const scope = engine.active();
+	if (!scope) throw new Error('no active scope');
+	const handlers = buildReplicationHandlers({
+		database: scope.database,
+		fetch: async () => Response.json([]),
+		syncBaseUrl: `${SITE}/wp-json/wc-rxdb-sync/v1`,
+		persistState: async () => undefined,
+		log: () => undefined,
+	});
+	switch (spec.collection) {
+		case 'products':
+			await handlers.deleteProducts([spec.remoteId]);
+			return;
+		case 'variations':
+			await handlers.deleteVariations([spec.remoteId]);
+			return;
+		case 'customers':
+			await handlers.deleteCustomers([spec.remoteId]);
+			return;
+		case 'coupons':
+			await handlers.refreshReferenceCollection('coupons');
+	}
+}
+
 describe('write facets beyond orders', () => {
 	it('keeps non-faceted collections non-writeable and names the explicit writeable set', async () => {
 		const spec = FACETS[0];
@@ -293,6 +365,58 @@ describe('write facets beyond orders', () => {
 				id: UUID_A,
 				[spec.remoteIdField]: spec.remoteId,
 				local: { dirty: false, pendingMutationIds: [] },
+			});
+			await subject.dispose();
+		}
+	);
+
+	it.each(FACETS)(
+		'$collection keeps an optimistic write resident when pull and delete/prune land before drain',
+		async (spec) => {
+			const serverTruth = {
+				...payload(spec, UUID_A, 'server-stale', spec.remoteId),
+				_rxdb_revision: 'sha256:server-stale',
+			};
+			const route = routedServer(spec, () => serverTruth);
+			const subject = engine(route.fetch);
+			await subject.ready;
+			await insert(
+				subject,
+				spec,
+				storedDocument({
+					spec,
+					id: UUID_A,
+					label: 'optimistic',
+					remoteId: spec.remoteId,
+					revision: 'sha256:local-base',
+				})
+			);
+			const receipt = await subject.write({
+				collection: spec.collection,
+				operation: 'update',
+				recordId: UUID_A,
+				payload: payload(spec, UUID_A, 'optimistic', spec.remoteId),
+			});
+
+			await applyFacetPull(subject, spec, route.fetch);
+			const afterPull = await record(subject, spec, UUID_A);
+			expect(afterPull?.payload).toMatchObject(
+				spec.collection === 'customers'
+					? { first_name: 'optimistic' }
+					: spec.collection === 'coupons'
+						? { code: 'optimistic' }
+						: spec.collection === 'variations'
+							? { sku: 'optimistic' }
+							: { name: 'optimistic' }
+			);
+			expect(afterPull?.local).toEqual({
+				dirty: true,
+				pendingMutationIds: [receipt.mutationId],
+			});
+
+			await applyFacetPrune(subject, spec);
+			expect(await record(subject, spec, UUID_A)).toMatchObject({
+				local: { dirty: true, pendingMutationIds: [receipt.mutationId] },
 			});
 			await subject.dispose();
 		}
@@ -435,6 +559,145 @@ describe('write facets beyond orders', () => {
 			await subject.dispose();
 		}
 	);
+
+	it.each(FACETS)(
+		'$collection discard preserves a queued successor and its optimistic payload',
+		async (spec) => {
+			const truth = {
+				...payload(spec, UUID_A, 'server-truth', spec.remoteId),
+				_rxdb_revision: 'sha256:server-base',
+			};
+			const route = routedServer(spec, () => truth);
+			route.server.seed(UUID_A, {
+				id: spec.remoteId,
+				revision: 'sha256:server-base',
+				collection: spec.collection,
+				payload: truth,
+			});
+			const subject = engine(route.fetch);
+			await subject.ready;
+			await insert(
+				subject,
+				spec,
+				storedDocument({
+					spec,
+					id: UUID_A,
+					label: 'local-a',
+					remoteId: spec.remoteId,
+					revision: 'sha256:stale',
+				})
+			);
+			const conflicted = await subject.write({
+				collection: spec.collection,
+				operation: 'update',
+				recordId: UUID_A,
+				payload: payload(spec, UUID_A, 'local-a', spec.remoteId),
+			});
+			await subject.sync('write-drain');
+			await replaceResident(
+				subject,
+				spec,
+				UUID_A,
+				storedDocument({
+					spec,
+					id: UUID_A,
+					label: 'local-b',
+					remoteId: spec.remoteId,
+					revision: 'sha256:stale',
+				})
+			);
+			const successor = await subject.write({
+				collection: spec.collection,
+				operation: 'update',
+				recordId: UUID_A,
+				payload: payload(spec, UUID_A, 'local-b', spec.remoteId),
+			});
+
+			await subject.resolveConflict(conflicted.mutationId, 'discard');
+			const afterDiscard = await record(subject, spec, UUID_A);
+			expect(afterDiscard?.payload).toMatchObject(
+				spec.collection === 'customers'
+					? { first_name: 'local-b' }
+					: spec.collection === 'coupons'
+						? { code: 'local-b' }
+						: spec.collection === 'variations'
+							? { sku: 'local-b' }
+							: { name: 'local-b' }
+			);
+			expect(afterDiscard).toMatchObject({
+				sync: { revision: 'sha256:server-base' },
+				local: { dirty: true, pendingMutationIds: [successor.mutationId] },
+			});
+			expect(await subject.sync('write-drain')).toMatchObject({ pushed: 1 });
+			expect(await subject.conflicts()).toEqual([]);
+			expect(await record(subject, spec, UUID_A)).toMatchObject({
+				local: { dirty: false, pendingMutationIds: [] },
+			});
+			await subject.dispose();
+		}
+	);
+
+	it('discard tombstones a resident update when the server no longer returns it', async () => {
+		const spec = FACETS[0];
+		let truth: Record<string, unknown> | null = {
+			...payload(spec, UUID_A, 'server-truth', spec.remoteId),
+			_rxdb_revision: 'sha256:server-base',
+		};
+		const route = routedServer(spec, () => truth);
+		route.server.seed(UUID_A, {
+			id: spec.remoteId,
+			revision: 'sha256:server-base',
+			collection: spec.collection,
+			payload: truth,
+		});
+		const subject = engine(route.fetch);
+		await subject.ready;
+		await insert(
+			subject,
+			spec,
+			storedDocument({
+				spec,
+				id: UUID_A,
+				label: 'local',
+				remoteId: spec.remoteId,
+				revision: 'sha256:stale',
+			})
+		);
+		const receipt = await subject.write({
+			collection: spec.collection,
+			operation: 'update',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'local', spec.remoteId),
+		});
+		await subject.sync('write-drain');
+		truth = null;
+
+		await subject.resolveConflict(receipt.mutationId, 'discard');
+		expect(await record(subject, spec, UUID_A)).toBeNull();
+		expect(await subject.conflicts()).toEqual([]);
+		await subject.dispose();
+	});
+
+	it('discard removes a rejected born-local create that never existed remotely', async () => {
+		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
+		const route = routedServer(spec, () => null);
+		route.server.script(() => ({ kind: 'identity_ambiguous' }));
+		const subject = engine(route.fetch);
+		await subject.ready;
+		await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'born-local' }));
+		const receipt = await subject.write({
+			collection: spec.collection,
+			operation: 'create',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'born-local'),
+		});
+		expect(await subject.sync('write-drain')).toMatchObject({ rejected: 1 });
+
+		await subject.resolveConflict(receipt.mutationId, 'discard');
+		expect(await record(subject, spec, UUID_A)).toBeNull();
+		expect(await subject.conflicts()).toEqual([]);
+		await subject.dispose();
+	});
 
 	it.each(FACETS)(
 		'$collection 428 refreshes once and retries against the targeted server revision',
@@ -613,6 +876,69 @@ describe('write facets beyond orders', () => {
 		expect(route.server.received).toHaveLength(2);
 		expect(route.server.received[1].baseRevision).toBe('sha256:server-base');
 		expect((await subject.conflicts())[0]).toMatchObject({ status: 'rejected' });
+		await subject.dispose();
+	});
+
+	it('born-local variation create parent-required 428 dead-letters and unblocks a queued successor', async () => {
+		const spec = FACETS.find(({ collection }) => collection === 'variations')!;
+		const route = routedServer(spec, () => null);
+		let releaseFirstPush: (() => void) | undefined;
+		let firstPushStarted: (() => void) | undefined;
+		const started = new Promise<void>((resolve) => {
+			firstPushStarted = resolve;
+		});
+		const release = new Promise<void>((resolve) => {
+			releaseFirstPush = resolve;
+		});
+		let pushCount = 0;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (url.includes('/push/')) {
+				pushCount += 1;
+				if (pushCount === 1) {
+					firstPushStarted?.();
+					await release;
+				}
+			}
+			return route.fetch(url, init);
+		};
+		const subject = engine(fetch);
+		await subject.ready;
+		const missingParent = storedDocument({ spec, id: UUID_A, label: 'missing-parent' });
+		(missingParent.payload as Record<string, unknown>).parent_id = undefined;
+		await insert(subject, spec, missingParent);
+		const first = await subject.write({
+			collection: 'variations',
+			operation: 'create',
+			recordId: UUID_A,
+			payload: { sku: 'missing-parent', meta_data: uuidMeta(UUID_A) },
+		});
+		const firstDrain = subject.sync('write-drain');
+		await started;
+		const corrected = storedDocument({ spec, id: UUID_A, label: 'corrected' });
+		await replaceResident(subject, spec, UUID_A, corrected);
+		const successor = await subject.write({
+			collection: 'variations',
+			operation: 'create',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'corrected'),
+		});
+		releaseFirstPush?.();
+
+		expect(await firstDrain).toMatchObject({ rejected: 1, conflicts: 0, pushed: 0 });
+		expect((await subject.conflicts())[0]).toMatchObject({
+			mutationId: first.mutationId,
+			status: 'rejected',
+		});
+		expect(await record(subject, spec, UUID_A)).toMatchObject({
+			local: { dirty: true, pendingMutationIds: [successor.mutationId] },
+		});
+		expect(route.pulls).toEqual([]);
+		expect(await subject.sync('write-drain')).toMatchObject({ pushed: 1 });
+		expect(route.server.received).toHaveLength(2);
+		expect(await record(subject, spec, UUID_A)).toMatchObject({
+			[spec.remoteIdField]: spec.remoteId,
+			local: { dirty: false, pendingMutationIds: [] },
+		});
 		await subject.dispose();
 	});
 

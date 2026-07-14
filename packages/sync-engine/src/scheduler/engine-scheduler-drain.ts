@@ -33,6 +33,7 @@ import {
 } from './rx-scheduler-reference-fetcher';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import { createOrderPendingMutationIds } from '../write-path/order-pull-guard';
+import { withoutLocallyProtected } from '../write-path/local-work-guard';
 import { withCustomerManifestPopulation } from '../local-coverage/existence-manifest-population';
 import {
 	type ManifestCollection,
@@ -134,17 +135,24 @@ export function isSupportedReferenceSchedulerTask(
 // The drain composition
 // ---------------------------------------------------------------------------
 
-type BulkUpsertCollection<T> = {
+type BulkUpsertCollection<T extends { id: string }> = {
 	bulkUpsert(documents: T[]): Promise<unknown>;
+	findByIds(ids: string[]): {
+		exec(): Promise<Map<string, { toJSON(): unknown }>>;
+	};
 };
 
 /** The generic pull-apply adapter every non-order fetcher writes through. */
-export function collectionSchedulerRepository<T>(collection: BulkUpsertCollection<T>): {
+export function collectionSchedulerRepository<T extends { id: string }>(
+	collection: BulkUpsertCollection<T>
+): {
 	upsertMany(documents: T[]): Promise<void>;
 } {
 	return {
 		async upsertMany(documents: T[]): Promise<void> {
-			assertBulkSuccess(await collection.bulkUpsert(documents), 'engine-scheduler-drain upsert');
+			const applicable = await withoutLocallyProtected(collection, documents);
+			if (applicable.length > 0)
+				assertBulkSuccess(await collection.bulkUpsert(applicable), 'engine-scheduler-drain upsert');
 		},
 	};
 }
@@ -152,22 +160,22 @@ export function collectionSchedulerRepository<T>(collection: BulkUpsertCollectio
 /** Structural: the collections the drain touches (superset of the repos it builds). */
 export type SchedulerDrainDatabase = OrderRepositoryDatabase &
 	SchedulerTaskStateDatabase & {
-		products: BulkUpsertCollection<unknown>;
-		customers: BulkUpsertCollection<unknown>;
-		taxRates: BulkUpsertCollection<unknown>;
-		categories: BulkUpsertCollection<unknown> & {
+		products: BulkUpsertCollection<{ id: string }>;
+		customers: BulkUpsertCollection<{ id: string }>;
+		taxRates: BulkUpsertCollection<{ id: string }>;
+		categories: BulkUpsertCollection<{ id: string }> & {
 			find(query?: unknown): { exec(): Promise<{ toJSON(): unknown }[]> };
 			bulkRemove(ids: string[]): Promise<unknown>;
 		};
-		brands: BulkUpsertCollection<unknown> & {
+		brands: BulkUpsertCollection<{ id: string }> & {
 			find(query?: unknown): { exec(): Promise<{ toJSON(): unknown }[]> };
 			bulkRemove(ids: string[]): Promise<unknown>;
 		};
-		tags: BulkUpsertCollection<unknown> & {
+		tags: BulkUpsertCollection<{ id: string }> & {
 			find(query?: unknown): { exec(): Promise<{ toJSON(): unknown }[]> };
 			bulkRemove(ids: string[]): Promise<unknown>;
 		};
-		coupons: BulkUpsertCollection<unknown> & {
+		coupons: BulkUpsertCollection<{ id: string }> & {
 			find(query?: unknown): { exec(): Promise<{ toJSON(): unknown }[]> };
 			bulkRemove(ids: string[]): Promise<unknown>;
 		};
