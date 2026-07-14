@@ -46,6 +46,7 @@ import {
 import { parseOrderBrowserSchedulerDescriptor } from './order-browser-scheduler-descriptor';
 
 import type { LocalCoverage } from '../local-coverage/local-coverage';
+import type { FetchTask, FetchTaskResult } from './replication-policy';
 
 export const ORDER_SCHEDULER_LEASE_FOR_MS = 30 * 1_000;
 export const ORDER_SCHEDULER_RETRY_AFTER_MS = 30 * 1_000;
@@ -203,14 +204,19 @@ export type RunEngineSchedulerDrainInput = {
 	onProgress?: (progress: { collection: string; documents: number; requests: number }) => void;
 };
 
-/** One drain tick over the ACTIVE scope database — the web tick's exact recipe. */
-export async function runEngineSchedulerDrain(
-	input: RunEngineSchedulerDrainInput
-): Promise<PersistedSchedulerTaskRunnerResult> {
+export type RunEngineSchedulerTaskInput = Pick<
+	RunEngineSchedulerDrainInput,
+	'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'signal' | 'nowMs' | 'onProgress'
+> & {
+	task: FetchTask;
+};
+
+function createEngineSchedulerFetcherRegistry(
+	input: Pick<RunEngineSchedulerDrainInput, 'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'nowMs'>
+) {
 	const db = input.db;
 	const nowMs = input.nowMs ?? Date.now();
 	const getNowMs = input.nowMs === undefined ? Date.now : () => nowMs;
-	const schedulerRepository = new RxSchedulerTaskStateRepository(db);
 	const orderRepository = new EngineOrderRepository(db);
 	const coverageRepository = {
 		recordQueryResult: (value: Parameters<LocalCoverage['recordQueryResult']>[0]) =>
@@ -231,7 +237,7 @@ export async function runEngineSchedulerDrain(
 		...(input.fetcher !== undefined ? { fetcher: input.fetcher } : {}),
 	};
 
-	const fetcherRegistry = createSchedulerFetcherRegistry([
+	return createSchedulerFetcherRegistry([
 		{
 			name: 'orders',
 			supportsTask: isSupportedOrderSchedulerTask,
@@ -289,6 +295,34 @@ export async function runEngineSchedulerDrain(
 			}),
 		})),
 	]);
+}
+
+/** Execute exactly one in-memory task without consulting or mutating durable scheduler state. */
+export async function runEngineSchedulerTask(
+	input: RunEngineSchedulerTaskInput
+): Promise<FetchTaskResult> {
+	const registry = createEngineSchedulerFetcherRegistry(input);
+	const result = await registry.fetcher(
+		input.task,
+		input.signal === undefined ? undefined : { signal: input.signal }
+	);
+	input.onProgress?.({
+		collection: input.task.collection,
+		documents: result.documentCount,
+		requests: result.requestCount,
+	});
+	return result;
+}
+
+/** One drain tick over the ACTIVE scope database — the web tick's exact recipe. */
+export async function runEngineSchedulerDrain(
+	input: RunEngineSchedulerDrainInput
+): Promise<PersistedSchedulerTaskRunnerResult> {
+	const db = input.db;
+	const nowMs = input.nowMs ?? Date.now();
+	const getNowMs = input.nowMs === undefined ? Date.now : () => nowMs;
+	const schedulerRepository = new RxSchedulerTaskStateRepository(db);
+	const fetcherRegistry = createEngineSchedulerFetcherRegistry(input);
 
 	return runPersistedSchedulerTasks({
 		repository: fetcherRegistry.supportedRepository(schedulerRepository),
