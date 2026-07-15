@@ -28,7 +28,7 @@ describe('parseRemoteId', () => {
 	it('normalizes numeric metadata values and rejects invalid ids', () => {
 		expect(parseRemoteId(42)).toBe(42);
 		expect(parseRemoteId('42')).toBe(42);
-		expect(parseRemoteId(' 42 ')).toBe(42);
+		expect(parseRemoteId(' 0042 ')).toBe(42);
 		expect(parseRemoteId('42abc')).toBeUndefined();
 		expect(parseRemoteId('')).toBeUndefined();
 		expect(parseRemoteId(undefined)).toBeUndefined();

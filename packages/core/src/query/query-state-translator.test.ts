@@ -81,6 +81,19 @@ describe('query-state translator', () => {
 		expect(translated.search).toBe('smith');
 	});
 
+	it('normalizes cashier ids before matching order metadata', () => {
+		const translated = translateQueryState('orders', {
+			search: '',
+			filters: { cashier: ' 0007 ' },
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 50,
+		} satisfies QueryStateOf<'orders'>);
+
+		expect(translated.selector).toEqual({
+			$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } }],
+		});
+	});
+
 	it('sorts order totals through the numeric adapter field', () => {
 		const translated = translateQueryState('orders', {
 			search: '',
@@ -92,11 +105,29 @@ describe('query-state translator', () => {
 		expect(translated.sort).toEqual([{ sortable_total: 'asc' }]);
 	});
 
+	it('preserves the legacy mutually-exclusive created_via and _pos_store selector branches', () => {
+		const base = {
+			search: '',
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 10,
+		} as const;
+
+		expect(translateQueryState('orders', { ...base, filters: { store: '12' } }).selector).toEqual({
+			$and: [{ meta_data: { $elemMatch: { key: '_pos_store', value: '12' } } }],
+		});
+		expect(
+			translateQueryState('orders', { ...base, filters: { store: 'checkout' } }).selector
+		).toEqual({
+			$and: [{ created_via: 'checkout' }],
+		});
+	});
+
 	it('keeps order demand fields visible to the requirement bridge', () => {
 		const translated = translateQueryState('orders', {
 			search: '',
 			filters: {
 				status: 'processing',
+				customer_id: 42,
 				dateRange: { from: '2026-07-01', to: '2026-07-14' },
 			},
 			sort: { field: 'date_created_gmt', direction: 'desc' },

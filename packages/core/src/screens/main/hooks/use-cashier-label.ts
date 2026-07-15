@@ -2,8 +2,11 @@ import { useObservable, useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
+import { parseRemoteId } from '../../../utils/parse-remote-id';
 import { useCollection } from './use-collection';
 import { useCustomerNameFormat } from './use-customer-name-format';
+
+export { parseRemoteId } from '../../../utils/parse-remote-id';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -13,26 +16,6 @@ interface CashierLabel {
 	id: number | undefined;
 	label: string;
 	document: CustomerDocument | undefined;
-}
-
-/**
- * Normalize remote ids that can arrive from order metadata as numbers or numeric strings.
- */
-export function parseRemoteId(value: unknown): number | undefined {
-	if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
-		return value;
-	}
-
-	if (typeof value !== 'string') {
-		return undefined;
-	}
-
-	const trimmed = value.trim();
-	if (!trimmed || !/^\d+$/.test(trimmed)) {
-		return undefined;
-	}
-
-	return Number(trimmed);
 }
 
 /**

@@ -1,3 +1,5 @@
+import { parseRemoteId } from '../utils/parse-remote-id';
+
 import type { CollectionKey, FiltersOf, QueryStateOf, SortFieldOf } from './query-state-types';
 
 type Storage = 'promoted' | 'payload' | 'local';
@@ -146,8 +148,12 @@ function compile(
 			return {
 				$or: (value as number[]).map((id) => ({ [entryValue.legacyPath]: { $elemMatch: { id } } })),
 			};
-		case 'metadata':
-			return { meta_data: { $elemMatch: { key: '_pos_user', value: String(value) } } };
+		case 'metadata': {
+			const cashierID = parseRemoteId(value);
+			return cashierID === undefined
+				? undefined
+				: { meta_data: { $elemMatch: { key: '_pos_user', value: String(cashierID) } } };
+		}
 		case 'store': {
 			const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
 			return numeric

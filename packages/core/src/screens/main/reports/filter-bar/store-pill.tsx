@@ -1,6 +1,11 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import {
+	ObservableResource,
+	useObservableEagerState,
+	useObservableSuspense,
+} from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
@@ -12,26 +17,33 @@ import {
 	SelectPrimitiveTrigger,
 	SelectSeparator,
 } from '@wcpos/components/select';
-import type { StoreDocument } from '@wcpos/database';
+import type { OrderCollection, StoreDocument } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
-import { useT } from '../../../../../contexts/translations';
-import { useQueryState, useQueryStateActions } from '../../../../../query';
+import { useT } from '../../../../contexts/translations';
 
 interface Props {
+	query: Query<OrderCollection>;
 	resource: ObservableResource<StoreDocument[]>;
 }
 
 /**
  *
  */
-export function StorePill({ resource }: Props) {
+export function StorePill({ resource, query }: Props) {
 	const stores = useObservableSuspense(resource);
-	const selected = useQueryState<'orders', string | number | undefined>(
-		(state) => state.filters.store
+	const selectedCreatedVia = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getSelector('created_via')))
 	);
-	const actions = useQueryStateActions<'orders'>();
+	/**
+	 * Selected store ID as a string
+	 */
+	const selectedStoreID = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_store')))
+	);
 	const t = useT();
-	const isActive = selected !== undefined && selected !== null && selected !== '';
+	const isActive = !!(selectedCreatedVia || selectedStoreID);
+	const selected = selectedCreatedVia || selectedStoreID;
 	const [open, setOpen] = React.useState(false);
 
 	/**
@@ -58,20 +70,39 @@ export function StorePill({ resource }: Props) {
 		return undefined;
 	}, [selected, stores, t]);
 
+	/**
+	 * @NOTE - meta_data is used for _pos_user and _pos_store, so we need multipleElemMatch
+	 */
 	const handleSelect = React.useCallback(
 		(option: { value: string; label: string } | undefined) => {
 			if (!option) return;
-			actions.setFilter('store', option.value);
+			const { value } = option;
+			// Store IDs are numeric strings, while created_via values are alphabetic
+			const numericValue = Number(value);
+			if (Number.isInteger(numericValue) && !isNaN(numericValue)) {
+				query
+					.removeWhere('created_via')
+					.removeElemMatch('meta_data', { key: '_pos_store' }) // clear any previous value
+					.where('meta_data')
+					.multipleElemMatch({ key: '_pos_store', value: String(value) })
+					.exec();
+			} else {
+				query
+					.removeElemMatch('meta_data', { key: '_pos_store' })
+					.where('created_via')
+					.equals(value)
+					.exec();
+			}
 		},
-		[actions]
+		[query]
 	);
 
 	/**
 	 *
 	 */
 	const handleRemove = React.useCallback(() => {
-		actions.clearFilter('store');
-	}, [actions]);
+		query.removeWhere('created_via').removeElemMatch('meta_data', { key: '_pos_store' }).exec();
+	}, [query]);
 
 	/**
 	 * Hide store section if there is only the default store

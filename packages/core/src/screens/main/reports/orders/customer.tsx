@@ -5,17 +5,15 @@ import { useObservableEagerState } from 'observable-hooks';
 import { ButtonPill } from '@wcpos/components/button';
 import { FormatAddress } from '@wcpos/components/format';
 import { VStack } from '@wcpos/components/vstack';
+import type { CustomerDocument, OrderCollection, OrderDocument } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
-import type { QueryStateActions } from '../../../../query';
 import type { CellContext } from '@tanstack/react-table';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
-
 /**
- *
+ * Legacy reports cell. Delete when reports/orders migrates to query-state bindings.
  */
 export function Customer({
 	table,
@@ -23,11 +21,7 @@ export function Customer({
 	column,
 }: CellContext<{ document: OrderDocument }, 'customer_id'>) {
 	const order = row.original.document;
-	const actions = (
-		table.options.meta as {
-			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
-		}
-	)?.actions;
+	const query = (table.options.meta as { query?: Query<OrderCollection> } | undefined)?.query;
 	const { format } = useCustomerNameFormat();
 	const customerID = useObservableEagerState(order.customer_id$!);
 	const billing = useObservableEagerState(order.billing$!);
@@ -39,7 +33,7 @@ export function Customer({
 			<ButtonPill
 				variant="ghost-primary"
 				size="xs"
-				onPress={() => actions?.setFilter('customer_id', customerID)}
+				onPress={() => query?.where('customer_id').equals(customerID).exec()}
 			>
 				{format({ billing, shipping, id: customerID } as unknown as CustomerDocument)}
 			</ButtonPill>
