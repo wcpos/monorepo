@@ -9,7 +9,7 @@ import { Input } from '@wcpos/components/input';
 import type { InputProps } from '@wcpos/components/input';
 import type { Query } from '@wcpos/query';
 
-import { useQueryState, useQueryStateActions } from '../../../query';
+import { useQueryState, useQueryStateActions, useSearchResetNonce } from '../../../query';
 
 import type { CollectionKey } from '../../../query';
 
@@ -74,11 +74,12 @@ function BindingQuerySearchInput<C extends CollectionKey>({
 	...props
 }: BindingProps<C>) {
 	const committedSearch = useQueryState<typeof collectionName, string>((state) => state.search);
+	const searchResetNonce = useSearchResetNonce();
 	const { setSearch } = useQueryStateActions<typeof collectionName>();
 
 	return (
 		<DebouncedBindingSearchInput
-			key={committedSearch}
+			key={`${committedSearch}:${searchResetNonce}`}
 			ref={ref}
 			committedSearch={committedSearch}
 			setSearch={setSearch}

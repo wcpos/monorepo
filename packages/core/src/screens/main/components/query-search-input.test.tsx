@@ -74,4 +74,27 @@ describe('QuerySearchInput binding mode', () => {
 		expect((screen.getByTestId('search') as HTMLInputElement).value).toBe('');
 		expect(screen.getByTestId('committed-search').textContent).toBe('');
 	});
+
+	it('cancels a pending draft when clearSearch is a committed-value no-op', () => {
+		render(
+			<QueryStateProvider
+				collection="customers"
+				initialPageSize={10}
+				initialSort={{ field: 'last_name', direction: 'asc' }}
+			>
+				<Harness />
+			</QueryStateProvider>
+		);
+
+		fireEvent.change(screen.getByTestId('search'), { target: { value: 'ABC-123' } });
+		expect((screen.getByTestId('search') as HTMLInputElement).value).toBe('ABC-123');
+		expect(screen.getByTestId('committed-search').textContent).toBe('');
+
+		fireEvent.click(screen.getByTestId('clear-search'));
+		expect((screen.getByTestId('search') as HTMLInputElement).value).toBe('');
+
+		act(() => jest.advanceTimersByTime(250));
+		expect((screen.getByTestId('search') as HTMLInputElement).value).toBe('');
+		expect(screen.getByTestId('committed-search').textContent).toBe('');
+	});
 });

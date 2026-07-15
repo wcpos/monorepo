@@ -62,7 +62,7 @@ function isVariationDocument(
 	return document.collection.name === 'variations';
 }
 
-export const useBarcode = (setSearch: (search: string) => void) => {
+export const useBarcode = (setSearch: (search: string) => void, clearSearch: () => void) => {
 	const { barcode$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
@@ -374,8 +374,8 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 			},
 		});
 
-		// Preserve the legacy successful-scan behavior: clear any visible search.
-		setSearch('');
+		// Successful scans clear both committed search and any pending input draft.
+		clearSearch();
 	});
 
 	return { onKeyPress };

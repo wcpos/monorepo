@@ -119,6 +119,7 @@ function LogsScreenContent() {
 						<Suspense fallback={<DataTableSkeleton id="logs" />}>
 							<DataTable<LogDocument>
 								id="logs"
+								collectionName="logs"
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}

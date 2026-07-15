@@ -297,6 +297,7 @@ export function Products() {
 						<Suspense fallback={<DataTableSkeleton id="products" />}>
 							<DataTable<ProductDocument>
 								id="products"
+								collectionName="products"
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}

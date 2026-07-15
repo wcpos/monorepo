@@ -92,6 +92,7 @@ const mockBarcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogge
 };
 
 const mockSetSearch = jest.fn();
+const mockClearSearch = jest.fn();
 
 function response(body: unknown): Response {
 	return {
@@ -163,10 +164,13 @@ async function scan(barcode = 'ABC'): Promise<void> {
 }
 
 function renderBarcodeHook() {
-	const useStoreBarcode = useBarcode as unknown as (setSearch: (search: string) => void) => {
+	const useStoreBarcode = useBarcode as unknown as (
+		setSearch: (search: string) => void,
+		clearSearch: () => void
+	) => {
 		onKeyPress: (...args: unknown[]) => unknown;
 	};
-	return renderHook(() => useStoreBarcode(mockSetSearch));
+	return renderHook(() => useStoreBarcode(mockSetSearch, mockClearSearch));
 }
 
 describe('useBarcode online escalation', () => {
@@ -182,6 +186,7 @@ describe('useBarcode online escalation', () => {
 			mockFindEngineProductById,
 			mockOnKeyPress,
 			mockSetSearch,
+			mockClearSearch,
 			mockBarcodeLogger.info,
 			mockBarcodeLogger.debug,
 			mockBarcodeLogger.error,
@@ -240,6 +245,8 @@ describe('useBarcode online escalation', () => {
 			expect(product.collection.name).toBe('products');
 			expect(product.isInstanceOfRxDocument).toBe(true);
 			expect(product.getLatest().toMutableJSON()).toMatchObject({ id: 41, name: 'Keyboard' });
+			expect(mockClearSearch).toHaveBeenCalledTimes(1);
+			expect(mockSetSearch).not.toHaveBeenCalled();
 		}
 	);
 

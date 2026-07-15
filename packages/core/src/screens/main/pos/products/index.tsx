@@ -191,7 +191,7 @@ function POSProductsContent({ isColumn = false }: { isColumn?: boolean }) {
 	/**
 	 * Barcode
 	 */
-	const { onKeyPress } = useBarcode(actions.setSearch);
+	const { onKeyPress } = useBarcode(actions.setSearch, actions.clearSearch);
 
 	/** UI settings are an external observable projected into committed query state. */
 	React.useEffect(() => {
@@ -292,6 +292,7 @@ function POSProductsContent({ isColumn = false }: { isColumn?: boolean }) {
 							) : (
 								<DataTable<ProductDocument>
 									id="pos-products"
+									collectionName="products"
 									resource={binding.resource}
 									sort={state.sort}
 									actions={tableActions}

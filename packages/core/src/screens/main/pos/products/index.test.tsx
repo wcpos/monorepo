@@ -18,9 +18,11 @@ const mockBinding = {
 	sync: jest.fn(async () => undefined),
 };
 const mockUseRelationalCollectionBinding = jest.fn((_state: unknown) => mockBinding);
-const mockUseBarcode = jest.fn((_setSearch: (search: string) => void) => ({
-	onKeyPress: jest.fn(),
-}));
+const mockUseBarcode = jest.fn(
+	(_setSearch: (search: string) => void, _clearSearch: () => void) => ({
+		onKeyPress: jest.fn(),
+	})
+);
 let mockDataTableProps: Record<string, unknown> = {};
 let mockGridProps: Record<string, unknown> = {};
 let mockFilterBarProps: Record<string, unknown> = {};
@@ -104,7 +106,8 @@ jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('./use-barcode', () => ({
-	useBarcode: (setSearch: (search: string) => void) => mockUseBarcode(setSearch),
+	useBarcode: (setSearch: (search: string) => void, clearSearch: () => void) =>
+		mockUseBarcode(setSearch, clearSearch),
 }));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./view-mode-toggle', () => ({ ViewModeToggle: () => null }));
@@ -157,6 +160,7 @@ describe('POSProducts query-state wiring', () => {
 			limit: 10,
 		});
 		expect(mockDataTableProps).toMatchObject({
+			collectionName: 'products',
 			resource: mockBinding.resource,
 			sort: { field: 'name', direction: 'asc' },
 			active$: mockBinding.active$,
@@ -170,6 +174,9 @@ describe('POSProducts query-state wiring', () => {
 		const setSearch = mockUseBarcode.mock.calls[0]?.[0];
 		act(() => setSearch?.('ABC-123'));
 		expect(latestState().search).toBe('ABC-123');
+		const clearSearch = mockUseBarcode.mock.calls[0]?.[1];
+		act(() => clearSearch?.());
+		expect(latestState().search).toBe('');
 	});
 
 	it('maps showOutOfStock and runtime sort changes exactly onto products query state', () => {

@@ -174,6 +174,7 @@ function CouponsScreenContent() {
 						<Suspense fallback={<DataTableSkeleton id="coupons" />}>
 							<DataTable<CouponDocument>
 								id="coupons"
+								collectionName="coupons"
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}

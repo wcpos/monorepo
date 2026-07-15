@@ -68,6 +68,7 @@ interface CommonProps {
 
 type LegacyQueryProps = {
 	query: Query<any>;
+	collectionName?: never;
 	resource?: never;
 	actions?: never;
 	active$?: never;
@@ -79,6 +80,7 @@ type LegacyQueryProps = {
 
 type BindingProps<TSortField extends string> = {
 	query?: never;
+	collectionName: CollectionKey;
 	resource: Query<import('rxdb').RxCollection>['resource'];
 	sort: { field: TSortField; direction: 'asc' | 'desc' };
 	actions: BindingActions<TSortField>;
@@ -262,7 +264,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 					{isBindingProps(props) ? (
 						props.TableFooterComponent ? (
 							<props.TableFooterComponent
-								collectionName={id as CollectionKey}
+								collectionName={props.collectionName}
 								active$={props.active$}
 								total$={props.total$}
 								totalSource$={props.totalSource$}
@@ -271,7 +273,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 							/>
 						) : (
 							<DataTableFooter
-								collectionName={id as CollectionKey}
+								collectionName={props.collectionName}
 								active$={props.active$}
 								total$={props.total$}
 								totalSource$={props.totalSource$}

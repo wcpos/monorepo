@@ -20,6 +20,8 @@ const DEFAULT_FILTERS = {
 type Store<C extends CollectionKey> = {
 	getState(): QueryStateOf<C>;
 	subscribe(listener: () => void): () => void;
+	getSearchResetNonce(): number;
+	subscribeSearchReset(listener: () => void): () => void;
 	actions: QueryStateActions<C>;
 };
 
@@ -53,7 +55,9 @@ function createStore<C extends CollectionKey>(
 	pageSize: number
 ): Store<C> {
 	let state = initial;
+	let searchResetNonce = 0;
 	const listeners = new Set<() => void>();
+	const searchResetListeners = new Set<() => void>();
 	const publish = (next: QueryStateOf<C>) => {
 		if (same(state, next)) return;
 		state = next;
@@ -69,9 +73,18 @@ function createStore<C extends CollectionKey>(
 			listeners.add(listener);
 			return () => listeners.delete(listener);
 		},
+		getSearchResetNonce: () => searchResetNonce,
+		subscribeSearchReset: (listener) => {
+			searchResetListeners.add(listener);
+			return () => searchResetListeners.delete(listener);
+		},
 		actions: {
 			setSearch: (search) => resultChange({ search }),
-			clearSearch: () => resultChange({ search: '' }),
+			clearSearch: () => {
+				searchResetNonce += 1;
+				resultChange({ search: '' });
+				searchResetListeners.forEach((listener) => listener());
+			},
 			setFilter: (field, value) => resultChange({ filters: { ...state.filters, [field]: value } }),
 			clearFilter: (field) => {
 				const filters = { ...state.filters };
@@ -155,4 +168,13 @@ export function useQueryState<C extends CollectionKey, S = QueryStateOf<C>>(
 
 export function useQueryStateActions<C extends CollectionKey>(): QueryStateActions<C> {
 	return useStore<C>().actions;
+}
+
+export function useSearchResetNonce(): number {
+	const store = useStore();
+	return React.useSyncExternalStore(
+		store.subscribeSearchReset,
+		store.getSearchResetNonce,
+		store.getSearchResetNonce
+	);
 }

@@ -211,6 +211,7 @@ export function Orders() {
 						<Suspense fallback={<DataTableSkeleton id="reports-orders" />}>
 							<DataTable<OrderDocument>
 								id="reports-orders"
+								collectionName="orders"
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}
