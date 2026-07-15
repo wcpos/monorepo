@@ -105,6 +105,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 					name="discount_type"
 					render={({ field }) => (
 						<FormToggleGroup
+							testID="coupon-discount-type"
 							label={t('coupons.discount')}
 							options={[
 								{ value: 'percent', label: t('coupons.percent_short') },
