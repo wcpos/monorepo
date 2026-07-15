@@ -10,6 +10,26 @@ describe('app connectivity store', () => {
 		expect(getEngineConnectivity()).toBe('online');
 	});
 
+	it('seeds offline when navigator reports offline at load', () => {
+		const original = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+		Object.defineProperty(globalThis, 'navigator', {
+			value: { onLine: false },
+			configurable: true,
+			writable: true,
+		});
+		try {
+			const { getEngineConnectivity } = loadConnectivity();
+
+			expect(getEngineConnectivity()).toBe('offline');
+		} finally {
+			if (original) {
+				Object.defineProperty(globalThis, 'navigator', original);
+			} else {
+				delete (globalThis as { navigator?: unknown }).navigator;
+			}
+		}
+	});
+
 	it.each([
 		['offline', 'offline'],
 		['online-website-unavailable', 'degraded'],
