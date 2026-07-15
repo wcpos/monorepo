@@ -5,6 +5,7 @@ import { Products } from './products';
 import { TaxRatesProvider } from '../contexts/tax-rates';
 import { useUISettings } from '../contexts/ui-settings';
 import { QueryStateProvider } from '../../../query';
+import { normalizeQuerySortField } from '../../../query/query-state-translator';
 
 import type { QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
@@ -15,7 +16,7 @@ const PRODUCT_SORT_FIELDS = [
 	'name',
 	'sku',
 	'barcode',
-	'price',
+	'sortable_price',
 	'regular_price',
 	'sale_price',
 	'stock_quantity',
@@ -33,9 +34,10 @@ function getInitialProductSort(
 	sortBy: unknown,
 	sortDirection: unknown
 ): QueryStateOf<'products'>['sort'] {
-	if (!isProductSortField(sortBy)) return DEFAULT_PRODUCT_SORT;
+	const sortField = normalizeQuerySortField('products', sortBy);
+	if (!isProductSortField(sortField)) return DEFAULT_PRODUCT_SORT;
 
-	return { field: sortBy, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
+	return { field: sortField, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
 }
 
 export function ProductsScreen() {

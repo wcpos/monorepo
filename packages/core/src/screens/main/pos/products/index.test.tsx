@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { POSProducts } from './index';
@@ -66,8 +66,18 @@ jest.mock('@wcpos/components/suspense', () => ({
 }));
 jest.mock('../../components/data-table', () => ({
 	DataTable: (props: Record<string, unknown>) => {
+		const { useQueryStateActions } = jest.requireActual('../../../../query');
+		const actions = useQueryStateActions();
 		mockDataTableProps = props;
-		return <div />;
+		return (
+			<button
+				data-testid="clear-and-refresh"
+				onClick={() => {
+					actions.clearSearch();
+					actions.resetFilters();
+				}}
+			/>
+		);
 	},
 	DataTableFooter: () => null,
 	defaultRenderItem: jest.fn(),
@@ -193,6 +203,34 @@ describe('POSProducts query-state wiring', () => {
 			sort: { field: 'total_sales', direction: 'desc' },
 		});
 		expect(latestState().filters).not.toHaveProperty('stock_status');
+	});
+
+	it('remounts the reset baseline when showOutOfStock changes', () => {
+		const { rerender } = render(<POSProducts />);
+		expect(latestState().filters.stock_status).toBe('instock');
+
+		mockShowOutOfStock = true;
+		rerender(<POSProducts />);
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+
+		act(() => {
+			const actions = mockDataTableProps.actions as {
+				setFilter: (field: 'stock_status', value: string) => void;
+			};
+			actions.setFilter('stock_status', 'outofstock');
+		});
+		fireEvent.click(screen.getByTestId('clear-and-refresh'));
+
+		expect(latestState().filters).not.toHaveProperty('stock_status');
+	});
+
+	it('normalizes the persisted price column key to sortable_price', () => {
+		mockSortBy = 'price';
+		mockSortDirection = 'desc';
+
+		render(<POSProducts />);
+
+		expect(latestState().sort).toEqual({ field: 'sortable_price', direction: 'desc' });
 	});
 
 	it('serves grid mode from the same binding and pagination action', () => {

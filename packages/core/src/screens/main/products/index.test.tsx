@@ -185,7 +185,7 @@ describe('ProductsScreen query-state wiring', () => {
 		mockSortBy = 'price';
 		mockSortDirection = 'desc';
 		const { unmount } = render(<ProductsScreen />);
-		expect(latestState().sort).toEqual({ field: 'price', direction: 'desc' });
+		expect(latestState().sort).toEqual({ field: 'sortable_price', direction: 'desc' });
 		unmount();
 
 		mockSortBy = 'type';

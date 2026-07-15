@@ -45,6 +45,7 @@ import {
 	useQueryStateActions,
 	useRelationalCollectionBinding,
 } from '../../../../query';
+import { normalizeQuerySortField } from '../../../../query/query-state-translator';
 
 import type { QueryStateActions, QueryStateOf } from '../../../../query';
 import type { SortFieldsByCollection } from '../../../../query/query-state-types';
@@ -75,8 +76,9 @@ function getPOSProductSort(
 	sortBy: unknown,
 	sortDirection: unknown
 ): QueryStateOf<'products'>['sort'] {
-	if (!isPOSProductSortField(sortBy)) return DEFAULT_POS_PRODUCT_SORT;
-	return { field: sortBy, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
+	const sortField = normalizeQuerySortField('products', sortBy);
+	if (!isPOSProductSortField(sortField)) return DEFAULT_POS_PRODUCT_SORT;
+	return { field: sortField, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
 }
 
 const cells = {
@@ -165,7 +167,13 @@ function TableFooter(props: BindingDataTableFooterProps) {
 /**
  *
  */
-function POSProductsContent({ isColumn = false }: { isColumn?: boolean }) {
+function POSProductsContent({
+	isColumn = false,
+	showOutOfStock,
+}: {
+	isColumn?: boolean;
+	showOutOfStock: boolean;
+}) {
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -181,7 +189,6 @@ function POSProductsContent({ isColumn = false }: { isColumn?: boolean }) {
 		[actions]
 	);
 	const { calcTaxes } = useTaxRates();
-	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const viewMode = useObservableEagerState(uiSettings.viewMode$);
 	const sortBy = useObservableEagerState(uiSettings.sortBy$);
 	const sortDirection = useObservableEagerState(uiSettings.sortDirection$);
@@ -319,19 +326,19 @@ function POSProductsContent({ isColumn = false }: { isColumn?: boolean }) {
 
 export function POSProducts({ isColumn = false }) {
 	const { uiSettings } = useUISettings('pos-products');
+	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const initialSort = getPOSProductSort(uiSettings.sortBy, uiSettings.sortDirection);
-	const initialFilters = uiSettings.showOutOfStock
-		? undefined
-		: { stock_status: 'instock' as const };
+	const initialFilters = showOutOfStock ? undefined : { stock_status: 'instock' as const };
 
 	return (
 		<QueryStateProvider
+			key={showOutOfStock ? 'show-out-of-stock' : 'in-stock-only'}
 			collection="products"
 			initialPageSize={POS_PRODUCTS_PAGE_SIZE}
 			initialSort={initialSort}
 			initialFilters={initialFilters}
 		>
-			<POSProductsContent isColumn={isColumn} />
+			<POSProductsContent isColumn={isColumn} showOutOfStock={showOutOfStock} />
 		</QueryStateProvider>
 	);
 }

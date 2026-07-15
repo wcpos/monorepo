@@ -137,6 +137,26 @@ const sortPaths = {
 	logs: { timestamp: 'timestamp', level: 'level', code: 'code' },
 } as const satisfies { [C in CollectionKey]: Record<SortFieldOf<C>, string> };
 
+const UI_SORT_FIELD_ALIASES = {
+	products: { price: 'sortable_price' },
+	orders: {},
+	coupons: {},
+	variations: {},
+	customers: {},
+	'tax-rates': {},
+	logs: {},
+} as const satisfies { [C in CollectionKey]: Partial<Record<string, SortFieldOf<C>>> };
+
+/** Normalize persisted UI column keys before they enter query state. */
+export function normalizeQuerySortField(
+	collection: CollectionKey,
+	field: unknown
+): string | undefined {
+	if (typeof field !== 'string') return undefined;
+	const aliases = UI_SORT_FIELD_ALIASES[collection] as Record<string, string>;
+	return aliases[field] ?? field;
+}
+
 function compile(
 	entryValue: FilterTranslator,
 	value: unknown
@@ -196,7 +216,7 @@ export function translateQueryState<C extends CollectionKey>(
 		...topLevelConditions,
 		...(nestedConditions.length > 0 ? { $and: nestedConditions } : {}),
 	};
-	const sortField = state.sort.field as string;
+	const sortField = normalizeQuerySortField(collection, state.sort.field)!;
 	const adapterSortField =
 		collection === 'orders' && sortField === 'total' ? sortPaths.orders.total : sortField;
 	return {

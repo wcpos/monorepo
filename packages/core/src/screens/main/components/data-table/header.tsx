@@ -8,8 +8,10 @@ import { Text } from '@wcpos/components/text';
 import { getSortField } from './sort-field';
 
 import type { SortingChange } from './sort-field';
+import type { CollectionKey } from '../../../../query';
 
 interface Props {
+	collectionName?: CollectionKey;
 	columnId: string;
 	header: React.ReactNode;
 	disableSort?: boolean;
@@ -20,6 +22,7 @@ interface Props {
 }
 
 export function DataTableHeader({
+	collectionName,
 	columnId,
 	header,
 	disableSort,
@@ -28,7 +31,7 @@ export function DataTableHeader({
 	onSortingChange,
 	align = 'left',
 }: Props) {
-	const sortField = getSortField(columnId);
+	const sortField = collectionName ? getSortField(collectionName, columnId) : columnId;
 	const isSorted = sortBy === sortField;
 	const contentAlignment =
 		align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start';

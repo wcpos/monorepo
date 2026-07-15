@@ -75,6 +75,7 @@ const renderHeader = (props: RenderHeaderProps) => {
 
 	return (
 		<DataTableHeader
+			collectionName={props.collectionName}
 			columnId={props.column.id}
 			header={flexRender(props.column.columnDef.header, props.getContext())}
 			disableSort={!props.column.getCanSort()}
