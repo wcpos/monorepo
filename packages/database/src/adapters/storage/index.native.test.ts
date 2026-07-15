@@ -62,15 +62,6 @@ jest.mock(
 	{ virtual: true }
 );
 
-jest.mock(
-	'rxdb-premium-old/plugins/storage-sqlite',
-	() => ({
-		getRxStorageSQLite: (config: { sqliteBasics: { open(name: string): Promise<unknown> } }) =>
-			mockGetRxStorageSQLite(config),
-	}),
-	{ virtual: true }
-);
-
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => mockLogger,
 }));
@@ -81,30 +72,31 @@ jest.mock('@wcpos/utils/logger/error-codes', () => ({
 	},
 }));
 
-describe('native storage migration configuration', () => {
+describe('native storage', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		jest.resetModules();
 	});
 
-	it('returns expo-sqlite as the target native storage kind', async () => {
-		const { getNativeStorageKind } = await import('./index');
+	it('creates the expo-sqlite storage with the shared database cache', async () => {
+		const { getNativeNewStorage } = await import('./index');
 
-		expect(getNativeStorageKind()).toBe('expo-sqlite');
+		expect(getNativeNewStorage()).toEqual({
+			name: 'sqlite-storage',
+			config: {
+				sqliteBasics: expect.objectContaining({
+					open: expect.any(Function),
+				}),
+			},
+		});
 	});
 
-	it('closes cached legacy sqlite connections before cleanup', async () => {
-		const { getNativeOldStorage, closeAllLegacyNativeDatabases } = await import('./index');
+	it('closes cached sqlite connections before cleanup', async () => {
+		const { closeAllCachedNativeDatabases, getSQLiteBasicsExpoSQLiteAsync } =
+			await import('./index');
 
-		getNativeOldStorage();
-		const sqliteStorageArgs = mockGetRxStorageSQLite.mock.calls[0]?.[0] as
-			| { sqliteBasics: { open(name: string): Promise<unknown> } }
-			| undefined;
-
-		expect(sqliteStorageArgs).toBeDefined();
-		await sqliteStorageArgs!.sqliteBasics.open('wcposusers_v2');
-
-		await closeAllLegacyNativeDatabases();
+		await getSQLiteBasicsExpoSQLiteAsync().open('wcposusers_v4');
+		await closeAllCachedNativeDatabases();
 
 		expect(mockCloseAsync).toHaveBeenCalledTimes(1);
 	});

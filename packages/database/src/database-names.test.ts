@@ -1,37 +1,20 @@
 import {
-	getFastStoreDatabaseNames,
-	getStoreDatabaseNames,
-	getUserDatabaseNames,
+	getFastStoreDatabaseName,
+	getStoreDatabaseName,
+	getUserDatabaseName,
 	isFastStoreDatabaseName,
 	isKnownAppDatabaseName,
 	isStoreDatabaseName,
-	USER_DATABASE_NAMES,
 } from './database-names';
 
 describe('database name helpers', () => {
-	it('returns the user database names', () => {
-		expect(USER_DATABASE_NAMES).toEqual({
-			oldName: 'wcposusers_v2',
-			newName: 'wcposusers_v4',
-		});
-		expect(getUserDatabaseNames()).toBe(USER_DATABASE_NAMES);
+	it('returns the current database names', () => {
+		expect(getUserDatabaseName()).toBe('wcposusers_v4');
+		expect(getStoreDatabaseName('abc123')).toBe('store_v4_abc123');
+		expect(getFastStoreDatabaseName('abc123')).toBe('fast_store_v5_abc123');
 	});
 
-	it('returns the store database names', () => {
-		expect(getStoreDatabaseNames('abc123')).toEqual({
-			oldName: 'store_v2_abc123',
-			newName: 'store_v4_abc123',
-		});
-	});
-
-	it('returns the fast store database names', () => {
-		expect(getFastStoreDatabaseNames('abc123')).toEqual({
-			oldName: 'fast_store_v3_abc123',
-			newName: 'fast_store_v5_abc123',
-		});
-	});
-
-	it('matches store and fast-store database names by prefix', () => {
+	it('matches store and fast-store database names from every generation', () => {
 		expect(isStoreDatabaseName('store_v2_abc123')).toBe(true);
 		expect(isStoreDatabaseName('store_v3_abc123')).toBe(true);
 		expect(isStoreDatabaseName('store_v4_abc123')).toBe(true);
@@ -43,7 +26,7 @@ describe('database name helpers', () => {
 		expect(isFastStoreDatabaseName('store_v2_abc123')).toBe(false);
 	});
 
-	it('matches app database names by prefix', () => {
+	it('matches app database names from every generation', () => {
 		expect(isKnownAppDatabaseName('wcposusers_v2')).toBe(true);
 		expect(isKnownAppDatabaseName('wcposusers_v3')).toBe(true);
 		expect(isKnownAppDatabaseName('wcposusers_v4')).toBe(true);

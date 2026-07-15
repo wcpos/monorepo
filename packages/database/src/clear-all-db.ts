@@ -4,12 +4,12 @@ import * as SQLite from 'expo-sqlite';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { closeAllLegacyNativeDatabases } from './migration/storage';
+import { closeAllCachedNativeDatabases } from './adapters/storage';
 import {
 	APP_DATABASE_PREFIXES,
+	getUserDatabaseName,
 	isKnownAppDatabaseName,
-	USER_DATABASE_NAMES,
-} from './migration/storage/database-names';
+} from './database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'clear']);
 const EXPO_OPFS_ROOT = new Directory(Paths.document, '.expo-opfs');
@@ -53,7 +53,7 @@ const deleteKnownSQLiteDatabase = async (dbName: string) => {
 
 const deleteLegacySQLiteDatabases = async () => {
 	let deletedCount = 0;
-	const knownDatabases: string[] = Object.values(USER_DATABASE_NAMES);
+	const knownDatabases = ['wcposusers_v2', 'wcposusers_v3', getUserDatabaseName()];
 
 	for (const dbName of knownDatabases) {
 		if (await deleteKnownSQLiteDatabase(dbName)) {
@@ -117,8 +117,8 @@ const deleteFilesystemDatabases = () => {
 export const clearAllDB = async (): Promise<ClearDBResult> => {
 	try {
 		dbLogger.debug('Starting to clear all application databases');
-		dbLogger.debug('Closing cached legacy SQLite migration connections');
-		await closeAllLegacyNativeDatabases();
+		dbLogger.debug('Closing cached native SQLite connections');
+		await closeAllCachedNativeDatabases();
 
 		const deletedSQLiteDatabases = await deleteLegacySQLiteDatabases();
 		const deletedFilesystemDatabases = deleteFilesystemDatabases();

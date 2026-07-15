@@ -65,7 +65,7 @@ export const config = [
 			'import/no-unresolved': [
 				'error',
 				{
-					ignore: ['^uniwind$', '^uniwind/.+', '^rxdb-premium/.+', '^rxdb-premium-old/.+'],
+					ignore: ['^uniwind$', '^uniwind/.+', '^rxdb-premium/.+'],
 				},
 			],
 

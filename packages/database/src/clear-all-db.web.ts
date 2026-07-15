@@ -1,4 +1,4 @@
-import { APP_DATABASE_PREFIXES, isKnownAppDatabaseName } from './migration/storage/database-names';
+import { APP_DATABASE_PREFIXES, isKnownAppDatabaseName } from './database-names';
 
 interface ClearDBResult {
 	success: boolean;

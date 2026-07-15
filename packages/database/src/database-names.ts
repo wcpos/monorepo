@@ -1,10 +1,6 @@
-export const USER_DATABASE_NAMES = {
-	oldName: 'wcposusers_v2',
-	newName: 'wcposusers_v4',
-} as const;
-
-export const STORE_DATABASE_PREFIXES = ['store_v2_', 'store_v4_'] as const;
-export const FAST_STORE_DATABASE_PREFIXES = ['fast_store_v3_', 'fast_store_v5_'] as const;
+const USER_DATABASE_NAME = 'wcposusers_v4';
+const STORE_DATABASE_PREFIX = 'store_v4_';
+const FAST_STORE_DATABASE_PREFIX = 'fast_store_v5_';
 
 /**
  * All known prefixes (including the skipped filesystem-era v3/v4 versions)
@@ -22,17 +18,9 @@ export const APP_DATABASE_PREFIXES = [
 const matchesAnyPrefix = (value: string, prefixes: readonly string[]) =>
 	prefixes.some((prefix) => value.startsWith(prefix));
 
-export const getUserDatabaseNames = () => USER_DATABASE_NAMES;
-
-export const getStoreDatabaseNames = (id: string) => ({
-	oldName: `${STORE_DATABASE_PREFIXES[0]}${id}`,
-	newName: `${STORE_DATABASE_PREFIXES[1]}${id}`,
-});
-
-export const getFastStoreDatabaseNames = (id: string) => ({
-	oldName: `${FAST_STORE_DATABASE_PREFIXES[0]}${id}`,
-	newName: `${FAST_STORE_DATABASE_PREFIXES[1]}${id}`,
-});
+export const getUserDatabaseName = () => USER_DATABASE_NAME;
+export const getStoreDatabaseName = (id: string) => `${STORE_DATABASE_PREFIX}${id}`;
+export const getFastStoreDatabaseName = (id: string) => `${FAST_STORE_DATABASE_PREFIX}${id}`;
 
 export const isStoreDatabaseName = (value: string) => matchesAnyPrefix(value, ALL_STORE_PREFIXES);
 export const isFastStoreDatabaseName = (value: string) =>

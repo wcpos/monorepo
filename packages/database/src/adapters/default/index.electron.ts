@@ -1,6 +1,6 @@
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
-import { getElectronNewStorage } from '../../migration/storage/index.electron';
+import { getElectronNewStorage } from '../storage/index.electron';
 import { wrappedErrorHandlerStorage } from '../../plugins/wrapped-error-handler-storage';
 
 const rendererStorage = getElectronNewStorage();
