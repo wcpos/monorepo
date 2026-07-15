@@ -14,3 +14,25 @@ export const formatMetaDataValue = (value: unknown): string | number => {
 	}
 	return typeof value === 'object' ? JSON.stringify(value) : String(value);
 };
+
+/**
+ * Parse edited meta-value text back to its typed form — the client-side mirror
+ * of the server's wire normalizer. A structured value is displayed as JSON in
+ * the edit form; without this, submitting the edit would store the JSON as a
+ * string and reintroduce stringified meta from the client side. Text that
+ * doesn't parse as a JSON object/array stays a plain string.
+ */
+export const parseMetaDataInput = (text: string): unknown => {
+	const trimmed = text.trim();
+	if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+		try {
+			const parsed: unknown = JSON.parse(trimmed);
+			if (typeof parsed === 'object' && parsed !== null) {
+				return parsed;
+			}
+		} catch {
+			// fall through — keep the raw text
+		}
+	}
+	return text;
+};

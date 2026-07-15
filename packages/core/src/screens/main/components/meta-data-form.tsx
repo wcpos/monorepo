@@ -12,7 +12,7 @@ import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 
-import { formatMetaDataValue } from './format-meta-data-value';
+import { formatMetaDataValue, parseMetaDataInput } from './format-meta-data-value';
 import { useT } from '../../../contexts/translations';
 
 export { metaDataSchema } from './meta-data-schema';
@@ -83,6 +83,7 @@ export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaData
 												label={t('common.value')}
 												{...field}
 												value={formatMetaDataValue(field.value)}
+												onChange={(text) => field.onChange(parseMetaDataInput(String(text ?? '')))}
 											/>
 										)}
 									/>
