@@ -2,156 +2,97 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { endOfDay, startOfDay } from 'date-fns';
-import toNumber from 'lodash/toNumber';
-import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
 
 import { Card } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import { useQuery } from '@wcpos/query';
+import { useQueryManager } from '@wcpos/query';
 
-import { useReports } from './context';
+import { forceRefreshFilterCustomer } from '../orders/force-refresh-filter-customer';
 import { useAppState } from '../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../hooks/use-local-date';
-import { CashierPill } from './filter-bar/cashier-pill';
-import { CustomerPill } from './filter-bar/customer-pill';
-import { DateRangePill } from './date-range-pill';
-import { StatusPill } from './filter-bar/status-pill';
-import { StorePill } from './filter-bar/store-pill';
-import { normalizeSelectedCustomerID } from '../components/order/filter-bar/customer-filter-utils';
-import { createSelectedEntityFromInputs$ } from '../components/filter-bar/selected-entity';
+import { useQueryState, useQueryStateActions } from '../../../query';
+import { CashierPill } from '../components/order/filter-bar/cashier-pill';
+import { CustomerPill } from '../components/order/filter-bar/customer-pill';
+import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
+import { StatusPill } from '../components/order/filter-bar/status-pill';
+import { StorePill } from '../components/order/filter-bar/store-pill';
+import { useEngineDocumentByWooId } from '../hooks/use-engine-document';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 /**
  *
  */
 export function FilterBar() {
-	const { query } = useReports();
+	const customerID = useQueryState<'orders', number | undefined>(
+		(state) => state.filters.customer_id
+	);
+	const cashierFilter = useQueryState<'orders', string | number | undefined>(
+		(state) => state.filters.cashier
+	);
+	const cashierID = cashierFilter === undefined ? undefined : Number(cashierFilter);
+	const actions = useQueryStateActions<'orders'>();
 	const guestCustomer = useGuestCustomer();
-	const rawCustomerID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
+	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
+		'customers',
+		customerID ?? 0
 	);
-	const customerID = React.useMemo(
-		() => normalizeSelectedCustomerID(rawCustomerID as string | number | null | undefined),
-		[rawCustomerID]
+	const cashierResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
+		'customers',
+		cashierID ?? 0
 	);
-	const cashierID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
-	) as string | undefined;
 	const { wpCredentials } = useAppState();
+	const manager = useQueryManager();
 
-	/**
-	 *
-	 */
-	const customerQuery = useQuery({
-		queryKeys: ['customers', 'reports-customer-filter', customerID ?? 'none'],
-		collectionName: 'customers',
-		initialParams:
-			customerID !== undefined && customerID !== 0
-				? {
-						selector: { id: customerID },
-					}
-				: undefined,
-	});
+	const refreshCustomer = React.useCallback(() => {
+		if (customerID === undefined || customerID === 0) return;
+		void forceRefreshFilterCustomer(manager, customerID, 'customer');
+	}, [customerID, manager]);
+	const refreshCashier = React.useCallback(() => {
+		if (cashierID === undefined || !Number.isFinite(cashierID)) return;
+		void forceRefreshFilterCustomer(manager, cashierID, 'cashier');
+	}, [cashierID, manager]);
 
-	/**
-	 *
-	 */
-	const cashierQuery = useQuery({
-		queryKeys: ['customers', 'cashier-filter'],
-		collectionName: 'customers',
-	});
-
-	/**
-	 *
-	 */
-	React.useEffect(() => {
-		if (cashierID) {
-			cashierQuery?.where('id').equals(toNumber(cashierID)).exec();
-		}
-	}, [cashierID, cashierQuery]);
-
-	/**
-	 *
-	 */
-	const selectedCustomer$ = useObservable(
-		(inputs$) => createSelectedEntityFromInputs$(inputs$),
-		[customerID, customerQuery?.result$, guestCustomer]
-	);
-
-	/**
-	 *
-	 */
-	const customerResource = React.useMemo(
-		() => new ObservableResource(selectedCustomer$),
-		[selectedCustomer$]
-	);
-
-	/**
-	 *
-	 */
-	const selectedCashier$ = useObservable(
-		(inputs$) => createSelectedEntityFromInputs$(inputs$),
-		[cashierID, cashierQuery?.result$, undefined]
-	);
-
-	/**
-	 *
-	 */
-	const cashierResource = React.useMemo(
-		() => new ObservableResource(selectedCashier$),
-		[selectedCashier$]
-	);
-
-	/**
-	 *
-	 */
 	const storesResource = React.useMemo(
-		() =>
-			new ObservableResource(
-				wpCredentials.populate$('stores') as import('rxjs').Observable<
-					import('@wcpos/database').StoreDocument[]
-				>,
-				(val) => !!val
-			),
+		() => new ObservableResource(wpCredentials.populate$('stores'), (value) => !!value),
 		[wpCredentials]
 	);
 
 	/**
-	 * Remove the date range filter
-	 * For reports we do want to show all orders, the calculations would grind the POS to a halt
-	 * Default to today
+	 * Reports must stay bounded to a date window; clearing restores today's window.
 	 */
 	const today = React.useMemo(() => new Date(), []);
 	const removeDateRangeFilter = React.useCallback(() => {
-		query
-			.where('date_created_gmt')
-			.gte(convertLocalDateToUTCString(startOfDay(today)))
-			.lte(convertLocalDateToUTCString(endOfDay(today)))
-			.exec();
-	}, [query, today]);
+		actions.setFilter('dateRange', {
+			from: convertLocalDateToUTCString(startOfDay(today)),
+			to: convertLocalDateToUTCString(endOfDay(today)),
+		});
+	}, [actions, today]);
 
-	/**
-	 *
-	 */
 	return (
 		<View className="p-2 pb-0">
 			<Card className="bg-card-header w-full p-2">
 				<HStack className="w-full flex-wrap">
-					<StatusPill query={query} />
+					<StatusPill />
 					<Suspense>
-						<CustomerPill resource={customerResource} query={query} customerID={customerID} />
-					</Suspense>
-					<Suspense>
-						<CashierPill
-							resource={cashierResource}
-							query={query}
-							cashierID={cashierID ? Number(cashierID) : undefined}
+						<CustomerPill
+							resource={customerResource}
+							guestCustomer={guestCustomer as unknown as import('@wcpos/database').CustomerDocument}
+							onMissing={refreshCustomer}
 						/>
 					</Suspense>
-					<StorePill resource={storesResource} query={query} />
-					<DateRangePill query={query} onRemove={removeDateRangeFilter} />
+					<Suspense>
+						<CashierPill resource={cashierResource} onMissing={refreshCashier} />
+					</Suspense>
+					<StorePill
+						resource={
+							storesResource as import('observable-hooks').ObservableResource<
+								import('@wcpos/database').StoreDocument[]
+							>
+						}
+					/>
+					<DateRangePill onRemove={removeDateRangeFilter} />
 				</HStack>
 			</Card>
 		</View>

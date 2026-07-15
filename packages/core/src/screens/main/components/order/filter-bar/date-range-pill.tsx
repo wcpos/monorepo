@@ -15,10 +15,14 @@ import {
 	useLocalDate,
 } from '../../../../../hooks/use-local-date';
 
+interface Props {
+	onRemove?: () => void;
+}
+
 /**
  *
  */
-export function DateRangePill() {
+export function DateRangePill({ onRemove }: Props = {}) {
 	const t = useT();
 	const triggerRef = React.useRef<{ close: () => void }>(null);
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
@@ -95,7 +99,7 @@ export function DateRangePill() {
 					leftIcon="calendarDays"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => actions.clearFilter('dateRange')}
+					onRemove={() => (onRemove ? onRemove() : actions.clearFilter('dateRange'))}
 				>
 					<ButtonText>{label}</ButtonText>
 				</ButtonPill>

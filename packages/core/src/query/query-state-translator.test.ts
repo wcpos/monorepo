@@ -143,4 +143,34 @@ describe('query-state translator', () => {
 			requirementsForQuery({ ...requirementInput, selector: { status: 'processing' } })
 		);
 	});
+
+	it('keeps the completed reports date window representable as orders demand', () => {
+		const translated = translateQueryState('orders', {
+			search: '',
+			filters: {
+				status: 'completed',
+				cashier: '7',
+				store: '12',
+				dateRange: { from: '2026-07-15T00:00:00.000Z', to: '2026-07-15T23:59:59.999Z' },
+			},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		} satisfies QueryStateOf<'orders'>);
+
+		expect(
+			requirementsForQuery({
+				id: 'reports-orders-binding',
+				collectionName: translated.collectionName,
+				selector: translated.selector,
+				limit: translated.limit,
+			})
+		).toEqual([
+			{
+				id: 'reports-orders-binding:orders-query',
+				collection: 'orders',
+				kind: 'query',
+				queryKey: 'orders:browser:status=completed:search=:limit=200',
+			},
+		]);
+	});
 });

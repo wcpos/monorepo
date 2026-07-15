@@ -212,6 +212,21 @@ describe('order filter pills', () => {
 		expect(filters()).toEqual({});
 	});
 
+	it('lets reports override date removal with its bounded-window reset', () => {
+		const onRemove = jest.fn();
+		const ReportsDateRangePill = DateRangePill as React.ComponentType<{ onRemove: () => void }>;
+		renderPill(<ReportsDateRangePill onRemove={onRemove} />, {
+			dateRange: { from: '2026-07-01', to: '2026-07-03' },
+		});
+
+		fireEvent.click(screen.getByTestId('clear-filter'));
+
+		expect(onRemove).toHaveBeenCalledTimes(1);
+		expect(filters()).toEqual({
+			dateRange: { from: '2026-07-01', to: '2026-07-03' },
+		});
+	});
+
 	it('sets either a numeric store or created_via value and clears the composite field', () => {
 		const stores = new ObservableResource(of([{ id: 12, name: 'Madrid' } as StoreDocument]));
 		mockSelectOption = { value: '12', label: 'Madrid' };

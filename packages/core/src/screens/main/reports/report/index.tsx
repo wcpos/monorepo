@@ -2,7 +2,6 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@wcpos/components/card';
@@ -27,6 +26,7 @@ import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { usePrint } from '../../hooks/use-print';
 import { useReports } from '../context';
+import { useQueryState } from '../../../../query';
 
 /**
  *
@@ -37,7 +37,10 @@ export function Report() {
 	const { store, wpCredentials } = useAppState();
 	const storeName = useObservableEagerState(store.name$) as string;
 	const num_decimals = useObservableEagerState(store.price_num_decimals$) as number;
-	const { selectedOrders, query } = useReports();
+	const { selectedOrders } = useReports();
+	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
+		(state) => state.filters.dateRange
+	);
 
 	const { format: formatCurrency } = useCurrencyFormat();
 	const { format: formatName } = useCustomerNameFormat();
@@ -60,23 +63,12 @@ export function Report() {
 		averageOrderValue,
 	} = calculateTotals({ orders: selectedOrders, num_decimals });
 
-	/**
-	 * Get date range from query
-	 */
-	const selectedDateRange = useObservableEagerState(
-		query.rxQuery$.pipe(
-			map(
-				() => query.getSelector('date_created_gmt') as { $gte?: string; $lte?: string } | undefined
-			)
-		)
-	);
-
 	const reportPeriod = React.useMemo(() => {
-		const from = selectedDateRange?.$gte
-			? convertUTCStringToLocalDate(selectedDateRange.$gte)
+		const from = selectedDateRange?.from
+			? convertUTCStringToLocalDate(selectedDateRange.from)
 			: new Date();
-		const to = selectedDateRange?.$lte
-			? convertUTCStringToLocalDate(selectedDateRange.$lte)
+		const to = selectedDateRange?.to
+			? convertUTCStringToLocalDate(selectedDateRange.to)
 			: new Date();
 
 		return {

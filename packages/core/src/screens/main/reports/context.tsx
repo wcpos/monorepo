@@ -1,15 +1,15 @@
 import * as React from 'react';
 
 import { endOfDay, startOfDay } from 'date-fns';
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { useObservableSuspense } from 'observable-hooks';
 
-import type { OrderCollection, OrderDocument } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
+import type { OrderDocument } from '@wcpos/database';
 
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
+import { useQueryState } from '../../../query';
 
 import type { RowSelectionState } from '@tanstack/react-table';
+import type { useCollectionBinding } from '../../../query';
 
 export interface DateRange {
 	start: Date;
@@ -17,7 +17,7 @@ export interface DateRange {
 }
 
 interface ReportsContextType {
-	query: Query<OrderCollection>;
+	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
 	allOrders: OrderDocument[];
 	selectedOrders: OrderDocument[];
 	unselectedRowIds: RowSelectionState;
@@ -42,26 +42,18 @@ export const useReports = () => {
 };
 
 interface ReportsProviderProps {
-	query: Query<OrderCollection>;
+	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
 	children: React.ReactNode;
 }
 
 /**
  *
  */
-export function ReportsProvider({ query, children }: ReportsProviderProps) {
-	const result = useObservableSuspense(query.resource);
+export function ReportsProvider({ binding, children }: ReportsProviderProps) {
+	const result = useObservableSuspense(binding.resource);
 	const [unselectedRowIds, setUnselectedRowIds] = React.useState<RowSelectionState>({});
-
-	/**
-	 * Get the date range from the query selector - updates when filter changes
-	 */
-	const selectedDateRange = useObservableEagerState(
-		query.rxQuery$.pipe(
-			map(
-				() => query.getSelector('date_created_gmt') as { $gte?: string; $lte?: string } | undefined
-			)
-		)
+	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
+		(state) => state.filters.dateRange
 	);
 
 	/**
@@ -75,10 +67,13 @@ export function ReportsProvider({ query, children }: ReportsProviderProps) {
 			return defaultRange;
 		}
 
-		const { $gte, $lte } = selectedDateRange;
 		return {
-			start: $gte ? convertUTCStringToLocalDate($gte) : defaultRange.start,
-			end: $lte ? convertUTCStringToLocalDate($lte) : defaultRange.end,
+			start: selectedDateRange.from
+				? convertUTCStringToLocalDate(selectedDateRange.from)
+				: defaultRange.start,
+			end: selectedDateRange.to
+				? convertUTCStringToLocalDate(selectedDateRange.to)
+				: defaultRange.end,
 		};
 	}, [selectedDateRange]);
 
@@ -104,7 +99,7 @@ export function ReportsProvider({ query, children }: ReportsProviderProps) {
 	return (
 		<ReportsContext.Provider
 			value={{
-				query,
+				binding,
 				allOrders,
 				selectedOrders,
 				unselectedRowIds,
