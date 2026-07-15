@@ -139,6 +139,7 @@ describe('CustomersScreen query-state wiring', () => {
 		expect(mockUseCollectionBinding).toHaveBeenLastCalledWith('customers', latestState());
 		expect(mockDataTableProps).toMatchObject({
 			resource: mockBinding.resource,
+			sort: { field: 'last_name', direction: 'asc' },
 			active$: mockBinding.active$,
 			total$: mockBinding.total$,
 			totalSource$: mockBinding.totalSource$,
@@ -163,6 +164,7 @@ describe('CustomersScreen query-state wiring', () => {
 		render(<CustomersScreen />);
 
 		expect(latestState().sort).toEqual({ field: 'last_name', direction: 'asc' });
+		expect(mockDataTableProps.sort).toEqual({ field: 'last_name', direction: 'asc' });
 	});
 
 	it('commits search through the store only after the input debounce', () => {
@@ -193,5 +195,6 @@ describe('CustomersScreen query-state wiring', () => {
 			sort: { field: 'email', direction: 'desc' },
 			limit: 10,
 		});
+		expect(mockDataTableProps.sort).toEqual({ field: 'email', direction: 'desc' });
 	});
 });

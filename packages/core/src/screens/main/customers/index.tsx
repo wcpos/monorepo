@@ -2,14 +2,12 @@ import React from 'react';
 import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import debounce from 'lodash/debounce';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Input } from '@wcpos/components/input';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -26,6 +24,7 @@ import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { TextCell } from '../components/text-cell';
 import { DateCell } from '../components/date';
 import { UISettingsDialog } from '../components/ui-settings';
+import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
 import {
 	QueryStateProvider,
@@ -84,37 +83,6 @@ function renderCell(columnKey: string, info: Record<string, unknown>) {
 	return <TextCell {...(info as any)} />;
 }
 
-function CustomersSearchInput() {
-	const { setSearch } = useQueryStateActions<'customers'>();
-	const [search, setInputSearch] = React.useState('');
-	const commitSearch = React.useMemo(() => debounce(setSearch, 250), [setSearch]);
-
-	React.useEffect(() => {
-		// The input owns the debounce timer, so cancel it if the screen unmounts before a commit.
-		return () => commitSearch.cancel();
-	}, [commitSearch]);
-
-	const handleSearch = React.useCallback(
-		(value: string) => {
-			setInputSearch(value);
-			commitSearch(value);
-		},
-		[commitSearch]
-	);
-	const t = useT();
-
-	return (
-		<Input
-			value={search}
-			onChangeText={handleSearch}
-			placeholder={t('common.search_customers')}
-			className="flex-1"
-			testID="search-customers"
-			clearable
-		/>
-	);
-}
-
 function CustomersScreenContent() {
 	const state = useQueryState<'customers'>();
 	const actions = useQueryStateActions<'customers'>();
@@ -146,7 +114,12 @@ function CustomersScreenContent() {
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-0">
 					<HStack className="p-2">
-						<CustomersSearchInput />
+						<QuerySearchInput
+							collectionName="customers"
+							placeholder={t('common.search_customers')}
+							className="flex-1"
+							testID="search-customers"
+						/>
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<IconButton
@@ -170,6 +143,7 @@ function CustomersScreenContent() {
 							<DataTable<CustomerDocument>
 								id="customers"
 								resource={binding.resource}
+								sort={state.sort}
 								actions={tableActions}
 								active$={binding.active$}
 								total$={binding.total$}

@@ -77,6 +77,7 @@ type LegacyQueryProps = {
 type BindingProps<TSortField extends string> = {
 	query?: never;
 	resource: Query<import('rxdb').RxCollection>['resource'];
+	sort: { field: TSortField; direction: 'asc' | 'desc' };
 	actions: BindingActions<TSortField>;
 } & Pick<ReplicationBinding, 'active$' | 'total$' | 'totalSource$' | 'sync'>;
 
@@ -132,8 +133,12 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 		[uiColumns]
 	);
 
-	const sortBy = uiSettings.sortBy;
-	const sortDirection: 'asc' | 'desc' = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
+	const sortBy = binding ? binding.sort.field : uiSettings.sortBy;
+	const sortDirection: 'asc' | 'desc' = binding
+		? binding.sort.direction
+		: uiSettings.sortDirection === 'desc'
+			? 'desc'
+			: 'asc';
 
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }: SortingChange) => {

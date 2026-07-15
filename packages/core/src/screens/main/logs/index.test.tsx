@@ -136,6 +136,7 @@ describe('LogsScreen query-state wiring', () => {
 		});
 		expect(mockDataTableProps).toMatchObject({
 			resource: mockBinding.resource,
+			sort: { field: 'timestamp', direction: 'desc' },
 			active$: mockBinding.active$,
 			total$: mockBinding.total$,
 			totalSource$: mockBinding.totalSource$,
@@ -190,5 +191,6 @@ describe('LogsScreen query-state wiring', () => {
 			sort: { field: 'level', direction: 'asc' },
 			limit: 10,
 		});
+		expect(mockDataTableProps.sort).toEqual({ field: 'level', direction: 'asc' });
 	});
 });
