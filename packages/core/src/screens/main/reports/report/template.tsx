@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { useFocusEffect } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs';
 
 import { Br, Line, Row, Text } from '@wcpos/components/print';
 
@@ -15,6 +14,7 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { useReports } from '../context';
+import { useQueryState } from '../../../../query';
 
 /**
  *
@@ -24,7 +24,10 @@ export function ZReport() {
 	const { store, wpCredentials } = useAppState();
 	const storeName = useObservableEagerState(store.name$) as string;
 	const num_decimals = useObservableEagerState(store.price_num_decimals$) as number;
-	const { selectedOrders, query } = useReports();
+	const { selectedOrders } = useReports();
+	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
+		(state) => state.filters.dateRange
+	);
 	const {
 		total,
 		refundTotal,
@@ -38,14 +41,6 @@ export function ZReport() {
 		averageOrderValue,
 	} = calculateTotals({ orders: selectedOrders, num_decimals });
 
-	const selectedDateRange = useObservableEagerState(
-		query.rxQuery$.pipe(
-			map(
-				() => query.getSelector('date_created_gmt') as { $gte?: string; $lte?: string } | undefined
-			)
-		)
-	);
-
 	const { format: formatCurrency } = useCurrencyFormat();
 	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat();
@@ -55,11 +50,11 @@ export function ZReport() {
 	 *
 	 */
 	const reportPeriod = React.useMemo(() => {
-		const from = selectedDateRange?.$gte
-			? convertUTCStringToLocalDate(selectedDateRange.$gte)
+		const from = selectedDateRange?.from
+			? convertUTCStringToLocalDate(selectedDateRange.from)
 			: new Date();
-		const to = selectedDateRange?.$lte
-			? convertUTCStringToLocalDate(selectedDateRange.$lte)
+		const to = selectedDateRange?.to
+			? convertUTCStringToLocalDate(selectedDateRange.to)
 			: new Date();
 
 		return {

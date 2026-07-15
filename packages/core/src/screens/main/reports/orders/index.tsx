@@ -11,23 +11,31 @@ import type { OrderDocument } from '@wcpos/database';
 
 import { TableHeaderSelect } from './header-select';
 import { TableRowSelect } from './row-select';
-import { Cashier } from './cashier';
-import { Customer } from './customer';
-import { Status } from './status';
 import { useT } from '../../../../contexts/translations';
-import { DataTable, DataTableHeader, type RenderHeaderProps } from '../../components/data-table';
+import {
+	DataTable,
+	DataTableFooter,
+	DataTableHeader,
+	type RenderHeaderProps,
+} from '../../components/data-table';
 import { DataTableSkeleton } from '../../components/data-table/skeleton';
 import { DateCell } from '../../components/date';
+import { Cashier } from '../../components/order/cashier';
 import { CreatedVia } from '../../components/order/created-via';
+import { Customer } from '../../components/order/customer';
 import { OrderNumber } from '../../components/order/order-number';
 import { PaymentMethod } from '../../components/order/payment-method';
+import { Status } from '../../components/order/status';
 import { Total } from '../../components/order/total';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useReports } from '../context';
 import { UISettingsForm } from '../ui-settings-form';
 import { TextCell } from '../../components/text-cell';
+import { useQueryState, useQueryStateActions } from '../../../../query';
 
+import type { QueryStateActions } from '../../../../query';
 import type { RowSelectionState } from '@tanstack/react-table';
+import type { Observable } from 'rxjs';
 
 const cells = {
 	select: TableRowSelect,
@@ -78,12 +86,35 @@ const renderHeader = (props: RenderHeaderProps) => {
 	);
 };
 
+function ReportsOrdersFooter(props: {
+	active$: Observable<boolean>;
+	total$: Observable<number>;
+	totalSource$: Observable<'coverage' | 'local'>;
+	sync: () => Promise<void>;
+	count: number;
+}) {
+	return <DataTableFooter {...props} collectionName="orders" />;
+}
+
 /**
  *
  */
 export function Orders() {
 	const t = useT();
-	const { query, allOrders, unselectedRowIds, setUnselectedRowIds } = useReports();
+	const state = useQueryState<'orders'>();
+	const actions = useQueryStateActions<'orders'>();
+	const { binding, allOrders, unselectedRowIds, setUnselectedRowIds } = useReports();
+	const tableActions = React.useMemo<
+		Pick<QueryStateActions<'orders'>, 'setSort' | 'extendLimit' | 'setFilter'>
+	>(
+		() => ({
+			setSort: actions.setSort,
+			// Reports bind the complete resident date window up front; there is no next page.
+			extendLimit: () => undefined,
+			setFilter: actions.setFilter,
+		}),
+		[actions]
+	);
 
 	/**
 	 * Derive the selection state by inverting unselectedRowIds
@@ -180,12 +211,19 @@ export function Orders() {
 						<Suspense fallback={<DataTableSkeleton id="reports-orders" />}>
 							<DataTable<OrderDocument>
 								id="reports-orders"
-								query={query}
+								resource={binding.resource}
+								sort={state.sort}
+								actions={tableActions}
+								active$={binding.active$}
+								total$={binding.total$}
+								totalSource$={binding.totalSource$}
+								sync={binding.sync}
 								renderCell={renderCell}
 								renderHeader={renderHeader}
 								noDataMessage={t('common.no_orders_found')}
 								estimatedItemSize={100}
 								tableConfig={tableConfig}
+								TableFooterComponent={ReportsOrdersFooter}
 							/>
 						</Suspense>
 					</ErrorBoundary>
