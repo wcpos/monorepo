@@ -5,6 +5,23 @@ type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 export type CartLine = LineItem | FeeLine | ShippingLine;
 type TaxStatus = 'taxable' | 'none';
+type PosData = {
+	price?: string | number;
+	regular_price?: string | number;
+	tax_status?: TaxStatus;
+	tax_class?: string;
+	amount?: string | number;
+	percent?: boolean;
+	prices_include_tax?: boolean;
+	percent_of_cart_total_with_tax?: boolean;
+	virtual?: boolean;
+	downloadable?: boolean;
+	categories?: { id: number; name: string; [key: string]: unknown }[];
+	[key: string]: unknown;
+};
+
+const isPosData = (value: unknown): value is PosData =>
+	typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Helper to coerce values to booleans.
@@ -39,7 +56,7 @@ export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => 
 		return;
 	}
 	const uuidMeta = metaData.find((meta) => meta.key === '_woocommerce_pos_uuid');
-	return uuidMeta ? uuidMeta.value : undefined;
+	return typeof uuidMeta?.value === 'string' ? uuidMeta.value : undefined;
 };
 
 /**
@@ -52,18 +69,20 @@ export const getUuidFromLineItem = (item: CartLine) => {
 /**
  * Implementation of updatePosDataMeta
  */
-export function updatePosDataMeta<T extends CartLine>(item: T, newData: any): T {
+export function updatePosDataMeta<T extends CartLine>(
+	item: T,
+	newData: Record<string, unknown>
+): T {
 	const meta_data = item.meta_data ?? [];
 	let posDataFound = false;
 
 	const updatedMetaData = meta_data.map((meta) => {
 		if (meta.key === '_woocommerce_pos_data') {
-			const posData = meta.value ? JSON.parse(meta.value) : {};
-			Object.assign(posData, newData); // Merge the existing data with new data
+			const posData = parsePosData({ meta_data: [meta] }) ?? {};
 			posDataFound = true;
 			return {
 				...meta,
-				value: JSON.stringify(posData), // Update the meta data value
+				value: { ...posData, ...newData },
 			};
 		}
 		return meta;
@@ -73,7 +92,7 @@ export function updatePosDataMeta<T extends CartLine>(item: T, newData: any): T 
 	if (!posDataFound) {
 		updatedMetaData.push({
 			key: '_woocommerce_pos_data',
-			value: JSON.stringify(newData),
+			value: newData,
 		});
 	}
 
@@ -89,12 +108,19 @@ export function updatePosDataMeta<T extends CartLine>(item: T, newData: any): T 
  * types (LineItemInput etc.) are accepted alongside DB document fragments.
  */
 export const parsePosData = (item: { meta_data?: CartLine['meta_data'] }) => {
-	const posDataString = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
-	if (!posDataString) {
+	const value = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
+	if (!value) {
+		return null;
+	}
+	if (isPosData(value)) {
+		return value;
+	}
+	if (typeof value !== 'string') {
 		return null;
 	}
 	try {
-		return JSON.parse(posDataString);
+		const parsed: unknown = JSON.parse(value);
+		return isPosData(parsed) ? parsed : null;
 	} catch {
 		return null;
 	}

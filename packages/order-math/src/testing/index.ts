@@ -18,6 +18,9 @@ import type {
 const POS_DATA_KEY = '_woocommerce_pos_data';
 
 function parseMetaObject(value: unknown): Record<string, unknown> {
+	if (value && typeof value === 'object' && !Array.isArray(value)) {
+		return value as Record<string, unknown>;
+	}
 	if (typeof value !== 'string' || value === '') {
 		return {};
 	}
@@ -52,7 +55,7 @@ function mergeMetaData(
 		{
 			...overridePosData,
 			key: POS_DATA_KEY,
-			value: JSON.stringify(mergedPosData),
+			value: mergedPosData,
 		},
 	];
 }
@@ -103,12 +106,12 @@ export function makeLineItem(
 		{ key: '_woocommerce_pos_uuid', value: 'test-uuid-1' },
 		{
 			key: POS_DATA_KEY,
-			value: JSON.stringify({
+			value: {
 				price: '10',
 				regular_price: '10',
 				tax_status: 'taxable',
 				...posData,
-			}),
+			},
 		},
 	];
 	return {
@@ -132,12 +135,12 @@ export function makeFeeLine(
 		{ key: '_woocommerce_pos_uuid', value: 'test-uuid-fee-1' },
 		{
 			key: POS_DATA_KEY,
-			value: JSON.stringify({
+			value: {
 				amount: 5,
 				percent: false,
 				tax_status: 'taxable',
 				...posData,
-			}),
+			},
 		},
 	];
 	return {
@@ -158,11 +161,11 @@ export function makeShippingLine(
 		{ key: '_woocommerce_pos_uuid', value: 'test-uuid-shipping-1' },
 		{
 			key: POS_DATA_KEY,
-			value: JSON.stringify({
+			value: {
 				amount: 5,
 				tax_status: 'taxable',
 				...posData,
-			}),
+			},
 		},
 	];
 	return {

@@ -78,7 +78,7 @@ describe('makeLineItem', () => {
 	it('merges posData overrides into the JSON meta', () => {
 		const item = makeLineItem({ posData: { price: '20', regular_price: '25' } });
 		const posDataMeta = item.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
-		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+		const parsed = posDataMeta?.value as Record<string, unknown>;
 		expect(parsed.price).toBe('20');
 		expect(parsed.regular_price).toBe('25');
 		expect(parsed.tax_status).toBe('taxable'); // default preserved
@@ -90,7 +90,7 @@ describe('makeLineItem', () => {
 			meta_data: [{ key: 'custom', value: 'meta' }],
 		});
 		const posDataMeta = item.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
-		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+		const parsed = posDataMeta?.value as Record<string, unknown>;
 
 		expect(parsed.price).toBe('20');
 		expect(item.meta_data).toContainEqual({ key: 'custom', value: 'meta' });
@@ -114,7 +114,7 @@ describe('makeFeeLine', () => {
 	it('merges posData overrides', () => {
 		const fee = makeFeeLine({ posData: { amount: 10, percent: true } });
 		const posDataMeta = fee.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
-		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+		const parsed = posDataMeta?.value as Record<string, unknown>;
 		expect(parsed.amount).toBe(10);
 		expect(parsed.percent).toBe(true);
 	});
@@ -125,7 +125,7 @@ describe('makeFeeLine', () => {
 			meta_data: [{ key: 'custom', value: 'fee' }],
 		});
 		const posDataMeta = fee.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
-		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+		const parsed = posDataMeta?.value as Record<string, unknown>;
 
 		expect(parsed.amount).toBe(10);
 		expect(fee.meta_data).toContainEqual({ key: 'custom', value: 'fee' });
@@ -149,7 +149,7 @@ describe('makeShippingLine', () => {
 	it('merges posData overrides', () => {
 		const shipping = makeShippingLine({ posData: { amount: 12 } });
 		const posDataMeta = shipping.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
-		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+		const parsed = posDataMeta?.value as Record<string, unknown>;
 		expect(parsed.amount).toBe(12);
 	});
 
@@ -159,7 +159,7 @@ describe('makeShippingLine', () => {
 			meta_data: [{ key: 'custom', value: 'shipping' }],
 		});
 		const posDataMeta = shipping.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
-		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+		const parsed = posDataMeta?.value as Record<string, unknown>;
 
 		expect(parsed.amount).toBe(12);
 		expect(shipping.meta_data).toContainEqual({ key: 'custom', value: 'shipping' });

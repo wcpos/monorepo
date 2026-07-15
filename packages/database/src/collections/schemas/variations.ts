@@ -261,9 +261,7 @@ export const variationsLiteral = {
 					key: {
 						type: 'string',
 					},
-					value: {
-						type: 'string',
-					},
+					value: {},
 				},
 			},
 		},

@@ -29,10 +29,11 @@ function isVariablePrices(value: unknown): value is VariablePrices {
 }
 
 /**
- *
+ * Read the typed variable-price object delivered by the server. String parsing
+ * remains only as legacy tolerance for metadata written before the typed contract.
  */
 export function getVariablePrices(
-	metaData: { key?: string; value?: string | object }[] | undefined
+	metaData: { key?: string; value?: unknown }[] | undefined
 ): VariablePrices | null {
 	if (!metaData) {
 		uiLogger.error('metaData is not defined', {
@@ -56,7 +57,10 @@ export function getVariablePrices(
 
 	try {
 		const value = metaDataEntry.value ?? '';
-		const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+		let parsed = value;
+		if (typeof value === 'string') {
+			parsed = JSON.parse(value);
+		}
 		if (!isVariablePrices(parsed)) {
 			uiLogger.error("'_woocommerce_pos_variable_prices' has invalid structure", {
 				context: {

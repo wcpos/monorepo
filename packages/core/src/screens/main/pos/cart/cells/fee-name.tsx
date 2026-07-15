@@ -65,7 +65,11 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 						return (
 							<React.Fragment key={meta.id || meta.key}>
 								<Text className="text-sm">{`${meta.key}:`}</Text>
-								<Text className="text-sm">{meta.value}</Text>
+								<Text className="text-sm">
+									{typeof meta.value === 'object'
+										? JSON.stringify(meta.value)
+										: String(meta.value ?? '')}
+								</Text>
 							</React.Fragment>
 						);
 					})}

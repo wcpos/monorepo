@@ -17,7 +17,7 @@ interface FeeData {
 	prices_include_tax: boolean;
 	tax_class: string;
 	tax_status: 'taxable' | 'none';
-	meta_data: { key: string; value: string }[];
+	meta_data: { key: string; value: unknown }[];
 }
 
 /**
@@ -50,11 +50,11 @@ export const useAddFee = () => {
 
 				meta_data.push({
 					key: '_woocommerce_pos_data',
-					value: JSON.stringify({
+					value: {
 						amount: data.amount,
 						percent: data.percent,
 						prices_include_tax: data.prices_include_tax,
-					}),
+					},
 				});
 
 				const newFeeLine = calculateFeeLineTaxesAndTotals({

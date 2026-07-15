@@ -40,22 +40,14 @@ export interface RecalculateResult {
  * Determine whether a line item represents a POS-discounted (on sale) product
  * by comparing the POS price against the regular price in _woocommerce_pos_data.
  */
-function isLineItemOnSale(
-	item: { meta_data?: { key?: string; value?: string }[] } | null | undefined
-): boolean {
-	if (!item?.meta_data) return false;
-	const meta = item.meta_data.find((m) => m.key === '_woocommerce_pos_data');
-	if (!meta?.value) return false;
-	try {
-		const posData = JSON.parse(meta.value);
-		if (posData.price == null || posData.regular_price == null) return false;
-		const price = parseFloat(posData.price);
-		const regularPrice = parseFloat(posData.regular_price);
-		if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
-		return price < regularPrice;
-	} catch {
-		return false;
-	}
+function isLineItemOnSale(item: LineItem | null | undefined): boolean {
+	if (!item) return false;
+	const posData = parsePosData(item);
+	if (posData?.price == null || posData.regular_price == null) return false;
+	const price = parseFloat(String(posData.price));
+	const regularPrice = parseFloat(String(posData.regular_price));
+	if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
+	return price < regularPrice;
 }
 
 /**

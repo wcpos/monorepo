@@ -85,7 +85,7 @@ export interface CalcLineResult<T> {
 /**
  * Detect a `_woocommerce_pos_data` meta entry whose value cannot be used:
  * the key is present (non-empty value) but `parsePosData` yields null
- * (invalid JSON, or the literal JSON `null`), so extract* silently fell back
+ * (invalid legacy JSON, or a non-object typed value), so extract* silently fell back
  * to totals-derived defaults.
  */
 function detectMalformedPosData(
@@ -93,8 +93,8 @@ function detectMalformedPosData(
 	lineType: WarningSite['lineType'],
 	warnings: EngineWarning[]
 ): void {
-	const posDataString = getMetaDataValueByKey(line.meta_data, '_woocommerce_pos_data');
-	if (posDataString && parsePosData(line) == null) {
+	const posDataValue = getMetaDataValueByKey(line.meta_data, '_woocommerce_pos_data');
+	if (posDataValue && parsePosData(line) == null) {
 		warnings.push({ code: 'malformed_pos_data', where: { lineType, index: -1 } });
 	}
 }

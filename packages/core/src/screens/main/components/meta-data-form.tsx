@@ -21,6 +21,16 @@ interface MetaDataFormProps {
 	withDisplayValues?: boolean;
 }
 
+const formatMetaDataValue = (value: unknown): string | number => {
+	if (typeof value === 'string' || typeof value === 'number') {
+		return value;
+	}
+	if (value === undefined || value === null) {
+		return '';
+	}
+	return typeof value === 'object' ? JSON.stringify(value) : String(value);
+};
+
 /**
  *
  */
@@ -77,7 +87,13 @@ export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaData
 									<FormField
 										control={control}
 										name={`${name}.${index}.value`}
-										render={({ field }) => <FormInput label={t('common.value')} {...field} />}
+										render={({ field }) => (
+											<FormInput
+												label={t('common.value')}
+												{...field}
+												value={formatMetaDataValue(field.value)}
+											/>
+										)}
 									/>
 									{withDisplayValues && (
 										<FormField

@@ -41,9 +41,10 @@ const posDataMeta = (data: Record<string, unknown>) => ({
 	value: JSON.stringify(data),
 });
 
-const getPosData = (line: { meta_data?: { key?: string; value?: string }[] }) => {
+const getPosData = (line: { meta_data?: { key?: string; value?: unknown }[] }) => {
 	const meta = (line.meta_data ?? []).find((m) => m.key === '_woocommerce_pos_data');
-	return meta?.value ? JSON.parse(meta.value) : null;
+	if (typeof meta?.value === 'object' && meta.value !== null) return meta.value;
+	return typeof meta?.value === 'string' ? JSON.parse(meta.value) : null;
 };
 
 describe('calculateCartLine — line_item', () => {

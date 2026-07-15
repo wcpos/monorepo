@@ -102,6 +102,13 @@ describe('Utilities', () => {
 
 	// Test parsePosData
 	describe('parsePosData', () => {
+		it('should accept typed object POS data from the server contract', () => {
+			const value = { test: 123, flags: ['typed'] };
+			const item = { meta_data: [{ key: '_woocommerce_pos_data', value }] };
+
+			expect(parsePosData(item)).toEqual(value);
+		});
+
 		it('should parse valid POS data from a line item', () => {
 			const item = { meta_data: [{ key: '_woocommerce_pos_data', value: '{"test": 123}' }] };
 			expect(parsePosData(item)).toEqual({ test: 123 });
@@ -117,10 +124,13 @@ describe('Utilities', () => {
 	describe('updatePosDataMeta', () => {
 		it('should add new POS data if none exists', () => {
 			const item = {
-				meta_data: [] as { key: string; value?: string }[],
+				meta_data: [],
 			} as unknown as CartLine;
 			const updatedItem = updatePosDataMeta(item, { key: 'value' });
-			expect(updatedItem.meta_data?.[0]?.key).toBe('_woocommerce_pos_data');
+			expect(updatedItem.meta_data?.[0]).toEqual({
+				key: '_woocommerce_pos_data',
+				value: { key: 'value' },
+			});
 		});
 
 		it('should merge with existing POS data', () => {
@@ -128,7 +138,7 @@ describe('Utilities', () => {
 				meta_data: [{ key: '_woocommerce_pos_data', value: '{"key": "old_value"}' }],
 			};
 			const updatedItem = updatePosDataMeta(item, { newKey: 'new_value' });
-			expect(JSON.parse(updatedItem.meta_data?.[0]?.value || '')).toEqual({
+			expect(updatedItem.meta_data?.[0]?.value).toEqual({
 				key: 'old_value',
 				newKey: 'new_value',
 			});

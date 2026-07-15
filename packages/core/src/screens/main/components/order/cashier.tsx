@@ -19,8 +19,8 @@ export function Cashier({ table, row }: CellContext<{ document: OrderDocument },
 	const order = row.original.document;
 	const cashierID = useObservableEagerState(
 		order.meta_data$!.pipe(
-			map((meta) => meta?.find((m: { key?: string; value?: string }) => m.key === '_pos_user')),
-			map((m: { key?: string; value?: string } | undefined) => m?.value)
+			map((meta) => meta?.find((entry) => entry.key === '_pos_user')),
+			map((entry) => (typeof entry?.value === 'string' ? entry.value : undefined))
 		)
 	);
 	const cashier = useCashierLabel(cashierID);

@@ -17,7 +17,7 @@ interface ShippingData {
 	prices_include_tax: boolean;
 	tax_status: 'taxable' | 'none';
 	tax_class: string;
-	meta_data?: { key: string; value: string }[];
+	meta_data?: { key: string; value: unknown }[];
 }
 
 /**
@@ -50,12 +50,12 @@ export const useAddShipping = () => {
 
 				meta_data.push({
 					key: '_woocommerce_pos_data',
-					value: JSON.stringify({
+					value: {
 						amount: data.amount,
 						prices_include_tax: data.prices_include_tax,
 						tax_class: data.tax_class,
 						tax_status: data.tax_status,
-					}),
+					},
 				});
 
 				const newShippingLine = calculateShippingLineTaxesAndTotals({

@@ -11,6 +11,15 @@ import { metaDataSchema } from './meta-data-schema';
 
 describe('metaDataSchema', () => {
 	describe('standard meta_data entries', () => {
+		it('should accept typed object and array values', () => {
+			const result = metaDataSchema.safeParse([
+				{ key: '_woocommerce_pos_data', value: { price: '10', tax_status: 'taxable' } },
+				{ key: '_pos_rules', value: ['retail', { enabled: true }] },
+			]);
+
+			expect(result.success).toBe(true);
+		});
+
 		it('should accept entries with key and value', () => {
 			const result = metaDataSchema.safeParse([
 				{ key: '_woocommerce_pos_data', value: '{"price":"10"}' },

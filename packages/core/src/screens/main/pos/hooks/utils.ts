@@ -207,7 +207,7 @@ export const convertProductToLineItemWithoutTax = (
 
 	new_meta_data.push({
 		key: '_woocommerce_pos_data',
-		value: JSON.stringify(posData),
+		value: posData,
 	});
 
 	/**
@@ -228,13 +228,7 @@ export const convertProductToLineItemWithoutTax = (
  * Convert a variation to the format expected by OrderDocument['line_items']
  */
 type Variation = import('@wcpos/database').ProductVariationDocument;
-type MetaData = {
-	id?: number;
-	key?: string;
-	value?: string;
-	display_key?: string;
-	display_value?: string;
-}[];
+type MetaData = NonNullable<LineItem['meta_data']>;
 export const convertVariationToLineItemWithoutTax = (
 	variation: Variation,
 	parent: Product,
@@ -274,7 +268,7 @@ export const convertVariationToLineItemWithoutTax = (
 
 	new_meta_data.push({
 		key: '_woocommerce_pos_data',
-		value: JSON.stringify({ price, regular_price, tax_status }),
+		value: { price, regular_price, tax_status },
 	});
 
 	new_meta_data.push(...attributes);

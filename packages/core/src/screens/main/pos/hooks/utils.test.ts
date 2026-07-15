@@ -223,11 +223,11 @@ describe('Utilities', () => {
 
 			const posData = lineItem.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
 			expect(posData).toBeDefined();
-
-			const parsed = JSON.parse(posData!.value!);
-			expect(parsed.price).toBe('10');
-			expect(parsed.regular_price).toBe('12');
-			expect(parsed.tax_status).toBe('taxable');
+			expect(posData?.value).toEqual({
+				price: '10',
+				regular_price: '12',
+				tax_status: 'taxable',
+			});
 		});
 
 		it('should sanitize empty or undefined prices to "0"', () => {
@@ -239,9 +239,7 @@ describe('Utilities', () => {
 			const lineItem = convertProductToLineItemWithoutTax(product);
 
 			const posData = lineItem.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
-			const parsed = JSON.parse(posData!.value!);
-			expect(parsed.price).toBe('0');
-			expect(parsed.regular_price).toBe('0');
+			expect(posData?.value).toMatchObject({ price: '0', regular_price: '0' });
 		});
 
 		it('should default tax_status to "taxable" if not provided', () => {
@@ -252,8 +250,7 @@ describe('Utilities', () => {
 			const lineItem = convertProductToLineItemWithoutTax(product);
 
 			const posData = lineItem.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
-			const parsed = JSON.parse(posData!.value!);
-			expect(parsed.tax_status).toBe('taxable');
+			expect(posData?.value).toMatchObject({ tax_status: 'taxable' });
 		});
 
 		it('should filter and transfer meta_data based on metaDataKeys', () => {
@@ -371,11 +368,11 @@ describe('Utilities', () => {
 
 			const posData = lineItem.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
 			expect(posData).toBeDefined();
-
-			const parsed = JSON.parse(posData!.value!);
-			expect(parsed.price).toBe('15');
-			expect(parsed.regular_price).toBe('20');
-			expect(parsed.tax_status).toBe('taxable');
+			expect(posData?.value).toEqual({
+				price: '15',
+				regular_price: '20',
+				tax_status: 'taxable',
+			});
 		});
 
 		it('should filter variation meta_data based on metaDataKeys', () => {
