@@ -68,6 +68,9 @@ function AppStack() {
 					refreshAccessToken({
 						site: {
 							wcpos_api_url: wcposApiUrl,
+							// Fallback the shared core uses to construct `${wp_api_url}wcpos/v1/`
+							// when wcpos_api_url is transiently unset (e.g. after a web wake).
+							wp_api_url: wpApiUrl,
 							use_jwt_as_param: useJwtAsParam,
 						},
 						wpUser: wpCredentials,

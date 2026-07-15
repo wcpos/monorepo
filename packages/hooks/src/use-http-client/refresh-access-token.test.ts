@@ -20,7 +20,12 @@ function createDeferred<T>() {
 	return { promise, resolve, reject };
 }
 
-function makeConfig(post: jest.Mock) {
+function makeConfig(
+	post: jest.Mock,
+	site: { wcpos_api_url?: string; wp_api_url?: string } = {
+		wcpos_api_url: 'https://example.test/wp-json/wcpos/v1/',
+	}
+) {
 	const wpUser = {
 		id: 1,
 		refresh_token: 'refresh-token',
@@ -31,7 +36,7 @@ function makeConfig(post: jest.Mock) {
 	};
 	return {
 		config: {
-			site: { wcpos_api_url: 'https://example.test/wp-json/wcpos/v1/' },
+			site,
 			wpUser,
 			getHttpClient: () => ({ post }),
 		},
@@ -73,6 +78,41 @@ describe('refreshAccessToken', () => {
 
 		expect(requestStateManager.checkCanProceed()).toEqual(
 			expect.objectContaining({ ok: false, errorCode: ERROR_CODES.AUTH_REQUIRED })
+		);
+	});
+
+	it('keeps a transient failure retryable without latching authFailed', async () => {
+		const post = jest.fn().mockRejectedValue(new Error('HTTP 503: Service Unavailable'));
+		const { config } = makeConfig(post);
+
+		await expect(refreshAccessToken(config)).resolves.toBeNull();
+
+		// A 5xx (or network) blip must not force re-authentication.
+		expect(requestStateManager.isAuthFailed()).toBe(false);
+	});
+
+	it('does not attempt a refresh once authentication has terminally failed', async () => {
+		const post = jest.fn();
+		const { config } = makeConfig(post);
+		requestStateManager.setAuthFailed(true);
+
+		await expect(refreshAccessToken(config)).resolves.toBeNull();
+
+		expect(post).not.toHaveBeenCalled();
+	});
+
+	it('falls back to wp_api_url when wcpos_api_url is unset', async () => {
+		const post = jest.fn().mockResolvedValue({
+			data: { access_token: 'new-token', expires_at: 9999 },
+			status: 200,
+		});
+		const { config } = makeConfig(post, { wp_api_url: 'https://example.test/wp-json/' });
+
+		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
+		expect(post).toHaveBeenCalledWith(
+			'https://example.test/wp-json/wcpos/v1/auth/refresh',
+			{ refresh_token: 'refresh-token' },
+			{ headers: { 'X-WCPOS': '1' } }
 		);
 	});
 
