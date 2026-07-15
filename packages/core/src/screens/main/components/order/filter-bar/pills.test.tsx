@@ -183,7 +183,7 @@ describe('order filter pills', () => {
 	});
 
 	it('sets and clears cashier and binds its dropdown through useSearchSelect', () => {
-		mockComboboxOption = { value: '7', item: { id: 7, first_name: 'Grace' } };
+		mockComboboxOption = { value: ' 0007 ', item: { id: 7, first_name: 'Grace' } };
 		const resource = new ObservableResource(of({ id: 7 } as CustomerDocument));
 		renderPill(<CashierPill resource={resource} />);
 
@@ -194,7 +194,7 @@ describe('order filter pills', () => {
 			withGuest: false,
 		});
 		fireEvent.click(screen.getByTestId('select-combobox'));
-		expect(filters()).toEqual({ cashier: '7' });
+		expect(filters()).toEqual({ cashier: 7 });
 		fireEvent.click(screen.getByTestId('clear-filter'));
 		expect(filters()).toEqual({});
 	});

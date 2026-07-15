@@ -81,6 +81,19 @@ describe('query-state translator', () => {
 		expect(translated.search).toBe('smith');
 	});
 
+	it('normalizes cashier ids before matching order metadata', () => {
+		const translated = translateQueryState('orders', {
+			search: '',
+			filters: { cashier: ' 0007 ' },
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 50,
+		} satisfies QueryStateOf<'orders'>);
+
+		expect(translated.selector).toEqual({
+			$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } }],
+		});
+	});
+
 	it('sorts order totals through the numeric adapter field', () => {
 		const translated = translateQueryState('orders', {
 			search: '',

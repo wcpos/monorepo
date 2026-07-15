@@ -57,16 +57,16 @@ function context(document: Record<string, unknown>, columnMeta: Record<string, u
 describe('order table-cell query filters', () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it('filters by cashier through the narrow table-meta action', () => {
+	it('filters by the normalized cashier id through the narrow table-meta action', () => {
 		render(
 			<Cashier
 				{...context({
-					meta_data$: new BehaviorSubject([{ key: '_pos_user', value: '7' }]),
+					meta_data$: new BehaviorSubject([{ key: '_pos_user', value: ' 0007 ' }]),
 				})}
 			/>
 		);
 		fireEvent.click(screen.getByTestId('filter-cell'));
-		expect(mockSetFilter).toHaveBeenCalledWith('cashier', '7');
+		expect(mockSetFilter).toHaveBeenCalledWith('cashier', 7);
 	});
 
 	it('filters by customer_id through the narrow table-meta action', () => {

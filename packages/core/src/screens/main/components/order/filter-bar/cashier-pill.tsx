@@ -14,6 +14,7 @@ import type { CustomerDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions, useSearchSelect } from '../../../../../query';
+import { parseRemoteId } from '../../../../../utils/parse-remote-id';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
 import { isIdOnlyCustomerEntity } from './customer-filter-utils';
@@ -86,7 +87,9 @@ export function CashierPill({ resource, onMissing }: CashierPillProps) {
 		<Combobox
 			onValueChange={(option) => {
 				if (!option) return;
-				actions.setFilter('cashier', String(option.value));
+				const cashierID = parseRemoteId(option.value);
+				if (cashierID === undefined) return;
+				actions.setFilter('cashier', cashierID);
 			}}
 		>
 			<ComboboxTrigger asChild>

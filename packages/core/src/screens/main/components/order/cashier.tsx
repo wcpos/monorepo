@@ -41,7 +41,7 @@ export function Cashier({ table, row }: CellContext<{ document: OrderDocument },
 		<ButtonPill
 			variant="ghost-secondary"
 			size="xs"
-			onPress={() => cashierID && actions?.setFilter('cashier', cashierID)}
+			onPress={() => actions?.setFilter('cashier', cashier.id)}
 		>
 			{cashier.label}
 		</ButtonPill>
