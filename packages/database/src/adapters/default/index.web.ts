@@ -1,6 +1,6 @@
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
-import { getWebNewStorage } from '../../migration/storage/index.web';
+import { getWebNewStorage } from '../storage/index.web';
 import { wrappedErrorHandlerStorage } from '../../plugins/wrapped-error-handler-storage';
 
 const workerStorage = getWebNewStorage();

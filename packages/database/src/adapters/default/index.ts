@@ -1,6 +1,6 @@
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
-import { getNativeNewStorage } from '../../migration/storage';
+import { getNativeNewStorage } from '../storage';
 
 export const storage = getNativeNewStorage();
 

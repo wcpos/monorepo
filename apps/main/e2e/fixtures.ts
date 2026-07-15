@@ -187,9 +187,8 @@ async function blockScriptRequests(route: import('@playwright/test').Route) {
  * asynchronously. We cannot poll OPFS files from the main thread while the
  * worker holds exclusive access, so we use a fixed wait instead.
  *
- * NOTE: The previous implementation polled IndexedDB for store_v2_* / store_v3_*
- * databases, but those databases live in OPFS (not IndexedDB) after the v17
- * storage migration. That approach always timed out (30s wasted per run).
+ * Polling OPFS from the main thread would block while the worker holds its
+ * exclusive access handle, so persistence is allowed a fixed flush window.
  */
 async function waitForOPFSPersistence(page: Page): Promise<void> {
 	await page.waitForTimeout(15_000);

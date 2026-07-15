@@ -1,17 +1,16 @@
 import * as SQLite from 'expo-sqlite';
 import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 
-import { getLegacyMigrationRxStorageSQLite } from './legacy-sqlite-storage';
+import type { SQLiteBasics } from 'rxdb-premium/plugins/storage-sqlite';
 
-import type { SQLiteBasics } from 'rxdb-premium-old/plugins/storage-sqlite';
-import type { StorageMigrationConfig, StorageMigrationDatabaseKind } from './types';
+type NativeSQLiteDatabase = Awaited<ReturnType<typeof SQLite.openDatabaseAsync>>;
 
-export { prepareOldDatabaseForStorageMigration } from './prepare-old-database';
+const nativeDbCache = new Map<string, NativeSQLiteDatabase>();
 
-const NATIVE_STORAGE_KIND = 'expo-sqlite' as const;
-const legacyDbCache = new Map<string, any>();
-
-async function withDatabaseRetry<T>(db: any, operation: (activeDb: any) => Promise<T>): Promise<T> {
+async function withDatabaseRetry<T>(
+	db: NativeSQLiteDatabase,
+	operation: (activeDb: NativeSQLiteDatabase) => Promise<T>
+): Promise<T> {
 	const maxRetries = 3;
 	let lastError: unknown;
 
@@ -27,9 +26,9 @@ async function withDatabaseRetry<T>(db: any, operation: (activeDb: any) => Promi
 			if (isConnectionError && attempt < maxRetries - 1) {
 				await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
 
-				for (const [key, cachedDb] of legacyDbCache.entries()) {
+				for (const [key, cachedDb] of nativeDbCache.entries()) {
 					if (cachedDb === db) {
-						legacyDbCache.delete(key);
+						nativeDbCache.delete(key);
 						db = await getSQLiteBasicsExpoSQLiteAsync().open(key);
 						break;
 					}
@@ -44,16 +43,16 @@ async function withDatabaseRetry<T>(db: any, operation: (activeDb: any) => Promi
 	throw lastError;
 }
 
-function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
+export function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<NativeSQLiteDatabase> {
 	return {
 		open: async (databaseName) => {
-			if (legacyDbCache.has(databaseName)) {
-				const cachedDb = legacyDbCache.get(databaseName);
+			const cachedDb = nativeDbCache.get(databaseName);
+			if (cachedDb) {
 				try {
 					await cachedDb.getAllAsync('SELECT 1');
 					return cachedDb;
 				} catch {
-					legacyDbCache.delete(databaseName);
+					nativeDbCache.delete(databaseName);
 				}
 			}
 
@@ -68,7 +67,7 @@ function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
 				PRAGMA busy_timeout = 15000;
 			`);
 
-			legacyDbCache.set(databaseName, db);
+			nativeDbCache.set(databaseName, db);
 			return db;
 		},
 		all: async (db, queryObject) => {
@@ -77,7 +76,7 @@ function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
 			);
 		},
 		run: async (db, queryObject) => {
-			return withDatabaseRetry(db, (activeDb) =>
+			await withDatabaseRetry(db, (activeDb) =>
 				activeDb.runAsync(queryObject.query, queryObject.params)
 			);
 		},
@@ -87,9 +86,9 @@ function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
 			);
 		},
 		close: async (db) => {
-			for (const [key, cachedDb] of legacyDbCache.entries()) {
+			for (const [key, cachedDb] of nativeDbCache.entries()) {
 				if (cachedDb === db) {
-					legacyDbCache.delete(key);
+					nativeDbCache.delete(key);
 					break;
 				}
 			}
@@ -97,48 +96,28 @@ function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
 			try {
 				await db.closeAsync();
 			} catch {
-				// Best-effort cleanup for migration-only legacy SQLite access.
+				// Best-effort cleanup for cached SQLite access.
 			}
 		},
 		journalMode: 'WAL',
 	};
 }
 
-export async function closeAllLegacyNativeDatabases() {
-	const closePromises = Array.from(legacyDbCache.values()).map(async (db) => {
+export async function closeAllCachedNativeDatabases() {
+	const closePromises = Array.from(nativeDbCache.values()).map(async (db) => {
 		try {
 			await db.closeAsync();
 		} catch {
-			// Best-effort cleanup for migration-only legacy SQLite access.
+			// Best-effort cleanup for cached SQLite access.
 		}
 	});
 
-	legacyDbCache.clear();
+	nativeDbCache.clear();
 	await Promise.all(closePromises);
-}
-
-export function getNativeStorageKind() {
-	return NATIVE_STORAGE_KIND;
-}
-
-export function getNativeOldStorage() {
-	return getLegacyMigrationRxStorageSQLite({
-		sqliteBasics: getSQLiteBasicsExpoSQLiteAsync(),
-	});
 }
 
 export function getNativeNewStorage() {
 	return getRxStorageSQLite({
 		sqliteBasics: getSQLiteBasicsExpoSQLiteAsync(),
 	});
-}
-
-export function getStorageMigrationConfig(
-	_databaseKind: StorageMigrationDatabaseKind
-): StorageMigrationConfig {
-	return {
-		oldStorage: getNativeOldStorage(),
-		sourceStorage: 'expo-sqlite',
-		targetStorage: 'expo-sqlite',
-	};
 }

@@ -41,8 +41,7 @@ const deleteDBPlugin: RxPlugin = {
 	 * you can add hooks to the hook-list
 	 * https://github.com/pubkey/rxdb/blob/master/src/hooks.ts
 	 *
-	 * Legacy IndexedDB cleanup hook retained for older migrations; deferred cleanup for the new
-	 * storage migration flow now runs from the migration verification step.
+	 * Keep IndexedDB cleanup so explicit database removal also clears IndexedDB-backed generations.
 	 */
 	hooks: {
 		postRemoveRxDatabase: {

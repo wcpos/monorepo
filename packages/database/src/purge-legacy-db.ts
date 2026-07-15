@@ -5,29 +5,23 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { closeAllCachedNativeDatabases } from './adapters/storage';
-import {
-	APP_DATABASE_PREFIXES,
-	getUserDatabaseName,
-	isKnownAppDatabaseName,
-	LEGACY_USER_DATABASE_NAMES,
-} from './database-names';
+import { isLegacyAppDatabaseName, LEGACY_USER_DATABASE_NAMES } from './database-names';
 
-const dbLogger = getLogger(['wcpos', 'db', 'clear']);
+const dbLogger = getLogger(['wcpos', 'db', 'purge-legacy']);
 const EXPO_OPFS_ROOT = new Directory(Paths.document, '.expo-opfs');
 const RXDB_DIRECTORY_PREFIX = 'rxdb-';
 
-export interface ClearDBResult {
+export interface PurgeLegacyDBResult {
 	success: boolean;
 	message: string;
 	databasesDeleted: number;
 }
 
-const toFilesystemSafeName = (value: string) => value.replace(/\//g, '__');
+const fromFilesystemSafeName = (value: string) => value.replace(/__/g, '/');
 
-const isKnownAppFilesystemEntry = (name: string) =>
-	APP_DATABASE_PREFIXES.map(toFilesystemSafeName).some((prefix) =>
-		name.startsWith(`${RXDB_DIRECTORY_PREFIX}${prefix}`)
-	);
+const isLegacyAppFilesystemEntry = (name: string) =>
+	name.startsWith(RXDB_DIRECTORY_PREFIX) &&
+	isLegacyAppDatabaseName(fromFilesystemSafeName(name.slice(RXDB_DIRECTORY_PREFIX.length)));
 
 const isMissingSQLiteDatabaseError = (error: unknown) => {
 	const message = error instanceof Error ? error.message : String(error);
@@ -36,15 +30,15 @@ const isMissingSQLiteDatabaseError = (error: unknown) => {
 	return normalizedMessage.includes('not exist') || normalizedMessage.includes('no such');
 };
 
-const deleteKnownSQLiteDatabase = async (dbName: string) => {
+const deleteLegacySQLiteDatabase = async (dbName: string) => {
 	try {
-		dbLogger.debug(`Attempting to delete SQLite database: ${dbName}`);
+		dbLogger.debug(`Attempting to delete legacy SQLite database: ${dbName}`);
 		await SQLite.deleteDatabaseAsync(dbName);
 		return true;
 	} catch (error) {
 		if (isMissingSQLiteDatabaseError(error)) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			dbLogger.debug(`SQLite database ${dbName} was already absent: ${errorMessage}`);
+			dbLogger.debug(`Legacy SQLite database ${dbName} was already absent: ${errorMessage}`);
 			return false;
 		}
 
@@ -54,10 +48,10 @@ const deleteKnownSQLiteDatabase = async (dbName: string) => {
 
 const deleteLegacySQLiteDatabases = async () => {
 	let deletedCount = 0;
-	const knownDatabases = [...LEGACY_USER_DATABASE_NAMES, getUserDatabaseName()];
+	const knownDatabases: readonly string[] = LEGACY_USER_DATABASE_NAMES;
 
 	for (const dbName of knownDatabases) {
-		if (await deleteKnownSQLiteDatabase(dbName)) {
+		if (await deleteLegacySQLiteDatabase(dbName)) {
 			deletedCount++;
 		}
 	}
@@ -73,20 +67,20 @@ const deleteLegacySQLiteDatabases = async () => {
 
 		const contents = databaseDirectory.list();
 		const fileNames = contents.map((item) => item.name);
-		const appDatabaseFiles = fileNames.filter((file) => {
+		const legacyDatabaseFiles = fileNames.filter((file) => {
 			if (file.endsWith('-wal') || file.endsWith('-shm')) {
 				return false;
 			}
 
-			return isKnownAppDatabaseName(file);
+			return isLegacyAppDatabaseName(file);
 		});
 
-		for (const fileName of appDatabaseFiles) {
+		for (const fileName of legacyDatabaseFiles) {
 			if (knownDatabases.includes(fileName)) {
 				continue;
 			}
 
-			if (await deleteKnownSQLiteDatabase(fileName)) {
+			if (await deleteLegacySQLiteDatabase(fileName)) {
 				deletedCount++;
 			}
 		}
@@ -98,47 +92,46 @@ const deleteLegacySQLiteDatabases = async () => {
 	return deletedCount;
 };
 
-const deleteFilesystemDatabases = () => {
+const deleteLegacyFilesystemDatabases = () => {
 	if (!EXPO_OPFS_ROOT.exists) {
 		dbLogger.debug('Expo OPFS root does not exist');
 		return 0;
 	}
 
 	const contents = EXPO_OPFS_ROOT.list();
-	const appEntries = contents.filter((item) => isKnownAppFilesystemEntry(item.name));
+	const legacyEntries = contents.filter((item) => isLegacyAppFilesystemEntry(item.name));
 
-	for (const entry of appEntries) {
-		dbLogger.debug(`Deleting filesystem-backed database entry: ${entry.name}`);
+	for (const entry of legacyEntries) {
+		dbLogger.debug(`Deleting legacy filesystem-backed database entry: ${entry.name}`);
 		entry.delete();
 	}
 
-	return appEntries.length;
+	return legacyEntries.length;
 };
 
-export const clearAllDB = async (): Promise<ClearDBResult> => {
+export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
 	try {
-		dbLogger.debug('Starting to clear all application databases');
+		dbLogger.debug('Starting to purge legacy application databases');
 		dbLogger.debug('Closing cached native SQLite connections');
 		await closeAllCachedNativeDatabases();
 
 		const deletedSQLiteDatabases = await deleteLegacySQLiteDatabases();
-		const deletedFilesystemDatabases = deleteFilesystemDatabases();
-		const deletedCount = deletedSQLiteDatabases + deletedFilesystemDatabases;
-
+		const deletedFilesystemDatabases = deleteLegacyFilesystemDatabases();
+		const databasesDeleted = deletedSQLiteDatabases + deletedFilesystemDatabases;
 		const message =
-			deletedCount > 0
-				? `Successfully cleared ${deletedCount} database entries`
-				: 'No databases found to clear (this might mean the app is already in a clean state)';
+			databasesDeleted > 0
+				? `Successfully purged ${databasesDeleted} legacy database entries`
+				: 'No legacy databases found to purge';
 
 		dbLogger.info(message);
 
 		return {
 			success: true,
 			message,
-			databasesDeleted: deletedCount,
+			databasesDeleted,
 		};
 	} catch (error) {
-		dbLogger.error('Failed to clear databases', {
+		dbLogger.error('Failed to purge legacy databases', {
 			showToast: true,
 			saveToDb: true,
 			context: {

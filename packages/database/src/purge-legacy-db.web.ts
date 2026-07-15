@@ -1,6 +1,6 @@
-import { APP_DATABASE_PREFIXES, isKnownAppDatabaseName } from './database-names';
+import { isLegacyAppDatabaseName } from './database-names';
 
-interface ClearDBResult {
+export interface PurgeLegacyDBResult {
 	success: boolean;
 	message: string;
 	databasesDeleted: number;
@@ -8,20 +8,16 @@ interface ClearDBResult {
 
 const RXDB_DIRECTORY_PREFIX = 'rxdb-';
 
-const toOpfsSafeName = (value: string) => value.replace(/\//g, '__');
+const fromOpfsSafeName = (value: string) => value.replace(/__/g, '/');
 
-const isKnownAppOpfsEntry = (name: string) =>
-	APP_DATABASE_PREFIXES.map(toOpfsSafeName).some((prefix) =>
-		name.startsWith(`${RXDB_DIRECTORY_PREFIX}${prefix}`)
-	);
+const isLegacyAppOpfsEntry = (name: string) =>
+	name.startsWith(RXDB_DIRECTORY_PREFIX) &&
+	isLegacyAppDatabaseName(fromOpfsSafeName(name.slice(RXDB_DIRECTORY_PREFIX.length)));
 
-/**
- * Delete all IndexedDB databases (legacy storage).
- */
-const deleteIndexedDbDatabases = async () => {
+const deleteLegacyIndexedDbDatabases = async () => {
 	const databases = await indexedDB.databases();
-	const appDatabases = databases.filter((db) => db.name && isKnownAppDatabaseName(db.name));
-	const deletePromises = appDatabases.map(
+	const legacyDatabases = databases.filter((db) => db.name && isLegacyAppDatabaseName(db.name));
+	const deletePromises = legacyDatabases.map(
 		(db) =>
 			new Promise<void>((resolve, reject) => {
 				if (!db.name) {
@@ -37,13 +33,10 @@ const deleteIndexedDbDatabases = async () => {
 	);
 
 	await Promise.all(deletePromises);
-	return appDatabases.length;
+	return legacyDatabases.length;
 };
 
-/**
- * Delete known app entries from the OPFS root (new storage).
- */
-const deleteOpfsDatabases = async () => {
+const deleteLegacyOpfsDatabases = async () => {
 	if (!navigator.storage?.getDirectory) {
 		return 0;
 	}
@@ -52,7 +45,7 @@ const deleteOpfsDatabases = async () => {
 	const entriesToDelete: string[] = [];
 
 	for await (const [name] of root as unknown as AsyncIterable<[string, FileSystemHandle]>) {
-		if (isKnownAppOpfsEntry(name)) {
+		if (isLegacyAppOpfsEntry(name)) {
 			entriesToDelete.push(name);
 		}
 	}
@@ -61,16 +54,16 @@ const deleteOpfsDatabases = async () => {
 	return entriesToDelete.length;
 };
 
-export const clearAllDB = async (): Promise<ClearDBResult> => {
+export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
 	const [deletedIndexedDbDatabases, deletedOpfsDatabases] = await Promise.all([
-		deleteIndexedDbDatabases(),
-		deleteOpfsDatabases(),
+		deleteLegacyIndexedDbDatabases(),
+		deleteLegacyOpfsDatabases(),
 	]);
 	const databasesDeleted = deletedIndexedDbDatabases + deletedOpfsDatabases;
 	const message =
 		databasesDeleted > 0
-			? `Successfully cleared ${databasesDeleted} database entries`
-			: 'No databases found to clear (this might mean the app is already in a clean state)';
+			? `Successfully purged ${databasesDeleted} legacy database entries`
+			: 'No legacy databases found to purge';
 
 	return {
 		success: true,

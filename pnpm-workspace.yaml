@@ -48,11 +48,6 @@ overrides:
   # external-editor@3.1.0 pins vulnerable tmp 0.0.33 — force the patched current release
   # (GHSA-ph9p-34f9-6g65, high).
   "external-editor@3.1.0>tmp": "0.2.7"
-packageExtensions:
-  "rxdb-premium-old@16.21.1":
-    "dependencies": { "rxdb": "16.21.1" }
-  "rxdb-premium@16.21.1":
-    "dependencies": { "rxdb": "16.21.1" }
 allowBuilds:
   "@firebase/util": false
   "@serialport/bindings-cpp": true
