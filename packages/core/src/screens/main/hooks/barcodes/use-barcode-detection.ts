@@ -88,7 +88,10 @@ export const useBarcodeDetection = (
 			}
 
 			const currentInputTime = Date.now();
-			let timeBetweenInputs = 0;
+			// With no previous keystroke the input speed is unknown — treat it as slow,
+			// otherwise the first key after mount always reads as scanner-fast (0ms) and
+			// normal typing gets captured as a barcode.
+			let timeBetweenInputs = Number.POSITIVE_INFINITY;
 			if (lastInputTimeRef.current !== null) {
 				timeBetweenInputs = currentInputTime - lastInputTimeRef.current;
 			}
