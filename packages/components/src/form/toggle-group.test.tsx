@@ -24,38 +24,36 @@ jest.mock('./context', () => ({
 }));
 
 // Mirrors the real single-select ToggleGroup contract: re-pressing the selected
-// item fires onValueChange(undefined), and root-level disabled blocks presses.
+// item fires onValueChange(undefined). Root and item disabled props stay
+// independent so the tests can verify that FormToggleGroup forwards both.
 jest.mock('../toggle-group', () => {
 	const React = require('react');
 	return {
 		ToggleGroup: ({ children, value, onValueChange, testID, disabled, ...props }: any) =>
 			React.createElement(
 				'div',
-				{ role: 'group', 'data-value': value, 'data-testid': testID, ...props },
+				{
+					role: 'group',
+					'data-value': value,
+					'data-testid': testID,
+					'aria-disabled': disabled,
+					...props,
+				},
 				React.Children.map(children, (child: any) =>
 					React.cloneElement(child, {
 						__groupValue: value,
 						__onValueChange: onValueChange,
-						__groupDisabled: disabled,
 					})
 				)
 			),
-		ToggleGroupItem: ({
-			children,
-			value,
-			testID,
-			disabled,
-			__groupValue,
-			__onValueChange,
-			__groupDisabled,
-		}: any) =>
+		ToggleGroupItem: ({ children, value, testID, disabled, __groupValue, __onValueChange }: any) =>
 			React.createElement(
 				'button',
 				{
 					'data-testid': testID,
 					'data-item-disabled': disabled ? 'true' : undefined,
 					'aria-pressed': __groupValue === value,
-					disabled: !!(disabled || __groupDisabled),
+					disabled,
 					onClick: () => __onValueChange(__groupValue === value ? undefined : value),
 				},
 				children
@@ -224,6 +222,7 @@ describe('FormToggleGroup', () => {
 				disabled
 			/>
 		);
+		expect(screen.getByRole('group')).toHaveAttribute('aria-disabled', 'true');
 		fireEvent.click(screen.getByText('Amount off order'));
 		expect(onChange).not.toHaveBeenCalled();
 		for (const item of screen.getAllByRole('button')) {
