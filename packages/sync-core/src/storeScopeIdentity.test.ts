@@ -81,7 +81,7 @@ describe('scopeDatabaseName', () => {
 	});
 
 	it('bumps the generation prefix for storage-format migrations', () => {
-		expect(scopeDatabaseName(identity, { generation: 2 })).toBe(`pos_v2_${scopeKeyFor(identity)}`);
+		expect(scopeDatabaseName(identity, { generation: 3 })).toBe(`pos_v3_${scopeKeyFor(identity)}`);
 	});
 
 	it('appends a namespace suffix for test isolation', () => {
