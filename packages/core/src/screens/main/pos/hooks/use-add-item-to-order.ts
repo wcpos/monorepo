@@ -50,7 +50,7 @@ export const useAddItemToOrder = () => {
 				collection: 'orders',
 				operation: 'create',
 				recordId,
-				payload: resident.get('payload') as Record<string, unknown>,
+				payload: resident.toMutableJSON().payload as Record<string, unknown>,
 			});
 			await order.remove();
 			setCurrentOrderID(recordId);

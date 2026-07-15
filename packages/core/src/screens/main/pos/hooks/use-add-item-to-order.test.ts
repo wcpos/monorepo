@@ -61,16 +61,23 @@ describe('useAddItemToOrder', () => {
 
 	it('creates an engine order from a worker-cloneable temporary-order snapshot', async () => {
 		const nestedProxy = new Proxy({ first_name: 'Guest' }, {});
+		const residentPayloadProxy = new Proxy({ status: 'pos-open' }, {});
 		order.isNew = true;
 		order.toJSON = () => ({ uuid: 'order-uuid', billing: nestedProxy });
 		order.toMutableJSON = () => ({ uuid: 'order-uuid', billing: { first_name: 'Guest' } });
 		mockInsertEngineResident.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => {
 				serialize(payload);
-				return { get: () => payload };
+				return {
+					get: () => residentPayloadProxy,
+					toMutableJSON: () => ({ payload: { status: 'pos-open' } }),
+				};
 			}
 		);
-		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+		mockWrite.mockImplementation(async ({ payload }: { payload: Record<string, unknown> }) => {
+			serialize(payload);
+			return { mutationId: 'mutation-1' };
+		});
 
 		const { result } = renderHook(() => useAddItemToOrder());
 		await act(async () => {
