@@ -6,10 +6,10 @@ import { useObservableEagerState, useObservableSuspense } from 'observable-hooks
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
-import type { Query } from '@wcpos/query';
 
 import { TaxRatesFooter } from './footer';
 import { TaxRateTable } from './rate-table';
+import { useCollectionBinding, useQueryState } from '../../../query';
 import { useExtraData } from '../contexts/extra-data';
 
 import type { Observable } from 'rxjs';
@@ -25,15 +25,13 @@ interface QueryResult {
 	hits: { document: TaxRateDocument }[];
 }
 
-interface TaxRatesTabsProps {
-	query: Query<import('rxdb').RxCollection>;
-}
-
 /**
  *
  */
-export function TaxRatesTabs({ query }: TaxRatesTabsProps) {
-	const result = useObservableSuspense(query.resource) as QueryResult;
+export function TaxRatesTabs() {
+	const state = useQueryState<'tax-rates'>();
+	const binding = useCollectionBinding('tax-rates', state);
+	const result = useObservableSuspense(binding.resource) as QueryResult;
 	const rates = result.hits.map(({ document }: { document: TaxRateDocument }) => document);
 	const { extraData } = useExtraData();
 	const taxClasses = useObservableEagerState(
@@ -73,7 +71,13 @@ export function TaxRatesTabs({ query }: TaxRatesTabsProps) {
 					</TabsContent>
 				))}
 			</Tabs>
-			<TaxRatesFooter count={rates.length} query={query} />
+			<TaxRatesFooter
+				count={rates.length}
+				active$={binding.active$}
+				total$={binding.total$}
+				totalSource$={binding.totalSource$}
+				sync={binding.sync}
+			/>
 		</>
 	);
 }
