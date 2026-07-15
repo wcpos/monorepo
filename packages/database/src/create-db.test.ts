@@ -56,19 +56,19 @@ describe('create-db', () => {
 	it.each([
 		[
 			'createUserDB',
-			'wcposusers_v4',
+			'wcposusers_v6',
 			userCollections,
 			async (module: typeof import('./create-db')) => module.createUserDB(),
 		],
 		[
 			'createStoreDB',
-			'store_v4_abc123',
+			'store_v6_abc123',
 			storeCollections,
 			async (module: typeof import('./create-db')) => module.createStoreDB('abc123'),
 		],
 		[
 			'createFastStoreDB',
-			'fast_store_v5_abc123',
+			'fast_store_v6_abc123',
 			syncCollections,
 			async (module: typeof import('./create-db')) => module.createFastStoreDB('abc123'),
 		],

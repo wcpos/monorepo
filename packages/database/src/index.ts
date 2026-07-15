@@ -8,6 +8,8 @@ export { userCollections, storeCollections, syncCollections } from './collection
 export { sanitizeWPCredentialsData } from './collections/wp-credentials';
 export { clearAllDB } from './clear-all-db';
 export type { ClearDBResult } from './clear-all-db';
+export { purgeLegacyDatabases } from './purge-legacy-db';
+export type { PurgeLegacyDBResult } from './purge-legacy-db';
 export type { FlexSearchInstance, SearchInitializationOptions } from './types.d';
 
 /**
