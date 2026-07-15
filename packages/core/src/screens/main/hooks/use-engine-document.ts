@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { Observable, of } from 'rxjs';
+import { EMPTY, Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
 import { observeEngineDatabases, useQueryManager } from '@wcpos/query';
@@ -38,7 +38,7 @@ function engineDocument$(
 		map((database) => database as unknown as EngineDatabase | null),
 		switchMap((database) => {
 			if (!database) {
-				return of(null);
+				return EMPTY;
 			}
 
 			// Resolve after every db$ emission: scope moves and resets replace collection residents.
@@ -46,7 +46,7 @@ function engineDocument$(
 				engineCollectionNameFor(collectionName)
 			] as unknown as EngineCollection | undefined;
 			if (!collection) {
-				return of(null);
+				return EMPTY;
 			}
 
 			const query =

@@ -28,7 +28,6 @@ type FakeDatabase = {
 
 let activeDatabase: FakeDatabase | null;
 let engineReady: Promise<{ database: FakeDatabase }>;
-let resolveEngineReady: (scope: { database: FakeDatabase }) => void;
 const databaseSubscribers = new Set<(database: FakeDatabase | null) => void>();
 
 const engine = {
@@ -102,9 +101,7 @@ function current(resource: ReturnType<typeof useEngineDocument<Record<string, un
 describe('useEngineDocument', () => {
 	beforeEach(() => {
 		activeDatabase = null;
-		engineReady = new Promise((resolve) => {
-			resolveEngineReady = resolve;
-		});
+		engineReady = new Promise(() => undefined);
 		databaseSubscribers.clear();
 	});
 
@@ -217,28 +214,20 @@ describe('useEngineDocument', () => {
 		expect(current(result.current)).toBeNull();
 	});
 
-	it('resolves null while the database opens and uses ready as a live-database backstop', async () => {
+	it('stays pending while the database opens and emits null only after a live query misses', async () => {
 		const { result } = renderHook(() =>
 			useEngineDocument<Record<string, unknown>>('products', 'product-uuid')
 		);
 
-		expect(current(result.current)).toBeNull();
+		expect(current(result.current)).toBeUndefined();
 
-		const source = fakeRxDocument({
-			id: 'product-uuid',
-			wooProductId: 42,
-			payload: { name: 'Coffee' },
-		});
-		const database = databaseWith(
-			new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document)
-		);
+		const database = databaseWith(new BehaviorSubject<RxDocument<EngineDocument> | null>(null));
 		await act(async () => {
-			activeDatabase = database;
-			resolveEngineReady({ database });
-			await engineReady;
+			emitDatabase(database);
 		});
 
-		expect(current(result.current)?.name).toBe('Coffee');
+		expect(database.collections.products.findOne).toHaveBeenCalledWith('product-uuid');
+		expect(current(result.current)).toBeNull();
 	});
 
 	it('resolves an empty document list while the database opens', () => {

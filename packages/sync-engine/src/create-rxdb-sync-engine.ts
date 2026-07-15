@@ -184,6 +184,9 @@ export type EngineStringStore = {
 
 export type RxdbSyncEnginePorts = {
 	site: { syncBaseUrl: string; wpJsonRoot: string };
+	/** Optional host lifecycle barrier. Initial database creation waits for this
+	 * while the engine handle itself remains synchronously constructible. */
+	databaseOpenBarrier?: Promise<void>;
 	/** The ONLY required adapter port. A factory receives the full scope
 	 * identity so per-scope storage decisions stay possible. */
 	storage:
@@ -488,6 +491,7 @@ export function createRxdbSyncEngine(
 		if (!identity) {
 			throw new Error(`No identity registered for scope ${scopeId}`);
 		}
+		if (ports.databaseOpenBarrier) await ports.databaseOpenBarrier;
 		const storage = typeof ports.storage === 'function' ? ports.storage(identity) : ports.storage;
 		const db = await createRxDatabase({
 			name: scopeDatabaseName(identity),
