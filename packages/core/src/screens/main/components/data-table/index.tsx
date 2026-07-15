@@ -175,10 +175,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 					...tableConfig?.meta,
 					actions: { setFilter: binding.actions.setFilter },
 				}
-			: {
-					query,
-					...tableConfig?.meta,
-				},
+			: tableConfig?.meta,
 	});
 
 	/**

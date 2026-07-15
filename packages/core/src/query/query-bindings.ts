@@ -94,14 +94,19 @@ function useLogsTotal(collection: CollectionKey, query: RegisteredQuery) {
 
 export function useCollectionBinding<C extends CollectionKey>(
 	collection: C,
-	state: QueryStateOf<C>
+	state: QueryStateOf<C>,
+	options: { wooIds?: readonly number[] } = {}
 ) {
 	const translated = translateQueryState(collection, state);
+	const selector =
+		options.wooIds === undefined
+			? translated.selector
+			: { ...translated.selector, id: { $in: [...options.wooIds] } };
 	const query = useRegisteredQuery({
 		collectionName: translated.collectionName,
-		params: { selector: translated.selector, sort: translated.sort, limit: translated.limit },
+		params: { selector, sort: translated.sort, limit: translated.limit },
 		search: translated.search,
-		identity: 'collection',
+		identity: options.wooIds === undefined ? 'collection' : 'targeted-collection',
 	});
 	const output = useBindingOutput(query);
 	const logsTotal = useLogsTotal(collection, query);

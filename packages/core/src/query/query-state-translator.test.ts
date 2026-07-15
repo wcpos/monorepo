@@ -13,6 +13,19 @@ type ExhaustiveFilterMap = {
 const exhaustiveFilterMap: ExhaustiveFilterMap = FILTER_TRANSLATORS;
 
 describe('query-state translator', () => {
+	it('keeps the POS runtime product sort surface mapped to engine paths', () => {
+		const state = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'total_sales', direction: 'desc' },
+			limit: 10,
+		} as unknown as QueryStateOf<'products'>;
+
+		expect(translateQueryState('products', state)).toMatchObject({
+			sort: [{ total_sales: 'desc' }],
+			sortEnginePath: 'payload.total_sales',
+		});
+	});
 	it('has an exhaustive entry for every declared collection filter', () => {
 		expect(exhaustiveFilterMap).toBe(FILTER_TRANSLATORS);
 		expect(Object.keys(FILTER_TRANSLATORS.products)).toEqual([

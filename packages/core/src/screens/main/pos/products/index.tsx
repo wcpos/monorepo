@@ -11,7 +11,6 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
-import { useRelationalQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';
@@ -27,7 +26,7 @@ import { useBarcode } from './use-barcode';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
-import { FilterBar } from './filter-bar';
+import { FilterBar } from '../../components/product/filter-bar';
 import { ProductImage } from '../../components/product/image';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
 import { VariableProductImage } from '../../components/product/variable-image';
@@ -40,8 +39,45 @@ import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 import { TextCell } from '../../components/text-cell';
 import { COGS } from './cells/cogs';
+import {
+	QueryStateProvider,
+	useQueryState,
+	useQueryStateActions,
+	useRelationalCollectionBinding,
+} from '../../../../query';
+
+import type { QueryStateActions, QueryStateOf } from '../../../../query';
+import type { SortFieldsByCollection } from '../../../../query/query-state-types';
+import type { BindingDataTableFooterProps } from '../../components/data-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+
+const POS_PRODUCTS_PAGE_SIZE = 10;
+const POS_PRODUCT_SORT_FIELDS = [
+	'name',
+	'sku',
+	'barcode',
+	'sortable_price',
+	'date_created_gmt',
+	'date_modified_gmt',
+	'total_sales',
+	'stock_quantity',
+	'stock_status',
+	'menu_order',
+] as const satisfies readonly SortFieldsByCollection['products'][];
+const DEFAULT_POS_PRODUCT_SORT = { field: 'name', direction: 'asc' } as const;
+
+function isPOSProductSortField(field: unknown): field is SortFieldsByCollection['products'] {
+	return POS_PRODUCT_SORT_FIELDS.some((sortField) => sortField === field);
+}
+
+function getPOSProductSort(
+	sortBy: unknown,
+	sortDirection: unknown
+): QueryStateOf<'products'>['sort'] {
+	if (!isPOSProductSortField(sortBy)) return DEFAULT_POS_PRODUCT_SORT;
+	return { field: sortBy, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
+}
 
 const cells = {
 	simple: {
@@ -118,7 +154,7 @@ function renderItem({
 /**
  *
  */
-function TableFooter(props: React.ComponentProps<typeof DataTableFooter>) {
+function TableFooter(props: BindingDataTableFooterProps) {
 	return (
 		<DataTableFooter {...props}>
 			<TaxBasedOn />
@@ -129,71 +165,53 @@ function TableFooter(props: React.ComponentProps<typeof DataTableFooter>) {
 /**
  *
  */
-export function POSProducts({ isColumn = false }) {
+function POSProductsContent({ isColumn = false }: { isColumn?: boolean }) {
 	const { uiSettings } = useUISettings('pos-products');
+	const state = useQueryState<'products'>();
+	const actions = useQueryStateActions<'products'>();
+	const binding = useRelationalCollectionBinding(state);
+	const tableActions = React.useMemo<
+		Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>
+	>(
+		() => ({
+			setSort: actions.setSort,
+			extendLimit: actions.extendLimit,
+			setFilter: actions.setFilter,
+		}),
+		[actions]
+	);
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const viewMode = useObservableEagerState(uiSettings.viewMode$);
 	const sortBy = useObservableEagerState(uiSettings.sortBy$);
 	const sortDirection = useObservableEagerState(uiSettings.sortDirection$);
-	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
 	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
 	const t = useT();
 
 	/**
-	 *
-	 */
-	const { parentQuery: query } = useRelationalQuery(
-		{
-			queryKeys: ['products', { target: 'pos', type: 'relational' }],
-			collectionName: 'products',
-			initialParams: {
-				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection as 'asc' | 'desc' }],
-			},
-			infiniteScroll: true,
-		},
-		{
-			queryKeys: ['variations', { target: 'pos', type: 'relational' }],
-			collectionName: 'variations',
-			initialParams: {
-				sort: [{ id: uiSettings.sortDirection as 'asc' | 'desc' }],
-			},
-			endpoint: 'products/variations',
-			greedy: true,
-		}
-	);
-
-	/**
 	 * Barcode
 	 */
-	const { onKeyPress } = useBarcode(
-		query as unknown as import('@wcpos/query').RelationalQuery<
-			import('@wcpos/database').ProductCollection
-		>,
-		querySearchInputRef as never
-	);
+	const { onKeyPress } = useBarcode(actions.setSearch);
 
-	/**
-	 *
-	 */
+	/** UI settings are an external observable projected into committed query state. */
 	React.useEffect(() => {
 		if (showOutOfStock) {
-			query?.removeWhere('stock_status').exec();
+			actions.clearFilter('stock_status');
 		} else {
-			query?.where('stock_status').equals('instock').exec();
+			actions.setFilter('stock_status', 'instock');
 		}
-	}, [query, showOutOfStock]);
+	}, [actions, showOutOfStock]);
 
 	/**
-	 * Apply sort changes to the live query. Both the settings control and the
+	 * Apply sort changes to query state. Both the settings control and the
 	 * DataTable column headers write sortBy/sortDirection to uiSettings; reacting
 	 * to those observables here keeps the grid (which has no headers) and the
-	 * table in sync. An effect is required because the query is an imperative
-	 * external store, not derivable state.
+	 * table in sync. An effect is required because UI settings are an external store.
 	 */
 	React.useEffect(() => {
-		query?.sort([{ [sortBy]: sortDirection as 'asc' | 'desc' }]).exec();
-	}, [query, sortBy, sortDirection]);
+		const sort = getPOSProductSort(sortBy, sortDirection);
+		actions.setSort(sort.field, sort.direction);
+	}, [actions, sortBy, sortDirection]);
 
 	/**
 	 * Helper to set expanded state directly, bypassing TanStack's updater function
@@ -248,8 +266,7 @@ export function POSProducts({ isColumn = false }) {
 							<HStack>
 								<ErrorBoundary>
 									<QuerySearchInput
-										ref={querySearchInputRef}
-										query={query!}
+										collectionName="products"
 										placeholder={t('common.search_products')}
 										className="flex-1"
 										onKeyPress={onKeyPress}
@@ -262,7 +279,7 @@ export function POSProducts({ isColumn = false }) {
 								</UISettingsDialog>
 							</HStack>
 							<ErrorBoundary>
-								<FilterBar query={query!} />
+								<FilterBar />
 							</ErrorBoundary>
 						</VStack>
 					</ErrorBoundary>
@@ -271,11 +288,17 @@ export function POSProducts({ isColumn = false }) {
 					<ErrorBoundary>
 						<Suspense>
 							{viewMode === 'grid' ? (
-								<ProductGrid query={query!} />
+								<ProductGrid binding={binding} actions={tableActions} />
 							) : (
 								<DataTable<ProductDocument>
 									id="pos-products"
-									query={query!}
+									resource={binding.resource}
+									sort={state.sort}
+									actions={tableActions}
+									active$={binding.active$}
+									total$={binding.total$}
+									totalSource$={binding.totalSource$}
+									sync={binding.sync}
 									renderItem={renderItem}
 									renderCell={renderCell}
 									noDataMessage={t('common.no_products_found')}
@@ -290,5 +313,24 @@ export function POSProducts({ isColumn = false }) {
 				</CardContent>
 			</Card>
 		</View>
+	);
+}
+
+export function POSProducts({ isColumn = false }) {
+	const { uiSettings } = useUISettings('pos-products');
+	const initialSort = getPOSProductSort(uiSettings.sortBy, uiSettings.sortDirection);
+	const initialFilters = uiSettings.showOutOfStock
+		? undefined
+		: { stock_status: 'instock' as const };
+
+	return (
+		<QueryStateProvider
+			collection="products"
+			initialPageSize={POS_PRODUCTS_PAGE_SIZE}
+			initialSort={initialSort}
+			initialFilters={initialFilters}
+		>
+			<POSProductsContent isColumn={isColumn} />
+		</QueryStateProvider>
 	);
 }

@@ -91,8 +91,7 @@ const mockBarcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogge
 	success: jest.Mock;
 };
 
-const productQuery = { search: jest.fn() };
-const searchInput = { setSearch: jest.fn(), onSearch: jest.fn() };
+const mockSetSearch = jest.fn();
 
 function response(body: unknown): Response {
 	return {
@@ -164,12 +163,10 @@ async function scan(barcode = 'ABC'): Promise<void> {
 }
 
 function renderBarcodeHook() {
-	return renderHook(() =>
-		useBarcode(
-			productQuery as never,
-			{ current: searchInput } as React.RefObject<typeof searchInput | null>
-		)
-	);
+	const useStoreBarcode = useBarcode as unknown as (setSearch: (search: string) => void) => {
+		onKeyPress: (...args: unknown[]) => unknown;
+	};
+	return renderHook(() => useStoreBarcode(mockSetSearch));
 }
 
 describe('useBarcode online escalation', () => {
@@ -184,9 +181,7 @@ describe('useBarcode online escalation', () => {
 			mockFindEngineVariations,
 			mockFindEngineProductById,
 			mockOnKeyPress,
-			productQuery.search,
-			searchInput.setSearch,
-			searchInput.onSearch,
+			mockSetSearch,
 			mockBarcodeLogger.info,
 			mockBarcodeLogger.debug,
 			mockBarcodeLogger.error,
@@ -470,12 +465,11 @@ describe('useBarcode online escalation', () => {
 			wooIds: [3],
 			forceRefresh: true,
 		});
-		expect(productQuery.search).not.toHaveBeenCalled();
+		expect(mockSetSearch).not.toHaveBeenCalled();
 		for (const resolve of hydrationResolvers) resolve();
 		await act(async () => scanPromise);
 
-		expect(productQuery.search).toHaveBeenCalledWith('ABC');
-		expect(searchInput.setSearch).toHaveBeenCalledWith('ABC');
+		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
@@ -534,8 +528,7 @@ describe('useBarcode online escalation', () => {
 
 		await act(async () => scan());
 
-		expect(productQuery.search).toHaveBeenCalledWith('ABC');
-		expect(searchInput.setSearch).toHaveBeenCalledWith('ABC');
+		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({ toast: { text2: 'common.barcode_online_lookup_failed' } })
@@ -577,8 +570,7 @@ describe('useBarcode online escalation', () => {
 				expect.any(String),
 				expect.objectContaining({ toast: { text2: 'common.barcode_online_lookup_failed' } })
 			);
-			expect(productQuery.search).toHaveBeenCalledWith('ABC');
-			expect(searchInput.setSearch).toHaveBeenCalledWith('ABC');
+			expect(mockSetSearch).toHaveBeenCalledWith('ABC');
 		} finally {
 			jest.useRealTimers();
 		}
@@ -605,7 +597,6 @@ describe('useBarcode online escalation', () => {
 			expect.any(String),
 			expect.objectContaining({ toast: { text2: message } })
 		);
-		expect(productQuery.search).toHaveBeenCalledWith('ABC');
-		expect(searchInput.setSearch).toHaveBeenCalledWith('ABC');
+		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
 	});
 });

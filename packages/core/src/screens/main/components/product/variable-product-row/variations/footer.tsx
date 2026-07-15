@@ -1,19 +1,20 @@
 import * as React from 'react';
 
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useQueryManager, useReplicationState } from '@wcpos/query';
+import { useQueryManager } from '@wcpos/query';
 import type { ProductDocument } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../../contexts/translations';
 import { SyncButton } from '../../../../components/sync-button';
 
 interface VariationTableFooterProps {
-	query: Query<import('@wcpos/database').ProductVariationCollection>;
+	binding: Pick<
+		ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>,
+		'sync' | 'active$' | 'total$'
+	>;
 	parent: ProductDocument;
 	count: number;
 }
@@ -21,10 +22,9 @@ interface VariationTableFooterProps {
 /**
  *
  */
-export function VariationTableFooter({ query, parent, count }: VariationTableFooterProps) {
+export function VariationTableFooter({ binding, parent, count }: VariationTableFooterProps) {
 	const manager = useQueryManager();
-	const { sync, active$, total$ } = useReplicationState(query);
-	const loading = useObservableEagerState(active$);
+	const loading = useObservableEagerState(binding.active$);
 
 	/**
 	 *
@@ -41,19 +41,19 @@ export function VariationTableFooter({ query, parent, count }: VariationTableFoo
 				recordId: String(variation.primary),
 			});
 		}
-		return sync();
-	}, [manager, parent.id, sync]);
+		return binding.sync();
+	}, [binding, manager, parent.id]);
 
 	/**
 	 * Get total from sync collection
 	 */
-	const total = useObservableState(total$ ?? of(0), 0);
+	const total = useObservableState(binding.total$, 0);
 	const t = useT();
 
 	return (
 		<HStack space="xs" className="border-border bg-footer justify-end border-b p-2">
 			<Text className="text-xs">{t('common.showing_of', { shown: count, total })}</Text>
-			<SyncButton sync={sync} clearAndSync={handleClearVariations} active={loading} />
+			<SyncButton sync={binding.sync} clearAndSync={handleClearVariations} active={loading} />
 		</HStack>
 	);
 }

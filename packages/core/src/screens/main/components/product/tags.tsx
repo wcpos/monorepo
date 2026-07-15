@@ -18,10 +18,7 @@ export function ProductTags({ table, row }: CellContext<{ document: ProductDocum
 	const tags = useObservableEagerState(product.tags$!) || [];
 
 	const meta = table.options.meta as unknown as {
-		actions?: Pick<QueryStateActions<'products'>, 'setFilter'>;
-		query?: {
-			where(field: string): { elemMatch(value: { id: number }): { exec(): void } };
-		};
+		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
 	};
 
 	if (tags.length === 0) {
@@ -40,14 +37,9 @@ export function ProductTags({ table, row }: CellContext<{ document: ProductDocum
 						key={index}
 						size="xs"
 						variant="ghost-secondary"
-						onPress={() => {
-							if (tag.id === undefined) return;
-							if (meta.actions) {
-								meta.actions.setFilter('tags', [tag.id]);
-							} else {
-								meta.query?.where('tags').elemMatch({ id: tag.id }).exec();
-							}
-						}}
+						onPress={() =>
+							tag.id === undefined ? undefined : meta.actions.setFilter('tags', [tag.id])
+						}
 					>
 						<ButtonText numberOfLines={1} decodeHtml>
 							{tag.name}

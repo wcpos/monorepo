@@ -35,7 +35,17 @@ type PriceSort = 'price' | 'regular_price' | 'sale_price';
 type StockSort = 'stock_quantity' | 'stock_status';
 
 export interface SortFieldsByCollection {
-	products: 'id' | 'name' | 'sku' | 'barcode' | PriceSort | StockSort | DatedSort;
+	products:
+		| 'id'
+		| 'name'
+		| 'sku'
+		| 'barcode'
+		| 'sortable_price'
+		| 'total_sales'
+		| 'menu_order'
+		| PriceSort
+		| StockSort
+		| DatedSort;
 	orders:
 		| 'status'
 		| 'number'

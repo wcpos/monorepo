@@ -1,36 +1,36 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
-
 import { ButtonPill } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
-import type { ProductDocument, ProductVariationCollection } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
+import type { ProductDocument } from '@wcpos/database';
 
 import { VariationSelect } from '../../variation-select';
+import {
+	getVariationMatchOption,
+	removeVariationMatch,
+	setVariationMatch,
+} from '../../variation-matches';
 import { useVariationRow } from '../context';
+import { useQueryState, useQueryStateActions } from '../../../../../../query';
 
 import type { Row } from '@tanstack/react-table';
 
 interface Props {
 	row: Row<{ document: ProductDocument }>;
-	query: Query<ProductVariationCollection>;
 }
 
 /**
  *
  */
-export function VariationsFilterBar({ row, query }: Props) {
+export function VariationsFilterBar({ row }: Props) {
 	const parent = row.original.document;
 	const { rowId, setRowExpanded } = useVariationRow();
-
-	/**
-	 * We need to trigger a re-render when the selected attributes change.
-	 */
-	const rxQuery = useObservableEagerState(query.rxQuery$);
-	const searchTerm = get(rxQuery, ['other', 'search', 'searchTerm']);
+	const { searchTerm, matches } = useQueryState<
+		'variations',
+		{ searchTerm: string; matches: import('../../../../../../query').VariationMatch[] }
+	>((state) => ({ searchTerm: state.search, matches: state.filters.attributeMatches }));
+	const actions = useQueryStateActions<'variations'>();
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -40,12 +40,7 @@ export function VariationsFilterBar({ row, query }: Props) {
 		<HStack className="bg-card-header p-2">
 			<HStack className="flex-1">
 				{!!searchTerm && (
-					<ButtonPill
-						leftIcon="magnifyingGlass"
-						size="xs"
-						removable
-						onRemove={() => query.search('')}
-					>
+					<ButtonPill leftIcon="magnifyingGlass" size="xs" removable onRemove={actions.clearSearch}>
 						{searchTerm}
 					</ButtonPill>
 				)}
@@ -57,18 +52,24 @@ export function VariationsFilterBar({ row, query }: Props) {
 							<VariationSelect
 								key={index}
 								attribute={attribute}
-								onSelect={(attribute) => {
-									query.variationMatch(attribute).exec();
-								}}
-								selected={query.getVariationMatchOption({
-									id: attribute.id ?? 0,
-									name: attribute.name ?? '',
-								})}
-								onRemove={() => {
-									query
-										.removeVariationMatch({ id: attribute.id ?? 0, name: attribute.name ?? '' })
-										.exec();
-								}}
+								onSelect={(attribute) =>
+									actions.setFilter('attributeMatches', setVariationMatch(matches, attribute))
+								}
+								selected={
+									getVariationMatchOption(matches, {
+										id: attribute.id ?? 0,
+										name: attribute.name ?? '',
+									}) ?? ''
+								}
+								onRemove={() =>
+									actions.setFilter(
+										'attributeMatches',
+										removeVariationMatch(matches, {
+											id: attribute.id ?? 0,
+											name: attribute.name ?? '',
+										})
+									)
+								}
 							/>
 						);
 					})}

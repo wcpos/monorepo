@@ -21,10 +21,7 @@ export function ProductBrands({
 	const brands = useObservableEagerState(product.brands$!) || [];
 
 	const meta = table.options.meta as unknown as {
-		actions?: Pick<QueryStateActions<'products'>, 'setFilter'>;
-		query?: {
-			where(field: string): { elemMatch(value: { id: number }): { exec(): void } };
-		};
+		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
 	};
 
 	if (brands.length === 0) {
@@ -41,14 +38,9 @@ export function ProductBrands({
 					variant="ghost-primary"
 					size="xs"
 					key={index}
-					onPress={() => {
-						if (brand.id === undefined) return;
-						if (meta.actions) {
-							meta.actions.setFilter('brands', [brand.id]);
-						} else {
-							meta.query?.where('brands').elemMatch({ id: brand.id }).exec();
-						}
-					}}
+					onPress={() =>
+						brand.id === undefined ? undefined : meta.actions.setFilter('brands', [brand.id])
+					}
 				>
 					<ButtonText numberOfLines={1} decodeHtml>
 						{brand.name}
