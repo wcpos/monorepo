@@ -19,9 +19,9 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { CustomerDocument } from '@wcpos/database';
-import { useQuery } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
+import { useSearchSelect } from '../../../query';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 
 export function CustomerSelect({
@@ -48,37 +48,17 @@ export function CustomerSelect({
 
 export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	const t = useT();
-	const [search, setSearch] = React.useState('');
-
-	/**
-	 * Query for cashiers
-	 */
-	const query = useQuery({
-		queryKeys: ['customers', 'customer-select'],
-		collectionName: 'customers',
-		initialParams: {
-			sort: [{ last_name: 'asc' }],
-		},
-		infiniteScroll: true,
-	});
+	const binding = useSearchSelect('customer');
 
 	/**
 	 *
 	 */
 	const onSearch = React.useCallback(
 		(value: string) => {
-			setSearch(value);
-			query?.debouncedSearch(value);
+			binding.setSearch(value);
 		},
-		[query]
+		[binding.setSearch]
 	);
-
-	/**
-	 * Clear the search when unmounting
-	 */
-	React.useEffect(() => {
-		return () => query?.search('');
-	}, [query]);
 
 	/**
 	 *
@@ -87,11 +67,11 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_customers')}
-				value={search}
+				value={binding.search}
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CustomerList query={query!} withGuest={withGuest} />
+				<CustomerList resource={binding.resource} withGuest={withGuest} />
 			</Suspense>
 		</>
 	);
@@ -102,14 +82,13 @@ interface CustomerHit {
 	document: CustomerDocument;
 }
 
-type CustomerQuery = NonNullable<ReturnType<typeof useQuery>>;
-type CustomerListProps = { withGuest: boolean } & (
-	| { query: CustomerQuery; resource?: never }
-	| { query?: never; resource: CustomerQuery['resource'] }
-);
+type CustomerListProps = {
+	withGuest: boolean;
+	resource: ReturnType<typeof useSearchSelect>['resource'];
+};
 
-export function CustomerList({ query, resource, withGuest }: CustomerListProps) {
-	const result = useObservableSuspense(resource ?? query.resource) as { hits: CustomerHit[] };
+export function CustomerList({ resource, withGuest }: CustomerListProps) {
+	const result = useObservableSuspense(resource) as { hits: CustomerHit[] };
 	const t = useT();
 
 	/**
@@ -130,11 +109,6 @@ export function CustomerList({ query, resource, withGuest }: CustomerListProps) 
 		<ComboboxList
 			data={data as unknown as import('@wcpos/components/combobox').Option[]}
 			shouldFilter={false}
-			onEndReached={() => {
-				if (query?.infiniteScroll) {
-					query.loadMore();
-				}
-			}}
 			renderItem={({ item }) => {
 				const hit = item as unknown as CustomerHit;
 				return (

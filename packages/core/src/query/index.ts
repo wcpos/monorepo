@@ -6,6 +6,7 @@ export {
 } from './query-state-store';
 export {
 	useCollectionBinding,
+	useAllCategoriesBinding,
 	useRelationalCollectionBinding,
 	useSearchSelect,
 } from './query-bindings';

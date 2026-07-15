@@ -1,171 +1,721 @@
-/**
- * SEQUENCING NOTE (ADR 0024 step 4): these bindings deliberately ride the
- * phase-1 manager seam (registerQuery + useReplicationState) instead of raw
- * engine-DB reads. The public binding contract is the stable surface screens
- * migrate to; when the fluent surface and the manager are deleted, ONLY this
- * file's internals swap to direct engine reads — no screen changes. The
- * terminal-deletion increment must include that swap.
- */
 import * as React from 'react';
 
-import { of } from 'rxjs';
-import { distinctUntilChanged, filter, switchMap } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
+import { BehaviorSubject, combineLatest, EMPTY, Observable, of, timer } from 'rxjs';
+import {
+	distinctUntilChanged,
+	expand,
+	map,
+	shareReplay,
+	startWith,
+	switchMap,
+} from 'rxjs/operators';
 
-import { useQueryManager, useReplicationState } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import {
+	type CoverageLaneDocument,
+	declareRequirements,
+	type EngineEvent,
+	type EngineLane,
+	type EngineQueryDescriptor,
+	observeEngineDatabases,
+	observeEngineQuery,
+	type QueryResult,
+	type QueryTotalCacheDocument,
+	registerActiveBinding,
+	type RequirementHandle,
+	requirementsForQuery,
+	type RxdbSyncEngine,
+	type SyncCollectionName,
+	useLocalQuery,
+	useQueryManager,
+} from '@wcpos/query';
 
 import { translateQueryState } from './query-state-translator';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
-import type { RxQuery } from 'rxdb';
+import type { MangoQuerySortPart, RxCollection, RxDatabase, RxDocument } from 'rxdb';
 
-type Manager = ReturnType<typeof useQueryManager>;
-type RegisteredQuery = NonNullable<ReturnType<Manager['registerQuery']>>;
-type QueryParams = Parameters<Manager['registerQuery']>[0]['initialParams'];
+type LegacyCollectionName = EngineQueryDescriptor['collection'];
+type TotalSource = 'coverage' | 'local';
 
-const logger = getLogger(['wcpos', 'core', 'query-bindings']);
+export interface QueryBinding {
+	resource: ObservableResource<QueryResult<RxCollection>>;
+	result$: Observable<QueryResult<RxCollection>>;
+	active$: Observable<boolean>;
+	total$: Observable<number>;
+	totalSource$: Observable<TotalSource>;
+	sync(): Promise<void>;
+}
 
-function deregisterOwnedQuery(manager: Manager, query: RegisteredQuery): void {
-	// A db$ scope change can replace a query under the same id before effect cleanup runs.
-	if (manager.queryStates.get(query.id) !== query) return;
-	void manager.deregisterQuery(query.id).catch((error) =>
-		logger.error('Failed to deregister query binding', {
-			context: { queryId: query.id, collectionName: query.collectionName, error },
+const COMPLETE_COLLECTION_LANES: Partial<Record<LegacyCollectionName, string>> = {
+	taxes: 'taxRates:all',
+	'products/categories': 'categories:all',
+	'products/tags': 'tags:all',
+	'products/brands': 'brands:all',
+	coupons: 'coupons:all',
+};
+
+const FIXED_COLLECTIONS_BY_LANE: Partial<Record<EngineLane, readonly SyncCollectionName[]>> = {
+	'reference-seed': ['categories', 'brands', 'tags', 'coupons'],
+	'product-browse-window-seed': ['products'],
+	'order-window-seed': ['orders'],
+};
+
+const ENGINE_COLLECTION_BY_LEGACY: Record<LegacyCollectionName, SyncCollectionName> = {
+	products: 'products',
+	variations: 'variations',
+	orders: 'orders',
+	customers: 'customers',
+	taxes: 'taxRates',
+	'products/categories': 'categories',
+	'products/tags': 'tags',
+	'products/brands': 'brands',
+	coupons: 'coupons',
+};
+
+const LANE_ACTIVITY_SAFETY_MS = 60_000;
+const LOCAL_TOTAL_SOURCE$ = of('local' as const);
+const INACTIVE$ = of(false);
+
+function stableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDescriptor {
+	return descriptor;
+}
+
+function useStableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDescriptor {
+	const key = JSON.stringify(descriptor);
+	return React.useMemo(() => stableDescriptor(JSON.parse(key) as EngineQueryDescriptor), [key]);
+}
+
+function selectorWithSearch(descriptor: EngineQueryDescriptor): Record<string, unknown> {
+	const selector = { ...(descriptor.selector ?? {}) } as Record<string, unknown>;
+	const search = descriptor.search?.trim();
+	if (search) selector.search = search;
+	return selector;
+}
+
+function useObservableResource<T>(observable$: Observable<T>): ObservableResource<T> {
+	const resource = React.useMemo(() => new ObservableResource(observable$), [observable$]);
+	React.useEffect(() => {
+		// The resource owns the direct RxDB/db$ subscription for this descriptor.
+		return () => resource.destroy();
+	}, [resource]);
+	return resource;
+}
+
+function useLaneActivity(
+	engine: RxdbSyncEngine,
+	collection: LegacyCollectionName,
+	enabled: boolean
+): Observable<boolean> {
+	const activity$ = React.useMemo(() => new BehaviorSubject(false), [engine, collection]);
+	React.useEffect(() => {
+		if (!enabled) return undefined;
+		const engineCollection = ENGINE_COLLECTION_BY_LEGACY[collection];
+		const starts = new Map<EngineLane, number[]>();
+		let safetyTimer: ReturnType<typeof setTimeout> | undefined;
+		const publish = () => {
+			const active = [...starts].some(
+				([lane, laneStarts]) =>
+					laneStarts.length > 0 &&
+					(FIXED_COLLECTIONS_BY_LANE[lane] ?? []).includes(engineCollection)
+			);
+			if (activity$.value !== active) activity$.next(active);
+		};
+		const prune = () => {
+			const now = Date.now();
+			for (const [lane, laneStarts] of starts) {
+				const fresh = laneStarts.filter((startedAt) => now - startedAt <= LANE_ACTIVITY_SAFETY_MS);
+				if (fresh.length === 0) starts.delete(lane);
+				else starts.set(lane, fresh);
+			}
+		};
+		const scheduleSafety = () => {
+			if (safetyTimer !== undefined) clearTimeout(safetyTimer);
+			const oldest = [...starts.values()].flat().sort((a, b) => a - b)[0];
+			if (oldest === undefined) return;
+			safetyTimer = setTimeout(
+				() => {
+					prune();
+					publish();
+					scheduleSafety();
+				},
+				Math.max(0, oldest + LANE_ACTIVITY_SAFETY_MS - Date.now() + 1)
+			);
+		};
+		const unsubscribe = engine.events((event: EngineEvent) => {
+			if (event.type !== 'lane-start' && event.type !== 'lane-finish') return;
+			prune();
+			if (event.type === 'lane-start') {
+				starts.set(event.lane, [...(starts.get(event.lane) ?? []), Date.now()]);
+			} else {
+				const laneStarts = starts.get(event.lane) ?? [];
+				laneStarts.pop();
+				if (laneStarts.length === 0) starts.delete(event.lane);
+			}
+			publish();
+			scheduleSafety();
+		});
+		return () => {
+			unsubscribe();
+			if (safetyTimer !== undefined) clearTimeout(safetyTimer);
+			activity$.next(false);
+		};
+	}, [activity$, collection, enabled, engine]);
+	return activity$.pipe(distinctUntilChanged());
+}
+
+type DemandProjection = {
+	active$: Observable<boolean>;
+	searchActive$: Observable<boolean>;
+	sync(): Promise<void>;
+};
+
+function useDemand(
+	engine: RxdbSyncEngine,
+	id: string,
+	descriptor: EngineQueryDescriptor,
+	enabled: boolean
+): DemandProjection {
+	const active$ = React.useMemo(() => new BehaviorSubject(false), [engine, id]);
+	const searchActive$ = React.useMemo(() => new BehaviorSubject(false), [engine, id]);
+	const generation = React.useRef(0);
+	const demandPending = React.useRef(0);
+	const syncPending = React.useRef(0);
+	const searchDemandPending = React.useRef(0);
+	const searchSyncPending = React.useRef(0);
+	const publish = React.useCallback(() => {
+		const active = demandPending.current + syncPending.current > 0;
+		if (active$.value !== active) active$.next(active);
+		const searchActive = searchDemandPending.current + searchSyncPending.current > 0;
+		if (searchActive$.value !== searchActive) searchActive$.next(searchActive);
+	}, [active$, searchActive$]);
+	const selector = selectorWithSearch(descriptor);
+	const selectorKey = JSON.stringify(selector);
+
+	React.useEffect(() => {
+		const currentGeneration = (generation.current += 1);
+		if (!enabled) {
+			demandPending.current = 0;
+			searchDemandPending.current = 0;
+			publish();
+			return undefined;
+		}
+		const stableSelector = JSON.parse(selectorKey) as Record<string, unknown>;
+		const binding = {
+			id,
+			collectionName: descriptor.collection,
+			selector: stableSelector,
+			limit: descriptor.limit,
+		};
+		const unregister = registerActiveBinding(engine, binding);
+		const requirements = requirementsForQuery(binding);
+		const handles = declareRequirements(engine, requirements);
+		demandPending.current = handles.length;
+		searchDemandPending.current = descriptor.search?.trim() ? handles.length : 0;
+		publish();
+		for (const handle of handles) {
+			const settle = () => {
+				if (generation.current !== currentGeneration) return;
+				demandPending.current = Math.max(0, demandPending.current - 1);
+				if (descriptor.search?.trim()) {
+					searchDemandPending.current = Math.max(0, searchDemandPending.current - 1);
+				}
+				publish();
+			};
+			void handle.ready.then(settle, settle);
+		}
+		return () => {
+			unregister();
+			for (const handle of handles) handle.release();
+			if (generation.current === currentGeneration) generation.current += 1;
+			demandPending.current = 0;
+			searchDemandPending.current = 0;
+			publish();
+		};
+	}, [
+		descriptor.collection,
+		descriptor.limit,
+		descriptor.search,
+		enabled,
+		engine,
+		id,
+		publish,
+		selectorKey,
+	]);
+
+	React.useEffect(
+		() => () => {
+			active$.complete();
+			searchActive$.complete();
+		},
+		[active$, searchActive$]
+	);
+
+	const sync = React.useCallback(async () => {
+		if (!enabled) return;
+		const requirements = requirementsForQuery({
+			id: `${id}:sync`,
+			collectionName: descriptor.collection,
+			selector: selectorWithSearch(descriptor),
+			limit: descriptor.limit,
+			priority: 1000,
+			forceRefresh: true,
+		});
+		const handles = declareRequirements(engine, requirements);
+		syncPending.current += 1;
+		if (descriptor.search?.trim()) searchSyncPending.current += 1;
+		publish();
+		await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
+		for (const handle of handles) handle.release();
+		try {
+			await engine.sync('scheduler-drain');
+		} finally {
+			syncPending.current = Math.max(0, syncPending.current - 1);
+			if (descriptor.search?.trim()) {
+				searchSyncPending.current = Math.max(0, searchSyncPending.current - 1);
+			}
+			publish();
+		}
+	}, [descriptor, enabled, engine, id, publish]);
+
+	return { active$: active$.pipe(distinctUntilChanged()), searchActive$, sync };
+}
+
+function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boolean {
+	return Object.entries(selector).every(([field, value]) => {
+		if (field === 'search') return typeof value === 'string';
+		if (field !== 'status') return false;
+		if (typeof value === 'string') return value.length > 0;
+		const status = value as Record<string, unknown> | null;
+		return (
+			status !== null &&
+			typeof status === 'object' &&
+			Object.keys(status).length === 1 &&
+			typeof status.$eq === 'string'
+		);
+	});
+}
+
+function coverageQueryKey(id: string, descriptor: EngineQueryDescriptor): string | null {
+	const selector = selectorWithSearch(descriptor);
+	if (descriptor.collection === 'orders' && !isFullyRepresentedOrderSelector(selector)) return null;
+	const requirement = requirementsForQuery({
+		id,
+		collectionName: descriptor.collection,
+		selector,
+		limit: descriptor.limit,
+	}).find((candidate) => candidate.kind === 'query' && candidate.queryKey);
+	if (requirement?.queryKey) return requirement.queryKey;
+	if (descriptor.collection === 'products' && Object.keys(selector).length === 0) {
+		return 'products:browse-window:limit=100';
+	}
+	if (Object.keys(selector).length > 0) return null;
+	return COMPLETE_COLLECTION_LANES[descriptor.collection] ?? null;
+}
+
+function coverageFreshnessTicks(
+	lanes: CoverageLaneDocument[],
+	queryTotals: QueryTotalCacheDocument[]
+): Observable<number> {
+	const expiries = [...lanes, ...queryTotals].map(({ freshUntilMs }) => freshUntilMs);
+	return of(Date.now()).pipe(
+		expand((nowMs) => {
+			const nextExpiry = expiries.reduce<number | undefined>(
+				(next, expiry) => (expiry > nowMs && (next === undefined || expiry < next) ? expiry : next),
+				undefined
+			);
+			return nextExpiry === undefined
+				? EMPTY
+				: timer(Math.max(0, nextExpiry - nowMs + 1)).pipe(map(() => Date.now()));
 		})
 	);
 }
 
-function useEngineEpoch(manager: Manager): number {
-	const [epoch, setEpoch] = React.useState(0);
-	React.useEffect(() => {
-		// db$ is the engine's scope/reset seam; every emission re-resolves collection residents.
-		return manager.engine.db$(() => setEpoch((current) => current + 1));
-	}, [manager]);
-	return epoch;
+function projectTotal(input: {
+	localCount: number;
+	queryKey: string | null;
+	lanes: CoverageLaneDocument[];
+	queryTotals: QueryTotalCacheDocument[];
+	nowMs: number;
+}): { total: number; source: TotalSource } {
+	if (input.queryKey === null) return { total: input.localCount, source: 'local' };
+	const queryTotal = input.queryTotals.find(
+		(candidate) => candidate.queryKey === input.queryKey && candidate.freshUntilMs > input.nowMs
+	);
+	if (queryTotal) return { total: queryTotal.totalMatchingRecords, source: 'coverage' };
+	const lane = input.lanes.find(
+		(candidate) =>
+			candidate.queryKey === input.queryKey &&
+			candidate.complete &&
+			candidate.freshUntilMs > input.nowMs
+	);
+	return lane
+		? { total: lane.expectedRecordIds.length, source: 'coverage' }
+		: { total: input.localCount, source: 'local' };
 }
 
-function useRegisteredQuery(input: {
-	collectionName: string;
-	params: QueryParams;
-	search: string;
-	identity: string;
-}): RegisteredQuery {
-	const manager = useQueryManager();
+function coverageDocuments$<T>(
+	database$: Observable<RxDatabase | null>,
+	collectionName: string
+): Observable<T[]> {
+	return database$.pipe(
+		switchMap((database) => {
+			const collection = database?.collections[collectionName] as RxCollection<T> | undefined;
+			if (!collection) return of([] as T[]);
+			return collection.find().$.pipe(
+				map((documents: RxDocument<T>[]) =>
+					documents.map((document) => document.toJSON() as unknown as T)
+				),
+				startWith([] as T[])
+			);
+		})
+	);
+}
+
+function coverageProjection$(
+	engine: RxdbSyncEngine,
+	id: string,
+	descriptor: EngineQueryDescriptor,
+	result$: Observable<QueryResult<RxCollection>>
+): Observable<{ total: number; source: TotalSource }> {
+	const database$ = observeEngineDatabases(engine).pipe(
+		shareReplay({ bufferSize: 1, refCount: true })
+	);
+	const lanes$ = coverageDocuments$<CoverageLaneDocument>(database$, 'coverageLanes');
+	const totals$ =
+		descriptor.collection === 'orders'
+			? coverageDocuments$<QueryTotalCacheDocument>(database$, 'queryTotalCacheEntries')
+			: of([] as QueryTotalCacheDocument[]);
+	const coverage$ = combineLatest([lanes$, totals$]).pipe(
+		switchMap(([lanes, queryTotals]) =>
+			coverageFreshnessTicks(lanes, queryTotals).pipe(
+				map((nowMs) => ({ lanes, queryTotals, nowMs }))
+			)
+		)
+	);
+	return combineLatest([
+		result$.pipe(map((result) => result.count ?? result.hits.length)),
+		coverage$,
+	]).pipe(
+		map(([localCount, { lanes, queryTotals, nowMs }]) =>
+			projectTotal({
+				localCount,
+				queryKey: coverageQueryKey(id, descriptor),
+				lanes,
+				queryTotals,
+				nowMs,
+			})
+		),
+		distinctUntilChanged(
+			(previous, current) => previous.total === current.total && previous.source === current.source
+		),
+		shareReplay({ bufferSize: 1, refCount: true })
+	);
+}
+
+function searchFieldsFor(
+	localDB: RxDatabase,
+	collection: LegacyCollectionName
+): string[] | undefined {
+	const fields = localDB.collections[collection]?.options?.searchFields;
+	return Array.isArray(fields) ? [...fields] : undefined;
+}
+
+function emptyResult(): QueryResult<RxCollection> {
+	return { elapsed: 0, searchActive: false, count: 0, hits: [] };
+}
+
+function useEngineBinding(
+	descriptorInput: EngineQueryDescriptor,
+	enabled = true
+): QueryBinding & { result$: Observable<QueryResult<RxCollection>> } {
+	const runtime = useQueryManager();
 	const bindingId = React.useId();
-	const epoch = useEngineEpoch(manager);
-	const key = JSON.stringify(input);
-	const query = React.useMemo(() => {
-		void epoch; // Re-register the stable query key after each db$ scope/reset emission.
-		const stable = JSON.parse(key) as typeof input;
-		const registered = manager.registerQuery({
-			queryKeys: ['query-binding', bindingId, stable.collectionName, stable.identity, key],
-			collectionName: stable.collectionName,
-			initialParams: stable.params,
-		});
-		if (!registered) throw new Error(`Unable to bind ${stable.collectionName}`);
-		if (stable.search) registered.search(stable.search);
-		return registered;
-	}, [manager, bindingId, epoch, key]);
-
-	React.useEffect(() => {
-		// Registration is an external manager resource and must be released on replacement/unmount.
-		return () => deregisterOwnedQuery(manager, query);
-	}, [manager, query]);
-	return query;
-}
-
-function useBindingOutput(query: RegisteredQuery) {
-	const replication = useReplicationState(query);
-	return { resource: query.resource, ...replication };
-}
-
-const LOCAL_TOTAL_SOURCE$ = of('local' as const);
-
-function useLogsTotal(collection: CollectionKey, query: RegisteredQuery) {
-	return React.useMemo(() => {
-		if (collection !== 'logs') return null;
-		return query.rxQuery$.pipe(
-			filter((rxQuery): rxQuery is RxQuery => rxQuery !== undefined),
-			switchMap((rxQuery) => query.collection.count({ selector: rxQuery.mangoQuery.selector }).$),
-			distinctUntilChanged()
+	const descriptor = useStableDescriptor({
+		...descriptorInput,
+		searchFields: searchFieldsFor(runtime.localDB, descriptorInput.collection),
+	});
+	const demand = useDemand(runtime.engine, bindingId, descriptor, enabled);
+	const laneActive$ = useLaneActivity(runtime.engine, descriptor.collection, enabled);
+	const active$ = React.useMemo(
+		() =>
+			combineLatest([demand.active$, laneActive$]).pipe(
+				map(([demandActive, laneActive]) => demandActive || laneActive),
+				distinctUntilChanged(),
+				shareReplay({ bufferSize: 1, refCount: true })
+			),
+		[demand.active$, laneActive$]
+	);
+	const result$ = React.useMemo(() => {
+		if (!enabled) return of(emptyResult());
+		return combineLatest([
+			observeEngineQuery(runtime.engine, runtime.locale, descriptor),
+			demand.searchActive$.pipe(startWith(false)),
+		]).pipe(
+			map(([result, searchActive]) => ({ ...result, searchActive })),
+			shareReplay({ bufferSize: 1, refCount: true })
 		);
-	}, [collection, query]);
+	}, [demand.searchActive$, descriptor, enabled, runtime.engine, runtime.locale]);
+	const projection$ = React.useMemo(
+		() => coverageProjection$(runtime.engine, bindingId, descriptor, result$),
+		[bindingId, descriptor, result$, runtime.engine]
+	);
+	const resource = useObservableResource(result$);
+	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
+	const totalSource$ = React.useMemo(
+		() => projection$.pipe(map(({ source }) => source)),
+		[projection$]
+	);
+	return { resource, result$, active$, total$, totalSource$, sync: demand.sync };
 }
 
 export function useCollectionBinding<C extends CollectionKey>(
 	collection: C,
 	state: QueryStateOf<C>,
 	options: { wooIds?: readonly number[] } = {}
-) {
+): QueryBinding {
 	const translated = translateQueryState(collection, state);
 	const selector =
 		options.wooIds === undefined
 			? translated.selector
 			: { ...translated.selector, id: { $in: [...options.wooIds] } };
-	const query = useRegisteredQuery({
-		collectionName: translated.collectionName,
-		params: { selector, sort: translated.sort, limit: translated.limit },
+	const engineDescriptor: EngineQueryDescriptor = {
+		collection:
+			collection === 'logs' ? 'products' : (translated.collectionName as LegacyCollectionName),
+		selector,
+		sort: translated.sort as MangoQuerySortPart<Record<string, unknown>>[],
+		limit: translated.limit,
 		search: translated.search,
-		identity: options.wooIds === undefined ? 'collection' : 'targeted-collection',
+	};
+	const engineBinding = useEngineBinding(engineDescriptor, collection !== 'logs');
+	const local = useLocalQuery({
+		collectionName: 'logs',
+		selector,
+		sort: translated.sort,
+		limit: translated.limit,
+		search: translated.search,
 	});
-	const output = useBindingOutput(query);
-	const logsTotal = useLogsTotal(collection, query);
-	return logsTotal ? { ...output, total$: logsTotal, totalSource$: LOCAL_TOTAL_SOURCE$ } : output;
+	return collection === 'logs'
+		? {
+				resource: local.resource as unknown as ObservableResource<QueryResult<RxCollection>>,
+				result$: local.result$ as unknown as Observable<QueryResult<RxCollection>>,
+				total$: local.total$,
+				totalSource$: LOCAL_TOTAL_SOURCE$,
+				active$: INACTIVE$,
+				sync: async () => undefined,
+			}
+		: engineBinding;
 }
 
-export function useRelationalCollectionBinding(state: QueryStateOf<'products'>) {
-	const manager = useQueryManager();
-	const bindingId = React.useId();
-	const epoch = useEngineEpoch(manager);
-	const translated = translateQueryState('products', state);
-	const key = JSON.stringify(translated);
-	const queries = React.useMemo(() => {
-		void epoch; // Re-register all three stable query keys against the new residents.
-		const stable = JSON.parse(key) as typeof translated;
-		const child = manager.registerQuery({
-			queryKeys: ['query-binding', bindingId, 'relational', 'variations', key],
-			collectionName: 'variations',
-			initialParams: { selector: {}, sort: [{ id: 'asc' }] },
-		});
-		const lookup = manager.registerQuery({
-			queryKeys: ['query-binding', bindingId, 'relational', 'lookup', key],
-			collectionName: 'products',
-			initialParams: { selector: { id: { $in: [] } } },
-		});
-		if (!child || !lookup) throw new Error('Unable to bind products↔variations queries');
-		const parent = manager.registerRelationalQuery(
-			{
-				queryKeys: ['query-binding', bindingId, 'relational', 'products', key],
-				collectionName: 'products',
-				initialParams: {
-					selector: stable.selector,
-					sort: stable.sort,
-					limit: stable.limit,
-				},
-			},
-			child,
-			lookup
-		);
-		if (!parent) throw new Error('Unable to bind relational products query');
-		if (stable.search) parent.search(stable.search);
-		return { parent, child, lookup };
-	}, [manager, bindingId, epoch, key]);
+function andSelector(
+	left: Record<string, unknown>,
+	right: Record<string, unknown>
+): Record<string, unknown> {
+	if (Object.keys(left).length === 0) return right;
+	return { $and: [left, right] };
+}
 
-	React.useEffect(() => {
-		// These registrations are private to this binding and must be released together.
-		return () => {
-			deregisterOwnedQuery(manager, queries.parent);
-			deregisterOwnedQuery(manager, queries.child);
-			deregisterOwnedQuery(manager, queries.lookup);
+function releaseHandles(handles: RequirementHandle[]): void {
+	for (const handle of handles) handle.release();
+}
+
+function observeParentLookup(
+	engine: RxdbSyncEngine,
+	locale: string,
+	id: string,
+	parentIds: number[],
+	searchFields: string[] | undefined,
+	lookupActive$: BehaviorSubject<boolean>
+): Observable<QueryResult<RxCollection>> {
+	if (parentIds.length === 0) return of(emptyResult());
+	return new Observable<QueryResult<RxCollection>>((subscriber) => {
+		const descriptor: EngineQueryDescriptor = {
+			collection: 'products',
+			selector: { id: { $in: parentIds } },
+			searchFields,
 		};
-	}, [manager, queries]);
-	return useBindingOutput(queries.parent);
+		const requirements = requirementsForQuery({
+			id,
+			collectionName: 'products',
+			selector: descriptor.selector,
+			limit: undefined,
+		});
+		const handles = declareRequirements(engine, requirements);
+		lookupActive$.next(handles.length > 0);
+		void Promise.all(handles.map((handle) => handle.ready.catch(() => undefined))).finally(() =>
+			lookupActive$.next(false)
+		);
+		const subscription = observeEngineQuery(engine, locale, descriptor).subscribe(subscriber);
+		return () => {
+			subscription.unsubscribe();
+			releaseHandles(handles);
+			lookupActive$.next(false);
+		};
+	});
 }
 
-export type SearchSelectCollection = 'customer' | 'category' | 'brand' | 'tag' | 'cashier';
+export function useRelationalCollectionBinding(state: QueryStateOf<'products'>): QueryBinding {
+	const runtime = useQueryManager();
+	const bindingId = React.useId();
+	const translated = translateQueryState('products', state);
+	const descriptor = useStableDescriptor({
+		collection: 'products',
+		selector: translated.selector,
+		sort: translated.sort as MangoQuerySortPart<Record<string, unknown>>[],
+		limit: translated.limit,
+		search: translated.search,
+		searchFields: searchFieldsFor(runtime.localDB, 'products'),
+	});
+	const childDescriptor = useStableDescriptor({
+		collection: 'variations',
+		selector: {},
+		sort: [{ id: 'asc' }],
+		search: translated.search,
+		searchFields: searchFieldsFor(runtime.localDB, 'variations'),
+	});
+	const parentDemand = useDemand(runtime.engine, `${bindingId}:parent`, descriptor, true);
+	const childDemand = useDemand(
+		runtime.engine,
+		`${bindingId}:child`,
+		childDescriptor,
+		Boolean(translated.search)
+	);
+	const laneActive$ = useLaneActivity(runtime.engine, 'products', true);
+	const lookupActive$ = React.useMemo(
+		() => new BehaviorSubject(false),
+		[runtime.engine, bindingId]
+	);
+	const result$ = React.useMemo(() => {
+		if (!translated.search) {
+			return observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
+				shareReplay({ bufferSize: 1, refCount: true })
+			);
+		}
+		const direct$ = observeEngineQuery(runtime.engine, runtime.locale, {
+			...descriptor,
+			limit: undefined,
+		});
+		const children$ = observeEngineQuery(runtime.engine, runtime.locale, childDescriptor);
+		return combineLatest([direct$, children$]).pipe(
+			switchMap(([direct, children]) => {
+				const counts = new Map<number, number>();
+				for (const hit of children.hits) {
+					const parentId = Number((hit.document as unknown as Record<string, unknown>).parent_id);
+					if (Number.isFinite(parentId)) counts.set(parentId, (counts.get(parentId) ?? 0) + 1);
+				}
+				const parentIds = [...counts.keys()];
+				return observeParentLookup(
+					runtime.engine,
+					runtime.locale,
+					`${bindingId}:lookup`,
+					parentIds,
+					descriptor.searchFields,
+					lookupActive$
+				).pipe(map((lookup) => ({ direct, lookup, counts })));
+			}),
+			switchMap(({ direct, lookup, counts }) => {
+				const uuids = [...new Set([...direct.hits, ...lookup.hits].map((hit) => hit.id))];
+				return observeEngineQuery(runtime.engine, runtime.locale, {
+					...descriptor,
+					search: '',
+					selector: andSelector((descriptor.selector ?? {}) as Record<string, unknown>, {
+						uuid: { $in: uuids },
+					}),
+				}).pipe(
+					map((result) => ({
+						...result,
+						searchActive: false,
+						hits: result.hits.map((hit) => {
+							const wooId = Number((hit.document as unknown as Record<string, unknown>).id);
+							return {
+								...hit,
+								childrenSearchCount: counts.get(wooId) ?? 0,
+								parentSearchTerm: translated.search,
+							};
+						}),
+					}))
+				);
+			}),
+			shareReplay({ bufferSize: 1, refCount: true })
+		);
+	}, [
+		bindingId,
+		childDescriptor,
+		descriptor,
+		lookupActive$,
+		runtime.engine,
+		runtime.locale,
+		translated.search,
+	]);
+	const resource = useObservableResource(result$);
+	const projection$ = React.useMemo(
+		() => coverageProjection$(runtime.engine, bindingId, descriptor, result$),
+		[bindingId, descriptor, result$, runtime.engine]
+	);
+	const active$ = React.useMemo(
+		() =>
+			combineLatest([
+				parentDemand.active$,
+				childDemand.active$,
+				lookupActive$.pipe(startWith(false)),
+				laneActive$,
+			]).pipe(
+				map((values) => values.some(Boolean)),
+				distinctUntilChanged(),
+				shareReplay({ bufferSize: 1, refCount: true })
+			),
+		[childDemand.active$, laneActive$, lookupActive$, parentDemand.active$]
+	);
+	const sync = React.useCallback(
+		() => Promise.all([parentDemand.sync(), childDemand.sync()]).then(() => undefined),
+		[childDemand, parentDemand]
+	);
+	return {
+		resource,
+		result$,
+		active$,
+		total$: projection$.pipe(map(({ total }) => total)),
+		totalSource$: projection$.pipe(map(({ source }) => source)),
+		sync,
+	};
+}
+
+export type SearchSelectCollection =
+	| 'customer'
+	| 'category'
+	| 'brand'
+	| 'tag'
+	| 'cashier'
+	| 'coupon';
 
 const SEARCH_SELECT_LIMIT = 50;
 const SEARCH_SELECT_LIMIT_MAX = 100;
+
+function searchSelectDescriptor(
+	collection: SearchSelectCollection,
+	search: string,
+	limit: number
+): EngineQueryDescriptor {
+	const isCustomer = collection === 'customer' || collection === 'cashier';
+	const names: Record<SearchSelectCollection, LegacyCollectionName> = {
+		customer: 'customers',
+		cashier: 'customers',
+		category: 'products/categories',
+		brand: 'products/brands',
+		tag: 'products/tags',
+		coupon: 'coupons',
+	};
+	return {
+		collection: names[collection],
+		selector:
+			collection === 'cashier'
+				? { role: { $in: ['administrator', 'shop_manager', 'cashier'] } }
+				: {},
+		sort: [{ [isCustomer ? 'last_name' : collection === 'coupon' ? 'code' : 'name']: 'asc' }],
+		limit,
+		search,
+	};
+}
 
 export function useSearchSelect(
 	collection: SearchSelectCollection,
@@ -176,34 +726,22 @@ export function useSearchSelect(
 	const debounceMs = options.debounceMs ?? 150;
 	React.useEffect(() => {
 		// Input text is intentionally the only debounced state; query state remains committed.
-		const timer = setTimeout(() => setCommittedSearch(search.trim()), debounceMs);
-		return () => clearTimeout(timer);
+		const timerId = setTimeout(() => setCommittedSearch(search.trim()), debounceMs);
+		return () => clearTimeout(timerId);
 	}, [debounceMs, search]);
-
-	const isCustomer = collection === 'customer' || collection === 'cashier';
-	const names = {
-		customer: 'customers',
-		cashier: 'customers',
-		category: 'products/categories',
-		brand: 'products/brands',
-		tag: 'products/tags',
-	} as const;
 	const limit = Math.max(
 		1,
 		Math.min(options.maxResults ?? SEARCH_SELECT_LIMIT, SEARCH_SELECT_LIMIT_MAX)
 	);
-	const query = useRegisteredQuery({
-		collectionName: names[collection],
-		params: {
-			selector:
-				collection === 'cashier'
-					? { role: { $in: ['administrator', 'shop_manager', 'cashier'] } }
-					: {},
-			sort: [{ [isCustomer ? 'last_name' : 'name']: 'asc' }],
-			limit,
-		},
-		search: committedSearch,
-		identity: `search-select:${collection}`,
+	const binding = useEngineBinding(searchSelectDescriptor(collection, committedSearch, limit));
+	return { ...binding, search, setSearch, committedSearch };
+}
+
+/** Full reference-lane category residents for the hierarchical category tree. */
+export function useAllCategoriesBinding() {
+	return useEngineBinding({
+		collection: 'products/categories',
+		selector: {},
+		sort: [{ name: 'asc' }],
 	});
-	return { ...useBindingOutput(query), search, setSearch, committedSearch };
 }

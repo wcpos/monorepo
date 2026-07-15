@@ -114,7 +114,7 @@ export function executeAdapterQuery({
 	if (!engineCollection) {
 		// DEGRADE, don't die: the engine database hasn't opened this collection
 		// yet (cold start, before `engine.ready` settles). Emit an empty result so
-		// a bound query stays constructible and renders; the Manager rebinds it to
+		// a bound read stays constructible and renders; db$ rebinds it to
 		// the live collection once the engine opens (ADR 0023 increment 1b).
 		return new Observable<AdapterQueryResult>((subscriber) => {
 			subscriber.next({ hits: [], count: 0, elapsed: 0 });

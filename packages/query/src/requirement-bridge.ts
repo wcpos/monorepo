@@ -22,7 +22,12 @@
  */
 
 import { getLogger } from '@wcpos/utils/logger';
-import type { EngineRequirement, RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type {
+	EngineRequirement,
+	RequirementHandle,
+	RxdbSyncEngine,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';
 
 import {
 	type EngineCollectionName,
@@ -183,4 +188,76 @@ export function declareRequirements(
 		});
 		return handle;
 	});
+}
+
+type ActiveBinding = Omit<RequirementInput, 'priority' | 'forceRefresh'>;
+
+const activeBindings = new WeakMap<RxdbSyncEngine, Map<string, ActiveBinding>>();
+
+/** Register only the declarative descriptor needed to reconstruct demand after an engine reset. */
+export function registerActiveBinding(engine: RxdbSyncEngine, binding: ActiveBinding): () => void {
+	let registry = activeBindings.get(engine);
+	if (!registry) {
+		registry = new Map();
+		activeBindings.set(engine, registry);
+	}
+	registry.set(binding.id, binding);
+	return () => {
+		if (registry?.get(binding.id) === binding) registry.delete(binding.id);
+	};
+}
+
+function requirementsForReset(
+	engine: RxdbSyncEngine,
+	collectionNames: string[]
+): EngineRequirement[] {
+	const wanted = new Set(collectionNames);
+	const requirements: EngineRequirement[] = [];
+	for (const binding of activeBindings.get(engine)?.values() ?? []) {
+		if (!wanted.has(binding.collectionName)) continue;
+		requirements.push(
+			...requirementsForQuery({
+				...binding,
+				id: `${binding.id}:collection-reset`,
+				priority: 1000,
+				forceRefresh: true,
+			})
+		);
+	}
+	if (wanted.has('taxes')) {
+		requirements.push({
+			id: 'taxRates:collection-reset',
+			collection: 'taxRates',
+			kind: 'refresh',
+			forceRefresh: true,
+			priority: 1000,
+		});
+	}
+	return requirements;
+}
+
+/** Capture the active binding descriptors before reset and return their one-shot refill. */
+export function prepareCollectionResetRefill(
+	engine: RxdbSyncEngine,
+	collectionNames: string[]
+): () => Promise<void> {
+	const requirements = requirementsForReset(engine, collectionNames);
+	const engineCollections = new Set<SyncCollectionName>(
+		collectionNames
+			.filter(isMappedCollection)
+			.map((collectionName) => engineCollectionNameFor(collectionName))
+	);
+	const seedReferences = (['categories', 'brands', 'tags', 'coupons'] as const).some((collection) =>
+		engineCollections.has(collection)
+	);
+	const seedProductBrowse = engineCollections.has('products');
+
+	return async () => {
+		if (seedReferences) await engine.sync('reference-seed');
+		if (seedProductBrowse) await engine.sync('product-browse-window-seed');
+		const handles = declareRequirements(engine, requirements);
+		await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
+		for (const handle of handles) handle.release();
+		await engine.sync('scheduler-drain');
+	};
 }

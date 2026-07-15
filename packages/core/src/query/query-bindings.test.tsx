@@ -115,6 +115,14 @@ describe('query bindings', () => {
 		);
 	}
 
+	it('uses the provider runtime without a fluent query manager surface', () => {
+		renderHook(() => useQueryManager(), { wrapper: Provider });
+
+		expect(manager).toBeDefined();
+		expect(manager).not.toHaveProperty('registerQuery');
+		expect(manager).not.toHaveProperty('queryStates');
+	});
+
 	it('reads engine residents and composes filter, sort, limit, and search', async () => {
 		await engineDB.collections.products.bulkInsert([
 			engineProduct({
@@ -439,6 +447,24 @@ describe('query bindings', () => {
 		expect(engine.searchRequireCalls).toHaveLength(1);
 	});
 
+	it('releases direct search demand when its binding unmounts', async () => {
+		const state: QueryStateOf<'customers'> = {
+			search: 'ada',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 10,
+		};
+		const { unmount } = renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
+		await waitFor(() => expect(engine.searchRequireCalls).toHaveLength(1));
+		expect(engine.searchRequireCalls[0]?.released).toBe(false);
+
+		unmount();
+
+		expect(engine.searchRequireCalls[0]?.released).toBe(true);
+	});
+
 	it('uses the full matching local logs count instead of the loaded window', async () => {
 		await localDB.collections.logs.bulkInsert([
 			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one', context: {} },
@@ -463,9 +489,6 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
-		expect(
-			[...manager!.queryStates.getAll().values()].filter((query) => query.collectionName === 'logs')
-		).toHaveLength(1);
 		await expect(firstValueFrom(result.current.totalSource$)).resolves.toBe('local');
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 
@@ -521,46 +544,6 @@ describe('query bindings', () => {
 		});
 		await waitFor(() => expect(current(result.current.resource)?.hits[0]?.id).toBe('new'));
 		await secondDB.remove();
-	});
-
-	it('deregisters superseded collection bindings and the final binding on unmount', async () => {
-		const base: QueryStateOf<'products'> = {
-			search: '',
-			filters: { categories: [], tags: [], brands: [] },
-			sort: { field: 'name', direction: 'asc' },
-			limit: 10,
-		};
-		const { rerender, unmount } = renderHook(
-			({ state }) => useCollectionBinding('products', state),
-			{ wrapper: Provider, initialProps: { state: base } }
-		);
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
-
-		for (let index = 1; index <= 5; index += 1) {
-			rerender({ state: { ...base, search: `term-${index}` } });
-			await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
-		}
-
-		unmount();
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(0));
-	});
-
-	it('keeps identical mounted binding registrations independently owned', async () => {
-		const state: QueryStateOf<'products'> = {
-			search: '',
-			filters: { categories: [], tags: [], brands: [] },
-			sort: { field: 'name', direction: 'asc' },
-			limit: 10,
-		};
-		const first = renderHook(() => useCollectionBinding('products', state), { wrapper: Provider });
-		const second = renderHook(() => useCollectionBinding('products', state), { wrapper: Provider });
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(2));
-
-		first.unmount();
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
-
-		second.unmount();
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(0));
 	});
 
 	it('binds the relational products-to-variations search pair', async () => {

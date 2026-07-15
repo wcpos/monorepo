@@ -5,7 +5,7 @@ import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import type { TemplateDocument } from '@wcpos/database';
-import { useQuery } from '@wcpos/query';
+import { useTemplatesSync } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useAppInfo } from '../../../../hooks/use-app-info';
@@ -26,13 +26,7 @@ export function useActiveTemplates(): TemplateDocument[] {
 	// endpoint returns the full set in a single response (posts_per_page=-1) and
 	// ignores include/exclude, so greedy pagination is unnecessary and would loop
 	// forever re-fetching the same set. A single sync pass per poll is enough.
-	useQuery({
-		queryKeys: ['templates'],
-		collectionName: 'templates',
-		initialParams: {
-			selector: { type: 'receipt' },
-		},
-	});
+	useTemplatesSync();
 
 	// Read per-store template assignments (will be empty until store schema v5)
 	type TemplateAssignment = { template_id: string | number; sort_order: number };

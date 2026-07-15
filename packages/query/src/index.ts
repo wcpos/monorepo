@@ -1,17 +1,30 @@
-import { Query, QueryHooks, QueryResult } from './query-state';
-
-export { QueryProvider, useQueryManager } from './provider';
-export { useQuery } from './use-query';
-export { useLocalQuery } from './use-local-query';
-export { useRelationalQuery } from './use-relational-query';
-export { useReplicationState } from './use-replication-state';
+export { QueryProvider, useQueryManager, type QueryRuntime } from './provider';
+export { useLocalQuery, type LocalQueryOptions } from './use-local-query';
+export { useTemplatesSync } from './templates';
 export { awaitWriteOutcome, type AwaitedWriteOutcome } from './await-write-outcome';
-export { swapCollection, swapCollections } from './collection-swap';
-export { yieldToEventLoop, processInChunks, chunkedIterator } from './yield';
-export type { RelationalQuery } from './relational-query-state';
-export type { Query, QueryHooks, QueryResult };
-export type { CollectionSwapConfig, CollectionSwapResult } from './collection-swap';
+export type { QueryResult } from './query-result';
+export {
+	observeEngineDatabases,
+	observeEngineQuery,
+	type EngineQueryDescriptor,
+} from './engine-query';
+export {
+	declareRequirements,
+	prepareCollectionResetRefill,
+	registerActiveBinding,
+	requirementsForQuery,
+} from './requirement-bridge';
 export {
 	isRecoverableLogsStorageError,
 	recoverLogsCollectionStorage,
 } from './logs-storage-recovery';
+export type {
+	CoverageLaneDocument,
+	EngineEvent,
+	EngineLane,
+	EngineRequirement,
+	QueryTotalCacheDocument,
+	RequirementHandle,
+	RxdbSyncEngine,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';

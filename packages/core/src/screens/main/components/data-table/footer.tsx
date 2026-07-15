@@ -4,8 +4,6 @@ import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useReplicationState } from '@wcpos/query';
-import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useQueryStateActions } from '../../../../query';
@@ -20,17 +18,7 @@ interface CommonProps {
 	count: number;
 }
 
-type LegacyProps = CommonProps & {
-	query: Query<any>;
-	collectionName?: never;
-	active$?: never;
-	total$?: never;
-	totalSource$?: never;
-	sync?: never;
-};
-
-type BindingProps = CommonProps & {
-	query?: never;
+export type BindingDataTableFooterProps = CommonProps & {
 	collectionName: CollectionKey;
 	active$: Observable<boolean>;
 	total$: Observable<number>;
@@ -38,10 +26,8 @@ type BindingProps = CommonProps & {
 	sync: () => Promise<void>;
 };
 
-type Props = LegacyProps | BindingProps;
-
 type FooterContentProps = CommonProps &
-	Pick<BindingProps, 'active$' | 'sync' | 'total$' | 'totalSource$'> & {
+	Pick<BindingDataTableFooterProps, 'active$' | 'sync' | 'total$' | 'totalSource$'> & {
 		clearAndSync: () => Promise<void>;
 	};
 
@@ -80,13 +66,7 @@ function FooterContent({
 	);
 }
 
-function LegacyDataTableFooter({ query, ...props }: LegacyProps) {
-	const projections = useReplicationState(query);
-	const { clearAndSync } = useCollectionReset(query.collection.name);
-	return <FooterContent {...props} {...projections} clearAndSync={clearAndSync} />;
-}
-
-function BindingDataTableFooter({ collectionName, ...props }: BindingProps) {
+export function DataTableFooter({ collectionName, ...props }: BindingDataTableFooterProps) {
 	const { clearAndSync } = useCollectionReset(collectionName);
 	const { clearSearch, resetFilters } = useQueryStateActions();
 	const resetQueryAndCollection = React.useCallback(() => {
@@ -96,8 +76,4 @@ function BindingDataTableFooter({ collectionName, ...props }: BindingProps) {
 	}, [clearAndSync, clearSearch, resetFilters]);
 
 	return <FooterContent {...props} clearAndSync={resetQueryAndCollection} />;
-}
-
-export function DataTableFooter(props: Props) {
-	return props.query ? <LegacyDataTableFooter {...props} /> : <BindingDataTableFooter {...props} />;
 }

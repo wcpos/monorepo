@@ -18,7 +18,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
-import type { Query } from '@wcpos/query';
+import type { QueryResult } from '@wcpos/query';
 
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { TextCell } from '../../components/text-cell';
@@ -29,7 +29,6 @@ import { ListFooterComponent as DefaultListFooterComponent } from './list-footer
 
 import type { SortingChange } from './sort-field';
 import type { CollectionKey as QueryCollectionKey } from '../../../../query';
-import type { CollectionKey as DatabaseCollectionKey } from '../../hooks/use-collection';
 import type { ColumnDef, Header, Table as TanStackTable } from '@tanstack/react-table';
 
 type DataTableCollectionKey = Exclude<QueryCollectionKey, 'tax-rates'>;
@@ -42,13 +41,7 @@ interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
 	onSortingChange: (sort: SortingChange) => void;
 }
 
-type ReplicationBinding = ReturnType<typeof import('@wcpos/query').useReplicationState>;
-type DataTableFooterProps = React.ComponentProps<typeof DataTableFooter>;
-type LegacyDataTableFooterProps = Extract<DataTableFooterProps, { query: Query<any> }>;
-type BindingDataTableFooterProps = Extract<
-	DataTableFooterProps,
-	{ collectionName: DatabaseCollectionKey }
->;
+type BindingDataTableFooterProps = React.ComponentProps<typeof DataTableFooter>;
 
 interface BindingActions<TSortField extends string> {
 	setSort(field: TSortField, direction: 'asc' | 'desc'): void;
@@ -73,34 +66,19 @@ interface CommonProps {
 	ListFooterComponent?: React.ComponentType<any>;
 }
 
-type LegacyQueryProps = {
-	query: Query<any>;
-	collectionName?: never;
-	resource?: never;
-	actions?: never;
-	active$?: never;
-	total$?: never;
-	totalSource$?: never;
-	sync?: never;
-	TableFooterComponent?: React.ComponentType<LegacyDataTableFooterProps>;
-};
-
 type BindingProps<TSortField extends string> = {
-	query?: never;
 	collectionName: DataTableCollectionKey;
-	resource: Query<import('rxdb').RxCollection>['resource'];
+	resource: import('observable-hooks').ObservableResource<QueryResult<import('rxdb').RxCollection>>;
 	sort: { field: TSortField; direction: 'asc' | 'desc' };
 	actions: BindingActions<TSortField>;
 	TableFooterComponent?: React.ComponentType<BindingDataTableFooterProps>;
-} & Pick<ReplicationBinding, 'active$' | 'total$' | 'totalSource$' | 'sync'>;
+	active$: import('rxjs').Observable<boolean>;
+	total$: import('rxjs').Observable<number>;
+	totalSource$: import('rxjs').Observable<'coverage' | 'local'>;
+	sync: () => Promise<void>;
+};
 
-type Props<TSortField extends string> = CommonProps & (LegacyQueryProps | BindingProps<TSortField>);
-
-function isBindingProps<TSortField extends string>(
-	props: Props<TSortField>
-): props is CommonProps & BindingProps<TSortField> {
-	return props.resource !== undefined;
-}
+type Props<TSortField extends string> = CommonProps & BindingProps<TSortField>;
 
 /**
  * React Compiler breaks tanstack/react-table
@@ -124,9 +102,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 		getItemType,
 		ListFooterComponent,
 	} = props;
-	const binding = isBindingProps(props) ? props : undefined;
-	const query = binding ? undefined : props.query;
-	const resource = binding ? binding.resource : query!.resource;
+	const resource = props.resource;
 	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
 	const uiColumns = useObservableEagerState(
 		uiSettings.columns$ as import('rxjs').Observable<Record<string, unknown>[]>
@@ -145,32 +121,20 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 		[uiColumns]
 	);
 
-	const sortBy = binding ? binding.sort.field : uiSettings.sortBy;
-	const sortDirection: 'asc' | 'desc' = binding
-		? binding.sort.direction
-		: uiSettings.sortDirection === 'desc'
-			? 'desc'
-			: 'asc';
+	const sortBy = props.sort.field;
+	const sortDirection = props.sort.direction;
 
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }: SortingChange) => {
 			patchUI({ sortBy, sortDirection });
-			if (binding) {
-				binding.actions.setSort(sortBy as TSortField, sortDirection);
-			} else {
-				query!.sort([{ [sortBy]: sortDirection }]).exec();
-			}
+			props.actions.setSort(sortBy as TSortField, sortDirection);
 		},
-		[binding, patchUI, query]
+		[patchUI, props.actions]
 	);
 
 	const handleEndReached = React.useCallback(() => {
-		if (binding) {
-			binding.actions.extendLimit();
-		} else if (query!.infiniteScroll) {
-			query!.loadMore();
-		}
-	}, [binding, query]);
+		props.actions.extendLimit();
+	}, [props.actions]);
 
 	const table = useReactTableWrapper({
 		columns,
@@ -179,12 +143,10 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 		getCoreRowModel: getCoreRowModel(),
 		...tableConfig,
 		state: { columnVisibility, ...tableConfig?.state },
-		meta: binding
-			? {
-					...tableConfig?.meta,
-					actions: { setFilter: binding.actions.setFilter },
-				}
-			: tableConfig?.meta,
+		meta: {
+			...tableConfig?.meta,
+			actions: { setFilter: props.actions.setFilter },
+		},
 	});
 
 	/**
@@ -250,50 +212,36 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 							</Text>
 						</TableRow>
 					)}
-					ListFooterComponent={
-						ListFooterComponent
-							? () =>
-									binding ? (
-										<ListFooterComponent active$={binding.active$} />
-									) : (
-										<ListFooterComponent query={query} />
-									)
-							: () =>
-									binding ? (
-										<DefaultListFooterComponent active$={binding.active$} />
-									) : (
-										<DefaultListFooterComponent query={query!} />
-									)
+					ListFooterComponent={() =>
+						ListFooterComponent ? (
+							<ListFooterComponent active$={props.active$} />
+						) : (
+							<DefaultListFooterComponent active$={props.active$} />
+						)
 					}
 					extraData={extraData}
 				/>
 			</VirtualizedList.Root>
 			{showFooter && (
 				<TableFooter>
-					{isBindingProps(props) ? (
-						props.TableFooterComponent ? (
-							<props.TableFooterComponent
-								collectionName={props.collectionName}
-								active$={props.active$}
-								total$={props.total$}
-								totalSource$={props.totalSource$}
-								sync={props.sync}
-								count={result.hits.length}
-							/>
-						) : (
-							<DataTableFooter
-								collectionName={props.collectionName}
-								active$={props.active$}
-								total$={props.total$}
-								totalSource$={props.totalSource$}
-								sync={props.sync}
-								count={result.hits.length}
-							/>
-						)
-					) : props.TableFooterComponent ? (
-						<props.TableFooterComponent query={props.query} count={result.hits.length} />
+					{props.TableFooterComponent ? (
+						<props.TableFooterComponent
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							totalSource$={props.totalSource$}
+							sync={props.sync}
+							count={result.hits.length}
+						/>
 					) : (
-						<DataTableFooter query={props.query} count={result.hits.length} />
+						<DataTableFooter
+							collectionName={props.collectionName}
+							active$={props.active$}
+							total$={props.total$}
+							totalSource$={props.totalSource$}
+							sync={props.sync}
+							count={result.hits.length}
+						/>
 					)}
 				</TableFooter>
 			)}
@@ -408,4 +356,4 @@ export {
 	getHeaderStyle,
 };
 export type { RenderHeaderProps, SortingChange };
-export type { BindingDataTableFooterProps, LegacyDataTableFooterProps };
+export type { BindingDataTableFooterProps };

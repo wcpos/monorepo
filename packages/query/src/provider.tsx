@@ -1,24 +1,26 @@
 import * as React from 'react';
 
-import { getLogger } from '@wcpos/utils/logger';
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
-
-import { Manager } from './manager';
 
 import type { RxDatabase } from 'rxdb';
 
-const logger = getLogger(['wcpos', 'query', 'provider']);
-
-const QueryContext = React.createContext<Manager<RxDatabase> | undefined>(undefined);
-
-interface QueryProviderProps<T extends RxDatabase> {
-	/** Local database — ONLY the `logs` (and dedicated `templates`) collections. */
+/** Runtime dependencies shared by the direct query bindings and local-only hooks. */
+export interface QueryRuntime<T extends RxDatabase = RxDatabase> {
+	/** Local database containing only dedicated local collections such as logs and templates. */
 	localDB: T;
-	/** The sync engine every fluent read is served from (ADR 0023 increment 1b). */
 	engine: RxdbSyncEngine;
 	locale: string;
 	/** Host HTTP client used only by the dedicated templates fetch target. */
-	http?: any;
+	httpClient?: unknown;
+}
+
+const QueryContext = React.createContext<QueryRuntime | undefined>(undefined);
+
+interface QueryProviderProps<T extends RxDatabase> {
+	localDB: T;
+	engine: RxdbSyncEngine;
+	locale: string;
+	http?: unknown;
 	children: React.ReactNode;
 }
 
@@ -29,20 +31,20 @@ export function QueryProvider<T extends RxDatabase>({
 	children,
 	locale,
 }: QueryProviderProps<T>) {
-	const manager = React.useMemo(() => {
-		logger.debug('Creating/getting manager', {
-			context: { localDBName: (localDB as any).name },
-		});
-		return Manager.getInstance<T>(localDB, engine, locale, http);
-	}, [localDB, engine, locale, http]);
+	const runtime = React.useMemo<QueryRuntime<T>>(
+		() => ({ localDB, engine, locale, httpClient: http }),
+		[engine, http, localDB, locale]
+	);
 
-	return <QueryContext.Provider value={manager}>{children}</QueryContext.Provider>;
+	return <QueryContext.Provider value={runtime}>{children}</QueryContext.Provider>;
 }
 
-export const useQueryManager = (): Manager<RxDatabase> => {
+/**
+ * Historical hook name retained as the provider-runtime seam used throughout core.
+ * It no longer returns or constructs a query manager.
+ */
+export const useQueryManager = (): QueryRuntime => {
 	const context = React.useContext(QueryContext);
-	if (!context) {
-		throw new Error('useQueryManager must be used within a QueryProvider');
-	}
+	if (!context) throw new Error('useQueryManager must be used within a QueryProvider');
 	return context;
 };
