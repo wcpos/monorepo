@@ -52,6 +52,7 @@ import {
 
 import type { ExpandedState } from '@tanstack/react-table';
 import type { QueryStateActions } from '../../../query';
+import type { BindingDataTableFooterProps } from '../components/data-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -158,9 +159,9 @@ function renderItem({
 /**
  *
  */
-function TableFooter(props: Record<string, unknown>) {
+function TableFooter(props: BindingDataTableFooterProps) {
 	return (
-		<DataTableFooter {...(props as unknown as React.ComponentProps<typeof DataTableFooter>)}>
+		<DataTableFooter {...props}>
 			<TaxBasedOn />
 		</DataTableFooter>
 	);
