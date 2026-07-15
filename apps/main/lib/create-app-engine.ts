@@ -19,6 +19,7 @@ import { defaultConfig } from '@wcpos/database/adapters/default';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 
+import { getEngineConnectivity } from './connectivity';
 import { deriveSyncSite } from './sync-site';
 
 export interface CreateAppSyncEngineOptions {
@@ -176,6 +177,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			site,
 			storage: defaultConfig.storage,
 			fetcher,
+			connectivity: getEngineConnectivity,
 			multiInstance: options.multiInstance ?? false,
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
