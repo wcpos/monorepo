@@ -1,26 +1,16 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-
-type ProductCollection = import('@wcpos/database').ProductCollection;
-
-interface Props {
-	query: Query<ProductCollection>;
-}
+import { useQueryState, useQueryStateActions } from '../../../../../query';
 
 /**
  *
  */
-export function FeaturedPill({ query }: Props) {
-	const isActive = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => !!query.getSelector('featured')))
-	);
+export function FeaturedPill() {
+	const isActive = useQueryState<'products', boolean>((state) => !!state.filters.featured);
+	const actions = useQueryStateActions<'products'>();
 	const t = useT();
 
 	return (
@@ -28,9 +18,9 @@ export function FeaturedPill({ query }: Props) {
 			leftIcon="star"
 			size="xs"
 			variant={isActive ? undefined : 'muted'}
-			onPress={() => query.where('featured').equals(true).exec()}
+			onPress={() => actions.setFilter('featured', true)}
 			removable={isActive}
-			onRemove={() => query.removeWhere('featured').exec()}
+			onRemove={() => actions.clearFilter('featured')}
 		>
 			<ButtonText>{t('common.featured')}</ButtonText>
 		</ButtonPill>

@@ -6,6 +6,7 @@ import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 
 import type { CellContext } from '@tanstack/react-table';
+import type { QueryStateActions } from '../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -19,7 +20,14 @@ export function ProductCategories({
 	const product = row.original.document;
 	const categories = useObservableEagerState(product.categories$!) || [];
 
-	const query = (table.options.meta as unknown as { query: any })?.query;
+	const meta = table.options.meta as unknown as {
+		actions?: Pick<QueryStateActions<'products'>, 'setFilter'>;
+		query?: {
+			removeWhere(field: string): {
+				and(selector: Record<string, unknown>[]): { exec(): void };
+			};
+		};
+	};
 
 	if (categories.length === 0) {
 		return null;
@@ -35,12 +43,17 @@ export function ProductCategories({
 					variant="ghost-primary"
 					size="xs"
 					key={index}
-					onPress={() =>
-						query
-							.removeWhere('categories')
-							.and([{ $or: [{ categories: { $elemMatch: { id: cat.id } } }] }])
-							.exec()
-					}
+					onPress={() => {
+						if (cat.id === undefined) return;
+						if (meta.actions) {
+							meta.actions.setFilter('categories', [cat.id]);
+						} else {
+							meta.query
+								?.removeWhere('categories')
+								.and([{ $or: [{ categories: { $elemMatch: { id: cat.id } } }] }])
+								.exec();
+						}
+					}}
 				>
 					<ButtonText numberOfLines={1} decodeHtml>
 						{cat.name}

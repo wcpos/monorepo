@@ -5,15 +5,12 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
-import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
+import { useQueryStateActions } from '../../../../../query';
 import { TagSearch } from '../tag-select';
 
-type ProductCollection = import('@wcpos/database').ProductCollection;
-
 interface Props {
-	query: Query<ProductCollection>;
 	resource: ObservableResource<import('@wcpos/database').ProductTagDocument>;
 	selectedID?: number;
 }
@@ -21,8 +18,9 @@ interface Props {
 /**
  *
  */
-export function TagPill({ query, resource, selectedID }: Props) {
+export function TagPill({ resource, selectedID }: Props) {
 	const tag = useObservableSuspense(resource);
+	const actions = useQueryStateActions<'products'>();
 	const t = useT();
 	const isActive = !!selectedID;
 
@@ -32,12 +30,9 @@ export function TagPill({ query, resource, selectedID }: Props) {
 	const handleSelect = React.useCallback(
 		(option: import('@wcpos/components/combobox').Option | undefined) => {
 			if (!option) return;
-			query
-				.where('tags')
-				.elemMatch({ id: toNumber(option.value) })
-				.exec();
+			actions.setFilter('tags', [toNumber(option.value)]);
 		},
-		[query]
+		[actions]
 	);
 
 	/**
@@ -51,7 +46,7 @@ export function TagPill({ query, resource, selectedID }: Props) {
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.where('tags').removeElemMatch('tags', { id: selectedID }).exec()}
+					onRemove={() => actions.clearFilter('tags')}
 				>
 					<ButtonText decodeHtml>
 						{isActive ? tag?.name || t('common.id_2', { id: selectedID }) : t('common.tag')}

@@ -27,7 +27,7 @@ import { useBarcode } from './use-barcode';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
-import { FilterBar } from '../../components/product/filter-bar';
+import { FilterBar } from './filter-bar';
 import { ProductImage } from '../../components/product/image';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
 import { VariableProductImage } from '../../components/product/variable-image';
