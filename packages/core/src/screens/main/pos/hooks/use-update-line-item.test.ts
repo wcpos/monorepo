@@ -164,10 +164,10 @@ describe('useUpdateLineItem', () => {
 						expect.objectContaining({
 							meta_data: expect.arrayContaining([
 								expect.objectContaining({ value: uuid }),
-								// Verify price was updated in pos_data metadata
+								// Verify price was updated in pos_data metadata (typed object, not JSON string)
 								expect.objectContaining({
 									key: '_woocommerce_pos_data',
-									value: expect.stringContaining(`"price":${newPrice}`),
+									value: expect.objectContaining({ price: newPrice }),
 								}),
 							]),
 						}),

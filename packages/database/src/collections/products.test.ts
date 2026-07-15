@@ -1,6 +1,15 @@
+import { addRxPlugin, createRxDatabase } from 'rxdb';
+import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
+
 import { storeCollections } from './index';
 import { sanitizeProductData } from './products';
 import { productsLiteral } from './schemas/products';
+
+beforeAll(() => {
+	addRxPlugin(RxDBMigrationSchemaPlugin);
+});
 
 describe('sanitizeProductData', () => {
 	it('normalizes stale product REST payloads for schema migration', () => {
@@ -20,6 +29,7 @@ describe('sanitizeProductData', () => {
 			meta_data: [
 				{ id: '10', key: '_alg_wc_cog_cost_archive', value: { stale: true } },
 				{ id: '11', key: '_pos_visible', value: { enabled: true } },
+				{ id: '12', key: '_pos_rules', value: ['retail', { enabled: true }] },
 			],
 			_links: { self: [{ href: 'https://example.test/wp-json/wc/v3/products/1' }] },
 			unexpected: 'drop me',
@@ -40,7 +50,10 @@ describe('sanitizeProductData', () => {
 					variation: false,
 				},
 			],
-			meta_data: [{ id: 11, key: '_pos_visible', value: '{"enabled":true}' }],
+			meta_data: [
+				{ id: 11, key: '_pos_visible', value: { enabled: true } },
+				{ id: 12, key: '_pos_rules', value: ['retail', { enabled: true }] },
+			],
 			links: { self: [{ href: 'https://example.test/wp-json/wc/v3/products/1' }] },
 		});
 		expect(sanitized).not.toHaveProperty('_links');
@@ -100,9 +113,33 @@ describe('products migration strategy', () => {
 		expect(migrated).toMatchObject({
 			uuid: 'product-uuid',
 			id: 1,
-			meta_data: [{ id: 11, key: '_pos_visible', value: '{"enabled":true}' }],
+			meta_data: [{ id: 11, key: '_pos_visible', value: { enabled: true } }],
 			links: { self: [{ href: 'https://example.test/product/1' }] },
 		});
 		expect(migrated).not.toHaveProperty('_links');
+	});
+});
+
+describe('products collection meta data', () => {
+	it('persists object meta values without coercion', async () => {
+		const db = await createRxDatabase({
+			name: `typedmetaproducts${Date.now()}`,
+			storage: wrappedValidateAjvStorage({ storage: getRxStorageMemory() }),
+		});
+
+		try {
+			const { products } = await db.addCollections({
+				products: { schema: productsLiteral },
+			});
+			const value = { enabled: true, channels: ['pos'] };
+			const document = await products.insert({
+				uuid: 'typed-meta-product',
+				meta_data: [{ id: 1, key: '_pos_visible', value }],
+			});
+
+			expect(document.toJSON().meta_data?.[0]?.value).toEqual(value);
+		} finally {
+			await db.remove();
+		}
 	});
 });

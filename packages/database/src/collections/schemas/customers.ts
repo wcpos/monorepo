@@ -169,7 +169,6 @@ export const customersLiteral = {
 					},
 					value: {
 						description: 'Meta value.',
-						type: 'string',
 					},
 				},
 			},

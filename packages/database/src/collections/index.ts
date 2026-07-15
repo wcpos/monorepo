@@ -27,6 +27,20 @@ import { sanitizeWPCredentialsData } from './wp-credentials';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
 
+type WithJsonMetaData<T> = T extends { meta_data?: infer MetaData }
+	? Omit<T, 'meta_data'> & {
+			meta_data?: MetaData extends readonly (infer Entry)[]
+				? (Omit<Entry, 'value'> & { value?: unknown })[]
+				: MetaData;
+		}
+	: T;
+
+type WithNestedJsonMetaData<T, Key extends keyof T> = Omit<T, Key> & {
+	[Property in Key]?: NonNullable<T[Property]> extends readonly (infer Entry)[]
+		? WithJsonMetaData<Entry>[]
+		: never;
+};
+
 /**
  * Global Users
  */
@@ -180,8 +194,10 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 /**
  * Products
  */
+type ProductDocumentType = WithJsonMetaData<
+	ExtractDocumentTypeFromTypedRxJsonSchema<typeof productsLiteral>
+>;
 const productSchema: RxJsonSchema<ProductDocumentType> = productsLiteral;
-type ProductDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof productsLiteral>;
 export type ProductDocument = RxDocument<ProductDocumentType>;
 export type ProductCollection = RxCollection<ProductDocumentType>;
 const products: RxCollectionCreator<ProductDocumentType> = {
@@ -235,10 +251,10 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 /**
  * Product Variations
  */
-const productVariationSchema: RxJsonSchema<ProductVariationDocumentType> = variationsLiteral;
-type ProductVariationDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
-	typeof variationsLiteral
+type ProductVariationDocumentType = WithJsonMetaData<
+	ExtractDocumentTypeFromTypedRxJsonSchema<typeof variationsLiteral>
 >;
+const productVariationSchema: RxJsonSchema<ProductVariationDocumentType> = variationsLiteral;
 export type ProductVariationDocument = RxDocument<ProductVariationDocumentType>;
 export type ProductVariationCollection = RxCollection<ProductVariationDocumentType>;
 const variations: RxCollectionCreator<ProductVariationDocumentType> = {
@@ -359,8 +375,11 @@ const brands: RxCollectionCreator<ProductBrandDocumentType> = {
 /**
  * Orders
  */
+type OrderDocumentType = WithNestedJsonMetaData<
+	WithJsonMetaData<ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersLiteral>>,
+	'line_items' | 'tax_lines' | 'shipping_lines' | 'fee_lines' | 'coupon_lines'
+>;
 const orderSchema: RxJsonSchema<OrderDocumentType> = ordersLiteral;
-type OrderDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersLiteral>;
 export type OrderDocument = RxDocument<OrderDocumentType> & { readonly isNew?: boolean };
 export type OrderCollection = RxCollection<OrderDocumentType>;
 const orders: RxCollectionCreator<OrderDocumentType> = {
@@ -422,8 +441,10 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 /**
  * Customers
  */
+type CustomerDocumentType = WithJsonMetaData<
+	ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersLiteral>
+>;
 const customerSchema: RxJsonSchema<CustomerDocumentType> = customersLiteral;
-type CustomerDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersLiteral>;
 export type CustomerDocument = RxDocument<CustomerDocumentType>;
 export type CustomerCollection = RxCollection<CustomerDocumentType>;
 const customers: RxCollectionCreator<CustomerDocumentType> = {

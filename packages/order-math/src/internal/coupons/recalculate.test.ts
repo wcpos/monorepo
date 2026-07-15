@@ -224,6 +224,32 @@ describe('recalculateCoupons', () => {
 	// Group 3: exclude_sale_items
 	// -----------------------------------------------------------------------
 	describe('exclude_sale_items', () => {
+		it('should detect typed object POS data as on sale', () => {
+			const item = makePosLineItem(1, 16, 18);
+			item.meta_data = [
+				{
+					key: '_woocommerce_pos_data',
+					value: { price: '16', regular_price: '18', tax_status: 'taxable' },
+				},
+			];
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [item],
+					couponLines: [makeCouponLine('sale')],
+					couponConfigs: new Map([
+						[
+							'sale',
+							makeConfig({ discount_type: 'percent', amount: '10', exclude_sale_items: true }),
+						],
+					]),
+				})
+			);
+
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(0, 2);
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16, 2);
+		});
+
 		it('should exclude POS-discounted item (on sale) when exclude_sale_items is true', () => {
 			// pos_data price=$16, regular=$18 => on_sale = true
 			const result = recalculateCoupons(

@@ -6,7 +6,7 @@ export type MoneyString = string;
 export interface MetaDataInput {
 	id?: number;
 	key?: string;
-	value?: string;
+	value?: unknown;
 	display_key?: string;
 	display_value?: string;
 }

@@ -31,7 +31,7 @@ export function VariableProductPrice({
 	const taxClass = useObservableState(product.tax_class$!, product.tax_class) as string | undefined;
 
 	const metaData = useObservableState(product.meta_data$!, product.meta_data) as
-		| { key?: string; value?: string }[]
+		| { key?: string; value?: unknown }[]
 		| undefined;
 	const variablePrices = getVariablePrices(metaData);
 	const key = column.id as PriceKey;

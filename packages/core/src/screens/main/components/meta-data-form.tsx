@@ -12,6 +12,7 @@ import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 
+import { formatMetaDataValue, parseMetaDataInput } from './format-meta-data-value';
 import { useT } from '../../../contexts/translations';
 
 export { metaDataSchema } from './meta-data-schema';
@@ -77,7 +78,14 @@ export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaData
 									<FormField
 										control={control}
 										name={`${name}.${index}.value`}
-										render={({ field }) => <FormInput label={t('common.value')} {...field} />}
+										render={({ field }) => (
+											<FormInput
+												label={t('common.value')}
+												{...field}
+												value={formatMetaDataValue(field.value)}
+												onChange={(text) => field.onChange(parseMetaDataInput(String(text ?? '')))}
+											/>
+										)}
 									/>
 									{withDisplayValues && (
 										<FormField

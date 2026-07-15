@@ -39,7 +39,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  * Helper function - @TODO move to utils
  */
 const upsertMetaData = (
-	metaDataArray: { key?: string; value?: string; id?: number }[],
+	metaDataArray: { key?: string; value?: unknown; id?: number }[],
 	key: string,
 	value: string
 ) => {

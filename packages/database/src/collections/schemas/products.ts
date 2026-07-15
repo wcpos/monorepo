@@ -442,9 +442,7 @@ export const productsLiteral = {
 					key: {
 						type: 'string',
 					},
-					value: {
-						type: 'string',
-					},
+					value: {},
 				},
 			},
 		},
