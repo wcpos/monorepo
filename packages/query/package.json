@@ -8,11 +8,12 @@
 	"main": "src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
-		"./*": "./src/*"
+		"./engine-compat": "./src/engine-compat.ts",
+		"./requirements": "./src/requirements/index.ts"
 	},
 	"type": "module",
 	"files": [
-		"src/*"
+		"src/**"
 	],
 	"scripts": {
 		"clean": "shx rm -rf dist && rm -rf node_modules",

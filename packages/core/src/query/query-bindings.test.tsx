@@ -13,7 +13,11 @@ import { filter, firstValueFrom } from 'rxjs';
 import { QueryProvider, useQueryManager } from '@wcpos/query';
 import type { QueryResult } from '@wcpos/query';
 
-import { coverageLaneSchema, queryTotalCacheSchema } from '../../../sync-engine/src/testing';
+import {
+	coverageLaneSchema,
+	engineSyncCollectionCreators,
+	queryTotalCacheSchema,
+} from '../../../sync-engine/src/testing';
 import {
 	useCollectionBinding,
 	useRelationalCollectionBinding,
@@ -114,6 +118,14 @@ describe('query bindings', () => {
 			</QueryProvider>
 		);
 	}
+
+	it('uses the provider runtime without a fluent query manager surface', () => {
+		renderHook(() => useQueryManager(), { wrapper: Provider });
+
+		expect(manager).toBeDefined();
+		expect(manager).not.toHaveProperty('registerQuery');
+		expect(manager).not.toHaveProperty('queryStates');
+	});
 
 	it('reads engine residents and composes filter, sort, limit, and search', async () => {
 		await engineDB.collections.products.bulkInsert([
@@ -439,6 +451,71 @@ describe('query bindings', () => {
 		expect(engine.searchRequireCalls).toHaveLength(1);
 	});
 
+	it('releases direct search demand when its binding unmounts', async () => {
+		const state: QueryStateOf<'customers'> = {
+			search: 'ada',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 10,
+		};
+		const { unmount } = renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
+		await waitFor(() => expect(engine.searchRequireCalls).toHaveLength(1));
+		expect(engine.searchRequireCalls[0]?.released).toBe(false);
+
+		unmount();
+
+		expect(engine.searchRequireCalls[0]?.released).toBe(true);
+	});
+
+	it('redeclares search demand once after a transient declaration rejection', async () => {
+		jest.useFakeTimers();
+		engine.searchFailure = new Error('transient search failure');
+		const state: QueryStateOf<'customers'> = {
+			search: 'ada',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 10,
+		};
+
+		renderHook(() => useCollectionBinding('customers', state), { wrapper: Provider });
+		await act(async () => Promise.resolve());
+		expect(engine.searchRequireCalls).toHaveLength(1);
+
+		engine.searchFailure = undefined;
+		await act(async () => jest.advanceTimersByTimeAsync(1_000));
+
+		expect(engine.searchRequireCalls).toHaveLength(2);
+		expect(engine.searchRequireCalls[0]?.released).toBe(true);
+		expect(engine.searchRequireCalls[1]?.released).toBe(false);
+	});
+
+	it('bounds permanent demand rejection to one redeclaration and returns inactive', async () => {
+		jest.useFakeTimers();
+		engine.searchFailure = new Error('permanent search failure');
+		const state: QueryStateOf<'customers'> = {
+			search: 'ada',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 10,
+		};
+		const activeValues: boolean[] = [];
+		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
+		const subscription = result.current.active$.subscribe((active) => activeValues.push(active));
+
+		await act(async () => Promise.resolve());
+		await act(async () => jest.advanceTimersByTimeAsync(1_000));
+		await act(async () => jest.advanceTimersByTimeAsync(60_000));
+
+		expect(engine.searchRequireCalls).toHaveLength(2);
+		expect(activeValues).toContain(true);
+		expect(activeValues.at(-1)).toBe(false);
+		subscription.unsubscribe();
+	});
+
 	it('uses the full matching local logs count instead of the loaded window', async () => {
 		await localDB.collections.logs.bulkInsert([
 			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one', context: {} },
@@ -463,9 +540,6 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
 		).resolves.toBe(2);
-		expect(
-			[...manager!.queryStates.getAll().values()].filter((query) => query.collectionName === 'logs')
-		).toHaveLength(1);
 		await expect(firstValueFrom(result.current.totalSource$)).resolves.toBe('local');
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 
@@ -523,44 +597,40 @@ describe('query bindings', () => {
 		await secondDB.remove();
 	});
 
-	it('deregisters superseded collection bindings and the final binding on unmount', async () => {
-		const base: QueryStateOf<'products'> = {
-			search: '',
-			filters: { categories: [], tags: [], brands: [] },
-			sort: { field: 'name', direction: 'asc' },
-			limit: 10,
-		};
-		const { rerender, unmount } = renderHook(
-			({ state }) => useCollectionBinding('products', state),
-			{ wrapper: Provider, initialProps: { state: base } }
+	it('rebinds residents after clear-and-refresh replaces a collection in the same database', async () => {
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'before-reset', id: 1, name: 'Before reset' })
 		);
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
-
-		for (let index = 1; index <= 5; index += 1) {
-			rerender({ state: { ...base, search: `term-${index}` } });
-			await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
-		}
-
-		unmount();
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(0));
-	});
-
-	it('keeps identical mounted binding registrations independently owned', async () => {
+		const listeners = new Set<(database: RxDatabase | null) => void>();
+		const resettingEngine = Object.assign(engine, {
+			db$: (listener: (database: RxDatabase | null) => void) => {
+				listeners.add(listener);
+				listener(engineDB);
+				return () => listeners.delete(listener);
+			},
+		});
 		const state: QueryStateOf<'products'> = {
 			search: '',
 			filters: { categories: [], tags: [], brands: [] },
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		};
-		const first = renderHook(() => useCollectionBinding('products', state), { wrapper: Provider });
-		const second = renderHook(() => useCollectionBinding('products', state), { wrapper: Provider });
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(2));
+		const wrapper = ({ children }: { children: React.ReactNode }) => (
+			<Provider value={resettingEngine}>{children}</Provider>
+		);
+		const { result } = renderHook(() => useCollectionBinding('products', state), { wrapper });
+		await waitFor(() => expect(current(result.current.resource)?.hits[0]?.id).toBe('before-reset'));
 
-		first.unmount();
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(1));
+		await engineDB.collections.products.remove();
+		await engineDB.addCollections({
+			products: engineSyncCollectionCreators().products as never,
+		});
+		act(() => listeners.forEach((listener) => listener(engineDB)));
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'after-refill', id: 2, name: 'After refill' })
+		);
 
-		second.unmount();
-		await waitFor(() => expect(manager?.queryStates.getAll().size).toBe(0));
+		await waitFor(() => expect(current(result.current.resource)?.hits[0]?.id).toBe('after-refill'));
 	});
 
 	it('binds the relational products-to-variations search pair', async () => {

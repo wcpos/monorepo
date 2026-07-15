@@ -4,16 +4,15 @@
  * `templates` has no engine collection: the WP endpoint returns the full receipt
  * set in a single response (`posts_per_page=-1`, ignores include/exclude), and
  * Core consumes it read-only from the local RxDB collection
- * (`storeDB.templates.find(...)`). So instead of the old replication machine we
- * do the smaller-correct thing: one direct fetch through the transitional http
- * seam that upserts the set into the local `templates` collection. The fluent
- * `useQuery({collectionName:'templates'})` then reads that local collection
- * directly (the same local read path as `logs`).
- *
- * @deprecated increment-3 — folds into the engine once templates gains a facet.
+ * (`storeDB.templates.find(...)`). One direct fetch through the HTTP seam
+ * upserts the set into the local `templates` collection, which core reads directly.
  */
 
+import * as React from 'react';
+
 import { getLogger } from '@wcpos/utils/logger';
+
+import { useQueryManager } from './provider';
 
 import type { RxCollection } from 'rxdb';
 
@@ -59,4 +58,13 @@ export function syncTemplates(collection: RxCollection, httpClient: any): Promis
 	})();
 	inFlight.set(collection, run);
 	return run;
+}
+
+/** Keep the dedicated local templates collection fresh without creating a query manager. */
+export function useTemplatesSync(): void {
+	const runtime = useQueryManager();
+	const collection = runtime.localDB.collections.templates;
+	React.useEffect(() => {
+		if (collection) void syncTemplates(collection, runtime.httpClient);
+	}, [collection, runtime.httpClient]);
 }

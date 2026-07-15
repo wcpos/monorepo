@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useQueryManager } from '@wcpos/query';
-import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
+import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 import { buildLocalBarcodeIndex } from '@wcpos/sync-core';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;

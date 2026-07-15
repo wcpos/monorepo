@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 import { awaitWriteOutcome, useQueryManager } from '@wcpos/query';
-import type { LegacyCollectionName } from '@wcpos/query/engine-adapter/collection-map';
-import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
+import type { LegacyCollectionName } from '@wcpos/query/engine-compat';
+import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 

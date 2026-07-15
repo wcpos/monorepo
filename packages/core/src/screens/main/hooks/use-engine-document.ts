@@ -9,8 +9,8 @@ import {
 	engineCollectionNameFor,
 	type LegacyCollectionName,
 	resolveLegacyField,
-} from '@wcpos/query/engine-adapter/collection-map';
-import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
+} from '@wcpos/query/engine-compat';
+import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 
 type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
 

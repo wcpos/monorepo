@@ -21,6 +21,8 @@ module.exports = {
 	verbose: true,
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.js'],
 	moduleNameMapper: {
+		// Historical proxy mocks resolve to the deliberate public compatibility seam.
+		'^@wcpos/query/engine-adapter/document-proxy$': '<rootDir>/../query/src/engine-compat.ts',
 		// Mock logger modules (must come before generic @wcpos/utils matcher)
 		'^@wcpos/utils/logger/error-codes$':
 			'<rootDir>/jest/__mocks__/@wcpos/utils/logger/error-codes.js',

@@ -8,9 +8,9 @@ import { useQueryManager } from '@wcpos/query';
 import {
 	engineCollectionNameFor,
 	resolveLegacyField,
-} from '@wcpos/query/engine-adapter/collection-map';
-import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
-import { declareRequirements, requirementsForQuery } from '@wcpos/query/requirement-bridge';
+	wrapEngineDocument,
+} from '@wcpos/query/engine-compat';
+import { declareRequirements, requirementsForQuery } from '@wcpos/query/requirements';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];

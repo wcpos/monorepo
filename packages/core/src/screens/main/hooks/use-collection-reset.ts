@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useQueryManager } from '@wcpos/query';
+import { prepareCollectionResetRefill, useQueryManager } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { CollectionKey } from './use-collection';
-import type { RxCollection } from 'rxdb';
 
 const logger = getLogger(['wcpos', 'hooks', 'useCollectionReset']);
 
@@ -39,7 +38,7 @@ export interface CollectionResetResult {
 /** Engine-owned reset funnel. A pending mutation queue is never destroyed implicitly: the
  * engine's `needs-confirmation` value is preserved and returned to the caller unchanged. */
 export const useCollectionReset = (key: CollectionKey) => {
-	const manager = useQueryManager();
+	const runtime = useQueryManager();
 	const collectionNames = React.useMemo<CollectionKey[]>(
 		() => (key === 'products' ? ['variations', 'products'] : [key]),
 		[key]
@@ -49,15 +48,10 @@ export const useCollectionReset = (key: CollectionKey) => {
 		async (collectionName: CollectionKey): Promise<CollectionResetResult> => {
 			const engineName = ENGINE_COLLECTIONS[collectionName];
 			if (!engineName) throw new Error(`Collection "${collectionName}" cannot be engine-reset`);
-			const staleCollection = manager.getCollection(collectionName) as RxCollection | undefined;
-			const outcome = await manager.engine.scope.resetCollection(engineName, {
-				// Cancel queries at the engine's guarded pre-drop seam. If a reset ever
-				// returns needs-confirmation, the live query remains registered.
-				beforeDrop: staleCollection ? () => manager.onCollectionReset(staleCollection) : undefined,
-			});
+			const outcome = await runtime.engine.scope.resetCollection(engineName);
 			if (outcome === 'reset') {
 				const resetSubject = (
-					manager.localDB as unknown as {
+					runtime.localDB as unknown as {
 						reset$?: { next(value: unknown): void };
 					}
 				).reset$;
@@ -65,7 +59,7 @@ export const useCollectionReset = (key: CollectionKey) => {
 			}
 			return { collectionName, outcome };
 		},
-		[manager]
+		[runtime]
 	);
 
 	const clear = React.useCallback(async (): Promise<CollectionResetResult[]> => {
@@ -80,7 +74,7 @@ export const useCollectionReset = (key: CollectionKey) => {
 
 	const clearAndSync = React.useCallback(async (): Promise<void> => {
 		logger.debug('clearAndSync: starting', { context: { key } });
-		const refill = manager.prepareCollectionResetRefill(collectionNames);
+		const refill = prepareCollectionResetRefill(runtime.engine, collectionNames);
 		const results = await clear();
 		const pendingConfirmation = results.find((result) => result.outcome === 'needs-confirmation');
 		if (pendingConfirmation) {
@@ -91,7 +85,7 @@ export const useCollectionReset = (key: CollectionKey) => {
 		}
 		await refill();
 		logger.debug('clearAndSync: complete', { context: { key } });
-	}, [clear, collectionNames, key, manager]);
+	}, [clear, collectionNames, key, runtime.engine]);
 
 	return { clear, clearAndSync };
 };

@@ -19,9 +19,9 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { CouponDocument } from '@wcpos/database';
-import { useQuery } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useSearchSelect } from '../../../../query';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useAddCoupon } from '../hooks/use-add-coupon';
 
@@ -101,57 +101,38 @@ export function AddCoupon() {
 
 function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 	const t = useT();
-	const [search, setSearch] = React.useState('');
-
-	const query = useQuery({
-		queryKeys: ['coupons', 'coupon-select'],
-		collectionName: 'coupons',
-		initialParams: {
-			sort: [{ code: 'asc' }],
-		},
-		infiniteScroll: true,
-	});
+	const binding = useSearchSelect('coupon');
 
 	const onSearch = React.useCallback(
 		(value: string) => {
-			setSearch(value);
+			binding.setSearch(value);
 			onSearchChange?.();
-			query?.debouncedSearch(value);
 		},
-		[onSearchChange, query]
+		[binding.setSearch, onSearchChange]
 	);
-
-	React.useEffect(() => {
-		return () => query?.search('');
-	}, [query]);
 
 	return (
 		<>
 			<ComboboxInput
 				placeholder={t('pos_cart.search_coupons', { defaultValue: 'Search coupons...' })}
-				value={search}
+				value={binding.search}
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CouponList query={query} />
+				<CouponList resource={binding.resource} />
 			</Suspense>
 		</>
 	);
 }
 
-function CouponList({ query }: { query: any }) {
-	const result = useObservableSuspense(query.resource) as { hits: CouponHit[] };
+function CouponList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
+	const result = useObservableSuspense(resource) as { hits: CouponHit[] };
 	const t = useT();
 
 	return (
 		<ComboboxList
 			data={result.hits as unknown as import('@wcpos/components/combobox').Option[]}
 			shouldFilter={false}
-			onEndReached={() => {
-				if (query?.infiniteScroll) {
-					query.loadMore();
-				}
-			}}
 			renderItem={({ item }) => {
 				const hit = item as unknown as CouponHit;
 				return (

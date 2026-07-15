@@ -13,7 +13,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useQueryManager } from '@wcpos/query';
-import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
+import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 

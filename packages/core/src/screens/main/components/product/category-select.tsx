@@ -15,10 +15,9 @@ import {
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
-import { useQuery } from '@wcpos/query';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 
-import { useSearchSelect } from '../../../../query';
+import { useAllCategoriesBinding, useSearchSelect } from '../../../../query';
 
 /**
  *
@@ -75,7 +74,7 @@ export function CategorySearch() {
 }
 
 /**
- * Loads categories via useQuery and passes them as HierarchicalOption[] to a callback.
+ * Loads all resident categories and passes them as HierarchicalOption[] to a callback.
  * Intended to be rendered inside TreeComboboxContent so it only mounts when the popover opens.
  *
  * @param onOptionsLoaded Must be a stable reference (e.g. setState) — an unstable
@@ -86,16 +85,9 @@ function CategoryTreeLoaderInner({
 }: {
 	onOptionsLoaded: (options: HierarchicalOption[]) => void;
 }) {
-	const categoryQuery = useQuery({
-		queryKeys: ['products/categories'],
-		collectionName: 'products/categories',
-		initialParams: {
-			sort: [{ name: 'asc' }],
-		},
-		greedy: true,
-	});
+	const binding = useAllCategoriesBinding();
 
-	const result = useObservableSuspense(categoryQuery!.resource) as {
+	const result = useObservableSuspense(binding.resource) as {
 		hits: { id: string; document: { id?: number; name?: string; parent?: number } }[];
 	};
 

@@ -1,4 +1,4 @@
-import { requirementsForQuery } from '@wcpos/query/requirement-bridge';
+import { requirementsForQuery } from '@wcpos/query';
 
 import {
 	FILTER_TRANSLATORS,
