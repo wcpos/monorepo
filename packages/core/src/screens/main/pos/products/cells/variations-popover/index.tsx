@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { useQuery } from '@wcpos/query';
 
 import { Variations } from './variations';
+import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -18,41 +18,29 @@ interface VariationsPopoverProps {
 /**
  *
  */
-export function VariationsPopover({ parent, addToCart }: VariationsPopoverProps) {
-	/**
-	 *
-	 */
-	const query = useQuery({
-		queryKeys: ['variations', { parentID: parent.id }],
-		collectionName: 'variations',
-		initialParams: {
-			selector: { id: { $in: parent.variations } },
-		},
-		endpoint: `products/${parent.id}/variations`,
-		greedy: true,
+function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps) {
+	const state = useQueryState<'variations'>();
+	const binding = useCollectionBinding('variations', state, {
+		wooIds: parent.variations ?? [],
 	});
-
-	/**
-	 * Clear the query when the popover closes
-	 */
-	React.useEffect(
-		() => {
-			return () => {
-				query?.removeWhere('attributes').exec();
-			};
-		},
-		[
-			// only run when the component unmounts
-		]
-	);
-
-	if (!query) return null;
 
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<Variations query={query} parent={parent} addToCart={addToCart} />
+				<Variations binding={binding} parent={parent} addToCart={addToCart} />
 			</Suspense>
 		</ErrorBoundary>
+	);
+}
+
+export function VariationsPopover(props: VariationsPopoverProps) {
+	return (
+		<QueryStateProvider
+			collection="variations"
+			initialPageSize={Number.MAX_SAFE_INTEGER}
+			initialSort={{ field: 'name', direction: 'asc' }}
+		>
+			<VariationsPopoverContent {...props} />
+		</QueryStateProvider>
 	);
 }

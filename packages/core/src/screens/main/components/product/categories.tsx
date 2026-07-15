@@ -21,12 +21,7 @@ export function ProductCategories({
 	const categories = useObservableEagerState(product.categories$!) || [];
 
 	const meta = table.options.meta as unknown as {
-		actions?: Pick<QueryStateActions<'products'>, 'setFilter'>;
-		query?: {
-			removeWhere(field: string): {
-				and(selector: Record<string, unknown>[]): { exec(): void };
-			};
-		};
+		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
 	};
 
 	if (categories.length === 0) {
@@ -43,17 +38,9 @@ export function ProductCategories({
 					variant="ghost-primary"
 					size="xs"
 					key={index}
-					onPress={() => {
-						if (cat.id === undefined) return;
-						if (meta.actions) {
-							meta.actions.setFilter('categories', [cat.id]);
-						} else {
-							meta.query
-								?.removeWhere('categories')
-								.and([{ $or: [{ categories: { $elemMatch: { id: cat.id } } }] }])
-								.exec();
-						}
-					}}
+					onPress={() =>
+						cat.id === undefined ? undefined : meta.actions.setFilter('categories', [cat.id])
+					}
 				>
 					<ButtonText numberOfLines={1} decodeHtml>
 						{cat.name}

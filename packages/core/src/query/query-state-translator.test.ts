@@ -1,6 +1,10 @@
 import { requirementsForQuery } from '@wcpos/query/requirement-bridge';
 
-import { FILTER_TRANSLATORS, translateQueryState } from './query-state-translator';
+import {
+	FILTER_TRANSLATORS,
+	normalizeQuerySortField,
+	translateQueryState,
+} from './query-state-translator';
 
 import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
 
@@ -13,6 +17,29 @@ type ExhaustiveFilterMap = {
 const exhaustiveFilterMap: ExhaustiveFilterMap = FILTER_TRANSLATORS;
 
 describe('query-state translator', () => {
+	it.each([
+		['price', 'sortable_price'],
+		['regular_price', 'regular_price'],
+		['sale_price', 'sale_price'],
+		['stock_quantity', 'stock_quantity'],
+		['stock_status', 'stock_status'],
+	] as const)('normalizes the products UI sort key %s to %s', (uiField, queryField) => {
+		expect(normalizeQuerySortField('products', uiField)).toBe(queryField);
+	});
+
+	it('keeps the POS runtime product sort surface mapped to engine paths', () => {
+		const state = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'total_sales', direction: 'desc' },
+			limit: 10,
+		} as unknown as QueryStateOf<'products'>;
+
+		expect(translateQueryState('products', state)).toMatchObject({
+			sort: [{ total_sales: 'desc' }],
+			sortEnginePath: 'payload.total_sales',
+		});
+	});
 	it('has an exhaustive entry for every declared collection filter', () => {
 		expect(exhaustiveFilterMap).toBe(FILTER_TRANSLATORS);
 		expect(Object.keys(FILTER_TRANSLATORS.products)).toEqual([
@@ -67,7 +94,7 @@ describe('query-state translator', () => {
 				{ stock_status: 'outofstock' },
 			],
 		});
-		expect(products).toMatchObject({ sort: [{ price: 'desc' }], limit: 25 });
+		expect(products).toMatchObject({ sort: [{ sortable_price: 'desc' }], limit: 25 });
 	});
 
 	it('composes order payload metadata with promoted filters and dates', () => {

@@ -19,7 +19,7 @@ import type { CellContext, Row } from '@tanstack/react-table';
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 interface Props {
-	query: import('@wcpos/query').Query<import('@wcpos/database').ProductVariationCollection>;
+	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
 	row: Row<{ document: ProductDocument }>;
 }
 
@@ -54,8 +54,8 @@ const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
 /**
  *
  */
-export function VariationsTable({ query, row }: Props) {
-	const result = useObservableSuspense(query.resource) as { hits: VariationHit[] };
+export function VariationsTable({ binding, row }: Props) {
+	const result = useObservableSuspense(binding.resource) as { hits: VariationHit[] };
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -111,7 +111,7 @@ export function VariationsTable({ query, row }: Props) {
 				);
 			})}
 			<VariationTableFooter
-				query={query}
+				binding={binding}
 				parent={row.original.document}
 				count={result.hits.length}
 			/>

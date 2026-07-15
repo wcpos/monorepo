@@ -28,11 +28,15 @@ import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
 
 import type { SortingChange } from './sort-field';
-import type { CollectionKey } from '../../hooks/use-collection';
+import type { CollectionKey as QueryCollectionKey } from '../../../../query';
+import type { CollectionKey as DatabaseCollectionKey } from '../../hooks/use-collection';
 import type { ColumnDef, Header, Table as TanStackTable } from '@tanstack/react-table';
+
+type DataTableCollectionKey = Exclude<QueryCollectionKey, 'tax-rates'>;
 
 interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
 	table: TanStackTable<TData>;
+	collectionName?: DataTableCollectionKey;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
 	onSortingChange: (sort: SortingChange) => void;
@@ -41,7 +45,10 @@ interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
 type ReplicationBinding = ReturnType<typeof import('@wcpos/query').useReplicationState>;
 type DataTableFooterProps = React.ComponentProps<typeof DataTableFooter>;
 type LegacyDataTableFooterProps = Extract<DataTableFooterProps, { query: Query<any> }>;
-type BindingDataTableFooterProps = Extract<DataTableFooterProps, { collectionName: CollectionKey }>;
+type BindingDataTableFooterProps = Extract<
+	DataTableFooterProps,
+	{ collectionName: DatabaseCollectionKey }
+>;
 
 interface BindingActions<TSortField extends string> {
 	setSort(field: TSortField, direction: 'asc' | 'desc'): void;
@@ -68,6 +75,7 @@ interface CommonProps {
 
 type LegacyQueryProps = {
 	query: Query<any>;
+	collectionName?: never;
 	resource?: never;
 	actions?: never;
 	active$?: never;
@@ -79,6 +87,7 @@ type LegacyQueryProps = {
 
 type BindingProps<TSortField extends string> = {
 	query?: never;
+	collectionName: DataTableCollectionKey;
 	resource: Query<import('rxdb').RxCollection>['resource'];
 	sort: { field: TSortField; direction: 'asc' | 'desc' };
 	actions: BindingActions<TSortField>;
@@ -175,10 +184,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 					...tableConfig?.meta,
 					actions: { setFilter: binding.actions.setFilter },
 				}
-			: {
-					query,
-					...tableConfig?.meta,
-				},
+			: tableConfig?.meta,
 	});
 
 	/**
@@ -202,12 +208,14 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 									renderHeader({
 										...header,
 										table,
+										collectionName: props.collectionName,
 										sortBy,
 										sortDirection,
 										onSortingChange: handleSortingChange,
 									})
 								) : (
 									<DataTableHeader
+										collectionName={props.collectionName}
 										columnId={header.column.id}
 										header={flexRender(header.column.columnDef.header, header.getContext())}
 										disableSort={!header.column.getCanSort()}
@@ -265,7 +273,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 					{isBindingProps(props) ? (
 						props.TableFooterComponent ? (
 							<props.TableFooterComponent
-								collectionName={id as CollectionKey}
+								collectionName={props.collectionName}
 								active$={props.active$}
 								total$={props.total$}
 								totalSource$={props.totalSource$}
@@ -274,7 +282,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 							/>
 						) : (
 							<DataTableFooter
-								collectionName={id as CollectionKey}
+								collectionName={props.collectionName}
 								active$={props.active$}
 								total$={props.total$}
 								totalSource$={props.totalSource$}

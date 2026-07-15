@@ -158,6 +158,56 @@ describe('query bindings', () => {
 		);
 	});
 
+	it('keeps finite variation ids at the selector root while applying query-state filters', async () => {
+		await engineDB.collections.variations.bulkInsert([
+			engineVariation({
+				uuid: 'red-small',
+				id: 11,
+				parent_id: 10,
+				name: 'Red Small',
+				attributes: [{ id: 1, name: 'Color', option: 'Red' }],
+			}),
+			engineVariation({
+				uuid: 'blue-small',
+				id: 12,
+				parent_id: 10,
+				name: 'Blue Small',
+				attributes: [{ id: 1, name: 'Color', option: 'Blue' }],
+			}),
+			engineVariation({
+				uuid: 'red-other-parent',
+				id: 21,
+				parent_id: 20,
+				name: 'Red Other Parent',
+				attributes: [{ id: 1, name: 'Color', option: 'Red' }],
+			}),
+		]);
+		const state: QueryStateOf<'variations'> = {
+			search: '',
+			filters: { attributeMatches: [{ id: 1, name: 'Color', option: 'Red' }] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		};
+		const bindTargeted = useCollectionBinding as unknown as (
+			collection: 'variations',
+			queryState: QueryStateOf<'variations'>,
+			options: { wooIds: number[] }
+		) => ReturnType<typeof useCollectionBinding<'variations'>>;
+		const { result } = renderHook(() => bindTargeted('variations', state, { wooIds: [11, 12] }), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['red-small'])
+		);
+		expect(
+			engine.requireCalls.find(
+				(requirement) =>
+					requirement.collection === 'variations' && requirement.kind === 'targeted-records'
+			)
+		).toMatchObject({ wooIds: [11, 12] });
+	});
+
 	it('declares the orders query descriptor for status/customer/date-filtered windows', async () => {
 		const state: QueryStateOf<'orders'> = {
 			search: 'smith',

@@ -1,8 +1,8 @@
 import * as React from 'react';
 
+import { QueryStateProvider } from '../../../../../query';
+
 interface VariationRowContextType {
-	queryParams: Record<string, any>;
-	updateQueryParams: (key: string, value: any) => void;
 	rowId: string;
 	setRowExpanded?: (rowId: string, expanded: boolean) => void;
 }
@@ -25,7 +25,7 @@ export const useVariationRow = () => {
 };
 
 interface VariationRowProviderProps {
-	row: any;
+	row: { id: string };
 	setRowExpanded?: (rowId: string, expanded: boolean) => void;
 	children: React.ReactNode;
 }
@@ -34,17 +34,15 @@ interface VariationRowProviderProps {
  *
  */
 export function VariationRowProvider({ row, setRowExpanded, children }: VariationRowProviderProps) {
-	const [queryParams, setQueryParams] = React.useState({});
-
-	const updateQueryParams = (key: string, value: any) => {
-		setQueryParams((prev) => ({ ...prev, [key]: value }));
-	};
-
 	return (
-		<VariationRowContext.Provider
-			value={{ queryParams, updateQueryParams, rowId: row.id, setRowExpanded }}
-		>
-			{children}
+		<VariationRowContext.Provider value={{ rowId: row.id, setRowExpanded }}>
+			<QueryStateProvider
+				collection="variations"
+				initialPageSize={Number.MAX_SAFE_INTEGER}
+				initialSort={{ field: 'name', direction: 'asc' }}
+			>
+				{children}
+			</QueryStateProvider>
 		</VariationRowContext.Provider>
 	);
 }

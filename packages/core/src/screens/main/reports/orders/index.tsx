@@ -75,6 +75,7 @@ const renderHeader = (props: RenderHeaderProps) => {
 
 	return (
 		<DataTableHeader
+			collectionName={props.collectionName}
 			columnId={props.column.id}
 			header={flexRender(props.column.columnDef.header, props.getContext())}
 			disableSort={!props.column.getCanSort()}
@@ -211,6 +212,7 @@ export function Orders() {
 						<Suspense fallback={<DataTableSkeleton id="reports-orders" />}>
 							<DataTable<OrderDocument>
 								id="reports-orders"
+								collectionName="orders"
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}

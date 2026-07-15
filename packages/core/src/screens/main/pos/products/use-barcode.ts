@@ -53,10 +53,8 @@ function withBarcodeLookupDeadline(fetcher: BarcodeResolveFetcher): BarcodeResol
 	};
 }
 
-type ProductCollection = import('@wcpos/database').ProductCollection;
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
 
 function isVariationDocument(
 	document: ProductDocument | ProductVariationDocument
@@ -64,15 +62,7 @@ function isVariationDocument(
 	return document.collection.name === 'variations';
 }
 
-interface SearchInputRef {
-	setSearch: (search: string) => void;
-	onSearch: (search: string) => void;
-}
-
-export const useBarcode = (
-	productQuery: Query,
-	querySearchInputRef: React.RefObject<SearchInputRef | null>
-) => {
+export const useBarcode = (setSearch: (search: string) => void, clearSearch: () => void) => {
 	const { barcode$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
@@ -104,8 +94,7 @@ export const useBarcode = (
 					resultsCount: count,
 				},
 			});
-			productQuery.search(barcodeStr);
-			(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
+			setSearch(barcodeStr);
 		};
 
 		const showOnlineFailure = (text2: string, errorCode: string, error?: string) => {
@@ -119,8 +108,7 @@ export const useBarcode = (
 					...(error ? { error } : {}),
 				},
 			});
-			productQuery.search(barcodeStr);
-			(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
+			setSearch(barcodeStr);
 		};
 
 		if (results.length > 1) {
@@ -321,8 +309,7 @@ export const useBarcode = (
 			 */
 			const parent_id = product.parent_id;
 			if (!parent_id) {
-				productQuery.search(barcodeStr);
-				(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
+				setSearch(barcodeStr);
 				return;
 			}
 
@@ -352,8 +339,7 @@ export const useBarcode = (
 				}
 			}
 			if (!parent) {
-				productQuery.search(barcodeStr);
-				(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
+				setSearch(barcodeStr);
 				return;
 			}
 
@@ -388,8 +374,8 @@ export const useBarcode = (
 			},
 		});
 
-		// clear search after successful scan?
-		(querySearchInputRef.current as SearchInputRef | null)?.onSearch('');
+		// Successful scans clear both committed search and any pending input draft.
+		clearSearch();
 	});
 
 	return { onKeyPress };

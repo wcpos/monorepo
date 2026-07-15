@@ -151,6 +151,7 @@ describe('DataTable binding contract', () => {
 		render(
 			<BindingDataTable
 				id="logs"
+				collectionName="logs"
 				resource={resource}
 				sort={{ field: 'level', direction: 'asc' }}
 				actions={{
@@ -202,6 +203,7 @@ describe('DataTable binding contract', () => {
 		render(
 			<BindingDataTable
 				id="coupons"
+				collectionName="coupons"
 				resource={resource}
 				sort={{ field: 'code', direction: 'desc' }}
 				actions={{
@@ -227,12 +229,13 @@ describe('DataTable binding contract', () => {
 		expect(mockDefaultFooterProps).not.toHaveProperty('query');
 	});
 
-	it('clears the products collection through a custom tax footer', () => {
+	it('clears the explicit products collection when the table id names a screen', () => {
 		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
 
 		render(
 			<BindingDataTable
-				id="products"
+				id="pos-products"
+				collectionName="products"
 				resource={{ kind: 'resource' }}
 				sort={{ field: 'name', direction: 'asc' }}
 				actions={{

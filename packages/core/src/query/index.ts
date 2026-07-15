@@ -1,4 +1,9 @@
-export { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
+export {
+	QueryStateProvider,
+	useQueryState,
+	useQueryStateActions,
+	useSearchResetNonce,
+} from './query-state-store';
 export {
 	useCollectionBinding,
 	useRelationalCollectionBinding,

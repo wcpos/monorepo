@@ -142,6 +142,7 @@ function CustomersScreenContent() {
 						<Suspense fallback={<DataTableSkeleton id="customers" />}>
 							<DataTable<CustomerDocument>
 								id="customers"
+								collectionName="customers"
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}
