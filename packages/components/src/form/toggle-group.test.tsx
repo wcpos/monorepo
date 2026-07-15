@@ -144,6 +144,25 @@ describe('FormToggleGroup', () => {
 		expect(group).toHaveAttribute('aria-invalid', 'true');
 	});
 
+	it('references both the rendered description and error message when invalid', () => {
+		mockError = { message: 'Discount type is required' };
+		render(
+			<FormToggleGroup
+				name="type"
+				onBlur={jest.fn()}
+				value="percent"
+				onChange={jest.fn()}
+				options={OPTIONS}
+				label="Discount type"
+				description="Choose a discount type"
+			/>
+		);
+		const group = screen.getByRole('group');
+		expect(group).toHaveAttribute('aria-labelledby', 'item-id');
+		expect(group).toHaveAttribute('aria-describedby', 'desc-id msg-id');
+		expect(group).toHaveAttribute('aria-invalid', 'true');
+	});
+
 	it('emits onChange with the pressed value', () => {
 		const onChange = jest.fn();
 		render(
