@@ -20,34 +20,39 @@ jest.mock('./context', () => ({
 	}),
 }));
 
-// Mirrors the real Tabs contract: a trigger always fires onValueChange with its
-// own value on press, including when it is already the active tab.
-jest.mock('../tabs', () => {
+// Mirrors the real single-select ToggleGroup contract: re-pressing the selected
+// item fires onValueChange(undefined), and root-level disabled blocks presses.
+jest.mock('../toggle-group', () => {
 	const React = require('react');
 	return {
-		Tabs: ({ children, value, onValueChange }: any) =>
+		ToggleGroup: ({ children, value, onValueChange, testID, disabled }: any) =>
 			React.createElement(
 				'div',
-				{ role: 'group', 'data-value': value },
+				{ role: 'group', 'data-value': value, 'data-testid': testID },
 				React.Children.map(children, (child: any) =>
-					React.cloneElement(child, { __rootValue: value, __onValueChange: onValueChange })
+					React.cloneElement(child, {
+						__groupValue: value,
+						__onValueChange: onValueChange,
+						__groupDisabled: disabled,
+					})
 				)
 			),
-		TabsList: ({ children, testID, __rootValue, __onValueChange }: any) =>
-			React.createElement(
-				'div',
-				{ 'data-testid': testID },
-				React.Children.map(children, (child: any) =>
-					React.cloneElement(child, { __rootValue, __onValueChange })
-				)
-			),
-		TabsTrigger: ({ children, value, testID, __rootValue, __onValueChange }: any) =>
+		ToggleGroupItem: ({
+			children,
+			value,
+			testID,
+			disabled,
+			__groupValue,
+			__onValueChange,
+			__groupDisabled,
+		}: any) =>
 			React.createElement(
 				'button',
 				{
 					'data-testid': testID,
-					'aria-pressed': __rootValue === value,
-					onClick: () => __onValueChange(value),
+					'aria-pressed': __groupValue === value,
+					disabled: !!(disabled || __groupDisabled),
+					onClick: () => __onValueChange(__groupValue === value ? undefined : value),
 				},
 				children
 			),
@@ -127,5 +132,21 @@ describe('FormToggleGroup', () => {
 		expect(screen.getByTestId('coupon-discount-type-fixed_cart')).toHaveTextContent(
 			'Amount off order'
 		);
+	});
+
+	it('does not emit onChange when the group is disabled', () => {
+		const onChange = jest.fn();
+		render(
+			<FormToggleGroup
+				name="type"
+				onBlur={jest.fn()}
+				value="percent"
+				onChange={onChange}
+				options={OPTIONS}
+				disabled
+			/>
+		);
+		fireEvent.click(screen.getByText('Amount off order'));
+		expect(onChange).not.toHaveBeenCalled();
 	});
 });

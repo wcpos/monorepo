@@ -2,8 +2,9 @@ import * as React from 'react';
 
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
-import { Tabs, TabsList, TabsTrigger } from '../tabs';
+import { cn } from '../lib/utils';
 import { Text } from '../text';
+import { ToggleGroup, ToggleGroupItem } from '../toggle-group';
 
 import type { FormItemProps } from './common';
 
@@ -13,9 +14,10 @@ export interface FormToggleGroupOption {
 }
 
 /**
- * Single-select segmented control for react-hook-form, rendered in the app's
- * segmented Tabs style (see the printer connection-type control). Pressing the
- * selected item again is a no-op (a form field must always hold a value).
+ * Single-select segmented control for react-hook-form, styled to match the
+ * app's segmented Tabs look (see the printer connection-type control) while
+ * keeping ToggleGroup selection semantics for assistive technology. Pressing
+ * the selected item again is a no-op (a form field must always hold a value).
  */
 export function FormToggleGroup({
 	label,
@@ -23,6 +25,7 @@ export function FormToggleGroup({
 	value,
 	onChange,
 	options,
+	disabled,
 	type: _type,
 	testID,
 	...props
@@ -32,39 +35,51 @@ export function FormToggleGroup({
 	return (
 		<FormItem>
 			{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
-			<Tabs
-				value={value ?? ''}
-				onValueChange={(next: string) => {
-					if (next && next !== value) {
+			<ToggleGroup
+				type="single"
+				value={value}
+				onValueChange={(next: string | undefined) => {
+					if (next) {
 						onChange?.(next);
 					}
 				}}
+				disabled={disabled}
+				testID={testID}
+				aria-labelledby={formItemNativeID}
+				aria-describedby={
+					!error
+						? `${formDescriptionNativeID}`
+						: `${formDescriptionNativeID} ${formMessageNativeID}`
+				}
+				aria-invalid={!!error}
+				className="bg-muted w-full rounded-md border-0 p-1"
+				{...props}
 			>
-				<TabsList
-					testID={testID}
-					aria-labelledby={formItemNativeID}
-					aria-describedby={
-						!error
-							? `${formDescriptionNativeID}`
-							: `${formDescriptionNativeID} ${formMessageNativeID}`
-					}
-					aria-invalid={!!error}
-					className="w-full flex-row"
-					{...props}
-				>
-					{options.map((option) => (
-						<TabsTrigger
+				{options.map((option) => {
+					const isSelected = option.value === value;
+					return (
+						<ToggleGroupItem
 							key={option.value}
 							value={option.value}
-							label={option.label}
+							disabled={disabled}
 							testID={testID ? `${testID}-${option.value}` : undefined}
-							className="flex-1"
+							className={cn(
+								'native:h-auto h-auto flex-1 rounded-md border-r-0 px-3 py-1.5',
+								isSelected && 'bg-primary web:hover:bg-primary active:bg-primary shadow-sm'
+							)}
 						>
-							<Text>{option.label}</Text>
-						</TabsTrigger>
-					))}
-				</TabsList>
-			</Tabs>
+							<Text
+								className={cn(
+									'text-center text-sm font-normal',
+									isSelected ? 'text-primary-foreground' : 'text-muted-foreground'
+								)}
+							>
+								{option.label}
+							</Text>
+						</ToggleGroupItem>
+					);
+				})}
+			</ToggleGroup>
 			{!!description && <FormDescription>{description}</FormDescription>}
 			<FormMessage />
 		</FormItem>
