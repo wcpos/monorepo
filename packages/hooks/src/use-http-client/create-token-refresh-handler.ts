@@ -136,9 +136,15 @@ export const createTokenRefreshHandler = ({
 
 			const freshToken = await refreshAccessToken({ site, wpUser, getHttpClient });
 			if (!freshToken) {
-				const refreshError = error as RefreshTokenError;
-				refreshError.isRefreshTokenInvalid = true;
-				refreshError.refreshTokenInvalid = true;
+				// refreshAccessToken latches authFailed only for a terminally rejected refresh
+				// token — flag the error for the OAuth fallback in that case. A transient failure
+				// (network / 5xx / malformed) leaves authFailed clear and re-throws the original
+				// error unflagged, so the request stays retryable instead of forcing re-auth.
+				if (requestStateManager.isAuthFailed()) {
+					const refreshError = error as RefreshTokenError;
+					refreshError.isRefreshTokenInvalid = true;
+					refreshError.refreshTokenInvalid = true;
+				}
 				throw error;
 			}
 
