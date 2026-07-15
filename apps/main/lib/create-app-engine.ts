@@ -129,8 +129,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	};
 
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
+		let tokenUsed: string | undefined;
 		const fetchWithLatestToken = async (): Promise<Response> => {
 			const token = fetcherOptions.credentials.getLatest().access_token;
+			tokenUsed = token;
 			const headers = new Headers(init?.headers ?? {});
 			// The wcpos/v1 namespace only constructs for POS-flagged requests
 			// (woocommerce_pos_request()) — without this header every sync route
@@ -153,6 +155,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
 		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
 		if (response.status === 401 && fetcherOptions.refreshAuth && !isRefreshRequest) {
+			// A concurrent request may have already refreshed the JWT while this one was in
+			// flight. If the current token differs from the one this request used, retry with it
+			// before starting another refresh — avoids redundant refreshes on staggered 401s.
+			const currentToken = fetcherOptions.credentials.getLatest().access_token;
+			if (currentToken && currentToken !== tokenUsed) {
+				return fetchWithLatestToken();
+			}
 			const refreshedToken = await fetcherOptions.refreshAuth();
 			if (refreshedToken) {
 				return fetchWithLatestToken();
