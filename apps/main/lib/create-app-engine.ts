@@ -39,11 +39,90 @@ export interface CreateAppSyncEngineOptions {
 	multiInstance?: boolean;
 }
 
+// One engine per scope, cached at module scope. The engine's factory opens an
+// RxDatabase keyed by scope (multiInstance:false), so constructing a second engine
+// for the SAME scope collides on the already-open database and its scope never
+// becomes ready — which is exactly what happens when a boot-time remount of the
+// engine-owning subtree (a compat-gate toggle, a Stack.Protected guard flip during
+// hydration) runs the construction twice. Caching by scope makes construction
+// idempotent: the same scope returns the identical live engine no matter how many
+// times React re-invokes the factory, and a genuine scope change disposes the prior
+// engine. Reopening a recently-used scope waits for that scope's close to settle.
+type MutableFetcherOptions = Pick<CreateAppSyncEngineOptions, 'credentials' | 'useJwtAsParam'>;
+
+type CachedEngine = {
+	key: string;
+	engine: RxdbSyncEngine;
+	fetcherOptions: MutableFetcherOptions;
+};
+
+let cachedEngine: CachedEngine | null = null;
+const pendingDisposals = new Map<string, Promise<void>>();
+
+function canonicalSite(site: string): string {
+	let canonical = site.trim().toLowerCase();
+	if (canonical.startsWith('https://')) canonical = canonical.slice('https://'.length);
+	else if (canonical.startsWith('http://')) canonical = canonical.slice('http://'.length);
+	while (canonical.endsWith('/')) canonical = canonical.slice(0, -1);
+	return canonical;
+}
+
+function canonicalScopeComponent(value: number | string): string {
+	return typeof value === 'number' ? String(value) : value.trim().toLowerCase();
+}
+
+function scopeCacheKey(options: CreateAppSyncEngineOptions): string {
+	return JSON.stringify([
+		canonicalSite(options.scope.site),
+		canonicalScopeComponent(options.scope.storeId),
+		canonicalScopeComponent(options.scope.cashierId),
+	]);
+}
+
+function disposeCachedEngine(entry: CachedEngine): void {
+	const priorDisposal = pendingDisposals.get(entry.key);
+	let disposal: Promise<void>;
+	try {
+		disposal = priorDisposal
+			? priorDisposal.then(() => entry.engine.dispose())
+			: entry.engine.dispose();
+	} catch {
+		disposal = Promise.resolve();
+	}
+	const settledDisposal = disposal.catch(() => undefined);
+	pendingDisposals.set(entry.key, settledDisposal);
+	void settledDisposal.then(() => {
+		if (pendingDisposals.get(entry.key) === settledDisposal) {
+			pendingDisposals.delete(entry.key);
+		}
+	});
+}
+
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
+	const cacheKey = scopeCacheKey(options);
+	if (cachedEngine && cachedEngine.key === cacheKey) {
+		cachedEngine.fetcherOptions.credentials = options.credentials;
+		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
+		return cachedEngine.engine;
+	}
+	// A genuine scope change has a different database name, so its construction can
+	// overlap the old scope's close. A later return to the old scope receives the
+	// disposal promise below as its engine-level database-open barrier.
+	if (cachedEngine) {
+		const previous = cachedEngine;
+		cachedEngine = null;
+		disposeCachedEngine(previous);
+	}
+
 	const site = deriveSyncSite(options.wpApiUrl);
+	const databaseOpenBarrier = pendingDisposals.get(cacheKey);
+	const fetcherOptions: MutableFetcherOptions = {
+		credentials: options.credentials,
+		useJwtAsParam: options.useJwtAsParam,
+	};
 
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
-		const token = options.credentials.getLatest().access_token;
+		const token = fetcherOptions.credentials.getLatest().access_token;
 		const headers = new Headers(init?.headers ?? {});
 		// The wcpos/v1 namespace only constructs for POS-flagged requests
 		// (woocommerce_pos_request()) — without this header every sync route
@@ -51,7 +130,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		headers.set('X-WCPOS', '1');
 		let finalUrl = url;
 		if (token) {
-			if (options.useJwtAsParam) {
+			if (fetcherOptions.useJwtAsParam) {
 				const parsed = new URL(url);
 				parsed.searchParams.set('authorization', `Bearer ${token}`);
 				finalUrl = parsed.toString();
@@ -62,13 +141,16 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		return globalThis.fetch(finalUrl, { ...init, headers });
 	};
 
-	return createRxdbSyncEngine(
+	const engine = createRxdbSyncEngine(
 		{
 			site,
 			storage: defaultConfig.storage,
 			fetcher,
 			multiInstance: options.multiInstance ?? false,
+			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
 		options.scope
 	);
+	cachedEngine = { key: cacheKey, engine, fetcherOptions };
+	return engine;
 }

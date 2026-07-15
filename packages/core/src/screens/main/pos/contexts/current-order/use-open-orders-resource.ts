@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
 import { Observable, of } from 'rxjs';
-import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { map, switchMap } from 'rxjs/operators';
 
 import { useQueryManager } from '@wcpos/query';
 import {
@@ -69,9 +69,6 @@ export function useOpenOrdersResource(
 					.map((document) => wrapEngineDocument<OrderDocument>('orders', document))
 					.sort((a, b) => (a.date_created_gmt ?? '').localeCompare(b.date_created_gmt ?? ''))
 					.map((document) => ({ id: document.uuid!, document }))
-			),
-			distinctUntilChanged(
-				(prev: OpenOrderHit[], next: OpenOrderHit[]) => prev.length === next.length
 			)
 		);
 		return new ObservableResource(openOrders$);

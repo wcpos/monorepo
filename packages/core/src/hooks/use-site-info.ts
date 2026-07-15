@@ -77,13 +77,14 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					data.wcpos_pro_version ||
 					data.license;
 				if (hasValidData) {
-					await site.incrementalPatch({
+					const patch: Record<string, unknown> = {
 						wp_version: data?.wp_version ?? '',
 						wc_version: data?.wc_version ?? '',
 						wcpos_version: data?.wcpos_version ?? '',
 						wcpos_pro_version: data?.wcpos_pro_version ?? '',
-						license: data?.license || {},
-					});
+					};
+					if (data.license !== undefined) patch.license = data.license || {};
+					await site.incrementalPatch(patch);
 				}
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);

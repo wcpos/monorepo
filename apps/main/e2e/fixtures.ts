@@ -104,7 +104,8 @@ export function getStoreVariant(testInfo: TestInfo): StoreVariant {
 
 export async function stubStoreVersionForE2E(
 	context: BrowserContext,
-	storeUrl: string
+	storeUrl: string,
+	variant: StoreVariant
 ): Promise<void> {
 	if (!STUB_WCPOS_VERSION_IN_E2E || VERSION_STUBBED_CONTEXTS.has(context)) {
 		return;
@@ -131,7 +132,8 @@ export async function stubStoreVersionForE2E(
 				json: {
 					...data,
 					wcpos_version: APP_PACKAGE_VERSION,
-					wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
+					wcpos_pro_version: variant === 'pro' ? APP_PACKAGE_VERSION : '',
+					license: variant === 'pro' ? { key: 'e2e-pro-license' } : {},
 				},
 			});
 		} catch (error) {
@@ -211,7 +213,7 @@ async function waitForOPFSPersistence(page: Page): Promise<void> {
 export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	const storeUrl = getStoreUrl(testInfo);
 	const context = page.context();
-	await stubStoreVersionForE2E(context, storeUrl);
+	await stubStoreVersionForE2E(context, storeUrl, getStoreVariant(testInfo));
 
 	// Intercept window.open: capture the URL, return fake window to prevent
 	// expo-auth-session from falling back to a page redirect.
@@ -548,7 +550,7 @@ export async function navigateToPage(
 export const authenticatedTest = base.extend<{ posPage: Page }>({
 	posPage: async ({ page }, use, testInfo) => {
 		const variant = getStoreVariant(testInfo);
-		await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo));
+		await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
 		const statePath = path.join(__dirname, '.auth-state', `${variant}.json`);
 
 		let state: SavedAuthState | null = null;

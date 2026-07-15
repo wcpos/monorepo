@@ -135,7 +135,10 @@ export function observeEngineQuery(
 				collection: adapterDatabase?.collections[engineCollectionNameFor(descriptor.collection)],
 			};
 		}),
-		distinctUntilChanged((previous, current) => previous.collection === current.collection),
+		distinctUntilChanged(
+			(previous, current) =>
+				previous.database === current.database && previous.collection === current.collection
+		),
 		switchMap(({ database, collection }) => {
 			if (!database || !collection) return of(emptyResult());
 			return matchingSelectors$(database, descriptor, locale).pipe(

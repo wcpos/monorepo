@@ -124,6 +124,24 @@ describe('useOpenOrdersResource', () => {
 		expect(result.current.read().map((hit: Hit) => hit.id)).toEqual(['next-scope']);
 	});
 
+	it('rebinds when a replacement database has the same number of open orders', () => {
+		const firstDatabase = databaseWith(
+			new BehaviorSubject([order('first-scope', 2, '2026-07-14T10:00:00', 7, 2)])
+		);
+		activeDatabase = firstDatabase;
+		const { result } = renderHook(() => useOpenOrdersResource(7, 2));
+
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['first-scope']);
+
+		act(() => {
+			emitDatabase(
+				databaseWith(new BehaviorSubject([order('next-scope', 3, '2026-07-14T11:00:00', 7, 2)]))
+			);
+		});
+
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['next-scope']);
+	});
+
 	it('holds pos-open order demand for its lifetime without coupling demand failures to residents', async () => {
 		const orders$ = new BehaviorSubject([order('resident', 2, '2026-07-14T10:00:00', 7, 2)]);
 		activeDatabase = databaseWith(orders$);

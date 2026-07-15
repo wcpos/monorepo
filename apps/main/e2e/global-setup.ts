@@ -139,7 +139,7 @@ async function setupVariant(
 			});
 		});
 	}
-	await stubStoreVersionForE2E(context, storeUrl);
+	await stubStoreVersionForE2E(context, storeUrl, variant);
 	const authPage = await context.newPage();
 
 	// Capture console output for debugging

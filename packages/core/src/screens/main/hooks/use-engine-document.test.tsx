@@ -27,10 +27,14 @@ type FakeDatabase = {
 };
 
 let activeDatabase: FakeDatabase | null;
+let engineReady: Promise<{ database: FakeDatabase }>;
 const databaseSubscribers = new Set<(database: FakeDatabase | null) => void>();
 
 const engine = {
 	active: () => (activeDatabase ? { database: activeDatabase } : null),
+	get ready() {
+		return engineReady;
+	},
 	db$: (subscriber: (database: FakeDatabase | null) => void) => {
 		databaseSubscribers.add(subscriber);
 		subscriber(activeDatabase);
@@ -39,6 +43,7 @@ const engine = {
 };
 
 jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
 	useQueryManager: () => ({ engine }),
 }));
 
@@ -96,6 +101,7 @@ function current(resource: ReturnType<typeof useEngineDocument<Record<string, un
 describe('useEngineDocument', () => {
 	beforeEach(() => {
 		activeDatabase = null;
+		engineReady = new Promise(() => undefined);
 		databaseSubscribers.clear();
 	});
 
@@ -208,17 +214,28 @@ describe('useEngineDocument', () => {
 		expect(current(result.current)).toBeNull();
 	});
 
-	it('stays pending until a database opens, then emits null for a missing record', () => {
+	it('stays pending while the database opens and emits null only after a live query misses', async () => {
 		const { result } = renderHook(() =>
 			useEngineDocument<Record<string, unknown>>('products', 'product-uuid')
 		);
 
 		expect(current(result.current)).toBeUndefined();
 
-		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(null);
-		act(() => emitDatabase(databaseWith(document$)));
+		const database = databaseWith(new BehaviorSubject<RxDocument<EngineDocument> | null>(null));
+		await act(async () => {
+			emitDatabase(database);
+		});
 
+		expect(database.collections.products.findOne).toHaveBeenCalledWith('product-uuid');
 		expect(current(result.current)).toBeNull();
+	});
+
+	it('resolves an empty document list while the database opens', () => {
+		const { result } = renderHook(() =>
+			useEngineDocumentsByWooId<Record<string, unknown>>('products/categories', [42])
+		);
+
+		expect(result.current.valueRef$$.value?.current).toEqual([]);
 	});
 
 	it('emits a newly wrapped document when the engine query updates', () => {
