@@ -53,6 +53,7 @@ jest.mock('../toggle-group', () => {
 				'button',
 				{
 					'data-testid': testID,
+					'data-item-disabled': disabled ? 'true' : undefined,
 					'aria-pressed': __groupValue === value,
 					disabled: !!(disabled || __groupDisabled),
 					onClick: () => __onValueChange(__groupValue === value ? undefined : value),
@@ -225,5 +226,8 @@ describe('FormToggleGroup', () => {
 		);
 		fireEvent.click(screen.getByText('Amount off order'));
 		expect(onChange).not.toHaveBeenCalled();
+		for (const item of screen.getAllByRole('button')) {
+			expect(item).toHaveAttribute('data-item-disabled', 'true');
+		}
 	});
 });
