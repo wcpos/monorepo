@@ -1,30 +1,64 @@
 import * as React from 'react';
 
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { Query, useReplicationState } from '@wcpos/query';
+import { useReplicationState } from '@wcpos/query';
+import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
+import { useQueryStateActions } from '../../../../query';
 import { useCollectionReset } from '../../hooks/use-collection-reset';
 import { SyncButton } from '../sync-button';
 
-interface Props {
+import type { CollectionKey } from '../../hooks/use-collection';
+import type { Observable } from 'rxjs';
+
+interface CommonProps {
 	children?: React.ReactNode;
-	query: Query<any>;
 	count: number;
 }
+
+type LegacyProps = CommonProps & {
+	query: Query<any>;
+	collectionName?: never;
+	active$?: never;
+	total$?: never;
+	totalSource$?: never;
+	sync?: never;
+};
+
+type BindingProps = CommonProps & {
+	query?: never;
+	collectionName: CollectionKey;
+	active$: Observable<boolean>;
+	total$: Observable<number>;
+	totalSource$: Observable<'coverage' | 'local'>;
+	sync: () => Promise<void>;
+};
+
+type Props = LegacyProps | BindingProps;
+
+type FooterContentProps = CommonProps &
+	Pick<BindingProps, 'active$' | 'sync' | 'total$' | 'totalSource$'> & {
+		clearAndSync: () => Promise<void>;
+	};
 
 /**
  *
  */
-export function DataTableFooter({ children, query, count }: Props) {
-	const { sync, active$, total$, totalSource$ } = useReplicationState(query);
-	const { clearAndSync } = useCollectionReset(query.collection.name);
+function FooterContent({
+	children,
+	count,
+	active$,
+	total$,
+	totalSource$,
+	sync,
+	clearAndSync,
+}: FooterContentProps) {
 	const loading = useObservableEagerState(active$);
-	const total = useObservableState(total$ ?? of(0), 0);
+	const total = useObservableState(total$, 0);
 	const totalSource = useObservableState(totalSource$, 'local');
 	const t = useT();
 
@@ -44,4 +78,26 @@ export function DataTableFooter({ children, query, count }: Props) {
 			</HStack>
 		</HStack>
 	);
+}
+
+function LegacyDataTableFooter({ query, ...props }: LegacyProps) {
+	const projections = useReplicationState(query);
+	const { clearAndSync } = useCollectionReset(query.collection.name);
+	return <FooterContent {...props} {...projections} clearAndSync={clearAndSync} />;
+}
+
+function BindingDataTableFooter({ collectionName, ...props }: BindingProps) {
+	const { clearAndSync } = useCollectionReset(collectionName);
+	const { clearSearch, resetFilters } = useQueryStateActions();
+	const resetQueryAndCollection = React.useCallback(() => {
+		clearSearch();
+		resetFilters();
+		return clearAndSync();
+	}, [clearAndSync, clearSearch, resetFilters]);
+
+	return <FooterContent {...props} clearAndSync={resetQueryAndCollection} />;
+}
+
+export function DataTableFooter(props: Props) {
+	return props.query ? <LegacyDataTableFooter {...props} /> : <BindingDataTableFooter {...props} />;
 }

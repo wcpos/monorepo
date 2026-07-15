@@ -28,6 +28,7 @@ import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
 
 import type { SortingChange } from './sort-field';
+import type { CollectionKey } from '../../hooks/use-collection';
 import type { ColumnDef, Header, Table as TanStackTable } from '@tanstack/react-table';
 
 interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
@@ -265,9 +266,18 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 						) : (
 							<TableFooterComponent query={query} count={result.hits.length} />
 						)
-					) : query ? (
-						<DataTableFooter query={query} count={result.hits.length} />
-					) : null}
+					) : binding ? (
+						<DataTableFooter
+							collectionName={id as CollectionKey}
+							active$={binding.active$}
+							total$={binding.total$}
+							totalSource$={binding.totalSource$}
+							sync={binding.sync}
+							count={result.hits.length}
+						/>
+					) : (
+						<DataTableFooter query={query!} count={result.hits.length} />
+					)}
 				</TableFooter>
 			)}
 		</Table>
