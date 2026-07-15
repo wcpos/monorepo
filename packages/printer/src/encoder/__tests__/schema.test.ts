@@ -32,6 +32,86 @@ describe('ReceiptDataSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
+	it('parses and preserves Receipt Data v1.1 savings fields', () => {
+		const fixture = structuredClone(sampleReceiptData) as unknown as Record<string, any>;
+		Object.assign(fixture.lines[0], {
+			regular_price: 6,
+			regular_price_incl: 6,
+			regular_price_excl: 5.45,
+			selling_price: 5,
+			selling_price_incl: 5,
+			selling_price_excl: 4.55,
+			unit_savings: 1,
+			unit_savings_incl: 1,
+			unit_savings_excl: 0.9,
+			line_regular_total: 12,
+			line_regular_total_incl: 12,
+			line_regular_total_excl: 10.9,
+			line_selling_total: 10,
+			line_selling_total_incl: 10,
+			line_selling_total_excl: 9.09,
+			line_savings: 2,
+			line_savings_incl: 2,
+			line_savings_excl: 1.81,
+			savings_in_discounts: false,
+		});
+		Object.assign(fixture.totals, {
+			sale_savings_total: 2,
+			sale_savings_total_incl: 2,
+			sale_savings_total_excl: 1.81,
+			total_saved: 2,
+			total_saved_incl: 2,
+			total_saved_excl: 1.81,
+			total_saved_complete: true,
+		});
+
+		const result = ReceiptDataSchema.safeParse(fixture);
+		expect(result.success).toBe(true);
+		if (!result.success) throw new Error(result.error.message);
+		expect(result.data.lines[0].line_savings).toBe(2);
+		expect(result.data.totals.total_saved_complete).toBe(true);
+	});
+
+	it('accepts null for incomplete Receipt Data v1.1 savings values', () => {
+		const fixture = structuredClone(sampleReceiptData) as unknown as Record<string, any>;
+		for (const key of [
+			'regular_price',
+			'regular_price_incl',
+			'regular_price_excl',
+			'selling_price',
+			'selling_price_incl',
+			'selling_price_excl',
+			'unit_savings',
+			'unit_savings_incl',
+			'unit_savings_excl',
+			'line_regular_total',
+			'line_regular_total_incl',
+			'line_regular_total_excl',
+			'line_selling_total',
+			'line_selling_total_incl',
+			'line_selling_total_excl',
+			'line_savings',
+			'line_savings_incl',
+			'line_savings_excl',
+		]) {
+			fixture.lines[0][key] = null;
+		}
+		fixture.lines[0].savings_in_discounts = false;
+		for (const key of [
+			'sale_savings_total',
+			'sale_savings_total_incl',
+			'sale_savings_total_excl',
+			'total_saved',
+			'total_saved_incl',
+			'total_saved_excl',
+		]) {
+			fixture.totals[key] = null;
+		}
+		fixture.totals.total_saved_complete = false;
+
+		expect(ReceiptDataSchema.safeParse(fixture).success).toBe(true);
+	});
+
 	it('maps store.id to an integer', () => {
 		const mapped = mapReceiptData({ store: { id: '42.9' } });
 		expect(mapped.store.id).toBe(42);

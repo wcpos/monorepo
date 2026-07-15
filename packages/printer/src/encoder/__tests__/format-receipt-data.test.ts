@@ -39,6 +39,86 @@ describe('formatReceiptData', () => {
 		expect(result.totals.total_display).toBe('$25.00');
 	});
 
+	it('formats Receipt Data v1.1 savings and keeps zero savings Mustache-falsy', () => {
+		const data = structuredClone(sampleReceiptData);
+		Object.assign(data.lines[0], {
+			regular_price: 5,
+			regular_price_incl: 5,
+			regular_price_excl: 4.55,
+			selling_price: 5,
+			selling_price_incl: 5,
+			selling_price_excl: 4.55,
+			unit_savings: 0,
+			unit_savings_incl: 0,
+			unit_savings_excl: 0,
+			line_regular_total: 10,
+			line_regular_total_incl: 10,
+			line_regular_total_excl: 9.09,
+			line_selling_total: 10,
+			line_selling_total_incl: 10,
+			line_selling_total_excl: 9.09,
+			line_savings: 0,
+			line_savings_incl: 0,
+			line_savings_excl: 0,
+			savings_in_discounts: false,
+		});
+		Object.assign(data.totals, {
+			sale_savings_total: 0,
+			sale_savings_total_incl: 0,
+			sale_savings_total_excl: 0,
+			total_saved: 0,
+			total_saved_incl: 0,
+			total_saved_excl: 0,
+			total_saved_complete: true,
+		});
+
+		const result = formatReceiptData(data);
+
+		expect(result.lines[0].regular_price_display).toBe('$5.00');
+		expect(result.lines[0].line_selling_total_display).toBe('$10.00');
+		expect(result.lines[0].unit_savings).toBe(0);
+		expect(result.lines[0].unit_savings_display).toBe('');
+		expect(result.lines[0].line_savings_display).toBe('');
+		expect(result.totals.sale_savings_total).toBe(0);
+		expect(result.totals.sale_savings_total_display).toBe('');
+		expect(result.totals.total_saved_display).toBe('');
+	});
+
+	it('does not add savings _display twins for null values', () => {
+		const data = structuredClone(sampleReceiptData);
+		Object.assign(data.lines[0], {
+			regular_price: null,
+			regular_price_incl: null,
+			regular_price_excl: null,
+			unit_savings: null,
+			unit_savings_incl: null,
+			unit_savings_excl: null,
+			line_regular_total: null,
+			line_regular_total_incl: null,
+			line_regular_total_excl: null,
+			line_savings: null,
+			line_savings_incl: null,
+			line_savings_excl: null,
+			savings_in_discounts: false,
+		});
+		Object.assign(data.totals, {
+			sale_savings_total: null,
+			sale_savings_total_incl: null,
+			sale_savings_total_excl: null,
+			total_saved: null,
+			total_saved_incl: null,
+			total_saved_excl: null,
+			total_saved_complete: false,
+		});
+
+		const result = formatReceiptData(data);
+
+		expect(result.lines[0]).not.toHaveProperty('regular_price_display');
+		expect(result.lines[0]).not.toHaveProperty('line_savings_display');
+		expect(result.totals).not.toHaveProperty('sale_savings_total_display');
+		expect(result.totals).not.toHaveProperty('total_saved_display');
+	});
+
 	it('preserves original numeric totals', () => {
 		const result = formatReceiptData(sampleReceiptData);
 		expect(result.totals.subtotal_incl).toBe(25.0);

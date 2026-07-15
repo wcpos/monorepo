@@ -18,6 +18,7 @@ const DEFAULT_I18N = {
 	store_tax_id_label_other: 'Tax ID',
 	customer_tax_id_label_other: 'Tax ID',
 	subtotal: 'Subtotal',
+	total_saved: 'Total saved',
 	total: 'Total',
 	tax: 'Tax',
 	tax_summary: 'Tax Summary',
@@ -144,6 +145,7 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		if (total == null || qty === 0) return undefined;
 		return total / qty;
 	};
+	const formatZeroFalsy = (value: number): string => (value === 0 ? '' : fmt(value));
 	const pickDisplayValue = (
 		total: number | undefined,
 		totalIncl: number | undefined,
@@ -223,6 +225,56 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 				...tax,
 				amount_display: fmt(tax.amount),
 			})),
+			...(line.regular_price != null ? { regular_price_display: fmt(line.regular_price) } : {}),
+			...(line.regular_price_incl != null
+				? { regular_price_incl_display: fmt(line.regular_price_incl) }
+				: {}),
+			...(line.regular_price_excl != null
+				? { regular_price_excl_display: fmt(line.regular_price_excl) }
+				: {}),
+			...(line.selling_price != null ? { selling_price_display: fmt(line.selling_price) } : {}),
+			...(line.selling_price_incl != null
+				? { selling_price_incl_display: fmt(line.selling_price_incl) }
+				: {}),
+			...(line.selling_price_excl != null
+				? { selling_price_excl_display: fmt(line.selling_price_excl) }
+				: {}),
+			...(line.unit_savings != null
+				? { unit_savings_display: formatZeroFalsy(line.unit_savings) }
+				: {}),
+			...(line.unit_savings_incl != null
+				? { unit_savings_incl_display: formatZeroFalsy(line.unit_savings_incl) }
+				: {}),
+			...(line.unit_savings_excl != null
+				? { unit_savings_excl_display: formatZeroFalsy(line.unit_savings_excl) }
+				: {}),
+			...(line.line_regular_total != null
+				? { line_regular_total_display: fmt(line.line_regular_total) }
+				: {}),
+			...(line.line_regular_total_incl != null
+				? { line_regular_total_incl_display: fmt(line.line_regular_total_incl) }
+				: {}),
+			...(line.line_regular_total_excl != null
+				? { line_regular_total_excl_display: fmt(line.line_regular_total_excl) }
+				: {}),
+			...(line.line_selling_total != null
+				? { line_selling_total_display: fmt(line.line_selling_total) }
+				: {}),
+			...(line.line_selling_total_incl != null
+				? { line_selling_total_incl_display: fmt(line.line_selling_total_incl) }
+				: {}),
+			...(line.line_selling_total_excl != null
+				? { line_selling_total_excl_display: fmt(line.line_selling_total_excl) }
+				: {}),
+			...(line.line_savings != null
+				? { line_savings_display: formatZeroFalsy(line.line_savings) }
+				: {}),
+			...(line.line_savings_incl != null
+				? { line_savings_incl_display: formatZeroFalsy(line.line_savings_incl) }
+				: {}),
+			...(line.line_savings_excl != null
+				? { line_savings_excl_display: formatZeroFalsy(line.line_savings_excl) }
+				: {}),
 			unit_price_display: fmt(
 				line.unit_price ?? (displayTax === 'excl' ? line.unit_price_excl : line.unit_price_incl)
 			),
@@ -285,6 +337,30 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			),
 			discount_total_incl_display: fmt(discountTotalIncl),
 			discount_total_excl_display: fmt(discountTotalExcl),
+			...(data.totals.sale_savings_total != null
+				? {
+						sale_savings_total_display: formatZeroFalsy(data.totals.sale_savings_total),
+					}
+				: {}),
+			...(data.totals.sale_savings_total_incl != null
+				? {
+						sale_savings_total_incl_display: formatZeroFalsy(data.totals.sale_savings_total_incl),
+					}
+				: {}),
+			...(data.totals.sale_savings_total_excl != null
+				? {
+						sale_savings_total_excl_display: formatZeroFalsy(data.totals.sale_savings_total_excl),
+					}
+				: {}),
+			...(data.totals.total_saved != null
+				? { total_saved_display: formatZeroFalsy(data.totals.total_saved) }
+				: {}),
+			...(data.totals.total_saved_incl != null
+				? { total_saved_incl_display: formatZeroFalsy(data.totals.total_saved_incl) }
+				: {}),
+			...(data.totals.total_saved_excl != null
+				? { total_saved_excl_display: formatZeroFalsy(data.totals.total_saved_excl) }
+				: {}),
 			tax_total_display: fmt(data.totals.tax_total),
 			total_display: fmt(
 				data.totals.total ??

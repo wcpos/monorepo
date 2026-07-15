@@ -54,6 +54,10 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 	const nameColWidth = columns - priceColWidth;
 	const customerTaxId = data.customer?.tax_ids?.[0]?.value || '';
 	const discountTotalIncl = data.totals.discount_total_incl ?? data.totals.discount_total ?? 0;
+	// Strictly the inclusive value: total_saved (display basis) may be exclusive,
+	// and null means the inclusive figure is unknowable — omit the row, never guess.
+	const totalSavedIncl =
+		typeof data.totals.total_saved_incl === 'number' ? data.totals.total_saved_incl : null;
 
 	// Build template data with pre-formatted money values
 	const templateData: Record<string, any> = {
@@ -106,6 +110,9 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 			priceColWidth,
 		})),
 		total_fmt: formatMoney(data.totals.total_incl, currency, dp),
+		has_total_saved:
+			data.totals.total_saved_complete === true && totalSavedIncl !== null && totalSavedIncl > 0,
+		total_saved_fmt: formatMoney(totalSavedIncl ?? 0, currency, dp),
 		payments: data.payments.map((payment) => ({
 			method_title: payment.method_title,
 			amount_fmt: formatMoney(payment.amount, currency, dp),
