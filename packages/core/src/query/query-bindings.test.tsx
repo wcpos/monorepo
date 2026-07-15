@@ -256,6 +256,63 @@ describe('query bindings', () => {
 		).resolves.toBe('local');
 	});
 
+	it('keeps customer search cold until engine results land locally and reports local totals', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: 'customers::customers:search=ada:limit=10',
+			collectionName: 'customers',
+			queryKey: 'customers:search=ada:limit=10',
+			complete: true,
+			expectedRecordIds: Array.from({ length: 9 }, (_, index) => `customer-${index}`),
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 2,
+		});
+		const state: QueryStateOf<'customers'> = {
+			search: 'ada',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 10,
+		};
+		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+		expect(engine.searchRequireCalls).toHaveLength(1);
+		expect(engine.searchRequireCalls[0]?.requirement).toMatchObject({
+			collection: 'customers',
+			kind: 'search',
+			term: 'ada',
+			limit: 10,
+		});
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 0)))
+		).resolves.toBe(0);
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
+		).resolves.toBe('local');
+
+		await engineDB.collections.customers.insert({
+			id: 'customer-ada',
+			wooCustomerId: 103,
+			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
+			sync: { revision: '1', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['customer-ada'])
+		);
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
+		).resolves.toBe(1);
+		expect(engine.searchRequireCalls).toHaveLength(1);
+	});
+
 	it('uses the full matching local logs count instead of the loaded window', async () => {
 		await localDB.collections.logs.bulkInsert([
 			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one', context: {} },
