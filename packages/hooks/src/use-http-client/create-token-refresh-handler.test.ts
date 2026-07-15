@@ -23,13 +23,22 @@ jest.mock('./request-queue', () => ({
 	resumeQueue: jest.fn(),
 }));
 
-jest.mock('./request-state-manager', () => ({
-	requestStateManager: {
-		startTokenRefresh: jest.fn(),
-		getRefreshedToken: jest.fn(),
-		setAuthFailed: jest.fn(),
-	},
-}));
+jest.mock('./request-state-manager', () => {
+	const setAuthFailed = jest.fn();
+	return {
+		requestStateManager: {
+			startTokenRefresh: jest.fn(),
+			getRefreshedToken: jest.fn(),
+			setAuthFailed,
+			// Reflect reality: setAuthFailed(true) → isAuthFailed() === true. Reading the latest
+			// setAuthFailed call keeps the two consistent and auto-resets via clearAllMocks() per test.
+			isAuthFailed: jest.fn(() => {
+				const calls = setAuthFailed.mock.calls;
+				return calls.length > 0 && calls[calls.length - 1][0] === true;
+			}),
+		},
+	};
+});
 
 const makeWpUser = (overrides: any = {}) => ({
 	id: 1,
@@ -349,6 +358,9 @@ describe('createTokenRefreshHandler', () => {
 
 			const ctx = makeContext();
 			await expect(handler.handle(ctx)).rejects.toThrow();
+			// A transient refresh failure must stay retryable: no re-auth, no invalid flag.
+			expect(requestStateManager.setAuthFailed).not.toHaveBeenCalledWith(true);
+			expect(ctx.error).not.toHaveProperty('isRefreshTokenInvalid');
 		});
 	});
 });

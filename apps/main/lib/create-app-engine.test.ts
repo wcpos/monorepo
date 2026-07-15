@@ -97,22 +97,29 @@ describe('createAppSyncEngine scope cache', () => {
 	});
 
 	it('uses the latest credentials and JWT mode after a same-scope cache hit', async () => {
-		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(new Response());
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 401 }));
 		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
-		createAppSyncEngine(BASE_OPTIONS);
+		const initialRefreshAuth = jest.fn().mockResolvedValue('initial-token');
+		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth: initialRefreshAuth });
 		const latestCredentials = {
 			getLatest: jest.fn(() => ({ access_token: 'latest-token' })),
 		};
+		const latestRefreshAuth = jest.fn().mockResolvedValue(null);
 
 		createAppSyncEngine({
 			...BASE_OPTIONS,
 			credentials: latestCredentials,
+			refreshAuth: latestRefreshAuth,
 			useJwtAsParam: true,
 		});
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 		await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
 
 		expect(latestCredentials.getLatest).toHaveBeenCalledTimes(1);
+		expect(initialRefreshAuth).not.toHaveBeenCalled();
+		expect(latestRefreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(
 			'https://store.example.test/wp-json/wcpos/v1/sync/products?authorization=Bearer+latest-token',
 			expect.objectContaining({ headers: expect.objectContaining({}) })
@@ -121,6 +128,113 @@ describe('createAppSyncEngine scope cache', () => {
 		const headers = init.headers as Headers;
 		expect(headers.get('Authorization')).toBeNull();
 		expect(headers.get('X-WCPOS')).toBe('1');
+		fetch.mockRestore();
+	});
+
+	it('refreshes after a 401 and retries once with the latest access token', async () => {
+		let accessToken = 'expired-token';
+		const credentials = {
+			getLatest: jest.fn(() => ({ access_token: accessToken })),
+		};
+		const refreshAuth = jest.fn(async () => {
+			accessToken = 'refreshed-token';
+			return accessToken;
+		});
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(new Response(null, { status: 200 }));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+
+		expect(response?.status).toBe(200);
+		expect(refreshAuth).toHaveBeenCalledTimes(1);
+		expect(fetch).toHaveBeenCalledTimes(2);
+		const firstHeaders = fetch.mock.calls[0]?.[1]?.headers as Headers;
+		const retryHeaders = fetch.mock.calls[1]?.[1]?.headers as Headers;
+		expect(firstHeaders.get('Authorization')).toBe('Bearer expired-token');
+		expect(retryHeaders.get('Authorization')).toBe('Bearer refreshed-token');
+		fetch.mockRestore();
+	});
+
+	it('retries with a peer-refreshed token instead of refreshing again on staggered 401s', async () => {
+		let accessToken = 'stale-token';
+		const credentials = { getLatest: jest.fn(() => ({ access_token: accessToken })) };
+		const refreshAuth = jest.fn(async () => {
+			accessToken = 'self-refreshed-token';
+			return accessToken;
+		});
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockImplementationOnce(async () => {
+				// A concurrent request refreshes the JWT while this one is in flight.
+				accessToken = 'peer-refreshed-token';
+				return new Response(null, { status: 401 });
+			})
+			.mockResolvedValueOnce(new Response(null, { status: 200 }));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+
+		expect(response?.status).toBe(200);
+		expect(refreshAuth).not.toHaveBeenCalled();
+		expect(fetch).toHaveBeenCalledTimes(2);
+		const retryHeaders = fetch.mock.calls[1]?.[1]?.headers as Headers;
+		expect(retryHeaders.get('Authorization')).toBe('Bearer peer-refreshed-token');
+		fetch.mockRestore();
+	});
+
+	it('returns the original 401 when refresh fails without retrying', async () => {
+		const originalUnauthorized = new Response(null, { status: 401 });
+		const refreshAuth = jest.fn().mockResolvedValue(null);
+		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(originalUnauthorized);
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+
+		expect(response?.status).toBe(originalUnauthorized.status);
+		expect(refreshAuth).toHaveBeenCalledTimes(1);
+		expect(fetch).toHaveBeenCalledTimes(1);
+		fetch.mockRestore();
+	});
+
+	it('does not refresh or loop when the retried request is still unauthorized', async () => {
+		const refreshAuth = jest.fn().mockResolvedValue('refreshed-token');
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+
+		expect(response?.status).toBe(401);
+		expect(refreshAuth).toHaveBeenCalledTimes(1);
+		expect(fetch).toHaveBeenCalledTimes(2);
+		fetch.mockRestore();
+	});
+
+	it('never refreshes a request to the refresh endpoint', async () => {
+		const refreshAuth = jest.fn().mockResolvedValue('refreshed-token');
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v1/auth/refresh');
+
+		expect(refreshAuth).not.toHaveBeenCalled();
+		expect(fetch).toHaveBeenCalledTimes(1);
 		fetch.mockRestore();
 	});
 

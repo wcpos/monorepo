@@ -14,7 +14,9 @@ import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data'
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
+import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
 import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
+import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-token';
 import { OnlineStatusProvider } from '@wcpos/hooks/use-online-status';
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
@@ -45,6 +47,7 @@ function AppStack() {
 	 * follow-up (increment-3).
 	 */
 	const wpApiUrl = useObservableEagerState(site.wp_api_url$) as string;
+	const wcposApiUrl = useObservableEagerState(site.wcpos_api_url$) as string;
 	const storeID = useObservableEagerState(store.id$) as number;
 	const cashierID = useObservableEagerState(wpCredentials.id$) as number;
 	const useJwtAsParam = useObservableEagerState(site.use_jwt_as_param$) as boolean;
@@ -61,9 +64,21 @@ function AppStack() {
 				wpApiUrl,
 				credentials: wpCredentials,
 				useJwtAsParam,
+				refreshAuth: () =>
+					refreshAccessToken({
+						site: {
+							wcpos_api_url: wcposApiUrl,
+							// Fallback the shared core uses to construct `${wp_api_url}wcpos/v1/`
+							// when wcpos_api_url is transiently unset (e.g. after a web wake).
+							wp_api_url: wpApiUrl,
+							use_jwt_as_param: useJwtAsParam,
+						},
+						wpUser: wpCredentials,
+						getHttpClient: createRefreshHttpClient,
+					}),
 				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },
 			}),
-		[wpApiUrl, storeID, cashierID, useJwtAsParam, wpCredentials]
+		[wpApiUrl, wcposApiUrl, storeID, cashierID, useJwtAsParam, wpCredentials]
 	);
 
 	return (
