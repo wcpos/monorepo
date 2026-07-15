@@ -33,6 +33,8 @@ export interface CreateAppSyncEngineOptions {
 	credentials: { getLatest: () => { access_token?: string } };
 	/** When the site authenticates via a query param instead of a header. */
 	useJwtAsParam?: boolean;
+	/** Refresh an expired access token after an unauthorized response. */
+	refreshAuth?: () => Promise<string | null>;
 	/** The initial store/cashier scope. */
 	scope: StoreScopeIdentity;
 	/** Multi-tab hosts (web) pass true for cross-tab change propagation. */
@@ -48,7 +50,10 @@ export interface CreateAppSyncEngineOptions {
 // idempotent: the same scope returns the identical live engine no matter how many
 // times React re-invokes the factory, and a genuine scope change disposes the prior
 // engine. Reopening a recently-used scope waits for that scope's close to settle.
-type MutableFetcherOptions = Pick<CreateAppSyncEngineOptions, 'credentials' | 'useJwtAsParam'>;
+type MutableFetcherOptions = Pick<
+	CreateAppSyncEngineOptions,
+	'credentials' | 'refreshAuth' | 'useJwtAsParam'
+>;
 
 type CachedEngine = {
 	key: string;
@@ -102,6 +107,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const cacheKey = scopeCacheKey(options);
 	if (cachedEngine && cachedEngine.key === cacheKey) {
 		cachedEngine.fetcherOptions.credentials = options.credentials;
+		cachedEngine.fetcherOptions.refreshAuth = options.refreshAuth;
 		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
 		return cachedEngine.engine;
 	}
@@ -118,27 +124,42 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const databaseOpenBarrier = pendingDisposals.get(cacheKey);
 	const fetcherOptions: MutableFetcherOptions = {
 		credentials: options.credentials,
+		refreshAuth: options.refreshAuth,
 		useJwtAsParam: options.useJwtAsParam,
 	};
 
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
-		const token = fetcherOptions.credentials.getLatest().access_token;
-		const headers = new Headers(init?.headers ?? {});
-		// The wcpos/v1 namespace only constructs for POS-flagged requests
-		// (woocommerce_pos_request()) — without this header every sync route
-		// answers rest_no_route and the engine stays degraded-empty.
-		headers.set('X-WCPOS', '1');
-		let finalUrl = url;
-		if (token) {
-			if (fetcherOptions.useJwtAsParam) {
-				const parsed = new URL(url);
-				parsed.searchParams.set('authorization', `Bearer ${token}`);
-				finalUrl = parsed.toString();
-			} else {
-				headers.set('Authorization', `Bearer ${token}`);
+		const fetchWithLatestToken = async (): Promise<Response> => {
+			const token = fetcherOptions.credentials.getLatest().access_token;
+			const headers = new Headers(init?.headers ?? {});
+			// The wcpos/v1 namespace only constructs for POS-flagged requests
+			// (woocommerce_pos_request()) — without this header every sync route
+			// answers rest_no_route and the engine stays degraded-empty.
+			headers.set('X-WCPOS', '1');
+			let finalUrl = url;
+			if (token) {
+				if (fetcherOptions.useJwtAsParam) {
+					const parsed = new URL(url);
+					parsed.searchParams.set('authorization', `Bearer ${token}`);
+					finalUrl = parsed.toString();
+				} else {
+					headers.set('Authorization', `Bearer ${token}`);
+				}
+			}
+			return globalThis.fetch(finalUrl, { ...init, headers });
+		};
+
+		const response = await fetchWithLatestToken();
+		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
+		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
+		if (response.status === 401 && fetcherOptions.refreshAuth && !isRefreshRequest) {
+			const refreshedToken = await fetcherOptions.refreshAuth();
+			if (refreshedToken) {
+				return fetchWithLatestToken();
 			}
 		}
-		return globalThis.fetch(finalUrl, { ...init, headers });
+
+		return response;
 	};
 
 	const engine = createRxdbSyncEngine(
