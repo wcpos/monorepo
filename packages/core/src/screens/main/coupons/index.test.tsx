@@ -152,6 +152,7 @@ describe('CouponsScreen query-state wiring', () => {
 		});
 		expect(mockDataTableProps).toMatchObject({
 			resource: mockBinding.resource,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
 			active$: mockBinding.active$,
 			total$: mockBinding.total$,
 			totalSource$: mockBinding.totalSource$,
@@ -206,5 +207,6 @@ describe('CouponsScreen query-state wiring', () => {
 			sort: { field: 'code', direction: 'asc' },
 			limit: 10,
 		});
+		expect(mockDataTableProps.sort).toEqual({ field: 'code', direction: 'asc' });
 	});
 });

@@ -79,13 +79,19 @@ jest.mock('@wcpos/components/virtualized-list', () => ({
 jest.mock('./header', () => ({
 	DataTableHeader: ({
 		columnId,
+		sortBy,
+		sortDirection,
 		onSortingChange,
 	}: {
 		columnId: string;
+		sortBy: string;
+		sortDirection: 'asc' | 'desc';
 		onSortingChange: (sort: { sortBy: string; sortDirection: 'asc' }) => void;
 	}) => (
 		<button
 			data-testid={`sort-${columnId}`}
+			data-sort-by={sortBy}
+			data-sort-direction={sortDirection}
 			onClick={() => onSortingChange({ sortBy: columnId, sortDirection: 'asc' })}
 		/>
 	),
@@ -124,6 +130,7 @@ describe('DataTable binding contract', () => {
 			<BindingDataTable
 				id="logs"
 				resource={resource}
+				sort={{ field: 'level', direction: 'asc' }}
 				actions={{
 					setSort: mockSetSort,
 					extendLimit: mockExtendLimit,
@@ -157,6 +164,8 @@ describe('DataTable binding contract', () => {
 			sync,
 		});
 		expect(mockFooterProps).not.toHaveProperty('query');
+		expect(screen.getByTestId('sort-level').getAttribute('data-sort-by')).toBe('level');
+		expect(screen.getByTestId('sort-level').getAttribute('data-sort-direction')).toBe('asc');
 	});
 
 	it('renders the default footer from binding projections', () => {
@@ -171,6 +180,7 @@ describe('DataTable binding contract', () => {
 			<BindingDataTable
 				id="coupons"
 				resource={resource}
+				sort={{ field: 'code', direction: 'desc' }}
 				actions={{
 					setSort: mockSetSort,
 					extendLimit: mockExtendLimit,
