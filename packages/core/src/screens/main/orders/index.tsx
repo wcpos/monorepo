@@ -174,13 +174,16 @@ export function OrdersScreen() {
 	const { uiSettings } = useUISettings('orders');
 	const { wpCredentials, store } = useAppState();
 	const initialSort = getInitialOrderSort(uiSettings.sortBy, uiSettings.sortDirection);
+	const cashierScopeID = String(wpCredentials?.id);
+	const storeScopeID = store?.id ? String(store.id) : 'woocommerce-pos';
 	const initialFilters: Partial<FiltersOf<'orders'>> = {
-		cashier: String(wpCredentials?.id),
-		store: store?.id ? String(store.id) : 'woocommerce-pos',
+		cashier: cashierScopeID,
+		store: storeScopeID,
 	};
 
 	return (
 		<QueryStateProvider
+			key={`${cashierScopeID}:${storeScopeID}`}
 			collection="orders"
 			initialPageSize={ORDERS_PAGE_SIZE}
 			initialSort={initialSort}

@@ -160,6 +160,16 @@ describe('OrdersScreen query-state wiring', () => {
 		expect(latestState().filters).toEqual({ cashier: '7', store: 'woocommerce-pos' });
 	});
 
+	it('re-initializes the provider filters when the selected store scope changes', () => {
+		const { rerender } = render(<OrdersScreen />);
+		expect(latestState().filters).toEqual({ cashier: '7', store: '9' });
+
+		mockStoreID = 12;
+		rerender(<OrdersScreen />);
+
+		expect(latestState().filters).toEqual({ cashier: '7', store: '12' });
+	});
+
 	it('seeds valid persisted sort and rejects fields outside the orders sort surface', () => {
 		mockSortBy = 'status';
 		mockSortDirection = 'asc';
