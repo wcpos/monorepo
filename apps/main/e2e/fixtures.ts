@@ -78,7 +78,7 @@ export async function waitForOAuthCallback(page: Page, appOrigin: string): Promi
 		)
 		.then(() => {
 			throw new Error(
-				'WordPress cannot write to wp-content/uploads/wc-logs, so OAuth callback headers cannot be sent. Restore the dev server directory ownership/permissions and rerun E2E.'
+				'WordPress cannot write to wp-content/uploads/wc-logs, so OAuth callback headers cannot be sent. On the dev-next host run: sudo install -d -o www-data -g www-data -m 0775 /var/www/html/wp-content/uploads/wc-logs; sudo chown -R www-data:www-data /var/www/html/wp-content/uploads/wc-logs; sudo find /var/www/html/wp-content/uploads/wc-logs -type d -exec chmod 0775 {} +; sudo find /var/www/html/wp-content/uploads/wc-logs -type f -exec chmod 0664 {} +. Verify with: sudo -u www-data touch /var/www/html/wp-content/uploads/wc-logs/.wcpos-e2e-write-test && sudo -u www-data rm /var/www/html/wp-content/uploads/wc-logs/.wcpos-e2e-write-test. Then rerun E2E.'
 			);
 		});
 

@@ -44,6 +44,6 @@ describe('waitForOAuthCallback', () => {
 
 		await expect(
 			waitForOAuthCallback(page as never, 'https://preview.example.com')
-		).rejects.toThrow('WordPress cannot write to wp-content/uploads/wc-logs');
+		).rejects.toThrow('sudo chown -R www-data:www-data /var/www/html/wp-content/uploads/wc-logs');
 	});
 });
