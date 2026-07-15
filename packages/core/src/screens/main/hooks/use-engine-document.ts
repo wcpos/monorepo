@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { NEVER, Observable, of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { useQueryManager } from '@wcpos/query';
+import { observeEngineDatabases, useQueryManager } from '@wcpos/query';
 import {
 	engineCollectionNameFor,
 	type LegacyCollectionName,
@@ -34,12 +34,11 @@ function engineDocument$(
 	collectionName: LegacyCollectionName,
 	key: DocumentKey
 ): Observable<EngineRxDocument | null> {
-	return new Observable<EngineDatabase | null>((subscriber) =>
-		manager.engine.db$((database) => subscriber.next(database as unknown as EngineDatabase | null))
-	).pipe(
+	return observeEngineDatabases(manager.engine).pipe(
+		map((database) => database as unknown as EngineDatabase | null),
 		switchMap((database) => {
 			if (!database) {
-				return NEVER;
+				return of(null);
 			}
 
 			// Resolve after every db$ emission: scope moves and resets replace collection residents.
@@ -115,14 +114,11 @@ export function useEngineDocumentsByWooId<TDocument extends object>(
 		[wooIdsKey]
 	);
 	const resource = React.useMemo(() => {
-		const documents$ = new Observable<EngineDatabase | null>((subscriber) =>
-			manager.engine.db$((database) =>
-				subscriber.next(database as unknown as EngineDatabase | null)
-			)
-		).pipe(
+		const documents$ = observeEngineDatabases(manager.engine).pipe(
+			map((database) => database as unknown as EngineDatabase | null),
 			switchMap((database) => {
 				if (!database) {
-					return NEVER;
+					return of([] as EngineRxDocument[]);
 				}
 
 				const collection = database.collections[

@@ -52,6 +52,9 @@ function AppStack() {
 	// The credentials DOCUMENT is a stable identity; the engine reads the JWT
 	// fresh at request time via getLatest() inside the lib module, so token
 	// refreshes never recreate the engine and no ref is touched in render.
+	// Construction is idempotent per scope (createAppSyncEngine caches by scope at
+	// module level), so even if this memo re-runs — or the whole subtree remounts —
+	// the same live engine is returned and its RxDatabase is never opened twice.
 	const engine = React.useMemo(
 		() =>
 			createAppSyncEngine({
@@ -66,31 +69,32 @@ function AppStack() {
 	return (
 		<QueryProvider localDB={storeDB} engine={engine} http={http} locale={locale}>
 			<UISettingsProvider>
-				<View className="bg-background flex-1">
-					<Stack
-						screenOptions={{
-							headerShown: false,
-							contentStyle: { backgroundColor: screenBackgroundColor },
-						}}
-					>
-						<Stack.Screen name="(drawer)" />
-						<Stack.Screen
-							name="(modals)/settings"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
+				<CompatGate>
+					<View className="bg-background flex-1">
+						<Stack
+							screenOptions={{
+								headerShown: false,
+								contentStyle: { backgroundColor: screenBackgroundColor },
 							}}
-						/>
-						<Stack.Screen
-							name="(modals)/tax-rates"
-							options={{
-								presentation: 'containedTransparentModal',
-								animation: 'fade',
-								contentStyle: { backgroundColor: 'transparent' },
-							}}
-						/>
-						{/* <Stack.Screen
+						>
+							<Stack.Screen name="(drawer)" />
+							<Stack.Screen
+								name="(modals)/settings"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							<Stack.Screen
+								name="(modals)/tax-rates"
+								options={{
+									presentation: 'containedTransparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							{/* <Stack.Screen
 							name="(modals)/login"
 							options={{
 								presentation: 'containedTransparentModal',
@@ -98,17 +102,36 @@ function AppStack() {
 								contentStyle: { backgroundColor: 'transparent' },
 							}}
 						/> */}
-					</Stack>
-					{/**
-					 * We need to have a PortalHost inside the UISettingsProvider
-					 */}
-					<ErrorBoundary>
-						<PortalHost />
-					</ErrorBoundary>
-				</View>
+						</Stack>
+						{/**
+						 * We need to have a PortalHost inside the UISettingsProvider
+						 */}
+						<ErrorBoundary>
+							<PortalHost />
+						</ErrorBoundary>
+					</View>
+				</CompatGate>
 			</UISettingsProvider>
 		</QueryProvider>
 	);
+}
+
+/**
+ * The plugin-version compatibility gate. It lives BELOW the engine + QueryProvider
+ * (inside AppStack) so that toggling it — the `wcposVersion` (useSiteInfo) and
+ * `wcposVersionPass` (useAppInfo) values settle on separate async timelines and
+ * transiently disagree during boot — only swaps the gated CONTENT and never
+ * unmounts the engine. Previously this gate early-returned in AppLayout, above
+ * AppStack, so the toggle remounted AppStack and constructed the engine twice; the
+ * second construction collided on the already-open RxDatabase (multiInstance:false)
+ * and its scope never became ready, leaving every binding reading an empty engine.
+ */
+function CompatGate({ children }: { children: React.ReactNode }) {
+	const { compatibility, site: siteVersionInfo } = useAppInfo();
+	if (siteVersionInfo?.wcposVersion && !compatibility?.wcposVersionPass) {
+		return <UpgradeRequired />;
+	}
+	return <>{children}</>;
 }
 
 export default function AppLayout() {
@@ -120,13 +143,9 @@ export default function AppLayout() {
 	// Fetch fresh site data (versions, license) on mount
 	useSiteInfo({ site });
 
-	// Block UI if the PHP plugin is older than the app.
-	// Only gate once wcposVersion is populated — before the fetch completes (or if it
-	// fails, e.g. offline) we fail open so we don't block compatible users.
-	const { compatibility, site: siteVersionInfo } = useAppInfo();
-	if (siteVersionInfo?.wcposVersion && !compatibility?.wcposVersionPass) {
-		return <UpgradeRequired />;
-	}
+	// The plugin-version compatibility gate moved INTO AppStack (CompatGate), below
+	// the engine + QueryProvider, so its transient boot-time toggling no longer
+	// remounts the engine-owning subtree. See CompatGate.
 
 	if (!wpAPIURL) {
 		throw new Error('No WP API URL');

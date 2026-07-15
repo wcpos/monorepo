@@ -39,7 +39,39 @@ export interface CreateAppSyncEngineOptions {
 	multiInstance?: boolean;
 }
 
+// One engine per scope, cached at module scope. The engine's factory opens an
+// RxDatabase keyed by scope (multiInstance:false), so constructing a second engine
+// for the SAME scope collides on the already-open database and its scope never
+// becomes ready — which is exactly what happens when a boot-time remount of the
+// engine-owning subtree (a compat-gate toggle, a Stack.Protected guard flip during
+// hydration) runs the construction twice. Caching by scope makes construction
+// idempotent: the same scope returns the identical live engine no matter how many
+// times React re-invokes the factory, and a genuine scope change disposes the prior
+// engine (releasing its database) before opening the next.
+let cachedEngine: { key: string; engine: RxdbSyncEngine } | null = null;
+
+function scopeCacheKey(options: CreateAppSyncEngineOptions): string {
+	return [
+		options.wpApiUrl,
+		options.scope.storeId,
+		options.scope.cashierId,
+		options.multiInstance ?? false,
+	].join('::');
+}
+
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
+	const cacheKey = scopeCacheKey(options);
+	if (cachedEngine && cachedEngine.key === cacheKey) {
+		return cachedEngine.engine;
+	}
+	// Scope changed (or first construction): release the previous engine's database
+	// before opening the next so the new scope can't collide with a lingering one.
+	if (cachedEngine) {
+		const previous = cachedEngine.engine;
+		cachedEngine = null;
+		void previous.dispose().catch(() => undefined);
+	}
+
 	const site = deriveSyncSite(options.wpApiUrl);
 
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
@@ -62,7 +94,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		return globalThis.fetch(finalUrl, { ...init, headers });
 	};
 
-	return createRxdbSyncEngine(
+	const engine = createRxdbSyncEngine(
 		{
 			site,
 			storage: defaultConfig.storage,
@@ -71,4 +103,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		},
 		options.scope
 	);
+	cachedEngine = { key: cacheKey, engine };
+	return engine;
 }
