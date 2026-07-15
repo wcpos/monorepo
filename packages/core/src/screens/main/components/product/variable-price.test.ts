@@ -21,6 +21,26 @@ describe('getVariablePrices', () => {
 		});
 	});
 
+	it('returns variable prices from object metadata', () => {
+		const metaData = [
+			{
+				key: '_woocommerce_pos_variable_prices',
+				value: {
+					price: { min: '10', max: '20' },
+					regular_price: { min: '15', max: '25' },
+					sale_price: { min: '10', max: '18' },
+				},
+			},
+		];
+
+		const result = getVariablePrices(metaData);
+		expect(result).toEqual({
+			price: { min: '10', max: '20' },
+			regular_price: { min: '15', max: '25' },
+			sale_price: { min: '10', max: '18' },
+		});
+	});
+
 	it('returns null when metaData is undefined', () => {
 		const result = getVariablePrices(undefined);
 		expect(result).toBeNull();

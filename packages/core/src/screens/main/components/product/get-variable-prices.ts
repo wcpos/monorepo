@@ -32,7 +32,7 @@ function isVariablePrices(value: unknown): value is VariablePrices {
  *
  */
 export function getVariablePrices(
-	metaData: { key?: string; value?: string }[] | undefined
+	metaData: { key?: string; value?: string | object }[] | undefined
 ): VariablePrices | null {
 	if (!metaData) {
 		uiLogger.error('metaData is not defined', {
@@ -43,9 +43,7 @@ export function getVariablePrices(
 		return null;
 	}
 
-	const metaDataEntry = metaData.find(
-		(m: { key?: string; value?: string }) => m.key === '_woocommerce_pos_variable_prices'
-	);
+	const metaDataEntry = metaData.find((m) => m.key === '_woocommerce_pos_variable_prices');
 
 	if (!metaDataEntry) {
 		uiLogger.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
@@ -57,7 +55,8 @@ export function getVariablePrices(
 	}
 
 	try {
-		const parsed = JSON.parse(metaDataEntry.value ?? '');
+		const value = metaDataEntry.value ?? '';
+		const parsed = typeof value === 'string' ? JSON.parse(value) : value;
 		if (!isVariablePrices(parsed)) {
 			uiLogger.error("'_woocommerce_pos_variable_prices' has invalid structure", {
 				context: {
