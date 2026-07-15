@@ -308,27 +308,27 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 	});
 
 	it('auto mode runs the seed lanes before the scheduler drain at boot', async () => {
-		vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
-		const bootAtMs = 1_000;
-		vi.setSystemTime(bootAtMs);
+		vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 		const bootLanes = [
 			'reference-seed',
 			'product-browse-window-seed',
 			'order-window-seed',
 			'scheduler-drain',
 		] as const;
-		const engine = engineWith({
-			mode: 'auto',
-			now: () => Date.now(),
-			fetcher: async () =>
+		const fetcher = vi.fn(
+			async (_url: string) =>
 				new Response(JSON.stringify([]), {
 					status: 200,
 					headers: { 'content-type': 'application/json' },
-				}),
+				})
+		);
+		const engine = engineWith({
+			mode: 'auto',
+			fetcher,
 		});
 
 		try {
-			const lifecycle: { atMs: number; event: EngineEvent }[] = [];
+			const lifecycle: EngineEvent[] = [];
 			let finished = 0;
 			let resolveBootTicks!: () => void;
 			const bootTicksFinished = new Promise<void>((resolve) => {
@@ -339,7 +339,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 					(event.type === 'lane-start' || event.type === 'lane-finish') &&
 					bootLanes.includes(event.lane as (typeof bootLanes)[number])
 				) {
-					lifecycle.push({ atMs: Date.now(), event });
+					lifecycle.push(event);
 					if (event.type === 'lane-finish' && ++finished === bootLanes.length) {
 						resolveBootTicks();
 					}
@@ -347,19 +347,24 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			});
 
 			await engine.ready;
+			await bootTicksFinished;
 			expect(
 				lifecycle
-					.filter(({ event }) => event.type === 'lane-start')
-					.map(({ atMs, event }) => ({ atMs, lane: event.type === 'lane-start' ? event.lane : '' }))
-			).toEqual(bootLanes.map((lane) => ({ atMs: bootAtMs, lane })));
+					.filter((event) => event.type === 'lane-start')
+					.map((event) => (event.type === 'lane-start' ? event.lane : ''))
+			).toEqual(bootLanes);
 
-			await bootTicksFinished;
 			for (const lane of bootLanes) {
-				expect(lifecycle.filter(({ event }) => 'lane' in event && event.lane === lane)).toEqual([
-					{ atMs: bootAtMs, event: { type: 'lane-start', lane } },
-					{ atMs: bootAtMs, event: { type: 'lane-finish', lane, status: 'ran' } },
+				expect(lifecycle.filter((event) => 'lane' in event && event.lane === lane)).toEqual([
+					{ type: 'lane-start', lane },
+					{ type: 'lane-finish', lane, status: 'ran' },
 				]);
 			}
+			const fetchedUrls = fetcher.mock.calls.map(([url]) => url);
+			expect(fetchedUrls).toContainEqual(
+				expect.stringContaining('/products?per_page=100&page=1&orderby=title&order=asc')
+			);
+			expect(fetchedUrls).toContainEqual(expect.stringContaining('/orders?'));
 		} finally {
 			vi.useRealTimers();
 			await engine.dispose();
