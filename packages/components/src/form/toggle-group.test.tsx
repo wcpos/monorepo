@@ -3,17 +3,20 @@ import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+let mockError: { message: string } | undefined;
+
 jest.mock('./common', () => ({
 	FormItem: ({ children }: any) => React.createElement('div', null, children),
 	FormLabel: ({ children, nativeID }: any) =>
 		React.createElement('label', { id: nativeID }, children),
-	FormDescription: ({ children }: any) => React.createElement('p', null, children),
-	FormMessage: () => null,
+	FormDescription: ({ children }: any) => React.createElement('p', { id: 'desc-id' }, children),
+	FormMessage: () =>
+		mockError ? React.createElement('p', { id: 'msg-id' }, mockError.message) : null,
 }));
 
 jest.mock('./context', () => ({
 	useFormField: () => ({
-		error: undefined,
+		error: mockError,
 		formItemNativeID: 'item-id',
 		formDescriptionNativeID: 'desc-id',
 		formMessageNativeID: 'msg-id',
@@ -71,6 +74,10 @@ const OPTIONS = [
 ];
 
 describe('FormToggleGroup', () => {
+	beforeEach(() => {
+		mockError = undefined;
+	});
+
 	it('renders an option per entry and marks the selected one', () => {
 		render(
 			<FormToggleGroup
@@ -99,6 +106,42 @@ describe('FormToggleGroup', () => {
 		const group = screen.getByRole('group');
 		expect(group).not.toHaveAttribute('aria-labelledby');
 		expect(group).not.toHaveAttribute('aria-describedby');
+		expect(group).toHaveAttribute('aria-invalid', 'false');
+	});
+
+	it('references only the rendered label and description', () => {
+		render(
+			<FormToggleGroup
+				name="type"
+				onBlur={jest.fn()}
+				value="percent"
+				onChange={jest.fn()}
+				options={OPTIONS}
+				label="Discount type"
+				description="Choose a discount type"
+			/>
+		);
+		const group = screen.getByRole('group');
+		expect(group).toHaveAttribute('aria-labelledby', 'item-id');
+		expect(group).toHaveAttribute('aria-describedby', 'desc-id');
+		expect(group).toHaveAttribute('aria-invalid', 'false');
+	});
+
+	it('references only the rendered error message when invalid', () => {
+		mockError = { message: 'Discount type is required' };
+		render(
+			<FormToggleGroup
+				name="type"
+				onBlur={jest.fn()}
+				value="percent"
+				onChange={jest.fn()}
+				options={OPTIONS}
+			/>
+		);
+		const group = screen.getByRole('group');
+		expect(group).not.toHaveAttribute('aria-labelledby');
+		expect(group).toHaveAttribute('aria-describedby', 'msg-id');
+		expect(group).toHaveAttribute('aria-invalid', 'true');
 	});
 
 	it('emits onChange with the pressed value', () => {
