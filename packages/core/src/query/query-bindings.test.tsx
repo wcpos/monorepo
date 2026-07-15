@@ -77,6 +77,7 @@ describe('query bindings', () => {
 			'products',
 			'variations',
 			'customers',
+			'orders',
 			'taxRates',
 			'categories',
 			'coupons',
@@ -86,6 +87,7 @@ describe('query bindings', () => {
 		installResidentSearch(engineDB.collections.products);
 		installResidentSearch(engineDB.collections.variations);
 		installResidentSearch(engineDB.collections.customers);
+		installResidentSearch(engineDB.collections.orders);
 		installResidentSearch(engineDB.collections.taxRates);
 		installResidentSearch(engineDB.collections.categories);
 		installResidentSearch(engineDB.collections.coupons);
@@ -153,6 +155,36 @@ describe('query bindings', () => {
 		});
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['coffee'])
+		);
+	});
+
+	it('declares the orders query descriptor for status/customer/date-filtered windows', async () => {
+		const state: QueryStateOf<'orders'> = {
+			search: 'smith',
+			filters: {
+				status: 'processing',
+				customer_id: 42,
+				cashier: '7',
+				store: '12',
+				dateRange: { from: '2026-07-01', to: '2026-07-14' },
+			},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 50,
+		};
+
+		renderHook(() => useCollectionBinding('orders', state), { wrapper: Provider });
+
+		await waitFor(() =>
+			expect(
+				engine.requireCalls.find(
+					(requirement) =>
+						requirement.kind === 'query' && requirement.queryKey?.includes('search=smith')
+				)
+			).toMatchObject({
+				collection: 'orders',
+				kind: 'query',
+				queryKey: 'orders:browser:status=processing:search=smith:limit=50',
+			})
 		);
 	});
 
@@ -630,5 +662,30 @@ describe('query bindings', () => {
 		expect(
 			(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits.length
 		).toBeLessThanOrEqual(2);
+	});
+
+	it('binds cashier search-select to eligible customer roles only', async () => {
+		await engineDB.collections.customers.bulkInsert([
+			{
+				id: 'cashier-grace',
+				wooCustomerId: 7,
+				payload: { id: 7, first_name: 'Grace', last_name: 'Hopper', role: 'cashier' },
+				sync: { revision: '1', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
+			},
+			{
+				id: 'customer-ada',
+				wooCustomerId: 42,
+				payload: { id: 42, first_name: 'Ada', last_name: 'Lovelace', role: 'customer' },
+				sync: { revision: '1', partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
+			},
+		]);
+
+		const { result } = renderHook(() => useSearchSelect('cashier'), { wrapper: Provider });
+
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['cashier-grace'])
+		);
 	});
 });

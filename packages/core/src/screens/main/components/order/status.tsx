@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
+import type { QueryStateActions } from '../../../../query';
 import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -60,7 +61,11 @@ export function Status({ table, row }: CellContext<{ document: OrderDocument }, 
 	const status = useObservableEagerState(order.status$!);
 	const iconName = get(iconMap, [status ?? '', 'name'], 'circleQuestion') as string;
 	const iconType = get(iconMap, [status ?? '', 'type'], 'disabled') as string;
-	const query = (table.options.meta as { query: any } | undefined)?.query;
+	const actions = (
+		table.options.meta as {
+			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
+		}
+	)?.actions;
 	const { getLabel } = useOrderStatusLabel();
 
 	/**
@@ -72,7 +77,7 @@ export function Status({ table, row }: CellContext<{ document: OrderDocument }, 
 				<IconButton
 					name={iconName as import('@wcpos/components/icon').IconName}
 					variant={iconType as 'muted'}
-					onPress={() => query?.where('status').equals(status).exec()}
+					onPress={() => status && actions?.setFilter('status', status)}
 				/>
 			</TooltipTrigger>
 			<TooltipContent side="right">

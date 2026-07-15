@@ -7,6 +7,7 @@ import { ButtonPill } from '@wcpos/components/button';
 
 import { useCashierLabel } from '../../hooks/use-cashier-label';
 
+import type { QueryStateActions } from '../../../../query';
 import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -23,9 +24,11 @@ export function Cashier({ table, row }: CellContext<{ document: OrderDocument },
 		)
 	);
 	const cashier = useCashierLabel(cashierID);
-	const query = (
-		table.options.meta as unknown as { query: ReturnType<typeof import('@wcpos/query').useQuery> }
-	)?.query;
+	const actions = (
+		table.options.meta as {
+			actions?: Pick<QueryStateActions<'orders'>, 'setFilter'>;
+		}
+	)?.actions;
 
 	/**
 	 * It's possible the order doesn't have a cashier, eg: web or admin orders.
@@ -38,12 +41,7 @@ export function Cashier({ table, row }: CellContext<{ document: OrderDocument },
 		<ButtonPill
 			variant="ghost-secondary"
 			size="xs"
-			onPress={() =>
-				query
-					?.where('meta_data')
-					.multipleElemMatch({ key: '_pos_user', value: String(cashier.id) })
-					.exec()
-			}
+			onPress={() => cashierID && actions?.setFilter('cashier', cashierID)}
 		>
 			{cashier.label}
 		</ButtonPill>

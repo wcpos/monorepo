@@ -91,7 +91,7 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CustomerList query={query} withGuest={withGuest} />
+				<CustomerList query={query!} withGuest={withGuest} />
 			</Suspense>
 		</>
 	);
@@ -102,8 +102,14 @@ interface CustomerHit {
 	document: CustomerDocument;
 }
 
-export function CustomerList({ query, withGuest }: { query: any; withGuest: boolean }) {
-	const result = useObservableSuspense(query.resource) as { hits: CustomerHit[] };
+type CustomerQuery = NonNullable<ReturnType<typeof useQuery>>;
+type CustomerListProps = { withGuest: boolean } & (
+	| { query: CustomerQuery; resource?: never }
+	| { query?: never; resource: CustomerQuery['resource'] }
+);
+
+export function CustomerList({ query, resource, withGuest }: CustomerListProps) {
+	const result = useObservableSuspense(resource ?? query.resource) as { hits: CustomerHit[] };
 	const t = useT();
 
 	/**

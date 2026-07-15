@@ -1,31 +1,38 @@
 import * as React from 'react';
 
 import { endOfDay, isSameDay, isToday, isYesterday, startOfDay } from 'date-fns';
+import { useObservableEagerState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import type { DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
+import type { OrderCollection } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
-import { DateRangeCalendar } from './calendar';
-import { useT } from '../../../../../contexts/translations';
-import { useQueryState, useQueryStateActions } from '../../../../../query';
+import { DateRangeCalendar } from '../components/order/filter-bar/calendar';
+import { useT } from '../../../contexts/translations';
 import {
 	convertLocalDateToUTCString,
 	convertUTCStringToLocalDate,
 	useLocalDate,
-} from '../../../../../hooks/use-local-date';
+} from '../../../hooks/use-local-date';
+
+interface Props {
+	query: Query<OrderCollection>;
+	onRemove?: () => void;
+}
 
 /**
  *
  */
-export function DateRangePill() {
+export function DateRangePill({ query, onRemove }: Props) {
 	const t = useT();
 	const triggerRef = React.useRef<{ close: () => void }>(null);
-	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
-		(state) => state.filters.dateRange
+	const selectedDateRange = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getSelector('date_created_gmt')))
 	);
-	const actions = useQueryStateActions<'orders'>();
-	const isActive = !!(selectedDateRange?.from && selectedDateRange?.to);
+	const isActive = !!(selectedDateRange && selectedDateRange?.$gte && selectedDateRange?.$lte);
 	const { formatDate } = useLocalDate();
 
 	/**
@@ -38,8 +45,8 @@ export function DateRangePill() {
 
 		// date_created_gmt in WC REST API is in UTC, but without the 'Z',
 		// we need to convert it to a local date
-		const from = convertUTCStringToLocalDate(selectedDateRange.from);
-		const to = convertUTCStringToLocalDate(selectedDateRange.to);
+		const from = convertUTCStringToLocalDate(selectedDateRange.$gte as string);
+		const to = convertUTCStringToLocalDate(selectedDateRange.$lte as string);
 
 		// check if to and from are the same day
 		if (isSameDay(from, to)) {
@@ -71,16 +78,17 @@ export function DateRangePill() {
 			// Ensure we capture the full day range in local time
 			// from: start of day (00:00:00 local) → converted to UTC
 			// to: end of day (23:59:59 local) → converted to UTC
-			actions.setFilter('dateRange', {
-				from: convertLocalDateToUTCString(startOfDay(from)),
-				to: convertLocalDateToUTCString(endOfDay(to)),
-			});
+			query
+				.where('date_created_gmt')
+				.gte(convertLocalDateToUTCString(startOfDay(from)))
+				.lte(convertLocalDateToUTCString(endOfDay(to)))
+				.exec();
 
 			if (triggerRef.current) {
 				triggerRef.current?.close();
 			}
 		},
-		[actions]
+		[query]
 	);
 
 	return (
@@ -95,7 +103,13 @@ export function DateRangePill() {
 					leftIcon="calendarDays"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => actions.clearFilter('dateRange')}
+					onRemove={() => {
+						if (onRemove) {
+							onRemove();
+						} else {
+							query.removeWhere('date_created_gmt').exec();
+						}
+					}}
 				>
 					<ButtonText>{label}</ButtonText>
 				</ButtonPill>
