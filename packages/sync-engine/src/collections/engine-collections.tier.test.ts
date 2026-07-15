@@ -56,7 +56,7 @@ describe('engine scope recipe: the scheduler/coverage tier (slice 5a)', () => {
 	it('opens the tier collections on a scope database through the public handle', async () => {
 		const engine = createRxdbSyncEngine(
 			{
-				site: { syncBaseUrl: `${SITE}/wp-json/wc-rxdb-sync/v1`, wpJsonRoot: `${SITE}/wp-json` },
+				site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
 				storage: memoryEngineStorage(),
 			},
 			freshIdentity()

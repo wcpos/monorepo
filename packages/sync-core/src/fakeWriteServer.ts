@@ -3,14 +3,14 @@ import { RECORD_UUID_META_KEY } from './recordIdentity';
 
 /**
  * A reusable in-memory push server honoring the generic write contract
- * (`{base}/wc-rxdb-sync/v1/push/{collection}`), so the write path is provable end to end
- * WITHOUT a live push — the lab's read-only-server constraint (wcpos.local / dev-free are
+ * (`{syncBase}/push/{collection}`), so the write path is provable end to end
+ * WITHOUT a live push — the test stores' read-only-server constraint (wcpos.local / dev-free are
  * never written). It lives in the `@wcpos/sync-core/testing` sub-path (NOT the engine
  * index) so it never ships in a production bundle.
  *
  * It models the real Write_Controller (P1-0) FAITHFULLY, so a test can't pass a flow the server
  * would reject:
- *  - the request URL is validated (`{base}/wc-rxdb-sync/v1/push/{collection}`, namespace exactly
+ *  - the request URL is validated (`{syncBase}/push/{collection}`, the `wcpos/v2` namespace exactly
  *    once, path collection === envelope collection) — a doubled/misrouted base is a 400, which is
  *    what makes the namespace-mismatch guard real.
  *  - create → assigns a numeric id to a NEW record uuid (201); a create of an already-known uuid is
@@ -84,8 +84,8 @@ export type FakeWriteServerOptions = {
 	firstId?: number;
 };
 
-const NAMESPACE = '/wc-rxdb-sync/v1/';
-const PUSH_MARKER = '/wc-rxdb-sync/v1/push/';
+const NAMESPACE = '/wcpos/v2/';
+const PUSH_MARKER = '/wcpos/v2/push/';
 
 function canonicalResponse(name: string): { status: number; body: unknown } {
 	const fixture = responseFixtures.find((candidate) => candidate.name === name);
@@ -97,7 +97,7 @@ function canonicalResponse(name: string): { status: number; body: unknown } {
  * single `push/{collection}` segment. Returns the decoded collection, or null for a bad route. */
 function parsePushUrl(url: string): { collection: string } | null {
 	const firstNs = url.indexOf(NAMESPACE);
-	// Doubled-namespace guard: `{base already ending in /wc-rxdb-sync/v1}` + resolver's own suffix.
+	// Doubled-namespace guard: a caller-supplied sync base must contain `/wcpos/v2` exactly once.
 	if (firstNs === -1 || url.indexOf(NAMESPACE, firstNs + 1) !== -1) return null;
 	const idx = url.indexOf(PUSH_MARKER);
 	if (idx === -1) return null;

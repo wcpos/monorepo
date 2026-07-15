@@ -32,7 +32,7 @@ function engineWith(
 ): RxdbSyncEngine {
 	return createRxdbSyncEngine(
 		{
-			site: { syncBaseUrl: `${SITE}/wp-json/wc-rxdb-sync/v1`, wpJsonRoot: `${SITE}/wp-json` },
+			site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
 			storage: memoryEngineStorage(),
 			mode: 'manual',
 			...overrides,

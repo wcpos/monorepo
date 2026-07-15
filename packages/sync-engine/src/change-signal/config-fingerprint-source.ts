@@ -18,7 +18,7 @@ export type ConfigSourceFetcher = (
 ) => Promise<Response>;
 
 export type CreateConfigFingerprintLiveSourceInput = {
-	/** e.g. http://wcpos.local/wp-json/wc-rxdb-sync/v1 (no trailing slash). */
+	/** e.g. http://wcpos.local/wp-json/wcpos/v2 (no trailing slash). */
 	syncBaseUrl: string;
 	/** Already-authenticated fetcher (Basic-auth header injected upstream). */
 	fetcher: ConfigSourceFetcher;

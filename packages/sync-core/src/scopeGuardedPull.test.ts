@@ -96,7 +96,7 @@ describe('runScopeGuardedPull', () => {
 
 		const result = await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher,
 			repository,
@@ -145,7 +145,7 @@ describe('runScopeGuardedPull', () => {
 
 		await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher: server.fetch,
 			repository,
@@ -169,7 +169,7 @@ describe('runScopeGuardedPull', () => {
 
 		await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher,
 			repository,
@@ -216,7 +216,7 @@ describe('runScopeGuardedPull', () => {
 
 		await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher: server.fetch,
 			repository,
@@ -236,7 +236,7 @@ describe('runScopeGuardedPull', () => {
 
 		const result = await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher: server.fetch,
 			repository,
@@ -257,7 +257,7 @@ describe('runScopeGuardedPull', () => {
 
 		const result = await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher: server.fetch,
 			repository,
@@ -283,7 +283,7 @@ describe('runScopeGuardedPull', () => {
 		// at all — 'aborted' with zero fetches and zero writes.
 		const result = await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher,
 			repository,
@@ -320,7 +320,7 @@ describe('runScopeGuardedPull', () => {
 
 		const racing = runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher,
 			repository,
@@ -359,7 +359,7 @@ describe('runScopeGuardedPull', () => {
 
 		const racing = runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher,
 			repository,
@@ -407,7 +407,7 @@ describe('runScopeGuardedPull', () => {
 
 		const racing = runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher: server.fetch,
 			repository,
@@ -447,7 +447,7 @@ describe('runScopeGuardedPull', () => {
 
 		const result = await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher: server.fetch,
 			repository,
@@ -473,7 +473,7 @@ describe('runScopeGuardedPull', () => {
 
 		const result = await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher,
 			repository,
@@ -493,7 +493,7 @@ describe('runScopeGuardedPull', () => {
 
 		const result = await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 50,
 			fetcher: server.fetch,
 			repository,
@@ -516,7 +516,7 @@ describe('ticket-bound fetching (stale pulls refuse network work)', () => {
 
 		const result = await runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 10,
 			fetcher: fetchSpy,
 			repository,
@@ -547,7 +547,7 @@ describe('ticket-bound fetching (stale pulls refuse network work)', () => {
 
 		const pull = runScopeGuardedPull({
 			manager,
-			baseUrl: 'http://test.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://test.local/wp-json/wcpos/v2',
 			limit: 10,
 			fetcher,
 			repository,

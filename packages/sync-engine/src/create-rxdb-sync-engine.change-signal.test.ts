@@ -21,7 +21,7 @@ import type { RxStorage } from 'rxdb';
 setPremiumFlag();
 
 const SITE = 'https://signal.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wc-rxdb-sync/v1`;
+const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const UUID_9 = '11111111-1111-4111-8111-111111111111';
 
 let uniqueScope = 0;

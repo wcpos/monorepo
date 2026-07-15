@@ -12,7 +12,7 @@ import { classifyScopeError } from './scopeGuardedOperation';
  * pin breaks, either the fake drifted from the PHP or the PHP contract changed; fix the fake.
  */
 
-const BASE_URL = 'http://wcpos.local/wp-json/wc-rxdb-sync/v1';
+const BASE_URL = 'http://wcpos.local/wp-json/wcpos/v2';
 const UUID = '5b8e1a3c-2f4d-4a6b-9c8e-1d2f3a4b5c6d'; // RestControllerTest.php:351
 
 function pullUrl(query: Record<string, string>): string {
@@ -291,7 +291,7 @@ describe('fakePullServer journal semantics (pinned against pull_orders + Sync_In
 	it('answers a misrouted URL with a WP-style rest_no_route 404, never the envelope', async () => {
 		const server = createFakePullServer();
 
-		const doubled = await server.fetch(`${BASE_URL}/wc-rxdb-sync/v1/orders/pull?limit=1`);
+		const doubled = await server.fetch(`${BASE_URL}/wcpos/v2/orders/pull?limit=1`);
 		expect(doubled.status).toBe(404);
 		expect((await doubled.json()).code).toBe('rest_no_route');
 

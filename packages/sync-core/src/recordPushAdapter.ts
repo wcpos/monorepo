@@ -23,16 +23,17 @@ export type PushEndpoint = { url: string; method: string };
 export type EndpointResolver = (mutation: RecordMutation) => PushEndpoint;
 
 /**
- * The canonical resolver for the lab's generic write surface (PR #224): every
- * mutation POSTs to `{base}/wc-rxdb-sync/v1/push/{collection}`, dispatched server-side
- * on the envelope's operation. `baseUrl` is the wp-json root (trailing slash optional).
+ * The canonical resolver for the versioned WCPOS write surface: every mutation
+ * POSTs to `{syncBase}/push/{collection}`, dispatched server-side on the
+ * envelope's operation. `syncBaseUrl` is the namespaced sync base (for example,
+ * `https://shop.example/wp-json/wcpos/v2`; trailing slash optional).
  */
-export function pushEndpointResolver(baseUrl: string): EndpointResolver {
+export function pushEndpointResolver(syncBaseUrl: string): EndpointResolver {
 	// Trim trailing slashes linearly (a `/\/+$/` regex is flagged as ReDoS-prone).
-	let base = baseUrl;
+	let base = syncBaseUrl;
 	while (base.endsWith('/')) base = base.slice(0, -1);
 	return (mutation) => ({
-		url: `${base}/wc-rxdb-sync/v1/push/${encodeURIComponent(mutation.collectionName)}`,
+		url: `${base}/push/${encodeURIComponent(mutation.collectionName)}`,
 		method: 'POST',
 	});
 }

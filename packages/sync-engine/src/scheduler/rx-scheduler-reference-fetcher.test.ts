@@ -45,7 +45,7 @@ describe('createReferenceCollectionFetcher set-difference deletion', () => {
 		const pruneServerSourcedAbsent = vi.fn(async () => ['woo-category:99']);
 		const repository = { upsertMany: vi.fn(async () => undefined), pruneServerSourcedAbsent };
 		const schedulerFetcher = createReferenceCollectionFetcher(CATEGORY_REFERENCE_CONFIG, {
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 		});

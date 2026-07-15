@@ -22,7 +22,7 @@ import { memoryEngineStorage } from './testing';
 setPremiumFlag();
 
 const SITE = 'https://lab.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wc-rxdb-sync/v1`;
+const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const UUID_1 = '11111111-1111-4111-8111-111111111111';
 let uniqueStore = 0;
 
@@ -184,7 +184,7 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 	});
 
 	it('a non-order 428 refresh uses the configured sync base without AbortSignal.any', async () => {
-		const syncBaseUrl = `${SITE}/configured-sync`;
+		const syncBaseUrl = `${SITE}/configured-sync/wcpos/v2`;
 		const server = createFakeWriteServer();
 		const truth = {
 			id: 501,

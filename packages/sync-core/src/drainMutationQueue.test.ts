@@ -110,7 +110,7 @@ describe('drainMutationQueue', () => {
 			push: (mutation) =>
 				pushRecordMutation({
 					mutation,
-					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json'),
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
 					fetcher: server.fetch,
 				}),
 			observe: (e) => events.push(e),
@@ -174,7 +174,7 @@ describe('drainMutationQueue', () => {
 			push: (mutation) =>
 				pushRecordMutation({
 					mutation,
-					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json'),
+					resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
 					fetcher: server.fetch,
 				}),
 			refreshRevision,

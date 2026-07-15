@@ -12,7 +12,7 @@ import { memoryEngineStorage, scriptedConnectivity } from './testing';
 setPremiumFlag();
 
 const SITE = 'https://existence.example.test';
-const BASE = `${SITE}/wp-json/wc-rxdb-sync/v1`;
+const BASE = `${SITE}/wp-json/wcpos/v2`;
 let scope = 0;
 const identity = (): StoreScopeIdentity => ({
 	site: SITE,

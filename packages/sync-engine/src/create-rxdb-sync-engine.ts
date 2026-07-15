@@ -1032,7 +1032,6 @@ export function createRxdbSyncEngine(
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		fetcher,
-		wpJsonRoot: ports.site.wpJsonRoot,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		connectivity: () => {
 			try {
@@ -1463,7 +1462,7 @@ export function createRxdbSyncEngine(
 						if (entry.collectionName === 'orders') {
 							serverBase = await fetchOrderServerRevision({
 								fetch: bound.bindFetch(fetcher as never) as never,
-								wpJsonRoot: ports.site.wpJsonRoot,
+								syncBaseUrl: ports.site.syncBaseUrl,
 								wooOrderId: remoteId,
 							});
 						} else {

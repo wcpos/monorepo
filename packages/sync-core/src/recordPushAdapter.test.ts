@@ -418,14 +418,14 @@ describe('pushRecordMutation', () => {
 });
 
 describe('pushEndpointResolver', () => {
-	it('routes each mutation to {base}/wc-rxdb-sync/v1/push/{collection} via POST', () => {
-		const resolve = pushEndpointResolver('https://shop.example/wp-json/');
+	it('routes each mutation to {syncBase}/push/{collection} via POST', () => {
+		const resolve = pushEndpointResolver('https://shop.example/wp-json/wcpos/v2/');
 		expect(resolve(mut({ collectionName: 'customers' }))).toEqual({
-			url: 'https://shop.example/wp-json/wc-rxdb-sync/v1/push/customers',
+			url: 'https://shop.example/wp-json/wcpos/v2/push/customers',
 			method: 'POST',
 		});
 		expect(resolve(mut({ collectionName: 'products' })).url).toBe(
-			'https://shop.example/wp-json/wc-rxdb-sync/v1/push/products'
+			'https://shop.example/wp-json/wcpos/v2/push/products'
 		);
 	});
 });

@@ -252,7 +252,7 @@ describe('StoreScopeManager', () => {
 
 			await manager.runGuarded(async (bound) => {
 				const pending = bound.bindFetch(fetcher)(
-					'https://store.example/wp-json/wc-rxdb-sync/v1/orders/pull'
+					'https://store.example/wp-json/wcpos/v2/orders/pull'
 				);
 				await manager.switchTo('scope-b');
 				expect(observedSignal?.aborted).toBe(true);
@@ -274,7 +274,7 @@ describe('StoreScopeManager', () => {
 
 			await manager.runGuarded(async (bound) => {
 				const pending = bound.bindFetch(ignoresAbort)(
-					'https://store.example/wp-json/wc-rxdb-sync/v1/orders/pull'
+					'https://store.example/wp-json/wcpos/v2/orders/pull'
 				);
 				await manager.switchTo('scope-b');
 				release({ ok: true } as Response);

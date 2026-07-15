@@ -39,7 +39,7 @@ describe('write path integration', () => {
 	it('build → enqueue → drain → push → reconcile, with identity + revision round-trip', async () => {
 		n = 0;
 		const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
-		const resolve = pushEndpointResolver('https://shop.example/wp-json/');
+		const resolve = pushEndpointResolver('https://shop.example/wp-json/wcpos/v2/');
 
 		// a born-local create
 		const create = buildCreateMutation(
@@ -64,9 +64,7 @@ describe('write path integration', () => {
 		expect(await queue.pending()).toEqual([]); // fully drained + acknowledged
 
 		// the resolver targeted the per-collection endpoint
-		expect(fetcher.mock.calls[0][0]).toBe(
-			'https://shop.example/wp-json/wc-rxdb-sync/v1/push/customers'
-		);
+		expect(fetcher.mock.calls[0][0]).toBe('https://shop.example/wp-json/wcpos/v2/push/customers');
 		// the envelope carried the born-local uuid + idempotency key
 		const sent = JSON.parse((fetcher.mock.calls[0][1] as RequestInit).body as string);
 		expect(sent.recordId).toBe(create.recordId);
@@ -81,7 +79,7 @@ describe('write path integration', () => {
 	it('an update uses the prior revision as baseRevision and conflicts are surfaced, not acknowledged', async () => {
 		n = 0;
 		const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
-		const resolve = pushEndpointResolver('https://shop.example/wp-json');
+		const resolve = pushEndpointResolver('https://shop.example/wp-json/wcpos/v2');
 
 		// an update built with the revision the server last returned
 		const update = buildUpdateMutation(

@@ -53,7 +53,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createCustomerSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 		});
@@ -70,7 +70,7 @@ describe('createCustomerSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/customers?include=12%2C34&per_page=2&orderby=include'
+			'http://wcpos.local/wp-json/wcpos/v2/customers?include=12%2C34&per_page=2&orderby=include'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
@@ -109,7 +109,7 @@ describe('createCustomerSchedulerFetcher', () => {
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createCustomerSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			nowMs: () => 11_000,
@@ -168,7 +168,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createCustomerSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 120_000,
@@ -179,7 +179,7 @@ describe('createCustomerSchedulerFetcher', () => {
 		const result = await schedulerFetcher(customerTask({ limit: 25 }));
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/customers?search=alex&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/customers?search=alex&per_page=25&page=1&orderby=id&order=desc'
 		);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
 			collection: 'customers',
@@ -212,7 +212,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createCustomerSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 		});
@@ -248,7 +248,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			.mockResolvedValueOnce(response(firstPage))
 			.mockResolvedValueOnce(response(secondPage));
 		const schedulerFetcher = createCustomerSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			fetcher,
@@ -259,8 +259,8 @@ describe('createCustomerSchedulerFetcher', () => {
 		);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/customers?search=alex&per_page=100&page=1&orderby=id&order=desc',
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/customers?search=alex&per_page=100&page=2&orderby=id&order=desc',
+			'http://wcpos.local/wp-json/wcpos/v2/customers?search=alex&per_page=100&page=1&orderby=id&order=desc',
+			'http://wcpos.local/wp-json/wcpos/v2/customers?search=alex&per_page=100&page=2&orderby=id&order=desc',
 		]);
 		expect(repository.upsertMany).toHaveBeenCalledTimes(2);
 		expect(repository.upsertMany.mock.calls[0]?.[0]).toHaveLength(100);
@@ -301,7 +301,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			.mockResolvedValueOnce(response(firstPage))
 			.mockResolvedValueOnce(response(secondPage));
 		const schedulerFetcher = createCustomerSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			nowMs: () => 10_000,

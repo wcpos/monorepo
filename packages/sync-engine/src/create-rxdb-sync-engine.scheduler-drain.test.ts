@@ -21,7 +21,7 @@ import { seedTargetedCustomerSchedulerTask } from './scheduler/rx-scheduler-cust
 setPremiumFlag();
 
 const SITE = 'https://lab.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wc-rxdb-sync/v1`;
+const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const UUID_1 = '11111111-1111-4111-8111-111111111111';
 let uniqueStore = 0;
 

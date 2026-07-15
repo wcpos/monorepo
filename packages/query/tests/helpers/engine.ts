@@ -271,7 +271,7 @@ export interface PendingFakeEngine {
 /**
  * A fake engine that models the REAL app's cold start: the RxDB database opens
  * asynchronously, so `active()` returns `null` and `ready` is pending until the
- * initial scope switch settles. Bootstrap/lane fetches (the E2E `wc-rxdb-sync/v1`
+ * initial scope switch settles. Bootstrap/lane fetches (the E2E versioned sync
  * 404s) are async and non-fatal — modelled here by a `require()` handle that
  * rejects. The query surface must DEGRADE (constructible queries, empty results)
  * across this window, then go live once `open()` is called.
@@ -312,7 +312,7 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 			// A bootstrap/lane fetch that 404s (server surface absent) — rejected,
 			// never fatal.
 			return {
-				ready: Promise.reject(new Error('404: wc-rxdb-sync/v1 not found')),
+				ready: Promise.reject(new Error('404: sync endpoint not found')),
 				release: () => undefined,
 			};
 		},

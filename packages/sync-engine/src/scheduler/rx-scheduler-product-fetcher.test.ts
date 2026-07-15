@@ -47,7 +47,7 @@ describe('createProductsSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 		});
@@ -56,11 +56,11 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?search=keyboard&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=25&page=1&orderby=id&order=desc'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?sku=keyboard&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=25&page=1&orderby=id&order=desc'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			{
@@ -112,7 +112,7 @@ describe('createProductsSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 60_000,
@@ -133,7 +133,7 @@ describe('createProductsSchedulerFetcher', () => {
 		// default catalog sort (orderby=title&order=asc) — no search, no status, no page walk.
 		expect(fetcher).toHaveBeenCalledTimes(1);
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?per_page=100&page=1&orderby=title&order=asc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=title&order=asc'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),
@@ -165,7 +165,7 @@ describe('createProductsSchedulerFetcher', () => {
 		}));
 		const fetcher = vi.fn(async () => response(products));
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 60_000,
@@ -205,7 +205,7 @@ describe('createProductsSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 			manifestSink,
@@ -249,7 +249,7 @@ describe('createProductsSchedulerFetcher', () => {
 			return response([]);
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 		});
@@ -263,11 +263,11 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?search=KEY-101&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=KEY-101&per_page=25&page=1&orderby=id&order=desc'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ id: uuidFor(101), wooProductId: 101 }),
@@ -310,7 +310,7 @@ describe('createProductsSchedulerFetcher', () => {
 			]);
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 		});
@@ -339,7 +339,7 @@ describe('createProductsSchedulerFetcher', () => {
 		}));
 		const fetcher = vi.fn(async () => response(products));
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 60_000,
@@ -364,7 +364,7 @@ describe('createProductsSchedulerFetcher', () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 		});
@@ -378,11 +378,11 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?search=100%25+cotton&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=100%25+cotton&per_page=25&page=1&orderby=id&order=desc'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?sku=100%25+cotton&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=100%25+cotton&per_page=25&page=1&orderby=id&order=desc'
 		);
 	});
 
@@ -396,7 +396,7 @@ describe('createProductsSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			nowMs: () => 5_000,
@@ -416,7 +416,7 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?include=321%2C654&per_page=2&orderby=include'
+			'http://wcpos.local/wp-json/wcpos/v2/products?include=321%2C654&per_page=2&orderby=include'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),
@@ -450,7 +450,7 @@ describe('createProductsSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			nowMs: () => 5_000,
@@ -470,7 +470,7 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/products?include=321%2C654&per_page=2&orderby=include'
+			'http://wcpos.local/wp-json/wcpos/v2/products?include=321%2C654&per_page=2&orderby=include'
 		);
 	});
 
@@ -480,7 +480,7 @@ describe('createProductsSchedulerFetcher', () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createProductsSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
 		});

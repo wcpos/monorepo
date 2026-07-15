@@ -12,7 +12,7 @@ const deps = {
 	mintUuid: () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`,
 	now: () => `2026-07-01T00:00:${String(seq).padStart(2, '0')}.000Z`,
 };
-const resolve = pushEndpointResolver('https://shop.example/wp-json');
+const resolve = pushEndpointResolver('https://shop.example/wp-json/wcpos/v2');
 const push = (
 	server: ReturnType<typeof createFakeWriteServer>,
 	mutation: Parameters<typeof pushRecordMutation>[0]['mutation']
@@ -88,7 +88,7 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 	it('deliberately returns 201 for a memoized create replay (#526)', async () => {
 		const server = createFakeWriteServer();
 		const create = buildCreateMutation({ collectionName: 'orders', payload: {} }, deps);
-		const url = 'https://example.test/wp-json/wc-rxdb-sync/v1/push/orders';
+		const url = 'https://example.test/wp-json/wcpos/v2/push/orders';
 		const init = {
 			method: 'POST',
 			body: JSON.stringify({ ...create, collection: create.collectionName }),
@@ -101,7 +101,7 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 		const server = createFakeWriteServer();
 		const create = buildCreateMutation({ collectionName: 'orders', payload: {} }, deps);
 		server.seed(create.recordId, { id: 42, revision: 'sha256:existing' });
-		const url = 'https://example.test/wp-json/wc-rxdb-sync/v1/push/orders';
+		const url = 'https://example.test/wp-json/wcpos/v2/push/orders';
 		const init = {
 			method: 'POST',
 			body: JSON.stringify({ ...create, collection: create.collectionName }),
@@ -160,8 +160,8 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 	it('400s a doubled-namespace URL — the endpoint guard is real (URL is validated, not just the body)', async () => {
 		seq = 0;
 		const server = createFakeWriteServer();
-		// A base that ALREADY includes the namespace + the resolver's own suffix => doubled path.
-		const doubledResolve = pushEndpointResolver('https://shop.example/wp-json/wc-rxdb-sync/v1');
+		// A caller-supplied sync base that already repeats the namespace must still be rejected.
+		const doubledResolve = pushEndpointResolver('https://shop.example/wp-json/wcpos/v2/wcpos/v2');
 		const create = buildCreateMutation({ collectionName: 'orders', payload: {} }, deps);
 
 		await expect(
@@ -171,7 +171,7 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 				fetcher: server.fetch,
 			})
 		).rejects.toMatchObject({ status: 400 });
-		expect(server.receivedUrls[0]).toContain('/wc-rxdb-sync/v1/wc-rxdb-sync/v1/push/orders');
+		expect(server.receivedUrls[0]).toContain('/wcpos/v2/wcpos/v2/push/orders');
 	});
 
 	it('scripts a 409 conflict surfaced by the push adapter', async () => {
@@ -216,7 +216,7 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 
 		// The raw response mirrors WP's WP_Error serialization from `unique_id_or_ambiguous`
 		// (class-mutation-store.php): { code, message, data: { status: 409 } } — no `current`.
-		const raw = await server.fetch('https://shop.example/wp-json/wc-rxdb-sync/v1/push/products', {
+		const raw = await server.fetch('https://shop.example/wp-json/wcpos/v2/push/products', {
 			method: 'POST',
 			body: JSON.stringify({
 				mutationId: 'm-amb',
@@ -287,7 +287,7 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 		const server = createFakeWriteServer();
 		const create = validFixtures.find(({ name }) => name === 'variation-create-with-parent')!;
 		const createdResponse = await server.fetch(
-			'https://shop.example/wp-json/wc-rxdb-sync/v1/push/variations',
+			'https://shop.example/wp-json/wcpos/v2/push/variations',
 			{ method: 'POST', body: JSON.stringify(create.envelope) }
 		);
 		expect(createdResponse.status).toBe(201);
@@ -299,7 +299,7 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 			({ name }) => name === 'variation-parent-precondition-428'
 		)!;
 		const missingResponse = await server.fetch(
-			'https://shop.example/wp-json/wc-rxdb-sync/v1/push/variations',
+			'https://shop.example/wp-json/wcpos/v2/push/variations',
 			{ method: 'POST', body: JSON.stringify(missingParent.envelope) }
 		);
 		expect(missingResponse.status).toBe(expectedMissingParent.status);
@@ -316,7 +316,7 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 			payload: { parent_id: 100 },
 		});
 		const mismatchResponse = await server.fetch(
-			'https://shop.example/wp-json/wc-rxdb-sync/v1/push/variations',
+			'https://shop.example/wp-json/wcpos/v2/push/variations',
 			{ method: 'POST', body: JSON.stringify(mismatch.envelope) }
 		);
 		expect(mismatchResponse.status).toBe(expectedMismatch.status);
@@ -334,7 +334,7 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 				payload: {},
 				...over,
 			});
-		const url = 'https://shop.example/wp-json/wc-rxdb-sync/v1/push/orders';
+		const url = 'https://shop.example/wp-json/wcpos/v2/push/orders';
 
 		it('422s when Idempotency-Key disagrees with the body mutationId', async () => {
 			const server = createFakeWriteServer();
