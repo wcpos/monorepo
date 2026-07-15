@@ -5,6 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
+import { formatMetaDataValue } from '../../../components/format-meta-data-value';
 import { useUISettings } from '../../../contexts/ui-settings';
 
 interface Props {
@@ -41,7 +42,7 @@ export function MetaData({ product }: Props) {
 			{metaData.map((m: any) => (
 				<Text className="text-sm" key={`${m.id}`}>
 					<Text className="text-secondary-foreground">{`${m.key}: `}</Text>
-					{m.value}
+					{formatMetaDataValue(m.value)}
 				</Text>
 			))}
 		</VStack>

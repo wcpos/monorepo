@@ -12,6 +12,7 @@ import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 
+import { formatMetaDataValue } from './format-meta-data-value';
 import { useT } from '../../../contexts/translations';
 
 export { metaDataSchema } from './meta-data-schema';
@@ -20,16 +21,6 @@ interface MetaDataFormProps {
 	name?: string;
 	withDisplayValues?: boolean;
 }
-
-const formatMetaDataValue = (value: unknown): string | number => {
-	if (typeof value === 'string' || typeof value === 'number') {
-		return value;
-	}
-	if (value === undefined || value === null) {
-		return '';
-	}
-	return typeof value === 'object' ? JSON.stringify(value) : String(value);
-};
 
 /**
  *

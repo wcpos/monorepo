@@ -5,6 +5,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
+import { formatMetaDataValue } from '../../../components/format-meta-data-value';
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
@@ -70,7 +71,7 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 								decodeHtml
 							>{`${meta.display_key || meta.key}: `}</Text>
 							<Text className="text-xs" decodeHtml>
-								{meta.display_value || meta.value}
+								{formatMetaDataValue(meta.display_value || meta.value)}
 							</Text>
 						</HStack>
 					))}
