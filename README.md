@@ -147,4 +147,4 @@ CI/CD lives in [`.github/workflows/`](./.github/workflows):
 
 ## 📄 License
 
-License metadata is declared in individual package manifests. Packages that currently declare a license use [MIT](https://opensource.org/licenses/MIT); this repo does not yet include a root `LICENSE` file, and some workspace manifests omit a license field.
+This repository is licensed under [MIT](./LICENSE). Individual workspace packages may also declare a license in their own manifest; those that do use [MIT](https://opensource.org/licenses/MIT). Manifests that omit a license field inherit the repository license.
