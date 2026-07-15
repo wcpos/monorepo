@@ -307,6 +307,70 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
+	it('auto mode runs the seed lanes before the scheduler drain at boot', async () => {
+		vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+		const bootLanes = [
+			'reference-seed',
+			'product-browse-window-seed',
+			'order-window-seed',
+			'scheduler-drain',
+		] as const;
+		const fetcher = vi.fn(
+			async (_url: string) =>
+				new Response(JSON.stringify([]), {
+					status: 200,
+					headers: { 'content-type': 'application/json' },
+				})
+		);
+		const engine = engineWith({
+			mode: 'auto',
+			fetcher,
+		});
+
+		try {
+			const lifecycle: EngineEvent[] = [];
+			let finished = 0;
+			let resolveBootTicks!: () => void;
+			const bootTicksFinished = new Promise<void>((resolve) => {
+				resolveBootTicks = resolve;
+			});
+			engine.events((event) => {
+				if (
+					(event.type === 'lane-start' || event.type === 'lane-finish') &&
+					bootLanes.includes(event.lane as (typeof bootLanes)[number])
+				) {
+					lifecycle.push(event);
+					if (event.type === 'lane-finish' && ++finished === bootLanes.length) {
+						resolveBootTicks();
+					}
+				}
+			});
+
+			await engine.ready;
+			await bootTicksFinished;
+			expect(
+				lifecycle
+					.filter((event) => event.type === 'lane-start')
+					.map((event) => (event.type === 'lane-start' ? event.lane : ''))
+			).toEqual(bootLanes);
+
+			for (const lane of bootLanes) {
+				expect(lifecycle.filter((event) => 'lane' in event && event.lane === lane)).toEqual([
+					{ type: 'lane-start', lane },
+					{ type: 'lane-finish', lane, status: 'ran' },
+				]);
+			}
+			const fetchedUrls = fetcher.mock.calls.map(([url]) => url);
+			expect(fetchedUrls).toContainEqual(
+				expect.stringContaining('/products?per_page=100&page=1&orderby=title&order=asc')
+			);
+			expect(fetchedUrls).toContainEqual(expect.stringContaining('/orders?'));
+		} finally {
+			vi.useRealTimers();
+			await engine.dispose();
+		}
+	});
+
 	it('opens a manual read-only engine without Web Crypto', async () => {
 		vi.stubGlobal('crypto', undefined);
 		try {

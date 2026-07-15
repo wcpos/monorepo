@@ -1210,8 +1210,14 @@ export function createRxdbSyncEngine(
 	};
 	if (mode === 'auto') {
 		void ready.then(
-			() => {
+			async () => {
 				if (disposed) return;
+				await Promise.all([
+					runAutomaticTick(() => tickLaneWithEvents('reference-seed')),
+					runAutomaticTick(() => tickLaneWithEvents('product-browse-window-seed')),
+					runAutomaticTick(() => tickLaneWithEvents('order-window-seed')),
+				]);
+				await runAutomaticTick(() => tickLaneWithEvents('scheduler-drain'));
 				changeSignalTimer = setInterval(() => {
 					void runAutomaticTick(() => tickLaneWithEvents('change-signal'));
 				}, intervals.changeSignalPollMs);
