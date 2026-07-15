@@ -25,10 +25,10 @@ jest.mock('./context', () => ({
 jest.mock('../toggle-group', () => {
 	const React = require('react');
 	return {
-		ToggleGroup: ({ children, value, onValueChange, testID, disabled }: any) =>
+		ToggleGroup: ({ children, value, onValueChange, testID, disabled, ...props }: any) =>
 			React.createElement(
 				'div',
-				{ role: 'group', 'data-value': value, 'data-testid': testID },
+				{ role: 'group', 'data-value': value, 'data-testid': testID, ...props },
 				React.Children.map(children, (child: any) =>
 					React.cloneElement(child, {
 						__groupValue: value,
@@ -84,6 +84,21 @@ describe('FormToggleGroup', () => {
 		expect(screen.getByText('Percentage')).toBeInTheDocument();
 		expect(screen.getByText('Amount off order')).toBeInTheDocument();
 		expect(screen.getByRole('button', { pressed: true })).toHaveTextContent('Percentage');
+	});
+
+	it('omits ARIA references when no label or description is rendered', () => {
+		render(
+			<FormToggleGroup
+				name="type"
+				onBlur={jest.fn()}
+				value="percent"
+				onChange={jest.fn()}
+				options={OPTIONS}
+			/>
+		);
+		const group = screen.getByRole('group');
+		expect(group).not.toHaveAttribute('aria-labelledby');
+		expect(group).not.toHaveAttribute('aria-describedby');
 	});
 
 	it('emits onChange with the pressed value', () => {

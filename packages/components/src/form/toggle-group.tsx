@@ -45,11 +45,11 @@ export function FormToggleGroup({
 				}}
 				disabled={disabled}
 				testID={testID}
-				aria-labelledby={formItemNativeID}
+				aria-labelledby={label ? formItemNativeID : undefined}
 				aria-describedby={
-					!error
-						? `${formDescriptionNativeID}`
-						: `${formDescriptionNativeID} ${formMessageNativeID}`
+					[description && formDescriptionNativeID, error && formMessageNativeID]
+						.filter(Boolean)
+						.join(' ') || undefined
 				}
 				aria-invalid={!!error}
 				className="bg-muted w-full rounded-md border-0 p-1"
