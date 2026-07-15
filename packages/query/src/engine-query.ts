@@ -1,5 +1,5 @@
 import { defer, from, Observable, of } from 'rxjs';
-import { map, startWith, switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
@@ -48,14 +48,20 @@ export interface EngineQueryDescriptor {
 export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDatabase | null> {
 	return new Observable<RxDatabase | null>((subscriber) => {
 		let current: RxDatabase | null | undefined;
-		const publish = (database: RxDatabase | null) => {
+		const publishIfChanged = (database: RxDatabase | null) => {
 			if (database === current) return;
 			current = database;
 			subscriber.next(database);
 		};
-		publish(engine.active()?.database ?? null);
-		const unsubscribe = engine.db$(publish);
-		void engine.ready.then((scope) => publish(scope.database)).catch(() => undefined);
+		publishIfChanged(engine.active()?.database ?? null);
+		let subscribing = true;
+		const unsubscribe = engine.db$((database) => {
+			if (subscribing && database === current) return;
+			current = database;
+			subscriber.next(database);
+		});
+		subscribing = false;
+		void engine.ready.then((scope) => publishIfChanged(scope.database)).catch(() => undefined);
 		return unsubscribe;
 	});
 }
@@ -122,12 +128,20 @@ export function observeEngineQuery(
 	descriptor: EngineQueryDescriptor
 ): Observable<QueryResult<RxCollection>> {
 	return observeEngineDatabases(engine).pipe(
-		switchMap((database) => {
-			if (!database) return of(emptyResult());
-			return matchingSelectors$(database as unknown as AdapterDatabase, descriptor, locale).pipe(
+		map((database) => {
+			const adapterDatabase = database as unknown as AdapterDatabase | null;
+			return {
+				database: adapterDatabase,
+				collection: adapterDatabase?.collections[engineCollectionNameFor(descriptor.collection)],
+			};
+		}),
+		distinctUntilChanged((previous, current) => previous.collection === current.collection),
+		switchMap(({ database, collection }) => {
+			if (!database || !collection) return of(emptyResult());
+			return matchingSelectors$(database, descriptor, locale).pipe(
 				switchMap((selector) =>
 					executeAdapterQuery({
-						database: database as unknown as AdapterDatabase,
+						database,
 						collection: descriptor.collection,
 						selector,
 						sort: descriptor.sort,

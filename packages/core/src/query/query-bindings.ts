@@ -74,6 +74,7 @@ const ENGINE_COLLECTION_BY_LEGACY: Record<LegacyCollectionName, SyncCollectionNa
 };
 
 const LANE_ACTIVITY_SAFETY_MS = 60_000;
+const DEMAND_RETRY_BACKOFF_MS = 250;
 const LOCAL_TOTAL_SOURCE$ = of('local' as const);
 const INACTIVE$ = of(false);
 
@@ -193,7 +194,7 @@ function useDemand(
 	const selectorKey = JSON.stringify(selector);
 
 	React.useEffect(() => {
-		const currentGeneration = (generation.current += 1);
+		generation.current += 1;
 		if (!enabled) {
 			demandPending.current = 0;
 			searchDemandPending.current = 0;
@@ -209,25 +210,46 @@ function useDemand(
 		};
 		const unregister = registerActiveBinding(engine, binding);
 		const requirements = requirementsForQuery(binding);
-		const handles = declareRequirements(engine, requirements);
-		demandPending.current = handles.length;
-		searchDemandPending.current = descriptor.search?.trim() ? handles.length : 0;
-		publish();
-		for (const handle of handles) {
-			const settle = () => {
-				if (generation.current !== currentGeneration) return;
-				demandPending.current = Math.max(0, demandPending.current - 1);
-				if (descriptor.search?.trim()) {
-					searchDemandPending.current = Math.max(0, searchDemandPending.current - 1);
-				}
-				publish();
-			};
-			void handle.ready.then(settle, settle);
-		}
+		const isSearch = Boolean(descriptor.search?.trim());
+		let handles: RequirementHandle[] = [];
+		let retryTimer: ReturnType<typeof setTimeout> | undefined;
+		const declare = (retryOnReject: boolean) => {
+			const declarationGeneration = (generation.current += 1);
+			handles = declareRequirements(engine, requirements);
+			demandPending.current = handles.length;
+			searchDemandPending.current = isSearch ? handles.length : 0;
+			publish();
+			for (const handle of handles) {
+				const settle = () => {
+					if (generation.current !== declarationGeneration) return;
+					demandPending.current = Math.max(0, demandPending.current - 1);
+					if (isSearch) {
+						searchDemandPending.current = Math.max(0, searchDemandPending.current - 1);
+					}
+					publish();
+				};
+				const reject = () => {
+					settle();
+					if (!retryOnReject || generation.current !== declarationGeneration) return;
+					const invalidatedGeneration = (generation.current += 1);
+					demandPending.current = 0;
+					searchDemandPending.current = 0;
+					publish();
+					retryTimer = setTimeout(() => {
+						if (generation.current !== invalidatedGeneration) return;
+						releaseHandles(handles);
+						declare(false);
+					}, DEMAND_RETRY_BACKOFF_MS);
+				};
+				void handle.ready.then(settle, reject);
+			}
+		};
+		declare(true);
 		return () => {
 			unregister();
-			for (const handle of handles) handle.release();
-			if (generation.current === currentGeneration) generation.current += 1;
+			if (retryTimer !== undefined) clearTimeout(retryTimer);
+			releaseHandles(handles);
+			generation.current += 1;
 			demandPending.current = 0;
 			searchDemandPending.current = 0;
 			publish();
