@@ -115,13 +115,13 @@ describe('createAppSyncEngine scope cache', () => {
 			useJwtAsParam: true,
 		});
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
-		await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(latestCredentials.getLatest).toHaveBeenCalledTimes(1);
 		expect(initialRefreshAuth).not.toHaveBeenCalled();
 		expect(latestRefreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(
-			'https://store.example.test/wp-json/wcpos/v1/sync/products?authorization=Bearer+latest-token',
+			'https://store.example.test/wp-json/wcpos/v2/products?authorization=Bearer+latest-token',
 			expect.objectContaining({ headers: expect.objectContaining({}) })
 		);
 		const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
@@ -148,7 +148,7 @@ describe('createAppSyncEngine scope cache', () => {
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
-		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(response?.status).toBe(200);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
@@ -179,7 +179,7 @@ describe('createAppSyncEngine scope cache', () => {
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
-		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(response?.status).toBe(200);
 		expect(refreshAuth).not.toHaveBeenCalled();
@@ -197,7 +197,7 @@ describe('createAppSyncEngine scope cache', () => {
 		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
-		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(response?.status).toBe(originalUnauthorized.status);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
@@ -214,7 +214,7 @@ describe('createAppSyncEngine scope cache', () => {
 		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
-		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v1/sync/products');
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(response?.status).toBe(401);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);

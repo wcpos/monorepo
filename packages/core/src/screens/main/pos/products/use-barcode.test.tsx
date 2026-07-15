@@ -54,7 +54,7 @@ jest.mock('@wcpos/query', () => ({
 		engine: {
 			active: mockEngineActive,
 			hostTransport: () => ({
-				syncBaseUrl: 'https://example.test/wp-json/wcpos/v1/sync',
+				syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 				fetcher: mockFetcher,
 			}),
 			require: mockEngineRequire,

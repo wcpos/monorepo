@@ -8,7 +8,7 @@ describe('RxdbSyncEngine host transport reflection', () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();
 		const fetcher = vi.fn(async () => new Response('{}'));
-		const syncBaseUrl = 'https://example.test/wp-json/wcpos/v1/sync';
+		const syncBaseUrl = 'https://example.test/wp-json/wcpos/v2';
 		const engine = createRxdbSyncEngine(
 			{
 				site: { syncBaseUrl, wpJsonRoot: 'https://example.test/wp-json/' },
