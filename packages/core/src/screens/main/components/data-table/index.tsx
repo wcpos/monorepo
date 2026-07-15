@@ -39,6 +39,9 @@ interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
 }
 
 type ReplicationBinding = ReturnType<typeof import('@wcpos/query').useReplicationState>;
+type DataTableFooterProps = React.ComponentProps<typeof DataTableFooter>;
+type LegacyDataTableFooterProps = Extract<DataTableFooterProps, { query: Query<any> }>;
+type BindingDataTableFooterProps = Extract<DataTableFooterProps, { collectionName: CollectionKey }>;
 
 interface BindingActions<TSortField extends string> {
 	setSort(field: TSortField, direction: 'asc' | 'desc'): void;
@@ -61,7 +64,6 @@ interface CommonProps {
 	tableConfig?: any;
 	getItemType?: (row: any) => string;
 	ListFooterComponent?: React.ComponentType<any>;
-	TableFooterComponent?: React.ComponentType<any>;
 }
 
 type LegacyQueryProps = {
@@ -72,6 +74,7 @@ type LegacyQueryProps = {
 	total$?: never;
 	totalSource$?: never;
 	sync?: never;
+	TableFooterComponent?: React.ComponentType<LegacyDataTableFooterProps>;
 };
 
 type BindingProps<TSortField extends string> = {
@@ -79,6 +82,7 @@ type BindingProps<TSortField extends string> = {
 	resource: Query<import('rxdb').RxCollection>['resource'];
 	sort: { field: TSortField; direction: 'asc' | 'desc' };
 	actions: BindingActions<TSortField>;
+	TableFooterComponent?: React.ComponentType<BindingDataTableFooterProps>;
 } & Pick<ReplicationBinding, 'active$' | 'total$' | 'totalSource$' | 'sync'>;
 
 type Props<TSortField extends string> = CommonProps & (LegacyQueryProps | BindingProps<TSortField>);
@@ -110,7 +114,6 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 		tableConfig,
 		getItemType,
 		ListFooterComponent,
-		TableFooterComponent,
 	} = props;
 	const binding = isBindingProps(props) ? props : undefined;
 	const query = binding ? undefined : props.query;
@@ -259,29 +262,30 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 			</VirtualizedList.Root>
 			{showFooter && (
 				<TableFooter>
-					{TableFooterComponent ? (
-						binding ? (
-							<TableFooterComponent
-								active$={binding.active$}
-								total$={binding.total$}
-								totalSource$={binding.totalSource$}
-								sync={binding.sync}
+					{isBindingProps(props) ? (
+						props.TableFooterComponent ? (
+							<props.TableFooterComponent
+								collectionName={id as CollectionKey}
+								active$={props.active$}
+								total$={props.total$}
+								totalSource$={props.totalSource$}
+								sync={props.sync}
 								count={result.hits.length}
 							/>
 						) : (
-							<TableFooterComponent query={query} count={result.hits.length} />
+							<DataTableFooter
+								collectionName={id as CollectionKey}
+								active$={props.active$}
+								total$={props.total$}
+								totalSource$={props.totalSource$}
+								sync={props.sync}
+								count={result.hits.length}
+							/>
 						)
-					) : binding ? (
-						<DataTableFooter
-							collectionName={id as CollectionKey}
-							active$={binding.active$}
-							total$={binding.total$}
-							totalSource$={binding.totalSource$}
-							sync={binding.sync}
-							count={result.hits.length}
-						/>
+					) : props.TableFooterComponent ? (
+						<props.TableFooterComponent query={props.query} count={result.hits.length} />
 					) : (
-						<DataTableFooter query={query!} count={result.hits.length} />
+						<DataTableFooter query={props.query} count={result.hits.length} />
 					)}
 				</TableFooter>
 			)}
@@ -396,3 +400,4 @@ export {
 	getHeaderStyle,
 };
 export type { RenderHeaderProps, SortingChange };
+export type { BindingDataTableFooterProps, LegacyDataTableFooterProps };

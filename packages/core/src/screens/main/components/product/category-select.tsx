@@ -18,11 +18,13 @@ import { useT } from '@wcpos/core/contexts/translations';
 import { useQuery } from '@wcpos/query';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 
+import { useSearchSelect } from '../../../../query';
+
 /**
  *
  */
-function CategoryList({ query }: { query: ReturnType<typeof useQuery> }) {
-	const result = useObservableSuspense(query!.resource) as {
+function CategoryList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
+	const result = useObservableSuspense(resource) as {
 		hits: { id: string; document: { id?: number; name?: string } }[];
 	};
 	const t = useT();
@@ -37,11 +39,6 @@ function CategoryList({ query }: { query: ReturnType<typeof useQuery> }) {
 	return (
 		<ComboboxList
 			data={data}
-			onEndReached={() => {
-				if (query?.infiniteScroll) {
-					query.loadMore();
-				}
-			}}
 			renderItem={({ item }) => (
 				<ComboboxItem value={String(item.value)} label={item.label} item={item}>
 					<ComboboxItemText />
@@ -58,38 +55,7 @@ function CategoryList({ query }: { query: ReturnType<typeof useQuery> }) {
  */
 export function CategorySearch() {
 	const t = useT();
-	const [search, setSearch] = React.useState('');
-
-	/**
-	 *
-	 */
-	const query = useQuery({
-		queryKeys: ['products/categories'],
-		collectionName: 'products/categories',
-		initialParams: {
-			sort: [{ name: 'asc' }],
-		},
-		greedy: true,
-		infiniteScroll: true,
-	});
-
-	/**
-	 *
-	 */
-	const onSearch = React.useCallback(
-		(value: string) => {
-			setSearch(value);
-			query?.debouncedSearch(value);
-		},
-		[query]
-	);
-
-	/**
-	 * Clear the search when unmounting
-	 */
-	React.useEffect(() => {
-		return () => query?.search('');
-	}, [query]);
+	const binding = useSearchSelect('category');
 
 	/**
 	 *
@@ -98,11 +64,11 @@ export function CategorySearch() {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_categories')}
-				value={search}
-				onChangeText={onSearch}
+				value={binding.search}
+				onChangeText={binding.setSearch}
 			/>
 			<Suspense>
-				<CategoryList query={query} />
+				<CategoryList resource={binding.resource} />
 			</Suspense>
 		</>
 	);

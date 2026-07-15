@@ -25,19 +25,30 @@ describe('query-state translator', () => {
 		]);
 	});
 
-	it('documents and compiles promoted and payload-backed filter paths', () => {
+	it('preserves every legacy products filter selector shape', () => {
 		expect(FILTER_TRANSLATORS.products.categories).toMatchObject({
 			storage: 'promoted',
 			enginePath: 'categoryIds',
 		});
-		expect(FILTER_TRANSLATORS.coupons.status).toMatchObject({
+		expect(FILTER_TRANSLATORS.products.tags).toMatchObject({
 			storage: 'payload',
-			enginePath: 'payload.status',
+			enginePath: 'payload.tags',
+		});
+		expect(FILTER_TRANSLATORS.products.brands).toMatchObject({
+			storage: 'promoted',
+			enginePath: 'brandIds',
 		});
 
 		const products = translateQueryState('products', {
 			search: '',
-			filters: { categories: [2, 7], tags: [], brands: [], featured: true },
+			filters: {
+				categories: [2, 7],
+				tags: [5],
+				brands: [9],
+				featured: true,
+				on_sale: false,
+				stock_status: 'outofstock',
+			},
 			sort: { field: 'price', direction: 'desc' },
 			limit: 25,
 		} satisfies QueryStateOf<'products'>);
@@ -49,7 +60,11 @@ describe('query-state translator', () => {
 						{ categories: { $elemMatch: { id: 7 } } },
 					],
 				},
+				{ $or: [{ tags: { $elemMatch: { id: 5 } } }] },
+				{ $or: [{ brands: { $elemMatch: { id: 9 } } }] },
 				{ featured: true },
+				{ on_sale: false },
+				{ stock_status: 'outofstock' },
 			],
 		});
 		expect(products).toMatchObject({ sort: [{ price: 'desc' }], limit: 25 });

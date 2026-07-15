@@ -15,14 +15,13 @@ import {
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
-
-import { useSearchSelect } from '../../../../query';
+import { useQuery } from '@wcpos/query';
 
 /**
  *
  */
-function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
-	const result = useObservableSuspense(resource) as {
+function TagList({ query }: { query: ReturnType<typeof useQuery> }) {
+	const result = useObservableSuspense(query!.resource) as {
 		hits: { id: string; document: { id?: number; name?: string } }[];
 	};
 	const t = useT();
@@ -37,13 +36,18 @@ function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>[
 	return (
 		<ComboboxList
 			data={data}
+			onEndReached={() => {
+				if (query?.infiniteScroll) {
+					query.loadMore();
+				}
+			}}
 			renderItem={({ item }) => (
 				<ComboboxItem value={String(item.value)} label={item.label} item={item}>
 					<ComboboxItemText />
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
-			ListEmptyComponent={<ComboboxEmpty>{t('common.no_brand_found')}</ComboboxEmpty>}
+			ListEmptyComponent={<ComboboxEmpty>{t('common.no_tag_found')}</ComboboxEmpty>}
 		/>
 	);
 }
@@ -51,22 +55,49 @@ function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>[
 /**
  *
  */
-export function BrandSearch() {
+export function TagSearch() {
 	const t = useT();
-	const binding = useSearchSelect('brand');
+	const [search, setSearch] = React.useState('');
+
+	/**
+	 *
+	 */
+	const query = useQuery({
+		queryKeys: ['products/tags'],
+		collectionName: 'products/tags',
+		initialParams: {
+			sort: [{ name: 'asc' }],
+		},
+		greedy: true,
+		infiniteScroll: true,
+	});
+
+	/**
+	 *
+	 */
+	const onSearch = React.useCallback(
+		(value: string) => {
+			setSearch(value);
+			query?.debouncedSearch(value);
+		},
+		[query]
+	);
+
+	/**
+	 * Clear the search when unmounting
+	 */
+	React.useEffect(() => {
+		return () => query?.search('');
+	}, [query]);
 
 	/**
 	 *
 	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('common.search_brands')}
-				value={binding.search}
-				onChangeText={binding.setSearch}
-			/>
+			<ComboboxInput placeholder={t('common.search_tags')} value={search} onChangeText={onSearch} />
 			<Suspense>
-				<BrandList resource={binding.resource} />
+				<TagList query={query} />
 			</Suspense>
 		</>
 	);
@@ -75,7 +106,7 @@ export function BrandSearch() {
 /**
  *
  */
-export function BrandSelect({
+export function TagSelect({
 	onValueChange,
 }: {
 	onValueChange?: (option: import('@wcpos/components/combobox').Option | undefined) => void;
@@ -88,10 +119,10 @@ export function BrandSelect({
 	return (
 		<Combobox onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('common.select_brand')} />
+				<ComboboxValue placeholder={t('common.select_tag')} />
 			</ComboboxTrigger>
 			<ComboboxContent className="min-w-64">
-				<BrandSearch />
+				<TagSearch />
 			</ComboboxContent>
 		</Combobox>
 	);

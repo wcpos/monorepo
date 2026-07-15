@@ -6,7 +6,7 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
-import { DataTable } from './index';
+import { DataTable, DataTableFooter } from './index';
 
 const mockSetSort = jest.fn();
 const mockExtendLimit = jest.fn();
@@ -15,6 +15,7 @@ const mockPatchUI = jest.fn();
 let mockTableMeta: Record<string, unknown> | undefined;
 let mockFooterProps: Record<string, unknown> | undefined;
 let mockDefaultFooterProps: Record<string, unknown> | undefined;
+const mockClearAndRefresh = jest.fn();
 
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => [{ key: 'level', show: true }],
@@ -97,9 +98,22 @@ jest.mock('./header', () => ({
 	),
 }));
 jest.mock('./footer', () => ({
-	DataTableFooter: (props: Record<string, unknown>) => {
+	DataTableFooter: ({ children, ...props }: Record<string, unknown>) => {
 		mockDefaultFooterProps = props;
-		return null;
+		return (
+			<>
+				{children as React.ReactNode}
+				<button
+					data-testid="clear-and-refresh"
+					onClick={() => {
+						if (typeof props.collectionName !== 'string') {
+							throw new Error('collectionName is required');
+						}
+						mockClearAndRefresh(props.collectionName);
+					}}
+				/>
+			</>
+		);
 	},
 }));
 jest.mock('./list-footer', () => ({ ListFooterComponent: () => null }));
@@ -108,6 +122,14 @@ jest.mock('../../components/text-cell', () => ({ TextCell: () => null }));
 function Footer(props: Record<string, unknown>) {
 	mockFooterProps = props;
 	return null;
+}
+
+function TaxFooter(props: React.ComponentProps<typeof DataTableFooter>) {
+	return (
+		<DataTableFooter {...props}>
+			<span data-testid="tax-based-on" />
+		</DataTableFooter>
+	);
 }
 
 describe('DataTable binding contract', () => {
@@ -157,6 +179,7 @@ describe('DataTable binding contract', () => {
 		expect(mockTableMeta).toEqual({ actions: { setFilter: mockSetFilter } });
 		expect(mockTableMeta).not.toHaveProperty('query');
 		expect(mockFooterProps).toMatchObject({
+			collectionName: 'logs',
 			count: 1,
 			active$,
 			total$,
@@ -202,5 +225,31 @@ describe('DataTable binding contract', () => {
 			sync,
 		});
 		expect(mockDefaultFooterProps).not.toHaveProperty('query');
+	});
+
+	it('clears the products collection through a custom tax footer', () => {
+		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
+
+		render(
+			<BindingDataTable
+				id="products"
+				resource={{ kind: 'resource' }}
+				sort={{ field: 'name', direction: 'asc' }}
+				actions={{
+					setSort: mockSetSort,
+					extendLimit: mockExtendLimit,
+					setFilter: mockSetFilter,
+				}}
+				active$={of(false)}
+				total$={of(27)}
+				totalSource$={of('coverage' as const)}
+				sync={jest.fn(async () => undefined)}
+				TableFooterComponent={TaxFooter}
+			/>
+		);
+
+		expect(screen.getByTestId('tax-based-on')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('clear-and-refresh'));
+		expect(mockClearAndRefresh).toHaveBeenCalledWith('products');
 	});
 });

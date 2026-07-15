@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
+
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
@@ -7,19 +10,24 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
+import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
-import { useQueryState, useQueryStateActions } from '../../../../../query';
+
+type ProductCollection = import('@wcpos/database').ProductCollection;
+
+interface Props {
+	query: Query<ProductCollection>;
+}
 
 /**
  *
  */
-export function StockStatusPill() {
-	const selected = useQueryState<'products', string | undefined>(
-		(state) => state.filters.stock_status
+export function StockStatusPill({ query }: Props) {
+	const selected = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getSelector('stock_status') as string | undefined))
 	);
-	const actions = useQueryStateActions<'products'>();
 	const t = useT();
 	const isActive = !!selected;
 	const { items } = useStockStatusLabel();
@@ -39,7 +47,7 @@ export function StockStatusPill() {
 	return (
 		<Select
 			value={value}
-			onValueChange={(option) => option && actions.setFilter('stock_status', option.value)}
+			onValueChange={(option) => option && query.where('stock_status').equals(option.value).exec()}
 		>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
@@ -47,7 +55,7 @@ export function StockStatusPill() {
 					leftIcon="warehouseFull"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => actions.clearFilter('stock_status')}
+					onRemove={() => query.removeWhere('stock_status').exec()}
 				>
 					<ButtonText decodeHtml>{value?.label || t('common.stock_status')}</ButtonText>
 				</ButtonPill>

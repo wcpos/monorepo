@@ -15,14 +15,13 @@ import {
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
-
-import { useSearchSelect } from '../../../../query';
+import { useQuery } from '@wcpos/query';
 
 /**
  *
  */
-function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>['resource'] }) {
-	const result = useObservableSuspense(resource) as {
+function BrandList({ query }: { query: ReturnType<typeof useQuery> }) {
+	const result = useObservableSuspense(query!.resource) as {
 		hits: { id: string; document: { id?: number; name?: string } }[];
 	};
 	const t = useT();
@@ -37,6 +36,11 @@ function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>[
 	return (
 		<ComboboxList
 			data={data}
+			onEndReached={() => {
+				if (query?.infiniteScroll) {
+					query.loadMore();
+				}
+			}}
 			renderItem={({ item }) => (
 				<ComboboxItem value={String(item.value)} label={item.label} item={item}>
 					<ComboboxItemText />
@@ -53,7 +57,38 @@ function BrandList({ resource }: { resource: ReturnType<typeof useSearchSelect>[
  */
 export function BrandSearch() {
 	const t = useT();
-	const binding = useSearchSelect('brand');
+	const [search, setSearch] = React.useState('');
+
+	/**
+	 *
+	 */
+	const query = useQuery({
+		queryKeys: ['products/brands'],
+		collectionName: 'products/brands',
+		initialParams: {
+			sort: [{ name: 'asc' }],
+		},
+		greedy: true,
+		infiniteScroll: true,
+	});
+
+	/**
+	 *
+	 */
+	const onSearch = React.useCallback(
+		(value: string) => {
+			setSearch(value);
+			query?.debouncedSearch(value);
+		},
+		[query]
+	);
+
+	/**
+	 * Clear the search when unmounting
+	 */
+	React.useEffect(() => {
+		return () => query?.search('');
+	}, [query]);
 
 	/**
 	 *
@@ -62,11 +97,11 @@ export function BrandSearch() {
 		<>
 			<ComboboxInput
 				placeholder={t('common.search_brands')}
-				value={binding.search}
-				onChangeText={binding.setSearch}
+				value={search}
+				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<BrandList resource={binding.resource} />
+				<BrandList query={query} />
 			</Suspense>
 		</>
 	);

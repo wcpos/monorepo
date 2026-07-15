@@ -6,17 +6,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useT } from '../../../contexts/translations';
 import { useBarcodeDetection, useBarcodeSearch } from '../hooks/barcodes';
 
-import type { QuerySearchInput } from '../components/query-search-input';
-
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'product']);
 
-type ProductCollection = import('@wcpos/database').ProductCollection;
-type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
-
-export const useBarcode = (
-	productQuery: Query,
-	querySearchInputRef: React.RefObject<{ setSearch: (search: string) => void } | null>
-) => {
+export const useBarcode = (setSearch: (search: string) => void) => {
 	const { barcode$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
 	const t = useT();
@@ -61,8 +53,7 @@ export const useBarcode = (
 				},
 			});
 		}
-		productQuery.search(barcode);
-		querySearchInputRef.current?.setSearch(barcode);
+		setSearch(barcode);
 	});
 
 	return { onKeyPress };

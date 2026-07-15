@@ -7,6 +7,7 @@ import { ButtonPill } from '@wcpos/components/button';
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
 import type { CellContext } from '@tanstack/react-table';
+import type { QueryStateActions } from '../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -21,7 +22,7 @@ export function StockStatus({
 	const stockStatus = useObservableEagerState(product.stock_status$!);
 	const { getLabel } = useStockStatusLabel();
 	const meta = table.options.meta as unknown as {
-		query: { where: (field: string) => { equals: (val: unknown) => { exec: () => void } } };
+		actions: Pick<QueryStateActions<'products'>, 'setFilter'>;
 	};
 
 	const variant = React.useMemo(() => {
@@ -43,7 +44,9 @@ export function StockStatus({
 		<ButtonPill
 			size="xs"
 			variant={variant}
-			onPress={() => meta.query.where('stock_status').equals(stockStatus).exec()}
+			onPress={() => {
+				if (stockStatus) meta.actions.setFilter('stock_status', stockStatus);
+			}}
 		>
 			{getLabel(stockStatus ?? '')}
 		</ButtonPill>

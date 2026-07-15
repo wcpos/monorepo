@@ -1,26 +1,16 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-
-type ProductCollection = import('@wcpos/database').ProductCollection;
-
-interface Props {
-	query: Query<ProductCollection>;
-}
+import { useQueryState, useQueryStateActions } from '../../../../../query';
 
 /**
  *
  */
-export function OnSalePill({ query }: Props) {
-	const isActive = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => !!query.getSelector('on_sale')))
-	);
+export function OnSalePill() {
+	const isActive = useQueryState<'products', boolean>((state) => !!state.filters.on_sale);
+	const actions = useQueryStateActions<'products'>();
 	const t = useT();
 
 	return (
@@ -28,9 +18,9 @@ export function OnSalePill({ query }: Props) {
 			leftIcon="badgeDollar"
 			size="xs"
 			variant={isActive ? undefined : 'muted'}
-			onPress={() => query.where('on_sale').equals(true).exec()}
+			onPress={() => actions.setFilter('on_sale', true)}
 			removable={isActive}
-			onRemove={() => query.removeWhere('on_sale').exec()}
+			onRemove={() => actions.clearFilter('on_sale')}
 		>
 			<ButtonText>{t('common.on_sale')}</ButtonText>
 		</ButtonPill>

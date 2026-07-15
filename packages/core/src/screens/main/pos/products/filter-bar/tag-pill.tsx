@@ -5,22 +5,24 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
+import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { useQueryStateActions } from '../../../../../query';
-import { BrandSearch } from '../brand-select';
+import { TagSearch } from '../tag-select';
+
+type ProductCollection = import('@wcpos/database').ProductCollection;
 
 interface Props {
-	resource: ObservableResource<import('@wcpos/database').ProductCategoryDocument>;
+	query: Query<ProductCollection>;
+	resource: ObservableResource<import('@wcpos/database').ProductTagDocument>;
 	selectedID?: number;
 }
 
 /**
  *
  */
-export function BrandsPill({ resource, selectedID }: Props) {
-	const brand = useObservableSuspense(resource);
-	const actions = useQueryStateActions<'products'>();
+export function TagPill({ query, resource, selectedID }: Props) {
+	const tag = useObservableSuspense(resource);
 	const t = useT();
 	const isActive = !!selectedID;
 
@@ -30,9 +32,12 @@ export function BrandsPill({ resource, selectedID }: Props) {
 	const handleSelect = React.useCallback(
 		(option: import('@wcpos/components/combobox').Option | undefined) => {
 			if (!option) return;
-			actions.setFilter('brands', [toNumber(option.value)]);
+			query
+				.where('tags')
+				.elemMatch({ id: toNumber(option.value) })
+				.exec();
 		},
-		[actions]
+		[query]
 	);
 
 	/**
@@ -46,15 +51,15 @@ export function BrandsPill({ resource, selectedID }: Props) {
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => actions.clearFilter('brands')}
+					onRemove={() => query.where('tags').removeElemMatch('tags', { id: selectedID }).exec()}
 				>
 					<ButtonText decodeHtml>
-						{isActive ? brand?.name || t('common.id_2', { id: selectedID }) : t('common.brand')}
+						{isActive ? tag?.name || t('common.id_2', { id: selectedID }) : t('common.tag')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<BrandSearch />
+				<TagSearch />
 			</ComboboxContent>
 		</Combobox>
 	);

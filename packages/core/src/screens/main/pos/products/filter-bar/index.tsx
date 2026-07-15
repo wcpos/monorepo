@@ -1,7 +1,11 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
+
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
+import type { Query } from '@wcpos/query';
 
 import { BrandsPill } from './brands-pill';
 import { CategoryPill } from './category-pill';
@@ -10,19 +14,23 @@ import { OnSalePill } from './on-sale-pill';
 import { StockStatusPill } from './stock-status-pill';
 import { TagPill } from './tag-pill';
 import { useEngineDocumentByWooId } from '../../../hooks/use-engine-document';
-import { useQueryState } from '../../../../../query';
+
+type ProductCollection = import('@wcpos/database').ProductCollection;
+
+interface Props {
+	query: Query<ProductCollection>;
+}
 
 /**
  *
  */
-export function FilterBar() {
-	const { selectedTagID, selectedBrandID } = useQueryState<
-		'products',
-		{ selectedTagID?: number; selectedBrandID?: number }
-	>((state) => ({
-		selectedTagID: state.filters.tags[0],
-		selectedBrandID: state.filters.brands[0],
-	}));
+export function FilterBar({ query }: Props) {
+	const selectedTagID = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getElemMatchId('tags')))
+	);
+	const selectedBrandID = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getElemMatchId('brands')))
+	);
 	const selectedTagResource = useEngineDocumentByWooId<
 		import('@wcpos/database').ProductTagDocument
 	>('products/tags', selectedTagID ?? 0);
@@ -35,15 +43,15 @@ export function FilterBar() {
 	 */
 	return (
 		<HStack className="w-full flex-wrap">
-			<StockStatusPill />
-			<FeaturedPill />
-			<OnSalePill />
-			<CategoryPill />
+			<StockStatusPill query={query} />
+			<FeaturedPill query={query} />
+			<OnSalePill query={query} />
+			<CategoryPill query={query} />
 			<Suspense>
-				<TagPill resource={selectedTagResource} selectedID={selectedTagID} />
+				<TagPill query={query} resource={selectedTagResource} selectedID={selectedTagID} />
 			</Suspense>
 			<Suspense>
-				<BrandsPill resource={selectedBrandResource} selectedID={selectedBrandID} />
+				<BrandsPill query={query} resource={selectedBrandResource} selectedID={selectedBrandID} />
 			</Suspense>
 		</HStack>
 	);

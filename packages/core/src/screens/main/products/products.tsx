@@ -12,7 +12,6 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
-import { useRelationalQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Barcode } from './cells/barcode';
@@ -41,13 +40,19 @@ import { ProductVariationImage } from '../components/product/variation-image';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
-import { useUISettings } from '../contexts/ui-settings';
 import { useMutation } from '../hooks/mutations/use-mutation';
 import { TextCell } from '../components/text-cell';
 import { ProductBrands } from '../components/product/brands';
 import { COGS } from './cells/cogs';
+import {
+	useQueryState,
+	useQueryStateActions,
+	useRelationalCollectionBinding,
+} from '../../../query';
 
 import type { ExpandedState } from '@tanstack/react-table';
+import type { QueryStateActions } from '../../../query';
+import type { BindingDataTableFooterProps } from '../components/data-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -154,9 +159,9 @@ function renderItem({
 /**
  *
  */
-function TableFooter(props: Record<string, unknown>) {
+function TableFooter(props: BindingDataTableFooterProps) {
 	return (
-		<DataTableFooter {...(props as unknown as React.ComponentProps<typeof DataTableFooter>)}>
+		<DataTableFooter {...props}>
 			<TaxBasedOn />
 		</DataTableFooter>
 	);
@@ -166,45 +171,30 @@ function TableFooter(props: Record<string, unknown>) {
  * Tables are expensive to render, so memoize all props.
  */
 export function Products() {
-	const { uiSettings } = useUISettings('products');
+	const state = useQueryState<'products'>();
+	const actions = useQueryStateActions<'products'>();
+	const binding = useRelationalCollectionBinding(state);
+	const tableActions = React.useMemo<
+		Pick<QueryStateActions<'products'>, 'setSort' | 'extendLimit' | 'setFilter'>
+	>(
+		() => ({
+			setSort: actions.setSort,
+			extendLimit: actions.extendLimit,
+			setFilter: actions.setFilter,
+		}),
+		[actions]
+	);
 	const { calcTaxes } = useTaxRates();
 	const { patch: productsPatch } = useMutation({ collectionName: 'products' });
 	const { patch: variationsPatch } = useMutation({ collectionName: 'variations' });
-	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
 	const { bottom } = useSafeAreaInsets();
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
 	const t = useT();
 
 	/**
-	 *
-	 */
-	const { parentQuery: query } = useRelationalQuery(
-		{
-			queryKeys: ['products', { target: 'page', type: 'relational' }],
-			collectionName: 'products',
-			initialParams: {
-				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection as 'asc' | 'desc' }],
-			},
-			infiniteScroll: true,
-		},
-		{
-			queryKeys: ['variations', { target: 'page', type: 'relational' }],
-			collectionName: 'variations',
-			initialParams: {
-				sort: [{ id: 'asc' }],
-			},
-			endpoint: 'products/variations',
-			greedy: true,
-		}
-	);
-
-	/**
 	 * Barcode
 	 */
-	useBarcode(
-		query! as import('@wcpos/query').RelationalQuery<import('@wcpos/database').ProductCollection>,
-		querySearchInputRef as React.RefObject<{ setSearch: (search: string) => void } | null>
-	);
+	useBarcode(actions.setSearch);
 
 	/**
 	 * Table config
@@ -282,8 +272,7 @@ export function Products() {
 						<HStack>
 							<ErrorBoundary>
 								<QuerySearchInput
-									ref={querySearchInputRef}
-									query={query!}
+									collectionName="products"
 									placeholder={t('common.search_products')}
 									className="flex-1"
 									testID="search-products"
@@ -299,7 +288,7 @@ export function Products() {
 							</UISettingsDialog>
 						</HStack>
 						<ErrorBoundary>
-							<FilterBar query={query!} />
+							<FilterBar />
 						</ErrorBoundary>
 					</VStack>
 				</CardHeader>
@@ -308,7 +297,13 @@ export function Products() {
 						<Suspense fallback={<DataTableSkeleton id="products" />}>
 							<DataTable<ProductDocument>
 								id="products"
-								query={query!}
+								resource={binding.resource}
+								sort={state.sort}
+								actions={tableActions}
+								active$={binding.active$}
+								total$={binding.total$}
+								totalSource$={binding.totalSource$}
+								sync={binding.sync}
 								renderItem={renderItem}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_products_found')}
