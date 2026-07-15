@@ -77,6 +77,91 @@ describe('useBarcodeDetection', () => {
 		jest.useRealTimers();
 	});
 
+	it('does not treat human-speed typing after mount as a barcode scan', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((barcode) =>
+			detected.push(String(barcode))
+		);
+
+		act(() => {
+			// 120ms between keys — human typing, well above the 24ms scanner threshold
+			for (const key of 'dfgh') {
+				document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+				jest.advanceTimersByTime(120);
+			}
+			jest.advanceTimersByTime(200);
+		});
+
+		expect(barcodeLogger.warn).not.toHaveBeenCalled();
+		expect(detected).toEqual([]);
+
+		subscription.unsubscribe();
+	});
+
+	it('does not emit the first keystroke after mount as a pseudo-scan', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((barcode) =>
+			detected.push(String(barcode))
+		);
+
+		act(() => {
+			document.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
+			jest.advanceTimersByTime(500);
+		});
+
+		expect(barcodeLogger.warn).not.toHaveBeenCalled();
+		expect(detected).toEqual([]);
+
+		subscription.unsubscribe();
+	});
+
+	it('does not treat human-speed typing as a scan when earlier keystrokes exist', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((barcode) =>
+			detected.push(String(barcode))
+		);
+
+		act(() => {
+			document.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
+			jest.advanceTimersByTime(500);
+			for (const key of 'dfgh') {
+				document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+				jest.advanceTimersByTime(120);
+			}
+			jest.advanceTimersByTime(200);
+		});
+
+		expect(barcodeLogger.warn).not.toHaveBeenCalled();
+		expect(detected).toEqual([]);
+
+		subscription.unsubscribe();
+	});
+
+	it('still detects a scanner burst immediately after mount, including the first character', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((barcode) =>
+			detected.push(String(barcode))
+		);
+
+		act(() => {
+			// scanner-speed input: 10ms between keys, below the 24ms threshold
+			for (const key of '12345678') {
+				document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+				jest.advanceTimersByTime(10);
+			}
+			jest.advanceTimersByTime(200);
+		});
+
+		expect(detected).toEqual(['12345678']);
+		expect(barcodeLogger.warn).not.toHaveBeenCalled();
+
+		subscription.unsubscribe();
+	});
+
 	it('uses the updated minimum length when scanner settings change after mount', () => {
 		const detected: string[] = [];
 		const { result } = renderHook(() => useBarcodeDetection());
