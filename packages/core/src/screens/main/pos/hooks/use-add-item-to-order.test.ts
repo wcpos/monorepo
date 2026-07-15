@@ -1,12 +1,16 @@
 /**
  * @jest-environment jsdom
  */
+import { serialize } from 'node:v8';
+
 import { act, renderHook } from '@testing-library/react';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 
 const mockLocalPatch = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
+const mockInsertEngineResident = jest.fn();
+const mockWrite = jest.fn();
 
 const order: Record<string, unknown> & {
 	getLatest(): typeof order;
@@ -16,10 +20,13 @@ const order: Record<string, unknown> & {
 	id: 42,
 	line_items: [],
 	getLatest: () => order,
+	toJSON: () => ({ uuid: 'order-uuid' }),
+	toMutableJSON: () => ({ uuid: 'order-uuid' }),
+	remove: async () => undefined,
 };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({}),
+	useQueryManager: () => ({ engine: { write: mockWrite } }),
 }));
 
 jest.mock('uuid', () => ({
@@ -32,7 +39,7 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	documentRecordId: (document: { uuid?: string }) => document.uuid ?? null,
-	insertEngineResident: jest.fn(),
+	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 
@@ -47,6 +54,33 @@ describe('useAddItemToOrder', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		order.line_items = [];
+		order.isNew = false;
+		order.toJSON = () => ({ uuid: 'order-uuid' });
+		order.toMutableJSON = () => ({ uuid: 'order-uuid' });
+	});
+
+	it('creates an engine order from a worker-cloneable temporary-order snapshot', async () => {
+		const nestedProxy = new Proxy({ first_name: 'Guest' }, {});
+		order.isNew = true;
+		order.toJSON = () => ({ uuid: 'order-uuid', billing: nestedProxy });
+		order.toMutableJSON = () => ({ uuid: 'order-uuid', billing: { first_name: 'Guest' } });
+		mockInsertEngineResident.mockImplementation(
+			async ({ payload }: { payload: Record<string, unknown> }) => {
+				serialize(payload);
+				return { get: () => payload };
+			}
+		);
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', {
+				product_id: 1,
+				meta_data: [],
+			} as never);
+		});
+
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
 	});
 
 	it('keeps both items when two appends overlap for the same order', async () => {

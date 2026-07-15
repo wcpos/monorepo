@@ -34,7 +34,7 @@ export const useAddItemToOrder = () => {
 			const date_created_gmt = convertLocalDateToUTCString(new Date());
 
 			const orderJSON: Record<string, unknown> = {
-				...order.toJSON(),
+				...order.toMutableJSON(),
 				date_created_gmt,
 				[type]: [data],
 			};
