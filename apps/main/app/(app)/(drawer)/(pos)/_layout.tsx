@@ -14,7 +14,6 @@ import {
 	useCurrentOrder,
 	useOpenOrdersResource,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
-import { useQuery } from '@wcpos/query';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
@@ -88,16 +87,8 @@ function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
 	const { currentOrder } = useCurrentOrder();
 
-	/**
-	 *
-	 */
-	const taxQuery = useQuery({
-		queryKeys: ['tax-rates'],
-		collectionName: 'taxes',
-	});
-
 	return (
-		<TaxRatesProvider taxQuery={taxQuery!} order={currentOrder}>
+		<TaxRatesProvider order={currentOrder}>
 			<View className="bg-background flex-1">
 				<Stack
 					screenOptions={{

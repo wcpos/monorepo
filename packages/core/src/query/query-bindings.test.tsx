@@ -77,6 +77,7 @@ describe('query bindings', () => {
 			'products',
 			'variations',
 			'customers',
+			'taxRates',
 			'categories',
 			'coupons',
 		]);
@@ -85,6 +86,7 @@ describe('query bindings', () => {
 		installResidentSearch(engineDB.collections.products);
 		installResidentSearch(engineDB.collections.variations);
 		installResidentSearch(engineDB.collections.customers);
+		installResidentSearch(engineDB.collections.taxRates);
 		installResidentSearch(engineDB.collections.categories);
 		installResidentSearch(engineDB.collections.coupons);
 	});
@@ -254,6 +256,48 @@ describe('query bindings', () => {
 		await expect(
 			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
 		).resolves.toBe('local');
+	});
+
+	it('projects taxRates:all coverage and idle binding activity for Tier 0', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.taxRates.insert({
+			id: 'woo-tax-rate:1',
+			wooTaxRateId: 1,
+			payload: { id: 1, name: 'Standard', class: 'standard' },
+			sync: { revision: '1', partial: false, source: 'woo-rest' },
+		});
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: 'taxRates::taxRates:all',
+			collectionName: 'taxRates',
+			queryKey: 'taxRates:all',
+			complete: true,
+			expectedRecordIds: ['woo-tax-rate:1', 'woo-tax-rate:2'],
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 2,
+		});
+		const state: QueryStateOf<'tax-rates'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'id', direction: 'asc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		};
+		const { result } = renderHook(() => useCollectionBinding('tax-rates', state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 2)))
+		).resolves.toBe(2);
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
+		).resolves.toBe('coverage');
+
+		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 	});
 
 	it('keeps customer search cold until engine results land locally and reports local totals', async () => {
