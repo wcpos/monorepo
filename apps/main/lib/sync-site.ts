@@ -1,12 +1,15 @@
 /**
  * The ONE place the engine's sync base URL is derived (ADR 0023 increment 1b).
  *
- * The engine talks to the production plugin's merged namespace: the sync
- * surface lives at `wcpos/v1/sync/*` on woocommerce-pos@next (server port
- * increments 1–2b), which is what the next-train server (dev-next.wcpos.com)
- * runs. The lab's `wc-rxdb-sync/v1` namespace never ships to production.
+ * The sync surface is the successor client/server contract and owns its own
+ * REST version: `wcpos/v2/*` on woocommerce-pos@next — the version replaced
+ * the old `sync/` prefix (`wcpos/v2/orders/pull`, never
+ * `wcpos/v1/sync/orders/pull`). The frozen `wcpos/v1` namespace is the old
+ * client's contract; client and server ship lockstep (cold-resync cutover),
+ * so there is no dual-target window. The lab's `wc-rxdb-sync/v1` namespace
+ * never ships to production.
  */
-export const SYNC_NAMESPACE = 'wcpos/v1/sync';
+export const SYNC_NAMESPACE = 'wcpos/v2';
 
 export interface SyncSite {
 	syncBaseUrl: string;

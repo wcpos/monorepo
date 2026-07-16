@@ -19,7 +19,7 @@ function response(body: unknown, headers: HeadersInit = {}) {
 	return new Response(JSON.stringify(body), { status: 200, headers });
 }
 
-const BASE_URL = 'http://wcpos.local/wp-json/wc-rxdb-sync/v1';
+const BASE_URL = 'http://wcpos.local/wp-json/wcpos/v2';
 
 describe('pullCustomBatch', () => {
 	it('posts checkpoint parameters and returns documents', async () => {
@@ -41,7 +41,7 @@ describe('pullCustomBatch', () => {
 		});
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders/pull?limit=50&updated_at_gmt=1970-01-01T00%3A00%3A00.000Z&order_id=0&sequence=0'
+			'http://wcpos.local/wp-json/wcpos/v2/orders/pull?limit=50&updated_at_gmt=1970-01-01T00%3A00%3A00.000Z&order_id=0&sequence=0'
 		);
 		expect(result.documents).toHaveLength(1);
 		expect(result.metrics?.duration_ms).toBe(7); // the fake's deterministic body metrics, surfaced verbatim
@@ -231,7 +231,7 @@ describe('syncCustomPullIntoRepository', () => {
 		});
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders/pull?limit=1&updated_at_gmt=2026-05-20T10%3A00%3A00.000Z&order_id=10&sequence=10'
+			'http://wcpos.local/wp-json/wcpos/v2/orders/pull?limit=1&updated_at_gmt=2026-05-20T10%3A00%3A00.000Z&order_id=10&sequence=10'
 		);
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>

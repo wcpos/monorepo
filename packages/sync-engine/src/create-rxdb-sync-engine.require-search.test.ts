@@ -16,7 +16,7 @@ import {
 import { memoryEngineStorage } from './testing';
 
 const SITE = 'https://lab.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wc-rxdb-sync/v1`;
+const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 let uniqueStore = 0;
 
 // Server-stamped identity: a deterministic v4-shaped uuid per Woo id, so the post-flip

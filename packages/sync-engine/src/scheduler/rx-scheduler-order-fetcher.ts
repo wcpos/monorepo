@@ -47,7 +47,7 @@ export type OrdersSchedulerCoverageRepository = {
 };
 
 export type OrdersSchedulerFetcherInput = {
-	/** The wc-rxdb-sync/v1 namespace base — all order reads (custom-pull, browser, targeted) route through it. */
+	/** The versioned WCPOS sync base — all order reads (custom-pull, browser, targeted) route through it. */
 	baseUrl: string;
 	repository: CustomPullRepository;
 	checkpointStore: CustomPullCheckpointStore;

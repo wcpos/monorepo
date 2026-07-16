@@ -33,7 +33,7 @@ function harness(over: Partial<Parameters<typeof createQueryTotalRequestRunner>[
 	const runner = createQueryTotalRequestRunner({
 		database: null,
 		ownerId: 'test-owner',
-		endpoint: 'https://demo.local/wp-json/wc-rxdb-sync/v1/orders',
+		endpoint: 'https://demo.local/wp-json/wcpos/v2/orders',
 		fetchWooQueryTotal,
 		onDiagnostic: (event) => diagnostics.push(event),
 		readCacheEntries: () => entries,
@@ -63,7 +63,7 @@ describe('createQueryTotalRequestRunner', () => {
 		expect(fetchWooQueryTotal).toHaveBeenCalledWith(
 			expect.objectContaining({
 				request: expect.objectContaining({
-					endpoint: 'https://demo.local/wp-json/wc-rxdb-sync/v1/orders',
+					endpoint: 'https://demo.local/wp-json/wcpos/v2/orders',
 				}),
 			})
 		);

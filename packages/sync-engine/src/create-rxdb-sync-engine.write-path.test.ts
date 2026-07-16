@@ -48,7 +48,7 @@ function engineWith(input: {
 }): RxdbSyncEngine {
 	return createRxdbSyncEngine(
 		{
-			site: { syncBaseUrl: `${SITE}/wp-json/wc-rxdb-sync/v1`, wpJsonRoot: `${SITE}/wp-json` },
+			site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
 			storage: input.storage ?? memoryEngineStorage(),
 			fetcher: input.fetch,
 			...(input.connectivity ? { connectivity: input.connectivity } : {}),
@@ -143,11 +143,17 @@ function routedFetch(
 	server: ReturnType<typeof createFakeWriteServer>,
 	orderTruth: () => Record<string, unknown>
 ) {
-	const state = { orderPulls: [] as number[][], failOrdersPull: false, emptyOrdersPull: false };
+	const state = {
+		orderPulls: [] as number[][],
+		orderUrls: [] as string[],
+		failOrdersPull: false,
+		emptyOrdersPull: false,
+	};
 	const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 		if (url.includes('/push/')) return server.fetch(url, init as never);
 		const u = new URL(url);
 		if (!u.pathname.endsWith('/orders')) throw new Error(`routedFetch: unexpected ${u.pathname}`);
+		state.orderUrls.push(url);
 		if (state.failOrdersPull) return new Response('boom', { status: 500 });
 		const include = (u.searchParams.get('include') ?? '').split(',').map(Number).filter(Boolean);
 		state.orderPulls.push(include);
@@ -1877,6 +1883,9 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				rejected: 0,
 			});
 			expect(state.orderPulls).toEqual([[42]]); // the targeted revision refresh ran
+			expect(state.orderUrls).toEqual([
+				`${SITE}/wp-json/wcpos/v2/orders?include=42&per_page=1&orderby=include`,
+			]);
 			expect(server.applied.has(UUID_A)).toBe(false); // the delete landed
 			expect(await orderJson(engine, UUID_A)).toBeNull();
 			expect(await engine.conflicts()).toEqual([]);

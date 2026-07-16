@@ -10,7 +10,7 @@ import {
 	type ScanEvent,
 } from './barcodeResolve';
 
-const SYNC_BASE_URL = 'http://wcpos.local/wp-json/wc-rxdb-sync/v1';
+const SYNC_BASE_URL = 'http://wcpos.local/wp-json/wcpos/v2';
 
 function jsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), { status });

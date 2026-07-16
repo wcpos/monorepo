@@ -3,7 +3,8 @@ import { type OrderDocument, type SyncCheckpoint } from './protocol';
 
 /**
  * A reusable in-memory PULL server honoring the custom-pull contract
- * (`{base}/wc-rxdb-sync/v1/orders/pull`), the read-side sibling of `fakeWriteServer`. It lives in
+ * (`{syncBase}/orders/pull` on the `wcpos/v2` namespace), the read-side sibling of
+ * `fakeWriteServer`. It lives in
  * the `@wcpos/sync-core/testing` sub-path (NOT the engine index) so it never ships in a
  * production bundle.
  *
@@ -143,7 +144,7 @@ export type FakePullServerOptions = {
 	epoch?: string;
 };
 
-const NAMESPACE = '/wc-rxdb-sync/v1/';
+const NAMESPACE = '/wcpos/v2/';
 /** The route registered under the namespace — the ONLY path the plugin answers (`/orders/pull`). */
 const PULL_ROUTE = 'orders/pull';
 
@@ -526,7 +527,8 @@ export function createFakePullServer(options: FakePullServerOptions = {}): FakeP
 		// Doubled/missing-namespace guard, like fakeWriteServer's parsePushUrl.
 		if (firstNs === -1 || path.indexOf(NAMESPACE, firstNs + 1) !== -1) return null;
 		// WP dispatches on the WHOLE route under the namespace, so the remainder must be exactly
-		// `orders/pull`. A baseUrl carrying a stray segment (`…/v1/orders`) builds `…/v1/orders/orders/pull`,
+		// `orders/pull`. A sync base carrying a stray segment (`…/wcpos/v2/orders`) builds
+		// `…/wcpos/v2/orders/orders/pull`,
 		// which the plugin registers no route for — a suffix match would serve it a valid envelope.
 		if (path.slice(firstNs + NAMESPACE.length) !== PULL_ROUTE) return null;
 		const params = new URLSearchParams(queryStart === -1 ? '' : url.slice(queryStart + 1));

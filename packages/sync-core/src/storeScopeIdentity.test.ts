@@ -75,18 +75,18 @@ describe('scopeKeyFor', () => {
 });
 
 describe('scopeDatabaseName', () => {
-	it('prefixes the scope key with pos_v<generation>', () => {
+	it('defaults to the v2 scope generation for the sync cutover', () => {
 		const name = scopeDatabaseName(identity);
-		expect(name).toBe(`pos_v1_${scopeKeyFor(identity)}`);
+		expect(name).toBe(`pos_v2_${scopeKeyFor(identity)}`);
 	});
 
 	it('bumps the generation prefix for storage-format migrations', () => {
-		expect(scopeDatabaseName(identity, { generation: 2 })).toBe(`pos_v2_${scopeKeyFor(identity)}`);
+		expect(scopeDatabaseName(identity, { generation: 3 })).toBe(`pos_v3_${scopeKeyFor(identity)}`);
 	});
 
 	it('appends a namespace suffix for test isolation', () => {
 		expect(scopeDatabaseName(identity, { namespace: 'run7' })).toBe(
-			`pos_v1_${scopeKeyFor(identity)}_run7`
+			`pos_v2_${scopeKeyFor(identity)}_run7`
 		);
 	});
 

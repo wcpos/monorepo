@@ -50,11 +50,11 @@ import type { RxDatabase } from 'rxdb';
  */
 export async function fetchOrderServerRevision(input: {
 	fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
-	wpJsonRoot: string;
+	syncBaseUrl: string;
 	wooOrderId: number;
 }): Promise<string | null> {
 	const response = await input.fetch(
-		`${input.wpJsonRoot}/wc-rxdb-sync/v1/orders?include=${input.wooOrderId}&per_page=1&orderby=include`
+		`${input.syncBaseUrl}/orders?include=${input.wooOrderId}&per_page=1&orderby=include`
 	);
 	if (!response.ok) throw new Error(`revision refresh failed: HTTP ${response.status}`);
 	const [payload] = (await response.json()) as Record<string, unknown>[];
@@ -107,9 +107,7 @@ export type WriteDrainLaneDeps = {
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
 	fetcher: EngineSourceFetcher;
-	/** The wp-json ROOT — the push resolver builds /wc-rxdb-sync/v1/push/{collection} from it. */
-	wpJsonRoot: string;
-	/** Configured namespaced read base used by targeted revision refreshes. */
+	/** Configured versioned WCPOS sync base used by pushes and targeted revision refreshes. */
 	syncBaseUrl: string;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
@@ -151,7 +149,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 					};
 				}
 				const queue = queueFor(database);
-				const resolveEndpoint = pushEndpointResolver(deps.wpJsonRoot);
+				const resolveEndpoint = pushEndpointResolver(deps.syncBaseUrl);
 				// A switch/reset mid-drain must read as CANCELLATION, not failure —
 				// without a signal the drain would classify the aborted push as a
 				// retryable error and bump the backoff. The controller mirrors the
@@ -234,7 +232,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									mutation.collectionName === 'orders'
 										? await fetchOrderServerRevision({
 												fetch: boundFetch,
-												wpJsonRoot: deps.wpJsonRoot,
+												syncBaseUrl: deps.syncBaseUrl,
 												wooOrderId: remoteId,
 											})
 										: revisionOf(

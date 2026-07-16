@@ -43,7 +43,7 @@ describe('createTaxRateSchedulerFetcher', () => {
 			.mockResolvedValueOnce(response([{ id: 3, country: 'ES', rate: '21.0' }]))
 			.mockResolvedValueOnce(response([{ id: 1, country: 'US', rate: '8.6' }]));
 		const schedulerFetcher = createTaxRateSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 300_000,
@@ -56,9 +56,9 @@ describe('createTaxRateSchedulerFetcher', () => {
 		const nextRun = await schedulerFetcher(taxTask());
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/taxes?per_page=2&page=1&orderby=id&order=asc',
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/taxes?per_page=2&page=2&orderby=id&order=asc',
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/taxes?per_page=2&page=1&orderby=id&order=asc',
+			'http://wcpos.local/wp-json/wcpos/v2/taxes?per_page=2&page=1&orderby=id&order=asc',
+			'http://wcpos.local/wp-json/wcpos/v2/taxes?per_page=2&page=2&orderby=id&order=asc',
+			'http://wcpos.local/wp-json/wcpos/v2/taxes?per_page=2&page=1&orderby=id&order=asc',
 		]);
 		expect(repository.upsertMany).toHaveBeenCalledTimes(3);
 		expect(repository.upsertMany.mock.calls[0]?.[0]).toEqual([

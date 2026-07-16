@@ -17,7 +17,7 @@ import * as schedulerDrain from './scheduler/engine-scheduler-drain';
 import { memoryEngineStorage } from './testing';
 
 const SITE = 'https://lab.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wc-rxdb-sync/v1`;
+const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const UUID_7 = '77777777-7777-4777-8777-777777777777';
 let uniqueStore = 0;
 

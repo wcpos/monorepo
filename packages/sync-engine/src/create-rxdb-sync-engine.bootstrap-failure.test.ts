@@ -18,7 +18,7 @@ describe('bootstrap failure honesty', () => {
 		const engine = createRxdbSyncEngine(
 			{
 				site: {
-					syncBaseUrl: 'https://example.test/wp-json/wc-rxdb-sync/v1',
+					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 					wpJsonRoot: 'https://example.test/wp-json',
 				},
 				storage: memoryEngineStorage(),

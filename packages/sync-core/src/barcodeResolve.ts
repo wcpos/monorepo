@@ -8,7 +8,8 @@
  * event is emitted synchronously BEFORE any network await, and that ordering
  * is pinned by tests.
  *
- * Server side: GET wc-rxdb-sync/v1/resolve/barcode?code=<string>
+ * Server side: GET {syncBase}/resolve/barcode?code=<string> on the
+ * versioned `wcpos/v2` namespace
  * (&benchmark_profile=<profile> for non-default profiles). 200 always —
  * not-found is a result, not an error.
  *

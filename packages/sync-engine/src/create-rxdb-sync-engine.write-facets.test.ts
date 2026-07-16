@@ -175,7 +175,7 @@ function engine(fetch: (url: string, init?: RequestInit) => Promise<Response>): 
 	return createRxdbSyncEngine(
 		{
 			site: {
-				syncBaseUrl: `${SITE}/wp-json/wc-rxdb-sync/v1`,
+				syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 				wpJsonRoot: `${SITE}/wp-json`,
 			},
 			storage: memoryEngineStorage(),
@@ -245,7 +245,7 @@ async function applyFacetPull(
 	const handlers = buildReplicationHandlers({
 		database: scope.database,
 		fetch: fetch as never,
-		syncBaseUrl: `${SITE}/wp-json/wc-rxdb-sync/v1`,
+		syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 		persistState: async () => undefined,
 		log: () => undefined,
 	});
@@ -270,7 +270,7 @@ async function applyFacetPrune(engine: RxdbSyncEngine, spec: FacetSpec): Promise
 	const handlers = buildReplicationHandlers({
 		database: scope.database,
 		fetch: async () => Response.json([]),
-		syncBaseUrl: `${SITE}/wp-json/wc-rxdb-sync/v1`,
+		syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 		persistState: async () => undefined,
 		log: () => undefined,
 	});

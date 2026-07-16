@@ -64,7 +64,7 @@ export type ReplicationActionHandlers = {
 	/**
 	 * Fetch + apply the given VARIATION ids. Variations are NOT fetchable via wc/v3
 	 * `products?include=` (a separate, parent-mediated resource), so the host pulls
-	 * them through the lab `wc-rxdb-sync/v1/variations` endpoint, which resolves the
+	 * them through the versioned `{syncBase}/variations` endpoint, which resolves the
 	 * parent server-side. Returns how many were applied; a return < `ids.length`
 	 * surfaces a shortfall exactly like `pullProducts`.
 	 */
@@ -451,7 +451,7 @@ export async function applyReplicationActions(
 	}
 
 	// 7) VARIATION targeted pulls — parent-mediated; the host fetches them through
-	//    the lab `wc-rxdb-sync/v1/variations` endpoint (the server resolves
+	//    the versioned `{syncBase}/variations` endpoint (the server resolves
 	//    parents), mirroring the product pull's shortfall surfacing.
 	const targetedVariationIds = idsFor(actions.targetedPulls, 'variations');
 	let appliedVariationCount = 0;

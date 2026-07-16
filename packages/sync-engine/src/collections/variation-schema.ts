@@ -1,7 +1,7 @@
 /**
  * Product variations — first-class local records (CONTEXT.md: their own
  * collection, indexed barcode + parent reference). Pulled ON DEMAND via the
- * lab-namespace `wc-rxdb-sync/v1/variations?include=<ids>` endpoint, which
+ * versioned `{syncBase}/variations?include=<ids>` endpoint, which
  * resolves the parent server-side. The stable string `id` is derived from the
  * Woo id; `wooId` and `parentId` are mirrored fields (never the key — G1).
  */

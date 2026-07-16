@@ -84,7 +84,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({ documents, checkpoint: nextCheckpoint, hasMore: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			fetcher,
@@ -94,7 +94,7 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		// F6: the custom-pull path opts into the server delete channel.
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders/pull?limit=25&updated_at_gmt=2026-05-20T10%3A00%3A00.000Z&order_id=10&sequence=10&include_deletes=true'
+			'http://wcpos.local/wp-json/wcpos/v2/orders/pull?limit=25&updated_at_gmt=2026-05-20T10%3A00%3A00.000Z&order_id=10&sequence=10&include_deletes=true'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith(documents);
 		expect(checkpointStore.writeCustomPullCheckpoint).toHaveBeenCalledWith(nextCheckpoint);
@@ -141,7 +141,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({ documents: [serverDoc], checkpoint: nextCheckpoint, hasMore: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			fetcher,
@@ -171,7 +171,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			coverageRepository,
@@ -224,7 +224,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			coverageRepository,
@@ -267,7 +267,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			coverageRepository,
@@ -303,7 +303,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			coverageRepository,
@@ -339,7 +339,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({ documents, checkpoint: nextCheckpoint, hasMore: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			coverageRepository,
@@ -379,7 +379,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			coverageRepository,
@@ -414,7 +414,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -436,7 +436,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?include=123%2C456&per_page=2&orderby=include'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?include=123%2C456&per_page=2&orderby=include'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			{
@@ -509,7 +509,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -531,7 +531,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?include=123%2C456&per_page=2&orderby=include'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?include=123%2C456&per_page=2&orderby=include'
 		);
 	});
 
@@ -541,7 +541,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -586,7 +586,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 60_000,
@@ -655,7 +655,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			.mockResolvedValueOnce(new Set<string | number>())
 			.mockResolvedValueOnce(new Set<string | number>([456]));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 60_000,
@@ -709,7 +709,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -760,7 +760,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 60_000,
@@ -809,7 +809,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -833,7 +833,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?include=123&per_page=1&orderby=include',
+			'http://wcpos.local/wp-json/wcpos/v2/orders?include=123&per_page=1&orderby=include',
 			{
 				signal: abortController.signal,
 			}
@@ -863,7 +863,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			.mockResolvedValueOnce(response(firstPayloads))
 			.mockResolvedValueOnce(response(secondPayloads));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -891,7 +891,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 		expect(firstUrl).toContain('per_page=100');
 		expect(fetcher.mock.calls[1][0]).toBe(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?include=101&per_page=1&orderby=include'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?include=101&per_page=1&orderby=include'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledTimes(2);
 		expect(repository.upsertMany.mock.calls[0][0]).toHaveLength(100);
@@ -948,7 +948,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				])
 			);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -970,9 +970,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?include=1%2C2&per_page=2&orderby=include',
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?include=3%2C4&per_page=2&orderby=include',
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?include=5&per_page=1&orderby=include',
+			'http://wcpos.local/wp-json/wcpos/v2/orders?include=1%2C2&per_page=2&orderby=include',
+			'http://wcpos.local/wp-json/wcpos/v2/orders?include=3%2C4&per_page=2&orderby=include',
+			'http://wcpos.local/wp-json/wcpos/v2/orders?include=5&per_page=1&orderby=include',
 		]);
 		expect(result).toEqual({
 			taskId: 'orders:ids:limit-two:on-demand',
@@ -996,7 +996,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -1036,7 +1036,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -1056,7 +1056,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?status=processing&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&per_page=25&page=1&orderby=id&order=desc'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
@@ -1095,7 +1095,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		}));
 		const fetcher = vi.fn().mockResolvedValueOnce(response(page));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 120_000,
@@ -1149,7 +1149,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			.mockResolvedValueOnce(response(firstPage))
 			.mockResolvedValueOnce(response(secondPage));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 120_000,
@@ -1212,7 +1212,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			.mockResolvedValueOnce(response(firstPage))
 			.mockResolvedValueOnce(response(secondPage));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 120_000,
@@ -1268,7 +1268,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			.mockResolvedValueOnce(response(firstPage))
 			.mockResolvedValueOnce(response(secondPage));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -1290,11 +1290,11 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?status=processing&per_page=100&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&per_page=100&page=1&orderby=id&order=desc'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?status=processing&per_page=100&page=2&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&per_page=100&page=2&orderby=id&order=desc'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledTimes(2);
 		expect(result).toEqual({
@@ -1324,7 +1324,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 120_000,
@@ -1347,7 +1347,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wc-rxdb-sync/v1/orders?status=processing&search=hat&per_page=50&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&search=hat&per_page=50&page=1&orderby=id&order=desc'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
@@ -1395,7 +1395,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			])
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 120_000,
@@ -1431,7 +1431,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		};
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore: {
 				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
@@ -1462,7 +1462,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		};
 		const fetcher = vi.fn(async () => response({ documents: [], checkpoint, hasMore: true }));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wc-rxdb-sync/v1',
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			checkpointStore,
 			fetcher,
