@@ -17,12 +17,13 @@ import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
 import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
 import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-token';
-import { OnlineStatusProvider } from '@wcpos/hooks/use-online-status';
+import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
 import { setDatabase } from '@wcpos/utils/logger';
 
 import { useNavigationBackground } from '../../components/use-navigation-background';
+import { setAppOnlineStatus } from '../../lib/connectivity';
 import { createAppSyncEngine } from '../../lib/create-app-engine';
 
 export const unstable_settings = {
@@ -149,6 +150,17 @@ function CompatGate({ children }: { children: React.ReactNode }) {
 	return <>{children}</>;
 }
 
+function EngineConnectivityBridge() {
+	const { status } = useOnlineStatus();
+
+	// Keep the sync engine's non-React connectivity port aligned with the provider.
+	React.useEffect(() => {
+		setAppOnlineStatus(status);
+	}, [status]);
+
+	return null;
+}
+
 export default function AppLayout() {
 	const { site } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
@@ -168,6 +180,7 @@ export default function AppLayout() {
 
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
+			<EngineConnectivityBridge />
 			<ExtraDataProvider>
 				<RasterizeProvider>
 					<AppStack />
