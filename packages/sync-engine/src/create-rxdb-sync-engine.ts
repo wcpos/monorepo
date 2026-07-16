@@ -121,6 +121,13 @@ import { orderDocumentFromWooPayload } from './scheduler/rx-scheduler-order-fetc
 import { manifestRowOf } from './materialization/record-materialization';
 import { WOO_REST_MAX_PER_PAGE } from './scheduler/order-browser-scheduler-descriptor';
 import { chunk } from './scheduler/chunk';
+import {
+	CENSUS_COLLECTIONS,
+	censusQueryKey,
+	type CensusTotals,
+	censusTotalsFromCache,
+} from './scheduler/census';
+import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 
 export type { CoverageOutcome, EngineRequirement, RequirementHandle } from './require-plane';
 export type {
@@ -130,6 +137,7 @@ export type {
 	QueryTotalCacheEvent,
 } from './maintenance/maintenance-lanes';
 export type { WriteIntent } from './write-path/write-intents';
+export type { CensusTotal, CensusTotals } from './scheduler/census';
 
 export type EngineLane = 'change-signal' | 'write-drain' | MaintenanceLaneName;
 
@@ -241,6 +249,8 @@ export type EngineIntervals = {
 	referenceSeedMs: number;
 	/** Query-total retry scan cadence (armed only with ports.queryTotal). Default 30s. */
 	queryTotalRetryScanMs: number;
+	/** Collection census cache freshness window. Default 15min. */
+	censusFreshForMs: number;
 	/** Coverage compaction scan cadence. Default 60s (the web host's). */
 	coverageCompactionScanMs: number;
 	/** Existence-manifest prime cadence. Conservative backstop; default 15min. */
@@ -257,6 +267,7 @@ const DEFAULT_INTERVALS: EngineIntervals = {
 	productBrowseWindowSeedMs: 5 * 60_000,
 	referenceSeedMs: 5 * 60_000,
 	queryTotalRetryScanMs: 30_000,
+	censusFreshForMs: 15 * 60_000,
 	coverageCompactionScanMs: 60_000,
 	existencePrimeMs: 15 * 60_000,
 	existenceReconcileMs: 17 * 60_000,
@@ -452,6 +463,10 @@ export type RxdbSyncEngine = {
 	status(): EngineStatus;
 	/** Emits the current status immediately, then coalesced status snapshots as it changes. */
 	statusChanges(cb: (status: EngineStatus) => void): Unsubscribe;
+	/** Read per-collection server totals from the active scope's query-total cache. */
+	censusTotals(): Promise<CensusTotals>;
+	/** Emits the current census snapshot, then updated cache/scope/freshness snapshots. */
+	censusChanges(cb: (totals: CensusTotals) => void): Unsubscribe;
 	/** Host view projection of the shared scope/guard counters. */
 	stats(): EngineStats;
 	/** Abort in-flight, close every scope db; terminal. */
@@ -490,6 +505,8 @@ export function createRxdbSyncEngine(
 	const eventSubscribers = new Set<(e: EngineEvent) => void>();
 	const scopeEventSubscribers = new Set<(e: EngineScopeEvent) => void>();
 	const statusSubscribers = new Set<(status: EngineStatus) => void>();
+	const censusSubscribers = new Set<(totals: CensusTotals) => void>();
+	let censusNotificationVersion = 0;
 	let statusNotificationQueued = false;
 	const scheduleStatusChange = (): void => {
 		if (statusNotificationQueued || statusSubscribers.size === 0) return;
@@ -842,6 +859,7 @@ export function createRxdbSyncEngine(
 				});
 			}
 		}
+		if (event.type === 'query-total-cache') publishCensusChanges();
 		const scopeEvent: EngineScopeEvent | null = (() => {
 			switch (event.type) {
 				case 'scope-switched':
@@ -889,12 +907,50 @@ export function createRxdbSyncEngine(
 				});
 			}
 		}
+		publishCensusChanges();
 	};
 
 	const activeDatabase = (): RxDatabase | null => {
 		const scopeId = manager.activeScope;
 		return scopeId === null ? null : (databaseByScopeId.get(scopeId) ?? null);
 	};
+
+	async function readCensusTotals(): Promise<CensusTotals> {
+		const database = activeDatabase();
+		if (!database) return censusTotalsFromCache([], nowMs());
+		const entries = await new RxQueryTotalCacheRepository(database as never).readForQueryKeys(
+			CENSUS_COLLECTIONS.map(censusQueryKey)
+		);
+		return censusTotalsFromCache(entries, nowMs());
+	}
+
+	function publishCensusChanges(): void {
+		if (censusSubscribers.size === 0) return;
+		const version = ++censusNotificationVersion;
+		void readCensusTotals().then(
+			(totals) => {
+				if (version !== censusNotificationVersion) return;
+				for (const cb of [...censusSubscribers]) {
+					try {
+						cb(totals);
+					} catch (error) {
+						diagnostics({
+							type: 'engine.listener-error',
+							level: 'error',
+							message: `censusChanges() listener threw: ${error instanceof Error ? error.message : String(error)}`,
+						});
+					}
+				}
+			},
+			(error: unknown) => {
+				diagnostics({
+					type: 'engine.listener-error',
+					level: 'error',
+					message: `censusChanges() cache read failed: ${error instanceof Error ? error.message : String(error)}`,
+				});
+			}
+		);
+	}
 
 	manager.onEvent((event: ScopeEvent) => {
 		switch (event.type) {
@@ -1124,6 +1180,7 @@ export function createRxdbSyncEngine(
 		ownerId: () => (maintenanceOwnerId ??= `engine-${uuid()}`),
 		pullBatchSize: () => pullBatchSize,
 		...(ports.queryTotal !== undefined ? { queryTotal: ports.queryTotal } : {}),
+		censusFreshForMs: intervals.censusFreshForMs,
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
@@ -1183,6 +1240,7 @@ export function createRxdbSyncEngine(
 					? { detail: report.error }
 					: {}),
 		});
+		if (name === 'query-total-retry') publishCensusChanges();
 		return report;
 	};
 
@@ -2020,6 +2078,18 @@ export function createRxdbSyncEngine(
 				statusSubscribers.delete(cb);
 			};
 		},
+		censusTotals: async () => {
+			assertNotDisposed();
+			return readCensusTotals();
+		},
+		censusChanges: (cb) => {
+			assertNotDisposed();
+			censusSubscribers.add(cb);
+			publishCensusChanges();
+			return () => {
+				censusSubscribers.delete(cb);
+			};
+		},
 		stats: () => {
 			const stats = manager.stats();
 			return {
@@ -2062,6 +2132,7 @@ export function createRxdbSyncEngine(
 				dbSubscribers.clear();
 				eventSubscribers.clear();
 				scopeEventSubscribers.clear();
+				censusSubscribers.clear();
 				// One synchronous, fully settled snapshot (disposed, ungated, zero
 				// scopes) before the set clears — the queued microtask would fire
 				// after the clear and monitors would never see the terminal state.

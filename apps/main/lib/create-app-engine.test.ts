@@ -28,6 +28,17 @@ function loadCreateAppEngine(
 		(
 			_ports: {
 				fetcher?: (url: string, init?: RequestInit) => Promise<Response>;
+				queryTotal?: {
+					fetchWooQueryTotal(input: {
+						request: {
+							queryKey: string;
+							endpoint: string;
+							params: Record<string, string | number | boolean>;
+							totalHeader: 'X-WP-Total';
+						};
+						signal?: AbortSignal;
+					}): Promise<number | null>;
+				};
 				databaseOpenBarrier?: Promise<void>;
 				diagnostics?: typeof appMetricsObserver;
 			},
@@ -59,6 +70,90 @@ function loadCreateAppEngine(
 }
 
 describe('createAppSyncEngine scope cache', () => {
+	it.each([
+		['orders', 'wc/v3/orders'],
+		['products', 'wc/v3/products'],
+		['customers', 'wc/v3/customers'],
+		['taxRates', 'wc/v3/taxes'],
+		['categories', 'wc/v3/products/categories'],
+		['brands', 'wc/v3/products/brands'],
+		['tags', 'wc/v3/products/tags'],
+		['coupons', 'wc/v3/coupons'],
+	])('fetches the %s census through the instrumented wc/v3 route', async (collection, route) => {
+		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response(null, {
+				status: 200,
+				headers: { 'X-WP-Total': '17', 'content-length': '0' },
+			})
+		);
+		const { createAppSyncEngine, createRxdbSyncEngine, recordTransport } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const queryTotal = createRxdbSyncEngine.mock.calls[0]?.[0].queryTotal;
+
+		const total = await queryTotal?.fetchWooQueryTotal({
+			request: {
+				queryKey: `census:${collection}`,
+				endpoint: collection,
+				params: { ignored: 'value', page: 9, per_page: 50 },
+				totalHeader: 'X-WP-Total',
+			},
+		});
+
+		expect(total).toBe(17);
+		expect(fetch).toHaveBeenCalledWith(
+			`https://store.example.test/wp-json/${route}?ignored=value&page=1&per_page=1`,
+			expect.objectContaining({ headers: expect.any(Headers) })
+		);
+		expect(recordTransport).toHaveBeenCalledTimes(1);
+		fetch.mockRestore();
+	});
+
+	it('reports variations census as unsupported without making a request', async () => {
+		const fetch = jest.spyOn(globalThis, 'fetch');
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const queryTotal = createRxdbSyncEngine.mock.calls[0]?.[0].queryTotal;
+
+		const total = await queryTotal?.fetchWooQueryTotal({
+			request: {
+				queryKey: 'census:variations',
+				endpoint: 'variations',
+				params: { page: 1, per_page: 1 },
+				totalHeader: 'X-WP-Total',
+			},
+		});
+
+		expect(total).toBeNull();
+		expect(fetch).not.toHaveBeenCalled();
+		fetch.mockRestore();
+	});
+
+	it.each([null, '', '3.5', '-1', 'not-a-number'])(
+		'rejects an invalid X-WP-Total value %p',
+		async (header) => {
+			const headers = new Headers();
+			if (header !== null) headers.set('X-WP-Total', header);
+			const fetch = jest
+				.spyOn(globalThis, 'fetch')
+				.mockResolvedValue(new Response(null, { status: 200, headers }));
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+			createAppSyncEngine(BASE_OPTIONS);
+			const queryTotal = createRxdbSyncEngine.mock.calls[0]?.[0].queryTotal;
+
+			await expect(
+				queryTotal?.fetchWooQueryTotal({
+					request: {
+						queryKey: 'census:orders',
+						endpoint: 'orders',
+						params: {},
+						totalHeader: 'X-WP-Total',
+					},
+				})
+			).rejects.toThrow('Invalid X-WP-Total');
+			fetch.mockRestore();
+		}
+	);
+
 	it('wires diagnostics and records response metrics without reading the body', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_025);
 		const response = new Response('do not read', {

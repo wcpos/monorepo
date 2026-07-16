@@ -17,7 +17,7 @@
 
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
-import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
+import type { QueryTotalWooRequest, RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 
 import { getEngineConnectivity } from './connectivity';
 import {
@@ -71,6 +71,20 @@ type CachedEngine = {
 
 let cachedEngine: CachedEngine | null = null;
 const pendingDisposals = new Map<string, Promise<void>>();
+
+const CENSUS_WC_ROUTES: Record<string, string | null> = {
+	orders: 'wc/v3/orders',
+	products: 'wc/v3/products',
+	// Woo exposes variations only beneath a specific product, so there is no
+	// honest cheap collection-wide census request. The engine leaves it unknown.
+	variations: null,
+	customers: 'wc/v3/customers',
+	taxRates: 'wc/v3/taxes',
+	categories: 'wc/v3/products/categories',
+	brands: 'wc/v3/products/brands',
+	tags: 'wc/v3/products/tags',
+	coupons: 'wc/v3/coupons',
+};
 
 function canonicalSite(site: string): string {
 	let canonical = site.trim().toLowerCase();
@@ -230,11 +244,39 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		return response;
 	};
 
+	const fetchWooQueryTotal = async (input: {
+		request: QueryTotalWooRequest;
+		signal?: AbortSignal;
+	}): Promise<number | null> => {
+		const mappedRoute = CENSUS_WC_ROUTES[input.request.endpoint];
+		if (mappedRoute === null) return null;
+		const url = new URL(mappedRoute ?? input.request.endpoint, site.wpJsonRoot);
+		for (const [key, value] of Object.entries(input.request.params)) {
+			url.searchParams.set(key, String(value));
+		}
+		url.searchParams.set('page', '1');
+		url.searchParams.set('per_page', '1');
+		const response = await fetcher(
+			url.toString(),
+			input.signal !== undefined ? { signal: input.signal } : undefined
+		);
+		if (!response.ok) {
+			throw new Error(`Query total request failed: ${response.status}`);
+		}
+		const rawTotal = response.headers.get(input.request.totalHeader);
+		const total = rawTotal === null || rawTotal.trim() === '' ? Number.NaN : Number(rawTotal);
+		if (!Number.isSafeInteger(total) || total < 0) {
+			throw new Error(`Invalid ${input.request.totalHeader} response header`);
+		}
+		return total;
+	};
+
 	const engine = createRxdbSyncEngine(
 		{
 			site,
 			storage: defaultConfig.storage,
 			fetcher,
+			queryTotal: { fetchWooQueryTotal },
 			connectivity: getEngineConnectivity,
 			diagnostics: appMetricsObserver,
 			multiInstance: options.multiInstance ?? false,

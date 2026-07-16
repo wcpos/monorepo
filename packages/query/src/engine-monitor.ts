@@ -1,7 +1,7 @@
 import { combineLatest, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import type { RxdbSyncEngine, Unsubscribe } from '@wcpos/sync-engine';
+import type { CensusTotals, RxdbSyncEngine, Unsubscribe } from '@wcpos/sync-engine';
 
 import { observeEngineDatabases } from './engine-query';
 
@@ -33,6 +33,13 @@ type MutationCollection = {
 const EMPTY_COLLECTION_COUNTS: EngineCollectionCounts = Object.fromEntries(
 	SYNC_COLLECTION_NAMES.map((name) => [name, 0])
 ) as EngineCollectionCounts;
+
+export function observeEngineCensus(
+	engine: RxdbSyncEngine,
+	cb: (totals: CensusTotals) => void
+): Unsubscribe {
+	return engine.censusChanges(cb);
+}
 
 export function observeEngineCollectionCounts(
 	engine: RxdbSyncEngine,

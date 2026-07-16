@@ -119,6 +119,27 @@ describe('runQueryTotalRetryRequests', () => {
 		]);
 	});
 
+	it('removes an unsupported request without caching or retrying it', async () => {
+		const runnable = state();
+		const stateRepository = createStateRepository([runnable]);
+		const cacheRepository = createCacheRepository();
+		const fetchWooQueryTotal = vi.fn(async () => null);
+
+		const result = await runQueryTotalRetryRequests({
+			...baseInput,
+			stateRepository,
+			cacheRepository,
+			fetchWooQueryTotal,
+		});
+
+		expect(stateRepository.remove).toHaveBeenCalledWith(
+			expect.objectContaining({ status: 'in-flight', ownerId: 'tab-retry' })
+		);
+		expect(cacheRepository.upsert).not.toHaveBeenCalled();
+		expect(stateRepository.markFailed).not.toHaveBeenCalled();
+		expect(result.unsupported).toBe(1);
+	});
+
 	it('passes the engine tick cancellation signal to the Woo total request', async () => {
 		const stateRepository = createStateRepository([state()]);
 		const cacheRepository = createCacheRepository();

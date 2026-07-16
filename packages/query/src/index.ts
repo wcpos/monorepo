@@ -9,6 +9,7 @@ export {
 	type EngineQueryDescriptor,
 } from './engine-query';
 export {
+	observeEngineCensus,
 	observeEngineCollectionCounts,
 	observeEngineMutationCounts,
 	type EngineCollectionCounts,
@@ -26,6 +27,8 @@ export {
 } from './logs-storage-recovery';
 export type {
 	CoverageLaneDocument,
+	CensusTotal,
+	CensusTotals,
 	EngineEvent,
 	EngineLane,
 	EngineRequirement,

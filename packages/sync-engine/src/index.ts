@@ -40,6 +40,8 @@ export {
 	type StoreScopeIdentity,
 	type SyncCollectionName,
 	type Unsubscribe,
+	type CensusTotal,
+	type CensusTotals,
 } from './create-rxdb-sync-engine';
 
 // Facade configuration and reporting types.

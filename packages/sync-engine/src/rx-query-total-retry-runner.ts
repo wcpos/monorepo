@@ -25,14 +25,14 @@ export type QueryTotalRetryRunnerInput = {
 	fetchWooQueryTotal(input: {
 		request: QueryTotalWooRequest;
 		signal?: AbortSignal;
-	}): Promise<number>;
+	}): Promise<number | null>;
 	signal?: AbortSignal;
 	ownerId: string;
 	nowMs: number;
 	getNowMs?: () => number;
 	leaseForMs: number;
 	retryAfterMs: number;
-	freshForMs: number;
+	freshForMs: number | ((request: QueryTotalWooRequest) => number);
 };
 
 export type QueryTotalRetryRunnerResult = {
@@ -41,6 +41,7 @@ export type QueryTotalRetryRunnerResult = {
 	skippedMissingRequest: number;
 	claimLost: number;
 	succeeded: number;
+	unsupported: number;
 	failed: number;
 	cacheEntries: QueryTotalCacheEntry[];
 };
@@ -89,6 +90,7 @@ export async function runQueryTotalRetryRequests(
 		skippedMissingRequest: 0,
 		claimLost: 0,
 		succeeded: 0,
+		unsupported: 0,
 		failed: 0,
 		cacheEntries: [],
 	};
@@ -120,10 +122,19 @@ export async function runQueryTotalRetryRequests(
 				request: runnableState.request,
 				...(input.signal !== undefined ? { signal: input.signal } : {}),
 			});
+			if (totalMatchingRecords === null) {
+				await input.stateRepository.remove(claimedState);
+				result.unsupported += 1;
+				continue;
+			}
+			const freshForMs =
+				typeof input.freshForMs === 'function'
+					? input.freshForMs(runnableState.request)
+					: input.freshForMs;
 			const cacheEntry = {
 				queryKey: runnableState.queryKey,
 				totalMatchingRecords,
-				freshUntilMs: input.nowMs + input.freshForMs,
+				freshUntilMs: input.nowMs + freshForMs,
 				updatedAtMs: input.nowMs,
 			};
 			await input.cacheRepository.upsert(cacheEntry);
