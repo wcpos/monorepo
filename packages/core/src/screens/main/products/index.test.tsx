@@ -88,10 +88,21 @@ jest.mock('../contexts/ui-settings', () => ({
 		uiSettings: { sortBy: mockSortBy, sortDirection: mockSortDirection },
 	}),
 }));
-jest.mock('../contexts/tax-rates', () => ({
-	TaxRatesProvider: ({ children }: { children: React.ReactNode }) => children,
-	useTaxRates: () => ({ calcTaxes: false }),
-}));
+jest.mock('../contexts/tax-rates', () => {
+	const { QueryStateProvider } = jest.requireActual('../../../query');
+	return {
+		TaxRatesProvider: ({ children }: { children: React.ReactNode }) => (
+			<QueryStateProvider
+				collection="tax-rates"
+				initialPageSize={100}
+				initialSort={{ field: 'priority', direction: 'asc' }}
+			>
+				{children}
+			</QueryStateProvider>
+		),
+		useTaxRates: () => ({ calcTaxes: false }),
+	};
+});
 jest.mock('../hooks/mutations/use-mutation', () => ({
 	useMutation: () => ({ patch: jest.fn() }),
 }));

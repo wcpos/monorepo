@@ -45,20 +45,20 @@ export function ProductsScreen() {
 	const initialSort = getInitialProductSort(uiSettings.sortBy, uiSettings.sortDirection);
 
 	return (
-		<QueryStateProvider
-			collection="products"
-			initialPageSize={PRODUCTS_PAGE_SIZE}
-			initialSort={initialSort}
-		>
-			<ErrorBoundary>
-				<Suspense>
-					<TaxRatesProvider>
+		<TaxRatesProvider>
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={PRODUCTS_PAGE_SIZE}
+				initialSort={initialSort}
+			>
+				<ErrorBoundary>
+					<Suspense>
 						<Suspense>
 							<Products />
 						</Suspense>
-					</TaxRatesProvider>
-				</Suspense>
-			</ErrorBoundary>
-		</QueryStateProvider>
+					</Suspense>
+				</ErrorBoundary>
+			</QueryStateProvider>
+		</TaxRatesProvider>
 	);
 }
