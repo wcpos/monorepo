@@ -89,21 +89,17 @@ jest.mock('../contexts/ui-settings', () => ({
 	}),
 }));
 jest.mock('../contexts/tax-rates', () => {
-	const ReactActual = jest.requireActual<typeof import('react')>('react');
-	const { QueryStateProvider } =
-		jest.requireActual<typeof import('../../../query')>('../../../query');
-
+	const { QueryStateProvider } = jest.requireActual('../../../query/query-state-store');
 	return {
-		TaxRatesProvider: ({ children }: { children: React.ReactNode }) =>
-			ReactActual.createElement(
-				QueryStateProvider,
-				{
-					collection: 'tax-rates',
-					initialPageSize: Number.MAX_SAFE_INTEGER,
-					initialSort: { field: 'id', direction: 'asc' },
-				},
-				children
-			),
+		TaxRatesProvider: ({ children }: { children: React.ReactNode }) => (
+			<QueryStateProvider
+				collection="tax-rates"
+				initialPageSize={100}
+				initialSort={{ field: 'order', direction: 'asc' }}
+			>
+				{children}
+			</QueryStateProvider>
+		),
 		useTaxRates: () => ({ calcTaxes: false }),
 	};
 });
