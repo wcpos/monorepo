@@ -59,11 +59,12 @@ export const usePushDocument = () => {
 					typeof resident.get === 'function'
 						? resident.get(REMOTE_ID_FIELD[collectionName])
 						: (resident as unknown as Record<string, unknown>)[REMOTE_ID_FIELD[collectionName]];
+				const residentSnapshot = resident.toMutableJSON?.() ?? resident;
 				const receipt = await manager.engine.write({
 					collection: collectionName,
 					operation: remoteId == null ? 'create' : 'update',
 					recordId,
-					payload: resident.get('payload') as Record<string, unknown>,
+					payload: residentSnapshot.payload as Record<string, unknown>,
 				});
 
 				let currentResident = resident;

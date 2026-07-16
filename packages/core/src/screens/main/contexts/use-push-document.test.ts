@@ -120,6 +120,35 @@ describe('usePushDocument', () => {
 		});
 	});
 
+	it('sends a mutable resident snapshot across the worker boundary', async () => {
+		const payload = { status: 'pos-open', line_items: [] };
+		const proxiedPayload = new Proxy(payload, {});
+		const resident: Record<string, unknown> = {
+			wooOrderId: null,
+			payload: proxiedPayload,
+			toMutableJSON: () => ({ wooOrderId: null, payload }),
+		};
+		resident.get = (field: string) => resident[field];
+		mockFindOneExec.mockResolvedValue(resident);
+		mockWrite.mockImplementationOnce(async (input) => {
+			structuredClone(input);
+			return { mutationId: 'mutation-1', recordId: 'order-uuid' };
+		});
+		const doc = {
+			uuid: 'order-uuid',
+			id: 0,
+			collection: { name: 'orders' },
+			getLatest: () => doc,
+		};
+
+		const { result } = renderHook(() => usePushDocument());
+
+		await expect(result.current(doc as never)).resolves.toBeDefined();
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({ payload: { status: 'pos-open', line_items: [] } })
+		);
+	});
+
 	it('waits for an order acknowledgement and returns the rematerialized document id', async () => {
 		const resident: Record<string, unknown> = {
 			wooOrderId: null,
