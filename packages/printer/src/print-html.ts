@@ -18,7 +18,17 @@ export function buildPrintableReceiptHtml({
 	paperWidth,
 }: BuildPrintableReceiptHtmlOptions): string {
 	const normalizedPaperWidth = normalizeReceiptPaperWidth(paperWidth);
-	const pageSize = normalizedPaperWidth === 'a4' ? 'A4' : normalizedPaperWidth;
+	// Thermal receipts defer to the printer's selected roll paper via `size: auto`.
+	//
+	// The CSS `@page size` descriptor grammar is `<length>{1,2} | auto | <page-size>`
+	// — there is no "fixed width, flowing height" form:
+	//   - `80mm auto`  is INVALID (length + keyword); browsers ignore it and fall
+	//     back to the default paper (Letter/A4), printing the receipt tiny.
+	//   - `80mm`       is valid but makes BOTH dimensions 80mm — an 80mm×80mm square —
+	//     which the print dialog shrinks onto the roll, also printing it tiny.
+	// `auto` lets the browser use the thermal printer's own paper (e.g. 80×297mm) and
+	// shrink-fits the content to the roll width, which is what we actually want.
+	const pageSize = normalizedPaperWidth === 'a4' ? 'A4' : 'auto';
 	const widthRule = normalizedPaperWidth === 'a4' ? '\nbody > * { width: 210mm; }' : '';
 
 	return `<!doctype html>

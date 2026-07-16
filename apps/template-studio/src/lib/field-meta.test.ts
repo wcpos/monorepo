@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ReceiptDataSchema } from '@wcpos/printer/encoder';
+import { ReceiptDataSchema, ReceiptLineItemSchema } from '@wcpos/printer/encoder';
 
 import { ARRAY_DEFAULTS, SECTIONS } from './field-meta';
 
@@ -40,5 +40,16 @@ describe('field metadata defaults', () => {
 			'weekday_short',
 			'year',
 		]);
+	});
+
+	it('mirrors required Receipt Data v1.1 line fields in the add-row default', () => {
+		const line = ARRAY_DEFAULTS.lines as Record<string, unknown>;
+		for (const key of Object.keys(ReceiptLineItemSchema.shape)) {
+			if (
+				!ReceiptLineItemSchema.shape[key as keyof typeof ReceiptLineItemSchema.shape].isOptional()
+			) {
+				expect(line, key).toHaveProperty(key);
+			}
+		}
 	});
 });

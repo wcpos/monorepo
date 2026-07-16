@@ -332,6 +332,122 @@ describe('mapReceiptData', () => {
 		});
 	});
 
+	describe('Receipt Data v1.1 savings', () => {
+		it('does not copy bare display savings fields into tax-basis variants', () => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				presentation_hints: {
+					...offlineReceiptData.presentation_hints,
+					display_tax: 'excl',
+					prices_entered_with_tax: false,
+				},
+				lines: [
+					{
+						...offlineReceiptData.lines[0],
+						regular_price: '6.00',
+						selling_price: '5.00',
+						unit_savings: '1.00',
+						line_regular_total: '12.00',
+						line_selling_total: '10.00',
+						line_savings: '2.00',
+					},
+				],
+				totals: {
+					...offlineReceiptData.totals,
+					sale_savings_total: '2.00',
+					total_saved: '2.00',
+					total_saved_complete: true,
+				},
+			});
+
+			expect(result.lines[0]).toMatchObject({
+				regular_price: 6,
+				regular_price_incl: null,
+				regular_price_excl: null,
+				unit_savings: 1,
+				unit_savings_incl: null,
+				unit_savings_excl: null,
+				line_regular_total: 12,
+				line_regular_total_incl: null,
+				line_regular_total_excl: null,
+				line_savings: 2,
+				line_savings_incl: null,
+				line_savings_excl: null,
+			});
+			expect(result.totals).toMatchObject({
+				sale_savings_total: 2,
+				sale_savings_total_incl: null,
+				sale_savings_total_excl: null,
+				total_saved: 2,
+				total_saved_incl: null,
+				total_saved_excl: null,
+			});
+		});
+
+		it('preserves null when deriving savings from an unknown selling price', () => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				lines: [
+					{
+						...offlineReceiptData.lines[0],
+						regular_price_incl: '6.00',
+						selling_price_incl: null,
+					},
+				],
+			});
+
+			expect(result.lines[0].unit_savings_incl).toBeNull();
+			expect(result.lines[0].line_savings_incl).toBeNull();
+		});
+
+		it('preserves nullable savings fields instead of coercing null to zero', () => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				lines: [
+					{
+						...offlineReceiptData.lines[0],
+						regular_price: null,
+						regular_price_incl: null,
+						regular_price_excl: null,
+						selling_price: '5.00',
+						selling_price_incl: '5.00',
+						selling_price_excl: '4.55',
+						unit_savings: null,
+						unit_savings_incl: null,
+						unit_savings_excl: null,
+						line_regular_total: null,
+						line_regular_total_incl: null,
+						line_regular_total_excl: null,
+						line_selling_total: '10.00',
+						line_selling_total_incl: '10.00',
+						line_selling_total_excl: '9.09',
+						line_savings: null,
+						line_savings_incl: null,
+						line_savings_excl: null,
+						savings_in_discounts: false,
+					},
+				],
+				totals: {
+					...offlineReceiptData.totals,
+					sale_savings_total: null,
+					sale_savings_total_incl: null,
+					sale_savings_total_excl: null,
+					total_saved: null,
+					total_saved_incl: null,
+					total_saved_excl: null,
+					total_saved_complete: false,
+				},
+			});
+
+			expect(result.lines[0].regular_price).toBeNull();
+			expect(result.lines[0].line_savings_incl).toBeNull();
+			expect(result.totals.sale_savings_total).toBeNull();
+			expect(result.totals.total_saved).toBeNull();
+			expect(result.totals.total_saved_complete).toBe(false);
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+	});
+
 	describe('mapping from offline rendering shape', () => {
 		let mapped: ReceiptData;
 

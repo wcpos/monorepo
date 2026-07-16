@@ -26,6 +26,9 @@ on:
         type: boolean
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   main:
     runs-on: ubuntu-latest

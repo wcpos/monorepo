@@ -13,6 +13,7 @@ export const couponFormSchema = z.object({
 	free_shipping: z.boolean().optional().default(false),
 	usage_limit: z.union([z.number(), z.null()]).optional(),
 	usage_limit_per_user: z.union([z.number(), z.null()]).optional(),
+	limit_usage_to_x_items: z.union([z.number(), z.null()]).optional(),
 	minimum_amount: z.string().optional().default(''),
 	maximum_amount: z.string().optional().default(''),
 	email_restrictions: z.array(z.string()).optional().default([]),

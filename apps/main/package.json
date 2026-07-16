@@ -1,7 +1,7 @@
 {
 	"name": "@wcpos/main",
 	"main": "expo-router/entry",
-	"version": "1.9.6",
+	"version": "1.9.7",
 	"scripts": {
 		"dev": "expo start",
 		"android": "expo run:android",

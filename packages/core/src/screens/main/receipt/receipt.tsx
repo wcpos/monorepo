@@ -156,26 +156,34 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 
 	// Content size measured from the rendered receipt frame — lets the preview
 	// viewport track the real document instead of locking to fixed paper sizes.
+	// The measurement is stored together with the previewKey it was taken for
+	// and only applied while that template is still selected. Deriving (rather
+	// than resetting state on switch) matters: the preview iframe fills the
+	// canvas that this measurement sizes, and a document can never measure
+	// narrower than its viewport — so a stale measurement that survives one
+	// switch gets re-measured into place and the old paper size sticks forever.
 	const previewKey = String(selectedTemplateId ?? 'legacy-receipt');
-	const [contentSize, setContentSize] = React.useState<{
-		width: number;
-		height: number;
+	const [measuredContent, setMeasuredContent] = React.useState<{
+		key: string;
+		size: { width: number; height: number };
 	} | null>(null);
-	const [measuredPreviewKey, setMeasuredPreviewKey] = React.useState(previewKey);
-	if (measuredPreviewKey !== previewKey) {
-		// Template switched — drop the stale measurement until the new frame loads.
-		setMeasuredPreviewKey(previewKey);
-		setContentSize(null);
-	}
+	const contentSize = measuredContent?.key === previewKey ? measuredContent.size : null;
+	const activePreviewKey = React.useRef(previewKey);
+	React.useLayoutEffect(() => {
+		activePreviewKey.current = previewKey;
+	}, [previewKey]);
 	const handleContentSizeChange = React.useCallback(
 		(event: { nativeEvent: { contentSize: { width: number; height: number } } }) => {
+			if (activePreviewKey.current !== previewKey) return;
 			const { width, height } = event.nativeEvent.contentSize;
 			if (width <= 0 || height <= 0) return;
-			setContentSize((prev) =>
-				prev && prev.width === width && prev.height === height ? prev : { width, height }
+			setMeasuredContent((prev) =>
+				prev && prev.key === previewKey && prev.size.width === width && prev.size.height === height
+					? prev
+					: { key: previewKey, size: { width, height } }
 			);
 		},
-		[]
+		[previewKey]
 	);
 
 	// Resolve printer for this template

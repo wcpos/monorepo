@@ -1159,29 +1159,66 @@ function buildLineItems(
 		const unitExclTax = pricesEnteredWithTax
 			? round(unitBase / (1 + taxRate / 100))
 			: round(unitBase);
-		const lineSubInc = round(unitInclTax * qty);
-		const lineSubExc = round(unitExclTax * qty);
-		const taxAmount = round(lineSubInc - lineSubExc);
+		const regularBase = index === 0 ? round(unitBase + 5) : unitBase;
+		const regularUnitIncl = pricesEnteredWithTax
+			? round(regularBase)
+			: round(regularBase * (1 + taxRate / 100));
+		const regularUnitExcl = pricesEnteredWithTax
+			? round(regularBase / (1 + taxRate / 100))
+			: round(regularBase);
+		const unitSavingsIncl = round(Math.max(0, regularUnitIncl - unitInclTax));
+		const unitSavingsExcl = round(Math.max(0, regularUnitExcl - unitExclTax));
+		const lineSellingIncl = round(unitInclTax * qty);
+		const lineSellingExcl = round(unitExclTax * qty);
+		const lineRegularIncl = round(regularUnitIncl * qty);
+		const lineRegularExcl = round(regularUnitExcl * qty);
+		const lineSavingsIncl = round(unitSavingsIncl * qty);
+		const lineSavingsExcl = round(unitSavingsExcl * qty);
+		const savingsInDiscounts = unitSavingsIncl > 0 && rand() < 0.15;
+		const lineSubInc = savingsInDiscounts ? lineRegularIncl : lineSellingIncl;
+		const lineSubExc = savingsInDiscounts ? lineRegularExcl : lineSellingExcl;
+		const discountsIncl = savingsInDiscounts ? lineSavingsIncl : 0;
+		const discountsExcl = savingsInDiscounts ? lineSavingsExcl : 0;
+		const taxAmount = round(lineSellingIncl - lineSellingExcl);
 		lines.push({
 			key: `line-${index}-${formatSeed(seedFromRand(rand))}`,
 			sku: rand() < 0.85 ? `SKU-${Math.floor(rand() * 9999)}` : undefined,
 			name,
 			qty,
-			unit_subtotal: unitInclTax,
-			unit_subtotal_incl: unitInclTax,
-			unit_subtotal_excl: unitExclTax,
+			regular_price: regularUnitIncl,
+			regular_price_incl: regularUnitIncl,
+			regular_price_excl: regularUnitExcl,
+			selling_price: unitInclTax,
+			selling_price_incl: unitInclTax,
+			selling_price_excl: unitExclTax,
+			unit_savings: unitSavingsIncl,
+			unit_savings_incl: unitSavingsIncl,
+			unit_savings_excl: unitSavingsExcl,
+			line_regular_total: lineRegularIncl,
+			line_regular_total_incl: lineRegularIncl,
+			line_regular_total_excl: lineRegularExcl,
+			line_selling_total: lineSellingIncl,
+			line_selling_total_incl: lineSellingIncl,
+			line_selling_total_excl: lineSellingExcl,
+			line_savings: lineSavingsIncl,
+			line_savings_incl: lineSavingsIncl,
+			line_savings_excl: lineSavingsExcl,
+			savings_in_discounts: savingsInDiscounts,
+			unit_subtotal: savingsInDiscounts ? regularUnitIncl : unitInclTax,
+			unit_subtotal_incl: savingsInDiscounts ? regularUnitIncl : unitInclTax,
+			unit_subtotal_excl: savingsInDiscounts ? regularUnitExcl : unitExclTax,
 			unit_price: unitInclTax,
 			unit_price_incl: unitInclTax,
 			unit_price_excl: unitExclTax,
 			line_subtotal: lineSubInc,
 			line_subtotal_incl: lineSubInc,
 			line_subtotal_excl: lineSubExc,
-			discounts: 0,
-			discounts_incl: 0,
-			discounts_excl: 0,
-			line_total: lineSubInc,
-			line_total_incl: lineSubInc,
-			line_total_excl: lineSubExc,
+			discounts: discountsIncl,
+			discounts_incl: discountsIncl,
+			discounts_excl: discountsExcl,
+			line_total: lineSellingIncl,
+			line_total_incl: lineSellingIncl,
+			line_total_excl: lineSellingExcl,
 			meta: buildLineMeta(rand, useLong),
 			taxes:
 				taxRate > 0
@@ -1461,17 +1498,46 @@ function computeTotals(
 	const shipTotalExcl = shipping.reduce((sum, item) => sum + item.total_excl, 0);
 	const discountTotalIncl = discounts.reduce((sum, item) => sum + item.total_incl, 0);
 	const discountTotalExcl = discounts.reduce((sum, item) => sum + item.total_excl, 0);
+	const lineDiscountTotalIncl = lines.reduce((sum, line) => sum + line.discounts_incl, 0);
+	const lineDiscountTotalExcl = lines.reduce((sum, line) => sum + line.discounts_excl, 0);
+	const combinedDiscountTotalIncl = discountTotalIncl + lineDiscountTotalIncl;
+	const combinedDiscountTotalExcl = discountTotalExcl + lineDiscountTotalExcl;
 	// Discounts are positive magnitudes (matches WC) — subtract from grand.
-	const grandIncl = round(lineSubInc + feeTotalIncl + shipTotalIncl - discountTotalIncl);
-	const grandExcl = round(lineSubExc + feeTotalExcl + shipTotalExcl - discountTotalExcl);
+	const grandIncl = round(lineSubInc + feeTotalIncl + shipTotalIncl - combinedDiscountTotalIncl);
+	const grandExcl = round(lineSubExc + feeTotalExcl + shipTotalExcl - combinedDiscountTotalExcl);
 	const refundTotal = refunds.reduce((sum, refund) => sum + (refund.amount ?? 0), 0);
+	const saleSavingsTotalIncl = round(
+		lines.reduce((sum, line) => sum + (line.line_savings_incl ?? 0), 0)
+	);
+	const saleSavingsTotalExcl = round(
+		lines.reduce((sum, line) => sum + (line.line_savings_excl ?? 0), 0)
+	);
+	const additionalSavingsIncl = round(
+		lines.reduce(
+			(sum, line) => sum + (line.savings_in_discounts ? 0 : (line.line_savings_incl ?? 0)),
+			0
+		)
+	);
+	const additionalSavingsExcl = round(
+		lines.reduce(
+			(sum, line) => sum + (line.savings_in_discounts ? 0 : (line.line_savings_excl ?? 0)),
+			0
+		)
+	);
 	const totals: ReceiptTotals = {
 		subtotal: round(lineSubInc),
 		subtotal_incl: round(lineSubInc),
 		subtotal_excl: round(lineSubExc),
-		discount_total: round(discountTotalIncl),
-		discount_total_incl: round(discountTotalIncl),
-		discount_total_excl: round(discountTotalExcl),
+		discount_total: round(combinedDiscountTotalIncl),
+		discount_total_incl: round(combinedDiscountTotalIncl),
+		discount_total_excl: round(combinedDiscountTotalExcl),
+		sale_savings_total: saleSavingsTotalIncl,
+		sale_savings_total_incl: saleSavingsTotalIncl,
+		sale_savings_total_excl: saleSavingsTotalExcl,
+		total_saved: round(combinedDiscountTotalIncl + additionalSavingsIncl),
+		total_saved_incl: round(combinedDiscountTotalIncl + additionalSavingsIncl),
+		total_saved_excl: round(combinedDiscountTotalExcl + additionalSavingsExcl),
+		total_saved_complete: true,
 		tax_total: round(grandIncl - grandExcl),
 		total: grandIncl,
 		total_incl: grandIncl,
@@ -1498,12 +1564,12 @@ function buildTaxSummary(
 	taxLabel: string
 ): ReceiptTaxSummaryItem[] {
 	const taxableExcl =
-		lines.reduce((sum, line) => sum + (line.line_subtotal_excl ?? 0), 0) +
+		lines.reduce((sum, line) => sum + (line.line_total_excl ?? 0), 0) +
 		fees.reduce((sum, fee) => sum + fee.total_excl, 0) +
 		shipping.reduce((sum, item) => sum + item.total_excl, 0) +
 		discounts.reduce((sum, item) => sum - item.total_excl, 0);
 	const taxableIncl =
-		lines.reduce((sum, line) => sum + (line.line_subtotal_incl ?? 0), 0) +
+		lines.reduce((sum, line) => sum + (line.line_total_incl ?? 0), 0) +
 		fees.reduce((sum, fee) => sum + fee.total_incl, 0) +
 		shipping.reduce((sum, item) => sum + item.total_incl, 0) +
 		discounts.reduce((sum, item) => sum - item.total_incl, 0);
