@@ -12,6 +12,7 @@ import { PaymentWebview } from './payment-webview';
 // Capture the props handed to the (mocked) WebView so the test can drive the
 // `onLoad` lifecycle the same way the real iframe/native webview would.
 let webViewProps: Record<string, any> = {};
+const mockGet = jest.fn();
 const mockReplace = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
@@ -42,6 +43,9 @@ jest.mock('../../../../../contexts/app-state', () => ({
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt } }),
+}));
+jest.mock('../../../hooks/use-rest-http-client', () => ({
+	useRestHttpClient: () => ({ get: mockGet }),
 }));
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
@@ -123,16 +127,13 @@ describe('PaymentWebview fallback order refresh', () => {
 		});
 
 		expect(mockEngineRequire).not.toHaveBeenCalled();
+		expect(mockGet).not.toHaveBeenCalled();
 		jest.useRealTimers();
 	});
 
-	it('does not log a payment-gateway error when the fallback engine refresh fails', async () => {
+	it('does not log a payment-gateway error when the fallback server probe fails', async () => {
 		jest.useFakeTimers();
-		const release = jest.fn();
-		mockEngineRequire.mockReturnValue({
-			ready: Promise.reject(new Error('refresh failed')),
-			release,
-		});
+		mockGet.mockRejectedValue(new Error('Request failed with status code 404'));
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
@@ -143,14 +144,9 @@ describe('PaymentWebview fallback order refresh', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockEngineRequire).toHaveBeenCalledWith({
-			id: 'checkout:order-refresh:42',
-			collection: 'orders',
-			kind: 'targeted-records',
-			wooIds: [42],
-			forceRefresh: true,
-		});
-		expect(release).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		// The probe failed before any local catch-up was warranted.
+		expect(mockEngineRequire).not.toHaveBeenCalled();
 		// The regression: a failed safety-net poll must NOT be raised as an error
 		// (which is what surfaced the spurious PY02001 payment-gateway error).
 		expect(logger.error).not.toHaveBeenCalled();
@@ -158,19 +154,18 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 	});
 
-	it('reads the refreshed local order and routes when its status changes', async () => {
+	it('routes on SERVER truth even when the local document never updates', async () => {
+		// The review scenario: an engine require can settle without applying a
+		// newer revision (skip-coalesced resident task, dirty-row protection) —
+		// the local doc stays pos-open forever. The decision must come from the
+		// direct server probe, with the engine refresh as best-effort catch-up.
 		jest.useFakeTimers();
-		const order = makeOrder() as {
-			getLatest: jest.Mock;
-		};
-		order.getLatest = jest.fn().mockReturnValueOnce({ status: 'pos-open' }).mockReturnValue({
-			status: 'completed',
-			number: '42',
-			line_items: [],
+		mockGet.mockResolvedValue({
+			data: [{ status: 'completed', number: '42', line_items: [] }],
 		});
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
-		render(<PaymentWebview order={order as never} setLoading={jest.fn()} />);
+		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
 
 		await act(async () => {
 			webViewProps.onLoad({});
@@ -178,7 +173,8 @@ describe('PaymentWebview fallback order refresh', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockEngineRequire).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });
 		jest.useRealTimers();

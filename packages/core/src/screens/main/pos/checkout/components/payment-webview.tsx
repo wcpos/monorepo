@@ -14,6 +14,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
+import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
@@ -40,6 +41,7 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
 	const manager = useQueryManager();
+	const http = useRestHttpClient();
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 	const loadCountRef = React.useRef(0);
@@ -193,20 +195,34 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 				if (!localStatus || localStatus !== 'pos-open') return;
 
 				try {
-					orderLogger.debug('No postMessage received, refreshing order status', {
+					orderLogger.debug('No postMessage received, checking server order status', {
 						context: { orderId: order.id },
 					});
 
-					await refreshOrder();
-					const refreshedOrder = order.getLatest();
-					const serverStatus = refreshedOrder.status;
+					// The decision reads SERVER truth directly (the sync surface's
+					// include-read) — an engine require's `ready` can settle without
+					// applying a newer revision to THIS document (skip-coalesced
+					// resident tasks, dirty-row protection), so it cannot prove
+					// payment state. The engine refresh below is local catch-up only.
+					const response = await http.get('orders', {
+						params: { include: order.id, per_page: 1 },
+					});
+					const serverOrder = response?.data?.[0] as Record<string, unknown> | undefined;
+					if (!serverOrder) return;
+					const serverStatus = serverOrder.status as string;
 
 					// If server still matches local, payment hasn't completed yet
 					if (serverStatus === localStatus) return;
 
 					paymentReceivedRef.current = true;
 
-					const reducedStockItems = (refreshedOrder.line_items || []).filter((item) =>
+					// Best-effort: bring the local document up to date; routing below
+					// does not depend on it.
+					void refreshOrder().catch(() => undefined);
+
+					const reducedStockItems = (
+						(serverOrder.line_items as Record<string, unknown>[]) || []
+					).filter((item) =>
 						(item.meta_data as { key: string }[] | undefined)?.some(
 							(meta) => meta.key === '_reduced_stock'
 						)
@@ -215,15 +231,15 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 
 					orderLogger.success(
 						t('pos_checkout.payment_completed_for_order', {
-							orderNumber: refreshedOrder.number || order.number,
+							orderNumber: (serverOrder.number as string) || order.number,
 						}),
 						{
 							showToast: true,
 							saveToDb: true,
 							context: {
-								total: refreshedOrder.total,
-								paymentMethod: refreshedOrder.payment_method,
-								paymentMethodTitle: refreshedOrder.payment_method_title,
+								total: serverOrder.total,
+								paymentMethod: serverOrder.payment_method,
+								paymentMethodTitle: serverOrder.payment_method_title,
 								status: serverStatus,
 								source: 'fallback-refresh',
 							},
