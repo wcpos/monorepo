@@ -132,7 +132,7 @@ test.describe('Products Page (Pro)', () => {
 		await page.waitForTimeout(2_000);
 
 		// Click the expand link on the variable product
-		const expandLink = screen.getByTestId('variable-product-expand').first();
+		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await expandLink.click();
 		await page.waitForTimeout(1_500);
@@ -154,7 +154,7 @@ test.describe('Products Page (Pro)', () => {
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
 
-		const expandLink = screen.getByTestId('variable-product-expand').first();
+		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await expandLink.click();
 		await page.waitForTimeout(1_500);
@@ -182,7 +182,7 @@ test.describe('Products Page (Pro)', () => {
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
 
-		const expandLink = screen.getByTestId('variable-product-expand').first();
+		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await expandLink.click();
 		await page.waitForTimeout(1_500);
