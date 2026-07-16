@@ -16,11 +16,10 @@
  */
 
 import { defaultConfig } from '@wcpos/database/adapters/default';
-import type { OnlineStatus } from '@wcpos/hooks/use-online-status';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 
-import { getEngineConnectivity, setAppOnlineStatus } from './connectivity';
+import { getEngineConnectivity } from './connectivity';
 import { deriveSyncSite } from './sync-site';
 
 export interface CreateAppSyncEngineOptions {
@@ -65,15 +64,6 @@ type CachedEngine = {
 
 let cachedEngine: CachedEngine | null = null;
 const pendingDisposals = new Map<string, Promise<void>>();
-
-export async function updateAppOnlineStatus(status: OnlineStatus): Promise<void> {
-	const wasOnline = getEngineConnectivity() === 'online';
-	setAppOnlineStatus(status);
-	if (wasOnline || getEngineConnectivity() !== 'online' || !cachedEngine) return;
-
-	await cachedEngine.engine.sync('product-browse-window-seed');
-	await cachedEngine.engine.sync('scheduler-drain');
-}
 
 function canonicalSite(site: string): string {
 	let canonical = site.trim().toLowerCase();
