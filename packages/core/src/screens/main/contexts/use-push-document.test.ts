@@ -1,6 +1,8 @@
 /**
  * @jest-environment jsdom
  */
+import { serialize } from 'node:v8';
+
 import { act, renderHook } from '@testing-library/react';
 
 import { usePushDocument } from './use-push-document';
@@ -118,6 +120,37 @@ describe('usePushDocument', () => {
 				line_items: [],
 			}),
 		});
+	});
+
+	it('sends a worker-cloneable resident payload', async () => {
+		const residentPayload = new Proxy({ status: 'processing' }, {});
+		const resident: Record<string, unknown> = {
+			wooOrderId: 123,
+			payload: residentPayload,
+		};
+		resident.get = (field: string) => resident[field];
+		resident.toMutableJSON = () => ({ payload: { status: 'processing' } });
+		mockFindOneExec.mockResolvedValue(resident);
+		mockWrite.mockImplementation(async ({ payload }: { payload: Record<string, unknown> }) => {
+			serialize(payload);
+			return { mutationId: 'mutation-1', recordId: 'order-uuid' };
+		});
+		const doc = {
+			uuid: 'order-uuid',
+			id: 123,
+			collection: { name: 'orders' },
+			getLatest: () => doc,
+		};
+
+		const { result } = renderHook(() => usePushDocument());
+
+		await act(async () => {
+			await result.current(doc as never);
+		});
+
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({ payload: { status: 'processing' } })
+		);
 	});
 
 	it('waits for an order acknowledgement and returns the rematerialized document id', async () => {

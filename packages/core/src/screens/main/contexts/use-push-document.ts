@@ -63,7 +63,7 @@ export const usePushDocument = () => {
 					collection: collectionName,
 					operation: remoteId == null ? 'create' : 'update',
 					recordId,
-					payload: resident.get('payload') as Record<string, unknown>,
+					payload: resident.toMutableJSON().payload as Record<string, unknown>,
 				});
 
 				let currentResident = resident;
