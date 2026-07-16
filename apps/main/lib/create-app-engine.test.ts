@@ -14,6 +14,7 @@ const BASE_OPTIONS = {
 function createEngineDouble(dispose: () => Promise<void> = () => Promise.resolve()) {
 	return {
 		dispose: jest.fn(dispose),
+		sync: jest.fn().mockResolvedValue({ lane: 'all', status: 'ran' }),
 	};
 }
 
@@ -36,12 +37,27 @@ function loadCreateAppEngine(
 		defaultConfig: { storage: { name: 'test-storage' } },
 	}));
 
-	const { createAppSyncEngine } =
+	const { createAppSyncEngine, updateAppOnlineStatus } =
 		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
-	return { createAppSyncEngine, createRxdbSyncEngine };
+	const { setAppOnlineStatus } =
+		jest.requireActual<typeof import('./connectivity')>('./connectivity');
+	return { createAppSyncEngine, createRxdbSyncEngine, setAppOnlineStatus, updateAppOnlineStatus };
 }
 
 describe('createAppSyncEngine scope cache', () => {
+	it('replays product bootstrap when connectivity recovers after an offline start', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, setAppOnlineStatus, updateAppOnlineStatus } = loadCreateAppEngine(
+			() => engine
+		);
+		setAppOnlineStatus('offline');
+		createAppSyncEngine(BASE_OPTIONS);
+
+		await updateAppOnlineStatus('online-website-available');
+
+		expect(engine.sync.mock.calls).toEqual([['product-browse-window-seed'], ['scheduler-drain']]);
+	});
+
 	it('returns the identical engine when the same scope is constructed twice', () => {
 		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
 

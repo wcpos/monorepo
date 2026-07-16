@@ -23,8 +23,7 @@ import { QueryProvider } from '@wcpos/query';
 import { setDatabase } from '@wcpos/utils/logger';
 
 import { useNavigationBackground } from '../../components/use-navigation-background';
-import { setAppOnlineStatus } from '../../lib/connectivity';
-import { createAppSyncEngine } from '../../lib/create-app-engine';
+import { createAppSyncEngine, updateAppOnlineStatus } from '../../lib/create-app-engine';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -155,7 +154,7 @@ function EngineConnectivityBridge() {
 
 	// Keep the sync engine's non-React connectivity port aligned with the provider.
 	React.useEffect(() => {
-		setAppOnlineStatus(status);
+		void updateAppOnlineStatus(status);
 	}, [status]);
 
 	return null;
