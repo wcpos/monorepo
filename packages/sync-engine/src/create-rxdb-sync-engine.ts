@@ -1197,12 +1197,10 @@ export function createRxdbSyncEngine(
 	const maintenanceTimers: ReturnType<typeof setInterval>[] = [];
 	let lastAutomaticConnectivity: EngineConnectivity | undefined;
 	let reconnectRetick: Promise<void> | null = null;
-	const reconnectRetickLanes: EngineLane[] = [
+	const reconnectRetickSeedLanes: EngineLane[] = [
 		'reference-seed',
 		'product-browse-window-seed',
 		'order-window-seed',
-		'scheduler-drain',
-		'write-drain',
 	];
 	const readConnectivity = (): EngineConnectivity => {
 		try {
@@ -1218,9 +1216,15 @@ export function createRxdbSyncEngine(
 		lastAutomaticConnectivity = connectivityNow;
 		if (reconnected && reconnectRetick === null) {
 			diagnostics({ type: 'engine.reconnect.retick', level: 'info' });
+			// Mirror startup ordering: seeds must land before the drains scan for
+			// runnable tasks, or the sweep seeds work the drain won't see until
+			// its regular interval.
 			reconnectRetick = Promise.all(
-				reconnectRetickLanes.map((lane) => runAutomaticTick(() => tickLaneWithEvents(lane)))
-			).then(() => undefined);
+				reconnectRetickSeedLanes.map((lane) => runAutomaticTick(() => tickLaneWithEvents(lane)))
+			)
+				.then(() => runAutomaticTick(() => tickLaneWithEvents('scheduler-drain')))
+				.then(() => runAutomaticTick(() => tickLaneWithEvents('write-drain')))
+				.then(() => undefined);
 			void reconnectRetick.then(
 				() => {
 					reconnectRetick = null;
@@ -1298,6 +1302,9 @@ export function createRxdbSyncEngine(
 					runAutomaticTick(() => tickLaneWithEvents('order-window-seed')),
 				]);
 				await runAutomaticTick(() => tickLaneWithEvents('scheduler-drain'));
+				// dispose() may have run during the awaited seeds above — arming now
+				// would repopulate laneNextDueAtMs on a disposed engine.
+				if (disposed) return;
 				changeSignalTimer = armLaneInterval('change-signal', intervals.changeSignalPollMs);
 				writeDrainTimer = armLaneInterval('write-drain', intervals.writeDrainPollMs);
 				maintenanceTimers.push(armLaneInterval('scheduler-drain', intervals.schedulerDrainMs));

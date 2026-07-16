@@ -246,22 +246,19 @@ async function fetchProductSearch(
 	search: string,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
+	// Single-shot path (no pagination): capping per-request here would truncate
+	// search results, so the batch dial deliberately does not apply.
 	const limit = taskLimit(task);
-	const requestLimit = taskLimit(task, input.pullBatchSize);
 	const searchPayloads = await fetchProductQuery(
 		input,
-		productSearchParams(search, requestLimit),
+		productSearchParams(search, limit),
 		context
 	);
-	const skuPayloads = await fetchProductQuery(
-		input,
-		productSkuParams(search, requestLimit),
-		context
-	);
+	const skuPayloads = await fetchProductQuery(input, productSkuParams(search, limit), context);
 	const payloads = uniqueProductPayloads([...skuPayloads, ...searchPayloads]);
 	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
-	const complete = searchPayloads.length < requestLimit && skuPayloads.length < requestLimit;
+	const complete = searchPayloads.length < limit && skuPayloads.length < limit;
 	await recordCoverage(
 		'products',
 		input,
@@ -285,10 +282,13 @@ export function createProductsSchedulerFetcher(
 
 		const browseWindowLimit = parseProductBrowseWindowLimit(task.queryKey);
 		if (browseWindowLimit !== null) {
+			// The window limit is a coverage total, not a request size — the batch
+			// dial must not shrink it (the task completes after one fetch, so a
+			// smaller value would permanently shrink the cold product window).
 			return fetchProductBrowseWindow(
 				input,
 				task,
-				Math.min(browseWindowLimit, taskLimit(task, input.pullBatchSize)),
+				Math.min(browseWindowLimit, taskLimit(task)),
 				context
 			);
 		}

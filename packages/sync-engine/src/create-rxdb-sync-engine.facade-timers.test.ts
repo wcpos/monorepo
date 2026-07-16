@@ -159,17 +159,21 @@ describe('RxdbSyncEngine reconnect re-tick', () => {
 		connectivity.set('online');
 		captured[0]!.callback();
 		captured.find(({ delay }) => delay === 60_000)!.callback();
-		for (const lane of [
-			'reference-seed',
-			'product-browse-window-seed',
-			'order-window-seed',
-			'scheduler-drain',
-			'write-drain',
-		] as const) {
-			expect(
-				events.filter((event) => event.type === 'lane-start' && event.lane === lane)
-			).toHaveLength(1);
-		}
+		// The sweep sequences seeds before drains (mirroring startup), so the
+		// drain lanes land a few microtask turns after the trigger.
+		await vi.waitFor(() => {
+			for (const lane of [
+				'reference-seed',
+				'product-browse-window-seed',
+				'order-window-seed',
+				'scheduler-drain',
+				'write-drain',
+			] as const) {
+				expect(
+					events.filter((event) => event.type === 'lane-start' && event.lane === lane)
+				).toHaveLength(1);
+			}
+		});
 		expect(
 			diagnostics.mock.calls.filter(([event]) => event.type === 'engine.reconnect.retick')
 		).toHaveLength(1);
