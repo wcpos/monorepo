@@ -22,7 +22,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryManager } from '@wcpos/query';
+import { prepareCollectionResetRefill, useQueryManager } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 import {
@@ -52,6 +52,19 @@ const ROW_ORDER: CollectionKey[] = [
 	'taxRates',
 ];
 
+/** Engine row key → the legacy collection key the reset funnel speaks. */
+const ROW_TO_LEGACY: Record<CollectionKey, string> = {
+	products: 'products',
+	variations: 'variations',
+	orders: 'orders',
+	customers: 'customers',
+	categories: 'products/categories',
+	brands: 'products/brands',
+	tags: 'products/tags',
+	coupons: 'coupons',
+	taxRates: 'taxes',
+};
+
 const ROW_LABEL_KEYS: Record<CollectionKey, { key: string; fallback: string }> = {
 	products: { key: 'common.products', fallback: 'Products' },
 	variations: { key: 'common.variations', fallback: 'Variations' },
@@ -66,6 +79,9 @@ const ROW_LABEL_KEYS: Record<CollectionKey, { key: string; fallback: string }> =
 
 function useStorageEstimate(): number | null {
 	const [bytes, setBytes] = React.useState<number | null>(null);
+	// Effect (last resort per project.mdc): navigator.storage.estimate() is a
+	// one-shot async platform probe with no reactive/observable seam, so a
+	// mount-time effect is the only way to pull it into React state.
 	React.useEffect(() => {
 		const nav = typeof navigator !== 'undefined' ? navigator : undefined;
 		if (!nav?.storage?.estimate) return;
@@ -98,9 +114,19 @@ function CollectionRowView({ row, label }: { row: CollectionRow; label: string }
 
 	const resetCollection = async () => {
 		setConfirming(false);
-		// resetCollection returns 'needs-confirmation' when a pending write queue
-		// would be dropped — the merchant already confirmed here, so force it.
-		await engine.scope.resetCollection(row.key, { confirmDestroyQueue: true });
+		// Clearing products must also clear the separate variations collection, or
+		// stale child docs survive — the same pairing the app-wide reset funnel uses.
+		const engineNames: CollectionKey[] =
+			row.key === 'products' ? ['variations', 'products'] : [row.key];
+		const legacyNames = engineNames.map((name) => ROW_TO_LEGACY[name]);
+		// Reseed + drain the dropped collections immediately (the merchant expects
+		// a re-download, not just a delete) — the established refill path.
+		const refill = prepareCollectionResetRefill(engine, legacyNames);
+		for (const name of engineNames) {
+			// The dialog IS the queue-destroy confirmation, so force past it.
+			await engine.scope.resetCollection(name, { confirmDestroyQueue: true });
+		}
+		await refill();
 	};
 
 	return (
@@ -270,10 +296,15 @@ export function DatabaseScreen() {
 				{status.connectivity === 'offline' ? (
 					<View className="border-warning/40 bg-warning/10 rounded-md border p-2">
 						<Text className="text-warning text-sm">
-							{t(
-								'health.database.offline',
-								"You're offline. Sales keep working — anything you make is stored here and delivered when your server is back."
-							)}
+							{readyToSell
+								? t('health.database.offline', {
+										defaultValue:
+											"You're offline. Sales keep working — anything you make is stored here and delivered when your server is back.",
+									})
+								: t('health.database.offline_preparing', {
+										defaultValue:
+											"You're offline and still setting up — this till can't sell until its catalog finishes downloading.",
+									})}
 						</Text>
 					</View>
 				) : null}
