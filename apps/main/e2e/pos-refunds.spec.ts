@@ -34,14 +34,14 @@ async function addFirstProductToCart(page: Page) {
 async function createCompletedOrder(page: Page) {
 	await addFirstProductToCart(page);
 	await page.getByTestId('checkout-button').click();
-	await page.waitForURL(/\/cart\/[^/]+\/checkout$/, {
+	await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, {
 		timeout: 15_000,
 	});
 	await expect(page.getByTestId('process-payment-button')).toBeVisible({
 		timeout: 15_000,
 	});
 
-	const orderUuid = page.url().match(/\/cart\/([^/]+)\/checkout$/)?.[1];
+	const orderUuid = page.url().match(/\/cart\/([^/?#]+)\/checkout(?:[/?#]|$)/)?.[1];
 	expect(orderUuid).toBeTruthy();
 
 	await page.getByTestId('process-payment-button').click();
