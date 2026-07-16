@@ -178,6 +178,12 @@ function MetricsPersistenceBridge() {
 	React.useEffect(() => {
 		if (!storeDB) return;
 
+		// Tracks whether this store is still the active one. A store switch tears the
+		// effect down (setting this) before the incoming store resets the module map;
+		// a hydrate that resolves after that point belongs to the outgoing store and
+		// must be dropped, or it would fold this store's counts into the new store.
+		let cancelled = false;
+
 		// Each store owns its host metrics. Drop any prior store's in-memory buckets
 		// before hydrating this store so one store never displays or re-persists
 		// another store's metrics. Safe against the outgoing store's final persist
@@ -191,6 +197,7 @@ function MetricsPersistenceBridge() {
 		const statePromise = storeDB.addState<MetricsBucket[]>('host_metrics_v1');
 		void statePromise
 			.then((state) => {
+				if (cancelled) return;
 				hydrateMetricsBuckets(state.get());
 			})
 			.catch((error: unknown) => {
@@ -215,6 +222,7 @@ function MetricsPersistenceBridge() {
 		);
 
 		return () => {
+			cancelled = true;
 			clearInterval(interval);
 			// Snapshot this store's buckets synchronously so the next store's
 			// resetMetricsBuckets() can't blank them before the write lands.
