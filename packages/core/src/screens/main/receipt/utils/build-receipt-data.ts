@@ -227,10 +227,22 @@ function getPosPriceData(item: Record<string, any>): PosPriceData | null {
 	const entry = Array.isArray(item.meta_data)
 		? item.meta_data.find((meta: Record<string, any>) => meta?.key === '_woocommerce_pos_data')
 		: undefined;
-	if (typeof entry?.value !== 'string' || entry.value === '') return null;
+	// next speaks typed meta: the local write path stores this value as an
+	// OBJECT (pos/hooks/utils.ts), while server round-trips may still deliver
+	// the stringified form — a string-only guard blanked the savings row on
+	// fresh/offline receipts.
+	if (
+		entry?.value == null ||
+		(typeof entry.value !== 'string' && typeof entry.value !== 'object') ||
+		entry.value === ''
+	) {
+		return null;
+	}
 
 	try {
-		const data = JSON.parse(entry.value) as Record<string, unknown>;
+		const data = (
+			typeof entry.value === 'string' ? JSON.parse(entry.value) : entry.value
+		) as Record<string, unknown>;
 		if (
 			!data ||
 			typeof data !== 'object' ||
