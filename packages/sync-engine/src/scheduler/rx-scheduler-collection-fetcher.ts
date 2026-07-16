@@ -136,7 +136,12 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 
 	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
 		assertGreedyTask(spec, task);
-		const perPage = Math.min(pullRequestLimit(task, input.pullBatchSize), WOO_REST_MAX_PER_PAGE);
+		// GREEDY lanes are exempt from the batch dial: their cross-invocation page
+		// cursor makes a mid-task per_page change shift the page arithmetic (rows
+		// skipped, then the terminal prune removes valid local records), and a
+		// small page size can strand large sets against the fixed request budget.
+		// These collections are tiny (terms/tax) — the dial buys nothing here.
+		const perPage = Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
 		const page = nextPageByTask.get(task.id) ?? 1;
 		const query = new URLSearchParams();
 		query.set('per_page', String(perPage));
