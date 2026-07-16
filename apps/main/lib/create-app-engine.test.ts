@@ -53,6 +53,9 @@ describe('createAppSyncEngine scope cache', () => {
 		setAppOnlineStatus('offline');
 		createAppSyncEngine(BASE_OPTIONS);
 
+		await updateAppOnlineStatus('online-website-unavailable');
+		expect(engine.sync).not.toHaveBeenCalled();
+
 		await updateAppOnlineStatus('online-website-available');
 
 		expect(engine.sync.mock.calls).toEqual([['product-browse-window-seed'], ['scheduler-drain']]);
@@ -133,7 +136,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
-		expect(latestCredentials.getLatest).toHaveBeenCalledTimes(1);
+		expect(latestCredentials.getLatest).toHaveBeenCalledTimes(2);
 		expect(initialRefreshAuth).not.toHaveBeenCalled();
 		expect(latestRefreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(

@@ -67,9 +67,9 @@ let cachedEngine: CachedEngine | null = null;
 const pendingDisposals = new Map<string, Promise<void>>();
 
 export async function updateAppOnlineStatus(status: OnlineStatus): Promise<void> {
-	const wasOffline = getEngineConnectivity() === 'offline';
+	const wasOnline = getEngineConnectivity() === 'online';
 	setAppOnlineStatus(status);
-	if (!wasOffline || getEngineConnectivity() === 'offline' || !cachedEngine) return;
+	if (wasOnline || getEngineConnectivity() !== 'online' || !cachedEngine) return;
 
 	await cachedEngine.engine.sync('product-browse-window-seed');
 	await cachedEngine.engine.sync('scheduler-drain');
