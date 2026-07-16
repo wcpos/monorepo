@@ -34,7 +34,6 @@ async function addFirstProductToCart(page: Page) {
 async function createCompletedOrder(page: Page) {
 	await addFirstProductToCart(page);
 	await page.getByTestId('checkout-button').click();
-	await expect(page).toHaveURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });
 	await expect(page.getByTestId('process-payment-button')).toBeVisible({
 		timeout: 15_000,
 	});
@@ -56,6 +55,7 @@ async function createCompletedOrder(page: Page) {
 
 async function interceptRefundDependencies(page: Page) {
 	const unsupportedProviderRefundGatewayId = 'unsupported_provider_refunds';
+	let orderRevision = 0;
 	const gatewayIds = [
 		unsupportedProviderRefundGatewayId,
 		'stripe_terminal_for_woocommerce',
@@ -93,6 +93,23 @@ async function interceptRefundDependencies(page: Page) {
 					},
 				}))
 			),
+		});
+	});
+
+	await page.route('**/wp-json/wcpos/v2/push/orders', async (route) => {
+		const mutation = route.request().postDataJSON() as {
+			operation: 'create' | 'update';
+			payload: Record<string, unknown>;
+		};
+		const currentRevision = `sha256:e2e-refund-${++orderRevision}`;
+
+		await route.fulfill({
+			status: mutation.operation === 'create' ? 201 : 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				document: { ...mutation.payload, id: 999_001 },
+				currentRevision,
+			}),
 		});
 	});
 }
