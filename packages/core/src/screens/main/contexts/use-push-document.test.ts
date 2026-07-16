@@ -120,6 +120,32 @@ describe('usePushDocument', () => {
 		});
 	});
 
+	it('detaches the resident payload before sending it to the write worker', async () => {
+		const payload = new Proxy({ status: 'pos-open', line_items: [] }, {});
+		const resident: Record<string, unknown> = {
+			wooOrderId: null,
+			payload,
+		};
+		resident.get = (field: string) => resident[field];
+		mockFindOneExec.mockResolvedValue(resident);
+		const doc = {
+			uuid: 'order-uuid',
+			id: 0,
+			collection: { name: 'orders' },
+			getLatest: () => doc,
+		};
+
+		const { result } = renderHook(() => usePushDocument());
+
+		await act(async () => {
+			await result.current(doc as never);
+		});
+
+		const queuedPayload = mockWrite.mock.calls[0][0].payload;
+		expect(queuedPayload).toEqual({ status: 'pos-open', line_items: [] });
+		expect(queuedPayload).not.toBe(payload);
+	});
+
 	it('waits for an order acknowledgement and returns the rematerialized document id', async () => {
 		const resident: Record<string, unknown> = {
 			wooOrderId: null,
