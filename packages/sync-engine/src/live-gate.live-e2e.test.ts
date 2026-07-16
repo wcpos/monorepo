@@ -153,24 +153,21 @@ function evidenceTable(evidence: readonly Evidence[]): string {
 
 liveDescribe('LIVE sync-engine sale-ready gate', () => {
 	const evidence: Evidence[] = [];
-	const createdOrders: { recordId: string; wooOrderId: number }[] = [];
+	const createdWooOrderIds: number[] = [];
 	let engine: RxdbSyncEngine | null = null;
 
 	afterAll(async () => {
 		try {
-			if (engine && createdOrders.length > 0) {
-				for (const { recordId } of createdOrders) {
-					await engine.write({ collection: 'orders', operation: 'delete', recordId });
+			if (createdWooOrderIds.length > 0) {
+				const site = liveSite(LIVE_SYNC_BASE as string);
+				const fetcher = authenticatedFetcher(LIVE_BASIC_AUTH as string);
+				for (const wooOrderId of createdWooOrderIds) {
+					const response = await fetcher(
+						`${site.wpJsonRoot}wc/v3/orders/${wooOrderId}?force=true`,
+						{ method: 'DELETE' }
+					);
+					expect(response.ok).toBe(true);
 				}
-				const cleanup = await engine.sync('write-drain');
-				expect(cleanup).toMatchObject({
-					lane: 'write-drain',
-					status: 'ran',
-					pushed: createdOrders.length,
-					conflicts: 0,
-					failed: 0,
-					rejected: 0,
-				});
 			}
 		} finally {
 			try {
@@ -334,7 +331,7 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 		const wooOrderId = order?.['wooOrderId'];
 		const orderRevision = (order?.['sync'] as { revision?: unknown } | undefined)?.revision;
 		if (typeof wooOrderId === 'number' && Number.isSafeInteger(wooOrderId) && wooOrderId > 0) {
-			createdOrders.push({ recordId: orderRecordId, wooOrderId });
+			createdWooOrderIds.push(wooOrderId);
 		}
 		expect(drain).toMatchObject({
 			lane: 'write-drain',
