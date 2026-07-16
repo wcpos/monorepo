@@ -27,25 +27,46 @@ import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useQueryManager } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { usePullDocument } from '../../contexts/use-pull-document';
 
 import type { CellContext } from '@tanstack/react-table';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
+const syncLogger = getLogger(['wcpos', 'coupons', 'actions', 'sync']);
+
 export function Actions({ row }: CellContext<{ document: CouponDocument }, 'actions'>) {
 	const coupon = row.original.document;
 	const router = useRouter();
-	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const initialForce = !coupon.id;
 	const [force, setForce] = React.useState(initialForce);
 	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
+
+	const handleRefresh = React.useCallback(() => {
+		const handle = manager.engine.require({
+			id: 'coupon-actions:refresh',
+			collection: 'coupons',
+			kind: 'refresh',
+			forceRefresh: true,
+		});
+		void handle.ready
+			.finally(() => handle.release())
+			.catch((error) => {
+				syncLogger.error('Failed to refresh coupons', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			});
+	}, [manager]);
 
 	const handleDelete = React.useCallback(async () => {
 		await manager.engine.write({
@@ -77,15 +98,7 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
 					{coupon.id && (
-						<DropdownMenuItem
-							onPress={() => {
-								if (coupon.id) {
-									void pullDocument(coupon.id, coupon.collection as never).catch(() => {
-										// Errors are already logged in usePullDocument
-									});
-								}
-							}}
-						>
+						<DropdownMenuItem onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>

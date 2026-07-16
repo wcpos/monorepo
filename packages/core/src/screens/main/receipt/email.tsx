@@ -31,7 +31,7 @@ interface Props {
  *
  */
 export function EmailForm({ order }: Props) {
-	const http = useRestHttpClient('', { legacyDataPlane: true });
+	const http = useRestHttpClient();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
 	const orderID = useObservableEagerState(order.id$ ?? of(undefined as number | undefined));

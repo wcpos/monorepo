@@ -32,7 +32,7 @@ export interface WCRefund {
 }
 
 export function useOrderRefunds(orderId: number) {
-	const http = useRestHttpClient('', { legacyDataPlane: true });
+	const http = useRestHttpClient();
 
 	const observable$ = React.useMemo(
 		() => from(http.get(`orders/${orderId}/refunds`)).pipe(map((res) => res.data as WCRefund[])),

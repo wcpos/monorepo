@@ -61,7 +61,7 @@ const makeOrder = () =>
 		getLatest: () => ({ status: 'pos-open', links: {}, line_items: [] }),
 	}) as never;
 
-describe('PaymentWebview fallback order fetch', () => {
+describe('PaymentWebview fallback order refresh', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		jest.useRealTimers();
@@ -126,11 +126,12 @@ describe('PaymentWebview fallback order fetch', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
+		expect(mockEngineRequire).not.toHaveBeenCalled();
 		expect(mockGet).not.toHaveBeenCalled();
 		jest.useRealTimers();
 	});
 
-	it('does not log a payment-gateway error when the fallback fetch fails (e.g. 404)', async () => {
+	it('does not log a payment-gateway error when the fallback server probe fails', async () => {
 		jest.useFakeTimers();
 		mockGet.mockRejectedValue(new Error('Request failed with status code 404'));
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
@@ -143,7 +144,9 @@ describe('PaymentWebview fallback order fetch', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockGet).toHaveBeenCalledWith('/42');
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		// The probe failed before any local catch-up was warranted.
+		expect(mockEngineRequire).not.toHaveBeenCalled();
 		// The regression: a failed safety-net poll must NOT be raised as an error
 		// (which is what surfaced the spurious PY02001 payment-gateway error).
 		expect(logger.error).not.toHaveBeenCalled();
@@ -151,9 +154,15 @@ describe('PaymentWebview fallback order fetch', () => {
 		jest.useRealTimers();
 	});
 
-	it('stays quiet (no error, no navigation) when the server status has not changed yet', async () => {
+	it('routes on SERVER truth even when the local document never updates', async () => {
+		// The review scenario: an engine require can settle without applying a
+		// newer revision (skip-coalesced resident task, dirty-row protection) —
+		// the local doc stays pos-open forever. The decision must come from the
+		// direct server probe, with the engine refresh as best-effort catch-up.
 		jest.useFakeTimers();
-		mockGet.mockResolvedValue({ data: { status: 'pos-open' } });
+		mockGet.mockResolvedValue({
+			data: [{ status: 'completed', number: '42', line_items: [] }],
+		});
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
@@ -164,9 +173,10 @@ describe('PaymentWebview fallback order fetch', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockGet).toHaveBeenCalledWith('/42');
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
 		expect(logger.error).not.toHaveBeenCalled();
-		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });
 		jest.useRealTimers();
 	});
 });

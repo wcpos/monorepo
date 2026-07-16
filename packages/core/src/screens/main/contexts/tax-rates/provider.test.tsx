@@ -20,13 +20,9 @@ const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown)
 	resource: mockResource,
 }));
 const mockUseObservableSuspense = jest.fn((resource: unknown) => resource);
-const mockServiceGet = jest.fn(async () => ({ status: 200, data: [] }));
-const mockLegacyGet = jest.fn(async () => ({ status: 200, data: [] }));
+const mockGet = jest.fn(async () => ({ status: 200, data: [] }));
 const mockExtraDataSet = jest.fn();
-const mockUseRestHttpClient = jest.fn(
-	(_endpoint?: string, options?: { legacyDataPlane?: boolean }) =>
-		options?.legacyDataPlane ? { get: mockLegacyGet } : { get: mockServiceGet }
-);
+const mockUseRestHttpClient = jest.fn(() => ({ get: mockGet }));
 
 jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
@@ -58,8 +54,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: (endpoint?: string, options?: { legacyDataPlane?: boolean }) =>
-		mockUseRestHttpClient(endpoint, options),
+	useRestHttpClient: () => mockUseRestHttpClient(),
 }));
 jest.mock('../../hooks/use-base-tax-location', () => ({
 	useBaseTaxLocation: () => ({ country: 'US', state: 'CA', city: '', postcode: '' }),
@@ -103,15 +98,16 @@ describe('TaxRatesProvider query-state consumption', () => {
 	});
 });
 
-describe('ExtraDataProvider API planes', () => {
+describe('ExtraDataProvider API services', () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it('loads only tax classes from the legacy data plane', () => {
+	it('loads all extra data through one service client', () => {
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
-		expect(mockLegacyGet).toHaveBeenCalledWith('/taxes/classes');
-		expect(mockServiceGet).toHaveBeenCalledWith('/shipping_methods');
-		expect(mockServiceGet).toHaveBeenCalledWith('/data/order_statuses');
-		expect(mockLegacyGet).toHaveBeenCalledTimes(1);
+		expect(mockUseRestHttpClient).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
+		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
+		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
+		expect(mockGet).toHaveBeenCalledTimes(3);
 	});
 });

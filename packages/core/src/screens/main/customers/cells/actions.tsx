@@ -27,15 +27,17 @@ import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useQueryManager } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { usePullDocument } from '../../contexts/use-pull-document';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 import type { CellContext } from '@tanstack/react-table';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
+
+const syncLogger = getLogger(['wcpos', 'customers', 'actions', 'sync']);
 
 /**
  *
@@ -43,13 +45,35 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
 export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'actions'>) {
 	const customer = row.original.document;
 	const router = useRouter();
-	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const { format } = useCustomerNameFormat();
 	const [force, setForce] = React.useState(!customer.id);
 	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
+
+	const handleRefresh = React.useCallback(() => {
+		if (!customer.id) return;
+		const handle = manager.engine.require({
+			id: `customer-actions:refresh:${customer.id}`,
+			collection: 'customers',
+			kind: 'targeted-records',
+			wooIds: [customer.id],
+			forceRefresh: true,
+		});
+		void handle.ready
+			.finally(() => handle.release())
+			.catch((error) => {
+				syncLogger.error('Failed to refresh customer', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						customerId: customer.id,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			});
+	}, [customer.id, manager]);
 
 	/**
 	 * Handle delete button click
@@ -87,13 +111,7 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
 					{customer.id && (
-						<DropdownMenuItem
-							onPress={() => {
-								if (customer.id) {
-									pullDocument(customer.id, customer.collection as never);
-								}
-							}}
-						>
+						<DropdownMenuItem onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
