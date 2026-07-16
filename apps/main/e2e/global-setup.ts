@@ -141,6 +141,13 @@ async function setupVariant(
 	}
 	await stubStoreVersionForE2E(context, storeUrl, variant);
 	const authPage = await context.newPage();
+	authPage.on('response', (response) => {
+		if (response.status() >= 400) {
+			console.log(
+				`[global-setup] [${variant}] HTTP ${response.status()}: ${response.request().method()} ${response.url()}`
+			);
+		}
+	});
 
 	// Capture console output for debugging
 	authPage.on('console', (msg) => {
