@@ -1,6 +1,21 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
+
+async function navigateToProductsAfterInitialSync(page: Page) {
+	const initialProductSync = page.waitForResponse(
+		(response) =>
+			response.ok() &&
+			/\/wp-json\/wcpos\/v2\/products\?/.test(response.url()) &&
+			new URL(response.url()).searchParams.get('per_page') === '100',
+		{ timeout: 60_000 }
+	);
+
+	await navigateToPage(page, 'products');
+	await initialProductSync;
+	await page.getByTestId('drawer-item-products').click();
+	await expect(page.getByTestId('screen-products')).toBeVisible({ timeout: 30_000 });
+}
 
 /**
  * Products page (pro-only drawer page with inline editing).
@@ -12,7 +27,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should navigate to Products page and see product table', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
+		await navigateToProductsAfterInitialSync(page);
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('search-products')).toBeVisible({
 			timeout: 30_000,
@@ -23,7 +38,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should show stock and price columns on Products page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
+		await navigateToProductsAfterInitialSync(page);
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
@@ -36,7 +51,7 @@ test.describe('Products Page (Pro)', () => {
 	test('should reorder rows when clicking the Name column header on Products page', async ({
 		posPage: page,
 	}) => {
-		await navigateToPage(page, 'products');
+		await navigateToProductsAfterInitialSync(page);
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
@@ -95,7 +110,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should search products on Products page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
+		await navigateToProductsAfterInitialSync(page);
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
@@ -114,7 +129,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should show product actions menu', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
+		await navigateToProductsAfterInitialSync(page);
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
@@ -130,7 +145,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should expand variable product to show variations', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
+		await navigateToProductsAfterInitialSync(page);
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
@@ -159,7 +174,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should show variation actions menu with edit/sync/delete', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
+		await navigateToProductsAfterInitialSync(page);
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
@@ -193,7 +208,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should collapse expanded variable product on Products page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
+		await navigateToProductsAfterInitialSync(page);
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
