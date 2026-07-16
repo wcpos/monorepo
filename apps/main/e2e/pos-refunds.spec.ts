@@ -31,7 +31,26 @@ async function addFirstProductToCart(page: Page) {
 	});
 }
 
+async function interceptOrderPush(page: Page) {
+	await page.route('**/wp-json/wcpos/v2/push/orders', async (route) => {
+		const envelope = route.request().postDataJSON() as {
+			mutationId: string;
+			operation: 'create' | 'update' | 'delete';
+			payload?: Record<string, unknown>;
+		};
+		await route.fulfill({
+			status: envelope.operation === 'create' ? 201 : 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				document: { ...envelope.payload, id: 9_000_000 },
+				currentRevision: `sha256:e2e-${envelope.mutationId}`,
+			}),
+		});
+	});
+}
+
 async function createCompletedOrder(page: Page) {
+	await interceptOrderPush(page);
 	await addFirstProductToCart(page);
 	await page.getByTestId('checkout-button').click();
 	await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });

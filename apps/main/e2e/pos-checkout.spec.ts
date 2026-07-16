@@ -37,6 +37,29 @@ async function addFirstProductToCart(page: Page) {
 	});
 }
 
+async function interceptOrderPush(page: Page) {
+	await page.route('**/wp-json/wcpos/v2/push/orders', async (route) => {
+		const envelope = route.request().postDataJSON() as {
+			mutationId: string;
+			operation: 'create' | 'update' | 'delete';
+			payload?: Record<string, unknown>;
+		};
+		const document = { ...envelope.payload, id: 9_000_000 };
+		await route.fulfill({
+			status: envelope.operation === 'create' ? 201 : 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				document,
+				currentRevision: `sha256:e2e-${envelope.mutationId}`,
+			}),
+		});
+	});
+}
+
+test.beforeEach(async ({ posPage: page }) => {
+	await interceptOrderPush(page);
+});
+
 async function isSwitchEnabled(toggle: Locator): Promise<boolean> {
 	return toggle.evaluate((node) => {
 		const element = node as HTMLElement & { checked?: boolean };
