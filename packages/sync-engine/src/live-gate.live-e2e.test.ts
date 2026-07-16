@@ -13,11 +13,12 @@ import { memoryEngineStorage } from './testing';
 
 const LIVE_SYNC_BASE = process.env['LIVE_SYNC_BASE']?.trim();
 const LIVE_BASIC_AUTH = process.env['LIVE_BASIC_AUTH']?.trim();
-const LIVE_ENABLED = Boolean(LIVE_SYNC_BASE && LIVE_BASIC_AUTH);
+const LIVE_BEARER_TOKEN = process.env['LIVE_BEARER_TOKEN']?.trim();
+const LIVE_ENABLED = Boolean(LIVE_SYNC_BASE && (LIVE_BEARER_TOKEN || LIVE_BASIC_AUTH));
 
 if (!LIVE_ENABLED) {
 	log.info(
-		'[live-sync-gate] skipped: set LIVE_SYNC_BASE and LIVE_BASIC_AUTH to run the real-server gate'
+		'[live-sync-gate] skipped: set LIVE_SYNC_BASE and LIVE_BEARER_TOKEN (or LIVE_BASIC_AUTH) to run the real-server gate'
 	);
 }
 
@@ -68,11 +69,17 @@ function liveProductId(): number | null {
 	return id;
 }
 
-function authenticatedFetcher(basicAuth: string) {
+function liveAuthorization(): string {
+	// A cashier JWT (minted via the login flow) is the realistic client tier; Basic is the fallback.
+	if (LIVE_BEARER_TOKEN) return `Bearer ${LIVE_BEARER_TOKEN}`;
+	return `Basic ${LIVE_BASIC_AUTH as string}`;
+}
+
+function authenticatedFetcher(authorization: string) {
 	return async (url: string, init?: RequestInit): Promise<Response> => {
 		const headers = new Headers(init?.headers ?? {});
 		headers.set('X-WCPOS', '1');
-		headers.set('Authorization', `Basic ${basicAuth}`);
+		headers.set('Authorization', authorization);
 		return globalThis.fetch(url, { ...init, headers });
 	};
 }
@@ -161,16 +168,38 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 
 	afterAll(async () => {
 		try {
+			// Cleanup is best-effort: client-tier tokens (e.g. a cashier JWT) lack the
+			// wc/v3 delete capability, and a leftover 0.01 test order must not fail a
+			// gate whose every step passed. The evidence table records what remains.
 			if (createdWooOrderIds.size > 0) {
 				const site = liveSite(LIVE_SYNC_BASE as string);
-				const fetcher = authenticatedFetcher(LIVE_BASIC_AUTH as string);
+				const fetcher = authenticatedFetcher(liveAuthorization());
+				const deleted: number[] = [];
+				const remaining: string[] = [];
 				for (const wooOrderId of createdWooOrderIds) {
-					const response = await fetcher(
-						`${site.wpJsonRoot}wc/v3/orders/${wooOrderId}?force=true`,
-						{ method: 'DELETE' }
-					);
-					expect(response.ok).toBe(true);
+					try {
+						const response = await fetcher(
+							`${site.wpJsonRoot}wc/v3/orders/${wooOrderId}?force=true`,
+							{ method: 'DELETE' }
+						);
+						if (response.ok) {
+							deleted.push(wooOrderId);
+						} else {
+							remaining.push(`${wooOrderId} (HTTP ${response.status})`);
+						}
+					} catch (error) {
+						remaining.push(
+							`${wooOrderId} (${error instanceof Error ? error.message : String(error)})`
+						);
+					}
 				}
+				evidence.push({
+					step: 'cleanup',
+					outcome:
+						remaining.length === 0
+							? `deleted ${deleted.length} test order(s)`
+							: `deleted ${deleted.length}, left on server: ${remaining.join(', ')} — token may lack wc/v3 delete`,
+				});
 			}
 		} finally {
 			try {
@@ -185,9 +214,8 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 		// The live harness is the host; production engine code does not import Premium.
 		setPremiumFlag();
 		const syncBaseUrl = LIVE_SYNC_BASE as string;
-		const basicAuth = LIVE_BASIC_AUTH as string;
 		const site = liveSite(syncBaseUrl);
-		const authenticatedFetch = authenticatedFetcher(basicAuth);
+		const authenticatedFetch = authenticatedFetcher(liveAuthorization());
 		const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
 			const response = await authenticatedFetch(url, init);
 			if (url === `${site.syncBaseUrl}/push/orders` && init?.method === 'POST' && response.ok) {
