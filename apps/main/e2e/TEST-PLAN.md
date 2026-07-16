@@ -1,6 +1,6 @@
 # WCPOS E2E Test Plan
 
-Inventory of the Playwright web suite in `apps/main/e2e/` — 120 tests across 15 spec files.
+Inventory of the Playwright web suite in `apps/main/e2e/` — 119 tests across 15 spec files.
 Regenerated from the spec files themselves (see #691 for the audit that found the previous
 version stale). If you add, remove, or rename tests, update this file.
 
