@@ -18,7 +18,6 @@
     "rxdb": "17.2.0"
   },
   "devDependencies": {
-    "@wcpos/utils": "workspace:*",
     "rxdb-premium": "17.2.0",
     "vitest": "^4.1.6"
   }
