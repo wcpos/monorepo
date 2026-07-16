@@ -34,7 +34,6 @@ async function addFirstProductToCart(page: Page) {
 async function createCompletedOrder(page: Page) {
 	await addFirstProductToCart(page);
 	await page.getByTestId('checkout-button').click();
-	await page.waitForURL(/\/cart\//);
 	await expect(page.getByTestId('process-payment-button')).toBeVisible({
 		timeout: 15_000,
 	});
