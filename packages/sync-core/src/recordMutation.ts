@@ -70,13 +70,20 @@ export function buildCreateMutation<T extends WooRecordPayload>(
 		typeof input.currentId === 'string' && input.currentId.length > 0 ? input.currentId : null;
 	const recordId = explicitId ?? deps.mintUuid();
 	const origin: RecordIdOrigin = explicitId ? 'existing' : 'minted';
+	const createdAtGmt = input.collectionName === 'orders' ? input.payload.date_created_gmt : null;
+	const payload =
+		typeof createdAtGmt === 'string' &&
+		createdAtGmt !== '' &&
+		!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(createdAtGmt)
+			? { ...input.payload, date_created_gmt: `${createdAtGmt}Z` }
+			: input.payload;
 	return {
 		mutationId: deps.mintUuid(),
 		collectionName: input.collectionName,
 		operation: 'create',
 		recordId,
 		origin,
-		payload: { ...input.payload, meta_data: mirrorRecordUuid(input.payload.meta_data, recordId) },
+		payload: { ...payload, meta_data: mirrorRecordUuid(payload.meta_data, recordId) },
 		baseRevision: null,
 		queuedAt: deps.now(),
 	};

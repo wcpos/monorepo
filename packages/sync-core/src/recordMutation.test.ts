@@ -66,6 +66,43 @@ describe('buildCreateMutation', () => {
 		expect(metaUuid(m.payload.meta_data as RecordMutationPayload)).toBe(UUID_A);
 		expect(isAwaitingRemoteCreate(m)).toBe(true); // a create awaits regardless of id origin
 	});
+
+	it('adds the UTC suffix required by the order create endpoint', () => {
+		const m = buildCreateMutation(
+			{
+				collectionName: 'orders',
+				payload: { date_created_gmt: '2026-07-16T07:21:27' },
+			},
+			counterDeps()
+		);
+
+		expect(m.payload.date_created_gmt).toBe('2026-07-16T07:21:27Z');
+	});
+
+	it('does not rewrite dates outside bare order creates', () => {
+		const bare = '2026-07-16T07:21:27';
+		const productCreate = buildCreateMutation(
+			{ collectionName: 'products', payload: { date_created_gmt: bare } },
+			counterDeps()
+		);
+		const zonedOrderCreate = buildCreateMutation(
+			{ collectionName: 'orders', payload: { date_created_gmt: `${bare}+0000` } },
+			counterDeps()
+		);
+		const orderUpdate = buildUpdateMutation(
+			{
+				collectionName: 'orders',
+				recordId: UUID_A,
+				payload: { date_created_gmt: bare },
+				baseRevision: null,
+			},
+			counterDeps()
+		);
+
+		expect(productCreate.payload.date_created_gmt).toBe(bare);
+		expect(zonedOrderCreate.payload.date_created_gmt).toBe(`${bare}+0000`);
+		expect(orderUpdate.payload.date_created_gmt).toBe(bare);
+	});
 });
 
 describe('buildUpdateMutation', () => {

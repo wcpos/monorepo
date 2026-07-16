@@ -61,11 +61,16 @@ export const usePushDocument = () => {
 					typeof resident.get === 'function'
 						? resident.get(REMOTE_ID_FIELD[collectionName])
 						: (resident as unknown as Record<string, unknown>)[REMOTE_ID_FIELD[collectionName]];
+				const payload = cloneDeep(resident.get('payload') as Record<string, unknown>);
+				if (collectionName === 'orders') {
+					const billing = payload.billing as Record<string, unknown> | undefined;
+					if (billing?.email === '') delete billing.email;
+				}
 				const receipt = await manager.engine.write({
 					collection: collectionName,
 					operation: remoteId == null ? 'create' : 'update',
 					recordId,
-					payload: cloneDeep(resident.get('payload') as Record<string, unknown>),
+					payload,
 				});
 
 				let currentResident = resident;

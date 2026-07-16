@@ -121,7 +121,10 @@ describe('usePushDocument', () => {
 	});
 
 	it('detaches a proxy-backed resident payload before the worker write', async () => {
-		const payload = new Proxy({ status: 'pos-open', line_items: [] }, {});
+		const payload = new Proxy(
+			{ status: 'pos-open', billing: { email: '' }, line_items: [] },
+			{}
+		);
 		const resident: Record<string, unknown> = {
 			wooOrderId: null,
 			payload,
@@ -142,8 +145,29 @@ describe('usePushDocument', () => {
 		});
 
 		const queuedPayload = mockWrite.mock.calls[0][0].payload;
-		expect(queuedPayload).toEqual({ status: 'pos-open', line_items: [] });
+		expect(queuedPayload).toEqual({ status: 'pos-open', billing: {}, line_items: [] });
 		expect(queuedPayload).not.toBe(payload);
+	});
+
+	it('preserves a non-empty order billing email', async () => {
+		const payload = { status: 'pos-open', billing: { email: 'shopper@example.com' } };
+		const resident: Record<string, unknown> = { wooOrderId: null, payload };
+		resident.get = (field: string) => resident[field];
+		mockFindOneExec.mockResolvedValue(resident);
+		const doc = {
+			uuid: 'order-uuid',
+			id: 0,
+			collection: { name: 'orders' },
+			getLatest: () => doc,
+		};
+
+		const { result } = renderHook(() => usePushDocument());
+
+		await act(async () => {
+			await result.current(doc as never);
+		});
+
+		expect(mockWrite.mock.calls[0][0].payload.billing.email).toBe('shopper@example.com');
 	});
 
 	it('waits for an order acknowledgement and returns the rematerialized document id', async () => {
