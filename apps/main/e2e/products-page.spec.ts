@@ -43,6 +43,9 @@ test.describe('Products Page (Pro)', () => {
 		});
 
 		// Use deterministic fixture data known to include multiple hoodie products.
+		await expect(screen.getByTestId('product-actions-button').first()).toBeVisible({
+			timeout: 60_000,
+		});
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
@@ -98,6 +101,9 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
+		await expect(screen.getByTestId('product-actions-button').first()).toBeVisible({
+			timeout: 60_000,
+		});
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
@@ -131,6 +137,9 @@ test.describe('Products Page (Pro)', () => {
 		});
 
 		// Search for a variable product
+		await expect(screen.getByTestId('product-actions-button').first()).toBeVisible({
+			timeout: 60_000,
+		});
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
@@ -157,6 +166,9 @@ test.describe('Products Page (Pro)', () => {
 		});
 
 		// Search for a variable product and expand it
+		await expect(screen.getByTestId('product-actions-button').first()).toBeVisible({
+			timeout: 60_000,
+		});
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
@@ -188,6 +200,9 @@ test.describe('Products Page (Pro)', () => {
 		});
 
 		// Search and expand
+		await expect(screen.getByTestId('product-actions-button').first()).toBeVisible({
+			timeout: 60_000,
+		});
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
