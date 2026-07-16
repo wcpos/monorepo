@@ -9,6 +9,12 @@ export {
 	type EngineQueryDescriptor,
 } from './engine-query';
 export {
+	observeEngineCollectionCounts,
+	observeEngineMutationCounts,
+	type EngineCollectionCounts,
+	type EngineMutationCounts,
+} from './engine-monitor';
+export {
 	declareRequirements,
 	prepareCollectionResetRefill,
 	registerActiveBinding,
@@ -23,6 +29,7 @@ export type {
 	EngineEvent,
 	EngineLane,
 	EngineRequirement,
+	EngineStatus,
 	QueryTotalCacheDocument,
 	RequirementHandle,
 	RxdbSyncEngine,
