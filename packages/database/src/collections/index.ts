@@ -147,6 +147,12 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.timezone = typeof oldDoc.timezone === 'string' ? oldDoc.timezone : '';
 			return oldDoc;
 		},
+		10(oldDoc: any) {
+			// #559 knob contract: per-store sync tuning, Balanced defaults.
+			oldDoc.sync_check_interval_ms = 10_000;
+			oldDoc.sync_pull_batch_size = 50;
+			return oldDoc;
+		},
 	},
 };
 

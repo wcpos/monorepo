@@ -23,6 +23,7 @@ import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
 
+import { SyncConfigBridge } from '../../components/sync-config-bridge';
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
 import { createAppSyncEngine } from '../../lib/create-app-engine';
@@ -94,6 +95,7 @@ function AppStack() {
 
 	return (
 		<QueryProvider localDB={storeDB} engine={engine} http={http} locale={locale}>
+			<SyncConfigBridge />
 			<UISettingsProvider>
 				<CompatGate>
 					<View className="bg-background flex-1">

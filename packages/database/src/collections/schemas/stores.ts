@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 9,
+	version: 10,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -183,6 +183,22 @@ export const storesLiteral = {
 			default: 'thousand',
 			enum: ['thousand', 'lakh', 'wan'],
 			enumNames: ['Thousand', 'Lakh', 'Wan'],
+		},
+		sync_check_interval_ms: {
+			title: 'Sync check interval (ms)',
+			description: 'How often this store checks the server for changes.',
+			type: 'number',
+			minimum: 5000,
+			maximum: 300000,
+			default: 10000,
+		},
+		sync_pull_batch_size: {
+			title: 'Records per sync request',
+			description: 'Upper bound on records fetched per pull request.',
+			type: 'number',
+			minimum: 10,
+			maximum: 100,
+			default: 50,
 		},
 		price_decimal_sep: {
 			title: 'Decimal Separator',
