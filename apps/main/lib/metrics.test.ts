@@ -1,11 +1,28 @@
-import {
+type MetricsModule = typeof import('./metrics');
+
+function loadMetrics(): MetricsModule {
+	jest.resetModules();
+	// jest-expo cannot load workspace TS packages at runtime (see the doMock
+	// pattern in create-app-engine.test.ts) — stub the collector seam.
+	jest.doMock('@wcpos/sync-core', () => ({
+		createMetricsCollector: () => ({
+			observe: jest.fn(),
+			snapshot: jest.fn(() => ({})),
+			reset: jest.fn(),
+		}),
+	}));
+	return jest.requireActual('./metrics');
+}
+
+const {
+	collectionFromSyncUrl,
 	getMetricsBuckets,
 	hydrateMetricsBuckets,
 	recordServerLoad,
 	recordTransport,
 	resetMetricsBuckets,
 	resetMetricsForTests,
-} from './metrics';
+} = loadMetrics();
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -141,5 +158,30 @@ describe('host metrics buckets', () => {
 				errors: 0,
 			},
 		]);
+	});
+});
+
+describe('collectionFromSyncUrl', () => {
+	it.each([
+		['https://s.test/wp-json/wcpos/v2/products?per_page=50', 'products'],
+		['https://s.test/wp-json/wcpos/v2/products/categories', 'categories'],
+		['https://s.test/wp-json/wcpos/v2/products/brands?page=2', 'brands'],
+		['https://s.test/wp-json/wcpos/v2/products/tags', 'tags'],
+		['https://s.test/wp-json/wcpos/v2/variations?include=1', 'variations'],
+		['https://s.test/wp-json/wcpos/v2/orders/pull?limit=50', 'orders'],
+		['https://s.test/wp-json/wcpos/v2/customers', 'customers'],
+		['https://s.test/wp-json/wcpos/v2/coupons', 'coupons'],
+		['https://s.test/wp-json/wcpos/v2/taxes', 'taxRates'],
+		['https://s.test/wp-json/wc/v3/orders?page=1', 'orders'],
+	] as const)('maps %s to %s', (url, collection) => {
+		expect(collectionFromSyncUrl(url)).toBe(collection);
+	});
+
+	it.each([
+		['https://s.test/wp-json/wcpos/v2/changes/sequence-log'],
+		['https://s.test/wp-json/wcpos/v2/resolve/barcode?code=x'],
+		['not a url'],
+	])('returns undefined for %s', (url) => {
+		expect(collectionFromSyncUrl(url)).toBeUndefined();
 	});
 });

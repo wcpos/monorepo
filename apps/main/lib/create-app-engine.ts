@@ -20,7 +20,12 @@ import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 
 import { getEngineConnectivity } from './connectivity';
-import { appMetricsObserver, recordServerLoad, recordTransport } from './metrics';
+import {
+	appMetricsObserver,
+	collectionFromSyncUrl,
+	recordServerLoad,
+	recordTransport,
+} from './metrics';
 import { deriveSyncSite } from './sync-site';
 
 export interface CreateAppSyncEngineOptions {
@@ -160,6 +165,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				appMetricsObserver({
 					type: 'transport.request',
 					level: 'warn',
+					collection: collectionFromSyncUrl(finalUrl),
 					fields: { durationMs, bytes: 0, status: 0 },
 				});
 				recordTransport({ atMs, durationMs, bytes: 0, ok: false });
@@ -168,15 +174,15 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 
 			const atMs = Date.now();
 			const durationMs = atMs - startedAtMs;
-			const contentLength = response.headers.get('content-length');
-			// A malformed/negative content-length (from a broken server or proxy) must
-			// not poison the hourly byte total — clamp anything non-finite or < 0 to 0.
-			const parsedContentLength = contentLength === null ? 0 : Number(contentLength);
+			const contentLengthRaw = Number(response.headers.get('content-length'));
+			// A malformed/negative content-length (broken server or proxy) must not
+			// poison the hourly byte totals — clamp to a finite non-negative count.
 			const bytes =
-				Number.isFinite(parsedContentLength) && parsedContentLength >= 0 ? parsedContentLength : 0;
+				Number.isFinite(contentLengthRaw) && contentLengthRaw >= 0 ? contentLengthRaw : 0;
 			appMetricsObserver({
 				type: 'transport.request',
 				level: response.ok ? 'info' : 'warn',
+				collection: collectionFromSyncUrl(finalUrl),
 				fields: { durationMs, bytes, status: response.status },
 			});
 			recordTransport({ atMs, durationMs, bytes, ok: response.ok });

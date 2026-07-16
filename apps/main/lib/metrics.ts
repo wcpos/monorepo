@@ -51,6 +51,41 @@ function pruneMetricsBuckets(): void {
 	}
 }
 
+/** Which synced collection a request concerns, derived from its URL path —
+ * feeds the collector's per-collection dimension. Non-collection routes
+ * (changes, resolve, status) return undefined. */
+export function collectionFromSyncUrl(url: string): string | undefined {
+	let segments: string[];
+	try {
+		segments = new URL(url).pathname.split('/').filter(Boolean);
+	} catch {
+		return undefined;
+	}
+	const namespaceIndex = segments.findIndex((segment) => segment === 'wcpos' || segment === 'wc');
+	const route = segments.slice(namespaceIndex >= 0 ? namespaceIndex + 2 : 0);
+	const [head, second] = route;
+	switch (head) {
+		case 'products':
+			if (second === 'categories') return 'categories';
+			if (second === 'brands') return 'brands';
+			if (second === 'tags') return 'tags';
+			if (second === 'variations') return 'variations';
+			return 'products';
+		case 'variations':
+			return 'variations';
+		case 'orders':
+			return 'orders';
+		case 'customers':
+			return 'customers';
+		case 'coupons':
+			return 'coupons';
+		case 'taxes':
+			return 'taxRates';
+		default:
+			return undefined;
+	}
+}
+
 export function recordTransport({
 	atMs,
 	durationMs,

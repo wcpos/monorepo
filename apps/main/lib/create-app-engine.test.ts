@@ -43,6 +43,7 @@ function loadCreateAppEngine(
 		appMetricsObserver,
 		recordTransport,
 		recordServerLoad,
+		collectionFromSyncUrl: jest.fn(() => undefined),
 	}));
 
 	const { createAppSyncEngine } =
