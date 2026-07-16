@@ -46,9 +46,16 @@ test.describe('Products Page (Pro)', () => {
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
-		const hoodieWithPocketRow = screen.getByTestId('data-table-row-hoodie-with-pocket').first();
-		const hoodieWithZipperRow = screen.getByTestId('data-table-row-hoodie-with-zipper').first();
+		const hoodieWithPocketRow = screen
+			.locator('[data-testid="data-table-row-hoodie-with-pocket"]:visible')
+			.first();
+		const hoodieWithZipperRow = screen
+			.locator('[data-testid="data-table-row-hoodie-with-zipper"]:visible')
+			.first();
 		await expect(hoodieWithPocketRow).toBeVisible({ timeout: 30_000 });
 		await expect(hoodieWithZipperRow).toBeVisible({ timeout: 30_000 });
 
@@ -96,11 +103,8 @@ test.describe('Products Page (Pro)', () => {
 		await page.waitForTimeout(1_500);
 
 		const countEl = screen.getByTestId('data-table-count');
-		const noResults = screen.getByTestId('no-data-message');
-
-		const hasResults = await countEl.isVisible().catch(() => false);
-		const hasNoResults = await noResults.isVisible().catch(() => false);
-		expect(hasResults || hasNoResults).toBeTruthy();
+		await expect(countEl).toBeVisible({ timeout: 60_000 });
+		await expect(countEl).toContainText(/[1-9]/, { timeout: 60_000 });
 	});
 
 	test('should show product actions menu', async ({ posPage: page }) => {
@@ -130,6 +134,9 @@ test.describe('Products Page (Pro)', () => {
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		// Click the expand link on the variable product
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
@@ -153,6 +160,9 @@ test.describe('Products Page (Pro)', () => {
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
@@ -181,6 +191,9 @@ test.describe('Products Page (Pro)', () => {
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
