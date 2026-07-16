@@ -18,7 +18,7 @@ export const ExtraDataContext = React.createContext<ExtraDataContextProps | null
  * @TODO - there must be a smarter way to only fetch data on chnages
  */
 export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
-	const http = useRestHttpClient();
+	const http = useRestHttpClient('', { legacyDataPlane: true });
 	const { extraData } = useAppState();
 
 	React.useEffect(() => {
