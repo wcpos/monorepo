@@ -915,7 +915,10 @@ export function createRxdbSyncEngine(
 		return scopeId === null ? null : (databaseByScopeId.get(scopeId) ?? null);
 	};
 
-	async function readCensusEntries(): Promise<{ totals: CensusTotals; nextExpiryMs: number | null }> {
+	async function readCensusEntries(): Promise<{
+		totals: CensusTotals;
+		nextExpiryMs: number | null;
+	}> {
 		const database = activeDatabase();
 		const now = nowMs();
 		if (!database) return { totals: censusTotalsFromCache([], now), nextExpiryMs: null };
