@@ -29,8 +29,8 @@ import { createAppSyncEngine } from '../../lib/create-app-engine';
 import {
 	getMetricsBuckets,
 	hydrateMetricsBuckets,
-	resetMetricsBuckets,
 	type MetricsBucket,
+	resetMetricsBuckets,
 } from '../../lib/metrics';
 
 const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
