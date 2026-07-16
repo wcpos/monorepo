@@ -47,8 +47,8 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 			return 'online-website-available';
 		}
 
-		// Optimistic default - assume everything is working
-		return 'online-website-available';
+		// Stay gated until NetInfo reports a real state.
+		return 'offline';
 	}, [netInfo.isConnected, netInfo.isInternetReachable]);
 
 	const value = React.useMemo(() => ({ status }), [status]);

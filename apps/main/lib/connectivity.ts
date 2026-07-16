@@ -7,23 +7,22 @@ const engineConnectivityByOnlineStatus = {
 	'online-website-available': 'online',
 } satisfies Record<OnlineStatus, EngineConnectivity>;
 
-function initialOnlineStatus(): OnlineStatus {
+function initialOnlineStatus(): OnlineStatus | null {
 	// The engine is constructed during first render, before any React effect can
 	// publish — a till booting offline must not open with an 'online' port. Web
-	// and Electron expose navigator.onLine synchronously; native leaves it
-	// undefined and stays optimistic until the provider's first report.
-	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-		return 'offline';
+	// and Electron expose navigator.onLine synchronously; native stays gated.
+	if (typeof navigator === 'undefined' || typeof navigator.onLine !== 'boolean') {
+		return null;
 	}
-	return 'online-website-available';
+	return navigator.onLine ? 'online-website-available' : 'offline';
 }
 
-let appOnlineStatus: OnlineStatus = initialOnlineStatus();
+let appOnlineStatus: OnlineStatus | null = initialOnlineStatus();
 
 export function setAppOnlineStatus(status: OnlineStatus): void {
 	appOnlineStatus = status;
 }
 
 export function getEngineConnectivity(): EngineConnectivity {
-	return engineConnectivityByOnlineStatus[appOnlineStatus];
+	return appOnlineStatus === null ? 'offline' : engineConnectivityByOnlineStatus[appOnlineStatus];
 }
