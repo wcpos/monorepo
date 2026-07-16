@@ -12,8 +12,9 @@ Specs marked **pro only** or **free only** below skip themselves on the other va
 `getStoreVariant()`. Authenticated specs use the `authenticatedTest` fixture from
 `fixtures.ts`, which restores a saved login and lands on the POS screen.
 
-Selector policy: stable `testID` selectors only — no localized text selectors (see repo
-`CLAUDE.md`).
+Selector policy: use stable `getByTestId('some-id')` locators for app UI. Avoid localized
+text and named role selectors; structural role locators without a name are allowed (see
+repo `CLAUDE.md`).
 
 ## Current Coverage
 
