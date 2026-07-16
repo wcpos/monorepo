@@ -89,7 +89,13 @@ describe('usePushDocument', () => {
 	});
 
 	it('enqueues a create when the resident document was born locally', async () => {
-		const json = { uuid: 'order-uuid', id: 0, status: 'pos-open', line_items: [] };
+		const json = {
+			uuid: 'order-uuid',
+			id: 0,
+			status: 'pos-open',
+			line_items: [],
+			billing: { first_name: 'Guest', email: '' },
+		};
 		const resident: Record<string, unknown> = {
 			wooOrderId: null,
 			payload: json,
@@ -116,6 +122,7 @@ describe('usePushDocument', () => {
 			payload: expect.objectContaining({
 				status: 'pos-open',
 				line_items: [],
+				billing: { first_name: 'Guest' },
 			}),
 		});
 	});
