@@ -80,7 +80,7 @@ export function isReadyToSell(input: {
 	productsLocal: number;
 }): boolean {
 	if (input.bootstrapFailed) return false;
-	if (input.gatedBy === 'bootstrap-failed' || input.gatedBy === 'lifecycle') return false;
+	if (input.gatedBy !== null) return false;
 	// Any local products means the first window has landed; offline is fine —
 	// selling works offline, that's the whole point.
 	return input.productsLocal > 0;

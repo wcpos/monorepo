@@ -47,9 +47,10 @@ describe('database page logic', () => {
 		expect(isReadyToSell({ ...base, connectivity: 'offline', productsLocal: 1 })).toBe(true);
 		// no products yet — still preparing
 		expect(isReadyToSell({ ...base, productsLocal: 0 })).toBe(false);
-		// bootstrap failure / lifecycle gate block readiness
+		// bootstrap failure / any engine gate block readiness
 		expect(isReadyToSell({ ...base, bootstrapFailed: true, productsLocal: 5 })).toBe(false);
 		expect(isReadyToSell({ ...base, gatedBy: 'lifecycle', productsLocal: 5 })).toBe(false);
+		expect(isReadyToSell({ ...base, gatedBy: 'first-window', productsLocal: 5 })).toBe(false);
 	});
 
 	it('sums local records and formats bytes', () => {
