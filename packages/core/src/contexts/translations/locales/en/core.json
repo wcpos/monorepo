@@ -851,7 +851,9 @@
 	"health.database.clear_body": "{count} {label} will be removed and re-downloaded fresh from your server. Sales and orders are not affected. You can keep selling — search may be incomplete for a minute.",
 	"health.database.clear_confirm": "Clear & re-download",
 	"health.database.conflicts": "{n} sale(s) need attention — changed on the server while a till was editing.",
-	"health.database.last_check": "Checked for changes recently · every 10 s",
 	"health.database.first_check_pending": "First check pending…",
-	"health.database.check_everything": "Check everything now"
+	"health.database.check_everything": "Check everything now",
+	"health.database.clear_body_orders": "The orders held on this device will be removed and re-downloaded fresh from your server. Nothing on the server changes. You can keep selling — recent orders reappear within a moment.",
+	"health.database.last_check_error": "Last check didn't complete — retrying",
+	"health.database.last_check_ok": "Checked for changes"
 }

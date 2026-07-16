@@ -52,16 +52,16 @@ const ROW_ORDER: CollectionKey[] = [
 	'taxRates',
 ];
 
-const ROW_LABELS: Record<CollectionKey, string> = {
-	products: 'Products',
-	variations: 'Variations',
-	orders: 'Orders',
-	customers: 'Customers',
-	categories: 'Categories',
-	brands: 'Brands',
-	tags: 'Tags',
-	coupons: 'Coupons',
-	taxRates: 'Tax rates',
+const ROW_LABEL_KEYS: Record<CollectionKey, { key: string; fallback: string }> = {
+	products: { key: 'common.products', fallback: 'Products' },
+	variations: { key: 'common.variations', fallback: 'Variations' },
+	orders: { key: 'common.orders', fallback: 'Orders' },
+	customers: { key: 'common.customers', fallback: 'Customers' },
+	categories: { key: 'common.categories', fallback: 'Categories' },
+	brands: { key: 'common.brands', fallback: 'Brands' },
+	tags: { key: 'common.tags', fallback: 'Tags' },
+	coupons: { key: 'common.coupons', fallback: 'Coupons' },
+	taxRates: { key: 'common.tax_rates', fallback: 'Tax rates' },
 };
 
 function useStorageEstimate(): number | null {
@@ -158,12 +158,17 @@ function CollectionRowView({ row, label }: { row: CollectionRow; label: string }
 							})}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{t('health.database.clear_body', {
-								defaultValue:
-									'{count} {label} will be removed and re-downloaded fresh from your server. Sales and orders are not affected. You can keep selling — search may be incomplete for a minute.',
-								count: row.local.toLocaleString(),
-								label: label.toLowerCase(),
-							})}
+							{row.windowed
+								? t('health.database.clear_body_orders', {
+										defaultValue:
+											'The orders held on this device will be removed and re-downloaded fresh from your server. Nothing on the server changes. You can keep selling — recent orders reappear within a moment.',
+									})
+								: t('health.database.clear_body', {
+										defaultValue:
+											'{count} {label} will be removed and re-downloaded fresh from your server. Sales and orders are not affected. You can keep selling — search may be incomplete for a minute.',
+										count: row.local.toLocaleString(),
+										label: label.toLowerCase(),
+									})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -207,7 +212,8 @@ export function DatabaseScreen() {
 		productsLocal: counts.products ?? 0,
 	});
 
-	const lastCheck = status.lanes['change-signal']?.lastTick;
+	const changeLane = status.lanes['change-signal'];
+	const lastCheck = changeLane?.lastTick ?? null;
 
 	return (
 		<ScrollView className="flex-1">
@@ -256,7 +262,7 @@ export function DatabaseScreen() {
 							{mutations.pending}
 						</Text>
 						<Text className="text-muted-foreground text-xs">
-							{t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
+							{t('health.database.waiting_to_send', { defaultValue: 'changes waiting to send' })}
 						</Text>
 					</VStack>
 				</HStack>
@@ -287,7 +293,13 @@ export function DatabaseScreen() {
 						<View className="w-9" />
 					</HStack>
 					{rows.map((row) => (
-						<CollectionRowView key={row.key} row={row} label={ROW_LABELS[row.key]} />
+						<CollectionRowView
+							key={row.key}
+							row={row}
+							label={t(ROW_LABEL_KEYS[row.key].key, {
+								defaultValue: ROW_LABEL_KEYS[row.key].fallback,
+							})}
+						/>
 					))}
 				</VStack>
 
@@ -306,11 +318,15 @@ export function DatabaseScreen() {
 
 				<HStack className="flex-wrap items-center justify-between gap-2 pt-1">
 					<Text className="text-muted-foreground text-xs">
-						{lastCheck
-							? t('health.database.last_check', {
-									defaultValue: 'Checked for changes recently · every 10 s',
-								})
-							: t('health.database.first_check_pending', { defaultValue: 'First check pending…' })}
+						{lastCheck === null
+							? t('health.database.first_check_pending', { defaultValue: 'First check pending…' })
+							: lastCheck.status === 'error'
+								? t('health.database.last_check_error', {
+										defaultValue: "Last check didn't complete — retrying",
+									})
+								: t('health.database.last_check_ok', {
+										defaultValue: 'Checked for changes',
+									})}
 					</Text>
 					<Button variant="outline" size="sm" onPress={() => void engine.sync()}>
 						<ButtonText>
