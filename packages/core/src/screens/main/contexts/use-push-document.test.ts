@@ -121,10 +121,7 @@ describe('usePushDocument', () => {
 	});
 
 	it('detaches a proxy-backed resident payload before the worker write', async () => {
-		const payload = new Proxy(
-			{ status: 'pos-open', billing: { email: '' }, line_items: [] },
-			{}
-		);
+		const payload = new Proxy({ status: 'pos-open', billing: { email: '' }, line_items: [] }, {});
 		const resident: Record<string, unknown> = {
 			wooOrderId: null,
 			payload,
