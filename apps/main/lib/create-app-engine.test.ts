@@ -44,6 +44,7 @@ function loadCreateAppEngine(
 		recordTransport,
 		recordServerLoad,
 		collectionFromSyncUrl: jest.fn(() => undefined),
+		getMetricsEpoch: jest.fn(() => 0),
 	}));
 
 	const { createAppSyncEngine } =
@@ -92,6 +93,7 @@ describe('createAppSyncEngine scope cache', () => {
 			durationMs: 25,
 			bytes: 42,
 			ok: true,
+			epoch: 0,
 		});
 		expect(recordServerLoad).toHaveBeenCalledWith(0.5);
 		expect(response.bodyUsed).toBe(false);
@@ -122,6 +124,7 @@ describe('createAppSyncEngine scope cache', () => {
 			durationMs: 40,
 			bytes: 0,
 			ok: false,
+			epoch: 0,
 		});
 		now.mockRestore();
 		fetch.mockRestore();

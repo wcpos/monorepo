@@ -16,6 +16,7 @@ function loadMetrics(): MetricsModule {
 
 const {
 	collectionFromSyncUrl,
+	getMetricsEpoch,
 	getMetricsBuckets,
 	hydrateMetricsBuckets,
 	recordServerLoad,
@@ -209,5 +210,27 @@ describe('collectionFromSyncUrl', () => {
 		['not a url'],
 	])('returns undefined for %s', (url) => {
 		expect(collectionFromSyncUrl(url)).toBeUndefined();
+	});
+});
+
+describe('metrics epoch', () => {
+	it('drops a transport completion recorded against a stale epoch (in-flight across store switch)', () => {
+		jest.spyOn(Date, 'now').mockReturnValue(HOUR_MS);
+		const epochAtStart = getMetricsEpoch();
+		resetMetricsBuckets();
+		recordTransport({ atMs: HOUR_MS, durationMs: 10, bytes: 100, ok: true, epoch: epochAtStart });
+		expect(getMetricsBuckets()).toEqual([]);
+	});
+
+	it('records a transport whose epoch is current', () => {
+		jest.spyOn(Date, 'now').mockReturnValue(HOUR_MS);
+		recordTransport({
+			atMs: HOUR_MS,
+			durationMs: 10,
+			bytes: 100,
+			ok: true,
+			epoch: getMetricsEpoch(),
+		});
+		expect(getMetricsBuckets()).toHaveLength(1);
 	});
 });

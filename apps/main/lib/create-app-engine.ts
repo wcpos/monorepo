@@ -23,6 +23,7 @@ import { getEngineConnectivity } from './connectivity';
 import {
 	appMetricsObserver,
 	collectionFromSyncUrl,
+	getMetricsEpoch,
 	recordServerLoad,
 	recordTransport,
 } from './metrics';
@@ -156,6 +157,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				}
 			}
 			const startedAtMs = Date.now();
+			// Captured at start: a completion after a store switch (epoch bump) is the
+			// outgoing store's traffic and must not land in the new store's buckets.
+			const epochAtStart = getMetricsEpoch();
 			let response: Response;
 			try {
 				response = await globalThis.fetch(finalUrl, { ...init, headers });
@@ -168,7 +172,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					collection: collectionFromSyncUrl(finalUrl),
 					fields: { durationMs, bytes: 0, status: 0 },
 				});
-				recordTransport({ atMs, durationMs, bytes: 0, ok: false });
+				recordTransport({ atMs, durationMs, bytes: 0, ok: false, epoch: epochAtStart });
 				throw error;
 			}
 
@@ -185,7 +189,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				collection: collectionFromSyncUrl(finalUrl),
 				fields: { durationMs, bytes, status: response.status },
 			});
-			recordTransport({ atMs, durationMs, bytes, ok: response.ok });
+			recordTransport({ atMs, durationMs, bytes, ok: response.ok, epoch: epochAtStart });
 
 			const serverLoad = response.headers.get('X-Server-Load');
 			if (serverLoad !== null) {

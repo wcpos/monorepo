@@ -16,6 +16,14 @@ export type MetricsBucket = {
 
 const appMetrics = createMetricsCollector();
 const metricsBuckets = new Map<number, MetricsBucket>();
+// Bumped on every reset (store switch). In-flight requests capture the epoch
+// at start; a completion whose epoch is stale belongs to the previous store
+// and must not land in the new store's buckets.
+let metricsEpoch = 0;
+
+export function getMetricsEpoch(): number {
+	return metricsEpoch;
+}
 
 export const appMetricsObserver = appMetrics.observe;
 
@@ -91,12 +99,15 @@ export function recordTransport({
 	durationMs,
 	bytes,
 	ok,
+	epoch,
 }: {
 	atMs: number;
 	durationMs: number;
 	bytes: number;
 	ok: boolean;
+	epoch?: number;
 }): void {
+	if (epoch !== undefined && epoch !== metricsEpoch) return;
 	const bucket = getOrCreateBucket(atMs);
 	bucket.requests += 1;
 	// Guard against a malformed byte count leaking in from any caller — a single
@@ -184,9 +195,11 @@ export function hydrateMetricsBuckets(persisted: unknown): void {
  */
 export function resetMetricsBuckets(): void {
 	metricsBuckets.clear();
+	metricsEpoch += 1;
 }
 
 export function resetMetricsForTests(): void {
 	appMetrics.reset();
 	metricsBuckets.clear();
+	metricsEpoch = 0;
 }
