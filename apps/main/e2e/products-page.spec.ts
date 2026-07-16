@@ -140,7 +140,7 @@ test.describe('Products Page (Pro)', () => {
 		await page.waitForTimeout(1_500);
 
 		// Variation rows should now be visible with their actions menus
-		const variationActionsMenu = screen.getByTestId('variation-actions-menu');
+		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
 		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
 	});
 
@@ -162,7 +162,9 @@ test.describe('Products Page (Pro)', () => {
 		await page.waitForTimeout(1_500);
 
 		// Click the variation actions menu (ellipsis button)
-		const variationActionsMenu = screen.getByTestId('variation-actions-menu').first();
+		const variationActionsMenu = screen
+			.locator('[data-testid="variation-actions-menu"]:visible')
+			.first();
 		await expect(variationActionsMenu).toBeVisible({ timeout: 15_000 });
 		await variationActionsMenu.click();
 
@@ -189,7 +191,7 @@ test.describe('Products Page (Pro)', () => {
 		await expandLink.click();
 		await page.waitForTimeout(1_500);
 
-		const variationActionsMenu = screen.getByTestId('variation-actions-menu');
+		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
 		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
 
 		// Collapse
