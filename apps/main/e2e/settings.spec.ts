@@ -3,19 +3,10 @@ import { expect } from '@playwright/test';
 import { navigateToPage, authenticatedTest as test } from './fixtures';
 
 /**
- * The drawer keeps blurred screens mounted, so every mounted screen carries a
- * hidden header — after visiting Settings and returning to POS there are two
- * user-menu triggers in the DOM and only one is visible.
- */
-function visibleUserMenuTrigger(page: import('@playwright/test').Page) {
-	return page.locator('[data-testid="user-menu-trigger"]:visible');
-}
-
-/**
  * Helper to open the settings area via the user menu.
  */
 async function openSettings(page: import('@playwright/test').Page) {
-	await visibleUserMenuTrigger(page).click();
+	await page.getByTestId('user-menu-trigger').click();
 	await page.getByTestId('settings-menu-item').click();
 	await expect(page.getByTestId('screen-settings-general')).toBeVisible({
 		timeout: 10_000,
@@ -191,7 +182,7 @@ test.describe('Language Settings', () => {
 		});
 
 		// Reopen settings and verify the new language stuck (testID-anchored)
-		await visibleUserMenuTrigger(page).click();
+		await page.locator('[data-testid="user-menu-trigger"]:visible').click();
 		await expect(page.getByTestId('settings-menu-item')).toBeVisible({
 			timeout: 15_000,
 		});
