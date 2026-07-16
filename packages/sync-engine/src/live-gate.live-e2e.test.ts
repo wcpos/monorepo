@@ -153,13 +153,31 @@ function evidenceTable(evidence: readonly Evidence[]): string {
 
 liveDescribe('LIVE sync-engine sale-ready gate', () => {
 	const evidence: Evidence[] = [];
+	const createdOrders: { recordId: string; wooOrderId: number }[] = [];
 	let engine: RxdbSyncEngine | null = null;
 
 	afterAll(async () => {
 		try {
-			if (engine) await engine.dispose();
+			if (engine && createdOrders.length > 0) {
+				for (const { recordId } of createdOrders) {
+					await engine.write({ collection: 'orders', operation: 'delete', recordId });
+				}
+				const cleanup = await engine.sync('write-drain');
+				expect(cleanup).toMatchObject({
+					lane: 'write-drain',
+					status: 'ran',
+					pushed: createdOrders.length,
+					conflicts: 0,
+					failed: 0,
+					rejected: 0,
+				});
+			}
 		} finally {
-			console.log(`\n[live-sync-gate] evidence\n${evidenceTable(evidence)}`);
+			try {
+				if (engine) await engine.dispose();
+			} finally {
+				console.log(`\n[live-sync-gate] evidence\n${evidenceTable(evidence)}`);
+			}
 		}
 	});
 
@@ -312,6 +330,12 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 		});
 		const drain = await engine.sync('write-drain');
 		unsubscribe();
+		const order = await orderByRecordId(engine, orderRecordId);
+		const wooOrderId = order?.['wooOrderId'];
+		const orderRevision = (order?.['sync'] as { revision?: unknown } | undefined)?.revision;
+		if (typeof wooOrderId === 'number' && Number.isSafeInteger(wooOrderId) && wooOrderId > 0) {
+			createdOrders.push({ recordId: orderRecordId, wooOrderId });
+		}
 		expect(drain).toMatchObject({
 			lane: 'write-drain',
 			status: 'ran',
@@ -333,9 +357,6 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 			mutationId: receipt.mutationId,
 		});
 
-		const order = await orderByRecordId(engine, orderRecordId);
-		const wooOrderId = order?.['wooOrderId'];
-		const orderRevision = (order?.['sync'] as { revision?: unknown } | undefined)?.revision;
 		expect(wooOrderId).toEqual(expect.any(Number));
 		expect(Number.isSafeInteger(wooOrderId) && Number(wooOrderId) > 0).toBe(true);
 		expect(orderRevision).toEqual(expect.any(String));
