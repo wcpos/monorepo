@@ -28,6 +28,7 @@ import {
 	httpGet,
 	recordCoverage,
 } from './rx-scheduler-collection-fetcher';
+import { pullRequestLimit } from './replication-policy';
 
 import type { FetchTask, FetchTaskResult } from './replication-policy';
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
@@ -48,6 +49,7 @@ export type ProductsSchedulerFetcherInput = {
 	coverageRepository?: ProductSchedulerCoverageRepository;
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
+	pullBatchSize?: () => number | undefined;
 	/**
 	 * Leg-3 manifest sink (ADR 0014): receives the `{wooId, digest}` rows extracted from each pulled
 	 * batch (from the server-attached `_rxdb_digest`). Optional — omitted by the playground/tests, wired
@@ -104,11 +106,11 @@ function targetedProductIds(task: FetchTask): number[] {
 	return task.wooIds;
 }
 
-function taskLimit(task: FetchTask): number {
+function taskLimit(task: FetchTask, pullBatchSize?: () => number | undefined): number {
 	if (!Number.isSafeInteger(task.limit) || task.limit <= 0) {
 		throw new Error('Product scheduler task limit must be a positive integer');
 	}
-	return Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
+	return Math.min(pullRequestLimit(task, pullBatchSize), WOO_REST_MAX_PER_PAGE);
 }
 
 /**
@@ -125,7 +127,7 @@ async function fetchTargetedProducts(
 	task: FetchTask,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
-	const batchSize = taskLimit(task);
+	const batchSize = taskLimit(task, input.pullBatchSize);
 	let documentCount = 0;
 	let requestCount = 0;
 	const fetchedDocumentIds: string[] = [];
@@ -245,16 +247,21 @@ async function fetchProductSearch(
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
 	const limit = taskLimit(task);
+	const requestLimit = taskLimit(task, input.pullBatchSize);
 	const searchPayloads = await fetchProductQuery(
 		input,
-		productSearchParams(search, limit),
+		productSearchParams(search, requestLimit),
 		context
 	);
-	const skuPayloads = await fetchProductQuery(input, productSkuParams(search, limit), context);
+	const skuPayloads = await fetchProductQuery(
+		input,
+		productSkuParams(search, requestLimit),
+		context
+	);
 	const payloads = uniqueProductPayloads([...skuPayloads, ...searchPayloads]);
 	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
-	const complete = searchPayloads.length < limit && skuPayloads.length < limit;
+	const complete = searchPayloads.length < requestLimit && skuPayloads.length < requestLimit;
 	await recordCoverage(
 		'products',
 		input,
@@ -278,7 +285,12 @@ export function createProductsSchedulerFetcher(
 
 		const browseWindowLimit = parseProductBrowseWindowLimit(task.queryKey);
 		if (browseWindowLimit !== null) {
-			return fetchProductBrowseWindow(input, task, browseWindowLimit, context);
+			return fetchProductBrowseWindow(
+				input,
+				task,
+				Math.min(browseWindowLimit, taskLimit(task, input.pullBatchSize)),
+				context
+			);
 		}
 
 		const search = productSearchTerm(task);

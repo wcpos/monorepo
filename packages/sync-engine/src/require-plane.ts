@@ -115,6 +115,7 @@ export type RequirePlaneDeps = {
 	fetcher: EngineSourceFetcher;
 	syncBaseUrl: string;
 	diagnostics: SyncObserver;
+	pullBatchSize?: () => number | undefined;
 	now?: () => number;
 };
 
@@ -258,6 +259,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				log: (line: string) =>
 					deps.diagnostics({ type: 'coverage.require.log', level: 'debug', message: line }),
 				observe: deps.diagnostics,
+				...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 			};
 
 			if (item.requirement.collection === 'orders' && item.requirement.kind === 'query') {
@@ -285,6 +287,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						baseUrl: deps.syncBaseUrl,
 						ownerId: 'require-plane',
 						fetcher: boundFetch as never,
+						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						signal: item.abortController.signal,
 						onProgress: progressObserver(item.requirement),
 					});
@@ -339,6 +342,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						baseUrl: deps.syncBaseUrl,
 						ownerId: 'require-plane',
 						fetcher: boundFetch as never,
+						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						signal: item.abortController.signal,
 						maxRequestsPerTask: Number.POSITIVE_INFINITY,
 						onProgress: progressObserver(item.requirement),
@@ -413,6 +417,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						coverage,
 						baseUrl: deps.syncBaseUrl,
 						fetcher: boundFetch as never,
+						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						signal: item.abortController.signal,
 						task,
 						onProgress: progressObserver(item.requirement),
@@ -488,6 +493,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							baseUrl: deps.syncBaseUrl,
 							ownerId: 'require-plane',
 							fetcher: boundFetch as never,
+							...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 							signal: item.abortController.signal,
 							nowMs,
 							onProgress: progressObserver(item.requirement),

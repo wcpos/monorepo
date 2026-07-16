@@ -196,6 +196,8 @@ export type RunEngineSchedulerDrainInput = {
 	ownerId: string;
 	/** The engine's transport port — every fetcher pull goes through it. */
 	fetcher?: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+	/** Live record cap applied per data pull request. */
+	pullBatchSize?: () => number | undefined;
 	signal?: AbortSignal;
 	nowMs?: number;
 	/** Override for an explicitly requested foreground drain. Background drains
@@ -212,7 +214,10 @@ export type RunEngineSchedulerTaskInput = Pick<
 };
 
 function createEngineSchedulerFetcherRegistry(
-	input: Pick<RunEngineSchedulerDrainInput, 'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'nowMs'>
+	input: Pick<
+		RunEngineSchedulerDrainInput,
+		'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'pullBatchSize' | 'nowMs'
+	>
 ) {
 	const db = input.db;
 	const nowMs = input.nowMs ?? Date.now();
@@ -235,6 +240,7 @@ function createEngineSchedulerFetcherRegistry(
 		coverageFreshForMs: ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 		nowMs: getNowMs,
 		...(input.fetcher !== undefined ? { fetcher: input.fetcher } : {}),
+		...(input.pullBatchSize !== undefined ? { pullBatchSize: input.pullBatchSize } : {}),
 	};
 
 	return createSchedulerFetcherRegistry([

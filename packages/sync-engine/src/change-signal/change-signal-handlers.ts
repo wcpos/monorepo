@@ -64,6 +64,7 @@ export type HandlerContext = {
 	persistState: (state: ReplicationActions['nextState']) => Promise<void>;
 	log: (line: string) => void;
 	observe?: SyncObserver;
+	pullBatchSize?: () => number | undefined;
 };
 
 const INCLUDE_CHUNK = 50;
@@ -121,9 +122,10 @@ async function pullByIds(
 ): Promise<number> {
 	if (ids.length === 0) return 0;
 	const collection = collectionOf(ctx, d.collection);
+	const includeChunk = ctx.pullBatchSize?.() ?? INCLUDE_CHUNK;
 	let applied = 0;
-	for (let at = 0; at < ids.length; at += INCLUDE_CHUNK) {
-		const chunk = ids.slice(at, at + INCLUDE_CHUNK);
+	for (let at = 0; at < ids.length; at += includeChunk) {
+		const chunk = ids.slice(at, at + includeChunk);
 		const payloads = d.parse(
 			await fetchBody(ctx, d.pullPath, {
 				include: chunk.join(','),
@@ -186,13 +188,14 @@ async function removeByWooIds(
 /** Full-page refresh: pages until a short page; returns every projected document. */
 async function fetchAll(ctx: HandlerContext, path: string): Promise<Record<string, unknown>[]> {
 	const all: Record<string, unknown>[] = [];
+	const pageSize = ctx.pullBatchSize?.() ?? REFRESH_PAGE_SIZE;
 	for (let page = 1; ; page += 1) {
 		const payloads = await fetchPayloadPage(ctx, path, {
-			per_page: String(REFRESH_PAGE_SIZE),
+			per_page: String(pageSize),
 			page: String(page),
 		});
 		all.push(...payloads);
-		if (payloads.length < REFRESH_PAGE_SIZE) return all;
+		if (payloads.length < pageSize) return all;
 	}
 }
 

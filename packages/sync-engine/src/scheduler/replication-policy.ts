@@ -58,6 +58,11 @@ export type FetchTask = {
 	mode: ReplicationMode;
 };
 
+/** Preserve the task's total/window limit while capping each transport request. */
+export function pullRequestLimit(task: FetchTask, configured?: () => number | undefined): number {
+	return Math.min(task.limit, configured?.() ?? task.limit);
+}
+
 export type FetchTaskResult = {
 	taskId: string;
 	documentCount: number;
