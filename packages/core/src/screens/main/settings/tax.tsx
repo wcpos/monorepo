@@ -54,7 +54,7 @@ export function TaxSettings() {
 	const t = useT();
 	const router = useRouter();
 	const { localPatch } = useLocalMutation();
-	const http = useRestHttpClient('', { legacyDataPlane: true });
+	const http = useRestHttpClient();
 	const [loading, setLoading] = React.useState(false);
 
 	/**
