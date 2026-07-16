@@ -50,6 +50,7 @@
 		"@wcpos/hooks": "workspace:*",
 		"@wcpos/printer": "workspace:*",
 		"@wcpos/query": "workspace:*",
+		"@wcpos/sync-core": "workspace:*",
 		"@wcpos/sync-engine": "workspace:*",
 		"@wcpos/utils": "workspace:*",
 		"expo": "~56.0.11",

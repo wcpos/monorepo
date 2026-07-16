@@ -20,6 +20,7 @@ import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 
 import { getEngineConnectivity } from './connectivity';
+import { appMetricsObserver, recordServerLoad, recordTransport } from './metrics';
 import { deriveSyncSite } from './sync-site';
 
 export interface CreateAppSyncEngineOptions {
@@ -149,7 +150,50 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					headers.set('Authorization', `Bearer ${token}`);
 				}
 			}
-			return globalThis.fetch(finalUrl, { ...init, headers });
+			const startedAtMs = Date.now();
+			let response: Response;
+			try {
+				response = await globalThis.fetch(finalUrl, { ...init, headers });
+			} catch (error) {
+				const atMs = Date.now();
+				const durationMs = atMs - startedAtMs;
+				appMetricsObserver({
+					type: 'transport.request',
+					level: 'warn',
+					fields: { durationMs, bytes: 0, status: 0 },
+				});
+				recordTransport({ atMs, durationMs, bytes: 0, ok: false });
+				throw error;
+			}
+
+			const atMs = Date.now();
+			const durationMs = atMs - startedAtMs;
+			const contentLength = response.headers.get('content-length');
+			const bytes = contentLength === null ? 0 : Number(contentLength);
+			appMetricsObserver({
+				type: 'transport.request',
+				level: response.ok ? 'info' : 'warn',
+				fields: { durationMs, bytes, status: response.status },
+			});
+			recordTransport({ atMs, durationMs, bytes, ok: response.ok });
+
+			const serverLoad = response.headers.get('X-Server-Load');
+			if (serverLoad !== null) {
+				try {
+					const parsed: unknown = JSON.parse(serverLoad);
+					if (
+						Array.isArray(parsed) &&
+						typeof parsed[0] === 'number' &&
+						Number.isFinite(parsed[0])
+					) {
+						recordServerLoad(parsed[0]);
+					}
+				} catch {
+					// Malformed server diagnostics must not affect the sync request.
+				}
+			}
+
+			return response;
 		};
 
 		const response = await fetchWithLatestToken();
@@ -178,6 +222,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			storage: defaultConfig.storage,
 			fetcher,
 			connectivity: getEngineConnectivity,
+			diagnostics: appMetricsObserver,
 			multiInstance: options.multiInstance ?? false,
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},

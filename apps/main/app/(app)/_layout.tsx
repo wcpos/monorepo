@@ -16,15 +16,20 @@ import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
 import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
+import type { StoreDatabase } from '@wcpos/database';
 import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-token';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
-import { setDatabase } from '@wcpos/utils/logger';
+import { getLogger, setDatabase } from '@wcpos/utils/logger';
 
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
 import { createAppSyncEngine } from '../../lib/create-app-engine';
+import { getMetricsBuckets, hydrateMetricsBuckets, type MetricsBucket } from '../../lib/metrics';
+
+const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
+const metricsLogger = getLogger(['wcpos', 'sync', 'host-metrics']);
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -161,6 +166,45 @@ function EngineConnectivityBridge() {
 	return null;
 }
 
+function MetricsPersistenceBridge() {
+	const { storeDB } = useAppState() as { storeDB?: StoreDatabase };
+
+	// Bridge the module-level metrics store to the active per-store RxDB lifecycle.
+	React.useEffect(() => {
+		if (!storeDB) return;
+
+		const statePromise = storeDB.addState<MetricsBucket[]>('host_metrics_v1');
+		void statePromise
+			.then((state) => {
+				hydrateMetricsBuckets(state.get());
+			})
+			.catch((error: unknown) => {
+				metricsLogger.warn('Failed to hydrate host sync metrics', {
+					context: { error: String(error) },
+				});
+			});
+
+		const persist = async (): Promise<void> => {
+			try {
+				const state = await statePromise;
+				await state.set('', () => getMetricsBuckets());
+			} catch (error) {
+				metricsLogger.warn('Failed to persist host sync metrics', {
+					context: { error: String(error) },
+				});
+			}
+		};
+		const interval = setInterval(() => void persist(), METRICS_PERSIST_INTERVAL_MS);
+
+		return () => {
+			clearInterval(interval);
+			void persist();
+		};
+	}, [storeDB]);
+
+	return null;
+}
+
 export default function AppLayout() {
 	const { site } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
@@ -181,6 +225,7 @@ export default function AppLayout() {
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<EngineConnectivityBridge />
+			<MetricsPersistenceBridge />
 			<ExtraDataProvider>
 				<RasterizeProvider>
 					<AppStack />

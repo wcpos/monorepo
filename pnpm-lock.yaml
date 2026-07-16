@@ -224,6 +224,9 @@ importers:
       '@wcpos/query':
         specifier: workspace:*
         version: link:../../packages/query
+      '@wcpos/sync-core':
+        specifier: workspace:*
+        version: link:../../packages/sync-core
       '@wcpos/sync-engine':
         specifier: workspace:*
         version: link:../../packages/sync-engine
