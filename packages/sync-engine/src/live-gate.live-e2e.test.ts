@@ -1,6 +1,8 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { log } from '@wcpos/utils/logger';
+
 import {
 	createRxdbSyncEngine,
 	type EngineEvent,
@@ -14,7 +16,7 @@ const LIVE_BASIC_AUTH = process.env['LIVE_BASIC_AUTH']?.trim();
 const LIVE_ENABLED = Boolean(LIVE_SYNC_BASE && LIVE_BASIC_AUTH);
 
 if (!LIVE_ENABLED) {
-	console.log(
+	log.info(
 		'[live-sync-gate] skipped: set LIVE_SYNC_BASE and LIVE_BASIC_AUTH to run the real-server gate'
 	);
 }
@@ -52,7 +54,7 @@ function liveSite(syncBaseUrl: string): {
 	return {
 		syncBaseUrl: normalized,
 		wpJsonRoot,
-		scopeSite: new URL(wpJsonRoot).origin,
+		scopeSite: wpJsonRoot.replace(/\/wp-json\/$/, ''),
 	};
 }
 
@@ -154,6 +156,7 @@ function evidenceTable(evidence: readonly Evidence[]): string {
 liveDescribe('LIVE sync-engine sale-ready gate', () => {
 	const evidence: Evidence[] = [];
 	const createdWooOrderIds: number[] = [];
+	const runSuffix = globalThis.crypto.randomUUID();
 	let engine: RxdbSyncEngine | null = null;
 
 	afterAll(async () => {
@@ -173,7 +176,7 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 			try {
 				if (engine) await engine.dispose();
 			} finally {
-				console.log(`\n[live-sync-gate] evidence\n${evidenceTable(evidence)}`);
+				log.info(`\n[live-sync-gate] evidence\n${evidenceTable(evidence)}`);
 			}
 		}
 	});
@@ -197,8 +200,8 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 			},
 			{
 				site: site.scopeSite,
-				storeId: 'live-sync-gate',
-				cashierId: 'live-sync-gate',
+				storeId: `live-sync-gate-${runSuffix}`,
+				cashierId: `live-sync-gate-${runSuffix}`,
 			}
 		);
 
