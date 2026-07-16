@@ -21,11 +21,15 @@ function loadCreateAppEngine(
 	createEngine: () => ReturnType<typeof createEngineDouble> = createEngineDouble
 ) {
 	jest.resetModules();
+	const appMetricsObserver = jest.fn();
+	const recordTransport = jest.fn();
+	const recordServerLoad = jest.fn();
 	const createRxdbSyncEngine = jest.fn(
 		(
 			_ports: {
 				fetcher?: (url: string, init?: RequestInit) => Promise<Response>;
 				databaseOpenBarrier?: Promise<void>;
+				diagnostics?: typeof appMetricsObserver;
 			},
 			_scope: unknown
 		) => createEngine()
@@ -35,13 +39,117 @@ function loadCreateAppEngine(
 	jest.doMock('@wcpos/database/adapters/default', () => ({
 		defaultConfig: { storage: { name: 'test-storage' } },
 	}));
+	jest.doMock('./metrics', () => ({
+		appMetricsObserver,
+		recordTransport,
+		recordServerLoad,
+		collectionFromSyncUrl: jest.fn(() => undefined),
+		getMetricsEpoch: jest.fn(() => 0),
+	}));
 
 	const { createAppSyncEngine } =
 		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
-	return { createAppSyncEngine, createRxdbSyncEngine };
+	return {
+		createAppSyncEngine,
+		createRxdbSyncEngine,
+		appMetricsObserver,
+		recordTransport,
+		recordServerLoad,
+	};
 }
 
 describe('createAppSyncEngine scope cache', () => {
+	it('wires diagnostics and records response metrics without reading the body', async () => {
+		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_025);
+		const response = new Response('do not read', {
+			status: 200,
+			headers: {
+				'content-length': '42',
+				'X-Server-Load': '[0.5,0.3,0.2]',
+			},
+		});
+		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(response);
+		const {
+			createAppSyncEngine,
+			createRxdbSyncEngine,
+			appMetricsObserver,
+			recordTransport,
+			recordServerLoad,
+		} = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const ports = createRxdbSyncEngine.mock.calls[0]?.[0];
+
+		const result = await ports?.fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(result).toBe(response);
+		expect(ports?.diagnostics).toBe(appMetricsObserver);
+		expect(appMetricsObserver).toHaveBeenCalledWith({
+			type: 'transport.request',
+			level: 'info',
+			fields: { durationMs: 25, bytes: 42, status: 200 },
+		});
+		expect(recordTransport).toHaveBeenCalledWith({
+			atMs: 1_025,
+			durationMs: 25,
+			bytes: 42,
+			ok: true,
+			epoch: 0,
+		});
+		expect(recordServerLoad).toHaveBeenCalledWith(0.5, 0);
+		expect(response.bodyUsed).toBe(false);
+		now.mockRestore();
+		fetch.mockRestore();
+	});
+
+	it('records a network error and rethrows it', async () => {
+		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_040);
+		const networkError = new Error('network down');
+		const fetch = jest.spyOn(globalThis, 'fetch').mockRejectedValue(networkError);
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver, recordTransport } =
+			loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await expect(fetcher?.('https://store.example.test/wp-json/wcpos/v2/products')).rejects.toBe(
+			networkError
+		);
+
+		expect(appMetricsObserver).toHaveBeenCalledWith({
+			type: 'transport.request',
+			level: 'warn',
+			fields: { durationMs: 40, bytes: 0, status: 0 },
+		});
+		expect(recordTransport).toHaveBeenCalledWith({
+			atMs: 2_040,
+			durationMs: 40,
+			bytes: 0,
+			ok: false,
+			epoch: 0,
+		});
+		now.mockRestore();
+		fetch.mockRestore();
+	});
+
+	it.each(['not-json', '{"load":0.5}', '["0.5"]'])(
+		'ignores malformed server load %s',
+		async (load) => {
+			const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+				new Response(null, {
+					status: 200,
+					headers: { 'X-Server-Load': load },
+				})
+			);
+			const { createAppSyncEngine, createRxdbSyncEngine, recordServerLoad } = loadCreateAppEngine();
+			createAppSyncEngine(BASE_OPTIONS);
+			const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+			await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+			expect(recordServerLoad).not.toHaveBeenCalled();
+			fetch.mockRestore();
+		}
+	);
+
 	it('returns the identical engine when the same scope is constructed twice', () => {
 		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
 
@@ -117,7 +225,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
-		expect(latestCredentials.getLatest).toHaveBeenCalledTimes(1);
+		expect(latestCredentials.getLatest).toHaveBeenCalledTimes(2);
 		expect(initialRefreshAuth).not.toHaveBeenCalled();
 		expect(latestRefreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(
@@ -144,7 +252,7 @@ describe('createAppSyncEngine scope cache', () => {
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValueOnce(new Response(null, { status: 401 }))
 			.mockResolvedValueOnce(new Response(null, { status: 200 }));
-		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -153,6 +261,22 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(response?.status).toBe(200);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(appMetricsObserver).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'warn',
+				fields: expect.objectContaining({ status: 401 }),
+			})
+		);
+		expect(appMetricsObserver).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'info',
+				fields: expect.objectContaining({ status: 200 }),
+			})
+		);
 		const firstHeaders = fetch.mock.calls[0]?.[1]?.headers as Headers;
 		const retryHeaders = fetch.mock.calls[1]?.[1]?.headers as Headers;
 		expect(firstHeaders.get('Authorization')).toBe('Bearer expired-token');

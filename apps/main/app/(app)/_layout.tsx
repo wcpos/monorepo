@@ -16,15 +16,25 @@ import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
 import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
+import type { StoreDatabase } from '@wcpos/database';
 import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-token';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
-import { setDatabase } from '@wcpos/utils/logger';
+import { getLogger, setDatabase } from '@wcpos/utils/logger';
 
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
 import { createAppSyncEngine } from '../../lib/create-app-engine';
+import {
+	getMetricsBuckets,
+	hydrateMetricsBuckets,
+	type MetricsBucket,
+	resetMetricsBuckets,
+} from '../../lib/metrics';
+
+const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
+const metricsLogger = getLogger(['wcpos', 'sync', 'host-metrics']);
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -161,6 +171,68 @@ function EngineConnectivityBridge() {
 	return null;
 }
 
+function MetricsPersistenceBridge() {
+	const { storeDB } = useAppState() as { storeDB?: StoreDatabase };
+
+	// Bridge the module-level metrics store to the active per-store RxDB lifecycle.
+	React.useEffect(() => {
+		if (!storeDB) return;
+
+		// Tracks whether this store is still the active one. A store switch tears the
+		// effect down (setting this) before the incoming store resets the module map;
+		// a hydrate that resolves after that point belongs to the outgoing store and
+		// must be dropped, or it would fold this store's counts into the new store.
+		let cancelled = false;
+
+		// Each store owns its host metrics. Drop any prior store's in-memory buckets
+		// before hydrating this store so one store never displays or re-persists
+		// another store's metrics. Safe against the outgoing store's final persist
+		// below, which snapshots synchronously before this reset can run.
+		resetMetricsBuckets();
+
+		// Hydration is async, but the engine (constructed during AppStack render) can
+		// fire startup ticks that open the current hour before this resolves. That is
+		// safe: hydrateMetricsBuckets folds persisted counts into any already-open
+		// bucket instead of skipping it, so no earlier-in-the-hour counts are lost.
+		const statePromise = storeDB.addState<MetricsBucket[]>('host_metrics_v1');
+		void statePromise
+			.then((state) => {
+				if (cancelled) return;
+				hydrateMetricsBuckets(state.get());
+			})
+			.catch((error: unknown) => {
+				metricsLogger.warn('Failed to hydrate host sync metrics', {
+					context: { error: String(error) },
+				});
+			});
+
+		const persist = async (buckets: MetricsBucket[]): Promise<void> => {
+			try {
+				const state = await statePromise;
+				await state.set('', () => buckets);
+			} catch (error) {
+				metricsLogger.warn('Failed to persist host sync metrics', {
+					context: { error: String(error) },
+				});
+			}
+		};
+		const interval = setInterval(
+			() => void persist(getMetricsBuckets()),
+			METRICS_PERSIST_INTERVAL_MS
+		);
+
+		return () => {
+			cancelled = true;
+			clearInterval(interval);
+			// Snapshot this store's buckets synchronously so the next store's
+			// resetMetricsBuckets() can't blank them before the write lands.
+			void persist(getMetricsBuckets());
+		};
+	}, [storeDB]);
+
+	return null;
+}
+
 export default function AppLayout() {
 	const { site } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
@@ -181,6 +253,7 @@ export default function AppLayout() {
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<EngineConnectivityBridge />
+			<MetricsPersistenceBridge />
 			<ExtraDataProvider>
 				<RasterizeProvider>
 					<AppStack />
