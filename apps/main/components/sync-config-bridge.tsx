@@ -7,9 +7,11 @@ import { useQueryManager } from '@wcpos/query';
 
 /**
  * Applies the store document's sync tuning (#559 knob contract) to the live
- * engine — on boot and whenever the fields change (any till editing the
- * per-store settings re-arms every till via replication). Values are clamped
- * again inside reconfigure(); this bridge just forwards.
+ * engine — on boot and whenever the fields change on THIS device. Store
+ * settings are local-resident documents (like every existing setting), so the
+ * values do not currently propagate between tills; if store-settings
+ * replication ever ships, this bridge inherits it for free. Values are
+ * clamped again inside reconfigure(); this bridge just forwards.
  */
 export function SyncConfigBridge() {
 	const { engine } = useQueryManager();
