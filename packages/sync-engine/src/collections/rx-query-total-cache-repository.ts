@@ -39,4 +39,14 @@ export class RxQueryTotalCacheRepository {
 			sort: [{ queryKey: 'asc' }],
 		});
 	}
+
+	async readForQueryKeys(queryKeys: string[]): Promise<QueryTotalCacheEntry[]> {
+		if (queryKeys.length === 0) return [];
+		const requested = new Set(queryKeys);
+		const entries = await this.keyed.readMany({
+			selector: { queryKey: { $in: [...requested] } },
+			sort: [{ queryKey: 'asc' }],
+		});
+		return entries.filter((entry) => requested.has(entry.queryKey));
+	}
 }

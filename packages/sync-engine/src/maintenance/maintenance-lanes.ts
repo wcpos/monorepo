@@ -46,6 +46,11 @@ import {
 	type QueryTotalCacheEntry,
 	type QueryTotalWooRequest,
 } from '../scheduler/query-total-requests';
+import {
+	censusCollectionFromQueryKey,
+	censusQueryKey,
+	SUPPORTED_CENSUS_COLLECTIONS,
+} from '../scheduler/census';
 
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { SeedPersistedSchedulerTasksResult } from '../scheduler/rx-scheduler-task-seeder';
@@ -73,7 +78,7 @@ export type QueryTotalPort = {
 	fetchWooQueryTotal: (input: {
 		request: QueryTotalWooRequest;
 		signal?: AbortSignal;
-	}) => Promise<number>;
+	}) => Promise<number | null>;
 };
 
 export type QueryTotalCacheEvent = { type: 'query-total-cache'; entries: QueryTotalCacheEntry[] };
@@ -112,6 +117,7 @@ type MaintenanceLaneDeps = {
 	/** Current facade-configured record cap for scheduler data requests. */
 	pullBatchSize?: () => number | undefined;
 	queryTotal?: QueryTotalPort;
+	censusFreshForMs: number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
 };
@@ -369,9 +375,43 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	const queryTotalRetry = queryTotal
 		? lane('query-total-retry', async (db, _scopeId, signal) => {
 				const nowMs = now();
+				const stateRepository = new RxQueryTotalRequestStateRepository(db as never);
+				const cacheRepository = new RxQueryTotalCacheRepository(db as never);
+				const censusQueryKeys = SUPPORTED_CENSUS_COLLECTIONS.map(censusQueryKey);
+				const [censusCacheEntries, censusRequestStates] = await Promise.all([
+					cacheRepository.readForQueryKeys(censusQueryKeys),
+					stateRepository.readForQueryKeys(censusQueryKeys),
+				]);
+				const censusCacheByKey = new Map(
+					censusCacheEntries.map((entry) => [entry.queryKey, entry])
+				);
+				const censusStateKeys = new Set(censusRequestStates.map((state) => state.queryKey));
+				for (const collection of SUPPORTED_CENSUS_COLLECTIONS) {
+					const queryKey = censusQueryKey(collection);
+					const cacheEntry = censusCacheByKey.get(queryKey);
+					if ((cacheEntry && cacheEntry.freshUntilMs > nowMs) || censusStateKeys.has(queryKey)) {
+						continue;
+					}
+					await stateRepository.claimNew({
+						queryKey,
+						status: 'failed',
+						ownerId: null,
+						claimedUntilMs: null,
+						attempt: 0,
+						retryAfterMs: nowMs,
+						updatedAtMs: nowMs,
+						request: {
+							queryKey,
+							method: 'GET',
+							endpoint: collection,
+							params: { page: 1, per_page: 1 },
+							totalHeader: 'X-WP-Total',
+						},
+					});
+				}
 				const result = await runQueryTotalRetryRequests({
-					stateRepository: new RxQueryTotalRequestStateRepository(db as never),
-					cacheRepository: new RxQueryTotalCacheRepository(db as never),
+					stateRepository,
+					cacheRepository,
 					fetchWooQueryTotal: ({ request, signal: requestSignal }) =>
 						queryTotal.fetchWooQueryTotal({
 							request,
@@ -383,7 +423,10 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					getNowMs: now,
 					leaseForMs: QUERY_TOTAL_LEASE_FOR_MS,
 					retryAfterMs: QUERY_TOTAL_RETRY_AFTER_MS,
-					freshForMs: QUERY_TOTAL_FRESH_FOR_MS,
+					freshForMs: (request) =>
+						censusCollectionFromQueryKey(request.queryKey) === null
+							? QUERY_TOTAL_FRESH_FOR_MS
+							: deps.censusFreshForMs,
 				});
 				if (result.cacheEntries.length > 0) {
 					deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });
@@ -392,12 +435,13 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					result.succeeded === 0 &&
 					result.failed === 0 &&
 					result.claimLost === 0 &&
+					result.unsupported === 0 &&
 					result.skippedMissingRequest === 0
 				) {
 					return { summary: null };
 				}
 				return {
-					summary: `Query total retry scan: ${result.succeeded} succeeded, ${result.failed} failed, ${result.claimLost} claim lost, ${result.skippedMissingRequest} missing request metadata`,
+					summary: `Query total retry scan: ${result.succeeded} succeeded, ${result.unsupported} unsupported, ${result.failed} failed, ${result.claimLost} claim lost, ${result.skippedMissingRequest} missing request metadata`,
 				};
 			})
 		: null;

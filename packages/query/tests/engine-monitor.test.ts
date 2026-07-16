@@ -2,7 +2,11 @@ import { BehaviorSubject } from 'rxjs';
 
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { observeEngineCollectionCounts, observeEngineMutationCounts } from '../src/engine-monitor';
+import {
+	observeEngineCensus,
+	observeEngineCollectionCounts,
+	observeEngineMutationCounts,
+} from '../src/engine-monitor';
 
 const COLLECTION_NAMES = [
 	'orders',
@@ -67,6 +71,26 @@ function mutationDatabase(pending: number, conflicts: number) {
 }
 
 describe('engine monitor observers', () => {
+	it('forwards census snapshots and unsubscription through the engine facade', () => {
+		const subscribers = new Set<(totals: { orders: { total: number } | null }) => void>();
+		const engine = {
+			censusChanges: (cb: (totals: { orders: { total: number } | null }) => void) => {
+				subscribers.add(cb);
+				cb({ orders: null });
+				return () => subscribers.delete(cb);
+			},
+		} as unknown as RxdbSyncEngine;
+		const emissions: unknown[] = [];
+		const unsubscribe = observeEngineCensus(engine, (totals) => emissions.push(totals));
+
+		expect(emissions).toEqual([{ orders: null }]);
+		for (const subscriber of subscribers) subscriber({ orders: { total: 12 } });
+		expect(emissions.at(-1)).toEqual({ orders: { total: 12 } });
+
+		unsubscribe();
+		expect(subscribers.size).toBe(0);
+	});
+
 	it('observes every synced collection count and re-subscribes on database swaps', () => {
 		const first = countDatabase(1);
 		const second = countDatabase(11);

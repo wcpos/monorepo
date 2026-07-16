@@ -176,7 +176,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 
 		// With the port: seed a due request state directly (the persisted shape the
 		// web app writes), then one lane tick claims + fetches + caches it.
-		const fetchWooQueryTotal = vi.fn(async () => 42);
+		const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 42);
 		const engine = engineWith({ queryTotal: { fetchWooQueryTotal }, now: () => 1_000_000 });
 		await engine.ready;
 		const scope = engine.active();
@@ -207,19 +207,91 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 
 		const report = await engine.sync('query-total-retry');
 		expect(report.status).toBe('ran');
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
+		expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
+			'orders:total:test'
+		);
 		const cacheEvent = events.find((event) => event.type === 'query-total-cache');
 		expect(cacheEvent).toBeDefined();
 		await engine.dispose();
 	});
 
+	it('seeds supported collection census requests and exposes fresh, stale, and unknown totals', async () => {
+		let nowMs = 1_000_000;
+		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) =>
+			request.queryKey === 'census:orders' ? 25 : 40
+		);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => nowMs,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+
+		const initial = await engine.censusTotals();
+		expect(Object.values(initial).every((entry) => entry === null)).toBe(true);
+
+		const emissions: (typeof initial)[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		const report = await engine.sync('query-total-retry');
+
+		expect(report.status).toBe('ran');
+		expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey).sort()).toEqual([
+			'census:brands',
+			'census:categories',
+			'census:coupons',
+			'census:customers',
+			'census:orders',
+			'census:products',
+			'census:tags',
+			'census:taxRates',
+		]);
+		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.total).toBe(25));
+		expect(emissions.at(-1)?.variations).toBeNull();
+		expect(emissions.at(-1)?.orders).toEqual({
+			total: 25,
+			updatedAtMs: 1_000_000,
+			fresh: true,
+		});
+
+		nowMs = 1_060_000;
+		expect((await engine.censusTotals()).orders?.fresh).toBe(false);
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('republishes a census snapshot when its freshness deadline passes', async () => {
+		const fetchWooQueryTotal = vi.fn(async () => 25);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			intervals: { censusFreshForMs: 40 },
+		});
+		await engine.ready;
+
+		const emissions: Awaited<ReturnType<typeof engine.censusTotals>>[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		await engine.sync('query-total-retry');
+		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.fresh).toBe(true));
+
+		// No cache/lane event fires at freshUntilMs — the expiry timer must
+		// republish so subscribers never hold a fresh:true snapshot past its
+		// deadline (stale-means-unknown).
+		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.fresh).toBe(false), {
+			timeout: 2_000,
+		});
+		expect(emissions.at(-1)?.orders?.total).toBe(25);
+		unsubscribe();
+		await engine.dispose();
+	});
+
 	it('dispose waits for an in-flight maintenance write before closing the scope database', async () => {
 		let releaseFetch!: (total: number) => void;
-		const fetchWooQueryTotal = vi.fn(
-			() =>
-				new Promise<number>((resolve) => {
-					releaseFetch = resolve;
-				})
+		const fetchWooQueryTotal = vi.fn(({ request }: { request: { queryKey: string } }) =>
+			request.queryKey === 'orders:total:guarded-dispose'
+				? new Promise<number>((resolve) => {
+						releaseFetch = resolve;
+					})
+				: Promise.resolve(42)
 		);
 		const engine = engineWith({ queryTotal: { fetchWooQueryTotal }, now: () => 1_000_000 });
 		await engine.ready;
@@ -249,7 +321,11 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		});
 
 		const tick = engine.sync('query-total-retry');
-		await vi.waitFor(() => expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() =>
+			expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
+				'orders:total:guarded-dispose'
+			)
+		);
 		const disposing = engine.dispose();
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		const closeStartedBeforeTickFinished = close.mock.calls.length > 0;
@@ -291,7 +367,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		});
 		await seed.dispose();
 
-		const fetchWooQueryTotal = vi.fn(async () => 42);
+		const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 42);
 		const engine = engineWith(
 			{
 				storage,
@@ -303,7 +379,13 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			identity
 		);
 		await engine.ready;
-		await vi.waitFor(() => expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1), { timeout: 1_000 });
+		await vi.waitFor(
+			() =>
+				expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
+					'orders:total:auto-start'
+				),
+			{ timeout: 1_000 }
+		);
 		await engine.dispose();
 	});
 
