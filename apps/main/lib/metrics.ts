@@ -149,9 +149,29 @@ function isMetricsBucket(value: unknown): value is MetricsBucket {
 export function hydrateMetricsBuckets(persisted: unknown): void {
 	if (!Array.isArray(persisted)) return;
 	for (const bucket of persisted) {
-		if (isMetricsBucket(bucket) && !metricsBuckets.has(bucket.hourStartMs)) {
+		if (!isMetricsBucket(bucket)) continue;
+		const existing = metricsBuckets.get(bucket.hourStartMs);
+		if (!existing) {
 			metricsBuckets.set(bucket.hourStartMs, { ...bucket });
+			continue;
 		}
+		// The sync engine can open the current hour's bucket with startup ticks
+		// before this (async) hydrate resolves. Fold the persisted counts into the
+		// live bucket rather than skipping it, so earlier-in-the-hour totals from a
+		// previous session survive the restart instead of being dropped. This runs
+		// after resetMetricsBuckets() on a store switch, so the only live bucket it
+		// can merge into belongs to the incoming store — never the previous one.
+		existing.requests += bucket.requests;
+		existing.bytes += bucket.bytes;
+		existing.durationTotalMs += bucket.durationTotalMs;
+		existing.durationCount += bucket.durationCount;
+		existing.errors += bucket.errors;
+		if (bucket.loadMax !== undefined) {
+			existing.loadMax = Math.max(existing.loadMax ?? bucket.loadMax, bucket.loadMax);
+		}
+		// Keep the live reading when the session has already recorded one (it is the
+		// most recent); otherwise fall back to the persisted last reading.
+		if (existing.loadLast === undefined) existing.loadLast = bucket.loadLast;
 	}
 	pruneMetricsBuckets();
 }

@@ -114,7 +114,8 @@ describe('host metrics buckets', () => {
 		expect(getMetricsBuckets().map((bucket) => bucket.hourStartMs)).toEqual([HOUR_MS]);
 	});
 
-	it('hydrates persisted buckets without replacing in-memory hours', () => {
+	it('folds persisted counts into a live hour the engine already opened on startup', () => {
+		// A startup tick opens the current hour before the async hydrate resolves.
 		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 20, ok: true });
 
 		hydrateMetricsBuckets([
@@ -140,6 +141,7 @@ describe('host metrics buckets', () => {
 
 		expect(getMetricsBuckets()).toEqual([
 			{
+				// A brand-new hour is taken verbatim from persistence.
 				hourStartMs: HOUR_MS,
 				requests: 3,
 				bytes: 40,
@@ -150,14 +152,38 @@ describe('host metrics buckets', () => {
 				loadMax: 0.4,
 			},
 			{
+				// The already-open hour keeps the live tick AND the persisted counts —
+				// the persisted totals are not dropped.
 				hourStartMs: 2 * HOUR_MS,
-				requests: 1,
-				bytes: 20,
-				durationTotalMs: 10,
-				durationCount: 1,
-				errors: 0,
+				requests: 100,
+				bytes: 119,
+				durationTotalMs: 109,
+				durationCount: 100,
+				errors: 99,
 			},
 		]);
+	});
+
+	it('prefers the live server-load reading and takes the max when merging a hour', () => {
+		recordServerLoad(0.5); // opens the current hour with a live reading
+		const currentHour = getMetricsBuckets()[0]?.hourStartMs ?? 0;
+
+		hydrateMetricsBuckets([
+			{
+				hourStartMs: currentHour,
+				requests: 0,
+				bytes: 0,
+				durationTotalMs: 0,
+				durationCount: 0,
+				errors: 0,
+				loadLast: 0.1,
+				loadMax: 0.9,
+			},
+		]);
+
+		const [bucket] = getMetricsBuckets();
+		expect(bucket?.loadLast).toBe(0.5); // live reading wins
+		expect(bucket?.loadMax).toBe(0.9); // max across live + persisted
 	});
 });
 

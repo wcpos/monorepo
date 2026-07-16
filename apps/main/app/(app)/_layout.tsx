@@ -184,6 +184,10 @@ function MetricsPersistenceBridge() {
 		// below, which snapshots synchronously before this reset can run.
 		resetMetricsBuckets();
 
+		// Hydration is async, but the engine (constructed during AppStack render) can
+		// fire startup ticks that open the current hour before this resolves. That is
+		// safe: hydrateMetricsBuckets folds persisted counts into any already-open
+		// bucket instead of skipping it, so no earlier-in-the-hour counts are lost.
 		const statePromise = storeDB.addState<MetricsBucket[]>('host_metrics_v1');
 		void statePromise
 			.then((state) => {
