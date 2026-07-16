@@ -118,6 +118,23 @@ describe('refreshAccessToken', () => {
 		);
 	});
 
+	it('migrates a persisted v1 base before refreshing', async () => {
+		const post = jest.fn().mockResolvedValue({
+			data: { access_token: 'new-token', expires_at: 9999 },
+			status: 200,
+		});
+		const { config } = makeConfig(post, {
+			wcpos_api_url: 'https://example.test/wp-json/wcpos/v1/',
+		});
+
+		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
+		expect(post).toHaveBeenCalledWith(
+			'https://example.test/wp-json/wcpos/v2/auth/refresh',
+			{ refresh_token: 'refresh-token' },
+			{ headers: { 'X-WCPOS': '1' } }
+		);
+	});
+
 	it('falls back to wp_api_url when wcpos_api_url is unset', async () => {
 		const post = jest.fn().mockResolvedValue({
 			data: { access_token: 'new-token', expires_at: 9999 },
