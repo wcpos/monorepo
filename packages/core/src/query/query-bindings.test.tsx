@@ -663,6 +663,28 @@ describe('query bindings', () => {
 		);
 	});
 
+	it('keeps relational search reactive while no local matches exist', async () => {
+		const state: QueryStateOf<'products'> = {
+			search: 'hoodie',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 20,
+		};
+		const { result } = renderHook(() => useRelationalCollectionBinding(state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'hoodie', id: 10, name: 'Hoodie' })
+		);
+
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['hoodie'])
+		);
+	});
+
 	it('windows relational products after considering every matching variation', async () => {
 		await engineDB.collections.products.bulkInsert([
 			engineProduct({ uuid: 'zulu-shirt', id: 10, name: 'Zulu Shirt' }),

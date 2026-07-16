@@ -637,6 +637,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 			}),
 			switchMap(({ direct, lookup, counts }) => {
 				const uuids = [...new Set([...direct.hits, ...lookup.hits].map((hit) => hit.id))];
+				if (uuids.length === 0) return of(emptyResult());
 				return observeEngineQuery(runtime.engine, runtime.locale, {
 					...descriptor,
 					search: '',
