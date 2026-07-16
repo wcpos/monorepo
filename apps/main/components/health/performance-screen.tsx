@@ -113,11 +113,19 @@ export function PerformanceScreen() {
 	const preset = presetFor(checkIntervalMs, pullBatchSize);
 	const requestsPerDay = Math.round((86_400_000 / checkIntervalMs) * 10) / 10;
 
-	const applyPreset = (name: PresetName) =>
-		persist({
+	const applyPreset = (name: PresetName) => {
+		// Cancel any pending debounced draft so a stale slider write doesn't
+		// overwrite the freshly-applied preset (greptile P1).
+		if (persistTimer.current !== null) {
+			clearTimeout(persistTimer.current);
+			persistTimer.current = null;
+		}
+		setDraft({});
+		void persist({
 			sync_check_interval_ms: PRESETS[name].checkIntervalMs,
 			sync_pull_batch_size: PRESETS[name].pullBatchSize,
 		});
+	};
 
 	return (
 		<ScrollView className="flex-1">
