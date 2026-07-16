@@ -13,7 +13,7 @@ test.describe('Products Page (Pro)', () => {
 
 	test('should navigate to Products page and see product table', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products');
+		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('search-products')).toBeVisible({
 			timeout: 30_000,
 		});
@@ -24,7 +24,7 @@ test.describe('Products Page (Pro)', () => {
 
 	test('should show stock and price columns on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products');
+		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -37,7 +37,7 @@ test.describe('Products Page (Pro)', () => {
 		posPage: page,
 	}) => {
 		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products');
+		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -47,8 +47,12 @@ test.describe('Products Page (Pro)', () => {
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
-		const hoodieWithPocketRow = screen.getByTestId('data-table-row-hoodie-with-pocket').first();
-		const hoodieWithZipperRow = screen.getByTestId('data-table-row-hoodie-with-zipper').first();
+		const hoodieWithPocketRow = screen
+			.locator('[data-testid="data-table-row-hoodie-with-pocket"]:visible')
+			.first();
+		const hoodieWithZipperRow = screen
+			.locator('[data-testid="data-table-row-hoodie-with-zipper"]:visible')
+			.first();
 		await expect(hoodieWithPocketRow).toBeVisible({ timeout: 30_000 });
 		await expect(hoodieWithZipperRow).toBeVisible({ timeout: 30_000 });
 
@@ -86,7 +90,7 @@ test.describe('Products Page (Pro)', () => {
 
 	test('should search products on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products');
+		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -98,14 +102,12 @@ test.describe('Products Page (Pro)', () => {
 		const countEl = screen.getByTestId('data-table-count');
 		const noResults = screen.getByTestId('no-data-message');
 
-		const hasResults = await countEl.isVisible().catch(() => false);
-		const hasNoResults = await noResults.isVisible().catch(() => false);
-		expect(hasResults || hasNoResults).toBeTruthy();
+		await expect(countEl.or(noResults).first()).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show product actions menu', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products');
+		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -121,7 +123,7 @@ test.describe('Products Page (Pro)', () => {
 
 	test('should expand variable product to show variations', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products');
+		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -132,19 +134,19 @@ test.describe('Products Page (Pro)', () => {
 		await page.waitForTimeout(2_000);
 
 		// Click the expand link on the variable product
-		const expandLink = screen.getByTestId('variable-product-expand').first();
+		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await expandLink.click();
 		await page.waitForTimeout(1_500);
 
 		// Variation rows should now be visible with their actions menus
-		const variationActionsMenu = screen.getByTestId('variation-actions-menu');
+		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
 		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show variation actions menu with edit/sync/delete', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products');
+		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -154,13 +156,15 @@ test.describe('Products Page (Pro)', () => {
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
 
-		const expandLink = screen.getByTestId('variable-product-expand').first();
+		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await expandLink.click();
 		await page.waitForTimeout(1_500);
 
 		// Click the variation actions menu (ellipsis button)
-		const variationActionsMenu = screen.getByTestId('variation-actions-menu').first();
+		const variationActionsMenu = screen
+			.locator('[data-testid="variation-actions-menu"]:visible')
+			.first();
 		await expect(variationActionsMenu).toBeVisible({ timeout: 15_000 });
 		await variationActionsMenu.click();
 
@@ -172,7 +176,7 @@ test.describe('Products Page (Pro)', () => {
 
 	test('should collapse expanded variable product on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products');
+		const screen = page.locator('[data-testid="screen-products"]:visible');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({
 			timeout: 60_000,
 		});
@@ -182,12 +186,12 @@ test.describe('Products Page (Pro)', () => {
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(2_000);
 
-		const expandLink = screen.getByTestId('variable-product-expand').first();
+		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
 		await expandLink.click();
 		await page.waitForTimeout(1_500);
 
-		const variationActionsMenu = screen.getByTestId('variation-actions-menu');
+		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
 		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
 
 		// Collapse
