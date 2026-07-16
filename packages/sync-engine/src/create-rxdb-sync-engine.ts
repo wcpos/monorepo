@@ -939,6 +939,8 @@ export function createRxdbSyncEngine(
 			}
 			case 'write-dropped':
 			case 'late-response-dropped': {
+				// The guard counter already incremented — status subscribers must see it.
+				scheduleStatusChange();
 				diagnostics({
 					type: 'engine.guard',
 					level: 'warn',
@@ -985,6 +987,9 @@ export function createRxdbSyncEngine(
 	let pendingLifecycleOps = 0;
 	const enqueueLifecycle = <T>(task: () => Promise<T>): Promise<T> => {
 		pendingLifecycleOps += 1;
+		// gatedBy flips to 'lifecycle' NOW — subscribers see the gate while the
+		// (potentially long) operation runs, not only after it settles.
+		scheduleStatusChange();
 		const run = lifecycleChain.then(task, task);
 		lifecycleChain = run.then(
 			() => undefined,

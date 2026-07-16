@@ -56,7 +56,7 @@ function mutationDatabase(pending: number, conflicts: number) {
 	const pending$ = new BehaviorSubject(Array.from({ length: pending }, () => ({})));
 	const conflicts$ = new BehaviorSubject(Array.from({ length: conflicts }, () => ({})));
 	const find = jest.fn((query: { selector: { status: { $in: string[] } } }) => ({
-		$: query.selector.status.$in.includes('conflicted') ? conflicts$ : pending$,
+		$: query.selector.status.$in.includes('rejected') ? conflicts$ : pending$,
 	}));
 	return {
 		pending$,
@@ -105,7 +105,7 @@ describe('engine monitor observers', () => {
 		const unsubscribe = observeEngineMutationCounts(engine, (counts) => emissions.push(counts));
 
 		expect(first.find).toHaveBeenCalledWith({
-			selector: { status: { $in: ['pending', 'claimed', 'needs-revision'] } },
+			selector: { status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] } },
 		});
 		expect(first.find).toHaveBeenCalledWith({
 			selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },

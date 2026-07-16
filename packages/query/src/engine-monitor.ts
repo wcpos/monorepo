@@ -70,7 +70,7 @@ export function observeEngineMutationCounts(
 				if (!database) return of({ pending: 0, conflicts: 0 });
 				const mutations = database.collections.recordMutations as unknown as MutationCollection;
 				const pending$ = mutations.find({
-					selector: { status: { $in: ['pending', 'claimed', 'needs-revision'] } },
+					selector: { status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] } },
 				}).$;
 				const conflicts$ = mutations.find({
 					selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },
