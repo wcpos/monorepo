@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { memoryEngineStorage } from './testing';
-import { createRxdbSyncEngine, type EngineScopeEvent } from './create-rxdb-sync-engine';
+import {
+	createRxdbSyncEngine,
+	type EngineScopeEvent,
+	type EngineStatus,
+} from './create-rxdb-sync-engine';
 
 setPremiumFlag();
 
@@ -29,6 +33,8 @@ describe('bootstrap failure honesty', () => {
 		);
 		const events: EngineScopeEvent[] = [];
 		engine.onScopeEvent((event) => events.push(event));
+		const statuses: EngineStatus[] = [];
+		engine.statusChanges((status) => statuses.push(status));
 
 		const scope = await engine.ready;
 
@@ -45,6 +51,9 @@ describe('bootstrap failure honesty', () => {
 			scopeId: scope.scopeId,
 			detail: 'seed exploded',
 		});
+		await vi.waitFor(() =>
+			expect(statuses.at(-1)?.bootstrapFailed).toEqual({ [scope.scopeId]: 'seed exploded' })
+		);
 		await engine.dispose();
 	});
 });

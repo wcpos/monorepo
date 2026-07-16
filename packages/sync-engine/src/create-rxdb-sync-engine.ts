@@ -450,6 +450,8 @@ export type RxdbSyncEngine = {
 	/** Host view projection of scope lifecycle and guard events. */
 	onScopeEvent(cb: (event: EngineScopeEvent) => void): Unsubscribe;
 	status(): EngineStatus;
+	/** Emits the current status immediately, then coalesced status snapshots as it changes. */
+	statusChanges(cb: (status: EngineStatus) => void): Unsubscribe;
 	/** Host view projection of the shared scope/guard counters. */
 	stats(): EngineStats;
 	/** Abort in-flight, close every scope db; terminal. */
@@ -487,6 +489,28 @@ export function createRxdbSyncEngine(
 	const dbSubscribers = new Set<(db: RxDatabase | null) => void>();
 	const eventSubscribers = new Set<(e: EngineEvent) => void>();
 	const scopeEventSubscribers = new Set<(e: EngineScopeEvent) => void>();
+	const statusSubscribers = new Set<(status: EngineStatus) => void>();
+	let statusNotificationQueued = false;
+	const scheduleStatusChange = (): void => {
+		if (statusNotificationQueued || statusSubscribers.size === 0) return;
+		statusNotificationQueued = true;
+		queueMicrotask(() => {
+			statusNotificationQueued = false;
+			if (statusSubscribers.size === 0) return;
+			const status = readStatus();
+			for (const cb of [...statusSubscribers]) {
+				try {
+					cb(status);
+				} catch (error) {
+					diagnostics({
+						type: 'engine.listener-error',
+						level: 'error',
+						message: `statusChanges() listener threw: ${error instanceof Error ? error.message : String(error)}`,
+					});
+				}
+			}
+		});
+	};
 	let disposed = false;
 	let announcedScopeId: string | null = null;
 	const bootstrappedScopes = new Set<string>();
@@ -879,6 +903,7 @@ export function createRxdbSyncEngine(
 				announcedScopeId = event.scopeId;
 				emitEngineEvent({ type: 'scope-switched', scopeId: event.scopeId, from });
 				emitDb(activeDatabase());
+				scheduleStatusChange();
 				return;
 			}
 			case 'reset': {
@@ -894,6 +919,7 @@ export function createRxdbSyncEngine(
 					collection: event.detail as ResettableCollectionName,
 				});
 				emitDb(activeDatabase());
+				scheduleStatusChange();
 				return;
 			}
 			case 'needs-confirmation': {
@@ -969,9 +995,11 @@ export function createRxdbSyncEngine(
 		void run.then(
 			() => {
 				pendingLifecycleOps -= 1;
+				scheduleStatusChange();
 			},
 			() => {
 				pendingLifecycleOps -= 1;
+				scheduleStatusChange();
 			}
 		);
 		return run;
@@ -998,9 +1026,11 @@ export function createRxdbSyncEngine(
 					});
 					bootstrappedScopes.add(scopeId);
 					bootstrapFailures.delete(scopeId);
+					scheduleStatusChange();
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					bootstrapFailures.set(scopeId, message);
+					scheduleStatusChange();
 					diagnostics({
 						type: 'engine.pos-bootstrap-error',
 						level: 'warn',
@@ -1213,6 +1243,9 @@ export function createRxdbSyncEngine(
 		if (pendingLifecycleOps > 0) return;
 		const connectivityNow = readConnectivity();
 		const reconnected = lastAutomaticConnectivity === 'offline' && connectivityNow === 'online';
+		if (lastAutomaticConnectivity !== undefined && lastAutomaticConnectivity !== connectivityNow) {
+			scheduleStatusChange();
+		}
 		lastAutomaticConnectivity = connectivityNow;
 		if (reconnected && reconnectRetick === null) {
 			diagnostics({ type: 'engine.reconnect.retick', level: 'info' });
@@ -1241,6 +1274,7 @@ export function createRxdbSyncEngine(
 				atMs: nowMs(),
 				status: report.status,
 			});
+		scheduleStatusChange();
 		diagnostics({
 			type: 'engine.lane.tick',
 			level: report.status === 'error' ? 'error' : 'info',
@@ -1266,10 +1300,12 @@ export function createRxdbSyncEngine(
 		intervalMs: number
 	): ReturnType<typeof setInterval> => {
 		laneNextDueAtMs.set(lane, nowMs() + intervalMs);
+		scheduleStatusChange();
 		return setInterval(() => {
 			// setInterval keeps its original cadence even when a callback runs long.
 			// Advance from the prior boundary, never from callback completion.
 			laneNextDueAtMs.set(lane, (laneNextDueAtMs.get(lane) ?? nowMs()) + intervalMs);
+			scheduleStatusChange();
 			void runAutomaticTick(() => tickLaneWithEvents(lane));
 		}, intervalMs);
 	};
@@ -1281,16 +1317,26 @@ export function createRxdbSyncEngine(
 			}
 			pullBatchSize = Math.min(100, Math.max(10, Math.trunc(config.pullBatchSize)));
 		}
-		if (config.changeSignalPollMs === undefined) return;
+		if (config.changeSignalPollMs === undefined) {
+			scheduleStatusChange();
+			return;
+		}
 		if (!Number.isFinite(config.changeSignalPollMs)) {
 			throw new TypeError('changeSignalPollMs must be a finite number');
 		}
 		const nextPollMs = Math.min(300_000, Math.max(5_000, Math.trunc(config.changeSignalPollMs)));
-		if (nextPollMs === intervals.changeSignalPollMs) return;
+		if (nextPollMs === intervals.changeSignalPollMs) {
+			scheduleStatusChange();
+			return;
+		}
 		intervals.changeSignalPollMs = nextPollMs;
-		if (mode === 'manual' || changeSignalTimer === null) return;
+		if (mode === 'manual' || changeSignalTimer === null) {
+			scheduleStatusChange();
+			return;
+		}
 		clearInterval(changeSignalTimer);
 		changeSignalTimer = armLaneInterval('change-signal', nextPollMs);
+		scheduleStatusChange();
 	};
 	if (mode === 'auto') {
 		void ready.then(
@@ -1329,6 +1375,82 @@ export function createRxdbSyncEngine(
 			},
 			() => undefined
 		);
+	}
+
+	function readStatus(): EngineStatus {
+		let connectivityNow: EngineConnectivity;
+		try {
+			connectivityNow = connectivity();
+		} catch (error) {
+			connectivityNow = 'offline';
+			diagnostics({
+				type: 'engine.connectivity-error',
+				level: 'error',
+				message: `connectivity port threw: ${error instanceof Error ? error.message : String(error)}`,
+			});
+		}
+		const stats = manager.stats();
+		const laneStatus = (name: EngineLane, lastError: string | null) => ({
+			lastError,
+			lastTick: laneLastTick.get(name) ?? null,
+			nextDueAtMs: laneNextDueAtMs.get(name),
+		});
+		return {
+			disposed,
+			mode,
+			connectivity: connectivityNow,
+			gatedBy:
+				pendingLifecycleOps > 0
+					? 'lifecycle'
+					: connectivityNow === 'offline'
+						? 'offline'
+						: manager.activeScope !== null && bootstrapFailures.has(manager.activeScope)
+							? 'bootstrap-failed'
+							: null,
+			bootstrapFailed: Object.fromEntries(bootstrapFailures),
+			activeScopeId: disposed ? null : manager.activeScope,
+			scopesOpen: stats.scopesOpen,
+			guards: {
+				wrongScopeWrites: stats.wrongScopeWrites,
+				lateResponsesDropped: stats.lateResponsesDropped,
+			},
+			lanes: {
+				// Key order mirrors the documented all-lane sync() order (seeds
+				// before the scheduler drain — #516 item 6).
+				'change-signal': laneStatus('change-signal', changeSignalLane.lastError()),
+				'write-drain': laneStatus('write-drain', writeDrainLane.lastError()),
+				'order-window-seed': laneStatus(
+					'order-window-seed',
+					maintenanceLanes.orderWindowSeed.lastError()
+				),
+				'product-browse-window-seed': laneStatus(
+					'product-browse-window-seed',
+					maintenanceLanes.productBrowseWindowSeed.lastError()
+				),
+				'reference-seed': laneStatus('reference-seed', maintenanceLanes.referenceSeed.lastError()),
+				'scheduler-drain': laneStatus(
+					'scheduler-drain',
+					maintenanceLanes.schedulerDrain.lastError()
+				),
+				'query-total-retry': laneStatus(
+					'query-total-retry',
+					maintenanceLanes.queryTotalRetry?.lastError() ?? null
+				),
+				'coverage-compaction': laneStatus(
+					'coverage-compaction',
+					maintenanceLanes.coverageCompaction.lastError()
+				),
+				'existence-prime': laneStatus(
+					'existence-prime',
+					maintenanceLanes.existencePrime.lastError()
+				),
+				'existence-reconcile': laneStatus(
+					'existence-reconcile',
+					maintenanceLanes.existenceReconcile.lastError()
+				),
+			},
+			queueDepth: writeDrainLane.lastKnownQueueDepth(),
+		};
 	}
 
 	return {
@@ -1422,6 +1544,7 @@ export function createRxdbSyncEngine(
 						observe: diagnostics,
 					});
 					writeDrainLane.noteQueueDepth((await queueFor(database).pending()).length);
+					scheduleStatusChange();
 				});
 				if (wrote === 'dropped' || result === null) {
 					throw new Error('write: scope moved during enqueue — retry against the settled scope');
@@ -1763,6 +1886,7 @@ export function createRxdbSyncEngine(
 						atMs: ports.now !== undefined ? ports.now() : Date.now(),
 						status: report.status,
 					});
+				scheduleStatusChange();
 				diagnostics({
 					type: 'engine.lane.tick',
 					level: report.status === 'error' ? 'error' : 'info',
@@ -1828,6 +1952,7 @@ export function createRxdbSyncEngine(
 					atMs: ports.now !== undefined ? ports.now() : Date.now(),
 					status: report.status,
 				});
+				scheduleStatusChange();
 				reports.push(report);
 			}
 			const drain = reports[1]!;
@@ -1870,6 +1995,18 @@ export function createRxdbSyncEngine(
 				scopeEventSubscribers.delete(cb);
 			};
 		},
+		statusChanges: (cb) => {
+			assertNotDisposed();
+			statusSubscribers.add(cb);
+			try {
+				cb(readStatus());
+			} catch {
+				// Same contract as db$: a throwing listener never breaks the engine.
+			}
+			return () => {
+				statusSubscribers.delete(cb);
+			};
+		},
 		stats: () => {
 			const stats = manager.stats();
 			return {
@@ -1878,84 +2015,7 @@ export function createRxdbSyncEngine(
 				lateResponsesDropped: stats.lateResponsesDropped,
 			};
 		},
-		status: () => {
-			let connectivityNow: EngineConnectivity;
-			try {
-				connectivityNow = connectivity();
-			} catch (error) {
-				connectivityNow = 'offline';
-				diagnostics({
-					type: 'engine.connectivity-error',
-					level: 'error',
-					message: `connectivity port threw: ${error instanceof Error ? error.message : String(error)}`,
-				});
-			}
-			const stats = manager.stats();
-			const laneStatus = (name: EngineLane, lastError: string | null) => ({
-				lastError,
-				lastTick: laneLastTick.get(name) ?? null,
-				nextDueAtMs: laneNextDueAtMs.get(name),
-			});
-			return {
-				disposed,
-				mode,
-				connectivity: connectivityNow,
-				gatedBy:
-					pendingLifecycleOps > 0
-						? 'lifecycle'
-						: connectivityNow === 'offline'
-							? 'offline'
-							: manager.activeScope !== null && bootstrapFailures.has(manager.activeScope)
-								? 'bootstrap-failed'
-								: null,
-				bootstrapFailed: Object.fromEntries(bootstrapFailures),
-				activeScopeId: disposed ? null : manager.activeScope,
-				scopesOpen: stats.scopesOpen,
-				guards: {
-					wrongScopeWrites: stats.wrongScopeWrites,
-					lateResponsesDropped: stats.lateResponsesDropped,
-				},
-				lanes: {
-					// Key order mirrors the documented all-lane sync() order (seeds
-					// before the scheduler drain — #516 item 6).
-					'change-signal': laneStatus('change-signal', changeSignalLane.lastError()),
-					'write-drain': laneStatus('write-drain', writeDrainLane.lastError()),
-					'order-window-seed': laneStatus(
-						'order-window-seed',
-						maintenanceLanes.orderWindowSeed.lastError()
-					),
-					'product-browse-window-seed': laneStatus(
-						'product-browse-window-seed',
-						maintenanceLanes.productBrowseWindowSeed.lastError()
-					),
-					'reference-seed': laneStatus(
-						'reference-seed',
-						maintenanceLanes.referenceSeed.lastError()
-					),
-					'scheduler-drain': laneStatus(
-						'scheduler-drain',
-						maintenanceLanes.schedulerDrain.lastError()
-					),
-					'query-total-retry': laneStatus(
-						'query-total-retry',
-						maintenanceLanes.queryTotalRetry?.lastError() ?? null
-					),
-					'coverage-compaction': laneStatus(
-						'coverage-compaction',
-						maintenanceLanes.coverageCompaction.lastError()
-					),
-					'existence-prime': laneStatus(
-						'existence-prime',
-						maintenanceLanes.existencePrime.lastError()
-					),
-					'existence-reconcile': laneStatus(
-						'existence-reconcile',
-						maintenanceLanes.existenceReconcile.lastError()
-					),
-				},
-				queueDepth: writeDrainLane.lastKnownQueueDepth(),
-			};
-		},
+		status: readStatus,
 		dispose: async () => {
 			assertNotDisposed();
 			// Terminal from THIS instant: later calls reject at the door, while
@@ -1975,6 +2035,7 @@ export function createRxdbSyncEngine(
 				clearInterval(timer);
 			}
 			laneNextDueAtMs.clear();
+			scheduleStatusChange();
 			return enqueueLifecycle(async () => {
 				// closeScope aborts the scope's in-flight signals and drains guarded
 				// writes before closing. Loop until empty rather than snapshotting —
@@ -1988,6 +2049,7 @@ export function createRxdbSyncEngine(
 				dbSubscribers.clear();
 				eventSubscribers.clear();
 				scopeEventSubscribers.clear();
+				statusSubscribers.clear();
 				diagnostics({
 					type: 'engine.disposed',
 					level: 'info',

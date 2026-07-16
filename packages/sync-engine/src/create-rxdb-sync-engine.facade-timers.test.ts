@@ -6,6 +6,7 @@ import { normalizeCheckpoint } from '@wcpos/sync-core';
 import {
 	createRxdbSyncEngine,
 	type EngineEvent,
+	type EngineStatus,
 	type RxdbSyncEnginePorts,
 } from './create-rxdb-sync-engine';
 import { seedOrderSchedulerTasks } from './scheduler/rx-order-scheduler-task-seeder';
@@ -62,6 +63,61 @@ afterEach(() => {
 });
 
 describe('RxdbSyncEngine facade timers and live configuration', () => {
+	it('publishes current and coalesced status changes, then unsubscribes', async () => {
+		const engine = engineWith();
+		const statuses: EngineStatus[] = [];
+		const unsubscribe = engine.statusChanges((status) => statuses.push(status));
+
+		expect(statuses).toHaveLength(1);
+		expect(statuses[0]).toEqual(engine.status());
+
+		await engine.ready;
+		await vi.waitFor(() => expect(statuses.at(-1)?.activeScopeId).not.toBeNull());
+
+		const beforeReconfigure = statuses.length;
+		engine.reconfigure({ pullBatchSize: 20 });
+		engine.reconfigure({ pullBatchSize: 30 });
+		expect(statuses).toHaveLength(beforeReconfigure);
+		await vi.waitFor(() => expect(statuses).toHaveLength(beforeReconfigure + 1));
+
+		await engine.sync('change-signal');
+		await vi.waitFor(() => expect(statuses.at(-1)?.lanes['change-signal'].lastTick).not.toBeNull());
+
+		const beforeReset = statuses.length;
+		await engine.scope.resetCollection('products');
+		await vi.waitFor(() => expect(statuses.length).toBeGreaterThan(beforeReset));
+
+		const active = engine.active();
+		if (!active) throw new Error('expected an active scope');
+		const orderId = '10000000-0000-4000-8000-000000000001';
+		await active.database.collections.orders.insert({
+			id: orderId,
+			wooOrderId: null,
+			number: '',
+			dateCreatedGmt: '2026-07-16T00:00:00',
+			status: 'pos-open',
+			total: '0.00',
+			customerId: 0,
+			payload: { status: 'pos-open' },
+			sync: { revision: '', partial: false, source: 'skeleton' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		await engine.write({
+			collection: 'orders',
+			operation: 'create',
+			recordId: orderId,
+			payload: { status: 'pos-open' },
+		});
+		await vi.waitFor(() => expect(statuses.at(-1)?.queueDepth).toBe(1));
+
+		unsubscribe();
+		const afterUnsubscribe = statuses.length;
+		engine.reconfigure({ pullBatchSize: 40 });
+		await Promise.resolve();
+		expect(statuses).toHaveLength(afterUnsubscribe);
+		await engine.dispose();
+	});
+
 	it('arms and advances each automatic lane nextDueAtMs on fixed interval boundaries', async () => {
 		let nowMs = 1_000;
 		const captured = captureIntervals();
@@ -152,6 +208,8 @@ describe('RxdbSyncEngine reconnect re-tick', () => {
 		});
 		const events: EngineEvent[] = [];
 		engine.events((event) => events.push(event));
+		const statuses: EngineStatus[] = [];
+		engine.statusChanges((status) => statuses.push(status));
 
 		await engine.ready;
 		await waitForAutomaticIntervals(captured);
@@ -177,6 +235,7 @@ describe('RxdbSyncEngine reconnect re-tick', () => {
 		expect(
 			diagnostics.mock.calls.filter(([event]) => event.type === 'engine.reconnect.retick')
 		).toHaveLength(1);
+		expect(statuses.at(-1)?.connectivity).toBe('online');
 		await engine.dispose();
 	});
 });
