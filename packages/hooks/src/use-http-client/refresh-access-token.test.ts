@@ -23,7 +23,7 @@ function createDeferred<T>() {
 function makeConfig(
 	post: jest.Mock,
 	site: { wcpos_api_url?: string; wp_api_url?: string } = {
-		wcpos_api_url: 'https://example.test/wp-json/wcpos/v1/',
+		wcpos_api_url: 'https://example.test/wp-json/wcpos/v2/',
 	}
 ) {
 	const wpUser = {
@@ -60,7 +60,7 @@ describe('refreshAccessToken', () => {
 
 		expect(token).toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v1/auth/refresh',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'X-WCPOS': '1' } }
 		);
@@ -107,12 +107,12 @@ describe('refreshAccessToken', () => {
 			status: 200,
 		});
 		const { config } = makeConfig(post, {
-			wcpos_api_url: 'https://example.test/wp-json/wcpos/v1',
+			wcpos_api_url: 'https://example.test/wp-json/wcpos/v2',
 		});
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v1/auth/refresh',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'X-WCPOS': '1' } }
 		);
@@ -127,7 +127,7 @@ describe('refreshAccessToken', () => {
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
-			'https://example.test/wp-json/wcpos/v1/auth/refresh',
+			'https://example.test/wp-json/wcpos/v2/auth/refresh',
 			{ refresh_token: 'refresh-token' },
 			{ headers: { 'X-WCPOS': '1' } }
 		);

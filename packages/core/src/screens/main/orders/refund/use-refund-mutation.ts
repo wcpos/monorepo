@@ -66,7 +66,7 @@ export function createRefundIdempotencyKey(orderId: number) {
  * Submit a POS refund request and refresh the order locally.
  */
 export function useRefundMutation() {
-	const http = useRestHttpClient();
+	const http = useRestHttpClient('', { legacyDataPlane: true });
 	const manager = useQueryManager();
 
 	return React.useCallback(

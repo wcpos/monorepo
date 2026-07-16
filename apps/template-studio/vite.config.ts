@@ -78,7 +78,7 @@ function templateStudioPlugin(): Plugin {
 					}
 
 					const target = new URL(
-						`/wp-json/wcpos/v1/templates/${encodeURIComponent(templateId)}/preview`,
+						`/wp-json/wcpos/v2/templates/${encodeURIComponent(templateId)}/preview`,
 						storeUrl
 					);
 					target.searchParams.set('include_legacy_html', '1');

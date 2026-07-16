@@ -190,7 +190,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 		(data: WpJsonResponse): void => {
 			const namespaces = data.namespaces;
 			const wcNamespace = 'wc/v3';
-			const wcposNamespace = 'wcpos/v1';
+			const wcposNamespace = 'wcpos/v2';
 
 			// Check for WooCommerce API
 			if (!namespaces.includes(wcNamespace)) {
@@ -271,7 +271,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			return {
 				wp_api_url: baseUrl,
 				wc_api_url: `${baseUrl}wc/v3/`,
-				wcpos_api_url: `${baseUrl}wcpos/v1/`,
+				wcpos_api_url: `${baseUrl}wcpos/v2/`,
 				wcpos_login_url: wcposLoginUrl,
 			};
 		},

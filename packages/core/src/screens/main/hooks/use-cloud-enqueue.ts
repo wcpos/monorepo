@@ -15,7 +15,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 /**
  * Builds the cloud enqueue factory the PrinterService uses for cloud profiles.
  * POSTs the rendered job to the WCPOS plugin queue via the authenticated REST
- * client, which is already scoped to the wcpos/v1 namespace.
+ * client, which is already scoped to the wcpos/v2 namespace.
  */
 export function createCloudEnqueueFactory(http: RestClient) {
 	return (_profile: PrinterProfile): CloudEnqueueFn => {

@@ -231,7 +231,7 @@ describe('createAppSyncEngine scope cache', () => {
 		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
-		await fetcher?.('https://store.example.test/wp-json/wcpos/v1/auth/refresh');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/auth/refresh');
 
 		expect(refreshAuth).not.toHaveBeenCalled();
 		expect(fetch).toHaveBeenCalledTimes(1);

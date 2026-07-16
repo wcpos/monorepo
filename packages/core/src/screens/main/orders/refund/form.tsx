@@ -116,7 +116,7 @@ export function RefundOrderForm({ order }: Props) {
 	const t = useT();
 	const { store } = useAppState();
 	const refundMutation = useRefundMutation();
-	const http = useRestHttpClient();
+	const http = useRestHttpClient('', { legacyDataPlane: true });
 	const router = useRouter();
 	const taxRates = React.useContext(TaxRatesContext);
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;

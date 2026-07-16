@@ -51,7 +51,7 @@ const makeWpUser = (overrides: any = {}) => ({
 });
 
 const makeSite = (overrides: any = {}) => ({
-	wcpos_api_url: 'https://example.com/wp-json/wcpos/v1/',
+	wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
 	url: 'https://example.com',
 	...overrides,
 });
@@ -175,7 +175,7 @@ describe('createTokenRefreshHandler', () => {
 			await handler.handle(ctx);
 
 			expect(mockPost).toHaveBeenCalledWith(
-				'https://example.com/wp-json/wcpos/v1/auth/refresh',
+				'https://example.com/wp-json/wcpos/v2/auth/refresh',
 				expect.any(Object),
 				expect.any(Object)
 			);

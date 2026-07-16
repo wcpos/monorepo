@@ -91,13 +91,13 @@ describe('testAuthorizationMethod', () => {
 		});
 
 		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v1/', 'token')
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
 		).resolves.toEqual({
 			useJwtAsParam: false,
 		});
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock.mock.calls[0][0]).toBe('https://example.com/wp-json/wcpos/v1/auth/test');
+		expect(fetchMock.mock.calls[0][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
 		expect(fetchMock.mock.calls[0][1]).toMatchObject({
 			headers: {
 				Authorization: 'Bearer token',
@@ -112,7 +112,7 @@ describe('testAuthorizationMethod', () => {
 		});
 
 		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v1/', 'token')
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
 		).resolves.toEqual({
 			useJwtAsParam: true,
 		});
@@ -132,7 +132,7 @@ describe('testAuthorizationMethod', () => {
 			.mockResolvedValueOnce({ ok: false, json: jest.fn() });
 
 		await expect(
-			testAuthorizationMethod('https://example.com/wp-json/wcpos/v1/', 'token')
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token')
 		).resolves.toBeNull();
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -155,7 +155,7 @@ describe('testAuthorizationMethod', () => {
 			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
 			.mockResolvedValueOnce({ ok: false, json: jest.fn() });
 
-		await testAuthorizationMethod('https://example.com/wp-json/wcpos/v1/', 'token');
+		await testAuthorizationMethod('https://example.com/wp-json/wcpos/v2/', 'token');
 
 		expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
 		expect(fetchMock.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
