@@ -9,6 +9,8 @@ import {
 	type TestInfo,
 } from '@playwright/test';
 
+import { createFakeWriteServer } from '@wcpos/sync-core/testing';
+
 import { restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
 
@@ -550,6 +552,20 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 	posPage: async ({ page }, use, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
+		const writeServer = createFakeWriteServer({ firstId: 900_000_000 });
+		await page.route('**/wp-json/wcpos/v2/push/orders', async (route) => {
+			const request = route.request();
+			const response = await writeServer.fetch(request.url(), {
+				method: request.method(),
+				headers: request.headers(),
+				body: request.postData() ?? undefined,
+			});
+			await route.fulfill({
+				status: response.status,
+				contentType: 'application/json',
+				body: JSON.stringify(await response.json()),
+			});
+		});
 		const statePath = path.join(__dirname, '.auth-state', `${variant}.json`);
 
 		let state: SavedAuthState | null = null;
