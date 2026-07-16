@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import cloneDeep from 'lodash/cloneDeep';
+
 import { awaitWriteOutcome, useQueryManager } from '@wcpos/query';
 import type { LegacyCollectionName } from '@wcpos/query/engine-compat';
 import { wrapEngineDocument } from '@wcpos/query/engine-compat';
@@ -63,7 +65,7 @@ export const usePushDocument = () => {
 					collection: collectionName,
 					operation: remoteId == null ? 'create' : 'update',
 					recordId,
-					payload: resident.get('payload') as Record<string, unknown>,
+					payload: cloneDeep(resident.get('payload') as Record<string, unknown>),
 				});
 
 				let currentResident = resident;
