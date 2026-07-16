@@ -147,6 +147,7 @@ test.describe('POS Checkout', () => {
 		await addFirstProductToCart(page);
 
 		await page.getByTestId('checkout-button').click();
+		await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });
 
 		await expect(page.getByTestId('process-payment-button')).toBeVisible({
 			timeout: 10_000,
@@ -157,6 +158,7 @@ test.describe('POS Checkout', () => {
 		await addFirstProductToCart(page);
 
 		await page.getByTestId('checkout-button').click();
+		await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });
 		await expect(page.getByTestId('process-payment-button')).toBeVisible({
 			timeout: 10_000,
 		});
@@ -172,6 +174,7 @@ test.describe('POS Checkout', () => {
 		await addFirstProductToCart(page);
 
 		await page.getByTestId('checkout-button').click();
+		await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });
 		await expect(page.getByTestId('process-payment-button')).toBeVisible({
 			timeout: 10_000,
 		});
@@ -187,6 +190,7 @@ test.describe('POS Checkout', () => {
 		await addFirstProductToCart(page);
 
 		await page.getByTestId('checkout-button').click();
+		await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });
 		await expect(page.getByTestId('process-payment-button')).toBeVisible({
 			timeout: 10_000,
 		});
@@ -219,6 +223,7 @@ test.describe('POS Checkout', () => {
 		await addFirstProductToCart(page);
 
 		await page.getByTestId('checkout-button').click();
+		await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });
 		await expect(page.getByTestId('process-payment-button')).toBeVisible({
 			timeout: 10_000,
 		});
@@ -261,6 +266,7 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 
 	await addFirstProductToCart(page);
 	await page.getByTestId('checkout-button').click();
+	await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });
 	await expect(page.getByTestId('process-payment-button')).toBeVisible();
 	await page.getByTestId('process-payment-button').click();
 	await expect(page.getByTestId('process-payment-button')).toBeDisabled({ timeout: 10_000 });
@@ -292,6 +298,7 @@ test('falls back to the legacy webview when supports_checkout=false', async ({ p
 
 	await addFirstProductToCart(page);
 	await page.getByTestId('checkout-button').click();
+	await page.waitForURL(/\/cart\/[^/?#]+\/checkout(?:[/?#]|$)/, { timeout: 15_000 });
 	await expect(page.getByTestId('process-payment-button')).toBeVisible();
 	await page.getByTestId('process-payment-button').click();
 	await expect(page.getByTestId('process-payment-button')).toBeDisabled({
