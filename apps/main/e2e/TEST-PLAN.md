@@ -4,8 +4,10 @@ Inventory of the Playwright web suite in `apps/main/e2e/` — 120 tests across 1
 Regenerated from the spec files themselves (see #691 for the audit that found the previous
 version stale). If you add, remove, or rename tests, update this file.
 
-Every spec runs against four Playwright projects (`apps/main/playwright.config.ts`):
+The suite defines four Playwright projects (`apps/main/playwright.config.ts`):
 `free-unauthenticated`, `free-authenticated`, `pro-unauthenticated`, `pro-authenticated`.
+Individual specs are limited by `testMatch`/`testIgnore`: `auth.spec.ts` runs only in the
+two unauthenticated projects, while all other specs run in the two authenticated projects.
 Specs marked **pro only** or **free only** below skip themselves on the other variant via
 `getStoreVariant()`. Authenticated specs use the `authenticatedTest` fixture from
 `fixtures.ts`, which restores a saved login and lands on the POS screen.
