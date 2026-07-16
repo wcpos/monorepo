@@ -109,6 +109,8 @@ type MaintenanceLaneDeps = {
 	diagnostics: SyncObserver;
 	/** Lease owner recorded on claimed rows — unique per engine instance. */
 	ownerId: () => string;
+	/** Current facade-configured record cap for scheduler data requests. */
+	pullBatchSize?: () => number | undefined;
 	queryTotal?: QueryTotalPort;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
@@ -279,6 +281,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			coverage,
 			baseUrl: deps.syncBaseUrl,
 			ownerId: deps.ownerId(),
+			...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 			fetcher,
 			signal,
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),

@@ -336,7 +336,11 @@ export type EngineStatus = {
 	gatedBy: 'offline' | 'lifecycle' | 'bootstrap-failed' | null;
 	lanes: Record<
 		Exclude<EngineLane, 'all'>,
-		{ lastError: string | null; lastTick: { atMs: number; status: SyncReport['status'] } | null }
+		{
+			lastError: string | null;
+			lastTick: { atMs: number; status: SyncReport['status'] } | null;
+			nextDueAtMs?: number;
+		}
 	>;
 	bootstrapFailed: Record<string, string>;
 	/** Pending mutation count of the active scope (cached from the last enqueue/drain; null before either). */
@@ -434,6 +438,9 @@ export type RxdbSyncEngine = {
 	 * This is host transport reflection only, not a second engine transport.
 	 */
 	hostTransport(): EngineHostTransport;
+	/** Live-tune the two facade-owned runtime controls. Values are clamped to
+	 * their supported ranges before they take effect. */
+	reconfigure(config: { changeSignalPollMs?: number; pullBatchSize?: number }): void;
 	/** One deterministic guarded tick of the named lane. When omitted, runs
 	 * every registered lane in documented dependency order. Never throws for
 	 * periodic-class failures — a failed tick reports { status: 'error' } and
@@ -485,6 +492,9 @@ export function createRxdbSyncEngine(
 	const bootstrappedScopes = new Set<string>();
 	const bootstrapFailures = new Map<string, string>();
 	const laneLastTick = new Map<EngineLane, { atMs: number; status: SyncReport['status'] }>();
+	const laneNextDueAtMs = new Map<EngineLane, number>();
+	const nowMs = ports.now ?? (() => Date.now());
+	let pullBatchSize: number | undefined;
 
 	const openScopeDatabase = async (scopeId: string): Promise<ScopeDatabase> => {
 		const identity = identityByScopeId.get(scopeId);
@@ -1026,6 +1036,7 @@ export function createRxdbSyncEngine(
 			}
 		},
 		diagnostics,
+		pullBatchSize: () => pullBatchSize,
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const writeDrainLane = createWriteDrainLane({
@@ -1055,6 +1066,7 @@ export function createRxdbSyncEngine(
 		fetcher,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
+		pullBatchSize: () => pullBatchSize,
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 
@@ -1075,6 +1087,7 @@ export function createRxdbSyncEngine(
 		},
 		diagnostics,
 		ownerId: () => (maintenanceOwnerId ??= `engine-${uuid()}`),
+		pullBatchSize: () => pullBatchSize,
 		...(ports.queryTotal !== undefined ? { queryTotal: ports.queryTotal } : {}),
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
@@ -1182,13 +1195,50 @@ export function createRxdbSyncEngine(
 	let changeSignalTimer: ReturnType<typeof setInterval> | null = null;
 	let writeDrainTimer: ReturnType<typeof setInterval> | null = null;
 	const maintenanceTimers: ReturnType<typeof setInterval>[] = [];
+	let lastAutomaticConnectivity: EngineConnectivity | undefined;
+	let reconnectRetick: Promise<void> | null = null;
+	const reconnectRetickSeedLanes: EngineLane[] = [
+		'reference-seed',
+		'product-browse-window-seed',
+		'order-window-seed',
+	];
+	const readConnectivity = (): EngineConnectivity => {
+		try {
+			return connectivity();
+		} catch {
+			return 'offline';
+		}
+	};
 	const runAutomaticTick = async (tick: () => Promise<SyncReport>): Promise<void> => {
 		if (pendingLifecycleOps > 0) return;
-		const startedAt = ports.now !== undefined ? ports.now() : Date.now();
+		const connectivityNow = readConnectivity();
+		const reconnected = lastAutomaticConnectivity === 'offline' && connectivityNow === 'online';
+		lastAutomaticConnectivity = connectivityNow;
+		if (reconnected && reconnectRetick === null) {
+			diagnostics({ type: 'engine.reconnect.retick', level: 'info' });
+			// Mirror startup ordering: seeds must land before the drains scan for
+			// runnable tasks, or the sweep seeds work the drain won't see until
+			// its regular interval.
+			reconnectRetick = Promise.all(
+				reconnectRetickSeedLanes.map((lane) => runAutomaticTick(() => tickLaneWithEvents(lane)))
+			)
+				.then(() => runAutomaticTick(() => tickLaneWithEvents('scheduler-drain')))
+				.then(() => runAutomaticTick(() => tickLaneWithEvents('write-drain')))
+				.then(() => undefined);
+			void reconnectRetick.then(
+				() => {
+					reconnectRetick = null;
+				},
+				() => {
+					reconnectRetick = null;
+				}
+			);
+		}
+		const startedAt = nowMs();
 		const report = await tick();
 		if (report.lane !== 'all')
 			laneLastTick.set(report.lane, {
-				atMs: ports.now !== undefined ? ports.now() : Date.now(),
+				atMs: nowMs(),
 				status: report.status,
 			});
 		diagnostics({
@@ -1207,9 +1257,40 @@ export function createRxdbSyncEngine(
 							rejected: report.rejected ?? 0,
 						}
 					: {}),
-				durationMs: (ports.now !== undefined ? ports.now() : Date.now()) - startedAt,
+				durationMs: nowMs() - startedAt,
 			},
 		});
+	};
+	const armLaneInterval = (
+		lane: EngineLane,
+		intervalMs: number
+	): ReturnType<typeof setInterval> => {
+		laneNextDueAtMs.set(lane, nowMs() + intervalMs);
+		return setInterval(() => {
+			// setInterval keeps its original cadence even when a callback runs long.
+			// Advance from the prior boundary, never from callback completion.
+			laneNextDueAtMs.set(lane, (laneNextDueAtMs.get(lane) ?? nowMs()) + intervalMs);
+			void runAutomaticTick(() => tickLaneWithEvents(lane));
+		}, intervalMs);
+	};
+	const reconfigure = (config: { changeSignalPollMs?: number; pullBatchSize?: number }): void => {
+		assertNotDisposed();
+		if (config.pullBatchSize !== undefined) {
+			if (!Number.isFinite(config.pullBatchSize)) {
+				throw new TypeError('pullBatchSize must be a finite number');
+			}
+			pullBatchSize = Math.min(100, Math.max(10, Math.trunc(config.pullBatchSize)));
+		}
+		if (config.changeSignalPollMs === undefined) return;
+		if (!Number.isFinite(config.changeSignalPollMs)) {
+			throw new TypeError('changeSignalPollMs must be a finite number');
+		}
+		const nextPollMs = Math.min(300_000, Math.max(5_000, Math.trunc(config.changeSignalPollMs)));
+		if (nextPollMs === intervals.changeSignalPollMs) return;
+		intervals.changeSignalPollMs = nextPollMs;
+		if (mode === 'manual' || changeSignalTimer === null) return;
+		clearInterval(changeSignalTimer);
+		changeSignalTimer = armLaneInterval('change-signal', nextPollMs);
 	};
 	if (mode === 'auto') {
 		void ready.then(
@@ -1221,54 +1302,29 @@ export function createRxdbSyncEngine(
 					runAutomaticTick(() => tickLaneWithEvents('order-window-seed')),
 				]);
 				await runAutomaticTick(() => tickLaneWithEvents('scheduler-drain'));
-				changeSignalTimer = setInterval(() => {
-					void runAutomaticTick(() => tickLaneWithEvents('change-signal'));
-				}, intervals.changeSignalPollMs);
-				writeDrainTimer = setInterval(() => {
-					void runAutomaticTick(() => tickLaneWithEvents('write-drain'));
-				}, intervals.writeDrainPollMs);
+				// dispose() may have run during the awaited seeds above — arming now
+				// would repopulate laneNextDueAtMs on a disposed engine.
+				if (disposed) return;
+				changeSignalTimer = armLaneInterval('change-signal', intervals.changeSignalPollMs);
+				writeDrainTimer = armLaneInterval('write-drain', intervals.writeDrainPollMs);
+				maintenanceTimers.push(armLaneInterval('scheduler-drain', intervals.schedulerDrainMs));
+				maintenanceTimers.push(armLaneInterval('order-window-seed', intervals.orderWindowSeedMs));
 				maintenanceTimers.push(
-					setInterval(() => {
-						void runAutomaticTick(() => tickLaneWithEvents('scheduler-drain'));
-					}, intervals.schedulerDrainMs)
+					armLaneInterval('product-browse-window-seed', intervals.productBrowseWindowSeedMs)
 				);
-				maintenanceTimers.push(
-					setInterval(() => {
-						void runAutomaticTick(() => tickLaneWithEvents('order-window-seed'));
-					}, intervals.orderWindowSeedMs)
-				);
-				maintenanceTimers.push(
-					setInterval(() => {
-						void runAutomaticTick(() => tickLaneWithEvents('product-browse-window-seed'));
-					}, intervals.productBrowseWindowSeedMs)
-				);
-				maintenanceTimers.push(
-					setInterval(() => {
-						void runAutomaticTick(() => tickLaneWithEvents('reference-seed'));
-					}, intervals.referenceSeedMs)
-				);
+				maintenanceTimers.push(armLaneInterval('reference-seed', intervals.referenceSeedMs));
 				if (maintenanceLanes.queryTotalRetry !== null) {
 					void runAutomaticTick(() => tickLaneWithEvents('query-total-retry'));
 					maintenanceTimers.push(
-						setInterval(() => {
-							void runAutomaticTick(() => tickLaneWithEvents('query-total-retry'));
-						}, intervals.queryTotalRetryScanMs)
+						armLaneInterval('query-total-retry', intervals.queryTotalRetryScanMs)
 					);
 				}
 				maintenanceTimers.push(
-					setInterval(() => {
-						void runAutomaticTick(() => tickLaneWithEvents('coverage-compaction'));
-					}, intervals.coverageCompactionScanMs)
+					armLaneInterval('coverage-compaction', intervals.coverageCompactionScanMs)
 				);
+				maintenanceTimers.push(armLaneInterval('existence-prime', intervals.existencePrimeMs));
 				maintenanceTimers.push(
-					setInterval(() => {
-						void runAutomaticTick(() => tickLaneWithEvents('existence-prime'));
-					}, intervals.existencePrimeMs)
-				);
-				maintenanceTimers.push(
-					setInterval(() => {
-						void runAutomaticTick(() => tickLaneWithEvents('existence-reconcile'));
-					}, intervals.existenceReconcileMs)
+					armLaneInterval('existence-reconcile', intervals.existenceReconcileMs)
 				);
 			},
 			() => undefined
@@ -1288,6 +1344,7 @@ export function createRxdbSyncEngine(
 			}
 		},
 		hostTransport: () => hostTransport,
+		reconfigure,
 		db$: (cb) => {
 			assertNotDisposed();
 			dbSubscribers.add(cb);
@@ -1837,6 +1894,7 @@ export function createRxdbSyncEngine(
 			const laneStatus = (name: EngineLane, lastError: string | null) => ({
 				lastError,
 				lastTick: laneLastTick.get(name) ?? null,
+				nextDueAtMs: laneNextDueAtMs.get(name),
 			});
 			return {
 				disposed,
@@ -1916,6 +1974,7 @@ export function createRxdbSyncEngine(
 			for (const timer of maintenanceTimers.splice(0)) {
 				clearInterval(timer);
 			}
+			laneNextDueAtMs.clear();
 			return enqueueLifecycle(async () => {
 				// closeScope aborts the scope's in-flight signals and drains guarded
 				// writes before closing. Loop until empty rather than snapshotting —

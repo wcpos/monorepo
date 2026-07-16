@@ -34,7 +34,7 @@ const uuidFor = (n: number): string => `00000000-0000-4000-8000-${String(n).padS
 const posMeta = (n: number) => [{ key: '_woocommerce_pos_uuid', value: uuidFor(n) }];
 
 describe('createProductsSchedulerFetcher', () => {
-	it('fetches product search tasks through Woo REST and stores full product documents', async () => {
+	it('keeps the task limit for non-paginated product search requests', async () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () =>
 			response([
@@ -50,6 +50,7 @@ describe('createProductsSchedulerFetcher', () => {
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			fetcher,
+			pullBatchSize: () => 10,
 		});
 
 		const result = await schedulerFetcher(productTask());
@@ -98,7 +99,7 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
-	it('fetches the browse-window task as one first page by the POS default catalog sort', async () => {
+	it('keeps the browse-window limit for its single page request', async () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () =>
@@ -118,6 +119,7 @@ describe('createProductsSchedulerFetcher', () => {
 			coverageFreshForMs: 60_000,
 			nowMs: () => 5_000,
 			fetcher,
+			pullBatchSize: () => 10,
 		});
 
 		const result = await schedulerFetcher(

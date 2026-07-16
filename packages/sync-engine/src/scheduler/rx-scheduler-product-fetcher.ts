@@ -28,6 +28,7 @@ import {
 	httpGet,
 	recordCoverage,
 } from './rx-scheduler-collection-fetcher';
+import { pullRequestLimit } from './replication-policy';
 
 import type { FetchTask, FetchTaskResult } from './replication-policy';
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
@@ -48,6 +49,7 @@ export type ProductsSchedulerFetcherInput = {
 	coverageRepository?: ProductSchedulerCoverageRepository;
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
+	pullBatchSize?: () => number | undefined;
 	/**
 	 * Leg-3 manifest sink (ADR 0014): receives the `{wooId, digest}` rows extracted from each pulled
 	 * batch (from the server-attached `_rxdb_digest`). Optional — omitted by the playground/tests, wired
@@ -104,11 +106,11 @@ function targetedProductIds(task: FetchTask): number[] {
 	return task.wooIds;
 }
 
-function taskLimit(task: FetchTask): number {
+function taskLimit(task: FetchTask, pullBatchSize?: () => number | undefined): number {
 	if (!Number.isSafeInteger(task.limit) || task.limit <= 0) {
 		throw new Error('Product scheduler task limit must be a positive integer');
 	}
-	return Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
+	return Math.min(pullRequestLimit(task, pullBatchSize), WOO_REST_MAX_PER_PAGE);
 }
 
 /**
@@ -125,7 +127,7 @@ async function fetchTargetedProducts(
 	task: FetchTask,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
-	const batchSize = taskLimit(task);
+	const batchSize = taskLimit(task, input.pullBatchSize);
 	let documentCount = 0;
 	let requestCount = 0;
 	const fetchedDocumentIds: string[] = [];
@@ -244,6 +246,8 @@ async function fetchProductSearch(
 	search: string,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
+	// Single-shot path (no pagination): capping per-request here would truncate
+	// search results, so the batch dial deliberately does not apply.
 	const limit = taskLimit(task);
 	const searchPayloads = await fetchProductQuery(
 		input,
@@ -278,7 +282,15 @@ export function createProductsSchedulerFetcher(
 
 		const browseWindowLimit = parseProductBrowseWindowLimit(task.queryKey);
 		if (browseWindowLimit !== null) {
-			return fetchProductBrowseWindow(input, task, browseWindowLimit, context);
+			// The window limit is a coverage total, not a request size — the batch
+			// dial must not shrink it (the task completes after one fetch, so a
+			// smaller value would permanently shrink the cold product window).
+			return fetchProductBrowseWindow(
+				input,
+				task,
+				Math.min(browseWindowLimit, taskLimit(task)),
+				context
+			);
 		}
 
 		const search = productSearchTerm(task);

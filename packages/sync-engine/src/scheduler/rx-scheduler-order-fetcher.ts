@@ -17,6 +17,7 @@ import {
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
 import { assertReturnedRequestedIds, chunk, httpGet } from './rx-scheduler-collection-fetcher';
+import { pullRequestLimit } from './replication-policy';
 
 import type { SchedulerFetcher, SchedulerFetcherContext } from './replication-scheduler';
 import type {
@@ -55,6 +56,7 @@ export type OrdersSchedulerFetcherInput = {
 	coverageRepository?: OrdersSchedulerCoverageRepository;
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
+	pullBatchSize?: () => number | undefined;
 	/**
 	 * Resolved before each pull batch; pulled documents whose ids are in the
 	 * set are skipped so scheduled pulls never overwrite queued local work.
@@ -73,7 +75,8 @@ function assertSupportedOrderTask(task: FetchTask): void {
 }
 
 function browserOrderQueryDescriptor(
-	task: FetchTask
+	task: FetchTask,
+	pullBatchSize?: () => number | undefined
 ): { status: string; search: string; limit: number; perPage: number } | null {
 	const decision = parseOrderBrowserSchedulerDescriptor(task.queryKey);
 	if (!decision) return null;
@@ -93,7 +96,7 @@ function browserOrderQueryDescriptor(
 		status: decision.descriptor.wooStatus,
 		search: decision.descriptor.search,
 		limit,
-		perPage: Math.min(limit, WOO_REST_MAX_PER_PAGE),
+		perPage: Math.min(limit, pullRequestLimit(task, pullBatchSize), WOO_REST_MAX_PER_PAGE),
 	};
 }
 
@@ -262,11 +265,11 @@ async function recordCumulativeOrderFetchCoverage(
 	}
 }
 
-function targetedBatchSize(task: FetchTask): number {
+function targetedBatchSize(task: FetchTask, pullBatchSize?: () => number | undefined): number {
 	if (!Number.isSafeInteger(task.limit) || task.limit <= 0) {
 		throw new Error('Targeted order scheduler task limit must be a positive integer');
 	}
-	return Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
+	return Math.min(pullRequestLimit(task, pullBatchSize), WOO_REST_MAX_PER_PAGE);
 }
 
 async function fetchBrowserOrderQuery(
@@ -349,7 +352,7 @@ async function fetchTargetedOrders(
 	}
 
 	const ids = targetedOrderIds(task);
-	const batchSize = targetedBatchSize(task);
+	const batchSize = targetedBatchSize(task, input.pullBatchSize);
 	let documentCount = 0;
 	let requestCount = 0;
 	const fetchedDocumentIds: string[] = [];
@@ -432,7 +435,7 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 			return fetchTargetedOrders(input, task, context);
 		}
 
-		const browserDescriptor = browserOrderQueryDescriptor(task);
+		const browserDescriptor = browserOrderQueryDescriptor(task, input.pullBatchSize);
 		if (browserDescriptor) {
 			return fetchBrowserOrderQuery(input, task, browserDescriptor, context);
 		}
@@ -450,7 +453,7 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 			(fullBaselineGreedyTasks.has(task.id) || (await hasFullBaselineMarker(input, task)));
 		const result = await syncCustomPullBatchIntoRepository({
 			baseUrl: input.baseUrl,
-			limit: task.limit,
+			limit: pullRequestLimit(task, input.pullBatchSize),
 			repository: input.repository,
 			checkpoint: previousCheckpoint,
 			checkpointStore: input.checkpointStore,

@@ -73,6 +73,7 @@ export type ChangeSignalLaneDeps = {
 	writeBlob: (scopeId: string, key: string, value: string) => Promise<void>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
+	pullBatchSize?: () => number | undefined;
 	now?: () => number;
 };
 
@@ -214,6 +215,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							log: (line) =>
 								deps.diagnostics({ type: 'signal.log', level: 'debug', message: line }),
 							observe: deps.diagnostics,
+							...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						})
 					);
 				});

@@ -16,6 +16,7 @@
 
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
+import { pullRequestLimit } from './replication-policy';
 
 import type { BuildCoverageDocumentsFromQueryResultInput } from './query-coverage-writes';
 import type { FetchTask, FetchTaskResult } from './replication-policy';
@@ -47,6 +48,7 @@ export type CollectionSchedulerInput<Doc> = {
 	coverageRepository?: CollectionSchedulerCoverageRepository;
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
+	pullBatchSize?: () => number | undefined;
 };
 
 /** The per-collection delta for a GREEDY (paginate-the-whole-set) collection — reference + tax. */
@@ -134,6 +136,11 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 
 	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
 		assertGreedyTask(spec, task);
+		// GREEDY lanes are exempt from the batch dial: their cross-invocation page
+		// cursor makes a mid-task per_page change shift the page arithmetic (rows
+		// skipped, then the terminal prune removes valid local records), and a
+		// small page size can strand large sets against the fixed request budget.
+		// These collections are tiny (terms/tax) — the dial buys nothing here.
 		const perPage = Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
 		const page = nextPageByTask.get(task.id) ?? 1;
 		const query = new URLSearchParams();
@@ -260,7 +267,7 @@ async function fetchTargeted<Doc, Payload>(
 		.filter((target) => target.wooId === null)
 		.map(spec.defaultDocument);
 	const ids = targets.map((target) => target.wooId).filter((id): id is number => id !== null);
-	const batchSize = Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
+	const batchSize = Math.min(pullRequestLimit(task, input.pullBatchSize), WOO_REST_MAX_PER_PAGE);
 	let documentCount = 0;
 	let requestCount = 0;
 	const fetchedCoverageIds: string[] = [];
@@ -306,7 +313,7 @@ async function fetchSearch<Doc, Payload>(
 	let requestCount = 0;
 	let exhausted = false;
 	const fetchedCoverageIds: string[] = [];
-	const perPage = Math.min(task.limit, WOO_REST_MAX_PER_PAGE);
+	const perPage = Math.min(pullRequestLimit(task, input.pullBatchSize), WOO_REST_MAX_PER_PAGE);
 
 	while (documentCount < task.limit) {
 		const remaining = task.limit - documentCount;
