@@ -36,9 +36,9 @@ export function PerformanceScreen() {
 	const { localPatch } = useLocalMutation();
 	const status = useEngineStatus();
 
-	const checkIntervalMs =
+	const storedCheckIntervalMs =
 		(useObservableEagerState(store.sync_check_interval_ms$) as number | undefined) ?? 10_000;
-	const pullBatchSize =
+	const storedPullBatchSize =
 		(useObservableEagerState(store.sync_pull_batch_size$) as number | undefined) ?? 50;
 
 	// The buckets are plain module state — re-read on a slow tick so the page
@@ -69,8 +69,14 @@ export function PerformanceScreen() {
 		Object.keys(status.bootstrapFailed).length === 0 &&
 		!laneTrouble;
 
-	const preset = presetFor(checkIntervalMs, pullBatchSize);
-	const requestsPerDay = Math.round((86_400_000 / checkIntervalMs) * 10) / 10;
+	// Draft values render instantly during a drag; the store write (and the
+	// engine re-arm it triggers) lands once the hand settles — persisting every
+	// slider step would spam RxDB writes and keep re-arming the poll timer.
+	const [draft, setDraft] = React.useState<{
+		sync_check_interval_ms?: number;
+		sync_pull_batch_size?: number;
+	}>({});
+	const persistTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const persist = async (data: {
 		sync_check_interval_ms?: number;
@@ -79,6 +85,33 @@ export function PerformanceScreen() {
 		// The SyncConfigBridge observes these fields and re-arms the engine live.
 		await localPatch({ document: store, data });
 	};
+
+	const persistDebounced = (data: {
+		sync_check_interval_ms?: number;
+		sync_pull_batch_size?: number;
+	}) => {
+		setDraft((prev) => ({ ...prev, ...data }));
+		if (persistTimer.current !== null) clearTimeout(persistTimer.current);
+		persistTimer.current = setTimeout(() => {
+			persistTimer.current = null;
+			setDraft((prev) => {
+				void persist(prev);
+				return {};
+			});
+		}, 400);
+	};
+	React.useEffect(
+		() => () => {
+			if (persistTimer.current !== null) clearTimeout(persistTimer.current);
+		},
+		[]
+	);
+
+	const checkIntervalMs = draft.sync_check_interval_ms ?? storedCheckIntervalMs;
+	const pullBatchSize = draft.sync_pull_batch_size ?? storedPullBatchSize;
+
+	const preset = presetFor(checkIntervalMs, pullBatchSize);
+	const requestsPerDay = Math.round((86_400_000 / checkIntervalMs) * 10) / 10;
 
 	const applyPreset = (name: PresetName) =>
 		persist({
@@ -186,7 +219,9 @@ export function PerformanceScreen() {
 									min={5_000}
 									max={300_000}
 									step={5_000}
-									onValueChange={(value: number) => void persist({ sync_check_interval_ms: value })}
+									onValueChange={(value: number) =>
+										persistDebounced({ sync_check_interval_ms: value })
+									}
 								/>
 							</View>
 						</VStack>
@@ -207,7 +242,9 @@ export function PerformanceScreen() {
 									min={10}
 									max={100}
 									step={5}
-									onValueChange={(value: number) => void persist({ sync_pull_batch_size: value })}
+									onValueChange={(value: number) =>
+										persistDebounced({ sync_pull_batch_size: value })
+									}
 								/>
 							</View>
 						</VStack>
@@ -275,7 +312,7 @@ export function PerformanceScreen() {
 							<Text className="text-muted-foreground text-sm">
 								{t(
 									'health.performance.total_cost',
-									'Total cost to your server today: {minutes} minutes of server time.',
+									'Total cost to your server in the last 24 hours: {minutes} minutes of server time.',
 									{ minutes: summary.serverMinutes }
 								)}
 							</Text>

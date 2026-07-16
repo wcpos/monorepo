@@ -789,7 +789,7 @@
 	"health.performance.server_load": "server load",
 	"health.performance.pos_requests": "POS requests · same period",
 	"health.performance.load_unavailable": "Your server doesn't report its load. Everything else on this page still works.",
-	"health.performance.total_cost": "Total cost to your server today: {minutes} minutes of server time.",
+	"health.performance.total_cost": "Total cost to your server in the last 24 hours: {minutes} minutes of server time.",
 	"health.performance.evidence": "Tested on live stores: a 50,000-product store is ready to sell in 3.2 s, and a caught-up check is 216 bytes —",
 	"health.performance.how_we_measure": "how we measure ›",
 	"health.performance.effective": "checking every {s} s · up to {n} records/request · preset: {preset}"
