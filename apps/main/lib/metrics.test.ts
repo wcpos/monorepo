@@ -234,3 +234,13 @@ describe('metrics epoch', () => {
 		expect(getMetricsBuckets()).toHaveLength(1);
 	});
 });
+
+describe('server-load epoch', () => {
+	it('drops a stale-epoch load sample after a store switch', () => {
+		jest.spyOn(Date, 'now').mockReturnValue(HOUR_MS);
+		const epochAtStart = getMetricsEpoch();
+		resetMetricsBuckets();
+		recordServerLoad(0.7, epochAtStart);
+		expect(getMetricsBuckets()).toEqual([]);
+	});
+});

@@ -95,7 +95,7 @@ describe('createAppSyncEngine scope cache', () => {
 			ok: true,
 			epoch: 0,
 		});
-		expect(recordServerLoad).toHaveBeenCalledWith(0.5);
+		expect(recordServerLoad).toHaveBeenCalledWith(0.5, 0);
 		expect(response.bodyUsed).toBe(false);
 		now.mockRestore();
 		fetch.mockRestore();

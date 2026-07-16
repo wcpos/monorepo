@@ -119,7 +119,8 @@ export function recordTransport({
 	pruneMetricsBuckets();
 }
 
-export function recordServerLoad(load1: number): void {
+export function recordServerLoad(load1: number, epoch?: number): void {
+	if (epoch !== undefined && epoch !== metricsEpoch) return;
 	if (!Number.isFinite(load1)) return;
 	const bucket = getOrCreateBucket(Date.now());
 	bucket.loadLast = load1;

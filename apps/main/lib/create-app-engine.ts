@@ -200,7 +200,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 						typeof parsed[0] === 'number' &&
 						Number.isFinite(parsed[0])
 					) {
-						recordServerLoad(parsed[0]);
+						recordServerLoad(parsed[0], epochAtStart);
 					}
 				} catch {
 					// Malformed server diagnostics must not affect the sync request.
