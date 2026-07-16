@@ -89,7 +89,19 @@ jest.mock('../contexts/ui-settings', () => ({
 	}),
 }));
 jest.mock('../contexts/tax-rates', () => ({
-	TaxRatesProvider: ({ children }: { children: React.ReactNode }) => children,
+	TaxRatesProvider: ({ children }: { children: React.ReactNode }) => {
+		const React = jest.requireActual('react');
+		const { QueryStateProvider } = jest.requireActual('../../../query');
+		return React.createElement(
+			QueryStateProvider,
+			{
+				collection: 'tax-rates',
+				initialPageSize: 10,
+				initialSort: { field: 'id', direction: 'asc' },
+			},
+			children
+		);
+	},
 	useTaxRates: () => ({ calcTaxes: false }),
 }));
 jest.mock('../hooks/mutations/use-mutation', () => ({
