@@ -1,6 +1,6 @@
 # WCPOS E2E Test Plan
 
-Inventory of the Playwright web suite in `apps/main/e2e/` — 119 tests across 15 spec files.
+Inventory of the Playwright web suite in `apps/main/e2e/` — 120 tests across 15 spec files.
 Regenerated from the spec files themselves (see #691 for the audit that found the previous
 version stale). If you add, remove, or rename tests, update this file.
 
@@ -12,7 +12,7 @@ Specs marked **pro only** or **free only** below skip themselves on the other va
 `getStoreVariant()`. Authenticated specs use the `authenticatedTest` fixture from
 `fixtures.ts`, which restores a saved login and lands on the POS screen.
 
-Selector policy: use stable `testID("some-id")` selectors for app UI. Avoid localized
+Selector policy: select app UI via stable testIDs with `getByTestId('some-id')`. Avoid localized
 text and named role selectors; structural role locators without a name are allowed (see
 repo `CLAUDE.md`).
 
