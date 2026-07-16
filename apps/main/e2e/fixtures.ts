@@ -472,59 +472,25 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 }
 
 /**
- * Sidebar drawer page indices.
- *
- * The drawer renders icon-only buttons in permanent mode (lg screens).
- * These have no text or aria-labels, so we identify them by position.
- * The order matches the Drawer.Screen definitions in _layout.tsx:
- *   0=POS, 1=Products, 2=Orders, 3=Coupons, 4=Customers, 5=Reports, 6=Logs, 7=Support
- */
-const DRAWER_INDEX: Record<string, number> = {
-	pos: 0,
-	products: 1,
-	orders: 2,
-	coupons: 3,
-	customers: 4,
-	reports: 5,
-	logs: 6,
-	support: 7,
-};
-
-/**
- * Navigate to a drawer page by clicking the sidebar icon button.
- *
- * The drawer shows icon-only in permanent mode (lg screens), so we collect
- * all narrow buttons on the left edge and click by index.
+ * Navigate to a drawer page by its stable, language-agnostic test ID.
  */
 export async function navigateToPage(
 	page: Page,
-	route: 'pos' | 'products' | 'orders' | 'coupons' | 'customers' | 'reports' | 'logs' | 'support'
+	route:
+		| 'pos'
+		| 'products'
+		| 'orders'
+		| 'coupons'
+		| 'customers'
+		| 'reports'
+		| 'health'
+		| 'settings'
+		| 'support'
 ) {
-	const idx = DRAWER_INDEX[route];
-	let lastSidebarCount = 0;
-
-	for (let attempt = 1; attempt <= 3; attempt++) {
-		const buttonHandles = await page.locator('button').elementHandles();
-		const sidebarButtons: typeof buttonHandles = [];
-
-		for (const button of buttonHandles) {
-			const box = await button.boundingBox().catch(() => null);
-			if (box && box.x < 60 && box.width < 60) {
-				sidebarButtons.push(button);
-			}
-		}
-
-		lastSidebarCount = sidebarButtons.length;
-		if (idx < sidebarButtons.length) {
-			await sidebarButtons[idx].click();
-			await page.waitForTimeout(2_000);
-			return;
-		}
-
-		await page.waitForTimeout(500);
-	}
-
-	throw new Error(`Sidebar button index ${idx} out of range (found ${lastSidebarCount})`);
+	const drawerItem = page.getByTestId(`drawer-item-${route}`);
+	await expect(drawerItem).toBeVisible({ timeout: 10_000 });
+	await drawerItem.click();
+	await page.waitForTimeout(2_000);
 }
 
 /**

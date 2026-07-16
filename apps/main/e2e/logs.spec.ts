@@ -1,9 +1,11 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest as test, navigateToPage } from './fixtures';
+
+import { navigateToPage, authenticatedTest as test } from './fixtures';
 
 test.describe('Logs Page', () => {
 	test.beforeEach(async ({ posPage: page }) => {
-		await navigateToPage(page, 'logs');
+		await navigateToPage(page, 'health');
+		await page.getByTestId('health-nav-logs').click();
 		const screen = page.getByTestId('screen-logs');
 		await expect(screen.getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
 	});

@@ -17,7 +17,6 @@ import {
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -360,12 +359,11 @@ export function GeneralSettings() {
 						)}
 					/>
 				</HStack>
-				<ModalFooter className="px-0">
+				<HStack className="px-0">
 					<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
 						{t('settings.restore_server_settings')}
 					</Button>
-					<ModalClose>{t('common.close')}</ModalClose>
-				</ModalFooter>
+				</HStack>
 			</VStack>
 		</Form>
 	);

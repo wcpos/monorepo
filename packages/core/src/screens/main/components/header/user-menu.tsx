@@ -143,10 +143,7 @@ export function UserMenu() {
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" side="bottom">
-				<DropdownMenuItem
-					testID="settings-menu-item"
-					onPress={() => router.push('/(modals)/settings')}
-				>
+				<DropdownMenuItem testID="settings-menu-item" onPress={() => router.push('/settings')}>
 					<Icon name="gear" />
 					<Text>{t('common.settings')}</Text>
 				</DropdownMenuItem>

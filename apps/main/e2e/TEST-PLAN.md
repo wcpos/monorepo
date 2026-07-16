@@ -16,8 +16,8 @@
 - [x] POS screen visible after login
 - [x] Responsive on mobile viewport (375x667)
 - [x] Responsive on desktop viewport (1920x1080)
-- [x] All drawer items visible on desktop (POS, Products, Orders, Customers, Reports, Logs, Support)
-- [x] Navigate to Logs page
+- [x] All drawer items visible on desktop (POS, Products, Orders, Customers, Reports, Store health, Settings, Support)
+- [x] Navigate to Logs inside Store health
 - [x] Navigate to Support page
 - [x] Navigate to a page and back to POS
 - [x] Active drawer item changes on navigation
@@ -25,7 +25,7 @@
 ### header.spec.ts (authenticated, free + pro)
 - [x] User menu trigger visible
 - [x] User menu dropdown opens
-- [x] Settings modal opens from user menu
+- [x] Settings area opens from user menu
 - [x] Online status indicator present
 - [x] Upgrade banner shown for free users
 
@@ -125,16 +125,16 @@
 - [x] View Demo button visible
 
 ### settings.spec.ts (authenticated, free + pro)
-- [x] Open settings and show tabs
-- [x] General settings tab
-- [x] Tax settings tab
+- [x] Open settings and show page navigation
+- [x] General settings page
+- [x] Tax settings page
 - [x] Barcode Scanning tab
 - [x] Keyboard Shortcuts tab
 - [x] Theme tab with theme list
-- [x] Close settings modal
+- [x] Leave settings area
 
 ### logs.spec.ts (authenticated, free + pro)
-- [x] Navigate to Logs page, see table
+- [x] Navigate to Logs inside Store health, see table
 - [x] Search logs
 
 ---

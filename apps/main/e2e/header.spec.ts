@@ -16,13 +16,13 @@ test.describe('Header', () => {
 		});
 	});
 
-	test('should open settings modal from user menu', async ({ posPage: page }) => {
+	test('should open settings area from user menu', async ({ posPage: page }) => {
 		await page.getByTestId('user-menu-trigger').click();
 		await expect(page.getByTestId('settings-menu-item')).toBeVisible({
 			timeout: 15_000,
 		});
 		await page.getByTestId('settings-menu-item').click();
-		await expect(page.getByTestId('settings-tab-general')).toBeVisible({
+		await expect(page.getByTestId('screen-settings-general')).toBeVisible({
 			timeout: 15_000,
 		});
 	});

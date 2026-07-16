@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import {
 	Table,
 	TableBody,
@@ -54,9 +53,6 @@ export function KeyboardShortcuts() {
 					))}
 				</TableBody>
 			</Table>
-			<ModalFooter className="px-0">
-				<ModalClose>{t('common.close')}</ModalClose>
-			</ModalFooter>
 		</>
 	);
 }
