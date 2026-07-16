@@ -1,72 +1,77 @@
 import { expect } from '@playwright/test';
 
-import { authenticatedTest as test } from './fixtures';
+import { navigateToPage, authenticatedTest as test } from './fixtures';
 
 /**
- * Helper to open settings modal via user menu.
+ * Helper to open the settings area via the user menu.
  */
 async function openSettings(page: import('@playwright/test').Page) {
 	await page.getByTestId('user-menu-trigger').click();
 	await page.getByTestId('settings-menu-item').click();
-	await expect(page.getByTestId('settings-tab-general')).toBeVisible({
+	await expect(page.getByTestId('screen-settings-general')).toBeVisible({
 		timeout: 10_000,
 	});
 }
 
-test.describe('Settings Modal', () => {
-	test('should open settings and show tabs', async ({ posPage: page }) => {
+test.describe('Settings Area', () => {
+	test('should open settings and show pages', async ({ posPage: page }) => {
 		await openSettings(page);
-		await expect(page.getByTestId('settings-tab-general')).toBeVisible({
+		await expect(page.getByTestId('settings-nav-general')).toBeVisible({
+			timeout: 10_000,
+		});
+		await expect(page.getByTestId('settings-nav-tax')).toBeVisible();
+		await expect(page.getByTestId('settings-nav-printing')).toBeVisible();
+		await expect(page.getByTestId('settings-nav-barcode-scanning')).toBeVisible();
+		await expect(page.getByTestId('settings-nav-shortcuts')).toBeVisible();
+		await expect(page.getByTestId('settings-nav-theme')).toBeVisible();
+	});
+
+	test('should show General settings page', async ({ posPage: page }) => {
+		await openSettings(page);
+		// General settings has form inputs (store name, language, currency, etc.)
+		const settingsPage = page.getByTestId('screen-settings-general');
+		await expect(settingsPage.locator('input').first()).toBeVisible({
 			timeout: 10_000,
 		});
 	});
 
-	test('should show General settings tab', async ({ posPage: page }) => {
+	test('should show Tax settings page', async ({ posPage: page }) => {
 		await openSettings(page);
-		await page.getByTestId('settings-tab-general').click();
-		// General tab has form inputs (store name, language, currency, etc.)
-		const tabPanel = page.getByRole('tabpanel');
-		await expect(tabPanel.locator('input').first()).toBeVisible({
+		await page.getByTestId('settings-nav-tax').click({ force: true });
+		await expect(page.getByTestId('screen-settings-tax')).toBeVisible({
 			timeout: 10_000,
 		});
 	});
 
-	test('should show Tax settings tab', async ({ posPage: page }) => {
+	test('should show Barcode Scanning page', async ({ posPage: page }) => {
 		await openSettings(page);
-		await page.getByTestId('settings-tab-tax').click({ force: true });
-		// Tax tab has content (table or form elements)
-		const tabPanel = page.getByRole('tabpanel');
-		await expect(tabPanel).toBeVisible({ timeout: 10_000 });
+		await page.getByTestId('settings-nav-barcode-scanning').click();
+		await expect(page.getByTestId('screen-settings-barcode-scanning')).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
-	test('should show Barcode Scanning tab', async ({ posPage: page }) => {
+	test('should show Keyboard Shortcuts page', async ({ posPage: page }) => {
 		await openSettings(page);
-		await page.getByTestId('settings-tab-barcode').click();
-		const tabPanel = page.getByRole('tabpanel');
-		await expect(tabPanel).toBeVisible({ timeout: 10_000 });
+		await page.getByTestId('settings-nav-shortcuts').click();
+		await expect(page.getByTestId('screen-settings-shortcuts')).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
-	test('should show Keyboard Shortcuts tab', async ({ posPage: page }) => {
+	test('should show Theme page and list themes', async ({ posPage: page }) => {
 		await openSettings(page);
-		await page.getByTestId('settings-tab-shortcuts').click();
-		const tabPanel = page.getByRole('tabpanel');
-		await expect(tabPanel).toBeVisible({ timeout: 10_000 });
+		await page.getByTestId('settings-nav-theme').click();
+		await expect(page.getByTestId('screen-settings-theme')).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
-	test('should show Theme tab and list themes', async ({ posPage: page }) => {
-		await openSettings(page);
-		await page.getByTestId('settings-tab-theme').click();
-		// Theme tab has radio/switch options for light/dark mode
-		const tabPanel = page.getByRole('tabpanel');
-		await expect(tabPanel).toBeVisible({ timeout: 10_000 });
-	});
-
-	test('should close settings modal', async ({ posPage: page }) => {
+	test('should leave the settings area', async ({ posPage: page }) => {
 		await openSettings(page);
 
-		// Settings modal is a route-based modal; navigate back to close it
-		await page.goBack();
-		await expect(page.getByTestId('settings-tab-general')).not.toBeVisible({
+		await navigateToPage(page, 'pos');
+		await expect(page.getByTestId('screen-settings-general')).not.toBeVisible({
 			timeout: 10_000,
 		});
 	});
@@ -170,9 +175,9 @@ test.describe('Language Settings', () => {
 
 		const { target } = await switchToDifferentLanguage(page);
 
-		// Close settings modal
-		await page.goBack();
-		await expect(page.getByTestId('settings-tab-general')).not.toBeVisible({
+		// Leave settings before reopening it from the user menu.
+		await navigateToPage(page, 'pos');
+		await expect(page.getByTestId('screen-settings-general')).not.toBeVisible({
 			timeout: 10_000,
 		});
 
@@ -182,6 +187,9 @@ test.describe('Language Settings', () => {
 			timeout: 15_000,
 		});
 		await page.getByTestId('settings-menu-item').click();
+		await expect(page.getByTestId('screen-settings-general')).toBeVisible({
+			timeout: 15_000,
+		});
 
 		// Re-select the same locale by stable option ID. If persisted, no CDN fetch should fire.
 		const sameLanguageFetch = page

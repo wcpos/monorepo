@@ -105,14 +105,6 @@ function AppStack() {
 						>
 							<Stack.Screen name="(drawer)" />
 							<Stack.Screen
-								name="(modals)/settings"
-								options={{
-									presentation: 'containedTransparentModal',
-									animation: 'fade',
-									contentStyle: { backgroundColor: 'transparent' },
-								}}
-							/>
-							<Stack.Screen
 								name="(modals)/tax-rates"
 								options={{
 									presentation: 'containedTransparentModal',

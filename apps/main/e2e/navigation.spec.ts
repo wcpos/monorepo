@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test';
+
 import { authenticatedTest, navigateToPage } from './fixtures';
 
 authenticatedTest.describe('Authenticated Navigation', () => {
@@ -19,61 +20,57 @@ authenticatedTest.describe('Authenticated Navigation', () => {
 });
 
 authenticatedTest.describe('Drawer Navigation', () => {
-	authenticatedTest(
-		'should have all sidebar navigation buttons',
-		async ({ posPage: page }) => {
-			// On lg screens the drawer shows icon-only buttons; verify the correct count exists
-			const allButtons = page.locator('button');
-			const count = await allButtons.count();
-			const sidebarButtons: any[] = [];
+	authenticatedTest('should have all sidebar navigation buttons', async ({ posPage: page }) => {
+		const routes = [
+			'pos',
+			'products',
+			'orders',
+			'coupons',
+			'customers',
+			'reports',
+			'health',
+			'settings',
+			'support',
+		];
 
-			for (let i = 0; i < count; i++) {
-				const btn = allButtons.nth(i);
-				const box = await btn.boundingBox();
-				if (box && box.x < 60 && box.width < 60) {
-					sidebarButtons.push(btn);
-				}
-			}
-
-			// Should have at least 7 sidebar buttons (POS, Products, Orders, Customers, Reports, Logs, Support)
-			expect(sidebarButtons.length).toBeGreaterThanOrEqual(7);
+		for (const route of routes) {
+			await expect(page.getByTestId(`drawer-item-${route}`)).toBeVisible();
 		}
-	);
+	});
 
-	authenticatedTest(
-		'should navigate to Logs page',
-		async ({ posPage: page }) => {
-			await navigateToPage(page, 'logs');
-			await expect(page.getByTestId('screen-logs').getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
-		}
-	);
+	authenticatedTest('should navigate to Logs inside Store health', async ({ posPage: page }) => {
+		await navigateToPage(page, 'health');
+		await page.getByTestId('health-nav-logs').click();
+		await expect(page.getByTestId('screen-logs').getByTestId('search-logs')).toBeVisible({
+			timeout: 30_000,
+		});
+	});
 
-	authenticatedTest(
-		'should navigate to Support page',
-		async ({ posPage: page }) => {
-			await navigateToPage(page, 'support');
-			await expect(page.getByTestId('screen-support').locator('iframe').first()).toBeVisible({
-				timeout: 30_000,
-			});
-		}
-	);
+	authenticatedTest('should navigate to Support page', async ({ posPage: page }) => {
+		await navigateToPage(page, 'support');
+		await expect(page.getByTestId('screen-support').locator('iframe').first()).toBeVisible({
+			timeout: 30_000,
+		});
+	});
 
-	authenticatedTest(
-		'should navigate to a page and back to POS',
-		async ({ posPage: page }) => {
-			await navigateToPage(page, 'logs');
-			await expect(page.getByTestId('screen-logs').getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
+	authenticatedTest('should navigate to a page and back to POS', async ({ posPage: page }) => {
+		await navigateToPage(page, 'health');
+		await page.getByTestId('health-nav-logs').click();
+		await expect(page.getByTestId('screen-logs').getByTestId('search-logs')).toBeVisible({
+			timeout: 30_000,
+		});
 
-			// Wait for logs page to fully render before navigating away
-			await page.waitForTimeout(1_000);
+		// Wait for logs page to fully render before navigating away
+		await page.waitForTimeout(1_000);
 
-			await navigateToPage(page, 'pos');
+		await navigateToPage(page, 'pos');
 
-			// The POS screen should show the search products input
-			// Try both screen-pos testId and just the placeholder directly
-			const posScreen = page.getByTestId('screen-pos');
-			const searchProducts = posScreen.getByTestId('search-products').or(page.getByTestId('search-products'));
-			await expect(searchProducts.first()).toBeVisible({ timeout: 30_000 });
-		}
-	);
+		// The POS screen should show the search products input
+		// Try both screen-pos testId and just the placeholder directly
+		const posScreen = page.getByTestId('screen-pos');
+		const searchProducts = posScreen
+			.getByTestId('search-products')
+			.or(page.getByTestId('search-products'));
+		await expect(searchProducts.first()).toBeVisible({ timeout: 30_000 });
+	});
 });

@@ -9,12 +9,10 @@ import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
-import {
-	LogsBadge,
-	useUnreadErrorCount,
-} from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
+import { LogsBadge } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import { Header } from '@wcpos/core/screens/main/components/header';
 
+import { UnreadLogsProvider, useUnreadLogs } from '../../../components/unread-logs';
 import { useNavigationBackground } from '../../../components/use-navigation-background';
 
 export const unstable_settings = {
@@ -34,14 +32,12 @@ function ThemedDrawer({
 	showUpgrade,
 	setShowUpgrade,
 	unreadErrorCount,
-	markLogsAsRead,
 }: {
 	screenSize: string;
 	t: ReturnType<typeof useT>;
 	showUpgrade: boolean;
 	setShowUpgrade: () => void;
 	unreadErrorCount: number;
-	markLogsAsRead: () => void;
 }) {
 	const screenBackgroundColor = useNavigationBackground();
 
@@ -160,13 +156,10 @@ function ThemedDrawer({
 				}}
 			/>
 			<Drawer.Screen
-				name="logs"
-				listeners={{
-					focus: () => markLogsAsRead(),
-				}}
+				name="health"
 				options={{
-					title: t('common.logs'),
-					drawerLabel: t('common.logs'),
+					title: t('common.store_health', 'Store health'),
+					drawerLabel: t('common.store_health', 'Store health'),
 					drawerIcon: ({ focused }) => (
 						<View>
 							<Icon
@@ -178,6 +171,20 @@ function ThemedDrawer({
 						</View>
 					),
 					drawerItemStyle: { marginTop: 'auto' },
+				}}
+			/>
+			<Drawer.Screen
+				name="settings"
+				options={{
+					title: t('common.settings'),
+					drawerLabel: t('common.settings'),
+					drawerIcon: ({ focused }) => (
+						<Icon
+							size="xl"
+							name="gear"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
+					),
 				}}
 			/>
 			<Drawer.Screen
@@ -198,7 +205,7 @@ function ThemedDrawer({
 	);
 }
 
-export default function DrawerLayout() {
+function DrawerLayoutContent() {
 	const { screenSize } = useTheme();
 	const t = useT();
 
@@ -214,7 +221,7 @@ export default function DrawerLayout() {
 		setPrevIsPro(isPro);
 		setShowUpgrade(!isPro);
 	}
-	const { count: unreadErrorCount, markAsRead: markLogsAsRead } = useUnreadErrorCount();
+	const { count: unreadErrorCount } = useUnreadLogs();
 
 	return (
 		<View className="bg-background flex-1">
@@ -224,8 +231,15 @@ export default function DrawerLayout() {
 				showUpgrade={showUpgrade}
 				setShowUpgrade={() => setShowUpgrade(false)}
 				unreadErrorCount={unreadErrorCount}
-				markLogsAsRead={markLogsAsRead}
 			/>
 		</View>
+	);
+}
+
+export default function DrawerLayout() {
+	return (
+		<UnreadLogsProvider>
+			<DrawerLayoutContent />
+		</UnreadLogsProvider>
 	);
 }

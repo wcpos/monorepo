@@ -10,7 +10,7 @@ import { recoverLogsCollectionStorage, useQueryManager } from '@wcpos/query';
 
 /**
  * Hook that tracks the count of error-level logs since a given timestamp.
- * When the user views the Logs screen, call markAsRead() to reset.
+ * When the user opens the Store health area, call markAsRead() to reset.
  */
 export function useUnreadErrorCount() {
 	const manager = useQueryManager();
