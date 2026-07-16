@@ -260,6 +260,30 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
+	it('republishes a census snapshot when its freshness deadline passes', async () => {
+		const fetchWooQueryTotal = vi.fn(async () => 25);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			intervals: { censusFreshForMs: 40 },
+		});
+		await engine.ready;
+
+		const emissions: Awaited<ReturnType<typeof engine.censusTotals>>[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		await engine.sync('query-total-retry');
+		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.fresh).toBe(true));
+
+		// No cache/lane event fires at freshUntilMs — the expiry timer must
+		// republish so subscribers never hold a fresh:true snapshot past its
+		// deadline (stale-means-unknown).
+		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.fresh).toBe(false), {
+			timeout: 2_000,
+		});
+		expect(emissions.at(-1)?.orders?.total).toBe(25);
+		unsubscribe();
+		await engine.dispose();
+	});
+
 	it('dispose waits for an in-flight maintenance write before closing the scope database', async () => {
 		let releaseFetch!: (total: number) => void;
 		const fetchWooQueryTotal = vi.fn(({ request }: { request: { queryKey: string } }) =>

@@ -915,21 +915,47 @@ export function createRxdbSyncEngine(
 		return scopeId === null ? null : (databaseByScopeId.get(scopeId) ?? null);
 	};
 
-	async function readCensusTotals(): Promise<CensusTotals> {
+	async function readCensusEntries(): Promise<{ totals: CensusTotals; nextExpiryMs: number | null }> {
 		const database = activeDatabase();
-		if (!database) return censusTotalsFromCache([], nowMs());
+		const now = nowMs();
+		if (!database) return { totals: censusTotalsFromCache([], now), nextExpiryMs: null };
 		const entries = await new RxQueryTotalCacheRepository(database as never).readForQueryKeys(
 			CENSUS_COLLECTIONS.map(censusQueryKey)
 		);
-		return censusTotalsFromCache(entries, nowMs());
+		const upcoming = entries
+			.map((entry) => entry.freshUntilMs)
+			.filter((deadline) => deadline > now);
+		return {
+			totals: censusTotalsFromCache(entries, now),
+			nextExpiryMs: upcoming.length > 0 ? Math.min(...upcoming) : null,
+		};
 	}
 
+	async function readCensusTotals(): Promise<CensusTotals> {
+		return (await readCensusEntries()).totals;
+	}
+
+	let censusExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 	function publishCensusChanges(): void {
 		if (censusSubscribers.size === 0) return;
 		const version = ++censusNotificationVersion;
-		void readCensusTotals().then(
-			(totals) => {
+		void readCensusEntries().then(
+			({ totals, nextExpiryMs }) => {
 				if (version !== censusNotificationVersion) return;
+				// A snapshot that says fresh:true must not outlive its deadline —
+				// no lane/cache event fires at freshUntilMs, so republish there
+				// (stale-means-unknown is the census's contract).
+				if (censusExpiryTimer !== null) clearTimeout(censusExpiryTimer);
+				censusExpiryTimer =
+					nextExpiryMs === null
+						? null
+						: setTimeout(
+								() => {
+									censusExpiryTimer = null;
+									publishCensusChanges();
+								},
+								Math.max(0, nextExpiryMs - nowMs()) + 1
+							);
 				for (const cb of [...censusSubscribers]) {
 					try {
 						cb(totals);
@@ -2129,10 +2155,14 @@ export function createRxdbSyncEngine(
 					await manager.closeScope(scopeId);
 				}
 				emitDb(null);
+				if (censusExpiryTimer !== null) {
+					clearTimeout(censusExpiryTimer);
+					censusExpiryTimer = null;
+				}
+				censusSubscribers.clear();
 				dbSubscribers.clear();
 				eventSubscribers.clear();
 				scopeEventSubscribers.clear();
-				censusSubscribers.clear();
 				// One synchronous, fully settled snapshot (disposed, ungated, zero
 				// scopes) before the set clears — the queued microtask would fire
 				// after the clear and monitors would never see the terminal state.
