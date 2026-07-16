@@ -55,17 +55,44 @@ function NavigationItems({
 
 export function NavigationAreaLayout({
 	items,
+	indexHref,
+	areaLabel,
 	testID,
 	children,
 }: {
 	items: NavigationAreaItem[];
+	indexHref: Extract<Href, string>;
+	areaLabel: string;
 	testID: string;
 	children: React.ReactNode;
 }) {
 	const { screenSize } = useTheme();
+	const pathname = usePathname();
+	const router = useRouter();
 
 	if (screenSize === 'sm') {
-		return <View className="flex-1">{children}</View>;
+		// A leaf page (or deep link) on a narrow screen has no rail — the back
+		// bar is its only in-app route to the area index and its siblings.
+		const current = items.find((item) => pathname === item.href);
+		return (
+			<View className="flex-1">
+				{current ? (
+					<HStack
+						testID={`${testID}-back`}
+						className="border-border bg-card h-12 items-center gap-2 border-b px-1"
+					>
+						<Button variant="ghost" onPress={() => router.navigate(indexHref)}>
+							<HStack className="items-center gap-1">
+								<Icon name="chevronLeft" className="text-primary" />
+								<ButtonText className="text-primary">{areaLabel}</ButtonText>
+							</HStack>
+						</Button>
+						<ButtonText className="font-semibold">{current.label}</ButtonText>
+					</HStack>
+				) : null}
+				{children}
+			</View>
+		);
 	}
 
 	return (

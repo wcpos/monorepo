@@ -17,7 +17,6 @@ import {
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -283,12 +282,11 @@ export function TaxSettings() {
 						/>
 						<View className="flex-1"></View>
 					</HStack>
-					<ModalFooter className="px-0">
+					<HStack className="px-0">
 						<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
 							{t('settings.restore_server_settings')}
 						</Button>
-						<ModalClose>{t('common.close')}</ModalClose>
-					</ModalFooter>
+					</HStack>
 				</VStack>
 			</Form>
 		</VStack>

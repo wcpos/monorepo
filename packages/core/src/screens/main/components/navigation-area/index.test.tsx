@@ -33,16 +33,22 @@ jest.mock('@wcpos/components/button', () => ({
 		children: React.ReactNode;
 		onPress: () => void;
 		testID: string;
-		accessibilityState: { selected: boolean };
+		accessibilityState?: { selected: boolean };
 	}) => (
-		<button data-testid={testID} aria-selected={accessibilityState.selected} onClick={onPress}>
+		<button
+			data-testid={testID}
+			aria-selected={accessibilityState?.selected ?? false}
+			onClick={onPress}
+		>
 			{children}
 		</button>
 	),
 	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	HStack: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/lib/utils', () => ({
@@ -67,7 +73,12 @@ describe('NavigationAreaLayout', () => {
 
 	it('shows a wide-screen rail, marks the current item, and navigates between pages', () => {
 		render(
-			<NavigationAreaLayout items={items} testID="settings-navigation">
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+			>
 				<div data-testid="settings-content" />
 			</NavigationAreaLayout>
 		);
@@ -80,17 +91,23 @@ describe('NavigationAreaLayout', () => {
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
 	});
 
-	it('shows only page content on narrow screens', () => {
+	it('shows content with a back bar to the area index on narrow leaf pages', () => {
 		mockScreenSize = 'sm';
 
 		render(
-			<NavigationAreaLayout items={items} testID="settings-navigation">
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+			>
 				<div data-testid="settings-content" />
 			</NavigationAreaLayout>
 		);
 
 		expect(screen.queryByTestId('settings-navigation-rail')).toBeNull();
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
+		expect(screen.getByTestId('settings-navigation-back')).toBeTruthy();
 	});
 });
 

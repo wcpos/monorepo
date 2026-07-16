@@ -6,7 +6,6 @@ import { Uniwind, useUniwind } from 'uniwind';
 import { Icon, IconName } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { Label } from '@wcpos/components/label';
-import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -211,11 +210,6 @@ export function ThemeSettings() {
 
 				<ThemeGrid themeOptions={themeOptions} onThemeChange={handleThemeChange} t={t} />
 			</VStack>
-
-			{/* Footer */}
-			<ModalFooter className="px-0">
-				<ModalClose>{t('common.close')}</ModalClose>
-			</ModalFooter>
 		</VStack>
 	);
 }

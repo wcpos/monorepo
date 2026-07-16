@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -16,9 +15,6 @@ export function BarcodeScanning() {
 			<BarcodeSettings />
 			<Text className="text-md font-bold">{t('settings.barcode_scanning_test')}</Text>
 			<BarcodeDisplay />
-			<ModalFooter className="px-0">
-				<ModalClose>{t('common.close')}</ModalClose>
-			</ModalFooter>
 		</VStack>
 	);
 }
