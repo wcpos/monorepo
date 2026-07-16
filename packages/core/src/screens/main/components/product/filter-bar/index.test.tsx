@@ -32,6 +32,23 @@ jest.mock('./tag-pill', () => ({ TagPill: () => <div data-testid="tag-pill" /> }
 jest.mock('./brands-pill', () => ({ BrandsPill: () => <div data-testid="brands-pill" /> }));
 
 describe('product FilterBar query-state fan-out', () => {
+	it('handles query state without optional tag and brand filters', () => {
+		render(
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+				initialFilters={{}}
+			>
+				{React.createElement(FilterBar as unknown as React.ComponentType)}
+			</QueryStateProvider>
+		);
+
+		expect(screen.getByTestId('stock-status-pill')).toBeTruthy();
+		expect(mockUseEngineDocumentByWooId).toHaveBeenCalledWith('products/tags', 0);
+		expect(mockUseEngineDocumentByWooId).toHaveBeenCalledWith('products/brands', 0);
+	});
+
 	it('reads tag and brand ids from state and renders all six filters without a fluent Query', () => {
 		render(
 			<QueryStateProvider

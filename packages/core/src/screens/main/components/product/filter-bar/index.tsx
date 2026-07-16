@@ -20,8 +20,8 @@ export function FilterBar() {
 		'products',
 		{ selectedTagID?: number; selectedBrandID?: number }
 	>((state) => ({
-		selectedTagID: state.filters.tags[0],
-		selectedBrandID: state.filters.brands[0],
+		selectedTagID: state.filters.tags?.[0],
+		selectedBrandID: state.filters.brands?.[0],
 	}));
 	const selectedTagResource = useEngineDocumentByWooId<
 		import('@wcpos/database').ProductTagDocument
