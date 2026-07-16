@@ -23,3 +23,5 @@ export function HealthPlaceholder({
 		</VStack>
 	);
 }
+
+export { DatabaseScreen } from './database';
