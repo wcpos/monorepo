@@ -57,11 +57,13 @@ export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 	/**
 	 * NOTE: If I memoize the options, the price doesn't update when changing settings.
 	 */
-	return useNumberFormat(
+	const numberFormat = useNumberFormat(
 		defaults(options, {
 			fixedDecimalScale: true,
 			prefix,
 			suffix,
 		})
 	);
+
+	return { ...numberFormat, currencySymbol, prefix, suffix };
 };

@@ -36,6 +36,13 @@ function toNum(value: unknown): number {
 	return Number.isFinite(n) ? n : 0;
 }
 
+/** Nullable number coercion for contract fields where null means unknown. */
+function toNullableNum(value: unknown): number | null {
+	if (value == null) return null;
+	const n = typeof value === 'string' ? parseFloat(value) : Number(value);
+	return Number.isFinite(n) ? n : null;
+}
+
 /** Safe string coercion. */
 function toStr(value: unknown): string {
 	if (value == null) return '';
@@ -212,6 +219,63 @@ function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax
 	const lineTotalIncl = toNum(src.line_total_incl ?? src.line_total ?? total);
 	const lineTotalExcl = toNum(src.line_total_excl ?? src.line_total ?? total);
 	const useExclSide = displayTax === 'excl';
+	const unitSubtotalIncl = toNum(
+		src.unit_subtotal_incl ?? src.unit_subtotal ?? (qty !== 0 ? lineSubtotalIncl / qty : 0)
+	);
+	const unitSubtotalExcl = toNum(
+		src.unit_subtotal_excl ?? src.unit_subtotal ?? (qty !== 0 ? lineSubtotalExcl / qty : 0)
+	);
+	const readNullable = (variant: string, fallback: number | null) =>
+		variant in src ? toNullableNum(src[variant]) : fallback;
+	const regularPriceIncl = readNullable('regular_price_incl', null);
+	const regularPriceExcl = readNullable('regular_price_excl', null);
+	const sellingPriceIncl = readNullable('selling_price_incl', unitSubtotalIncl);
+	const sellingPriceExcl = readNullable('selling_price_excl', unitSubtotalExcl);
+	const unitSavingsIncl =
+		'unit_savings_incl' in src
+			? readNullable('unit_savings_incl', null)
+			: regularPriceIncl === null || sellingPriceIncl === null
+				? null
+				: Math.max(0, regularPriceIncl - sellingPriceIncl);
+	const unitSavingsExcl =
+		'unit_savings_excl' in src
+			? readNullable('unit_savings_excl', null)
+			: regularPriceExcl === null || sellingPriceExcl === null
+				? null
+				: Math.max(0, regularPriceExcl - sellingPriceExcl);
+	const lineRegularTotalIncl =
+		'line_regular_total_incl' in src
+			? readNullable('line_regular_total_incl', null)
+			: regularPriceIncl === null
+				? null
+				: regularPriceIncl * qty;
+	const lineRegularTotalExcl =
+		'line_regular_total_excl' in src
+			? readNullable('line_regular_total_excl', null)
+			: regularPriceExcl === null
+				? null
+				: regularPriceExcl * qty;
+	const lineSellingTotalIncl = readNullable(
+		'line_selling_total_incl',
+		sellingPriceIncl === null ? null : sellingPriceIncl * qty
+	);
+	const lineSellingTotalExcl = readNullable(
+		'line_selling_total_excl',
+		sellingPriceExcl === null ? null : sellingPriceExcl * qty
+	);
+	const lineSavingsIncl =
+		'line_savings_incl' in src
+			? readNullable('line_savings_incl', null)
+			: unitSavingsIncl === null
+				? null
+				: unitSavingsIncl * qty;
+	const lineSavingsExcl =
+		'line_savings_excl' in src
+			? readNullable('line_savings_excl', null)
+			: unitSavingsExcl === null
+				? null
+				: unitSavingsExcl * qty;
+	const selectNullable = <T>(incl: T, excl: T): T => (useExclSide ? excl : incl);
 	const displayUnitPrice = useExclSide ? unitPriceExcl : unitPriceIncl;
 	const displayLineSubtotal = useExclSide ? lineSubtotalExcl : lineSubtotalIncl;
 	const displayDiscounts = useExclSide ? discountsExcl : discountsIncl;
@@ -222,6 +286,43 @@ function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax
 		sku: toStr(src.sku),
 		name: toStr(src.name),
 		qty,
+		regular_price:
+			'regular_price' in src
+				? toNullableNum(src.regular_price)
+				: selectNullable(regularPriceIncl, regularPriceExcl),
+		regular_price_incl: regularPriceIncl,
+		regular_price_excl: regularPriceExcl,
+		selling_price:
+			'selling_price' in src
+				? toNullableNum(src.selling_price)
+				: selectNullable(sellingPriceIncl, sellingPriceExcl),
+		selling_price_incl: sellingPriceIncl,
+		selling_price_excl: sellingPriceExcl,
+		unit_savings:
+			'unit_savings' in src
+				? toNullableNum(src.unit_savings)
+				: selectNullable(unitSavingsIncl, unitSavingsExcl),
+		unit_savings_incl: unitSavingsIncl,
+		unit_savings_excl: unitSavingsExcl,
+		line_regular_total:
+			'line_regular_total' in src
+				? toNullableNum(src.line_regular_total)
+				: selectNullable(lineRegularTotalIncl, lineRegularTotalExcl),
+		line_regular_total_incl: lineRegularTotalIncl,
+		line_regular_total_excl: lineRegularTotalExcl,
+		line_selling_total:
+			'line_selling_total' in src
+				? toNullableNum(src.line_selling_total)
+				: selectNullable(lineSellingTotalIncl, lineSellingTotalExcl),
+		line_selling_total_incl: lineSellingTotalIncl,
+		line_selling_total_excl: lineSellingTotalExcl,
+		line_savings:
+			'line_savings' in src
+				? toNullableNum(src.line_savings)
+				: selectNullable(lineSavingsIncl, lineSavingsExcl),
+		line_savings_incl: lineSavingsIncl,
+		line_savings_excl: lineSavingsExcl,
+		savings_in_discounts: toOptionalBool(src.savings_in_discounts) ?? false,
 		unit_price: displayUnitPrice,
 		unit_price_incl: unitPriceIncl,
 		unit_price_excl: unitPriceExcl,
@@ -260,8 +361,8 @@ function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax
 
 	// Pass through pre-discount per-unit subtotals when the canonical shape
 	// supplies them — used by templates that want to display "was/now" pricing.
-	if ('unit_subtotal_incl' in src) line.unit_subtotal_incl = toNum(src.unit_subtotal_incl);
-	if ('unit_subtotal_excl' in src) line.unit_subtotal_excl = toNum(src.unit_subtotal_excl);
+	if ('unit_subtotal_incl' in src) line.unit_subtotal_incl = unitSubtotalIncl;
+	if ('unit_subtotal_excl' in src) line.unit_subtotal_excl = unitSubtotalExcl;
 	if ('unit_subtotal' in src) {
 		line.unit_subtotal = toNum(src.unit_subtotal);
 	} else if (line.unit_subtotal_incl !== undefined || line.unit_subtotal_excl !== undefined) {
@@ -370,6 +471,23 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 	const subtotal = displayTax === 'excl' ? subtotalExcl : subtotalIncl;
 	const discountTotal = displayTax === 'excl' ? discountTotalExcl : discountTotalIncl;
 	const grandTotal = displayTax === 'excl' ? grandTotalExcl : grandTotalIncl;
+	const readNullable = (variant: string) => (variant in src ? toNullableNum(src[variant]) : null);
+	const saleSavingsTotalIncl = readNullable('sale_savings_total_incl');
+	const saleSavingsTotalExcl = readNullable('sale_savings_total_excl');
+	const totalSavedIncl = readNullable('total_saved_incl');
+	const totalSavedExcl = readNullable('total_saved_excl');
+	const saleSavingsTotal =
+		'sale_savings_total' in src
+			? toNullableNum(src.sale_savings_total)
+			: displayTax === 'excl'
+				? saleSavingsTotalExcl
+				: saleSavingsTotalIncl;
+	const totalSaved =
+		'total_saved' in src
+			? toNullableNum(src.total_saved)
+			: displayTax === 'excl'
+				? totalSavedExcl
+				: totalSavedIncl;
 
 	return {
 		subtotal,
@@ -378,6 +496,13 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 		discount_total: discountTotal,
 		discount_total_incl: discountTotalIncl,
 		discount_total_excl: discountTotalExcl,
+		sale_savings_total: saleSavingsTotal,
+		sale_savings_total_incl: saleSavingsTotalIncl,
+		sale_savings_total_excl: saleSavingsTotalExcl,
+		total_saved: totalSaved,
+		total_saved_incl: totalSavedIncl,
+		total_saved_excl: totalSavedExcl,
+		total_saved_complete: toOptionalBool(src.total_saved_complete) ?? false,
 		tax_total: taxTotal,
 		total: grandTotal,
 		total_incl: grandTotalIncl,
@@ -686,9 +811,30 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	const storeData = { ...storeSource };
 	delete storeData.tax_id;
 	delete storeData.tax_ids;
+	if (
+		!storeData.address ||
+		typeof storeData.address !== 'object' ||
+		Array.isArray(storeData.address)
+	) {
+		delete storeData.address;
+	}
 	const customerData = { ...customerSource };
 	delete customerData.tax_id;
 	delete customerData.tax_ids;
+	if (
+		!customerData.billing_address ||
+		typeof customerData.billing_address !== 'object' ||
+		Array.isArray(customerData.billing_address)
+	) {
+		delete customerData.billing_address;
+	}
+	if (
+		!customerData.shipping_address ||
+		typeof customerData.shipping_address !== 'object' ||
+		Array.isArray(customerData.shipping_address)
+	) {
+		delete customerData.shipping_address;
+	}
 	const normalizedStore = mapStore(storeSource);
 	const normalizedCustomer = mapCustomer(customerSource);
 	const storeTimezone =
@@ -957,6 +1103,13 @@ function emptyReceiptData(): ReceiptData {
 			discount_total: 0,
 			discount_total_incl: 0,
 			discount_total_excl: 0,
+			sale_savings_total: 0,
+			sale_savings_total_incl: 0,
+			sale_savings_total_excl: 0,
+			total_saved: 0,
+			total_saved_incl: 0,
+			total_saved_excl: 0,
+			total_saved_complete: true,
 			tax_total: 0,
 			total: 0,
 			total_incl: 0,

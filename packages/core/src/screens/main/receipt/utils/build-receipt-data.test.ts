@@ -1,3 +1,5 @@
+import { mapReceiptData, ReceiptDataSchema } from '@wcpos/printer/encoder';
+
 import { buildReceiptData } from './build-receipt-data';
 
 const mockOrder = {
@@ -583,6 +585,275 @@ describe('buildReceiptData', () => {
 			});
 
 			expect(result.tax.breakdown).toBe('itemized');
+		});
+	});
+
+	describe('Receipt Data v1.1 savings', () => {
+		const posData = (price: number, regularPrice: number, taxStatus = 'taxable') => ({
+			key: '_woocommerce_pos_data',
+			value: JSON.stringify({ price, regular_price: regularPrice, tax_status: taxStatus }),
+		});
+
+		it('accepts typed-object pos data (next stores meta as objects, not strings)', () => {
+			const objectPosData = {
+				key: '_woocommerce_pos_data',
+				value: { price: 15, regular_price: 20, tax_status: 'taxable' },
+			};
+			const result = buildReceiptData(
+				{
+					...aliasOrder,
+					line_items: [
+						{
+							...aliasOrder.line_items[0],
+							quantity: 1,
+							meta_data: [objectPosData],
+						},
+					],
+				} as never,
+				inclStore
+			);
+			expect(result.totals.total_saved_complete).toBe(true);
+		});
+
+		it('preserves signed refund quantities in lines and totals', () => {
+			const result = buildReceiptData(
+				{
+					...aliasOrder,
+					line_items: [
+						{
+							...aliasOrder.line_items[0],
+							quantity: -2,
+							meta_data: [posData(15, 18)],
+						},
+					],
+				},
+				inclStore
+			);
+
+			expect(result.lines[0]).toMatchObject({
+				quantity: -2,
+				unit_price: '0.00',
+				line_regular_total: '-36.00',
+				line_savings: '-6.00',
+			});
+			expect(result.totals).toMatchObject({
+				total_qty: -2,
+				sale_savings_total: '-6.00',
+			});
+		});
+
+		it('builds on-sale prices and savings on both tax bases and parses canonically', () => {
+			const result = buildReceiptData(
+				{
+					...aliasOrder,
+					line_items: [
+						{
+							...aliasOrder.line_items[0],
+							meta_data: [posData(15, 18)],
+						},
+					],
+				},
+				inclStore
+			);
+
+			expect(result.lines[0]).toMatchObject({
+				regular_price: '18.00',
+				regular_price_incl: '18.00',
+				regular_price_excl: '15.00',
+				selling_price: '15.00',
+				selling_price_incl: '15.00',
+				selling_price_excl: '12.50',
+				unit_savings: '3.00',
+				unit_savings_incl: '3.00',
+				unit_savings_excl: '2.50',
+				line_regular_total_incl: '36.00',
+				line_regular_total_excl: '30.00',
+				line_selling_total_incl: '30.00',
+				line_selling_total_excl: '25.00',
+				line_savings: '6.00',
+				line_savings_incl: '6.00',
+				line_savings_excl: '5.00',
+				savings_in_discounts: false,
+			});
+			expect(result.totals).toMatchObject({
+				sale_savings_total: '6.00',
+				sale_savings_total_incl: '6.00',
+				sale_savings_total_excl: '5.00',
+				total_saved: '12.00',
+				total_saved_incl: '12.00',
+				total_saved_excl: '10.00',
+				total_saved_complete: true,
+			});
+
+			const canonical = mapReceiptData(result as unknown as Record<string, unknown>);
+			const parsed = ReceiptDataSchema.safeParse(canonical);
+			if (!parsed.success) throw new Error(parsed.error.message);
+			expect(parsed.success).toBe(true);
+		});
+
+		it('converts recorded prices on the order tax basis, not the store setting', () => {
+			const result = buildReceiptData(
+				{
+					...aliasOrder,
+					prices_include_tax: false,
+					line_items: [
+						{
+							...aliasOrder.line_items[0],
+							meta_data: [posData(12.5, 15)],
+						},
+					],
+				},
+				inclStore
+			);
+
+			// Recorded prices are exclusive (the order's basis) even though the
+			// store currently enters prices inclusive: incl = value * 30 / 25.
+			expect(result.lines[0]).toMatchObject({
+				regular_price_incl: '18.00',
+				regular_price_excl: '15.00',
+				selling_price_incl: '15.00',
+				selling_price_excl: '12.50',
+				unit_savings_incl: '3.00',
+				unit_savings_excl: '2.50',
+			});
+			expect(result.totals).toMatchObject({
+				sale_savings_total_incl: '6.00',
+				sale_savings_total_excl: '5.00',
+				total_saved_complete: true,
+			});
+		});
+
+		it('preserves unknown savings when a line has no valid POS price metadata', () => {
+			const result = buildReceiptData(
+				{
+					...aliasOrder,
+					line_items: [
+						{ ...aliasOrder.line_items[0], id: 1, meta_data: [posData(15, 18)] },
+						{
+							...aliasOrder.line_items[0],
+							id: 2,
+							quantity: 1,
+							total: '10.00',
+							total_tax: '2.00',
+							subtotal: '10.00',
+							subtotal_tax: '2.00',
+							meta_data: [
+								{
+									key: '_woocommerce_pos_data',
+									value: '{"price":10,"regular_price":"0x10","tax_status":"taxable"}',
+								},
+							],
+						},
+					],
+				},
+				inclStore
+			);
+
+			expect(result.lines[1]).toMatchObject({
+				regular_price: null,
+				regular_price_incl: null,
+				regular_price_excl: null,
+				selling_price: '12.00',
+				selling_price_incl: '12.00',
+				selling_price_excl: '10.00',
+				unit_savings: null,
+				line_savings: null,
+			});
+			expect(result.totals).toMatchObject({
+				sale_savings_total: null,
+				sale_savings_total_incl: null,
+				sale_savings_total_excl: null,
+				total_saved: null,
+				total_saved_incl: null,
+				total_saved_excl: null,
+				total_saved_complete: false,
+			});
+		});
+
+		it('emits known zero savings when recorded regular and selling prices match', () => {
+			const result = buildReceiptData(
+				{
+					...mockOrder,
+					line_items: [
+						{
+							...mockOrder.line_items[0],
+							total: '25.00',
+							total_tax: '2.50',
+							meta_data: [posData(12.5, 12.5, 'none')],
+						},
+					],
+				},
+				exclStore
+			);
+
+			expect(result.lines[0]).toMatchObject({
+				unit_savings: '0.00',
+				unit_savings_incl: '0.00',
+				unit_savings_excl: '0.00',
+				line_savings: '0.00',
+				line_savings_incl: '0.00',
+				line_savings_excl: '0.00',
+			});
+			expect(result.totals.sale_savings_total).toBe('0.00');
+		});
+
+		it('detects legacy savings already included in WooCommerce discounts', () => {
+			const result = buildReceiptData(
+				{
+					...mockOrder,
+					total: '14.50',
+					total_tax: '0.00',
+					discount_total: '2.50',
+					discount_tax: '0.00',
+					line_items: [
+						{
+							...mockOrder.line_items[0],
+							quantity: 1,
+							subtotal: '17.00',
+							subtotal_tax: '0.00',
+							total: '14.50',
+							total_tax: '0.00',
+							meta_data: [posData(14.5, 17, 'none')],
+						},
+					],
+				},
+				exclStore
+			);
+
+			expect(result.lines[0].savings_in_discounts).toBe(true);
+			expect(result.totals.sale_savings_total).toBe('2.50');
+			expect(result.totals.total_saved).toBe('2.50');
+			expect(result.totals.total_saved_complete).toBe(true);
+		});
+
+		it('converts recorded prices excl-to-incl and keeps tax-status none unchanged', () => {
+			const taxable = buildReceiptData(
+				{
+					...aliasOrder,
+					line_items: [{ ...aliasOrder.line_items[0], meta_data: [posData(12.5, 15)] }],
+				},
+				exclStore
+			);
+			const nonTaxable = buildReceiptData(
+				{
+					...aliasOrder,
+					line_items: [{ ...aliasOrder.line_items[0], meta_data: [posData(12.5, 15, 'none')] }],
+				},
+				exclStore
+			);
+
+			expect(taxable.lines[0]).toMatchObject({
+				regular_price_incl: '18.00',
+				regular_price_excl: '15.00',
+				selling_price_incl: '15.00',
+				selling_price_excl: '12.50',
+			});
+			expect(nonTaxable.lines[0]).toMatchObject({
+				regular_price_incl: '15.00',
+				regular_price_excl: '15.00',
+				selling_price_incl: '12.50',
+				selling_price_excl: '12.50',
+			});
 		});
 	});
 });

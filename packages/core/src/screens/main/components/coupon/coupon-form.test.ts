@@ -63,6 +63,7 @@ describe('couponFormSchema', () => {
 			free_shipping: true,
 			usage_limit: 100,
 			usage_limit_per_user: 1,
+			limit_usage_to_x_items: 2,
 			minimum_amount: '50.00',
 			maximum_amount: '500.00',
 			email_restrictions: ['test@example.com'],
@@ -76,5 +77,32 @@ describe('couponFormSchema', () => {
 			usage_limit: null,
 		});
 		expect(result.success).toBe(true);
+	});
+
+	it('should accept 0 as the clearing value for every usage limit field', () => {
+		const result = couponFormSchema.safeParse({
+			code: 'TEST',
+			usage_limit: 0,
+			usage_limit_per_user: 0,
+			limit_usage_to_x_items: 0,
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it('should accept usage_limit_per_user and limit_usage_to_x_items as number or null', () => {
+		expect(
+			couponFormSchema.safeParse({
+				code: 'TEST',
+				usage_limit_per_user: 3,
+				limit_usage_to_x_items: 5,
+			}).success
+		).toBe(true);
+		expect(
+			couponFormSchema.safeParse({
+				code: 'TEST',
+				usage_limit_per_user: null,
+				limit_usage_to_x_items: null,
+			}).success
+		).toBe(true);
 	});
 });

@@ -55,6 +55,25 @@ interface ReceiptLine {
 	price: number;
 	total: string;
 	sku: string;
+	regular_price: string | null;
+	regular_price_incl: string | null;
+	regular_price_excl: string | null;
+	selling_price: string | null;
+	selling_price_incl: string | null;
+	selling_price_excl: string | null;
+	unit_savings: string | null;
+	unit_savings_incl: string | null;
+	unit_savings_excl: string | null;
+	line_regular_total: string | null;
+	line_regular_total_incl: string | null;
+	line_regular_total_excl: string | null;
+	line_selling_total: string | null;
+	line_selling_total_incl: string | null;
+	line_selling_total_excl: string | null;
+	line_savings: string | null;
+	line_savings_incl: string | null;
+	line_savings_excl: string | null;
+	savings_in_discounts: boolean;
 	unit_price: string;
 	unit_price_incl: string;
 	unit_price_excl: string;
@@ -78,6 +97,13 @@ interface ReceiptTotals {
 	discount_total: string;
 	discount_total_incl: string;
 	discount_total_excl: string;
+	sale_savings_total: string | null;
+	sale_savings_total_incl: string | null;
+	sale_savings_total_excl: string | null;
+	total_saved: string | null;
+	total_saved_incl: string | null;
+	total_saved_excl: string | null;
+	total_saved_complete: boolean;
 	total: string;
 	total_incl: string;
 	total_excl: string;
@@ -161,6 +187,230 @@ function formatAddress(addr: Record<string, string | undefined>): string {
 function toNum(value: unknown): number {
 	const n = typeof value === 'string' ? parseFloat(value) : Number(value);
 	return Number.isFinite(n) ? n : 0;
+}
+
+function toNullableNum(value: unknown): number | null {
+	if (value == null) return null;
+	const n = typeof value === 'string' ? parseFloat(value) : Number(value);
+	return Number.isFinite(n) ? n : null;
+}
+
+function roundToPrecision(value: number, precision: number): number {
+	const factor = 10 ** precision;
+	return Math.round(value * factor) / factor;
+}
+
+function formatNullableMoney(value: number | null, dp: number): string | null {
+	return value === null ? null : value.toFixed(dp);
+}
+
+type TaxBasis = 'incl' | 'excl';
+
+interface PosPriceData {
+	price: number;
+	regularPrice: number;
+	taxStatus: 'none' | 'taxable' | 'shipping';
+}
+
+function isNumeric(value: unknown): boolean {
+	if (typeof value === 'number') return Number.isFinite(value);
+	if (typeof value !== 'string') return false;
+	const normalized = value.trim();
+	return (
+		normalized !== '' &&
+		/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized) &&
+		Number.isFinite(Number(normalized))
+	);
+}
+
+function getPosPriceData(item: Record<string, any>): PosPriceData | null {
+	const entry = Array.isArray(item.meta_data)
+		? item.meta_data.find((meta: Record<string, any>) => meta?.key === '_woocommerce_pos_data')
+		: undefined;
+	// next speaks typed meta: the local write path stores this value as an
+	// OBJECT (pos/hooks/utils.ts), while server round-trips may still deliver
+	// the stringified form — a string-only guard blanked the savings row on
+	// fresh/offline receipts.
+	if (
+		entry?.value == null ||
+		(typeof entry.value !== 'string' && typeof entry.value !== 'object') ||
+		entry.value === ''
+	) {
+		return null;
+	}
+
+	try {
+		const data = (
+			typeof entry.value === 'string' ? JSON.parse(entry.value) : entry.value
+		) as Record<string, unknown>;
+		if (
+			!data ||
+			typeof data !== 'object' ||
+			!Object.prototype.hasOwnProperty.call(data, 'price') ||
+			!Object.prototype.hasOwnProperty.call(data, 'regular_price') ||
+			!Object.prototype.hasOwnProperty.call(data, 'tax_status') ||
+			!isNumeric(data.price) ||
+			!isNumeric(data.regular_price) ||
+			(data.tax_status !== 'none' &&
+				data.tax_status !== 'taxable' &&
+				data.tax_status !== 'shipping')
+		) {
+			return null;
+		}
+
+		return {
+			price: Number(data.price),
+			regularPrice: Number(data.regular_price),
+			taxStatus: data.tax_status,
+		};
+	} catch {
+		return null;
+	}
+}
+
+function convertRecordedPriceBases({
+	value,
+	taxStatus,
+	pricesIncludeTax,
+	subtotalIncl,
+	subtotalExcl,
+}: {
+	value: number;
+	taxStatus: PosPriceData['taxStatus'];
+	pricesIncludeTax: boolean;
+	subtotalIncl: number;
+	subtotalExcl: number;
+}): Record<TaxBasis, number | null> {
+	if (taxStatus === 'none' || value === 0) {
+		return { incl: value, excl: value };
+	}
+
+	if (pricesIncludeTax) {
+		return {
+			incl: value,
+			excl: subtotalIncl !== 0 ? (value * subtotalExcl) / subtotalIncl : null,
+		};
+	}
+
+	return {
+		incl: subtotalExcl !== 0 ? (value * subtotalIncl) / subtotalExcl : null,
+		excl: value,
+	};
+}
+
+function getLinePriceConvenienceFields({
+	item,
+	displayTax,
+	pricesIncludeTax,
+	quantity,
+	unitSubtotalIncl,
+	unitSubtotalExcl,
+	subtotalIncl,
+	subtotalExcl,
+	totalIncl,
+	totalExcl,
+	dp,
+}: {
+	item: Record<string, any>;
+	displayTax: 'incl' | 'excl';
+	pricesIncludeTax: boolean;
+	quantity: number;
+	unitSubtotalIncl: number;
+	unitSubtotalExcl: number;
+	subtotalIncl: number;
+	subtotalExcl: number;
+	totalIncl: number;
+	totalExcl: number;
+	dp: number;
+}) {
+	const posData = getPosPriceData(item);
+	const selling: Record<TaxBasis, number> = {
+		incl: unitSubtotalIncl,
+		excl: unitSubtotalExcl,
+	};
+	let regular: Record<TaxBasis, number | null> = { incl: null, excl: null };
+
+	if (posData) {
+		const recordedSelling = convertRecordedPriceBases({
+			value: posData.price,
+			taxStatus: posData.taxStatus,
+			pricesIncludeTax,
+			subtotalIncl,
+			subtotalExcl,
+		});
+		regular = convertRecordedPriceBases({
+			value: posData.regularPrice,
+			taxStatus: posData.taxStatus,
+			pricesIncludeTax,
+			subtotalIncl,
+			subtotalExcl,
+		});
+		for (const basis of ['incl', 'excl'] as const) {
+			if (recordedSelling[basis] !== null) selling[basis] = recordedSelling[basis];
+		}
+	}
+
+	const unitSavings: Record<TaxBasis, number | null> = {
+		incl: regular.incl !== null ? Math.max(0, regular.incl - selling.incl) : null,
+		excl: regular.excl !== null ? Math.max(0, regular.excl - selling.excl) : null,
+	};
+	const multiply = (value: number | null): number | null =>
+		value === null ? null : value * quantity;
+	const lineRegular = { incl: multiply(regular.incl), excl: multiply(regular.excl) };
+	const lineSelling = { incl: multiply(selling.incl), excl: multiply(selling.excl) };
+	const lineSavings = { incl: multiply(unitSavings.incl), excl: multiply(unitSavings.excl) };
+	const stored = {
+		incl: { subtotal: subtotalIncl, total: totalIncl },
+		excl: { subtotal: subtotalExcl, total: totalExcl },
+	};
+	const basisOrder: TaxBasis[] = pricesIncludeTax ? ['incl', 'excl'] : ['excl', 'incl'];
+	let savingsInDiscounts = false;
+	for (const basis of basisOrder) {
+		const savings = lineSavings[basis];
+		if (savings === null || savings <= 0) continue;
+
+		const distanceToRegular = roundToPrecision(
+			Math.abs(stored[basis].subtotal - (lineRegular[basis] ?? 0)),
+			dp
+		);
+		const distanceToSelling = roundToPrecision(
+			Math.abs(stored[basis].subtotal - (lineSelling[basis] ?? 0)),
+			dp
+		);
+		const storedDiscount = roundToPrecision(
+			Math.max(0, stored[basis].subtotal - stored[basis].total),
+			dp
+		);
+		const recordedSavings = roundToPrecision(savings, dp);
+		savingsInDiscounts = distanceToRegular < distanceToSelling && storedDiscount >= recordedSavings;
+		break;
+	}
+
+	const select = (values: Record<TaxBasis, number | null>) => values[displayTax];
+	return {
+		regular_price: formatNullableMoney(select(regular), dp),
+		regular_price_incl: formatNullableMoney(regular.incl, dp),
+		regular_price_excl: formatNullableMoney(regular.excl, dp),
+		selling_price: formatNullableMoney(select(selling), dp),
+		selling_price_incl: formatNullableMoney(selling.incl, dp),
+		selling_price_excl: formatNullableMoney(selling.excl, dp),
+		unit_savings: formatNullableMoney(select(unitSavings), dp),
+		unit_savings_incl: formatNullableMoney(unitSavings.incl, dp),
+		unit_savings_excl: formatNullableMoney(unitSavings.excl, dp),
+		line_regular_total: formatNullableMoney(select(lineRegular), dp),
+		line_regular_total_incl: formatNullableMoney(lineRegular.incl, dp),
+		line_regular_total_excl: formatNullableMoney(lineRegular.excl, dp),
+		line_selling_total: formatNullableMoney(select(lineSelling), dp),
+		line_selling_total_incl: formatNullableMoney(lineSelling.incl, dp),
+		line_selling_total_excl: formatNullableMoney(lineSelling.excl, dp),
+		line_savings: formatNullableMoney(select(lineSavings), dp),
+		line_savings_incl: formatNullableMoney(lineSavings.incl, dp),
+		line_savings_excl: formatNullableMoney(lineSavings.excl, dp),
+		savings_in_discounts: savingsInDiscounts,
+		// Raw (unrounded) values for totals aggregation — the PHP sums floats
+		// and rounds once, so summing the rounded strings above would drift.
+		raw: { lineSavings, lineSelling, savingsInDiscounts },
+	};
 }
 
 function getDisplayValue({
@@ -318,17 +568,26 @@ export function buildReceiptData(
 	const displayTax = store.tax_display_cart === 'incl' ? 'incl' : 'excl';
 	const pricesEnteredWithTax =
 		store.prices_include_tax === 'yes' || store.prices_include_tax === true;
+	// Recorded POS prices live on the order's entered-price basis, which can
+	// differ from the store's current setting on reprints — prefer the order.
+	const orderPricesIncludeTax =
+		typeof order.prices_include_tax === 'boolean' ? order.prices_include_tax : pricesEnteredWithTax;
 	const locale = typeof store.locale === 'string' && store.locale ? store.locale : 'en_US';
 
+	const rawLineSavings: {
+		lineSavings: Record<TaxBasis, number | null>;
+		lineSelling: Record<TaxBasis, number | null>;
+		savingsInDiscounts: boolean;
+		subtotal: Record<TaxBasis, number>;
+	}[] = [];
 	const mappedLines: ReceiptLine[] = lineItems.map((item: Record<string, any>) => {
 		const quantity = toNum(item.quantity);
 		const subtotalExcl = toNum(item.subtotal);
 		const subtotalIncl = subtotalExcl + toNum(item.subtotal_tax);
 		const totalExcl = toNum(item.total);
 		const totalIncl = totalExcl + toNum(item.total_tax);
-		const unitPriceExcl = quantity > 0 ? subtotalExcl / quantity : toNum(item.price);
-		const unitPriceIncl =
-			quantity > 0 ? subtotalIncl / quantity : toNum(item.price) + toNum(item.total_tax);
+		const unitPriceExcl = quantity > 0 ? roundToPrecision(subtotalExcl / quantity, dp) : 0;
+		const unitPriceIncl = quantity > 0 ? roundToPrecision(subtotalIncl / quantity, dp) : 0;
 		const discountsExcl = subtotalExcl - totalExcl;
 		const discountsIncl = subtotalIncl - totalIncl;
 		const meta = Array.isArray(item.meta_data)
@@ -338,12 +597,28 @@ export function buildReceiptData(
 				}))
 			: [];
 
+		const { raw: savingsRaw, ...priceConvenience } = getLinePriceConvenienceFields({
+			item,
+			displayTax,
+			pricesIncludeTax: orderPricesIncludeTax,
+			quantity,
+			unitSubtotalIncl: unitPriceIncl,
+			unitSubtotalExcl: unitPriceExcl,
+			subtotalIncl,
+			subtotalExcl,
+			totalIncl,
+			totalExcl,
+			dp,
+		});
+		rawLineSavings.push({ ...savingsRaw, subtotal: { incl: subtotalIncl, excl: subtotalExcl } });
+
 		return {
 			name: item.name || '',
 			quantity,
 			price: item.price || 0,
 			total: item.total || '0.00',
 			sku: item.sku || '',
+			...priceConvenience,
 			unit_price: getDisplayValue({
 				incl: unitPriceIncl,
 				excl: unitPriceExcl,
@@ -387,6 +662,38 @@ export function buildReceiptData(
 	const discountTax = toNum(order.discount_tax);
 	const discountTotalIncl =
 		order.discount_total != null ? discountTotalExcl + discountTax : lineDiscountTotalIncl;
+	const saleSavingsTotals: Record<TaxBasis, number | null> = { incl: 0, excl: 0 };
+	const additionalSavings: Record<TaxBasis, number> = { incl: 0, excl: 0 };
+	const savingsComplete: Record<TaxBasis, boolean> = { incl: true, excl: true };
+	for (const line of rawLineSavings) {
+		for (const basis of ['incl', 'excl'] as const) {
+			const lineSavings = line.lineSavings[basis];
+			if (lineSavings === null || !Number.isFinite(lineSavings)) {
+				savingsComplete[basis] = false;
+				continue;
+			}
+
+			saleSavingsTotals[basis] = (saleSavingsTotals[basis] ?? 0) + lineSavings;
+			if (!line.savingsInDiscounts) {
+				const selling = line.lineSelling[basis];
+				if (
+					lineSavings > 0 &&
+					(selling === null || roundToPrecision(Math.abs(line.subtotal[basis] - selling), dp) > 0)
+				) {
+					savingsComplete[basis] = false;
+					continue;
+				}
+				additionalSavings[basis] += lineSavings;
+			}
+		}
+	}
+	const totalSaved: Record<TaxBasis, number | null> = {
+		incl: savingsComplete.incl ? discountTotalIncl + additionalSavings.incl : null,
+		excl: savingsComplete.excl ? discountTotalExcl + additionalSavings.excl : null,
+	};
+	for (const basis of ['incl', 'excl'] as const) {
+		if (!savingsComplete[basis]) saleSavingsTotals[basis] = null;
+	}
 	const grandTotalIncl = toNum(order.total);
 	const grandTotalExcl = grandTotalIncl - toNum(order.total_tax);
 	const mappedFees: ReceiptAdjustment[] = (order.fee_lines || []).map((line: Record<string, any>) =>
@@ -523,6 +830,13 @@ export function buildReceiptData(
 			}).toFixed(dp),
 			discount_total_incl: discountTotalIncl.toFixed(dp),
 			discount_total_excl: discountTotalExcl.toFixed(dp),
+			sale_savings_total: formatNullableMoney(saleSavingsTotals[displayTax], dp),
+			sale_savings_total_incl: formatNullableMoney(saleSavingsTotals.incl, dp),
+			sale_savings_total_excl: formatNullableMoney(saleSavingsTotals.excl, dp),
+			total_saved: formatNullableMoney(totalSaved[displayTax], dp),
+			total_saved_incl: formatNullableMoney(totalSaved.incl, dp),
+			total_saved_excl: formatNullableMoney(totalSaved.excl, dp),
+			total_saved_complete: savingsComplete[displayTax],
 			total: getDisplayValue({
 				incl: grandTotalIncl,
 				excl: grandTotalExcl,
