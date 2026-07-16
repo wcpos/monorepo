@@ -26,7 +26,12 @@ import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
 import { createAppSyncEngine } from '../../lib/create-app-engine';
-import { getMetricsBuckets, hydrateMetricsBuckets, type MetricsBucket } from '../../lib/metrics';
+import {
+	getMetricsBuckets,
+	hydrateMetricsBuckets,
+	resetMetricsBuckets,
+	type MetricsBucket,
+} from '../../lib/metrics';
 
 const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
 const metricsLogger = getLogger(['wcpos', 'sync', 'host-metrics']);
@@ -173,6 +178,12 @@ function MetricsPersistenceBridge() {
 	React.useEffect(() => {
 		if (!storeDB) return;
 
+		// Each store owns its host metrics. Drop any prior store's in-memory buckets
+		// before hydrating this store so one store never displays or re-persists
+		// another store's metrics. Safe against the outgoing store's final persist
+		// below, which snapshots synchronously before this reset can run.
+		resetMetricsBuckets();
+
 		const statePromise = storeDB.addState<MetricsBucket[]>('host_metrics_v1');
 		void statePromise
 			.then((state) => {
@@ -184,21 +195,26 @@ function MetricsPersistenceBridge() {
 				});
 			});
 
-		const persist = async (): Promise<void> => {
+		const persist = async (buckets: MetricsBucket[]): Promise<void> => {
 			try {
 				const state = await statePromise;
-				await state.set('', () => getMetricsBuckets());
+				await state.set('', () => buckets);
 			} catch (error) {
 				metricsLogger.warn('Failed to persist host sync metrics', {
 					context: { error: String(error) },
 				});
 			}
 		};
-		const interval = setInterval(() => void persist(), METRICS_PERSIST_INTERVAL_MS);
+		const interval = setInterval(
+			() => void persist(getMetricsBuckets()),
+			METRICS_PERSIST_INTERVAL_MS
+		);
 
 		return () => {
 			clearInterval(interval);
-			void persist();
+			// Snapshot this store's buckets synchronously so the next store's
+			// resetMetricsBuckets() can't blank them before the write lands.
+			void persist(getMetricsBuckets());
 		};
 	}, [storeDB]);
 

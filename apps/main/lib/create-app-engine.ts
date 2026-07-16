@@ -169,7 +169,11 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			const atMs = Date.now();
 			const durationMs = atMs - startedAtMs;
 			const contentLength = response.headers.get('content-length');
-			const bytes = contentLength === null ? 0 : Number(contentLength);
+			// A malformed/negative content-length (from a broken server or proxy) must
+			// not poison the hourly byte total — clamp anything non-finite or < 0 to 0.
+			const parsedContentLength = contentLength === null ? 0 : Number(contentLength);
+			const bytes =
+				Number.isFinite(parsedContentLength) && parsedContentLength >= 0 ? parsedContentLength : 0;
 			appMetricsObserver({
 				type: 'transport.request',
 				level: response.ok ? 'info' : 'warn',

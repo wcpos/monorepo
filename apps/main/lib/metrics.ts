@@ -64,7 +64,9 @@ export function recordTransport({
 }): void {
 	const bucket = getOrCreateBucket(atMs);
 	bucket.requests += 1;
-	bucket.bytes += bytes;
+	// Guard against a malformed byte count leaking in from any caller — a single
+	// NaN/negative value would otherwise corrupt this bucket's running total.
+	if (Number.isFinite(bytes) && bytes >= 0) bucket.bytes += bytes;
 	bucket.durationTotalMs += durationMs;
 	bucket.durationCount += 1;
 	if (!ok) bucket.errors += 1;
@@ -117,6 +119,16 @@ export function hydrateMetricsBuckets(persisted: unknown): void {
 		}
 	}
 	pruneMetricsBuckets();
+}
+
+/**
+ * Drop all in-memory hourly buckets. Host metrics are per-store, so the
+ * persistence bridge calls this when the active store changes — otherwise the
+ * previous store's buckets would survive in this module-level map and be
+ * displayed and re-persisted under the new store.
+ */
+export function resetMetricsBuckets(): void {
+	metricsBuckets.clear();
 }
 
 export function resetMetricsForTests(): void {

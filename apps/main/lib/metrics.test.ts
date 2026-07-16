@@ -3,6 +3,7 @@ import {
 	hydrateMetricsBuckets,
 	recordServerLoad,
 	recordTransport,
+	resetMetricsBuckets,
 	resetMetricsForTests,
 } from './metrics';
 
@@ -62,6 +63,38 @@ describe('host metrics buckets', () => {
 		expect(buckets).toHaveLength(48);
 		expect(buckets[0]?.hourStartMs).toBe(2 * HOUR_MS);
 		expect(buckets[47]?.hourStartMs).toBe(49 * HOUR_MS);
+	});
+
+	it('ignores malformed byte counts instead of poisoning the bucket total', () => {
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 100, ok: true });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: Number.NaN, ok: true });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: -50, ok: true });
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 25, ok: true });
+
+		const [bucket] = getMetricsBuckets();
+		expect(bucket?.requests).toBe(4);
+		expect(bucket?.bytes).toBe(125);
+	});
+
+	it('resetMetricsBuckets drops in-memory buckets so metrics do not cross stores', () => {
+		recordTransport({ atMs: 2 * HOUR_MS, durationMs: 10, bytes: 20, ok: true });
+		expect(getMetricsBuckets()).toHaveLength(1);
+
+		resetMetricsBuckets();
+		expect(getMetricsBuckets()).toEqual([]);
+
+		// A store switch hydrates from the new store without inheriting the old hour.
+		hydrateMetricsBuckets([
+			{
+				hourStartMs: HOUR_MS,
+				requests: 5,
+				bytes: 60,
+				durationTotalMs: 40,
+				durationCount: 5,
+				errors: 0,
+			},
+		]);
+		expect(getMetricsBuckets().map((bucket) => bucket.hourStartMs)).toEqual([HOUR_MS]);
 	});
 
 	it('hydrates persisted buckets without replacing in-memory hours', () => {
