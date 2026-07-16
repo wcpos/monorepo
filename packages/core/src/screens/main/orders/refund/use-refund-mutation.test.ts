@@ -11,7 +11,6 @@ import {
 
 const mockPost = jest.fn();
 const mockEngineRequire = jest.fn();
-const mockPullDocument = jest.fn();
 
 jest.mock('uuid', () => ({
 	v4: jest.fn(() => 'mock-uuid'),
@@ -25,10 +24,6 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	useQueryManager: () => ({ engine: { require: mockEngineRequire } }),
-}));
-
-jest.mock('../../contexts/use-pull-document', () => ({
-	usePullDocument: () => mockPullDocument,
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
@@ -200,7 +195,6 @@ describe('useRefundMutation', () => {
 
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(mockEngineRequire).not.toHaveBeenCalled();
-		expect(mockPullDocument).not.toHaveBeenCalled();
 	});
 });
 

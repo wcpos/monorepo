@@ -132,7 +132,7 @@ test.describe('POS refunds (Pro)', () => {
 
 	test('submits refund_destination=cash for a non-cash order', async ({ posPage: page }) => {
 		let refundPayload: any = null;
-		await page.route('**/wp-json/wcpos/v1/orders/*/refunds**', async (route) => {
+		await page.route('**/wp-json/wcpos/v2/orders/*/refunds**', async (route) => {
 			if (route.request().method() !== 'POST') {
 				await route.fulfill({
 					status: 200,
@@ -177,7 +177,7 @@ test.describe('POS refunds (Pro)', () => {
 		posPage: page,
 	}) => {
 		let refundPayload: any = null;
-		await page.route('**/wp-json/wcpos/v1/orders/*/refunds**', async (route) => {
+		await page.route('**/wp-json/wcpos/v2/orders/*/refunds**', async (route) => {
 			if (route.request().method() !== 'POST') {
 				await route.fulfill({
 					status: 200,

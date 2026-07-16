@@ -14,7 +14,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
@@ -40,7 +39,6 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
-	const httpClient = useRestHttpClient('orders', { legacyDataPlane: true });
 	const manager = useQueryManager();
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -165,7 +163,7 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	);
 
 	/**
-	 * When the webview loads, schedule a fallback fetch in case the payment
+	 * When the webview loads, schedule a fallback refresh in case the payment
 	 * gateway doesn't send a postMessage.
 	 *
 	 * The first load is the initial order-pay page, where a payment cannot have
@@ -195,45 +193,42 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 				if (!localStatus || localStatus !== 'pos-open') return;
 
 				try {
-					orderLogger.debug('No postMessage received, fetching order status', {
+					orderLogger.debug('No postMessage received, refreshing order status', {
 						context: { orderId: order.id },
 					});
 
-					const response = await httpClient.get(`/${order.id}`);
-					if (!response?.data) return;
-
-					const serverOrder = response.data as Record<string, unknown>;
-					const serverStatus = serverOrder.status as string;
+					await refreshOrder();
+					const refreshedOrder = order.getLatest();
+					const serverStatus = refreshedOrder.status;
 
 					// If server still matches local, payment hasn't completed yet
 					if (serverStatus === localStatus) return;
 
 					paymentReceivedRef.current = true;
 
-					const reducedStockItems = (
-						(serverOrder.line_items as Record<string, unknown>[]) || []
-					).filter((item) =>
-						(item.meta_data as { key: string }[])?.some((meta) => meta.key === '_reduced_stock')
+					const reducedStockItems = (refreshedOrder.line_items || []).filter((item) =>
+						(item.meta_data as { key: string }[] | undefined)?.some(
+							(meta) => meta.key === '_reduced_stock'
+						)
 					);
 					stockAdjustment(reducedStockItems);
 
 					orderLogger.success(
 						t('pos_checkout.payment_completed_for_order', {
-							orderNumber: (serverOrder.number as string | number) || order.number,
+							orderNumber: refreshedOrder.number || order.number,
 						}),
 						{
 							showToast: true,
 							saveToDb: true,
 							context: {
-								total: serverOrder.total,
-								paymentMethod: serverOrder.payment_method,
-								paymentMethodTitle: serverOrder.payment_method_title,
+								total: refreshedOrder.total,
+								paymentMethod: refreshedOrder.payment_method,
+								paymentMethodTitle: refreshedOrder.payment_method_title,
 								status: serverStatus,
-								source: 'fallback-fetch',
+								source: 'fallback-refresh',
 							},
 						}
 					);
-					await refreshOrder();
 
 					if (uiSettings.autoShowReceipt) {
 						router.replace({
@@ -245,13 +240,13 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 				} catch (err) {
 					// Best-effort safety net only. Order completion is authoritatively
 					// delivered via the postMessage path, so a failed or premature poll
-					// (order not queryable yet, a 404, or a transient network error) is
+					// (order not queryable yet or a transient sync error) is
 					// expected and must NOT be surfaced as a payment-gateway failure —
 					// doing so produced spurious PY02001 errors on successful checkouts.
-					orderLogger.debug('Fallback order status fetch did not complete', {
+					orderLogger.debug('Fallback order status refresh did not complete', {
 						context: {
 							error: err instanceof Error ? err.message : String(err),
-							source: 'fallback-fetch',
+							source: 'fallback-refresh',
 						},
 					});
 				} finally {
@@ -261,7 +256,6 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 		},
 		[
 			order,
-			httpClient,
 			stockAdjustment,
 			uiSettings.autoShowReceipt,
 			router,

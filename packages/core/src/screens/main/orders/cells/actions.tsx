@@ -24,16 +24,18 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { useQueryManager } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { usePullDocument } from '../../contexts/use-pull-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+
+const syncLogger = getLogger(['wcpos', 'orders', 'actions', 'sync']);
 
 /**
  * Helper function - @TODO move to utils
@@ -60,7 +62,6 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const order = row.original.document;
 	const router = useRouter();
 	const status = useObservableEagerState(order.status$!);
-	const pullDocument = usePullDocument();
 	const { localPatch } = useLocalMutation();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
@@ -69,6 +70,29 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
 	const canRefund = orderHasID && !!status && REFUNDABLE_STATUSES.includes(status);
+
+	const handleRefresh = React.useCallback(() => {
+		if (!orderHasID) return;
+		const handle = manager.engine.require({
+			id: `order-actions:refresh:${orderHasID}`,
+			collection: 'orders',
+			kind: 'targeted-records',
+			wooIds: [orderHasID],
+			forceRefresh: true,
+		});
+		void handle.ready
+			.finally(() => handle.release())
+			.catch((error) => {
+				syncLogger.error('Failed to refresh order', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						orderId: orderHasID,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			});
+	}, [manager, orderHasID]);
 
 	/**
 	 * To re-open an order, we need to:
@@ -156,7 +180,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 									<Text>{t('orders.refund')}</Text>
 								</DropdownMenuItem>
 							)}
-							<DropdownMenuItem onPress={() => pullDocument(order.id!, order.collection as never)}>
+							<DropdownMenuItem onPress={handleRefresh}>
 								<Icon name="arrowRotateRight" />
 								<Text>{t('common.sync')}</Text>
 							</DropdownMenuItem>

@@ -12,7 +12,6 @@ import { PaymentWebview } from './payment-webview';
 // Capture the props handed to the (mocked) WebView so the test can drive the
 // `onLoad` lifecycle the same way the real iframe/native webview would.
 let webViewProps: Record<string, any> = {};
-const mockGet = jest.fn();
 const mockReplace = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
@@ -44,9 +43,6 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt } }),
 }));
-jest.mock('../../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ get: mockGet }),
-}));
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
@@ -61,7 +57,7 @@ const makeOrder = () =>
 		getLatest: () => ({ status: 'pos-open', links: {}, line_items: [] }),
 	}) as never;
 
-describe('PaymentWebview fallback order fetch', () => {
+describe('PaymentWebview fallback order refresh', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		jest.useRealTimers();
@@ -126,13 +122,17 @@ describe('PaymentWebview fallback order fetch', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockEngineRequire).not.toHaveBeenCalled();
 		jest.useRealTimers();
 	});
 
-	it('does not log a payment-gateway error when the fallback fetch fails (e.g. 404)', async () => {
+	it('does not log a payment-gateway error when the fallback engine refresh fails', async () => {
 		jest.useFakeTimers();
-		mockGet.mockRejectedValue(new Error('Request failed with status code 404'));
+		const release = jest.fn();
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.reject(new Error('refresh failed')),
+			release,
+		});
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
@@ -143,7 +143,14 @@ describe('PaymentWebview fallback order fetch', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockGet).toHaveBeenCalledWith('/42');
+		expect(mockEngineRequire).toHaveBeenCalledWith({
+			id: 'checkout:order-refresh:42',
+			collection: 'orders',
+			kind: 'targeted-records',
+			wooIds: [42],
+			forceRefresh: true,
+		});
+		expect(release).toHaveBeenCalledTimes(1);
 		// The regression: a failed safety-net poll must NOT be raised as an error
 		// (which is what surfaced the spurious PY02001 payment-gateway error).
 		expect(logger.error).not.toHaveBeenCalled();
@@ -151,12 +158,19 @@ describe('PaymentWebview fallback order fetch', () => {
 		jest.useRealTimers();
 	});
 
-	it('stays quiet (no error, no navigation) when the server status has not changed yet', async () => {
+	it('reads the refreshed local order and routes when its status changes', async () => {
 		jest.useFakeTimers();
-		mockGet.mockResolvedValue({ data: { status: 'pos-open' } });
+		const order = makeOrder() as {
+			getLatest: jest.Mock;
+		};
+		order.getLatest = jest.fn().mockReturnValueOnce({ status: 'pos-open' }).mockReturnValue({
+			status: 'completed',
+			number: '42',
+			line_items: [],
+		});
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
-		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
+		render(<PaymentWebview order={order as never} setLoading={jest.fn()} />);
 
 		await act(async () => {
 			webViewProps.onLoad({});
@@ -164,9 +178,9 @@ describe('PaymentWebview fallback order fetch', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockGet).toHaveBeenCalledWith('/42');
+		expect(mockEngineRequire).toHaveBeenCalledTimes(1);
 		expect(logger.error).not.toHaveBeenCalled();
-		expect(mockReplace).not.toHaveBeenCalled();
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });
 		jest.useRealTimers();
 	});
 });

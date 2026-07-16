@@ -23,23 +23,47 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { useQueryManager } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
-import { usePullDocument } from '../../contexts/use-pull-document';
 
 import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
+const syncLogger = getLogger(['wcpos', 'products', 'actions', 'sync']);
+
 export function Actions({ row }: CellContext<{ document: ProductDocument }, 'actions'>) {
 	const router = useRouter();
 	const product = row.original.document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
-	const pullDocument = usePullDocument();
 	const t = useT();
 	const manager = useQueryManager();
 	const { readOnly } = useProAccess();
+
+	const handleRefresh = React.useCallback(() => {
+		if (!product.id) return;
+		const handle = manager.engine.require({
+			id: `product-actions:refresh:${product.id}`,
+			collection: 'products',
+			kind: 'targeted-records',
+			wooIds: [product.id],
+			forceRefresh: true,
+		});
+		void handle.ready
+			.finally(() => handle.release())
+			.catch((error) => {
+				syncLogger.error('Failed to refresh product', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						productId: product.id,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			});
+	}, [manager, product.id]);
 
 	/**
 	 * Handle delete button click
@@ -77,13 +101,7 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
 					{product.id && (
-						<DropdownMenuItem
-							onPress={() => {
-								if (product.id) {
-									pullDocument(product.id, product.collection as never);
-								}
-							}}
-						>
+						<DropdownMenuItem onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>

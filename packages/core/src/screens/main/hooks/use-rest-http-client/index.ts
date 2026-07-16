@@ -57,21 +57,7 @@ function extractValidJSON(responseString: string) {
 	return null;
 }
 
-/**
- * Options for useRestHttpClient.
- *
- * `legacyDataPlane` pins the client to the frozen `wcpos/v1` namespace — the
- * old client's contract, still consumed by the flows that have not yet moved
- * onto the sync engine (document pull-by-id, delete, refunds, tax classes).
- * Convergence scaffolding: when those flows migrate (ADR 0023/0024 increments),
- * their call sites drop this flag and the option can be deleted. Everything
- * else (the shared POS services) speaks `wcpos/v2`.
- */
-interface RestHttpClientOptions {
-	legacyDataPlane?: boolean;
-}
-
-export const useRestHttpClient = (endpoint = '', options: RestHttpClientOptions = {}) => {
+export const useRestHttpClient = (endpoint = '') => {
 	const { site, wpCredentials, store, logout } = useAppState();
 	const { status: onlineStatus } = useOnlineStatus();
 
@@ -195,13 +181,6 @@ export const useRestHttpClient = (endpoint = '', options: RestHttpClientOptions 
 				await site.incrementalPatch({ wcpos_api_url: apiURL });
 			}
 
-			// The frozen v1 data plane — see RestHttpClientOptions.legacyDataPlane.
-			// Built from wp_api_url directly (never the stored wcpos_api_url, which
-			// is the versioned service base).
-			if (options.legacyDataPlane) {
-				apiURL = wpApiURL + 'wcpos/v1';
-			}
-
 			const defaultConfig = {
 				baseURL: apiURL + '/' + endpoint,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
@@ -250,7 +229,7 @@ export const useRestHttpClient = (endpoint = '', options: RestHttpClientOptions 
 				throw error;
 			}
 		},
-		[endpoint, httpClient, wpCredentials, store.id, site, options.legacyDataPlane]
+		[endpoint, httpClient, wpCredentials, store.id, site]
 	);
 
 	/**
