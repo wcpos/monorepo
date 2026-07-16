@@ -155,13 +155,13 @@ function evidenceTable(evidence: readonly Evidence[]): string {
 
 liveDescribe('LIVE sync-engine sale-ready gate', () => {
 	const evidence: Evidence[] = [];
-	const createdWooOrderIds: number[] = [];
+	const createdWooOrderIds = new Set<number>();
 	const runSuffix = globalThis.crypto.randomUUID();
 	let engine: RxdbSyncEngine | null = null;
 
 	afterAll(async () => {
 		try {
-			if (createdWooOrderIds.length > 0) {
+			if (createdWooOrderIds.size > 0) {
 				const site = liveSite(LIVE_SYNC_BASE as string);
 				const fetcher = authenticatedFetcher(LIVE_BASIC_AUTH as string);
 				for (const wooOrderId of createdWooOrderIds) {
@@ -187,7 +187,18 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 		const syncBaseUrl = LIVE_SYNC_BASE as string;
 		const basicAuth = LIVE_BASIC_AUTH as string;
 		const site = liveSite(syncBaseUrl);
-		const fetcher = authenticatedFetcher(basicAuth);
+		const authenticatedFetch = authenticatedFetcher(basicAuth);
+		const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
+			const response = await authenticatedFetch(url, init);
+			if (url === `${site.syncBaseUrl}/push/orders` && init?.method === 'POST' && response.ok) {
+				const createdOrder = (await response.clone().json()) as Record<string, unknown>;
+				const wooOrderId = createdOrder['id'];
+				if (typeof wooOrderId === 'number' && Number.isSafeInteger(wooOrderId) && wooOrderId > 0) {
+					createdWooOrderIds.add(wooOrderId);
+				}
+			}
+			return response;
+		};
 		const productId = liveProductId();
 
 		engine = createRxdbSyncEngine(
@@ -334,7 +345,7 @@ liveDescribe('LIVE sync-engine sale-ready gate', () => {
 		const wooOrderId = order?.['wooOrderId'];
 		const orderRevision = (order?.['sync'] as { revision?: unknown } | undefined)?.revision;
 		if (typeof wooOrderId === 'number' && Number.isSafeInteger(wooOrderId) && wooOrderId > 0) {
-			createdWooOrderIds.push(wooOrderId);
+			createdWooOrderIds.add(wooOrderId);
 		}
 		expect(drain).toMatchObject({
 			lane: 'write-drain',
