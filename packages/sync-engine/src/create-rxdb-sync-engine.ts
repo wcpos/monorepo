@@ -1876,6 +1876,14 @@ export function createRxdbSyncEngine(
 					collection: settled.collectionName,
 					fields: { recordId: settled.recordId, mutationId, resolution },
 				});
+				// The resolution changed queue state outside the drain path — refresh
+				// the cached depth and tell status subscribers, or an idle engine
+				// keeps showing the pre-resolution depth.
+				const database = activeDatabase();
+				if (database) {
+					writeDrainLane.noteQueueDepth((await queueFor(database).pending()).length);
+				}
+				scheduleStatusChange();
 			}
 		},
 		require: (requirement) => {
@@ -2054,6 +2062,23 @@ export function createRxdbSyncEngine(
 				dbSubscribers.clear();
 				eventSubscribers.clear();
 				scopeEventSubscribers.clear();
+				// One synchronous, fully settled snapshot (disposed, ungated, zero
+				// scopes) before the set clears — the queued microtask would fire
+				// after the clear and monitors would never see the terminal state.
+				{
+					const finalStatus = readStatus();
+					for (const cb of [...statusSubscribers]) {
+						try {
+							cb(finalStatus);
+						} catch (error) {
+							diagnostics({
+								type: 'engine.listener-error',
+								level: 'error',
+								message: `statusChanges() listener threw during dispose: ${error instanceof Error ? error.message : String(error)}`,
+							});
+						}
+					}
+				}
 				statusSubscribers.clear();
 				diagnostics({
 					type: 'engine.disposed',
