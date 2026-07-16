@@ -7,6 +7,7 @@ import { render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { TaxRatesContext, TaxRatesProvider } from './provider';
+import { ExtraDataProvider } from '../extra-data/provider';
 
 import type { QueryStateOf } from '../../../../query';
 
@@ -19,6 +20,13 @@ const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown)
 	resource: mockResource,
 }));
 const mockUseObservableSuspense = jest.fn((resource: unknown) => resource);
+const mockServiceGet = jest.fn(async () => ({ status: 200, data: [] }));
+const mockLegacyGet = jest.fn(async () => ({ status: 200, data: [] }));
+const mockExtraDataSet = jest.fn();
+const mockUseRestHttpClient = jest.fn(
+	(_endpoint?: string, options?: { legacyDataPlane?: boolean }) =>
+		options?.legacyDataPlane ? { get: mockLegacyGet } : { get: mockServiceGet }
+);
 
 jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
@@ -38,6 +46,7 @@ jest.mock('observable-hooks', () => ({
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
+		extraData: { set: mockExtraDataSet },
 		store: {
 			shipping_tax_class$: new BehaviorSubject(''),
 			calc_taxes$: new BehaviorSubject('yes'),
@@ -47,6 +56,10 @@ jest.mock('../../../../contexts/app-state', () => ({
 			tax_based_on$: new BehaviorSubject('base'),
 		},
 	}),
+}));
+jest.mock('../../hooks/use-rest-http-client', () => ({
+	useRestHttpClient: (endpoint?: string, options?: { legacyDataPlane?: boolean }) =>
+		mockUseRestHttpClient(endpoint, options),
 }));
 jest.mock('../../hooks/use-base-tax-location', () => ({
 	useBaseTaxLocation: () => ({ country: 'US', state: 'CA', city: '', postcode: '' }),
@@ -87,5 +100,18 @@ describe('TaxRatesProvider query-state consumption', () => {
 		expect(context.allRates).toHaveLength(2);
 		expect(context.taxClasses).toEqual(['standard', 'reduced-rate']);
 		expect(context).not.toHaveProperty('taxQuery');
+	});
+});
+
+describe('ExtraDataProvider API planes', () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it('loads only tax classes from the legacy data plane', () => {
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+
+		expect(mockLegacyGet).toHaveBeenCalledWith('/taxes/classes');
+		expect(mockServiceGet).toHaveBeenCalledWith('/shipping_methods');
+		expect(mockServiceGet).toHaveBeenCalledWith('/data/order_statuses');
+		expect(mockLegacyGet).toHaveBeenCalledTimes(1);
 	});
 });

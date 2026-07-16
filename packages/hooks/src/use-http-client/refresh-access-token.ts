@@ -66,9 +66,11 @@ export async function refreshAccessToken({
 
 	const latestDoc = wpUser.getLatest();
 	const refreshToken = latestDoc?.refresh_token;
-	const apiBaseUrl = site.wcpos_api_url || (site.wp_api_url ? `${site.wp_api_url}wcpos/v1/` : null);
+	const persistedApiBaseUrl = site.wcpos_api_url?.replace(/\/wcpos\/v1\/?$/, '/wcpos/v2/');
+	const apiBaseUrl =
+		persistedApiBaseUrl || (site.wp_api_url ? `${site.wp_api_url}wcpos/v2/` : null);
 	// Normalize the trailing slash so `${apiUrl}auth/refresh` never collapses into
-	// `.../wcpos/v1auth/refresh` when wcpos_api_url is stored without one.
+	// `.../wcpos/v2auth/refresh` when wcpos_api_url is stored without one.
 	const apiUrl = apiBaseUrl ? (apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`) : null;
 
 	if (!refreshToken) {

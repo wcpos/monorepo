@@ -2,7 +2,7 @@
  * Builds the canonical receipt_data object from local RxDB documents.
  * Used for offline Mustache template rendering when the receipts API is unavailable.
  *
- * Matches the shape returned by GET /wcpos/v1/receipts/{order_id} → data field.
+ * Matches the shape returned by GET /wcpos/v2/receipts/{order_id} → data field.
  * See field-picker.tsx for the full field reference.
  */
 

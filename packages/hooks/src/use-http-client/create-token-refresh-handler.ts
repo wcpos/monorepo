@@ -51,7 +51,7 @@
  *
  * @example
  * const handler = createTokenRefreshHandler({
- *   site: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v1/' },
+ *   site: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/' },
  *   wpUser: wpCredentialsDocument,
  *   getHttpClient: () => ({
  *     post: async (url, data, config) => {

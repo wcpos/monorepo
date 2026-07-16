@@ -40,7 +40,7 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
-	const httpClient = useRestHttpClient('orders');
+	const httpClient = useRestHttpClient('orders', { legacyDataPlane: true });
 	const manager = useQueryManager();
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);

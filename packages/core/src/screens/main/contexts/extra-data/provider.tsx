@@ -19,10 +19,11 @@ export const ExtraDataContext = React.createContext<ExtraDataContextProps | null
  */
 export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 	const http = useRestHttpClient();
+	const legacyHttp = useRestHttpClient('', { legacyDataPlane: true });
 	const { extraData } = useAppState();
 
 	React.useEffect(() => {
-		http.get('/taxes/classes').then((response) => {
+		legacyHttp.get('/taxes/classes').then((response) => {
 			if (response?.status === 200) {
 				extraData.set('taxClasses', () => response.data);
 			}

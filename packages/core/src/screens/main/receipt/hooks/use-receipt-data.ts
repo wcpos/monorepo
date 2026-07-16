@@ -10,7 +10,7 @@ export type ReceiptMode = 'fiscal' | 'live';
 export type SubmissionStatus = 'pending' | 'sent' | 'failed';
 
 /**
- * Matches the response from GET /wcpos/v1/receipts/{order_id}
+ * Matches the response from GET /wcpos/v2/receipts/{order_id}
  */
 interface ReceiptApiResponse {
 	order_id: number;

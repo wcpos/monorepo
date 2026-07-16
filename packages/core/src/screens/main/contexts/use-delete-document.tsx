@@ -18,7 +18,7 @@ interface DeleteDocumentFunction {
 }
 
 export const useDeleteDocument = () => {
-	const http = useRestHttpClient();
+	const http = useRestHttpClient('', { legacyDataPlane: true });
 	const t = useT();
 
 	return React.useCallback<DeleteDocumentFunction>(

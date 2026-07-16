@@ -23,7 +23,7 @@ interface AnyRxCollection {
  * - it should be reactive, a lot of components need to suspend until the document is pulled
  */
 export const usePullDocument = () => {
-	const http = useRestHttpClient();
+	const http = useRestHttpClient('', { legacyDataPlane: true });
 	const t = useT();
 
 	/**
