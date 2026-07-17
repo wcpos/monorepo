@@ -343,6 +343,7 @@ describe('useBarcode online escalation', () => {
 			id: expect.stringMatching(/^scan:\d+$/),
 			type: 'warning',
 			title: 'pos_products.out_of_stock:{"name":"Keyboard / Black"}',
+			description: 'ABC',
 			duration: 6000,
 		});
 		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
@@ -420,7 +421,7 @@ describe('useBarcode online escalation', () => {
 			id: expect.stringMatching(/^scan:\d+$/),
 			title: 'common.barcode_searching_online:{"defaultValue":"Searching store…"}',
 			description: 'ABC',
-			duration: 15000,
+			duration: Infinity,
 		});
 		resolveFetch?.(onlineResponse());
 		await act(async () => scanPromise);
@@ -735,5 +736,55 @@ describe('useBarcode online escalation', () => {
 				'pos_products.scan_unavailable_description:{"code":"ABC","defaultValue":"{code} — Sync engine is offline — see the banner above the products"}',
 			duration: 6000,
 		});
+	});
+
+	it.each(['lifecycle', 'bootstrap-failed'] as const)(
+		'resolves online instead of reporting an offline outage when gated by %s',
+		async (gatedBy) => {
+			mockEngineStatus.mockReturnValue({ connectivity: 'online', gatedBy });
+			mockFetcher.mockResolvedValue(onlineResponse());
+			renderBarcodeHook();
+
+			await act(async () => scan());
+
+			expect(mockResolveScan).toHaveBeenCalledTimes(1);
+			expect(mockToastShow).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					type: 'warning',
+					title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+				})
+			);
+		}
+	);
+
+	it('waits for the cart mutation before showing scan success', async () => {
+		let resolveAdd: (() => void) | undefined;
+		mockAddProduct.mockImplementation(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveAdd = resolve;
+				})
+		);
+		engineProducts.push(productDocument());
+		renderBarcodeHook();
+
+		let scanPromise: Promise<void> | undefined;
+		await act(async () => {
+			scanPromise = scan();
+			await Promise.resolve();
+		});
+
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).not.toHaveBeenCalled();
+
+		resolveAdd?.();
+		await act(async () => scanPromise);
+
+		expect(mockToastShow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'success',
+				title: 'pos_products.scan_added:{"defaultValue":"Added to cart"}',
+			})
+		);
 	});
 });

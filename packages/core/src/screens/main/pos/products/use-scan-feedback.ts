@@ -6,8 +6,6 @@ import { useT } from '../../../../contexts/translations';
 
 const SUCCESS_DURATION = 2500;
 const ALERT_DURATION = 6000;
-// Outlives the 10s online-lookup deadline; always superseded by the terminal update.
-const SEARCHING_DURATION = 15000;
 
 // Monotonic per-session counter so every scan owns one toast id and later
 // lifecycle stages update that toast in place instead of stacking new ones.
@@ -23,7 +21,7 @@ export interface ScanFeedbackHandle {
 	notFound: (code: string) => void;
 	ambiguous: (count: number, code: string) => void;
 	error: (code: string) => void;
-	outOfStock: (name: string) => void;
+	outOfStock: (name: string, code: string) => void;
 	unavailable: (code: string) => void;
 }
 
@@ -39,7 +37,7 @@ export const useScanFeedback = () => {
 					id,
 					title: t('common.barcode_searching_online', { defaultValue: 'Searching store…' }),
 					description: code,
-					duration: SEARCHING_DURATION,
+					duration: Infinity,
 				});
 			},
 			added: (name) => {
@@ -84,11 +82,12 @@ export const useScanFeedback = () => {
 					duration: ALERT_DURATION,
 				});
 			},
-			outOfStock: (name) => {
+			outOfStock: (name, code) => {
 				Toast.show({
 					id,
 					type: 'warning',
 					title: t('pos_products.out_of_stock', { name }),
+					description: code,
 					duration: ALERT_DURATION,
 				});
 			},

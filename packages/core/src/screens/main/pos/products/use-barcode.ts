@@ -132,7 +132,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			// The online fallback needs a healthy sync engine; during an outage tell
 			// the cashier why scanning can't look the code up instead of timing out.
 			const engineStatus = manager.engine.status();
-			if (engineStatus.connectivity === 'offline' || engineStatus.gatedBy !== null) {
+			if (engineStatus.connectivity === 'offline') {
 				scan.unavailable(barcodeStr);
 				barcodeLogger.warn(text1, {
 					saveToDb: true,
@@ -308,7 +308,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			? !resolveVariationStock(product).sellable
 			: product.stock_status !== 'instock';
 		if (!showOutOfStock && outOfStock) {
-			scan.outOfStock(product.name ?? '');
+			scan.outOfStock(product.name ?? '', barcodeStr);
 			barcodeLogger.warn(text1, {
 				context: {
 					barcode: barcodeStr,
@@ -372,9 +372,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 			// The scan toast owns success feedback; silence the add-hook's own toast so
 			// a scan produces exactly one notification (fixes the double popup per scan).
-			addVariation(product, parent, metaData, { silent: true });
+			await addVariation(product, parent, metaData, { silent: true });
 		} else {
-			addProduct(product, { silent: true });
+			await addProduct(product, { silent: true });
 		}
 
 		/**
