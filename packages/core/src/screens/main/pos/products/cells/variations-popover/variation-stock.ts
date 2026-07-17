@@ -25,7 +25,7 @@ export function resolveVariationStock({
 		if ((stockQuantity as number) > 0) {
 			return { status: 'instock', quantity: stockQuantity as number, sellable: true };
 		}
-		if (backorders !== 'no') {
+		if (backorders === 'yes' || backorders === 'notify') {
 			return { status: 'onbackorder', quantity: null, sellable: true };
 		}
 		return { status: 'outofstock', quantity: null, sellable: false };

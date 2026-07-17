@@ -153,6 +153,15 @@ describe('resolveVariationStock', () => {
 			expected: { status: 'outofstock', quantity: null, sellable: false },
 		},
 		{
+			name: 'managed depleted stock with missing backorder state',
+			input: {
+				manage_stock: true,
+				stock_quantity: 0,
+				stock_status: 'instock',
+			},
+			expected: { status: 'outofstock', quantity: null, sellable: false },
+		},
+		{
 			name: 'managed depleted stock with backorders',
 			input: {
 				manage_stock: true,
