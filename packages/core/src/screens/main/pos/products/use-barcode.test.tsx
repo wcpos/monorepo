@@ -225,6 +225,8 @@ describe('useBarcode online escalation', () => {
 			ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
 			release: jest.fn(),
 		}));
+		mockAddProduct.mockResolvedValue(true);
+		mockAddVariation.mockResolvedValue(true);
 	});
 
 	it.each(['sku', 'barcode', 'global_unique_id'] as const)(
@@ -283,6 +285,31 @@ describe('useBarcode online escalation', () => {
 		expect(parent.id).toBe(41);
 		expect(parent.isInstanceOfRxDocument).toBe(true);
 		expect(metaData).toEqual([{ attr_id: 7, display_key: 'Colour', display_value: 'Black' }]);
+	});
+
+	it('does not report barcode success when a product add is blocked', async () => {
+		engineProducts.push(productDocument());
+		mockAddProduct.mockResolvedValue(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
+	});
+
+	it('does not report barcode success when a variation add is blocked', async () => {
+		engineProducts.push(productDocument(41, 'PARENT'));
+		engineVariations.push(variationDocument());
+		mockAddVariation.mockResolvedValue(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddVariation).toHaveBeenCalledTimes(1);
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
 	});
 
 	it('does not add an unsellable managed variation when out-of-stock items are hidden', async () => {

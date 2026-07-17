@@ -354,9 +354,11 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				}
 			);
 
-			addVariation(product, parent, metaData);
+			const added = await addVariation(product, parent, metaData);
+			if (!added) return;
 		} else {
-			addProduct(product);
+			const added = await addProduct(product);
+			if (!added) return;
 		}
 
 		/**
