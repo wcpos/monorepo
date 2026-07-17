@@ -9,6 +9,7 @@ import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './sto
 import { useCartStockGuard } from './use-cart-stock-guard';
 
 const mockFindOneExec = jest.fn();
+const mockFindDocumentsById = jest.fn();
 
 jest.mock('observable-hooks', () => ({ useObservableEagerState: () => true }));
 jest.mock('@wcpos/query', () => ({
@@ -17,8 +18,14 @@ jest.mock('@wcpos/query', () => ({
 			active: () => ({
 				database: {
 					collections: {
-						products: { findOne: () => ({ exec: mockFindOneExec }) },
-						variations: { findOne: () => ({ exec: mockFindOneExec }) },
+						products: {
+							findOne: () => ({ exec: mockFindOneExec }),
+							storageInstance: { findDocumentsById: mockFindDocumentsById },
+						},
+						variations: {
+							findOne: () => ({ exec: mockFindOneExec }),
+							storageInstance: { findDocumentsById: mockFindDocumentsById },
+						},
 					},
 				},
 			}),
@@ -184,6 +191,7 @@ describe('useCartStockGuard', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockFindOneExec.mockResolvedValue(null);
+		mockFindDocumentsById.mockResolvedValue([]);
 	});
 
 	it('fails closed when the enabled guard cannot load the product record', async () => {
@@ -207,5 +215,35 @@ describe('useCartStockGuard', () => {
 			name: 'Deleted product',
 		});
 		expect(stockLogger.warn).toHaveBeenCalled();
+	});
+
+	it('evaluates a soft-deleted product tombstone', async () => {
+		mockFindDocumentsById.mockResolvedValue([
+			{
+				payload: {
+					id: 10,
+					name: 'Deleted product',
+					manage_stock: true,
+					stock_quantity: 0,
+					stock_status: 'outofstock',
+					backorders: 'no',
+				},
+			},
+		]);
+		const { result } = renderHook(() => useCartStockGuard());
+
+		const stockResult = await result.current.checkCartStock({
+			lineItems: [],
+			productId: 10,
+			requestedQuantity: 1,
+		});
+
+		expect(mockFindDocumentsById).toHaveBeenCalledWith(['woo-product:10'], true);
+		expect(stockResult).toEqual({
+			allowed: false,
+			warning: null,
+			available: 0,
+			name: 'Deleted product',
+		});
 	});
 });

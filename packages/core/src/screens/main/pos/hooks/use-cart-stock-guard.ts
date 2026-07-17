@@ -81,8 +81,17 @@ export const useCartStockGuard = () => {
 			if (!collection) return null;
 			const field = resolveLegacyField(collectionName, 'id').enginePath;
 			const result = await collection.findOne({ selector: { [field]: wooId } }).exec();
-			return isEngineRxDocument(result)
-				? (wrapEngineDocument(collectionName, result) as unknown as StockDocument)
+			if (isEngineRxDocument(result)) {
+				return wrapEngineDocument(collectionName, result) as unknown as StockDocument;
+			}
+			const documentId = `${collectionName === 'products' ? 'woo-product' : 'woo-variation'}:${wooId}`;
+			const [deletedDocument] = await collection.storageInstance.findDocumentsById(
+				[documentId],
+				true
+			);
+			const payload = (deletedDocument as { payload?: unknown } | undefined)?.payload;
+			return payload !== null && typeof payload === 'object'
+				? (payload as StockDocument)
 				: null;
 		},
 		[manager]
