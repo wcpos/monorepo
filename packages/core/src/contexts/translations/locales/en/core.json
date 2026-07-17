@@ -861,5 +861,22 @@
 	"health.database.clear_body_orders": "The orders held on this device will be removed and re-downloaded fresh from your server. Nothing on the server changes. You can keep selling — recent orders reappear within a moment.",
 	"health.database.last_check_error": "Last check didn't complete — retrying",
 	"health.database.last_check_ok": "Checked for changes",
-	"health.database.offline_preparing": "You're offline and still setting up — this till can't sell until its catalog finishes downloading."
+	"health.database.offline_preparing": "You're offline and still setting up — this till can't sell until its catalog finishes downloading.",
+	"settings.barcode_test_chart_empty": "Scan into this page to see keystroke timing",
+	"settings.barcode_test_chart_threshold": "Dashed line = your {threshold}ms threshold — amber bars exceed it",
+	"settings.barcode_test_detected_scan": "Detected as a scan → {code}",
+	"settings.barcode_test_scan_detail": "Average keystroke gap {avg}ms, under the {threshold}ms threshold",
+	"settings.barcode_test_near_miss": "Treated as typing — average gap {avg}ms is above your {threshold}ms threshold",
+	"settings.barcode_test_typing": "Treated as typing (average gap {avg}ms) — correctly ignored",
+	"settings.barcode_test_apply": "Apply",
+	"settings.barcode_test_suggest_threshold": "Raise threshold to {value}ms — your scanner averages {avg}ms",
+	"settings.barcode_test_suggest_min_chars": "Lower minimum length to {value} — this code is {value} characters",
+	"settings.barcode_test_suggest_prefix": "Strip leading \"{value}\" — set it as your prefix",
+	"settings.barcode_test_shift_mangled": "Scanner is sending Shift as separate keys — reconfigure it to a US-keyboard / no-modifier mode",
+	"settings.barcode_test_trailing_enter": "Trailing Enter detected and ignored — no suffix needed",
+	"settings.barcode_test_recent": "Recent attempts",
+	"settings.barcode_test_result_scan": "scan",
+	"settings.barcode_test_result_typing": "typing",
+	"settings.barcode_test_result_too_short": "too short",
+	"settings.barcode_test_docs_link": "Setup guides and common problems → WCPOS docs"
 }
