@@ -47,9 +47,28 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 				rejected.variation_id === (item.variation_id ?? 0)
 		);
 		if (!match) return null;
-		if (match.available !== null && (item.quantity ?? 0) <= match.available) return null;
+		const aggregateParentStock = stockRejection.items.some(
+			(rejected) =>
+				rejected.product_id === match.product_id &&
+				rejected.variation_id !== match.variation_id &&
+				rejected.available === match.available
+		);
+		const requestedQuantity = (currentOrder.line_items ?? [])
+			.filter(
+				(lineItem) =>
+					lineItem.product_id === match.product_id &&
+					(aggregateParentStock || (lineItem.variation_id ?? 0) === match.variation_id)
+			)
+			.reduce((quantity, lineItem) => quantity + (lineItem.quantity ?? 0), 0);
+		if (match.available !== null && requestedQuantity <= match.available) return null;
 		return match;
-	}, [stockRejection, currentOrder.uuid, item.product_id, item.variation_id, item.quantity]);
+	}, [
+		stockRejection,
+		currentOrder.line_items,
+		currentOrder.uuid,
+		item.product_id,
+		item.variation_id,
+	]);
 
 	/**
 	 * filter out the private meta data
