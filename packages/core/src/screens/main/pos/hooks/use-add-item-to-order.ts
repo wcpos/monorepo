@@ -59,7 +59,7 @@ export const useAddItemToOrder = () => {
 			});
 			createdOrders.current.set(
 				recordId,
-				wrapEngineDocument('orders', resident) as unknown as OrderDocument
+				wrapEngineDocument('orders', resident as never) as unknown as OrderDocument
 			);
 			await order.remove();
 			setCurrentOrderID(recordId);
