@@ -37,7 +37,7 @@ export function EngineOutageBanner() {
 							defaultValue: 'Scanning unavailable — sync engine offline.',
 						})
 					: t('pos_products.scan_engine_unavailable_banner', {
-							defaultValue: 'Scanning unavailable — sync engine unavailable.',
+							defaultValue: 'Scanning unavailable — sync engine isn’t ready.',
 						})}
 			</Text>
 			<Pressable onPress={() => router.push('/health/database')}>

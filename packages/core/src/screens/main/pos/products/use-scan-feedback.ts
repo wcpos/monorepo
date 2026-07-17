@@ -6,6 +6,11 @@ import { useT } from '../../../../contexts/translations';
 
 const SUCCESS_DURATION = 2500;
 const ALERT_DURATION = 6000;
+// Safety net: a few code paths bail without terminal feedback (e.g. an online
+// variation whose parent can't be assembled falls back to search) — the
+// searching toast must never be strandable forever, so cap it past the 10s
+// lookup deadline instead of using Infinity.
+const SEARCHING_DURATION = 30000;
 
 // Monotonic per-session counter so every scan owns one toast id and later
 // lifecycle stages update that toast in place instead of stacking new ones.
@@ -38,7 +43,7 @@ export const useScanFeedback = () => {
 					id,
 					title: t('common.barcode_searching_online', { defaultValue: 'Searching store…' }),
 					description: code,
-					duration: Infinity,
+					duration: SEARCHING_DURATION,
 				});
 			},
 			added: (name) => {

@@ -84,7 +84,7 @@ describe('EngineOutageBanner', () => {
 			render(<EngineOutageBanner />);
 
 			expect(screen.getByTestId('engine-outage-banner').textContent).toContain(
-				'Scanning unavailable — sync engine unavailable.'
+				'Scanning unavailable — sync engine isn’t ready.'
 			);
 		}
 	);

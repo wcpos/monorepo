@@ -423,7 +423,7 @@ describe('useBarcode online escalation', () => {
 			id: expect.stringMatching(/^scan:\d+$/),
 			title: 'common.barcode_searching_online:{"defaultValue":"Searching store…"}',
 			description: 'ABC',
-			duration: Infinity,
+			duration: 30000,
 		});
 		resolveFetch?.(onlineResponse());
 		await act(async () => scanPromise);
