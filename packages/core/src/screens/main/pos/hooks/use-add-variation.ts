@@ -100,6 +100,8 @@ export const useAddVariation = () => {
 					},
 				});
 			}
+
+			return Boolean(success);
 		},
 		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
 	);

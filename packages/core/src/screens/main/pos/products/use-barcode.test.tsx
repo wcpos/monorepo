@@ -240,6 +240,8 @@ describe('useBarcode online escalation', () => {
 		mockSubscriptionCallback = undefined;
 		mockEngineStatus.mockReturnValue({ connectivity: 'online', gatedBy: null });
 		mockToastShow.mockReturnValue('toast-id');
+		mockAddProduct.mockResolvedValue(true);
+		mockAddVariation.mockResolvedValue(true);
 		mockResolveScan.mockClear();
 		mockEngineRequire.mockImplementation(() => ({
 			ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
@@ -758,10 +760,10 @@ describe('useBarcode online escalation', () => {
 	);
 
 	it('waits for the cart mutation before showing scan success', async () => {
-		let resolveAdd: (() => void) | undefined;
+		let resolveAdd: ((success: boolean) => void) | undefined;
 		mockAddProduct.mockImplementation(
 			() =>
-				new Promise<void>((resolve) => {
+				new Promise<boolean>((resolve) => {
 					resolveAdd = resolve;
 				})
 		);
@@ -777,7 +779,7 @@ describe('useBarcode online escalation', () => {
 		expect(mockAddProduct).toHaveBeenCalledTimes(1);
 		expect(mockToastShow).not.toHaveBeenCalled();
 
-		resolveAdd?.();
+		resolveAdd?.(true);
 		await act(async () => scanPromise);
 
 		expect(mockToastShow).toHaveBeenCalledWith(
@@ -786,5 +788,17 @@ describe('useBarcode online escalation', () => {
 				title: 'pos_products.scan_added:{"defaultValue":"Added to cart"}',
 			})
 		);
+	});
+
+	it('does not show scan success when the cart mutation reports failure', async () => {
+		mockAddProduct.mockResolvedValue(false);
+		engineProducts.push(productDocument());
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockToastShow).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
 	});
 });

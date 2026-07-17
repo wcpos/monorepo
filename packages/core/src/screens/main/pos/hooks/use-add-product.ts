@@ -106,6 +106,8 @@ export const useAddProduct = () => {
 					},
 				});
 			}
+
+			return Boolean(success);
 		},
 		[
 			currentOrder,

@@ -320,6 +320,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			return;
 		}
 
+		let added: boolean;
 		if (isVariationDocument(product)) {
 			/**
 			 * Hack: we need to get the parent product
@@ -372,10 +373,11 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 			// The scan toast owns success feedback; silence the add-hook's own toast so
 			// a scan produces exactly one notification (fixes the double popup per scan).
-			await addVariation(product, parent, metaData, { silent: true });
+			added = await addVariation(product, parent, metaData, { silent: true });
 		} else {
-			await addProduct(product, { silent: true });
+			added = await addProduct(product, { silent: true });
 		}
+		if (!added) return;
 
 		/**
 		 * Show success message
