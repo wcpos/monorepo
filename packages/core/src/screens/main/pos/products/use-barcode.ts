@@ -383,7 +383,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		}
 		if (!added) {
 			// An online-resolved product/variation that fails to add would otherwise leave
-			// the infinite "Searching store…" toast up after the scan finished. Replace it
+			// the "Searching store…" toast up after the scan finished. Replace it
 			// with terminal failure feedback (the add hook surfaces its own mutation error).
 			if (searchingOnlineShown) {
 				scan.addFailed(product.name ?? '');

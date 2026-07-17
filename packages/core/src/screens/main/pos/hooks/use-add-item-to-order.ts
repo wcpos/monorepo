@@ -3,7 +3,10 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryManager } from '@wcpos/query';
+import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 
+import { useCartStockGuard } from './use-cart-stock-guard';
+import { enqueueOrderMutation } from './order-mutation-queue';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import {
 	documentRecordId,
@@ -23,14 +26,13 @@ export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const manager = useQueryManager();
 	const { localPatch } = useLocalMutation();
-	const appendChains = React.useRef(new Map<string, Promise<void>>());
+	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 
 	/**
 	 *
 	 */
 	const saveNewOrder = React.useCallback(
-		async (type: CartLineType, data: CartLine) => {
-			const order = currentOrder.getLatest();
+		async (order: import('@wcpos/database').OrderDocument, type: CartLineType, data: CartLine) => {
 			const date_created_gmt = convertLocalDateToUTCString(new Date());
 
 			const orderJSON: Record<string, unknown> = {
@@ -52,11 +54,15 @@ export const useAddItemToOrder = () => {
 				recordId,
 				payload: resident.toMutableJSON().payload as Record<string, unknown>,
 			});
+			const savedOrder = wrapEngineDocument(
+				'orders',
+				resident as never
+			) as unknown as import('@wcpos/database').OrderDocument;
 			await order.remove();
 			setCurrentOrderID(recordId);
-			return resident;
+			return savedOrder;
 		},
-		[currentOrder, manager, setCurrentOrderID]
+		[manager, setCurrentOrderID]
 	);
 
 	/**
@@ -78,35 +84,52 @@ export const useAddItemToOrder = () => {
 				});
 			}
 
-			if ((order as unknown as { isNew?: boolean }).isNew) {
-				return saveNewOrder(type, data);
-			}
-
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
-			const previous = appendChains.current.get(recordId) ?? Promise.resolve();
-			const append = previous.then(async () => {
-				const latest = order.getLatest();
-				return localPatch({
-					document: latest,
-					data: {
-						[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
-					} as never,
-				});
-			});
-			const tail = append.then(
-				() => undefined,
-				() => undefined
-			);
-			appendChains.current.set(recordId, tail);
-			void tail.then(() => {
-				if (appendChains.current.get(recordId) === tail) {
-					appendChains.current.delete(recordId);
+			return enqueueOrderMutation(recordId, async (context) => {
+				const latest = context.order?.getLatest() ?? order.getLatest();
+				const isNew = Boolean((latest as unknown as { isNew?: boolean }).isNew);
+				let stockWarningName: string | null = null;
+				if (type === 'line_items' && stockGuardEnabled && (data as LineItem).product_id !== 0) {
+					const lineItem = data as LineItem;
+					const stockResult = await checkCartStock({
+						lineItems: latest.line_items ?? [],
+						productId: lineItem.product_id ?? 0,
+						variationId: lineItem.variation_id ?? 0,
+						requestedQuantity: lineItem.quantity ?? 1,
+						name: lineItem.name,
+					});
+					if (!stockResult.allowed) return false;
+					if (stockResult.warning === 'backorder') {
+						stockWarningName = stockResult.name;
+					}
 				}
+
+				let result;
+				if (isNew) {
+					const savedOrder = await saveNewOrder(latest, type, data);
+					context.order = savedOrder;
+					result = savedOrder;
+				} else {
+					result = await localPatch({
+						document: latest,
+						data: {
+							[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
+						} as never,
+					});
+				}
+				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
+				return result;
 			});
-			return append;
 		},
-		[currentOrder, localPatch, saveNewOrder]
+		[
+			checkCartStock,
+			currentOrder,
+			localPatch,
+			saveNewOrder,
+			showBackorderWarning,
+			stockGuardEnabled,
+		]
 	);
 
 	return { addItemToOrder };

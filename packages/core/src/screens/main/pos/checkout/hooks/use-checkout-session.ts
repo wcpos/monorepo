@@ -15,6 +15,13 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
+import {
+	clearStockRejection,
+	parseInsufficientStockError,
+	setStockRejection,
+	stockRejection$,
+} from '../../hooks/stock-rejection';
+import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
@@ -56,6 +63,7 @@ export function useCheckoutSession(order: OrderDocument) {
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const t = useT();
+	const { resolveStockOwnerId } = useCartStockGuard();
 	const [loading, setLoading] = React.useState(false);
 	// Error raised by the checkout flow itself (set imperatively in handlers).
 	const [checkoutError, setError] = React.useState<string | null>(null);
@@ -110,6 +118,61 @@ export function useCheckoutSession(order: OrderDocument) {
 			router.replace({ pathname: `cart` });
 		}
 	}, [manager, order, router, stockAdjustment, uiSettings.autoShowReceipt]);
+
+	const handleStockRejection = React.useCallback(
+		(error: unknown) => {
+			const rejectedItems = parseInsufficientStockError(error);
+			if (!rejectedItems) return false;
+
+			const rejection = { orderUuid: order.uuid ?? '', items: rejectedItems };
+			setStockRejection(rejection);
+			checkoutAttemptIdRef.current = null;
+			setError('insufficient_stock');
+			const productIds = [...new Set(rejectedItems.map((item) => item.product_id))];
+			const variationIds = [
+				...new Set(rejectedItems.map((item) => item.variation_id).filter(Boolean)),
+			];
+			const refreshes: Promise<void>[] = [];
+			for (const [collection, wooIds] of [
+				['products', productIds],
+				['variations', variationIds],
+			] as const) {
+				if (wooIds.length === 0) continue;
+				const handle = manager.engine.require({
+					id: `checkout:stock-rejection:${collection}:${order.id}`,
+					collection,
+					kind: 'targeted-records',
+					wooIds,
+					forceRefresh: true,
+				});
+				refreshes.push(
+					handle.ready
+						.then(
+							() => undefined,
+							() => undefined
+						)
+						.finally(() => handle.release())
+				);
+			}
+			void Promise.all(refreshes)
+				.then(() =>
+					Promise.all(
+						rejectedItems.map(async (item) => ({
+							...item,
+							stock_owner_id: await resolveStockOwnerId(item.product_id, item.variation_id),
+						}))
+					)
+				)
+				.then((items) => {
+					if (stockRejection$.getValue() === rejection) {
+						setStockRejection({ ...rejection, items });
+					}
+				})
+				.catch(() => undefined);
+			return true;
+		},
+		[manager, order.id, order.uuid, resolveStockOwnerId]
+	);
 
 	const startCheckout = React.useCallback(async () => {
 		if (!order.id || !gatewayResolved) return;
@@ -169,6 +232,7 @@ export function useCheckoutSession(order: OrderDocument) {
 			checkoutAttemptIdRef.current = null;
 
 			if (state.status === 'completed') {
+				clearStockRejection();
 				checkoutLogger.success(
 					t('pos_checkout.payment_completed_for_order', {
 						orderNumber: order.number,
@@ -194,6 +258,7 @@ export function useCheckoutSession(order: OrderDocument) {
 
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
+			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
 			checkoutLogger.error(message, {
@@ -208,7 +273,17 @@ export function useCheckoutSession(order: OrderDocument) {
 		} finally {
 			setLoading(false);
 		}
-	}, [completeOrderFlow, gateway, gatewayId, gatewayResolved, http, order, refetch, t]);
+	}, [
+		completeOrderFlow,
+		gateway,
+		gatewayId,
+		gatewayResolved,
+		handleStockRejection,
+		http,
+		order,
+		refetch,
+		t,
+	]);
 
 	const mode = !gatewayResolved
 		? 'pending'
@@ -224,5 +299,6 @@ export function useCheckoutSession(order: OrderDocument) {
 		gatewayId,
 		mode,
 		startCheckout,
+		handleStockRejection,
 	};
 }

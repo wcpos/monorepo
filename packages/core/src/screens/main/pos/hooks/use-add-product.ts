@@ -29,7 +29,7 @@ export const useAddProduct = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { currentOrder } = useCurrentOrder();
-	const { updateLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
@@ -64,14 +64,16 @@ export const useAddProduct = () => {
 				product = latest.toMutableJSON();
 			}
 
+			const lineItems = currentOrder.getLatest().line_items ?? [];
+
 			// check if product is already in order, if so increment quantity
 			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && product.id !== 0) {
-				const lineItems = currentOrder.getLatest().line_items ?? [];
 				const matches = findByProductVariationID(lineItems, product.id ?? 0);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
+						success = await incrementLineItem(uuid, 1);
+						if (success === false) return false;
 					}
 				}
 			}
@@ -82,6 +84,7 @@ export const useAddProduct = () => {
 				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
 				success = await addItemToOrder('line_items', newLineItem);
+				if (success === false) return false;
 			}
 
 			// returned success should be the updated order
@@ -95,6 +98,7 @@ export const useAddProduct = () => {
 						productName: product.name,
 					},
 				});
+				return true;
 			} else {
 				orderLogger.error(t('pos.error_adding_to_cart', { name: product.name }), {
 					showToast: true,
@@ -105,13 +109,14 @@ export const useAddProduct = () => {
 						productName: product.name,
 					},
 				});
+				return false;
 			}
 
 			return Boolean(success);
 		},
 		[
 			currentOrder,
-			updateLineItem,
+			incrementLineItem,
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,
 			addItemToOrder,

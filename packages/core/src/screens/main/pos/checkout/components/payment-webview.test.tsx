@@ -82,7 +82,9 @@ describe('PaymentWebview fallback order refresh', () => {
 		});
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
-		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
+		render(
+			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+		);
 
 		await act(async () => {
 			webViewProps.onMessage({
@@ -119,7 +121,9 @@ describe('PaymentWebview fallback order refresh', () => {
 
 	it('does not poll on the initial page load (payment cannot have completed yet)', async () => {
 		jest.useFakeTimers();
-		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
+		render(
+			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+		);
 
 		await act(async () => {
 			webViewProps.onLoad({});
@@ -131,12 +135,39 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 	});
 
+	it('routes structured stock errors to the shared rejection handler', async () => {
+		const setLoading = jest.fn();
+		const onStockRejection = jest.fn(() => true);
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const payload = {
+			code: 'wcpos_insufficient_stock',
+			data: { items: [{ product_id: 10, variation_id: 0, available: 0 }] },
+		};
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={setLoading}
+				onStockRejection={onStockRejection}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onMessage({ nativeEvent: { data: { payload } } });
+		});
+
+		expect(onStockRejection).toHaveBeenCalledWith(payload);
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(setLoading).toHaveBeenCalledWith(false);
+	});
+
 	it('does not log a payment-gateway error when the fallback server probe fails', async () => {
 		jest.useFakeTimers();
 		mockGet.mockRejectedValue(new Error('Request failed with status code 404'));
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
-		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
+		render(
+			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+		);
 
 		await act(async () => {
 			webViewProps.onLoad({}); // initial order-pay load — gated, no poll
@@ -165,7 +196,9 @@ describe('PaymentWebview fallback order refresh', () => {
 		});
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
-		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);
+		render(
+			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+		);
 
 		await act(async () => {
 			webViewProps.onLoad({});

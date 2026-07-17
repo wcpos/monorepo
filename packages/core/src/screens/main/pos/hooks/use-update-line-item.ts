@@ -4,9 +4,11 @@ import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
+import { useCartStockGuard } from './use-cart-stock-guard';
 import { useLineItemData } from './use-line-item-data';
+import { enqueueOrderMutation } from './order-mutation-queue';
 import { updatePosDataMeta } from './utils';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { documentRecordId, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -20,6 +22,10 @@ interface Changes extends Partial<Omit<LineItem, 'price'>> {
 	categories?: { id: number; name: string }[];
 }
 
+interface UpdateLineItemOptions {
+	skipStockGuard?: boolean;
+}
+
 /**
  *
  */
@@ -28,17 +34,46 @@ export const useUpdateLineItem = () => {
 	const { localPatch } = useLocalMutation();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { getLineItemData } = useLineItemData();
+	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 
 	/**
 	 * Update line item
 	 *
 	 * @TODO - what if more than one property is changed at once?
 	 */
-	const updateLineItem = React.useCallback(
-		async (uuid: string, changes: Changes) => {
+	const applyLineItemChanges = React.useCallback(
+		async (uuid: string, changes: Changes, options?: UpdateLineItemOptions) => {
 			const order = currentOrder.getLatest();
 			const json = order.toMutableJSON();
 			let updated = false;
+			let stockWarningName: string | null = null;
+			const lineItemToUpdate = json.line_items?.find((lineItem) =>
+				lineItem.meta_data?.some(
+					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
+				)
+			);
+
+			if (
+				stockGuardEnabled &&
+				!options?.skipStockGuard &&
+				lineItemToUpdate &&
+				lineItemToUpdate.product_id !== 0 &&
+				typeof changes.quantity === 'number' &&
+				changes.quantity > (lineItemToUpdate.quantity ?? 0)
+			) {
+				const stockResult = await checkCartStock({
+					lineItems: json.line_items ?? [],
+					productId: lineItemToUpdate.product_id ?? 0,
+					variationId: lineItemToUpdate.variation_id ?? 0,
+					requestedQuantity: changes.quantity,
+					excludedLineItemUuid: uuid,
+					name: lineItemToUpdate.name,
+				});
+				if (!stockResult.allowed) return false;
+				if (stockResult.warning === 'backorder') {
+					stockWarningName = stockResult.name;
+				}
+			}
 
 			const updatedLineItems = json.line_items?.map((lineItem) => {
 				if (
@@ -75,10 +110,54 @@ export const useUpdateLineItem = () => {
 
 			// if we have updated a line item, patch the order
 			if (updated && updatedLineItems) {
-				return localPatch({ document: order, data: { line_items: updatedLineItems } });
+				const result = await localPatch({
+					document: order,
+					data: { line_items: updatedLineItems },
+				});
+				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
+				return result;
 			}
 		},
-		[calculateLineItemTaxesAndTotals, currentOrder, getLineItemData, localPatch]
+		[
+			calculateLineItemTaxesAndTotals,
+			checkCartStock,
+			currentOrder,
+			getLineItemData,
+			localPatch,
+			showBackorderWarning,
+			stockGuardEnabled,
+		]
+	);
+
+	const updateLineItem = React.useCallback(
+		async (uuid: string, changes: Changes, options?: UpdateLineItemOptions) => {
+			const recordId = documentRecordId(currentOrder.getLatest());
+			if (!recordId) throw new Error('Order is missing its uuid');
+			return enqueueOrderMutation(recordId, () => applyLineItemChanges(uuid, changes, options));
+		},
+		[applyLineItemChanges, currentOrder]
+	);
+
+	const incrementLineItem = React.useCallback(
+		async (uuid: string, quantity: number) => {
+			const recordId = documentRecordId(currentOrder.getLatest());
+			if (!recordId) throw new Error('Order is missing its uuid');
+			return enqueueOrderMutation(recordId, async () => {
+				const lineItem = currentOrder
+					.getLatest()
+					.toMutableJSON()
+					.line_items?.find((item) =>
+						item.meta_data?.some(
+							(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
+						)
+					);
+				if (!lineItem) return;
+				return applyLineItemChanges(uuid, {
+					quantity: (lineItem.quantity ?? 0) + quantity,
+				});
+			});
+		},
+		[applyLineItemChanges, currentOrder]
 	);
 
 	/**
@@ -149,5 +228,5 @@ export const useUpdateLineItem = () => {
 		[calculateLineItemTaxesAndTotals, currentOrder, localPatch]
 	);
 
-	return { updateLineItem, splitLineItem };
+	return { updateLineItem, incrementLineItem, splitLineItem };
 };
