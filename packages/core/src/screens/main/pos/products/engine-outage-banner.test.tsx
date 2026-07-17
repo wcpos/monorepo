@@ -9,6 +9,7 @@ import { EngineOutageBanner } from './engine-outage-banner';
 
 const mockPush = jest.fn();
 const mockUseEngineStatus = jest.fn();
+let mockOnlineStatus = 'online-website-available';
 
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush }),
@@ -25,6 +26,10 @@ jest.mock('../../hooks/use-engine-monitor', () => ({
 	useEngineStatus: () => mockUseEngineStatus(),
 }));
 
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnlineStatus }),
+}));
+
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (_key: string, options?: { defaultValue?: string }) => options?.defaultValue,
 }));
@@ -32,6 +37,7 @@ jest.mock('../../../../contexts/translations', () => ({
 describe('EngineOutageBanner', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockOnlineStatus = 'online-website-available';
 	});
 
 	it('renders nothing while the engine is healthy', () => {
@@ -43,6 +49,7 @@ describe('EngineOutageBanner', () => {
 	});
 
 	it('renders the outage message and status link while the engine is offline', () => {
+		mockOnlineStatus = 'offline';
 		mockUseEngineStatus.mockReturnValue({ connectivity: 'offline', gatedBy: 'offline' });
 
 		render(<EngineOutageBanner />);
@@ -53,4 +60,32 @@ describe('EngineOutageBanner', () => {
 		fireEvent.click(screen.getByText('View status'));
 		expect(mockPush).toHaveBeenCalledWith('/health/database');
 	});
+
+	it('refreshes immediately from live connectivity instead of a stale engine snapshot', () => {
+		mockOnlineStatus = 'offline';
+		mockUseEngineStatus.mockReturnValue({ connectivity: 'online', gatedBy: null });
+
+		const { rerender } = render(<EngineOutageBanner />);
+
+		expect(screen.getByTestId('engine-outage-banner')).toBeTruthy();
+
+		mockOnlineStatus = 'online-website-available';
+		mockUseEngineStatus.mockReturnValue({ connectivity: 'offline', gatedBy: 'offline' });
+		rerender(<EngineOutageBanner />);
+
+		expect(screen.queryByTestId('engine-outage-banner')).toBeNull();
+	});
+
+	it.each(['lifecycle', 'bootstrap-failed'])(
+		'uses neutral copy while the online engine is gated by %s',
+		(gatedBy) => {
+			mockUseEngineStatus.mockReturnValue({ connectivity: 'online', gatedBy });
+
+			render(<EngineOutageBanner />);
+
+			expect(screen.getByTestId('engine-outage-banner').textContent).toContain(
+				'Scanning unavailable — sync engine unavailable.'
+			);
+		}
+	);
 });

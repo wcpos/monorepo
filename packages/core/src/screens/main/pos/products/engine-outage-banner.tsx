@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Text } from '@wcpos/components/text';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { useT } from '../../../../contexts/translations';
 import { useEngineStatus } from '../../hooks/use-engine-monitor';
@@ -14,10 +15,14 @@ import { useEngineStatus } from '../../hooks/use-engine-monitor';
  */
 export function EngineOutageBanner() {
 	const status = useEngineStatus();
+	const { status: onlineStatus } = useOnlineStatus();
 	const router = useRouter();
 	const t = useT();
+	const isOffline = onlineStatus === 'offline';
+	const isEngineUnavailable =
+		status.gatedBy === 'lifecycle' || status.gatedBy === 'bootstrap-failed';
 
-	if (status.connectivity !== 'offline' && status.gatedBy === null) {
+	if (!isOffline && !isEngineUnavailable) {
 		return null;
 	}
 
@@ -27,9 +32,13 @@ export function EngineOutageBanner() {
 			className="border-destructive/40 bg-destructive/10 flex-row items-center gap-2 rounded-md border p-2"
 		>
 			<Text className="text-destructive flex-1 text-sm">
-				{t('pos_products.scan_outage_banner', {
-					defaultValue: 'Scanning unavailable — sync engine offline.',
-				})}
+				{isOffline
+					? t('pos_products.scan_outage_banner', {
+							defaultValue: 'Scanning unavailable — sync engine offline.',
+						})
+					: t('pos_products.scan_engine_unavailable_banner', {
+							defaultValue: 'Scanning unavailable — sync engine unavailable.',
+						})}
 			</Text>
 			<Pressable onPress={() => router.push('/health/database')}>
 				<Text className="text-destructive text-sm font-medium underline">

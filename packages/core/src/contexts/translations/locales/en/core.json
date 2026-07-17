@@ -866,5 +866,6 @@
 	"pos_products.scan_unavailable": "Scanning unavailable",
 	"pos_products.scan_unavailable_description": "{code} — Sync engine is offline — see the banner above the products",
 	"pos_products.scan_outage_banner": "Scanning unavailable — sync engine offline.",
+	"pos_products.scan_engine_unavailable_banner": "Scanning unavailable — sync engine unavailable.",
 	"pos_products.scan_outage_view_status": "View status"
 }
