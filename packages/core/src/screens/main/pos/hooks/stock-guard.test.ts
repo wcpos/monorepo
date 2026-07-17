@@ -1,4 +1,40 @@
+/**
+ * @jest-environment jsdom
+ */
+import { act, renderHook } from '@testing-library/react';
+
+import { getLogger } from '@wcpos/utils/logger';
+
 import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './stock-guard';
+import { useCartStockGuard } from './use-cart-stock-guard';
+
+const mockFindOneExec = jest.fn();
+
+jest.mock('observable-hooks', () => ({ useObservableEagerState: () => true }));
+jest.mock('@wcpos/query', () => ({
+	useQueryManager: () => ({
+		engine: {
+			active: () => ({
+				database: {
+					collections: {
+						products: { findOne: () => ({ exec: mockFindOneExec }) },
+						variations: { findOne: () => ({ exec: mockFindOneExec }) },
+					},
+				},
+			}),
+		},
+	}),
+}));
+jest.mock('@wcpos/query/engine-compat', () => ({
+	resolveLegacyField: () => ({ enginePath: 'wooProductId' }),
+	wrapEngineDocument: (_collection: string, document: unknown) => document,
+}));
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: { prevent_overselling$: {} } }),
+}));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string) => key,
+}));
 
 describe('evaluateStockForCartChange', () => {
 	const managedProduct = {
@@ -141,5 +177,35 @@ describe('aggregateExistingCartQuantity', () => {
 				excludedLineItemUuid: 'edited',
 			})
 		).toBe(1);
+	});
+});
+
+describe('useCartStockGuard', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockFindOneExec.mockResolvedValue(null);
+	});
+
+	it('fails closed when the enabled guard cannot load the product record', async () => {
+		const { result } = renderHook(() => useCartStockGuard());
+		const stockLogger = getLogger(['wcpos', 'pos', 'cart', 'stock']);
+		let stockResult;
+
+		await act(async () => {
+			stockResult = await result.current.checkCartStock({
+				lineItems: [],
+				productId: 10,
+				requestedQuantity: 1,
+				name: 'Deleted product',
+			});
+		});
+
+		expect(stockResult).toEqual({
+			allowed: false,
+			warning: null,
+			available: null,
+			name: 'Deleted product',
+		});
+		expect(stockLogger.warn).toHaveBeenCalled();
 	});
 });

@@ -68,7 +68,7 @@ export const useUpdateLineItem = () => {
 					excludedLineItemUuid: uuid,
 					name: lineItemToUpdate.name,
 				});
-				if (!stockResult.allowed) return;
+				if (!stockResult.allowed) return false;
 				if (stockResult.warning === 'backorder') {
 					stockWarningName = stockResult.name;
 				}

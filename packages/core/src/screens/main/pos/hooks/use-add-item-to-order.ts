@@ -20,10 +20,6 @@ type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_li
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 
-interface AddItemOptions {
-	skipStockGuard?: boolean;
-}
-
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const manager = useQueryManager();
@@ -69,9 +65,8 @@ export const useAddItemToOrder = () => {
 	 * NOTE: If I don't include getLatest(), the populate() will return old data
 	 */
 	const addItemToOrder = React.useCallback(
-		async (type: CartLineType, data: CartLine, options?: AddItemOptions) => {
+		async (type: CartLineType, data: CartLine) => {
 			const order = currentOrder.getLatest();
-			let stockWarningName: string | null = null;
 
 			// make sure items have a uuid before saving
 			data.meta_data = data.meta_data || [];
@@ -93,12 +88,8 @@ export const useAddItemToOrder = () => {
 				: (appendChains.current.get(recordId) ?? Promise.resolve());
 			const append = previous.then(async () => {
 				const latest = isNew ? order : order.getLatest();
-				if (
-					type === 'line_items' &&
-					stockGuardEnabled &&
-					(data as LineItem).product_id !== 0 &&
-					!options?.skipStockGuard
-				) {
+				let stockWarningName: string | null = null;
+				if (type === 'line_items' && stockGuardEnabled && (data as LineItem).product_id !== 0) {
 					const lineItem = data as LineItem;
 					const stockResult = await checkCartStock({
 						lineItems: latest.line_items ?? [],
@@ -107,19 +98,22 @@ export const useAddItemToOrder = () => {
 						requestedQuantity: lineItem.quantity ?? 1,
 						name: lineItem.name,
 					});
-					if (!stockResult.allowed) return;
+					if (!stockResult.allowed) return false;
 					if (stockResult.warning === 'backorder') {
 						stockWarningName = stockResult.name;
 					}
 				}
 
-				if (isNew) return saveNewOrder(type, data);
-				return localPatch({
-					document: latest,
-					data: {
-						[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
-					} as never,
-				});
+				const result = isNew
+					? await saveNewOrder(type, data)
+					: await localPatch({
+							document: latest,
+							data: {
+								[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
+							} as never,
+						});
+				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
+				return result;
 			});
 			const tail = append.then(
 				() => undefined,
@@ -133,9 +127,7 @@ export const useAddItemToOrder = () => {
 					}
 				});
 			}
-			const result = await append;
-			if (stockWarningName !== null) showBackorderWarning(stockWarningName);
-			return result;
+			return append;
 		},
 		[
 			checkCartStock,

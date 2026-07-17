@@ -108,8 +108,9 @@ export const useCartStockGuard = () => {
 				: await readStockDocument('products', productId);
 			if (!product) {
 				const name = suppliedName ?? '';
-				cartLogger.warn('Cart stock check blocked because the product record is missing', {
-					context: { productId, variationId },
+				cartLogger.warn(t('pos_products.out_of_stock', { name }), {
+					showToast: true,
+					context: { productId, variationId, reason: 'missing_stock_record' },
 				});
 				return { allowed: false, warning: null, available: null, name };
 			}
