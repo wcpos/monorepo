@@ -24,12 +24,18 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: OrderDocument;
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
+	onCheckoutError?: (error: unknown) => boolean;
 }
 
 /**
  *
  */
-export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewProps) {
+export function PaymentWebview({
+	order,
+	setLoading,
+	onCheckoutError,
+	...props
+}: PaymentWebviewProps) {
 	const router = useRouter();
 	const paymentURL = useObservableState(
 		order.links$!.pipe(map((links) => get(links, ['payment', 0, 'href']))),
@@ -301,6 +307,10 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 						const data = event?.nativeEvent?.data as Record<string, unknown> | undefined;
 						const payload = data?.payload as Record<string, unknown> | undefined;
 						if (payload?.data) {
+							if (onCheckoutError?.(payload.data)) {
+								setLoading(false);
+								return;
+							}
 							orderLogger.error((payload?.message as string) || 'Payment error', {
 								showToast: true,
 								saveToDb: true,

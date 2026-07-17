@@ -179,4 +179,31 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });
 		jest.useRealTimers();
 	});
+
+	it('routes structured stock errors to the checkout rejection handler', async () => {
+		const onCheckoutError = jest.fn(() => true);
+		const setLoading = jest.fn();
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={setLoading}
+				onCheckoutError={onCheckoutError}
+			/>
+		);
+		const error = {
+			code: 'wcpos_insufficient_stock',
+			data: { items: [{ product_id: 12, variation_id: 0, available: 1 }] },
+		};
+
+		await act(async () => {
+			webViewProps.onMessage({
+				nativeEvent: { data: { payload: { message: 'Insufficient stock', data: error } } },
+			});
+		});
+
+		expect(onCheckoutError).toHaveBeenCalledWith(error);
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(setLoading).toHaveBeenCalledWith(false);
+	});
 });
