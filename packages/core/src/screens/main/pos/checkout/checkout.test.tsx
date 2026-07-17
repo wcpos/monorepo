@@ -78,4 +78,22 @@ describe('Checkout', () => {
 		expect(screen.queryByText('common.cancel')).toBeNull();
 		expect(screen.getByText('pos_checkout.return_to_cart')).toBeTruthy();
 	});
+
+	it('shows stock rejection detail in legacy webview mode', () => {
+		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
+		mockIsRxDocument.mockReturnValue(true);
+		mockUseObservableEagerState.mockReturnValueOnce('100').mockReturnValueOnce({
+			orderUuid: 'order-1',
+			items: [{ product_id: 1, variation_id: 0, available: 0 }],
+		});
+		mockUseCheckoutSession.mockReturnValue({
+			mode: 'webview',
+			error: 'insufficient_stock',
+			startCheckout: jest.fn(),
+		});
+
+		render(<Checkout resource={{} as never} />);
+
+		expect(screen.getByText('pos_checkout.insufficient_stock_message')).toBeTruthy();
+	});
 });

@@ -116,6 +116,51 @@ export function useCheckoutSession(order: OrderDocument) {
 		}
 	}, [manager, order, router, stockAdjustment, uiSettings.autoShowReceipt]);
 
+	const handleStockRejection = React.useCallback(
+		(error: unknown) => {
+			const rejectedItems = parseInsufficientStockError(error);
+			if (!rejectedItems) return false;
+
+			// The server just proved the local stock data is stale — refresh the
+			// affected records so the cart guard and badges show truth while the
+			// cashier corrects the cart. The rejection state drives the checkout
+			// modal's per-line detail and the cart line highlights.
+			setStockRejection({ orderUuid: order.uuid ?? '', items: rejectedItems });
+			checkoutAttemptIdRef.current = null;
+			setError('insufficient_stock');
+			const productIds = [...new Set(rejectedItems.map((item) => item.product_id))];
+			const variationIds = [
+				...new Set(rejectedItems.map((item) => item.variation_id).filter(Boolean)),
+			];
+			for (const [collection, wooIds] of [
+				['products', productIds],
+				['variations', variationIds],
+			] as const) {
+				if (wooIds.length === 0) continue;
+				const handle = manager.engine.require({
+					id: `checkout:stock-rejection:${collection}:${order.id}`,
+					collection,
+					kind: 'targeted-records',
+					wooIds,
+					forceRefresh: true,
+				});
+				void handle.ready
+					.finally(() => handle.release())
+					.catch((refreshError) => {
+						checkoutLogger.error('Failed to refresh rejected stock records', {
+							saveToDb: true,
+							context: {
+								collection,
+								error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+							},
+						});
+					});
+			}
+			return true;
+		},
+		[manager, order.id, order.uuid]
+	);
+
 	const startCheckout = React.useCallback(async () => {
 		if (!order.id || !gatewayResolved) return;
 		setLoading(true);
@@ -200,46 +245,7 @@ export function useCheckoutSession(order: OrderDocument) {
 
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
-			const rejectedItems = parseInsufficientStockError(err);
-			if (rejectedItems) {
-				// The server just proved the local stock data is stale — refresh the
-				// affected records so the cart guard and badges show truth while the
-				// cashier corrects the cart. The rejection state drives the checkout
-				// modal's per-line detail and the cart line highlights.
-				setStockRejection({ orderUuid: order.uuid ?? '', items: rejectedItems });
-				checkoutAttemptIdRef.current = null;
-				setError('insufficient_stock');
-				const productIds = [...new Set(rejectedItems.map((item) => item.product_id))];
-				const variationIds = [
-					...new Set(rejectedItems.map((item) => item.variation_id).filter(Boolean)),
-				];
-				for (const [collection, wooIds] of [
-					['products', productIds],
-					['variations', variationIds],
-				] as const) {
-					if (wooIds.length === 0) continue;
-					const handle = manager.engine.require({
-						id: `checkout:stock-rejection:${collection}:${order.id}`,
-						collection,
-						kind: 'targeted-records',
-						wooIds,
-						forceRefresh: true,
-					});
-					void handle.ready
-						.finally(() => handle.release())
-						.catch((refreshError) => {
-							checkoutLogger.error('Failed to refresh rejected stock records', {
-								saveToDb: true,
-								context: {
-									collection,
-									error:
-										refreshError instanceof Error ? refreshError.message : String(refreshError),
-								},
-							});
-						});
-				}
-				return;
-			}
+			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
 			checkoutLogger.error(message, {
@@ -254,7 +260,17 @@ export function useCheckoutSession(order: OrderDocument) {
 		} finally {
 			setLoading(false);
 		}
-	}, [completeOrderFlow, gateway, gatewayId, gatewayResolved, http, manager, order, refetch, t]);
+	}, [
+		completeOrderFlow,
+		gateway,
+		gatewayId,
+		gatewayResolved,
+		handleStockRejection,
+		http,
+		order,
+		refetch,
+		t,
+	]);
 
 	const mode = !gatewayResolved
 		? 'pending'
@@ -270,5 +286,6 @@ export function useCheckoutSession(order: OrderDocument) {
 		gatewayId,
 		mode,
 		startCheckout,
+		handleStockRejection,
 	};
 }
