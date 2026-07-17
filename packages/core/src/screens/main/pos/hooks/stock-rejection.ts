@@ -8,6 +8,7 @@ export interface StockRejectionItem {
 	available: number | null;
 	reason?: string;
 	backorders?: string;
+	stock_owner_key?: string;
 }
 
 export interface StockRejectionState {
@@ -27,6 +28,11 @@ interface GetStockRejectionForLineArgs {
 	lineItems: StockRejectionLine[];
 	lineItem: StockRejectionLine;
 }
+
+type ReadStockFields = (
+	collection: 'products' | 'variations',
+	wooId: number
+) => Promise<{ manage_stock?: boolean | 'parent' } | null>;
 
 /**
  * The last server-side wcpos_insufficient_stock rejection, shared between the
@@ -63,19 +69,51 @@ export function getStockRejectionForLine({
 	);
 	if (!match || match.available === null) return match ?? null;
 
-	const rejectedVariationIds = new Set(
-		stockRejection.items
-			.filter((item) => item.product_id === productId)
-			.map((item) => item.variation_id)
+	const stockOwnerItems = stockRejection.items.filter(
+		(item) => item.stock_owner_key !== undefined && item.stock_owner_key === match.stock_owner_key
+	);
+	const rejectedLines = stockOwnerItems.length > 0 ? stockOwnerItems : [match];
+	const rejectedLineKeys = new Set(
+		rejectedLines.map((item) => `${item.product_id}:${item.variation_id}`)
 	);
 	const aggregateQuantity = lineItems.reduce(
 		(total, item) =>
-			item.product_id === productId && rejectedVariationIds.has(item.variation_id ?? 0)
+			rejectedLineKeys.has(`${item.product_id ?? 0}:${item.variation_id ?? 0}`)
 				? total + (item.quantity ?? 0)
 				: total,
 		0
 	);
 	return aggregateQuantity > match.available ? match : null;
+}
+
+/** Annotate rejected lines with the local product or variation that owns their stock. */
+export async function attachStockOwnerKeys(
+	items: StockRejectionItem[],
+	readStockFields: ReadStockFields
+): Promise<StockRejectionItem[]> {
+	const products = new Map<number, Awaited<ReturnType<ReadStockFields>>>();
+	const variations = new Map<number, Awaited<ReturnType<ReadStockFields>>>();
+	await Promise.all([
+		...[...new Set(items.map((item) => item.product_id))].map(async (productId) => {
+			products.set(productId, await readStockFields('products', productId));
+		}),
+		...[...new Set(items.map((item) => item.variation_id).filter(Boolean))].map(
+			async (variationId) => {
+				variations.set(variationId, await readStockFields('variations', variationId));
+			}
+		),
+	]);
+
+	return items.map((item) => {
+		const variationOwnsStock = variations.get(item.variation_id)?.manage_stock === true;
+		const parentOwnsStock = products.get(item.product_id)?.manage_stock === true;
+		const stockOwnerKey = variationOwnsStock
+			? `variation:${item.variation_id}`
+			: parentOwnsStock
+				? `product:${item.product_id}`
+				: `line:${item.product_id}:${item.variation_id}`;
+		return { ...item, stock_owner_key: stockOwnerKey };
+	});
 }
 
 /**

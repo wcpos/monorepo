@@ -1,4 +1,5 @@
 import {
+	attachStockOwnerKeys,
 	clearStockRejection,
 	getStockRejectionForLine,
 	parseInsufficientStockError,
@@ -49,8 +50,20 @@ describe('getStockRejectionForLine', () => {
 		const stockRejection = {
 			orderUuid: 'order-a',
 			items: [
-				{ product_id: 12, variation_id: 34, requested: 2, available: 3 },
-				{ product_id: 12, variation_id: 35, requested: 2, available: 3 },
+				{
+					product_id: 12,
+					variation_id: 34,
+					requested: 2,
+					available: 3,
+					stock_owner_key: 'product:12',
+				},
+				{
+					product_id: 12,
+					variation_id: 35,
+					requested: 2,
+					available: 3,
+					stock_owner_key: 'product:12',
+				},
 			],
 		};
 		expect(
@@ -70,6 +83,71 @@ describe('getStockRejectionForLine', () => {
 				lineItem,
 			})
 		).toBeNull();
+	});
+
+	it('clears independently managed sibling variations separately', () => {
+		const firstLine = { product_id: 12, variation_id: 34, quantity: 1 };
+		const secondLine = { product_id: 12, variation_id: 35, quantity: 1 };
+		const stockRejection = {
+			orderUuid: 'order-a',
+			items: [
+				{
+					product_id: 12,
+					variation_id: 34,
+					requested: 2,
+					available: 1,
+					stock_owner_key: 'variation:34',
+				},
+				{
+					product_id: 12,
+					variation_id: 35,
+					requested: 2,
+					available: 1,
+					stock_owner_key: 'variation:35',
+				},
+			],
+		};
+
+		expect(
+			getStockRejectionForLine({
+				stockRejection,
+				orderUuid: 'order-a',
+				lineItems: [firstLine, secondLine],
+				lineItem: firstLine,
+			})
+		).toBeNull();
+		expect(
+			getStockRejectionForLine({
+				stockRejection,
+				orderUuid: 'order-a',
+				lineItems: [firstLine, secondLine],
+				lineItem: secondLine,
+			})
+		).toBeNull();
+	});
+});
+
+describe('attachStockOwnerKeys', () => {
+	it('distinguishes parent-managed stock from variation-managed stock', async () => {
+		const readStockFields = jest.fn(async (collection: string, wooId: number) => {
+			if (collection === 'products') return { manage_stock: wooId === 12 };
+			return { manage_stock: wooId === 36 };
+		});
+
+		const result = await attachStockOwnerKeys(
+			[
+				{ product_id: 12, variation_id: 34, available: 3 },
+				{ product_id: 12, variation_id: 35, available: 3 },
+				{ product_id: 13, variation_id: 36, available: 1 },
+			],
+			readStockFields
+		);
+
+		expect(result.map((item) => item.stock_owner_key)).toEqual([
+			'product:12',
+			'product:12',
+			'variation:36',
+		]);
 	});
 });
 

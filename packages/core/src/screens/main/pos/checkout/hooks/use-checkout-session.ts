@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { useQueryManager } from '@wcpos/query';
+import { resolveLegacyField, wrapEngineDocument } from '@wcpos/query/engine-compat';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -16,14 +17,17 @@ import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import {
+	attachStockOwnerKeys,
 	clearStockRejection,
 	parseInsufficientStockError,
 	setStockRejection,
+	stockRejection$,
 } from '../../hooks/stock-rejection';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
 
 export type GatewayContract = PaymentGatewayContract;
 
@@ -41,6 +45,23 @@ export function isTerminalCheckoutStatus(status?: string) {
 }
 
 const LEGACY_WEBVIEW_GATEWAY_IDS = new Set(['pos_cash', 'pos_card', 'wcpos_cash', 'wcpos_card']);
+
+async function readStockFields(
+	manager: ReturnType<typeof useQueryManager>,
+	collectionName: 'products' | 'variations',
+	wooId: number
+) {
+	const collection = manager.engine.active()?.database.collections[collectionName];
+	if (!collection) return null;
+	const field = resolveLegacyField(collectionName, 'id').enginePath;
+	const result = await collection.findOne({ selector: { [field]: wooId } }).exec();
+	if (!result) return null;
+	const document = wrapEngineDocument(
+		collectionName,
+		result as unknown as EngineRxDocument
+	) as unknown as { manage_stock?: boolean | 'parent' };
+	return { manage_stock: document.manage_stock };
+}
 
 export function shouldUseContractCheckout(gateway?: GatewayContract | null) {
 	return supportsCheckoutContract(gateway) && !LEGACY_WEBVIEW_GATEWAY_IDS.has(gateway?.id || '');
@@ -132,6 +153,7 @@ export function useCheckoutSession(order: OrderDocument) {
 			const variationIds = [
 				...new Set(rejectedItems.map((item) => item.variation_id).filter(Boolean)),
 			];
+			const refreshes: Promise<unknown>[] = [];
 			for (const [collection, wooIds] of [
 				['products', productIds],
 				['variations', variationIds],
@@ -144,7 +166,7 @@ export function useCheckoutSession(order: OrderDocument) {
 					wooIds,
 					forceRefresh: true,
 				});
-				void handle.ready
+				const refresh = handle.ready
 					.finally(() => handle.release())
 					.catch((refreshError) => {
 						checkoutLogger.error('Failed to refresh rejected stock records', {
@@ -154,8 +176,36 @@ export function useCheckoutSession(order: OrderDocument) {
 								error: refreshError instanceof Error ? refreshError.message : String(refreshError),
 							},
 						});
+						return undefined;
 					});
+				refreshes.push(refresh);
 			}
+			void Promise.all(refreshes)
+				.then(() =>
+					attachStockOwnerKeys(rejectedItems, (collection, wooId) =>
+						readStockFields(manager, collection, wooId)
+					)
+				)
+				.then((items) => {
+					const activeRejection = stockRejection$.getValue();
+					if (
+						activeRejection?.orderUuid === (order.uuid ?? '') &&
+						activeRejection.items === rejectedItems
+					) {
+						setStockRejection({ ...activeRejection, items });
+					}
+				})
+				.catch((stockOwnerError) => {
+					checkoutLogger.error('Failed to identify rejected stock owners', {
+						saveToDb: true,
+						context: {
+							error:
+								stockOwnerError instanceof Error
+									? stockOwnerError.message
+									: String(stockOwnerError),
+						},
+					});
+				});
 			return true;
 		},
 		[manager, order.id, order.uuid]
