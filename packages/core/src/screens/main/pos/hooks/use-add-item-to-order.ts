@@ -105,15 +105,19 @@ export const useAddItemToOrder = () => {
 					}
 				}
 
-				const result = isNew
-					? await saveNewOrder(latest, type, data)
-					: await localPatch({
-							document: latest,
-							data: {
-								[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
-							} as never,
-						});
-				if (isNew) context.order = result;
+				let result;
+				if (isNew) {
+					const savedOrder = await saveNewOrder(latest, type, data);
+					context.order = savedOrder;
+					result = savedOrder;
+				} else {
+					result = await localPatch({
+						document: latest,
+						data: {
+							[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
+						} as never,
+					});
+				}
 				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
 				return result;
 			});
