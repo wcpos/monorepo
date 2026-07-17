@@ -73,26 +73,6 @@ export const useAddItemToOrder = () => {
 			const order = currentOrder.getLatest();
 			let stockWarningName: string | null = null;
 
-			if (
-				type === 'line_items' &&
-				stockGuardEnabled &&
-				(data as LineItem).product_id !== 0 &&
-				!options?.skipStockGuard
-			) {
-				const lineItem = data as LineItem;
-				const stockResult = await checkCartStock({
-					lineItems: order.line_items ?? [],
-					productId: lineItem.product_id ?? 0,
-					variationId: lineItem.variation_id ?? 0,
-					requestedQuantity: lineItem.quantity ?? 1,
-					name: lineItem.name,
-				});
-				if (!stockResult.allowed) return;
-				if (stockResult.warning === 'backorder') {
-					stockWarningName = stockResult.name;
-				}
-			}
-
 			// make sure items have a uuid before saving
 			data.meta_data = data.meta_data || [];
 			const meta = data.meta_data.find((meta: any) => meta.key === '_woocommerce_pos_uuid');
@@ -105,17 +85,35 @@ export const useAddItemToOrder = () => {
 				});
 			}
 
-			if ((order as unknown as { isNew?: boolean }).isNew) {
-				const result = await saveNewOrder(type, data);
-				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
-				return result;
-			}
-
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
-			const previous = appendChains.current.get(recordId) ?? Promise.resolve();
+			const isNew = Boolean((order as unknown as { isNew?: boolean }).isNew);
+			const previous = isNew
+				? Promise.resolve()
+				: (appendChains.current.get(recordId) ?? Promise.resolve());
 			const append = previous.then(async () => {
-				const latest = order.getLatest();
+				const latest = isNew ? order : order.getLatest();
+				if (
+					type === 'line_items' &&
+					stockGuardEnabled &&
+					(data as LineItem).product_id !== 0 &&
+					!options?.skipStockGuard
+				) {
+					const lineItem = data as LineItem;
+					const stockResult = await checkCartStock({
+						lineItems: latest.line_items ?? [],
+						productId: lineItem.product_id ?? 0,
+						variationId: lineItem.variation_id ?? 0,
+						requestedQuantity: lineItem.quantity ?? 1,
+						name: lineItem.name,
+					});
+					if (!stockResult.allowed) return;
+					if (stockResult.warning === 'backorder') {
+						stockWarningName = stockResult.name;
+					}
+				}
+
+				if (isNew) return saveNewOrder(type, data);
 				return localPatch({
 					document: latest,
 					data: {
@@ -127,12 +125,14 @@ export const useAddItemToOrder = () => {
 				() => undefined,
 				() => undefined
 			);
-			appendChains.current.set(recordId, tail);
-			void tail.then(() => {
-				if (appendChains.current.get(recordId) === tail) {
-					appendChains.current.delete(recordId);
-				}
-			});
+			if (!isNew) {
+				appendChains.current.set(recordId, tail);
+				void tail.then(() => {
+					if (appendChains.current.get(recordId) === tail) {
+						appendChains.current.delete(recordId);
+					}
+				});
+			}
 			const result = await append;
 			if (stockWarningName !== null) showBackorderWarning(stockWarningName);
 			return result;
