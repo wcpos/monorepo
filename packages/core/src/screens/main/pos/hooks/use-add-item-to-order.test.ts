@@ -87,7 +87,10 @@ describe('useAddItemToOrder', () => {
 		const residentPayloadProxy = new Proxy({ status: 'pos-open' }, {});
 		order.isNew = true;
 		order.toJSON = () => ({ uuid: 'order-uuid', billing: nestedProxy });
-		order.toMutableJSON = () => ({ uuid: 'order-uuid', billing: { first_name: 'Guest' } });
+		order.toMutableJSON = () => ({
+			uuid: 'order-uuid',
+			billing: { first_name: 'Guest' },
+		});
 		mockInsertEngineResident.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => {
 				serialize(payload);
@@ -160,32 +163,30 @@ describe('useAddItemToOrder', () => {
 			})
 		);
 		mockInsertEngineResident.mockImplementation(
-			async ({ payload }: { payload: Record<string, unknown> }) => {
-				const savedOrder = {
-					...(payload as { line_items: Record<string, unknown>[] }),
-					collection: { name: 'orders' },
-					getLatest: () => savedOrder,
-				};
-				return {
-					savedOrder,
-					toMutableJSON: () => ({ payload }),
-				};
-			}
+			async ({ payload }: { payload: Record<string, unknown> }) => ({
+				payload,
+				toMutableJSON: () => ({ payload }),
+			})
 		);
-		mockWrapEngineDocument.mockImplementation(
-			(_collection, resident: { savedOrder: Record<string, unknown> }) => resident.savedOrder
-		);
+		mockWrapEngineDocument.mockImplementation((_collection, resident: { payload: object }) => {
+			const savedOrder = {
+				...resident.payload,
+				getLatest: () => savedOrder,
+			};
+			return savedOrder;
+		});
 		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
 
-		const { result } = renderHook(() => useAddItemToOrder());
+		const { result: firstHook } = renderHook(() => useAddItemToOrder());
+		const { result: secondHook } = renderHook(() => useAddItemToOrder());
 		await act(async () => {
 			await Promise.all([
-				result.current.addItemToOrder('line_items', {
+				firstHook.current.addItemToOrder('line_items', {
 					product_id: 1,
 					quantity: 1,
 					meta_data: [],
 				} as never),
-				result.current.addItemToOrder('line_items', {
+				secondHook.current.addItemToOrder('line_items', {
 					product_id: 1,
 					quantity: 1,
 					meta_data: [],
@@ -215,15 +216,16 @@ describe('useAddItemToOrder', () => {
 			}
 		);
 
-		const { result } = renderHook(() => useAddItemToOrder());
+		const { result: firstHook } = renderHook(() => useAddItemToOrder());
+		const { result: secondHook } = renderHook(() => useAddItemToOrder());
 		let firstAppend!: Promise<unknown>;
 		let secondAppend!: Promise<unknown>;
 		act(() => {
-			firstAppend = result.current.addItemToOrder('line_items', {
+			firstAppend = firstHook.current.addItemToOrder('line_items', {
 				product_id: 1,
 				meta_data: [],
 			} as never);
-			secondAppend = result.current.addItemToOrder('line_items', {
+			secondAppend = secondHook.current.addItemToOrder('line_items', {
 				product_id: 1,
 				meta_data: [],
 			} as never);

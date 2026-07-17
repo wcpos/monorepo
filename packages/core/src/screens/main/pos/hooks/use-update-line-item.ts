@@ -6,8 +6,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { useLineItemData } from './use-line-item-data';
+import { enqueueOrderMutation } from './order-mutation-queue';
 import { updatePosDataMeta } from './utils';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { documentRecordId, useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -40,7 +41,7 @@ export const useUpdateLineItem = () => {
 	 *
 	 * @TODO - what if more than one property is changed at once?
 	 */
-	const updateLineItem = React.useCallback(
+	const applyLineItemChanges = React.useCallback(
 		async (uuid: string, changes: Changes, options?: UpdateLineItemOptions) => {
 			const order = currentOrder.getLatest();
 			const json = order.toMutableJSON();
@@ -128,6 +129,37 @@ export const useUpdateLineItem = () => {
 		]
 	);
 
+	const updateLineItem = React.useCallback(
+		async (uuid: string, changes: Changes, options?: UpdateLineItemOptions) => {
+			const recordId = documentRecordId(currentOrder.getLatest());
+			if (!recordId) throw new Error('Order is missing its uuid');
+			return enqueueOrderMutation(recordId, () => applyLineItemChanges(uuid, changes, options));
+		},
+		[applyLineItemChanges, currentOrder]
+	);
+
+	const incrementLineItem = React.useCallback(
+		async (uuid: string, quantity: number) => {
+			const recordId = documentRecordId(currentOrder.getLatest());
+			if (!recordId) throw new Error('Order is missing its uuid');
+			return enqueueOrderMutation(recordId, async () => {
+				const lineItem = currentOrder
+					.getLatest()
+					.toMutableJSON()
+					.line_items?.find((item) =>
+						item.meta_data?.some(
+							(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
+						)
+					);
+				if (!lineItem) return;
+				return applyLineItemChanges(uuid, {
+					quantity: (lineItem.quantity ?? 0) + quantity,
+				});
+			});
+		},
+		[applyLineItemChanges, currentOrder]
+	);
+
 	/**
 	 *
 	 */
@@ -196,5 +228,5 @@ export const useUpdateLineItem = () => {
 		[calculateLineItemTaxesAndTotals, currentOrder, localPatch]
 	);
 
-	return { updateLineItem, splitLineItem };
+	return { updateLineItem, incrementLineItem, splitLineItem };
 };

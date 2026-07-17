@@ -129,6 +129,13 @@ export const useCartStockGuard = () => {
 					: await readStockDocument('variations', variationId)
 				: undefined;
 			const name = suppliedName ?? product.name ?? '';
+			if (variationId && !variation) {
+				cartLogger.warn(t('pos_products.out_of_stock', { name }), {
+					showToast: true,
+					context: { productId, variationId, reason: 'missing_stock_record' },
+				});
+				return { allowed: false, warning: null, available: null, name };
+			}
 			const existingCartQuantity = aggregateExistingCartQuantity({
 				lineItems,
 				productId,

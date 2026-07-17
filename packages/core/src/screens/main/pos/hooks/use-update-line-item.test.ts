@@ -16,6 +16,7 @@ jest.mock('uuid', () => ({
 const mockLocalPatch = jest.fn();
 const mockCheckCartStock = jest.fn();
 const mockShowBackorderWarning = jest.fn();
+let mockLineItemQuantity = 1;
 
 jest.mock('./use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({
@@ -34,28 +35,41 @@ jest.mock('../contexts/current-order', () => ({
 					line_items: [
 						{
 							meta_data: [
-								{ key: '_woocommerce_pos_uuid', value: '5aa605ce-325e-47c8-96a9-fef1c55ea5b7' },
+								{
+									key: '_woocommerce_pos_uuid',
+									value: '5aa605ce-325e-47c8-96a9-fef1c55ea5b7',
+								},
 							],
 						},
 						{
 							name: 'Item 1',
 							product_id: 1,
 							variation_id: 0,
-							quantity: 1,
+							quantity: mockLineItemQuantity,
 							price: 10,
 							subtotal: '10',
 							total: '10',
 							meta_data: [
-								{ key: '_woocommerce_pos_uuid', value: '23e108ca-63a7-469a-ad12-ed72e0d04be3' },
+								{
+									key: '_woocommerce_pos_uuid',
+									value: '23e108ca-63a7-469a-ad12-ed72e0d04be3',
+								},
 								{
 									key: '_woocommerce_pos_data',
-									value: JSON.stringify({ price: 10, regular_price: 10, tax_status: 'taxable' }),
+									value: JSON.stringify({
+										price: 10,
+										regular_price: 10,
+										tax_status: 'taxable',
+									}),
 								},
 							],
 						},
 						{
 							meta_data: [
-								{ key: '_woocommerce_pos_uuid', value: 'f5e3c8d3-7d6d-4a3b-8c1d-0c2a0d1b3c8d' },
+								{
+									key: '_woocommerce_pos_uuid',
+									value: 'f5e3c8d3-7d6d-4a3b-8c1d-0c2a0d1b3c8d',
+								},
 							],
 						},
 					],
@@ -67,6 +81,7 @@ jest.mock('../contexts/current-order', () => ({
 
 // Mock useLocalMutation
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
+	documentRecordId: () => 'order-uuid',
 	useLocalMutation: () => ({
 		localPatch: mockLocalPatch,
 	}),
@@ -109,6 +124,7 @@ jest.mock('./use-line-item-data', () => ({
 describe('useUpdateLineItem', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockLineItemQuantity = 1;
 		mockCheckCartStock.mockResolvedValue({
 			allowed: true,
 			warning: null,
@@ -165,6 +181,28 @@ describe('useUpdateLineItem', () => {
 		expect(mockShowBackorderWarning.mock.invocationCallOrder[0]).toBeGreaterThan(
 			mockLocalPatch.mock.invocationCallOrder[0]
 		);
+	});
+
+	it('atomically increments overlapping additions against the latest quantity', async () => {
+		mockLocalPatch.mockImplementation(
+			async ({ data }: { data: { line_items: { quantity?: number }[] } }) => {
+				mockLineItemQuantity = data.line_items[1]?.quantity ?? mockLineItemQuantity;
+				return { changes: data };
+			}
+		);
+		const { result } = renderHook(() => useUpdateLineItem());
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+
+		await act(async () => {
+			await Promise.all([
+				result.current.incrementLineItem(uuid, 1),
+				result.current.incrementLineItem(uuid, 1),
+			]);
+		});
+
+		expect(mockLocalPatch.mock.calls.map(([args]) => args.data.line_items[1].quantity)).toEqual([
+			2, 3,
+		]);
 	});
 
 	it('updates line item name correctly', async () => {

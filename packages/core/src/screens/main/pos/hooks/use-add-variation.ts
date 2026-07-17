@@ -32,7 +32,7 @@ interface MetaData {
 export const useAddVariation = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { currentOrder } = useCurrentOrder();
-	const { updateLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
@@ -60,9 +60,7 @@ export const useAddVariation = () => {
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, {
-							quantity: (matches[0].quantity ?? 0) + 1,
-						});
+						success = await incrementLineItem(uuid, 1);
 						if (success === false) return false;
 					}
 				}
@@ -105,7 +103,14 @@ export const useAddVariation = () => {
 				return false;
 			}
 		},
-		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
+		[
+			currentOrder,
+			incrementLineItem,
+			metaDataKeys,
+			calculateLineItemTaxesAndTotals,
+			addItemToOrder,
+			t,
+		]
 	);
 
 	return { addVariation };

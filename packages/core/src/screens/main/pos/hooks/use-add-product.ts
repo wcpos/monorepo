@@ -29,7 +29,7 @@ export const useAddProduct = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { currentOrder } = useCurrentOrder();
-	const { updateLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
@@ -69,9 +69,7 @@ export const useAddProduct = () => {
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, {
-							quantity: (matches[0].quantity ?? 0) + 1,
-						});
+						success = await incrementLineItem(uuid, 1);
 						if (success === false) return false;
 					}
 				}
@@ -112,7 +110,7 @@ export const useAddProduct = () => {
 		},
 		[
 			currentOrder,
-			updateLineItem,
+			incrementLineItem,
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,
 			addItemToOrder,

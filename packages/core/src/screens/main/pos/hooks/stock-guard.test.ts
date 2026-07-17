@@ -246,4 +246,32 @@ describe('useCartStockGuard', () => {
 			name: 'Deleted product',
 		});
 	});
+
+	it('fails closed when the enabled guard cannot load the variation record', async () => {
+		const { result } = renderHook(() => useCartStockGuard());
+		let stockResult;
+
+		await act(async () => {
+			stockResult = await result.current.checkCartStock({
+				lineItems: [],
+				productId: 10,
+				variationId: 11,
+				requestedQuantity: 1,
+				product: {
+					manage_stock: true,
+					stock_quantity: 5,
+					stock_status: 'instock',
+					backorders: 'no',
+				},
+				name: 'Deleted variation',
+			});
+		});
+
+		expect(stockResult).toEqual({
+			allowed: false,
+			warning: null,
+			available: null,
+			name: 'Deleted variation',
+		});
+	});
 });
