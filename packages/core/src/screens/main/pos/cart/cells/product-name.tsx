@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useObservableEagerState } from 'observable-hooks';
+
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -10,7 +12,9 @@ import { EditCartItemButton } from './edit-cart-item-button';
 import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
 import { EditableField } from '../../../components/editable-field';
+import { getStockRejectionForLine, stockRejection$ } from '../../hooks/stock-rejection';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -24,10 +28,29 @@ interface Props {
 /**
  *
  */
-export function ProductName({ row, column }: CellContext<Props, 'name'>) {
+export function ProductName({ row, column, table }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
+	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
+	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
+
+	/**
+	 * Highlight lines the server rejected at checkout, until the quantity no
+	 * longer exceeds what the server said was available (self-clearing).
+	 */
+	const rejectedItem = React.useMemo(
+		() =>
+			getStockRejectionForLine({
+				stockRejection,
+				orderUuid: currentOrder.uuid ?? '',
+				lineItems: table.options.data
+					.filter((line) => line.type === 'line_items')
+					.map((line) => line.item),
+				lineItem: item,
+			}),
+		[stockRejection, currentOrder.uuid, table.options.data, item]
+	);
 
 	/**
 	 * filter out the private meta data
@@ -59,6 +82,14 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 					<EditLineItem uuid={uuid} item={item} />
 				</EditCartItemButton>
 			</HStack>
+
+			{rejectedItem && (
+				<Text className="text-destructive text-xs font-semibold">
+					{rejectedItem.available === null
+						? t('common.out_of_stock')
+						: t('pos_cart.n_available', { quantity: rejectedItem.available })}
+				</Text>
+			)}
 
 			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
 

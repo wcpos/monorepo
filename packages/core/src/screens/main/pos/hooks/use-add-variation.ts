@@ -32,7 +32,7 @@ interface MetaData {
 export const useAddVariation = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { currentOrder } = useCurrentOrder();
-	const { updateLineItem } = useUpdateLineItem();
+	const { incrementLineItem } = useUpdateLineItem();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
@@ -52,15 +52,16 @@ export const useAddVariation = () => {
 			// always make sure we have the latest product document
 			const variation = variationDoc.getLatest();
 			const parent = parentDoc.getLatest();
+			const lineItems = currentOrder.getLatest().line_items ?? [];
 
 			// check if variation is already in order, if so increment quantity
 			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && parent.id !== 0) {
-				const lineItems = currentOrder.getLatest().line_items ?? [];
 				const matches = findByProductVariationID(lineItems, parent.id ?? 0, variation.id);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
+						success = await incrementLineItem(uuid, 1);
+						if (success === false) return false;
 					}
 				}
 			}
@@ -71,6 +72,7 @@ export const useAddVariation = () => {
 				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
 				success = await addItemToOrder('line_items', newLineItem);
+				if (success === false) return false;
 			}
 
 			// returned success should be the updated order
@@ -85,6 +87,7 @@ export const useAddVariation = () => {
 						orderId: currentOrder.id,
 					},
 				});
+				return true;
 			} else {
 				cartLogger.error(t('pos.error_adding_to_cart', { name: parent.name }), {
 					showToast: true,
@@ -97,9 +100,17 @@ export const useAddVariation = () => {
 						orderId: currentOrder.id,
 					},
 				});
+				return false;
 			}
 		},
-		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
+		[
+			currentOrder,
+			incrementLineItem,
+			metaDataKeys,
+			calculateLineItemTaxesAndTotals,
+			addItemToOrder,
+			t,
+		]
 	);
 
 	return { addVariation };
