@@ -9,6 +9,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
+import { serializeCartMutation } from './stock-guard';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
 	convertProductToLineItemWithoutTax,
@@ -52,7 +53,7 @@ export const useAddProduct = () => {
 	 *
 	 * NOTE: for the miscellaneous product we pass in an object!! Not a document
 	 */
-	const addProduct = React.useCallback(
+	const addProductToOrder = React.useCallback(
 		async (data: ProductDocument | { id: number; [key: string]: any }) => {
 			let success;
 			let product = data;
@@ -73,7 +74,12 @@ export const useAddProduct = () => {
 							product,
 							name: product.name,
 						})
-					: { allowed: true, warning: null, available: null, name: product.name ?? '' };
+					: {
+							allowed: true,
+							warning: null,
+							available: null,
+							name: product.name ?? '',
+						};
 			if (!stockResult.allowed) return;
 
 			// check if product is already in order, if so increment quantity
@@ -96,7 +102,9 @@ export const useAddProduct = () => {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
+				success = await addItemToOrder('line_items', newLineItem, {
+					skipStockGuard: true,
+				});
 			}
 
 			if (success && stockResult.warning === 'backorder') {
@@ -124,6 +132,7 @@ export const useAddProduct = () => {
 					},
 				});
 			}
+			return success;
 		},
 		[
 			currentOrder,
@@ -137,6 +146,13 @@ export const useAddProduct = () => {
 			t,
 			orderLogger,
 		]
+	);
+	const addProduct = React.useCallback(
+		(data: ProductDocument | { id: number; [key: string]: any }) =>
+			serializeCartMutation(currentOrder.uuid ?? String(currentOrder.id), () =>
+				addProductToOrder(data)
+			),
+		[addProductToOrder, currentOrder.id, currentOrder.uuid]
 	);
 
 	return { addProduct };

@@ -1,4 +1,32 @@
-import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './stock-guard';
+import {
+	aggregateExistingCartQuantity,
+	evaluateStockForCartChange,
+	serializeCartMutation,
+} from './stock-guard';
+
+describe('serializeCartMutation', () => {
+	it('runs mutations for the same order one at a time', async () => {
+		const values: number[] = [];
+		let releaseFirst!: () => void;
+		const firstMayFinish = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+
+		const first = serializeCartMutation('order-1', async () => {
+			await firstMayFinish;
+			values.push(1);
+		});
+		const second = serializeCartMutation('order-1', async () => {
+			values.push(2);
+		});
+
+		await Promise.resolve();
+		expect(values).toEqual([]);
+		releaseFirst();
+		await Promise.all([first, second]);
+		expect(values).toEqual([1, 2]);
+	});
+});
 
 describe('evaluateStockForCartChange', () => {
 	const managedProduct = {

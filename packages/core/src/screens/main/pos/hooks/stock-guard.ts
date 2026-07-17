@@ -35,6 +35,26 @@ interface AggregateExistingCartQuantityArgs {
 }
 
 const DECIMAL_PRECISION = 12;
+const cartMutationChains = new Map<string, Promise<void>>();
+
+export function serializeCartMutation<T>(
+	orderUuid: string,
+	mutation: () => Promise<T>
+): Promise<T> {
+	const previous = cartMutationChains.get(orderUuid) ?? Promise.resolve();
+	const result = previous.then(mutation);
+	const tail = result.then(
+		() => undefined,
+		() => undefined
+	);
+	cartMutationChains.set(orderUuid, tail);
+	void tail.then(() => {
+		if (cartMutationChains.get(orderUuid) === tail) {
+			cartMutationChains.delete(orderUuid);
+		}
+	});
+	return result;
+}
 
 function normalizeDecimal(value: number): number {
 	return Number(value.toFixed(DECIMAL_PRECISION));

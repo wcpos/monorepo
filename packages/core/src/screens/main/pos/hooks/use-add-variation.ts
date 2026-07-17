@@ -8,6 +8,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
+import { serializeCartMutation } from './stock-guard';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
 	convertVariationToLineItemWithoutTax,
@@ -43,7 +44,7 @@ export const useAddVariation = () => {
 	/**
 	 *
 	 */
-	const addVariation = React.useCallback(
+	const addVariationToOrder = React.useCallback(
 		async (
 			variationDoc: ProductVariationDocument,
 			parentDoc: ProductDocument,
@@ -66,7 +67,12 @@ export const useAddVariation = () => {
 							variation,
 							name: parent.name,
 						})
-					: { allowed: true, warning: null, available: null, name: parent.name ?? '' };
+					: {
+							allowed: true,
+							warning: null,
+							available: null,
+							name: parent.name ?? '',
+						};
 			if (!stockResult.allowed) return;
 
 			// check if variation is already in order, if so increment quantity
@@ -89,7 +95,9 @@ export const useAddVariation = () => {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
+				success = await addItemToOrder('line_items', newLineItem, {
+					skipStockGuard: true,
+				});
 			}
 
 			if (success && stockResult.warning === 'backorder') {
@@ -121,6 +129,7 @@ export const useAddVariation = () => {
 					},
 				});
 			}
+			return success;
 		},
 		[
 			currentOrder,
@@ -133,6 +142,13 @@ export const useAddVariation = () => {
 			stockGuardEnabled,
 			t,
 		]
+	);
+	const addVariation = React.useCallback(
+		(variationDoc: ProductVariationDocument, parentDoc: ProductDocument, metaData?: MetaData[]) =>
+			serializeCartMutation(currentOrder.uuid ?? String(currentOrder.id), () =>
+				addVariationToOrder(variationDoc, parentDoc, metaData)
+			),
+		[addVariationToOrder, currentOrder.id, currentOrder.uuid]
 	);
 
 	return { addVariation };
