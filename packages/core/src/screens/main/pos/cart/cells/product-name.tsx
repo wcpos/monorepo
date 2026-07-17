@@ -12,7 +12,8 @@ import { EditCartItemButton } from './edit-cart-item-button';
 import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
 import { EditableField } from '../../../components/editable-field';
-import { stockRejection$ } from '../../hooks/stock-rejection';
+import { useCurrentOrder } from '../../contexts/current-order';
+import { findActiveStockRejection, stockRejection$ } from '../../hooks/stock-rejection';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -29,7 +30,9 @@ interface Props {
  */
 export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
+	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
+	const lineItems = useObservableEagerState(currentOrder.line_items$!);
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
 
@@ -37,16 +40,16 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 	 * Highlight lines the server rejected at checkout, until the quantity no
 	 * longer exceeds what the server said was available (self-clearing).
 	 */
-	const rejectedItem = React.useMemo(() => {
-		const match = stockRejection?.items.find(
-			(rejected) =>
-				rejected.product_id === (item.product_id ?? 0) &&
-				rejected.variation_id === (item.variation_id ?? 0)
-		);
-		if (!match) return null;
-		if (match.available !== null && (item.quantity ?? 0) <= match.available) return null;
-		return match;
-	}, [stockRejection, item.product_id, item.variation_id, item.quantity]);
+	const rejectedItem = React.useMemo(
+		() =>
+			findActiveStockRejection({
+				stockRejection,
+				orderUuid: currentOrder.uuid ?? '',
+				lineItem: item,
+				lineItems: lineItems ?? [],
+			}),
+		[stockRejection, currentOrder.uuid, item, lineItems]
+	);
 
 	/**
 	 * filter out the private meta data
