@@ -225,7 +225,10 @@ export function useCheckoutSession(order: OrderDocument) {
 						wooIds,
 						forceRefresh: true,
 					});
-					handle.ready.finally(() => handle.release());
+					void handle.ready.then(
+						() => handle.release(),
+						() => handle.release()
+					);
 				}
 				return;
 			}
