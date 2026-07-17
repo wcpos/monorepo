@@ -117,6 +117,29 @@ describe('PaymentWebview fallback order refresh', () => {
 		});
 	});
 
+	it('routes structured stock errors through the shared rejection handler', async () => {
+		const onStockRejection = jest.fn(async () => true);
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const payload = {
+			code: 'wcpos_insufficient_stock',
+			data: { items: [{ product_id: 1, variation_id: 0, available: 0 }] },
+		};
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				onStockRejection={onStockRejection}
+			/>
+		);
+
+		await act(async () => {
+			await webViewProps.onMessage({ nativeEvent: { data: { payload } } });
+		});
+
+		expect(onStockRejection).toHaveBeenCalledWith(payload);
+		expect(logger.error).not.toHaveBeenCalled();
+	});
+
 	it('does not poll on the initial page load (payment cannot have completed yet)', async () => {
 		jest.useFakeTimers();
 		render(<PaymentWebview order={makeOrder()} setLoading={jest.fn()} />);

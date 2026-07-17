@@ -65,6 +65,7 @@ export function useCheckoutSession(order: OrderDocument) {
 	// Error raised by the checkout flow itself (set imperatively in handlers).
 	const [checkoutError, setError] = React.useState<string | null>(null);
 	const checkoutAttemptIdRef = React.useRef<string | null>(null);
+	const webviewErrorRef = React.useRef<unknown>(null);
 
 	const gatewayId = React.useMemo(() => order.payment_method || 'pos_cash', [order.payment_method]);
 	const {
@@ -118,6 +119,8 @@ export function useCheckoutSession(order: OrderDocument) {
 
 	const startCheckout = React.useCallback(async () => {
 		if (!order.id || !gatewayResolved) return;
+		const webviewError = webviewErrorRef.current;
+		webviewErrorRef.current = null;
 		setLoading(true);
 		setError(null);
 
@@ -126,12 +129,13 @@ export function useCheckoutSession(order: OrderDocument) {
 			const gateways = await refetch();
 			resolvedGateway = gateways.find((item) => item.id === gatewayId) || null;
 		}
-		if (!resolvedGateway || !shouldUseContractCheckout(resolvedGateway)) {
+		if (!resolvedGateway || (!webviewError && !shouldUseContractCheckout(resolvedGateway))) {
 			setLoading(false);
 			return;
 		}
 
 		try {
+			if (webviewError) throw webviewError;
 			if (!checkoutAttemptIdRef.current) {
 				checkoutAttemptIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 			}
@@ -227,8 +231,9 @@ export function useCheckoutSession(order: OrderDocument) {
 					});
 					void handle.ready.finally(() => handle.release()).catch(() => undefined);
 				}
-				return;
+				return true;
 			}
+			if (webviewError) return false;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
 			checkoutLogger.error(message, {
@@ -244,6 +249,13 @@ export function useCheckoutSession(order: OrderDocument) {
 			setLoading(false);
 		}
 	}, [completeOrderFlow, gateway, gatewayId, gatewayResolved, http, manager, order, refetch, t]);
+	const handleWebviewError = React.useCallback(
+		(error: unknown) => {
+			webviewErrorRef.current = error;
+			return startCheckout();
+		},
+		[startCheckout]
+	);
 
 	const mode = !gatewayResolved
 		? 'pending'
@@ -259,5 +271,6 @@ export function useCheckoutSession(order: OrderDocument) {
 		gatewayId,
 		mode,
 		startCheckout,
+		handleWebviewError,
 	};
 }

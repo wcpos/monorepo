@@ -68,7 +68,7 @@ describe('Checkout', () => {
 			items: [{ product_id: 1, variation_id: 0, available: 0 }],
 		});
 		mockUseCheckoutSession.mockReturnValue({
-			mode: 'contract',
+			mode: 'webview',
 			error: 'insufficient_stock',
 			startCheckout: jest.fn(),
 		});
@@ -76,6 +76,7 @@ describe('Checkout', () => {
 		render(<Checkout resource={{} as never} />);
 
 		expect(screen.queryByText('common.cancel')).toBeNull();
+		expect(screen.getByText('pos_checkout.insufficient_stock_message')).toBeTruthy();
 		expect(screen.getByText('pos_checkout.return_to_cart')).toBeTruthy();
 	});
 });

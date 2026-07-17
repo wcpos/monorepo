@@ -63,7 +63,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	const t = useT();
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [legacyLoading, setLegacyLoading] = React.useState(false);
-	const { loading, mode, error, startCheckout } = useCheckoutSession(
+	const { loading, mode, error, startCheckout, handleWebviewError } = useCheckoutSession(
 		order as import('@wcpos/database').OrderDocument
 	);
 	const showStockRejection =
@@ -109,8 +109,13 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
-						{mode === 'webview' ? (
-							<PaymentWebview order={order} ref={webViewRef} setLoading={setLegacyLoading} />
+						{mode === 'webview' && !showStockRejection ? (
+							<PaymentWebview
+								order={order}
+								ref={webViewRef}
+								setLoading={setLegacyLoading}
+								onStockRejection={handleWebviewError}
+							/>
 						) : (
 							<VStack space="sm">
 								{mode === 'pending' ? (
