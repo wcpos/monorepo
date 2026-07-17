@@ -50,6 +50,7 @@ export const useAddVariation = () => {
 			metaData?: MetaData[]
 		) => {
 			let success;
+			let updatedExistingLine = false;
 
 			// always make sure we have the latest product document
 			const variation = variationDoc.getLatest();
@@ -80,6 +81,7 @@ export const useAddVariation = () => {
 							{ quantity: (matches[0].quantity ?? 0) + 1 },
 							{ skipStockGuard: true }
 						);
+						updatedExistingLine = Boolean(success);
 					}
 				}
 			}
@@ -89,10 +91,10 @@ export const useAddVariation = () => {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
+				success = await addItemToOrder('line_items', newLineItem);
 			}
 
-			if (success && stockResult.warning === 'backorder') {
+			if (updatedExistingLine && stockResult.warning === 'backorder') {
 				showBackorderWarning(stockResult.name);
 			}
 

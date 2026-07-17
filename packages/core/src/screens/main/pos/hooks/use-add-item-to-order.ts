@@ -72,26 +72,25 @@ export const useAddItemToOrder = () => {
 		async (type: CartLineType, data: CartLine, options?: AddItemOptions) => {
 			const order = currentOrder.getLatest();
 			let stockWarningName: string | null = null;
-
-			if (
+			const shouldCheckStock =
 				type === 'line_items' &&
 				stockGuardEnabled &&
 				(data as LineItem).product_id !== 0 &&
-				!options?.skipStockGuard
-			) {
+				!options?.skipStockGuard;
+			const checkStock = async (lineItems: LineItem[]) => {
 				const lineItem = data as LineItem;
 				const stockResult = await checkCartStock({
-					lineItems: order.line_items ?? [],
+					lineItems,
 					productId: lineItem.product_id ?? 0,
 					variationId: lineItem.variation_id ?? 0,
 					requestedQuantity: lineItem.quantity ?? 1,
 					name: lineItem.name,
 				});
-				if (!stockResult.allowed) return;
 				if (stockResult.warning === 'backorder') {
 					stockWarningName = stockResult.name;
 				}
-			}
+				return stockResult.allowed;
+			};
 
 			// make sure items have a uuid before saving
 			data.meta_data = data.meta_data || [];
@@ -106,6 +105,7 @@ export const useAddItemToOrder = () => {
 			}
 
 			if ((order as unknown as { isNew?: boolean }).isNew) {
+				if (shouldCheckStock && !(await checkStock(order.line_items ?? []))) return;
 				const result = await saveNewOrder(type, data);
 				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
 				return result;
@@ -116,6 +116,7 @@ export const useAddItemToOrder = () => {
 			const previous = appendChains.current.get(recordId) ?? Promise.resolve();
 			const append = previous.then(async () => {
 				const latest = order.getLatest();
+				if (shouldCheckStock && !(await checkStock(latest.line_items ?? []))) return;
 				return localPatch({
 					document: latest,
 					data: {

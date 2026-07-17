@@ -12,10 +12,11 @@ const mockSetCurrentOrderID = jest.fn();
 const mockInsertEngineResident = jest.fn();
 const mockWrite = jest.fn();
 const mockCheckCartStock = jest.fn();
+let mockStockGuardEnabled = false;
 
 jest.mock('./use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({
-		stockGuardEnabled: false,
+		stockGuardEnabled: mockStockGuardEnabled,
 		checkCartStock: mockCheckCartStock,
 		showBackorderWarning: jest.fn(),
 	}),
@@ -62,6 +63,7 @@ jest.mock('../contexts/current-order', () => ({
 describe('useAddItemToOrder', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockStockGuardEnabled = false;
 		mockCheckCartStock.mockResolvedValue({
 			allowed: true,
 			warning: null,
@@ -138,5 +140,41 @@ describe('useAddItemToOrder', () => {
 		await act(async () => Promise.all([firstAppend, secondAppend]));
 
 		expect(order.line_items.map((item) => item.product_id)).toEqual([1, 2]);
+	});
+
+	it('checks stock against the latest cart inside the append chain', async () => {
+		mockStockGuardEnabled = true;
+		mockCheckCartStock.mockImplementation(
+			async ({ lineItems }: { lineItems: Record<string, unknown>[] }) => ({
+				allowed: lineItems.length === 0,
+				warning: null,
+				available: 1,
+				name: 'Product',
+			})
+		);
+		mockLocalPatch.mockImplementation(
+			async ({ data }: { data: { line_items: Record<string, unknown>[] } }) => {
+				order.line_items = data.line_items;
+				return { changes: data, document: order };
+			}
+		);
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		const first = { product_id: 1, quantity: 1, meta_data: [] };
+		const second = { product_id: 1, quantity: 1, meta_data: [] };
+
+		await act(async () => {
+			await Promise.all([
+				result.current.addItemToOrder('line_items', first as never),
+				result.current.addItemToOrder('line_items', second as never),
+			]);
+		});
+
+		expect(mockCheckCartStock).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({ lineItems: [expect.objectContaining({ product_id: 1 })] })
+		);
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(order.line_items).toHaveLength(1);
 	});
 });

@@ -55,6 +55,7 @@ export const useAddProduct = () => {
 	const addProduct = React.useCallback(
 		async (data: ProductDocument | { id: number; [key: string]: any }) => {
 			let success;
+			let updatedExistingLine = false;
 			let product = data;
 
 			// always make sure we have the latest product document
@@ -87,6 +88,7 @@ export const useAddProduct = () => {
 							{ quantity: (matches[0].quantity ?? 0) + 1 },
 							{ skipStockGuard: true }
 						);
+						updatedExistingLine = Boolean(success);
 					}
 				}
 			}
@@ -96,10 +98,10 @@ export const useAddProduct = () => {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
+				success = await addItemToOrder('line_items', newLineItem);
 			}
 
-			if (success && stockResult.warning === 'backorder') {
+			if (updatedExistingLine && stockResult.warning === 'backorder') {
 				showBackorderWarning(stockResult.name);
 			}
 
