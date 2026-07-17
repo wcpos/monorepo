@@ -5,7 +5,7 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
-import { useAddItemToOrder } from './use-add-item-to-order';
+import { serializeOrderMutation, useAddItemToOrder } from './use-add-item-to-order';
 
 const mockLocalPatch = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -79,7 +79,10 @@ describe('useAddItemToOrder', () => {
 		const residentPayloadProxy = new Proxy({ status: 'pos-open' }, {});
 		order.isNew = true;
 		order.toJSON = () => ({ uuid: 'order-uuid', billing: nestedProxy });
-		order.toMutableJSON = () => ({ uuid: 'order-uuid', billing: { first_name: 'Guest' } });
+		order.toMutableJSON = () => ({
+			uuid: 'order-uuid',
+			billing: { first_name: 'Guest' },
+		});
 		mockInsertEngineResident.mockImplementation(
 			async ({ payload }: { payload: Record<string, unknown> }) => {
 				serialize(payload);
@@ -138,5 +141,31 @@ describe('useAddItemToOrder', () => {
 		await act(async () => Promise.all([firstAppend, secondAppend]));
 
 		expect(order.line_items.map((item) => item.product_id)).toEqual([1, 2]);
+	});
+
+	it('serializes stock checks and mutations across add hook callers', async () => {
+		let releaseFirst!: () => void;
+		const firstMayFinish = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		const calls: string[] = [];
+
+		const first = serializeOrderMutation('order-uuid', async () => {
+			calls.push('first:start');
+			await firstMayFinish;
+			calls.push('first:end');
+			return true;
+		});
+		const second = serializeOrderMutation('order-uuid', async () => {
+			calls.push('second');
+			return true;
+		});
+
+		await Promise.resolve();
+		expect(calls).toEqual(['first:start']);
+		releaseFirst();
+		await Promise.all([first, second]);
+
+		expect(calls).toEqual(['first:start', 'first:end', 'second']);
 	});
 });

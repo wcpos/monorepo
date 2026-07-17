@@ -6,7 +6,7 @@ import { isRxDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { useAddItemToOrder } from './use-add-item-to-order';
+import { serializeOrderMutation, useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { useUpdateLineItem } from './use-update-line-item';
@@ -54,7 +54,6 @@ export const useAddProduct = () => {
 	 */
 	const addProduct = React.useCallback(
 		async (data: ProductDocument | { id: number; [key: string]: any }) => {
-			let success;
 			let product = data;
 
 			// always make sure we have the latest product document
@@ -63,67 +62,78 @@ export const useAddProduct = () => {
 				product = latest.toMutableJSON();
 			}
 
-			const lineItems = currentOrder.getLatest().line_items ?? [];
-			const stockResult =
-				stockGuardEnabled && (product.id ?? 0) !== 0
-					? await checkCartStock({
-							lineItems,
-							productId: product.id ?? 0,
-							requestedQuantity: 1,
-							product,
-							name: product.name,
-						})
-					: { allowed: true, warning: null, available: null, name: product.name ?? '' };
-			if (!stockResult.allowed) return;
+			return serializeOrderMutation(currentOrder.uuid ?? '', async () => {
+				let success;
+				const lineItems = currentOrder.getLatest().line_items ?? [];
+				const stockResult =
+					stockGuardEnabled && (product.id ?? 0) !== 0
+						? await checkCartStock({
+								lineItems,
+								productId: product.id ?? 0,
+								requestedQuantity: 1,
+								product,
+								name: product.name,
+							})
+						: {
+								allowed: true,
+								warning: null,
+								available: null,
+								name: product.name ?? '',
+							};
+				if (!stockResult.allowed) return false;
 
-			// check if product is already in order, if so increment quantity
-			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && product.id !== 0) {
-				const matches = findByProductVariationID(lineItems, product.id ?? 0);
-				if (matches && matches.length === 1) {
-					const uuid = getUuidFromLineItem(matches[0]);
-					if (uuid) {
-						success = await updateLineItem(
-							uuid,
-							{ quantity: (matches[0].quantity ?? 0) + 1 },
-							{ skipStockGuard: true }
-						);
+				// check if product is already in order, if so increment quantity
+				if (!(currentOrder as unknown as { isNew?: boolean }).isNew && product.id !== 0) {
+					const matches = findByProductVariationID(lineItems, product.id ?? 0);
+					if (matches && matches.length === 1) {
+						const uuid = getUuidFromLineItem(matches[0]);
+						if (uuid) {
+							success = await updateLineItem(
+								uuid,
+								{ quantity: (matches[0].quantity ?? 0) + 1 },
+								{ skipStockGuard: true }
+							);
+						}
 					}
 				}
-			}
 
-			// if product is not in order, add it
-			if (!success) {
-				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
-				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
-				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
-			}
+				// if product is not in order, add it
+				if (!success) {
+					const keys = metaDataKeys ? metaDataKeys.split(',') : [];
+					let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
+					newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
+					success = await addItemToOrder('line_items', newLineItem, {
+						skipStockGuard: true,
+					});
+				}
 
-			if (success && stockResult.warning === 'backorder') {
-				showBackorderWarning(stockResult.name);
-			}
+				if (success && stockResult.warning === 'backorder') {
+					showBackorderWarning(stockResult.name);
+				}
 
-			// returned success should be the updated order
-			if (success) {
-				orderLogger.success(t('common.added_to_cart', { name: product.name }), {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						productId: product.id,
-						productName: product.name,
-					},
-				});
-			} else {
-				orderLogger.error(t('pos.error_adding_to_cart', { name: product.name }), {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						productId: product.id,
-						productName: product.name,
-					},
-				});
-			}
+				// returned success should be the updated order
+				if (success) {
+					orderLogger.success(t('common.added_to_cart', { name: product.name }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							productId: product.id,
+							productName: product.name,
+						},
+					});
+				} else {
+					orderLogger.error(t('pos.error_adding_to_cart', { name: product.name }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							productId: product.id,
+							productName: product.name,
+						},
+					});
+				}
+				return Boolean(success);
+			});
 		},
 		[
 			currentOrder,

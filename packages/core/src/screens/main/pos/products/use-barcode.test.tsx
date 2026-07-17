@@ -104,7 +104,11 @@ function response(body: unknown): Response {
 }
 
 function onlineResponse(input?: {
-	match?: { id: number; type: 'product' | 'variation'; parent_id?: number } | null;
+	match?: {
+		id: number;
+		type: 'product' | 'variation';
+		parent_id?: number;
+	} | null;
 	ambiguous?: { id: number; type: 'product' | 'variation' }[];
 }): Response {
 	const match = input?.match ?? null;
@@ -222,9 +226,15 @@ describe('useBarcode online escalation', () => {
 		}));
 		mockSubscriptionCallback = undefined;
 		mockEngineRequire.mockImplementation(() => ({
-			ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
+			ready: Promise.resolve({
+				action: 'fetched',
+				missingRecordIds: [],
+				reason: 'test',
+			}),
 			release: jest.fn(),
 		}));
+		mockAddProduct.mockResolvedValue(true);
+		mockAddVariation.mockResolvedValue(true);
 	});
 
 	it.each(['sku', 'barcode', 'global_unique_id'] as const)(
@@ -246,7 +256,10 @@ describe('useBarcode online escalation', () => {
 			expect(product.stock_status).toBe('instock');
 			expect(product.collection.name).toBe('products');
 			expect(product.isInstanceOfRxDocument).toBe(true);
-			expect(product.getLatest().toMutableJSON()).toMatchObject({ id: 41, name: 'Keyboard' });
+			expect(product.getLatest().toMutableJSON()).toMatchObject({
+				id: 41,
+				name: 'Keyboard',
+			});
 			expect(mockClearSearch).toHaveBeenCalledTimes(1);
 			expect(mockSetSearch).not.toHaveBeenCalled();
 		}
@@ -263,7 +276,9 @@ describe('useBarcode online escalation', () => {
 		expect(mockAddProduct).not.toHaveBeenCalled();
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
 			expect.any(String),
-			expect.objectContaining({ toast: { text2: 'common.product_not_found_online' } })
+			expect.objectContaining({
+				toast: { text2: 'common.product_not_found_online' },
+			})
 		);
 	});
 
@@ -302,7 +317,9 @@ describe('useBarcode online escalation', () => {
 		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
-				toast: { text2: 'pos_products.out_of_stock:{"name":"Keyboard / Black"}' },
+				toast: {
+					text2: 'pos_products.out_of_stock:{"name":"Keyboard / Black"}',
+				},
 			})
 		);
 	});
@@ -321,13 +338,38 @@ describe('useBarcode online escalation', () => {
 		expect(mockBarcodeLogger.warn).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		['product', () => engineProducts.push(productDocument()), mockAddProduct],
+		[
+			'variation',
+			() => {
+				engineProducts.push(productDocument(41, 'PARENT'));
+				engineVariations.push(variationDocument());
+			},
+			mockAddVariation,
+		],
+	])('does not report a blocked %s barcode add as successful', async (_type, arrange, add) => {
+		arrange();
+		add.mockResolvedValue(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
+	});
+
 	it('target-requires a missing parent for a local variation before adding it', async () => {
 		const parent = productDocument(41, 'PARENT');
 		engineVariations.push(variationDocument());
 		mockEngineRequire.mockImplementation(() => {
 			engineProducts.push(parent);
 			return {
-				ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
+				ready: Promise.resolve({
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: 'test',
+				}),
 				release: jest.fn(),
 			};
 		});
@@ -383,7 +425,11 @@ describe('useBarcode online escalation', () => {
 		mockEngineRequire.mockImplementation(() => {
 			product.payload.barcode = 'ABC';
 			return {
-				ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
+				ready: Promise.resolve({
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: 'test',
+				}),
 				release: jest.fn(),
 			};
 		});
@@ -420,7 +466,11 @@ describe('useBarcode online escalation', () => {
 				if (requirement.collection === 'products') engineProducts.push(parent);
 				if (requirement.collection === 'variations') engineVariations.push(variation);
 				return {
-					ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
+					ready: Promise.resolve({
+						action: 'fetched',
+						missingRecordIds: [],
+						reason: 'test',
+					}),
 					release: jest.fn(),
 				};
 			}
@@ -469,7 +519,9 @@ describe('useBarcode online escalation', () => {
 		expect(mockAddProduct).not.toHaveBeenCalled();
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
 			expect.any(String),
-			expect.objectContaining({ toast: { text2: 'common.product_not_found_online' } })
+			expect.objectContaining({
+				toast: { text2: 'common.product_not_found_online' },
+			})
 		);
 	});
 
@@ -542,16 +594,25 @@ describe('useBarcode online escalation', () => {
 
 		expect(mockEngineRequire).toHaveBeenNthCalledWith(
 			1,
-			expect.objectContaining({ collection: 'products', wooIds: [1, 3, 5, 7, 9] })
+			expect.objectContaining({
+				collection: 'products',
+				wooIds: [1, 3, 5, 7, 9],
+			})
 		);
 		expect(mockEngineRequire).toHaveBeenNthCalledWith(
 			2,
-			expect.objectContaining({ collection: 'variations', wooIds: [2, 4, 6, 8, 10] })
+			expect.objectContaining({
+				collection: 'variations',
+				wooIds: [2, 4, 6, 8, 10],
+			})
 		);
 		expect(mockBarcodeLogger.debug).toHaveBeenCalledWith(
 			expect.stringContaining('capped'),
 			expect.objectContaining({
-				context: expect.objectContaining({ candidatesCount: 12, hydratedCandidatesCount: 10 }),
+				context: expect.objectContaining({
+					candidatesCount: 12,
+					hydratedCandidatesCount: 10,
+				}),
 			})
 		);
 	});
@@ -568,7 +629,10 @@ describe('useBarcode online escalation', () => {
 				ready: Promise.reject(new Error('offline')),
 				release: jest.fn(),
 			}))
-			.mockImplementationOnce(() => ({ ready: Promise.resolve(), release: jest.fn() }));
+			.mockImplementationOnce(() => ({
+				ready: Promise.resolve(),
+				release: jest.fn(),
+			}));
 		renderBarcodeHook();
 
 		await act(async () => scan());
@@ -576,7 +640,9 @@ describe('useBarcode online escalation', () => {
 		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
 			expect.any(String),
-			expect.objectContaining({ toast: { text2: 'common.barcode_online_lookup_failed' } })
+			expect.objectContaining({
+				toast: { text2: 'common.barcode_online_lookup_failed' },
+			})
 		);
 		for (const result of mockEngineRequire.mock.results) {
 			expect(result.value.release).toHaveBeenCalledTimes(1);
@@ -613,7 +679,9 @@ describe('useBarcode online escalation', () => {
 			expect(fetchSignal?.aborted).toBe(true);
 			expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
 				expect.any(String),
-				expect.objectContaining({ toast: { text2: 'common.barcode_online_lookup_failed' } })
+				expect.objectContaining({
+					toast: { text2: 'common.barcode_online_lookup_failed' },
+				})
 			);
 			expect(mockSetSearch).toHaveBeenCalledWith('ABC');
 		} finally {

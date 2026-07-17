@@ -303,6 +303,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			return;
 		}
 
+		let added: boolean;
 		if (isVariationDocument(product)) {
 			/**
 			 * Hack: we need to get the parent product
@@ -354,10 +355,11 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				}
 			);
 
-			addVariation(product, parent, metaData);
+			added = await addVariation(product, parent, metaData);
 		} else {
-			addProduct(product);
+			added = await addProduct(product);
 		}
+		if (!added) return;
 
 		/**
 		 * Show success message
