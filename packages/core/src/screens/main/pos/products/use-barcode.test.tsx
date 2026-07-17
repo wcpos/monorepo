@@ -225,6 +225,31 @@ describe('useBarcode online escalation', () => {
 			ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
 			release: jest.fn(),
 		}));
+		mockAddProduct.mockResolvedValue(true);
+		mockAddVariation.mockResolvedValue(true);
+	});
+
+	it('does not report success when the cart guard blocks a product', async () => {
+		engineProducts.push(productDocument());
+		mockAddProduct.mockResolvedValue(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
+	});
+
+	it('does not report success when the cart guard blocks a variation', async () => {
+		engineProducts.push(productDocument(41, 'PARENT'));
+		engineVariations.push(variationDocument());
+		mockAddVariation.mockResolvedValue(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
 	});
 
 	it.each(['sku', 'barcode', 'global_unique_id'] as const)(

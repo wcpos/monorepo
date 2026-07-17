@@ -80,7 +80,7 @@ export const useAddProduct = () => {
 							available: null,
 							name: product.name ?? '',
 						};
-			if (!stockResult.allowed) return;
+			if (!stockResult.allowed) return false;
 
 			// check if product is already in order, if so increment quantity
 			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && product.id !== 0) {
@@ -132,7 +132,7 @@ export const useAddProduct = () => {
 					},
 				});
 			}
-			return success;
+			return Boolean(success);
 		},
 		[
 			currentOrder,
