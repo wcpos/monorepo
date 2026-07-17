@@ -197,6 +197,8 @@ describe('useBarcode online escalation', () => {
 		]) {
 			mock.mockReset();
 		}
+		mockAddProduct.mockResolvedValue(true);
+		mockAddVariation.mockResolvedValue(true);
 		engineProducts.length = 0;
 		engineVariations.length = 0;
 		mockFindEngineProducts.mockImplementation(async () => engineProducts);
@@ -319,6 +321,31 @@ describe('useBarcode online escalation', () => {
 
 		expect(mockAddVariation).toHaveBeenCalledTimes(1);
 		expect(mockBarcodeLogger.warn).not.toHaveBeenCalled();
+	});
+
+	it('does not report success when a product add is blocked', async () => {
+		engineProducts.push(productDocument());
+		mockAddProduct.mockResolvedValueOnce(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
+	});
+
+	it('does not report success when a variation add is blocked', async () => {
+		engineProducts.push(productDocument(41, 'PARENT'));
+		engineVariations.push(variationDocument());
+		mockAddVariation.mockResolvedValueOnce(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddVariation).toHaveBeenCalledTimes(1);
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
 	});
 
 	it('target-requires a missing parent for a local variation before adding it', async () => {
