@@ -17,6 +17,7 @@ jest.mock('observable-hooks', () => ({
 }));
 
 jest.mock('rxdb', () => ({ isRxDocument: () => false }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
 
 jest.mock('./hooks/use-checkout-session', () => ({
 	useCheckoutSession: (...args: unknown[]) => mockUseCheckoutSession(...args),

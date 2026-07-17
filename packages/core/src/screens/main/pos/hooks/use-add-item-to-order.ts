@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryManager } from '@wcpos/query';
 
+import { useCartStockGuard } from './use-cart-stock-guard';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import {
 	documentRecordId,
@@ -19,10 +20,15 @@ type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_li
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 
+interface AddItemOptions {
+	skipStockGuard?: boolean;
+}
+
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const manager = useQueryManager();
 	const { localPatch } = useLocalMutation();
+	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const appendChains = React.useRef(new Map<string, Promise<void>>());
 
 	/**
@@ -63,8 +69,29 @@ export const useAddItemToOrder = () => {
 	 * NOTE: If I don't include getLatest(), the populate() will return old data
 	 */
 	const addItemToOrder = React.useCallback(
-		async (type: CartLineType, data: CartLine) => {
+		async (type: CartLineType, data: CartLine, options?: AddItemOptions) => {
 			const order = currentOrder.getLatest();
+			let stockWarningName: string | null = null;
+
+			if (
+				type === 'line_items' &&
+				stockGuardEnabled &&
+				(data as LineItem).product_id !== 0 &&
+				!options?.skipStockGuard
+			) {
+				const lineItem = data as LineItem;
+				const stockResult = await checkCartStock({
+					lineItems: order.line_items ?? [],
+					productId: lineItem.product_id ?? 0,
+					variationId: lineItem.variation_id ?? 0,
+					requestedQuantity: lineItem.quantity ?? 1,
+					name: lineItem.name,
+				});
+				if (!stockResult.allowed) return;
+				if (stockResult.warning === 'backorder') {
+					stockWarningName = stockResult.name;
+				}
+			}
 
 			// make sure items have a uuid before saving
 			data.meta_data = data.meta_data || [];
@@ -79,7 +106,9 @@ export const useAddItemToOrder = () => {
 			}
 
 			if ((order as unknown as { isNew?: boolean }).isNew) {
-				return saveNewOrder(type, data);
+				const result = await saveNewOrder(type, data);
+				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
+				return result;
 			}
 
 			const recordId = documentRecordId(order);
@@ -104,9 +133,18 @@ export const useAddItemToOrder = () => {
 					appendChains.current.delete(recordId);
 				}
 			});
-			return append;
+			const result = await append;
+			if (stockWarningName !== null) showBackorderWarning(stockWarningName);
+			return result;
 		},
-		[currentOrder, localPatch, saveNewOrder]
+		[
+			checkCartStock,
+			currentOrder,
+			localPatch,
+			saveNewOrder,
+			showBackorderWarning,
+			stockGuardEnabled,
+		]
 	);
 
 	return { addItemToOrder };

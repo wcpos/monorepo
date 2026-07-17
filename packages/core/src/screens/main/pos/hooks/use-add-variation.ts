@@ -7,6 +7,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
+import { useCartStockGuard } from './use-cart-stock-guard';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
 	convertVariationToLineItemWithoutTax,
@@ -37,6 +38,7 @@ export const useAddVariation = () => {
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
+	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 
 	/**
 	 *
@@ -52,15 +54,32 @@ export const useAddVariation = () => {
 			// always make sure we have the latest product document
 			const variation = variationDoc.getLatest();
 			const parent = parentDoc.getLatest();
+			const lineItems = currentOrder.getLatest().line_items ?? [];
+			const stockResult =
+				stockGuardEnabled && (parent.id ?? 0) !== 0
+					? await checkCartStock({
+							lineItems,
+							productId: parent.id ?? 0,
+							variationId: variation.id,
+							requestedQuantity: 1,
+							product: parent,
+							variation,
+							name: parent.name,
+						})
+					: { allowed: true, warning: null, available: null, name: parent.name ?? '' };
+			if (!stockResult.allowed) return;
 
 			// check if variation is already in order, if so increment quantity
 			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && parent.id !== 0) {
-				const lineItems = currentOrder.getLatest().line_items ?? [];
 				const matches = findByProductVariationID(lineItems, parent.id ?? 0, variation.id);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
+						success = await updateLineItem(
+							uuid,
+							{ quantity: (matches[0].quantity ?? 0) + 1 },
+							{ skipStockGuard: true }
+						);
 					}
 				}
 			}
@@ -70,7 +89,11 @@ export const useAddVariation = () => {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem);
+				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
+			}
+
+			if (success && stockResult.warning === 'backorder') {
+				showBackorderWarning(stockResult.name);
 			}
 
 			// returned success should be the updated order
@@ -99,7 +122,17 @@ export const useAddVariation = () => {
 				});
 			}
 		},
-		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
+		[
+			currentOrder,
+			updateLineItem,
+			metaDataKeys,
+			calculateLineItemTaxesAndTotals,
+			addItemToOrder,
+			checkCartStock,
+			showBackorderWarning,
+			stockGuardEnabled,
+			t,
+		]
 	);
 
 	return { addVariation };

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useRouter } from 'expo-router';
 import {
 	ObservableResource,
 	useObservableEagerState,
@@ -25,6 +26,7 @@ import { PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
 import { useT } from '../../../../contexts/translations';
+import { stockRejection$ } from '../hooks/stock-rejection';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -56,12 +58,19 @@ export function Checkout({ resource }: Props) {
 
 function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDocument }) {
 	const orderNumber = useObservableEagerState(order.number$!);
+	const stockRejection = useObservableEagerState(stockRejection$);
+	const router = useRouter();
 	const t = useT();
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [legacyLoading, setLegacyLoading] = React.useState(false);
 	const { loading, mode, error, startCheckout } = useCheckoutSession(
 		order as import('@wcpos/database').OrderDocument
 	);
+	const showStockRejection =
+		error === 'insufficient_stock' &&
+		stockRejection !== null &&
+		stockRejection.orderUuid === order.uuid &&
+		stockRejection.items.length > 0;
 
 	/**
 	 *
@@ -109,25 +118,59 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 								) : (
 									<Text>{t('pos_checkout.amount_to_pay')}</Text>
 								)}
-								{error && <Text className="text-destructive">{error}</Text>}
+								{showStockRejection ? (
+									<VStack
+										space="xs"
+										className="border-destructive bg-destructive/10 rounded-md border p-3"
+									>
+										<Text className="text-destructive font-semibold">
+											{t('pos_checkout.insufficient_stock_message')}
+										</Text>
+										{stockRejection!.items.map((item) => (
+											<Text
+												key={`${item.product_id}-${item.variation_id}`}
+												className="text-destructive text-sm"
+												decodeHtml
+											>
+												{item.available === null
+													? t('pos_products.out_of_stock', { name: item.name ?? '' })
+													: t('pos_cart.only_n_available', {
+															quantity: item.available,
+															name: item.name ?? '',
+														})}
+											</Text>
+										))}
+									</VStack>
+								) : (
+									error && <Text className="text-destructive">{error}</Text>
+								)}
 							</VStack>
 						)}
 					</VStack>
 				</ModalBody>
 				<ModalFooter>
 					<ModalClose testID="cancel-checkout-button">{t('common.cancel')}</ModalClose>
-					<ModalAction
-						testID="process-payment-button"
-						onPress={handleProcessPayment}
-						loading={mode === 'contract' ? loading : legacyLoading}
-						disabled={
-							mode === 'pending' ||
-							error === 'payment_gateways_fetch_failed' ||
-							(mode === 'contract' && loading)
-						}
-					>
-						{t('pos_checkout.process_payment')}
-					</ModalAction>
+					{showStockRejection ? (
+						<ModalAction
+							testID="return-to-cart-button"
+							onPress={() => router.replace({ pathname: 'cart' })}
+						>
+							{t('pos_checkout.return_to_cart')}
+						</ModalAction>
+					) : (
+						<ModalAction
+							testID="process-payment-button"
+							onPress={handleProcessPayment}
+							loading={mode === 'contract' ? loading : legacyLoading}
+							disabled={
+								mode === 'pending' ||
+								error === 'payment_gateways_fetch_failed' ||
+								(mode === 'contract' && loading)
+							}
+						>
+							{t('pos_checkout.process_payment')}
+						</ModalAction>
+					)}
 				</ModalFooter>
 			</ModalContent>
 		</Modal>

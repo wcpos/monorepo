@@ -11,6 +11,15 @@ const mockLocalPatch = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockInsertEngineResident = jest.fn();
 const mockWrite = jest.fn();
+const mockCheckCartStock = jest.fn();
+
+jest.mock('./use-cart-stock-guard', () => ({
+	useCartStockGuard: () => ({
+		stockGuardEnabled: false,
+		checkCartStock: mockCheckCartStock,
+		showBackorderWarning: jest.fn(),
+	}),
+}));
 
 const order: Record<string, unknown> & {
 	getLatest(): typeof order;
@@ -53,6 +62,12 @@ jest.mock('../contexts/current-order', () => ({
 describe('useAddItemToOrder', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockCheckCartStock.mockResolvedValue({
+			allowed: true,
+			warning: null,
+			available: 10,
+			name: '',
+		});
 		order.line_items = [];
 		order.isNew = false;
 		order.toJSON = () => ({ uuid: 'order-uuid' });
@@ -88,6 +103,7 @@ describe('useAddItemToOrder', () => {
 		});
 
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
+		expect(mockCheckCartStock).not.toHaveBeenCalled();
 	});
 
 	it('keeps both items when two appends overlap for the same order', async () => {

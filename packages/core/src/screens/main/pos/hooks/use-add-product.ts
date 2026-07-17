@@ -8,6 +8,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
+import { useCartStockGuard } from './use-cart-stock-guard';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
 	convertProductToLineItemWithoutTax,
@@ -28,6 +29,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 export const useAddProduct = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
+	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 	const t = useT();
@@ -61,14 +63,30 @@ export const useAddProduct = () => {
 				product = latest.toMutableJSON();
 			}
 
+			const lineItems = currentOrder.getLatest().line_items ?? [];
+			const stockResult =
+				stockGuardEnabled && (product.id ?? 0) !== 0
+					? await checkCartStock({
+							lineItems,
+							productId: product.id ?? 0,
+							requestedQuantity: 1,
+							product,
+							name: product.name,
+						})
+					: { allowed: true, warning: null, available: null, name: product.name ?? '' };
+			if (!stockResult.allowed) return;
+
 			// check if product is already in order, if so increment quantity
 			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && product.id !== 0) {
-				const lineItems = currentOrder.getLatest().line_items ?? [];
 				const matches = findByProductVariationID(lineItems, product.id ?? 0);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
+						success = await updateLineItem(
+							uuid,
+							{ quantity: (matches[0].quantity ?? 0) + 1 },
+							{ skipStockGuard: true }
+						);
 					}
 				}
 			}
@@ -78,7 +96,11 @@ export const useAddProduct = () => {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem);
+				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
+			}
+
+			if (success && stockResult.warning === 'backorder') {
+				showBackorderWarning(stockResult.name);
 			}
 
 			// returned success should be the updated order
@@ -109,6 +131,9 @@ export const useAddProduct = () => {
 			metaDataKeys,
 			calculateLineItemTaxesAndTotals,
 			addItemToOrder,
+			checkCartStock,
+			showBackorderWarning,
+			stockGuardEnabled,
 			t,
 			orderLogger,
 		]

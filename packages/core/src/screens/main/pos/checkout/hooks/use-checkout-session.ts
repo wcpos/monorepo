@@ -15,6 +15,11 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
+import {
+	clearStockRejection,
+	parseInsufficientStockError,
+	setStockRejection,
+} from '../../hooks/stock-rejection';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
@@ -169,6 +174,7 @@ export function useCheckoutSession(order: OrderDocument) {
 			checkoutAttemptIdRef.current = null;
 
 			if (state.status === 'completed') {
+				clearStockRejection();
 				checkoutLogger.success(
 					t('pos_checkout.payment_completed_for_order', {
 						orderNumber: order.number,
@@ -194,6 +200,35 @@ export function useCheckoutSession(order: OrderDocument) {
 
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
+			const rejectedItems = parseInsufficientStockError(err);
+			if (rejectedItems) {
+				// The server just proved the local stock data is stale — refresh the
+				// affected records so the cart guard and badges show truth while the
+				// cashier corrects the cart. The rejection state drives the checkout
+				// modal's per-line detail and the cart line highlights.
+				setStockRejection({ orderUuid: order.uuid ?? '', items: rejectedItems });
+				checkoutAttemptIdRef.current = null;
+				setError('insufficient_stock');
+				const productIds = [...new Set(rejectedItems.map((item) => item.product_id))];
+				const variationIds = [
+					...new Set(rejectedItems.map((item) => item.variation_id).filter(Boolean)),
+				];
+				for (const [collection, wooIds] of [
+					['products', productIds],
+					['variations', variationIds],
+				] as const) {
+					if (wooIds.length === 0) continue;
+					const handle = manager.engine.require({
+						id: `checkout:stock-rejection:${collection}:${order.id}`,
+						collection,
+						kind: 'targeted-records',
+						wooIds,
+						forceRefresh: true,
+					});
+					handle.ready.finally(() => handle.release());
+				}
+				return;
+			}
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
 			checkoutLogger.error(message, {
@@ -208,7 +243,7 @@ export function useCheckoutSession(order: OrderDocument) {
 		} finally {
 			setLoading(false);
 		}
-	}, [completeOrderFlow, gateway, gatewayId, gatewayResolved, http, order, refetch, t]);
+	}, [completeOrderFlow, gateway, gatewayId, gatewayResolved, http, manager, order, refetch, t]);
 
 	const mode = !gatewayResolved
 		? 'pending'

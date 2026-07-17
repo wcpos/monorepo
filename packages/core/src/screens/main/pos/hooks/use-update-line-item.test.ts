@@ -14,6 +14,16 @@ jest.mock('uuid', () => ({
 
 // Mock the localPatch function
 const mockLocalPatch = jest.fn();
+const mockCheckCartStock = jest.fn();
+const mockShowBackorderWarning = jest.fn();
+
+jest.mock('./use-cart-stock-guard', () => ({
+	useCartStockGuard: () => ({
+		stockGuardEnabled: true,
+		checkCartStock: mockCheckCartStock,
+		showBackorderWarning: mockShowBackorderWarning,
+	}),
+}));
 
 // Mock useCurrentOrder
 jest.mock('../contexts/current-order', () => ({
@@ -29,6 +39,8 @@ jest.mock('../contexts/current-order', () => ({
 						},
 						{
 							name: 'Item 1',
+							product_id: 1,
+							variation_id: 0,
 							quantity: 1,
 							price: 10,
 							subtotal: '10',
@@ -97,6 +109,62 @@ jest.mock('./use-line-item-data', () => ({
 describe('useUpdateLineItem', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockCheckCartStock.mockResolvedValue({
+			allowed: true,
+			warning: null,
+			available: 10,
+			name: 'Item 1',
+		});
+	});
+
+	it('allows a quantity decrease without evaluating stock', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+
+		await act(async () => {
+			await result.current.updateLineItem(uuid, { quantity: 0.5 });
+		});
+
+		expect(mockCheckCartStock).not.toHaveBeenCalled();
+		expect(mockLocalPatch).toHaveBeenCalled();
+	});
+
+	it('does not mutate a blocked quantity increase', async () => {
+		mockCheckCartStock.mockResolvedValue({
+			allowed: false,
+			warning: null,
+			available: 1,
+			name: 'Item 1',
+		});
+		const { result } = renderHook(() => useUpdateLineItem());
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+
+		await act(async () => {
+			await result.current.updateLineItem(uuid, { quantity: 2 });
+		});
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+	});
+
+	it('warns about a backorder after mutating an allowed increase', async () => {
+		mockCheckCartStock.mockResolvedValue({
+			allowed: true,
+			warning: 'backorder',
+			available: 1,
+			name: 'Item 1',
+		});
+		const { result } = renderHook(() => useUpdateLineItem());
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+
+		await act(async () => {
+			await result.current.updateLineItem(uuid, { quantity: 2 });
+		});
+
+		expect(mockLocalPatch).toHaveBeenCalled();
+		expect(mockShowBackorderWarning).toHaveBeenCalledWith('Item 1');
+		expect(mockShowBackorderWarning.mock.invocationCallOrder[0]).toBeGreaterThan(
+			mockLocalPatch.mock.invocationCallOrder[0]
+		);
 	});
 
 	it('updates line item name correctly', async () => {
