@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
 
 import { getKeyFromEvent, RNKeyboardEvent, useHotkeys } from '@wcpos/hooks/use-hotkeys';
 
@@ -61,7 +62,23 @@ export function useScanTraceCapture() {
 		[recordKey]
 	);
 
+	// Web: a global key listener captures scans anywhere on the page.
 	useHotkeys('*', onKeyboardEvent);
+
+	// Native: `useHotkeys` is a no-op, so nothing above ever fires. A scanner on
+	// a native build delivers keys through a focused TextInput's `onKeyPress`
+	// (the same path the production detector uses), so expose a handler the
+	// panel can wire to a capture input. `getKeyFromEvent` isn't exported from
+	// the native build, so read the key straight off the native event.
+	const onKeyPress = React.useCallback(
+		(keyPressEvent: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+			const key = keyPressEvent?.nativeEvent?.key;
+			if (key) {
+				recordKey(key, Date.now());
+			}
+		},
+		[recordKey]
+	);
 
 	const reset = React.useCallback(() => {
 		if (settleTimerRef.current) {
@@ -73,5 +90,5 @@ export function useScanTraceCapture() {
 		setAttempts([]);
 	}, []);
 
-	return { currentKeys, attempts, reset, recordKey };
+	return { currentKeys, attempts, reset, recordKey, onKeyPress };
 }

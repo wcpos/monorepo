@@ -69,6 +69,17 @@ describe('useScanTraceCapture', () => {
 		expect(result.current.attempts[0][0].key).toBe('6');
 	});
 
+	it('records keys from a native onKeyPress event', () => {
+		const { result } = renderHook(() => useScanTraceCapture());
+
+		act(() => {
+			result.current.onKeyPress({ nativeEvent: { key: '7' } } as never);
+			result.current.onKeyPress({ nativeEvent: { key: '3' } } as never);
+		});
+
+		expect(result.current.currentKeys.map((entry) => entry.key).join('')).toBe('73');
+	});
+
 	it('reset clears attempts and the current trace', () => {
 		const { result } = renderHook(() => useScanTraceCapture());
 

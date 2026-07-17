@@ -878,5 +878,6 @@
 	"settings.barcode_test_result_scan": "scan",
 	"settings.barcode_test_result_typing": "typing",
 	"settings.barcode_test_result_too_short": "too short",
-	"settings.barcode_test_docs_link": "Setup guides and common problems → WCPOS docs"
+	"settings.barcode_test_docs_link": "Setup guides and common problems → WCPOS docs",
+	"settings.barcode_test_capture_placeholder": "Tap here, then scan"
 }

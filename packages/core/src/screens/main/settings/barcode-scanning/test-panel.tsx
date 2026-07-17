@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { useObservablePickState, useObservableState } from 'observable-hooks';
 
@@ -85,7 +85,11 @@ export function TestPanel() {
 	const { localPatch } = useLocalMutation();
 	const { barcode$ } = useBarcodeDetection();
 	const detectedBarcode = useObservableState(barcode$) as string | undefined;
-	const { currentKeys, attempts } = useScanTraceCapture();
+	const { currentKeys, attempts, onKeyPress } = useScanTraceCapture();
+	// On web a global key listener captures scans; on native `useHotkeys` is
+	// inert, so the readout below doubles as a focused capture input that feeds
+	// keystrokes in through `onKeyPress`.
+	const isWeb = Platform.OS === 'web';
 
 	const storeSettings = useObservablePickState(
 		store.$,
@@ -143,8 +147,17 @@ export function TestPanel() {
 				<Input
 					className="bg-accent font-mono"
 					value={liveKeys}
-					editable={false}
-					aria-disabled
+					editable={!isWeb}
+					aria-disabled={isWeb}
+					onKeyPress={isWeb ? undefined : onKeyPress}
+					autoFocus={!isWeb}
+					placeholder={
+						isWeb
+							? undefined
+							: t('settings.barcode_test_capture_placeholder', {
+									defaultValue: 'Tap here, then scan',
+								})
+					}
 					testID="barcode-test-keys"
 				/>
 			</VStack>
