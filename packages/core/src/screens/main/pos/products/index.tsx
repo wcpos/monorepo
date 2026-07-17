@@ -255,9 +255,10 @@ function POSProductsContent({
 				expanded$,
 				setRowExpanded,
 				variationRenderCell,
+				hideOutOfStockVariations: !showOutOfStock,
 			},
 		}),
-		[expandedRef, expanded$, setRowExpanded]
+		[expandedRef, expanded$, setRowExpanded, showOutOfStock]
 	);
 	/* eslint-enable react-compiler/react-compiler */
 

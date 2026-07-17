@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
-import { useVariationStock, VariationStockBadge } from './stock-status';
+import { resolveVariationStock, useVariationStock, VariationStockBadge } from './stock-status';
 
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (obs: { __value: unknown }) => obs.__value,
@@ -127,5 +127,62 @@ describe('useVariationStock / VariationStockBadge', () => {
 		);
 		expect(screen.getByTestId('sellable').textContent).toBe('false');
 		expect(badge()!.textContent).toBe('common.out_of_stock');
+	});
+});
+
+describe('resolveVariationStock', () => {
+	it.each([
+		{
+			name: 'managed positive quantity',
+			input: {
+				manage_stock: true,
+				stock_quantity: 2.5,
+				stock_status: 'outofstock',
+				backorders: 'no',
+			},
+			expected: { status: 'instock', quantity: 2.5, sellable: true },
+		},
+		{
+			name: 'managed depleted stock without backorders',
+			input: {
+				manage_stock: true,
+				stock_quantity: 0,
+				stock_status: 'instock',
+				backorders: 'no',
+			},
+			expected: { status: 'outofstock', quantity: null, sellable: false },
+		},
+		{
+			name: 'managed depleted stock with backorders',
+			input: {
+				manage_stock: true,
+				stock_quantity: 0,
+				stock_status: 'outofstock',
+				backorders: 'notify',
+			},
+			expected: { status: 'onbackorder', quantity: null, sellable: true },
+		},
+		{
+			name: 'unmanaged out-of-stock status',
+			input: {
+				manage_stock: false,
+				stock_quantity: 9,
+				stock_status: 'outofstock',
+				backorders: 'yes',
+			},
+			expected: { status: 'outofstock', quantity: null, sellable: false },
+		},
+		{
+			name: 'unmanaged backorder status',
+			input: {
+				manage_stock: false,
+				stock_quantity: null,
+				stock_status: 'onbackorder',
+				backorders: 'no',
+			},
+			expected: { status: 'onbackorder', quantity: null, sellable: true },
+		},
+	])('resolves $name', ({ input, expected }) => {
+		expect(resolveVariationStock(input)).toEqual(expected);
 	});
 });

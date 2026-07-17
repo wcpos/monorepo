@@ -11,6 +11,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { ProductDocument } from '@wcpos/database';
 
 import { VariationTableFooter } from './footer';
+import { resolveVariationStock } from '../../../../pos/products/cells/variations-popover/variation-stock';
 import { TextCell } from '../../../../components/text-cell';
 import { getColumnStyle } from '../../../data-table';
 
@@ -21,6 +22,7 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 interface Props {
 	binding: ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>;
 	row: Row<{ document: ProductDocument }>;
+	hideOutOfStock?: boolean;
 }
 
 interface VariationHit {
@@ -54,8 +56,15 @@ const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
 /**
  *
  */
-export function VariationsTable({ binding, row }: Props) {
+export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
 	const result = useObservableSuspense(binding.resource) as { hits: VariationHit[] };
+	const hits = React.useMemo(
+		() =>
+			hideOutOfStock
+				? result.hits.filter((hit) => resolveVariationStock(hit.document).sellable)
+				: result.hits,
+		[hideOutOfStock, result.hits]
+	);
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -63,7 +72,7 @@ export function VariationsTable({ binding, row }: Props) {
 	 */
 	return (
 		<VStack className="gap-0">
-			{result.hits.map((hit: VariationHit, index: number) => {
+			{hits.map((hit: VariationHit, index: number) => {
 				return (
 					<TableRow key={index} index={index}>
 						{row
@@ -110,11 +119,7 @@ export function VariationsTable({ binding, row }: Props) {
 					</TableRow>
 				);
 			})}
-			<VariationTableFooter
-				binding={binding}
-				parent={row.original.document}
-				count={result.hits.length}
-			/>
+			<VariationTableFooter binding={binding} parent={row.original.document} count={hits.length} />
 		</VStack>
 	);
 }

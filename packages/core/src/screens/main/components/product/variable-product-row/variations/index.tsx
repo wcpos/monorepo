@@ -15,12 +15,13 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 
 interface Props {
 	row: Row<{ document: ProductDocument }>;
+	hideOutOfStock?: boolean;
 }
 
 /**
  *
  */
-export function Variations({ row }: Props) {
+export function Variations({ row, hideOutOfStock }: Props) {
 	const parent = row.original.document;
 	const state = useQueryState<'variations'>();
 	const actions = useQueryStateActions<'variations'>();
@@ -47,7 +48,7 @@ export function Variations({ row }: Props) {
 			<View className="flex-1">
 				<ErrorBoundary>
 					<Suspense>
-						<VariationsTable row={row} binding={binding} />
+						<VariationsTable row={row} binding={binding} hideOutOfStock={hideOutOfStock} />
 					</Suspense>
 				</ErrorBoundary>
 			</View>

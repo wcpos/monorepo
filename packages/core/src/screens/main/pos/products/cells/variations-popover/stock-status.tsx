@@ -1,21 +1,17 @@
 import * as React from 'react';
 
-import isFinite from 'lodash/isFinite';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { StatusBadge } from '@wcpos/components/status-badge';
 
+import { resolveVariationStock, type VariationStock } from './variation-stock';
 import { useT } from '../../../../../../contexts/translations';
 import { useNumberFormat } from '../../../../hooks/use-number-format';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
-export interface VariationStock {
-	status: 'instock' | 'onbackorder' | 'outofstock';
-	/** Quantity is only known when the variation manages its own stock */
-	quantity: number | null;
-	sellable: boolean;
-}
+export { resolveVariationStock } from './variation-stock';
+export type { VariationStock, VariationStockInput } from './variation-stock';
 
 /**
  * Resolve the sellability of a single variation.
@@ -30,23 +26,12 @@ export function useVariationStock(variation: ProductVariationDocument): Variatio
 	const stockStatus = useObservableEagerState(variation.stock_status$!);
 	const backorders = useObservableEagerState(variation.backorders$!);
 
-	if (manageStock === true && isFinite(stockQuantity)) {
-		if ((stockQuantity as number) > 0) {
-			return { status: 'instock', quantity: stockQuantity as number, sellable: true };
-		}
-		if (backorders !== 'no') {
-			return { status: 'onbackorder', quantity: null, sellable: true };
-		}
-		return { status: 'outofstock', quantity: null, sellable: false };
-	}
-
-	if (stockStatus === 'outofstock') {
-		return { status: 'outofstock', quantity: null, sellable: false };
-	}
-	if (stockStatus === 'onbackorder') {
-		return { status: 'onbackorder', quantity: null, sellable: true };
-	}
-	return { status: 'instock', quantity: null, sellable: true };
+	return resolveVariationStock({
+		manage_stock: manageStock,
+		stock_quantity: stockQuantity,
+		stock_status: stockStatus,
+		backorders,
+	});
 }
 
 /**

@@ -11,6 +11,7 @@ import { useBarcodeDetection } from '../../hooks/barcodes';
 import { useBarcodeSearch } from '../../hooks/barcodes/use-barcode-search';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
+import { resolveVariationStock } from './cells/variations-popover/variation-stock';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
 const BARCODE_LOOKUP_TIMEOUT_MS = 10_000;
@@ -283,10 +284,10 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const [product] = results;
 
-		/**
-		 * TODO: what if product is out of stock?
-		 */
-		if (!showOutOfStock && product.stock_status !== 'instock') {
+		const outOfStock = isVariationDocument(product)
+			? !resolveVariationStock(product).sellable
+			: product.stock_status !== 'instock';
+		if (!showOutOfStock && outOfStock) {
 			barcodeLogger.warn(text1, {
 				showToast: true,
 				toast: {
