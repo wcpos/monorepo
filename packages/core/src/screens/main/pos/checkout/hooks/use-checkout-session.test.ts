@@ -11,6 +11,9 @@ const mockReplace = jest.fn();
 const mockHttp = { get: mockGet, post: mockPost };
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
+const mockResolveStockOwnerId = jest.fn((productId: number, variationId: number) =>
+	Promise.resolve(variationId || productId)
+);
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -25,6 +28,9 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 }));
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
+}));
+jest.mock('../../hooks/use-cart-stock-guard', () => ({
+	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ success: jest.fn(), error: jest.fn() }),
@@ -250,5 +256,6 @@ describe('useCheckoutSession', () => {
 
 		expect(result.current.error).toBe('insufficient_stock');
 		expect(release).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(mockResolveStockOwnerId).toHaveBeenCalledWith(10, 0));
 	});
 });

@@ -3,6 +3,7 @@ import { BehaviorSubject } from 'rxjs';
 export interface StockRejectionItem {
 	product_id: number;
 	variation_id: number;
+	stock_owner_id?: number;
 	name?: string;
 	requested?: number;
 	available: number | null;
@@ -63,14 +64,17 @@ export function getStockRejectionForLine({
 	);
 	if (!match || match.available === null) return match ?? null;
 
-	const rejectedVariationIds = new Set(
+	const stockOwnerId = match.stock_owner_id ?? (match.variation_id || match.product_id);
+	const rejectedOwnerVariationIds = new Set(
 		stockRejection.items
-			.filter((item) => item.product_id === productId)
+			.filter(
+				(item) => (item.stock_owner_id ?? (item.variation_id || item.product_id)) === stockOwnerId
+			)
 			.map((item) => item.variation_id)
 	);
 	const aggregateQuantity = lineItems.reduce(
 		(total, item) =>
-			item.product_id === productId && rejectedVariationIds.has(item.variation_id ?? 0)
+			item.product_id === productId && rejectedOwnerVariationIds.has(item.variation_id ?? 0)
 				? total + (item.quantity ?? 0)
 				: total,
 		0

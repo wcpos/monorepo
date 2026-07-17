@@ -47,8 +47,8 @@ describe('getStockRejectionForLine', () => {
 	const rejection = {
 		orderUuid: 'order-a',
 		items: [
-			{ product_id: 12, variation_id: 34, requested: 2, available: 3 },
-			{ product_id: 12, variation_id: 35, requested: 2, available: 3 },
+			{ product_id: 12, variation_id: 34, stock_owner_id: 12, requested: 2, available: 3 },
+			{ product_id: 12, variation_id: 35, stock_owner_id: 12, requested: 2, available: 3 },
 		],
 	};
 
@@ -79,6 +79,26 @@ describe('getStockRejectionForLine', () => {
 				stockRejection: rejection,
 				orderUuid: 'order-a',
 				lineItems: [lineItem, { product_id: 12, variation_id: 35, quantity: 1 }],
+				lineItem,
+			})
+		).toBeNull();
+	});
+
+	it('does not aggregate independently managed sibling variations', () => {
+		const independentRejection = {
+			orderUuid: 'order-a',
+			items: [
+				{ product_id: 12, variation_id: 34, stock_owner_id: 34, requested: 2, available: 1 },
+				{ product_id: 12, variation_id: 35, stock_owner_id: 35, requested: 2, available: 1 },
+			],
+		};
+		const lineItem = { product_id: 12, variation_id: 34, quantity: 1 };
+
+		expect(
+			getStockRejectionForLine({
+				stockRejection: independentRejection,
+				orderUuid: 'order-a',
+				lineItems: [lineItem, { product_id: 12, variation_id: 35, quantity: 2 }],
 				lineItem,
 			})
 		).toBeNull();

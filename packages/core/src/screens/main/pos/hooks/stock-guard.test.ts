@@ -194,6 +194,22 @@ describe('useCartStockGuard', () => {
 		mockFindDocumentsById.mockResolvedValue([]);
 	});
 
+	it.each([
+		[true, 11],
+		['parent', 10],
+		[null, 11],
+	] as const)(
+		'resolves variation stock ownership for manage_stock=%s',
+		async (manageStock, ownerId) => {
+			mockFindDocumentsById.mockResolvedValue(
+				manageStock === null ? [] : [{ payload: { manage_stock: manageStock } }]
+			);
+			const { result } = renderHook(() => useCartStockGuard());
+
+			await expect(result.current.resolveStockOwnerId(10, 11)).resolves.toBe(ownerId);
+		}
+	);
+
 	it('fails closed when the enabled guard cannot load the product record', async () => {
 		const { result } = renderHook(() => useCartStockGuard());
 		const stockLogger = getLogger(['wcpos', 'pos', 'cart', 'stock']);

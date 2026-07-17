@@ -19,7 +19,9 @@ import {
 	clearStockRejection,
 	parseInsufficientStockError,
 	setStockRejection,
+	stockRejection$,
 } from '../../hooks/stock-rejection';
+import { useCartStockGuard } from '../../hooks/use-cart-stock-guard';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
@@ -61,6 +63,7 @@ export function useCheckoutSession(order: OrderDocument) {
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const t = useT();
+	const { resolveStockOwnerId } = useCartStockGuard();
 	const [loading, setLoading] = React.useState(false);
 	// Error raised by the checkout flow itself (set imperatively in handlers).
 	const [checkoutError, setError] = React.useState<string | null>(null);
@@ -121,13 +124,15 @@ export function useCheckoutSession(order: OrderDocument) {
 			const rejectedItems = parseInsufficientStockError(error);
 			if (!rejectedItems) return false;
 
-			setStockRejection({ orderUuid: order.uuid ?? '', items: rejectedItems });
+			const rejection = { orderUuid: order.uuid ?? '', items: rejectedItems };
+			setStockRejection(rejection);
 			checkoutAttemptIdRef.current = null;
 			setError('insufficient_stock');
 			const productIds = [...new Set(rejectedItems.map((item) => item.product_id))];
 			const variationIds = [
 				...new Set(rejectedItems.map((item) => item.variation_id).filter(Boolean)),
 			];
+			const refreshes: Promise<void>[] = [];
 			for (const [collection, wooIds] of [
 				['products', productIds],
 				['variations', variationIds],
@@ -140,11 +145,33 @@ export function useCheckoutSession(order: OrderDocument) {
 					wooIds,
 					forceRefresh: true,
 				});
-				void handle.ready.finally(() => handle.release()).catch(() => undefined);
+				refreshes.push(
+					handle.ready
+						.then(
+							() => undefined,
+							() => undefined
+						)
+						.finally(() => handle.release())
+				);
 			}
+			void Promise.all(refreshes)
+				.then(() =>
+					Promise.all(
+						rejectedItems.map(async (item) => ({
+							...item,
+							stock_owner_id: await resolveStockOwnerId(item.product_id, item.variation_id),
+						}))
+					)
+				)
+				.then((items) => {
+					if (stockRejection$.getValue() === rejection) {
+						setStockRejection({ ...rejection, items });
+					}
+				})
+				.catch(() => undefined);
 			return true;
 		},
-		[manager, order.id, order.uuid]
+		[manager, order.id, order.uuid, resolveStockOwnerId]
 	);
 
 	const startCheckout = React.useCallback(async () => {

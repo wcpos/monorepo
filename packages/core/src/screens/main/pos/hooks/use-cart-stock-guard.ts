@@ -165,6 +165,16 @@ export const useCartStockGuard = () => {
 		[preventOverselling, readStockDocument, t]
 	);
 
+	const resolveStockOwnerId = React.useCallback(
+		async (productId: number, variationId = 0) => {
+			if (!variationId) return productId;
+			const variation = await readStockDocument('variations', variationId);
+			if (!variation) return variationId;
+			return variation?.manage_stock === true ? variationId : productId;
+		},
+		[readStockDocument]
+	);
+
 	const showBackorderWarning = React.useCallback(
 		(name: string) => {
 			cartLogger.warn(t('pos_cart.will_be_backordered', { name }), {
@@ -177,6 +187,7 @@ export const useCartStockGuard = () => {
 	return {
 		stockGuardEnabled: preventOverselling === true,
 		checkCartStock,
+		resolveStockOwnerId,
 		showBackorderWarning,
 	};
 };
