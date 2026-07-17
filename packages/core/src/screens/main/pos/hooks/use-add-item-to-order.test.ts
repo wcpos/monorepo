@@ -12,6 +12,7 @@ const mockSetCurrentOrderID = jest.fn();
 const mockInsertEngineResident = jest.fn();
 const mockWrite = jest.fn();
 const mockCheckCartStock = jest.fn();
+const mockWrapEngineDocument = jest.fn();
 let mockStockGuardEnabled = false;
 
 jest.mock('./use-cart-stock-guard', () => ({
@@ -39,6 +40,10 @@ jest.mock('@wcpos/query', () => ({
 	useQueryManager: () => ({ engine: { write: mockWrite } }),
 }));
 
+jest.mock('@wcpos/query/engine-compat', () => ({
+	wrapEngineDocument: (...args: unknown[]) => mockWrapEngineDocument(...args),
+}));
+
 jest.mock('uuid', () => ({
 	v4: () => 'line-item-uuid',
 }));
@@ -64,6 +69,7 @@ describe('useAddItemToOrder', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockStockGuardEnabled = false;
+		mockWrapEngineDocument.mockImplementation((_collection, resident) => resident);
 		mockCheckCartStock.mockResolvedValue({
 			allowed: true,
 			warning: null,
@@ -140,6 +146,56 @@ describe('useAddItemToOrder', () => {
 		await act(async () => Promise.all([firstAppend, secondAppend]));
 
 		expect(order.line_items.map((item) => item.product_id)).toEqual([1, 2]);
+	});
+
+	it('serializes overlapping additions while a new order is being saved', async () => {
+		order.isNew = true;
+		mockStockGuardEnabled = true;
+		mockCheckCartStock.mockImplementation(
+			async ({ lineItems }: { lineItems: Record<string, unknown>[] }) => ({
+				allowed: lineItems.length === 0,
+				warning: null,
+				available: 1,
+				name: 'Item',
+			})
+		);
+		mockInsertEngineResident.mockImplementation(
+			async ({ payload }: { payload: Record<string, unknown> }) => {
+				const savedOrder = {
+					...(payload as { line_items: Record<string, unknown>[] }),
+					collection: { name: 'orders' },
+					getLatest: () => savedOrder,
+				};
+				return {
+					savedOrder,
+					toMutableJSON: () => ({ payload }),
+				};
+			}
+		);
+		mockWrapEngineDocument.mockImplementation(
+			(_collection, resident: { savedOrder: Record<string, unknown> }) => resident.savedOrder
+		);
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await Promise.all([
+				result.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					meta_data: [],
+				} as never),
+				result.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					meta_data: [],
+				} as never),
+			]);
+		});
+
+		expect(mockCheckCartStock.mock.calls.map(([args]) => args.lineItems.length)).toEqual([0, 1]);
+		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockWrite).toHaveBeenCalledTimes(1);
 	});
 
 	it('serializes order mutations so each callback reads the latest cart', async () => {

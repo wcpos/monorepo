@@ -138,11 +138,13 @@ describe('useUpdateLineItem', () => {
 		});
 		const { result } = renderHook(() => useUpdateLineItem());
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		let outcome: unknown;
 
 		await act(async () => {
-			await result.current.updateLineItem(uuid, { quantity: 2 });
+			outcome = await result.current.updateLineItem(uuid, { quantity: 2 });
 		});
 
+		expect(outcome).toBe(false);
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 	});
 

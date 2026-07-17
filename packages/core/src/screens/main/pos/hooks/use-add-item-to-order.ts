@@ -3,6 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryManager } from '@wcpos/query';
+import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
@@ -17,13 +18,9 @@ type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items'
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type OrderDocument = import('@wcpos/database').OrderDocument;
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
-
-interface AddItemOptions {
-	skipStockGuard?: boolean;
-	skipMutationQueue?: boolean;
-}
 
 const mutationChains = new Map<string, Promise<void>>();
 
@@ -48,10 +45,13 @@ export const useAddItemToOrder = () => {
 	const manager = useQueryManager();
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
+	const appendChains = React.useRef(new Map<string, Promise<void>>());
+	const createdOrders = React.useRef(new Map<string, OrderDocument>());
 
 	const runOrderMutation = React.useCallback(
 		async <T>(mutation: () => Promise<T>) => {
 			const order = currentOrder.getLatest();
+			if ((order as unknown as { isNew?: boolean }).isNew) return mutation();
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
 			return serializeOrderMutation(recordId, mutation);
@@ -86,6 +86,10 @@ export const useAddItemToOrder = () => {
 				recordId,
 				payload: resident.toMutableJSON().payload as Record<string, unknown>,
 			});
+			createdOrders.current.set(
+				recordId,
+				wrapEngineDocument('orders', resident as never) as unknown as OrderDocument
+			);
 			await order.remove();
 			setCurrentOrderID(recordId);
 			return resident;
@@ -97,29 +101,8 @@ export const useAddItemToOrder = () => {
 	 * NOTE: If I don't include getLatest(), the populate() will return old data
 	 */
 	const addItemToOrder = React.useCallback(
-		async (type: CartLineType, data: CartLine, options?: AddItemOptions) => {
+		async (type: CartLineType, data: CartLine) => {
 			const order = currentOrder.getLatest();
-			let stockWarningName: string | null = null;
-
-			if (
-				type === 'line_items' &&
-				stockGuardEnabled &&
-				(data as LineItem).product_id !== 0 &&
-				!options?.skipStockGuard
-			) {
-				const lineItem = data as LineItem;
-				const stockResult = await checkCartStock({
-					lineItems: order.line_items ?? [],
-					productId: lineItem.product_id ?? 0,
-					variationId: lineItem.variation_id ?? 0,
-					requestedQuantity: lineItem.quantity ?? 1,
-					name: lineItem.name,
-				});
-				if (!stockResult.allowed) return;
-				if (stockResult.warning === 'backorder') {
-					stockWarningName = stockResult.name;
-				}
-			}
 
 			// make sure items have a uuid before saving
 			data.meta_data = data.meta_data || [];
@@ -133,28 +116,52 @@ export const useAddItemToOrder = () => {
 				});
 			}
 
-			if ((order as unknown as { isNew?: boolean }).isNew) {
-				const result = await saveNewOrder(type, data);
-				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
-				return result;
-			}
-
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
-			const append = async () => {
-				const latest = order.getLatest();
-				return localPatch({
-					document: latest,
-					data: {
-						[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
-					} as never,
-				});
-			};
-			const result = await (options?.skipMutationQueue
-				? append()
-				: serializeOrderMutation(recordId, append));
-			if (stockWarningName !== null) showBackorderWarning(stockWarningName);
-			return result;
+			const isNew = Boolean((order as unknown as { isNew?: boolean }).isNew);
+			const previous = appendChains.current.get(recordId) ?? Promise.resolve();
+			const append = previous.then(async () => {
+				const createdOrder = createdOrders.current.get(recordId);
+				const latest = createdOrder?.getLatest() ?? (isNew ? order : order.getLatest());
+				let stockWarningName: string | null = null;
+				if (type === 'line_items' && stockGuardEnabled && (data as LineItem).product_id !== 0) {
+					const lineItem = data as LineItem;
+					const stockResult = await checkCartStock({
+						lineItems: latest.line_items ?? [],
+						productId: lineItem.product_id ?? 0,
+						variationId: lineItem.variation_id ?? 0,
+						requestedQuantity: lineItem.quantity ?? 1,
+						name: lineItem.name,
+					});
+					if (!stockResult.allowed) return false;
+					if (stockResult.warning === 'backorder') {
+						stockWarningName = stockResult.name;
+					}
+				}
+
+				const result =
+					isNew && !createdOrder
+						? await saveNewOrder(type, data)
+						: await localPatch({
+								document: latest,
+								data: {
+									[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
+								} as never,
+							});
+				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
+				return result;
+			});
+			const tail = append.then(
+				() => undefined,
+				() => undefined
+			);
+			appendChains.current.set(recordId, tail);
+			void tail.then(() => {
+				if (appendChains.current.get(recordId) === tail) {
+					appendChains.current.delete(recordId);
+				}
+			});
+			return append;
 		},
 		[
 			checkCartStock,
