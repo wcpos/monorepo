@@ -12,6 +12,7 @@ import { EditCartItemButton } from './edit-cart-item-button';
 import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
 import { EditableField } from '../../../components/editable-field';
+import { useCurrentOrder } from '../../contexts/current-order';
 import { stockRejection$ } from '../../hooks/stock-rejection';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
@@ -30,6 +31,7 @@ interface Props {
 export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
 	const { updateLineItem } = useUpdateLineItem();
+	const { currentOrder } = useCurrentOrder();
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
 
@@ -38,15 +40,40 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 	 * longer exceeds what the server said was available (self-clearing).
 	 */
 	const rejectedItem = React.useMemo(() => {
-		const match = stockRejection?.items.find(
+		if (!stockRejection || stockRejection.orderUuid !== currentOrder.uuid) return null;
+		const match = stockRejection.items.find(
 			(rejected) =>
 				rejected.product_id === (item.product_id ?? 0) &&
 				rejected.variation_id === (item.variation_id ?? 0)
 		);
 		if (!match) return null;
-		if (match.available !== null && (item.quantity ?? 0) <= match.available) return null;
+		if (match.available !== null) {
+			const rejectedGroup = stockRejection.items.filter(
+				(rejected) =>
+					rejected.product_id === match.product_id &&
+					rejected.available === match.available &&
+					rejected.reason === match.reason &&
+					rejected.backorders === match.backorders
+			);
+			const aggregateQuantity = (currentOrder.line_items ?? []).reduce((total, lineItem) => {
+				const belongsToRejectedGroup = rejectedGroup.some(
+					(rejected) =>
+						rejected.product_id === (lineItem.product_id ?? 0) &&
+						rejected.variation_id === (lineItem.variation_id ?? 0)
+				);
+				if (!belongsToRejectedGroup || !Number.isFinite(lineItem.quantity)) return total;
+				return total + (lineItem.quantity ?? 0);
+			}, 0);
+			if (Number(aggregateQuantity.toFixed(12)) <= match.available) return null;
+		}
 		return match;
-	}, [stockRejection, item.product_id, item.variation_id, item.quantity]);
+	}, [
+		stockRejection,
+		currentOrder.uuid,
+		currentOrder.line_items,
+		item.product_id,
+		item.variation_id,
+	]);
 
 	/**
 	 * filter out the private meta data
