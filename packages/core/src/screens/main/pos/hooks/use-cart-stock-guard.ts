@@ -90,9 +90,7 @@ export const useCartStockGuard = () => {
 				true
 			);
 			const payload = (deletedDocument as { payload?: unknown } | undefined)?.payload;
-			return payload !== null && typeof payload === 'object'
-				? (payload as StockDocument)
-				: null;
+			return payload !== null && typeof payload === 'object' ? (payload as StockDocument) : null;
 		},
 		[manager]
 	);
