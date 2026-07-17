@@ -45,7 +45,8 @@ export const useAddVariation = () => {
 		async (
 			variationDoc: ProductVariationDocument,
 			parentDoc: ProductDocument,
-			metaData?: MetaData[]
+			metaData?: MetaData[],
+			options?: { silent?: boolean }
 		) => {
 			let success;
 
@@ -76,7 +77,8 @@ export const useAddVariation = () => {
 			// returned success should be the updated order
 			if (success) {
 				cartLogger.success(t('common.added_to_cart', { name: parent.name }), {
-					showToast: true,
+					// Scan-driven adds toast via the scan-feedback module instead.
+					showToast: !options?.silent,
 					saveToDb: true,
 					context: {
 						variationId: variation.id,

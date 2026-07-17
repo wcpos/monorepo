@@ -9,6 +9,7 @@ const mockAddProduct = jest.fn();
 const mockAddVariation = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockEngineActive = jest.fn();
+const mockEngineStatus = jest.fn();
 const mockFetcher = jest.fn();
 const mockFindEngineProducts = jest.fn(async () => engineProducts);
 const mockFindEngineVariations = jest.fn(async () => engineVariations);
@@ -21,6 +22,7 @@ const engineProducts: EngineDocument[] = [];
 const engineVariations: EngineDocument[] = [];
 let mockSubscriptionCallback: ((barcode: unknown) => Promise<void> | void) | undefined;
 let mockShowOutOfStock = true;
+const mockToastShow = jest.fn();
 
 interface EngineDocument {
 	id: string;
@@ -43,6 +45,17 @@ jest.mock('@wcpos/utils/logger', () => {
 	return { getLogger: () => barcodeLogger, __barcodeLogger: barcodeLogger };
 });
 
+jest.mock('@wcpos/components/toast', () => ({
+	// Lazy closure: the hoisted factory must not evaluate mockToastShow before init.
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
+}));
+
+jest.mock('@wcpos/sync-core', () => {
+	const actual = jest.requireActual<typeof import('@wcpos/sync-core')>('@wcpos/sync-core');
+	const resolveScan = jest.fn(actual.resolveScan);
+	return { ...actual, resolveScan, __resolveScan: resolveScan };
+});
+
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => mockShowOutOfStock,
 	useSubscription: (_observable: unknown, callback: (barcode: unknown) => Promise<void> | void) => {
@@ -54,6 +67,7 @@ jest.mock('@wcpos/query', () => ({
 	useQueryManager: () => ({
 		engine: {
 			active: mockEngineActive,
+			status: mockEngineStatus,
 			hostTransport: () => ({
 				syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 				fetcher: mockFetcher,
@@ -91,6 +105,7 @@ const mockBarcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogge
 	warn: jest.Mock;
 	success: jest.Mock;
 };
+const mockResolveScan = jest.requireMock('@wcpos/sync-core').__resolveScan as jest.Mock;
 
 const mockSetSearch = jest.fn();
 const mockClearSearch = jest.fn();
@@ -182,7 +197,9 @@ describe('useBarcode online escalation', () => {
 			mockAddVariation,
 			mockEngineRequire,
 			mockEngineActive,
+			mockEngineStatus,
 			mockFetcher,
+			mockToastShow,
 			mockFindEngineProducts,
 			mockFindEngineVariations,
 			mockFindEngineProductById,
@@ -221,6 +238,9 @@ describe('useBarcode online escalation', () => {
 			},
 		}));
 		mockSubscriptionCallback = undefined;
+		mockEngineStatus.mockReturnValue({ connectivity: 'online', gatedBy: null });
+		mockToastShow.mockReturnValue('toast-id');
+		mockResolveScan.mockClear();
 		mockEngineRequire.mockImplementation(() => ({
 			ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
 			release: jest.fn(),
@@ -249,6 +269,18 @@ describe('useBarcode online escalation', () => {
 			expect(product.getLatest().toMutableJSON()).toMatchObject({ id: 41, name: 'Keyboard' });
 			expect(mockClearSearch).toHaveBeenCalledTimes(1);
 			expect(mockSetSearch).not.toHaveBeenCalled();
+			expect(mockToastShow).toHaveBeenCalledTimes(1);
+			expect(mockToastShow).toHaveBeenCalledWith({
+				id: expect.stringMatching(/^scan:\d+$/),
+				type: 'success',
+				title: 'pos_products.scan_added:{"defaultValue":"Added to cart"}',
+				description: 'Keyboard',
+				duration: 2500,
+			});
+			expect(mockBarcodeLogger.success).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.not.objectContaining({ showToast: expect.anything(), toast: expect.anything() })
+			);
 		}
 	);
 
@@ -261,9 +293,17 @@ describe('useBarcode online escalation', () => {
 
 		expect(mockFetcher).toHaveBeenCalledTimes(1);
 		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenLastCalledWith({
+			id: expect.stringMatching(/^scan:\d+$/),
+			type: 'warning',
+			title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+			description:
+				'pos_products.scan_not_found_description:{"code":"ABC","defaultValue":"{code} — not in this store, locally or online"}',
+			duration: 6000,
+		});
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
 			expect.any(String),
-			expect.objectContaining({ toast: { text2: 'common.product_not_found_online' } })
+			expect.not.objectContaining({ showToast: expect.anything(), toast: expect.anything() })
 		);
 	});
 
@@ -299,11 +339,15 @@ describe('useBarcode online escalation', () => {
 		await act(async () => scan());
 
 		expect(mockAddVariation).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenCalledWith({
+			id: expect.stringMatching(/^scan:\d+$/),
+			type: 'warning',
+			title: 'pos_products.out_of_stock:{"name":"Keyboard / Black"}',
+			duration: 6000,
+		});
 		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
 			expect.any(String),
-			expect.objectContaining({
-				toast: { text2: 'pos_products.out_of_stock:{"name":"Keyboard / Black"}' },
-			})
+			expect.not.objectContaining({ showToast: expect.anything(), toast: expect.anything() })
 		);
 	});
 
@@ -352,7 +396,10 @@ describe('useBarcode online escalation', () => {
 	it('shows searching-online feedback before the fetch promise resolves', async () => {
 		let resolveFetch: ((value: Response) => void) | undefined;
 		const order: string[] = [];
-		mockBarcodeLogger.info.mockImplementation(() => order.push('toast'));
+		mockToastShow.mockImplementation(() => {
+			order.push('toast');
+			return 'toast-id';
+		});
 		mockFetcher.mockImplementation(
 			() =>
 				new Promise<Response>((resolve) => {
@@ -369,8 +416,24 @@ describe('useBarcode online escalation', () => {
 		});
 
 		expect(order).toEqual(['toast', 'fetch']);
+		expect(mockToastShow).toHaveBeenNthCalledWith(1, {
+			id: expect.stringMatching(/^scan:\d+$/),
+			title: 'common.barcode_searching_online:{"defaultValue":"Searching store…"}',
+			description: 'ABC',
+			duration: 15000,
+		});
 		resolveFetch?.(onlineResponse());
 		await act(async () => scanPromise);
+		const [searching, terminal] = mockToastShow.mock.calls.map(([toast]) => toast);
+		expect(terminal).toMatchObject({
+			type: 'warning',
+			title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+		});
+		expect(terminal.id).toBe(searching.id);
+		expect(mockBarcodeLogger.info).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.not.objectContaining({ showToast: expect.anything(), toast: expect.anything() })
+		);
 	});
 
 	it('force-refreshes a resident product with a stale barcode before re-querying locally', async () => {
@@ -467,9 +530,11 @@ describe('useBarcode online escalation', () => {
 		expect(mockFetcher).toHaveBeenCalledTimes(1);
 		expect(mockEngineRequire).toHaveBeenCalledTimes(1);
 		expect(mockAddProduct).not.toHaveBeenCalled();
-		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({ toast: { text2: 'common.product_not_found_online' } })
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				type: 'warning',
+				title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+			})
 		);
 	});
 
@@ -515,12 +580,13 @@ describe('useBarcode online escalation', () => {
 		await act(async () => scanPromise);
 
 		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
-		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({
-				toast: { text2: 'common.product_found_locally:{"count":3}' },
-			})
-		);
+		expect(mockToastShow).toHaveBeenLastCalledWith({
+			id: expect.stringMatching(/^scan:\d+$/),
+			type: 'warning',
+			title: 'pos_products.scan_several_matches:{"defaultValue":"Several matches"}',
+			description: 'common.product_found_locally:{"count":3} — ABC',
+			duration: 6000,
+		});
 		for (const result of mockEngineRequire.mock.results) {
 			expect(result.value.release).toHaveBeenCalledTimes(1);
 		}
@@ -574,9 +640,11 @@ describe('useBarcode online escalation', () => {
 		await act(async () => scan());
 
 		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
-		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({ toast: { text2: 'common.barcode_online_lookup_failed' } })
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				type: 'error',
+				title: 'pos_products.scan_lookup_failed:{"defaultValue":"Lookup failed"}',
+			})
 		);
 		for (const result of mockEngineRequire.mock.results) {
 			expect(result.value.release).toHaveBeenCalledTimes(1);
@@ -603,7 +671,7 @@ describe('useBarcode online escalation', () => {
 				jest.advanceTimersByTime(9_999);
 				await Promise.resolve();
 			});
-			expect(mockBarcodeLogger.error).not.toHaveBeenCalled();
+			expect(mockToastShow).toHaveBeenCalledTimes(1);
 
 			await act(async () => {
 				jest.advanceTimersByTime(1);
@@ -611,10 +679,14 @@ describe('useBarcode online escalation', () => {
 			});
 
 			expect(fetchSignal?.aborted).toBe(true);
-			expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
-				expect.any(String),
-				expect.objectContaining({ toast: { text2: 'common.barcode_online_lookup_failed' } })
-			);
+			expect(mockToastShow).toHaveBeenLastCalledWith({
+				id: expect.stringMatching(/^scan:\d+$/),
+				type: 'error',
+				title: 'pos_products.scan_lookup_failed:{"defaultValue":"Lookup failed"}',
+				description:
+					'pos_products.scan_lookup_failed_description:{"code":"ABC","defaultValue":"{code} — Store didn’t respond — check your connection and scan again"}',
+				duration: 6000,
+			});
 			expect(mockSetSearch).toHaveBeenCalledWith('ABC');
 		} finally {
 			jest.useRealTimers();
@@ -625,23 +697,43 @@ describe('useBarcode online escalation', () => {
 		{
 			name: 'not found online',
 			fetch: () => Promise.resolve(onlineResponse()),
-			message: 'common.product_not_found_online',
+			type: 'warning',
+			title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
 		},
 		{
 			name: 'online lookup failure',
 			fetch: () => Promise.reject(new Error('offline')),
-			message: 'common.barcode_online_lookup_failed',
+			type: 'error',
+			title: 'pos_products.scan_lookup_failed:{"defaultValue":"Lookup failed"}',
 		},
-	])('uses the distinct $name toast', async ({ fetch, message }) => {
+	])('uses the distinct $name toast', async ({ fetch, type, title }) => {
 		mockFetcher.mockImplementation(fetch);
 		renderBarcodeHook();
 
 		await act(async () => scan());
 
-		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({ toast: { text2: message } })
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({ type, title, description: expect.stringContaining('ABC') })
 		);
 		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
+	});
+
+	it('does not resolve online when the engine is unavailable after a local miss', async () => {
+		mockEngineStatus.mockReturnValue({ connectivity: 'offline', gatedBy: 'offline' });
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockResolveScan).not.toHaveBeenCalled();
+		expect(mockFetcher).not.toHaveBeenCalled();
+		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
+		expect(mockToastShow).toHaveBeenCalledWith({
+			id: expect.stringMatching(/^scan:\d+$/),
+			type: 'error',
+			title: 'pos_products.scan_unavailable:{"defaultValue":"Scanning unavailable"}',
+			description:
+				'pos_products.scan_unavailable_description:{"code":"ABC","defaultValue":"{code} — Sync engine is offline — see the banner above the products"}',
+			duration: 6000,
+		});
 	});
 });

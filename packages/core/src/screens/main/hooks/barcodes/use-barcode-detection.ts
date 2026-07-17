@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
+import { Toast } from '@wcpos/components/toast';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
@@ -54,13 +55,16 @@ export const useBarcodeDetection = (
 					if (event.barcode.length >= currentMinLengthNumber) {
 						return true;
 					}
+					// Scan feedback toasts directly; the logger only records the event.
+					Toast.show({
+						type: 'warning',
+						title: t('common.barcode_scanned', { barcode: event.barcode }),
+						description: t('common.barcode_must_be_at_least_characters', {
+							minLength: currentMinLengthNumber,
+						}),
+						duration: 6000,
+					});
 					barcodeLogger.warn(t('common.barcode_scanned', { barcode: event.barcode }), {
-						showToast: true,
-						toast: {
-							text2: t('common.barcode_must_be_at_least_characters', {
-								minLength: currentMinLengthNumber,
-							}),
-						},
 						context: {
 							barcode: event.barcode,
 							minLength: currentMinLengthNumber,

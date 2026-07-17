@@ -69,7 +69,7 @@
 	"common.barcode_must_be_at_least_characters": "Barcode must be at least {minLength} characters long",
 	"common.barcode_online_lookup_failed": "Online barcode lookup failed",
 	"common.barcode_scanned": "Barcode scanned: {barcode}",
-	"common.barcode_searching_online": "Searching online",
+	"common.barcode_searching_online": "Searching store…",
 	"common.billing_address": "Billing Address",
 	"common.brand": "Brand",
 	"common.brands": "Brands",
@@ -856,5 +856,15 @@
 	"health.database.clear_body_orders": "The orders held on this device will be removed and re-downloaded fresh from your server. Nothing on the server changes. You can keep selling — recent orders reappear within a moment.",
 	"health.database.last_check_error": "Last check didn't complete — retrying",
 	"health.database.last_check_ok": "Checked for changes",
-	"health.database.offline_preparing": "You're offline and still setting up — this till can't sell until its catalog finishes downloading."
+	"health.database.offline_preparing": "You're offline and still setting up — this till can't sell until its catalog finishes downloading.",
+	"pos_products.scan_added": "Added to cart",
+	"pos_products.scan_not_found": "Barcode not found",
+	"pos_products.scan_not_found_description": "{code} — not in this store, locally or online",
+	"pos_products.scan_several_matches": "Several matches",
+	"pos_products.scan_lookup_failed": "Lookup failed",
+	"pos_products.scan_lookup_failed_description": "{code} — Store didn’t respond — check your connection and scan again",
+	"pos_products.scan_unavailable": "Scanning unavailable",
+	"pos_products.scan_unavailable_description": "{code} — Sync engine is offline — see the banner above the products",
+	"pos_products.scan_outage_banner": "Scanning unavailable — sync engine offline.",
+	"pos_products.scan_outage_view_status": "View status"
 }

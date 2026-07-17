@@ -12,6 +12,7 @@ import { useBarcodeSearch } from '../../hooks/barcodes/use-barcode-search';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 import { resolveVariationStock } from './cells/variations-popover/variation-stock';
+import { useScanFeedback } from './use-scan-feedback';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
 const BARCODE_LOOKUP_TIMEOUT_MS = 10_000;
@@ -72,6 +73,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
+	const { begin } = useScanFeedback();
 
 	/**
 	 *
@@ -79,16 +81,14 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	useSubscription(barcode$, async (barcode: unknown) => {
 		const barcodeStr = String(barcode);
 		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
+		const scan = begin();
 		let results = await barcodeSearch(barcodeStr);
 		let onlineParentRequired = false;
 
 		const showAmbiguousResults = (count: number) => {
+			scan.ambiguous(count, barcodeStr);
 			barcodeLogger.error(text1, {
-				showToast: true,
 				saveToDb: true,
-				toast: {
-					text2: t('common.product_found_locally', { count }),
-				},
 				context: {
 					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
 					barcode: barcodeStr,
@@ -98,11 +98,22 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			setSearch(barcodeStr);
 		};
 
-		const showOnlineFailure = (text2: string, errorCode: string, error?: string) => {
+		const showNotFound = () => {
+			scan.notFound(barcodeStr);
 			barcodeLogger.error(text1, {
-				showToast: true,
 				saveToDb: true,
-				toast: { text2 },
+				context: {
+					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+					barcode: barcodeStr,
+				},
+			});
+			setSearch(barcodeStr);
+		};
+
+		const showLookupError = (errorCode: string, error?: string) => {
+			scan.error(barcodeStr);
+			barcodeLogger.error(text1, {
+				saveToDb: true,
 				context: {
 					errorCode,
 					barcode: barcodeStr,
@@ -118,6 +129,23 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		}
 
 		if (results.length === 0) {
+			// The online fallback needs a healthy sync engine; during an outage tell
+			// the cashier why scanning can't look the code up instead of timing out.
+			const engineStatus = manager.engine.status();
+			if (engineStatus.connectivity === 'offline' || engineStatus.gatedBy !== null) {
+				scan.unavailable(barcodeStr);
+				barcodeLogger.warn(text1, {
+					saveToDb: true,
+					context: {
+						barcode: barcodeStr,
+						connectivity: engineStatus.connectivity,
+						gatedBy: engineStatus.gatedBy,
+					},
+				});
+				setSearch(barcodeStr);
+				return;
+			}
+
 			const { fetcher, syncBaseUrl } = manager.engine.hostTransport();
 			const resolution = await resolveScan({
 				code: barcodeStr,
@@ -127,9 +155,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				now: Date.now,
 				onEvent: (event) => {
 					if (event.type === 'searching-online') {
+						scan.searchingOnline(barcodeStr);
 						barcodeLogger.info(text1, {
-							showToast: true,
-							toast: { text2: t('common.barcode_searching_online') },
 							context: { barcode: barcodeStr },
 						});
 					}
@@ -137,16 +164,12 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			});
 
 			if (resolution.outcome === 'not-found') {
-				showOnlineFailure(t('common.product_not_found_online'), ERROR_CODES.RECORD_NOT_FOUND);
+				showNotFound();
 				return;
 			}
 
 			if (resolution.outcome === 'error') {
-				showOnlineFailure(
-					t('common.barcode_online_lookup_failed'),
-					ERROR_CODES.CONNECTION_REFUSED,
-					resolution.message
-				);
+				showLookupError(ERROR_CODES.CONNECTION_REFUSED, resolution.message);
 				return;
 			}
 
@@ -207,8 +230,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						}
 						await Promise.all(handles.map((handle) => handle.ready));
 					} catch (error) {
-						showOnlineFailure(
-							t('common.barcode_online_lookup_failed'),
+						showLookupError(
 							ERROR_CODES.CONNECTION_REFUSED,
 							error instanceof Error ? error.message : String(error)
 						);
@@ -225,8 +247,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 				const match = resolution.match;
 				if (match.type === 'variation' && !match.parent_id) {
-					showOnlineFailure(
-						t('common.barcode_online_lookup_failed'),
+					showLookupError(
 						ERROR_CODES.MISSING_RESPONSE_DATA,
 						'resolve/barcode returned a variation without parent_id'
 					);
@@ -258,8 +279,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					}
 					await Promise.all(handles.map((handle) => handle.ready));
 				} catch (error) {
-					showOnlineFailure(
-						t('common.barcode_online_lookup_failed'),
+					showLookupError(
 						ERROR_CODES.CONNECTION_REFUSED,
 						error instanceof Error ? error.message : String(error)
 					);
@@ -272,7 +292,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 				results = await barcodeSearch(barcodeStr);
 				if (results.length === 0) {
-					showOnlineFailure(t('common.product_not_found_online'), ERROR_CODES.RECORD_NOT_FOUND);
+					showNotFound();
 					return;
 				}
 				if (results.length > 1) {
@@ -288,11 +308,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			? !resolveVariationStock(product).sellable
 			: product.stock_status !== 'instock';
 		if (!showOutOfStock && outOfStock) {
+			scan.outOfStock(product.name ?? '');
 			barcodeLogger.warn(text1, {
-				showToast: true,
-				toast: {
-					text2: t('pos_products.out_of_stock', { name: product.name }),
-				},
 				context: {
 					barcode: barcodeStr,
 					productId: product.id,
@@ -331,8 +348,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						handle.release();
 					}
 				} catch (error) {
-					showOnlineFailure(
-						t('common.barcode_online_lookup_failed'),
+					showLookupError(
 						ERROR_CODES.CONNECTION_REFUSED,
 						error instanceof Error ? error.message : String(error)
 					);
@@ -354,20 +370,19 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				}
 			);
 
-			addVariation(product, parent, metaData);
+			// The scan toast owns success feedback; silence the add-hook's own toast so
+			// a scan produces exactly one notification (fixes the double popup per scan).
+			addVariation(product, parent, metaData, { silent: true });
 		} else {
-			addProduct(product);
+			addProduct(product, { silent: true });
 		}
 
 		/**
 		 * Show success message
 		 */
+		scan.added(product.name ?? '');
 		barcodeLogger.success(text1, {
-			showToast: true,
 			saveToDb: true,
-			toast: {
-				text2: t('common.added_to_cart', { name: product.name }),
-			},
 			context: {
 				barcode: barcodeStr,
 				productId: product.id,

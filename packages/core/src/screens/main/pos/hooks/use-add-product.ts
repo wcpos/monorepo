@@ -51,7 +51,10 @@ export const useAddProduct = () => {
 	 * NOTE: for the miscellaneous product we pass in an object!! Not a document
 	 */
 	const addProduct = React.useCallback(
-		async (data: ProductDocument | { id: number; [key: string]: any }) => {
+		async (
+			data: ProductDocument | { id: number; [key: string]: any },
+			options?: { silent?: boolean }
+		) => {
 			let success;
 			let product = data;
 
@@ -84,7 +87,8 @@ export const useAddProduct = () => {
 			// returned success should be the updated order
 			if (success) {
 				orderLogger.success(t('common.added_to_cart', { name: product.name }), {
-					showToast: true,
+					// Scan-driven adds toast via the scan-feedback module instead.
+					showToast: !options?.silent,
 					saveToDb: true,
 					context: {
 						productId: product.id,

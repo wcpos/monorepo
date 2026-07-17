@@ -12,6 +12,7 @@ const suffix$ = new BehaviorSubject('');
 const avgThreshold$ = new BehaviorSubject(24);
 
 const focusEffectCleanups: (() => void)[] = [];
+const mockToastShow = jest.fn();
 
 jest.mock('expo-router', () => ({
 	useFocusEffect: (callback: () => void | (() => void)) => {
@@ -48,6 +49,11 @@ jest.mock('@wcpos/utils/logger', () => {
 		__barcodeLogger: barcodeLogger,
 	};
 });
+
+jest.mock('@wcpos/components/toast', () => ({
+	// Lazy closure: the hoisted factory must not evaluate mockToastShow before init.
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
+}));
 
 const barcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogger as {
 	warn: jest.Mock;
@@ -202,6 +208,33 @@ describe('useBarcodeDetection', () => {
 		expect(detected).toEqual(['1234']);
 		expect(callback).toHaveBeenCalledWith('1234');
 		expect(barcodeLogger.warn).not.toHaveBeenCalled();
+
+		subscription.unsubscribe();
+	});
+
+	it('shows a direct warning toast and logs a scan shorter than the minimum length', () => {
+		const detected: string[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const subscription = result.current.barcode$.subscribe((barcode) =>
+			detected.push(String(barcode))
+		);
+
+		act(() => {
+			dispatchBarcode('1234');
+			jest.advanceTimersByTime(151);
+		});
+
+		expect(detected).toEqual([]);
+		expect(mockToastShow).toHaveBeenCalledWith({
+			type: 'warning',
+			title: 'common.barcode_scanned',
+			description: 'Barcode must be at least 8 characters long',
+			duration: 6000,
+		});
+		expect(barcodeLogger.warn).toHaveBeenCalledWith(
+			'common.barcode_scanned',
+			expect.not.objectContaining({ showToast: expect.anything(), toast: expect.anything() })
+		);
 
 		subscription.unsubscribe();
 	});
