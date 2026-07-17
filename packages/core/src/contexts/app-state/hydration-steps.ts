@@ -10,6 +10,11 @@ import type { UserDatabase } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
 
+import {
+	mergeServerOwnedStoreFields,
+	normalizeStorePayload,
+	type ServerStorePayload,
+} from '../../utils/merge-stores';
 import { initialProps } from './initial-props';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
@@ -301,12 +306,13 @@ const processInitialPropsStep: HydrationStep = {
 		// Process stores and generate local IDs
 		let selectedStoreID: string | undefined;
 		const stores = await Promise.all(
-			initialProps.stores.map(async (store: any) => {
+			initialProps.stores.map(async (store: ServerStorePayload) => {
+				const normalizedStore = normalizeStorePayload(store);
 				const localID = await generateHashId({
 					user: user.uuid,
 					siteID: siteDoc.uuid,
 					wpCredentialsID: wpCredentialsDoc.uuid,
-					storeID: store.id,
+					storeID: normalizedStore.id,
 				});
 
 				// Check if this is the URL-selected store
@@ -315,7 +321,7 @@ const processInitialPropsStep: HydrationStep = {
 				}
 
 				return {
-					...store,
+					...normalizedStore,
 					localID,
 				};
 			})
@@ -336,8 +342,23 @@ const processInitialPropsStep: HydrationStep = {
 			storeID = stores[0].localID;
 		}
 
-		// Insert stores and update credentials
-		await userDB.stores.bulkInsert(stores); // will not overwrite existing data
+		// Patch existing documents without touching local preferences; insert new stores.
+		const newStores = [];
+		for (let index = 0; index < stores.length; index++) {
+			const preparedStore = stores[index];
+			const existingStore = await userDB.stores.findOne(preparedStore.localID).exec();
+			if (existingStore) {
+				await mergeServerOwnedStoreFields(
+					existingStore,
+					initialProps.stores[index] as ServerStorePayload
+				);
+			} else {
+				newStores.push(preparedStore);
+			}
+		}
+		if (newStores.length > 0) {
+			await userDB.stores.bulkInsert(newStores);
+		}
 		await wpCredentialsDoc.patch({
 			stores: storeLocalIDs,
 		});

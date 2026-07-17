@@ -1,6 +1,8 @@
 import * as Crypto from 'expo-crypto';
+import isEqual from 'lodash/isEqual';
 
 import type { StoreDocument, UserDatabase, WPCredentialsDocument } from '@wcpos/database';
+import { AUTO_SYNCED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 import { getLogger } from '@wcpos/utils/logger';
 
 const appLogger = getLogger(['wcpos', 'app', 'stores']);
@@ -39,15 +41,25 @@ async function generateHashId(dataObject: {
  */
 const VALID_TAX_BASED_ON_VALUES = new Set(['shipping', 'billing', 'base']);
 
-function normalizeStorePayload<T extends { id: number; [key: string]: any }>(store: T): T {
-	const out: any = { ...store };
+export type ServerStorePayload = { id: number } & Record<string, unknown>;
+
+export function normalizeStorePayload(store: ServerStorePayload): ServerStorePayload {
+	const out: ServerStorePayload = { ...store };
 
 	if (typeof out.timezone !== 'string') {
 		out.timezone = '';
 	}
 
-	if (!VALID_TAX_BASED_ON_VALUES.has(out.tax_based_on)) {
+	if (typeof out.tax_based_on !== 'string' || !VALID_TAX_BASED_ON_VALUES.has(out.tax_based_on)) {
 		out.tax_based_on = 'base';
+	}
+
+	if (typeof out.prevent_overselling !== 'boolean') {
+		out.prevent_overselling = false;
+	}
+
+	if (typeof out.price_num_decimals === 'number') {
+		out.wc_price_decimals = out.price_num_decimals;
 	}
 
 	if (typeof out.opening_hours === 'string') {
@@ -63,21 +75,21 @@ function normalizeStorePayload<T extends { id: number; [key: string]: any }>(sto
 	}
 
 	// tax_ids: server may omit the field entirely on older plugin versions.
-	// Coerce to [] so RxDB validation against the v8 schema doesn't reject
+	// Coerce to [] so RxDB validation against the current schema doesn't reject
 	// otherwise-valid store payloads, and drop malformed entries (missing
 	// type/value strings) so a single bad row doesn't take down the whole doc.
 	if (!Array.isArray(out.tax_ids)) {
 		out.tax_ids = [];
 	} else {
 		out.tax_ids = out.tax_ids
-			.filter(
-				(entry: any) =>
-					entry &&
-					typeof entry === 'object' &&
-					typeof entry.type === 'string' &&
-					typeof entry.value === 'string'
-			)
-			.map((entry: any) => ({
+			.filter((entry: unknown): entry is Record<string, unknown> => {
+				if (entry === null || typeof entry !== 'object') {
+					return false;
+				}
+				const candidate = entry as Record<string, unknown>;
+				return typeof candidate.type === 'string' && typeof candidate.value === 'string';
+			})
+			.map((entry) => ({
 				type: entry.type,
 				value: entry.value,
 				...(typeof entry.country === 'string' ? { country: entry.country } : {}),
@@ -86,6 +98,56 @@ function normalizeStorePayload<T extends { id: number; [key: string]: any }>(sto
 	}
 
 	return out;
+}
+
+/**
+ * Build the smallest patch that applies authoritative server values while leaving
+ * device-local preferences and fields omitted by older plugins untouched.
+ */
+export function getServerOwnedStorePatch(
+	currentStore: Record<string, unknown>,
+	incomingStore: ServerStorePayload,
+	fields: readonly string[] = AUTO_SYNCED_STORE_FIELDS
+): Record<string, unknown> {
+	const normalizedStore = normalizeStorePayload(incomingStore);
+	const providedFields = new Set(Object.keys(incomingStore));
+
+	// These values are derived from fields that are present in legacy/current payloads.
+	if (typeof incomingStore.price_num_decimals === 'number') {
+		providedFields.add('wc_price_decimals');
+	}
+	if (
+		typeof incomingStore.opening_hours === 'string' &&
+		!Object.prototype.hasOwnProperty.call(incomingStore, 'opening_hours_notes')
+	) {
+		providedFields.add('opening_hours_notes');
+	}
+
+	const patch: Record<string, unknown> = {};
+	for (const field of fields) {
+		if (!providedFields.has(field)) {
+			continue;
+		}
+		const incomingValue = normalizedStore[field];
+		if (incomingValue !== undefined && !isEqual(currentStore[field], incomingValue)) {
+			patch[field] = incomingValue;
+		}
+	}
+
+	return patch;
+}
+
+/** Apply authoritative values from one server payload to an existing store document. */
+export async function mergeServerOwnedStoreFields(
+	storeDocument: StoreDocument,
+	incomingStore: ServerStorePayload
+): Promise<Record<string, unknown>> {
+	const latest = storeDocument.getLatest() as unknown as Record<string, unknown>;
+	const patch = getServerOwnedStorePatch(latest, incomingStore);
+	if (Object.keys(patch).length > 0) {
+		await storeDocument.incrementalPatch(patch as never);
+	}
+	return patch;
 }
 
 /**
@@ -100,7 +162,7 @@ export async function mergeStoresWithResponse({
 }: {
 	userDB: UserDatabase;
 	wpUser: WPCredentialsDocument;
-	remoteStores: { id: number; [key: string]: any }[];
+	remoteStores: ServerStorePayload[];
 	user: { uuid: string };
 	siteID: string;
 }) {
@@ -148,14 +210,31 @@ export async function mergeStoresWithResponse({
 			});
 		}
 
-		// Upsert stores from the response (this handles both new and existing stores)
+		// Patch existing stores with server-owned fields and insert only genuinely new stores.
+		const existingStoresByLocalID = new Map(
+			currentStores.map((store) => [store.localID, store] as const)
+		);
+		const newStores = [];
+		for (let index = 0; index < remoteStoresWithLocalID.length; index++) {
+			const preparedStore = remoteStoresWithLocalID[index];
+			const remoteStore = remoteStores[index];
+			const existingStore =
+				existingStoresByLocalID.get(preparedStore.localID) ??
+				(await userDB.stores.findOne(preparedStore.localID).exec());
+			if (existingStore) {
+				await mergeServerOwnedStoreFields(existingStore, remoteStore);
+			} else {
+				newStores.push(preparedStore);
+			}
+		}
+
 		// `failedDocIds` collects localIDs for non-conflict bulkInsert errors so we
 		// can exclude them from wpUser.stores — otherwise a 422/write failure would
 		// leave wpUser pointing at a missing store doc and StoreSelect would
 		// silently drop it.
 		const failedDocIds = new Set<string>();
-		if (remoteStoresWithLocalID.length > 0) {
-			const bulkResult: any = await userDB.stores.bulkInsert(remoteStoresWithLocalID);
+		if (newStores.length > 0) {
+			const bulkResult: any = await userDB.stores.bulkInsert(newStores);
 			if (bulkResult?.error?.length) {
 				// bulkInsert resolves successfully even when every doc failed — the caller
 				// has to inspect `error` or it looks like the merge worked.
@@ -229,25 +308,10 @@ export async function mergeStoresWithResponse({
 				},
 			});
 
-			// Always update wc_price_decimals from the server on every sync.
-			// This field is server-authoritative and used for tax/discount calculations.
-			// Unlike price_num_decimals (which users can override locally for display),
-			// wc_price_decimals must always match WC's wc_get_price_decimals().
-			for (let i = 0; i < remoteStoresWithLocalID.length; i++) {
-				const remoteStore = remoteStores[i];
-				const localID = remoteStoresWithLocalID[i].localID;
-				const localStore = await userDB.stores.findOne(localID).exec();
-				if (localStore && remoteStore.price_num_decimals != null) {
-					await localStore.incrementalPatch({
-						wc_price_decimals: remoteStore.price_num_decimals,
-					});
-				}
-			}
-
-			appLogger.debug('Upserted stores from response', {
+			appLogger.debug('Inserted new stores from response', {
 				context: {
-					storeIds: remoteStoresWithLocalID.map((store) => store.id),
-					localIDs: remoteStoresWithLocalID.map((store) => store.localID),
+					storeIds: newStores.map((store) => store.id),
+					localIDs: newStores.map((store) => store.localID),
 				},
 			});
 		}
