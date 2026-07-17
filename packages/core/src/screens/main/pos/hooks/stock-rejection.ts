@@ -15,6 +15,56 @@ export interface StockRejectionState {
 	items: StockRejectionItem[];
 }
 
+interface CartLineStockIdentity {
+	product_id?: number | null;
+	variation_id?: number | null;
+	quantity?: number | null;
+}
+
+interface FindActiveStockRejectionArgs {
+	stockRejection: StockRejectionState | null;
+	orderUuid: string;
+	item: CartLineStockIdentity;
+	lineItems: CartLineStockIdentity[];
+}
+
+export function findActiveStockRejection({
+	stockRejection,
+	orderUuid,
+	item,
+	lineItems,
+}: FindActiveStockRejectionArgs): StockRejectionItem | null {
+	if (!stockRejection || stockRejection.orderUuid !== orderUuid) return null;
+	const match = stockRejection.items.find(
+		(rejected) =>
+			rejected.product_id === (item.product_id ?? 0) &&
+			rejected.variation_id === (item.variation_id ?? 0)
+	);
+	if (!match || match.available === null) return match ?? null;
+
+	const cohortVariationIds = new Set(
+		stockRejection.items
+			.filter(
+				(rejected) =>
+					rejected.product_id === match.product_id &&
+					rejected.available === match.available &&
+					rejected.reason === match.reason &&
+					rejected.backorders === match.backorders
+			)
+			.map((rejected) => rejected.variation_id)
+	);
+	const quantity = lineItems.reduce((total, lineItem) => {
+		if (
+			lineItem.product_id !== match.product_id ||
+			!cohortVariationIds.has(lineItem.variation_id ?? 0)
+		) {
+			return total;
+		}
+		return total + (Number.isFinite(lineItem.quantity) ? (lineItem.quantity as number) : 0);
+	}, 0);
+	return quantity <= match.available ? null : match;
+}
+
 /**
  * The last server-side wcpos_insufficient_stock rejection, shared between the
  * checkout modal (which sets it) and the cart line cells (which highlight the
