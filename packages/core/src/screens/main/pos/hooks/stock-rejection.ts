@@ -16,9 +16,9 @@ export interface StockRejectionState {
 }
 
 interface StockRejectionLine {
-	product_id?: number;
-	variation_id?: number;
-	quantity?: number;
+	product_id?: number | null;
+	variation_id?: number | null;
+	quantity?: number | null;
 }
 
 /**
@@ -52,31 +52,21 @@ export function findActiveStockRejection(
 	);
 	if (!match) return null;
 
-	const relatedItems = state.items.filter(
-		(rejected) => rejected.product_id === match.product_id && rejected.available === match.available
+	if (match.available === null) return match;
+	const rejectedVariationIds = new Set(
+		state.items
+			.filter((rejected) => rejected.product_id === match.product_id)
+			.map((rejected) => rejected.variation_id)
 	);
-	const aggregatesParentStock = relatedItems.some(
-		(rejected) =>
-			rejected.available !== null &&
-			rejected.requested !== undefined &&
-			rejected.requested <= rejected.available
-	);
-	const stockOwnerItems = aggregatesParentStock
-		? relatedItems
-		: relatedItems.filter((rejected) => rejected.variation_id === match.variation_id);
 	const quantity = lineItems.reduce(
 		(total, lineItem) =>
-			stockOwnerItems.some(
-				(rejected) =>
-					rejected.product_id === (lineItem.product_id ?? 0) &&
-					rejected.variation_id === (lineItem.variation_id ?? 0)
-			)
+			lineItem.product_id === match.product_id &&
+			rejectedVariationIds.has(lineItem.variation_id ?? 0)
 				? total + (lineItem.quantity ?? 0)
 				: total,
 		0
 	);
-	if (match.available !== null && quantity <= match.available) return null;
-	return match;
+	return quantity > match.available ? match : null;
 }
 
 /**

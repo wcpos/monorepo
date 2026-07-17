@@ -86,4 +86,22 @@ describe('findActiveStockRejection', () => {
 			])
 		).toBeNull();
 	});
+
+	it('aggregates siblings even when every rejected line was individually over stock', () => {
+		const parentRejection = {
+			orderUuid: 'order-a',
+			items: [
+				{ product_id: 12, variation_id: 34, requested: 4, available: 3 },
+				{ product_id: 12, variation_id: 35, requested: 4, available: 3 },
+			],
+		};
+		const correctedLines = [
+			{ product_id: 12, variation_id: 34, quantity: 2 },
+			{ product_id: 12, variation_id: 35, quantity: 2 },
+		];
+
+		expect(
+			findActiveStockRejection(parentRejection, 'order-a', correctedLines[0], correctedLines)
+		).toEqual(parentRejection.items[0]);
+	});
 });

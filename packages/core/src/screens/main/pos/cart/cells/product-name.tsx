@@ -28,7 +28,7 @@ interface Props {
 /**
  *
  */
-export function ProductName({ row, column }: CellContext<Props, 'name'>) {
+export function ProductName({ row, column, table }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
 	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
@@ -45,9 +45,9 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 				stockRejection,
 				currentOrder.uuid ?? '',
 				item,
-				currentOrder.getLatest().line_items ?? []
+				table.options.data.filter((line) => line.type === 'line_items').map((line) => line.item)
 			),
-		[stockRejection, currentOrder, item]
+		[stockRejection, currentOrder.uuid, table.options.data, item]
 	);
 
 	/**
