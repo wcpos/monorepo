@@ -84,6 +84,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const scan = begin();
 		let results = await barcodeSearch(barcodeStr);
 		let onlineParentRequired = false;
+		// The online lookup shows a persistent "Searching store…" toast; track it so a
+		// later failure can replace it with terminal feedback instead of leaving it up.
+		let searchingOnlineShown = false;
 
 		const showAmbiguousResults = (count: number) => {
 			scan.ambiguous(count, barcodeStr);
@@ -155,6 +158,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				now: Date.now,
 				onEvent: (event) => {
 					if (event.type === 'searching-online') {
+						searchingOnlineShown = true;
 						scan.searchingOnline(barcodeStr);
 						barcodeLogger.info(text1, {
 							context: { barcode: barcodeStr },
@@ -377,7 +381,15 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		} else {
 			added = await addProduct(product, { silent: true });
 		}
-		if (!added) return;
+		if (!added) {
+			// An online-resolved product/variation that fails to add would otherwise leave
+			// the infinite "Searching store…" toast up after the scan finished. Replace it
+			// with terminal failure feedback (the add hook surfaces its own mutation error).
+			if (searchingOnlineShown) {
+				scan.addFailed(product.name ?? '');
+			}
+			return;
+		}
 
 		/**
 		 * Show success message

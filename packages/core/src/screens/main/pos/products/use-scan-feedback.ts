@@ -18,6 +18,7 @@ function nextScanId(): string {
 export interface ScanFeedbackHandle {
 	searchingOnline: (code: string) => void;
 	added: (name: string) => void;
+	addFailed: (name: string) => void;
 	notFound: (code: string) => void;
 	ambiguous: (count: number, code: string) => void;
 	error: (code: string) => void;
@@ -47,6 +48,15 @@ export const useScanFeedback = () => {
 					title: t('pos_products.scan_added', { defaultValue: 'Added to cart' }),
 					description: name,
 					duration: SUCCESS_DURATION,
+				});
+			},
+			addFailed: (name) => {
+				Toast.show({
+					id,
+					type: 'error',
+					title: t('pos_products.scan_add_failed', { defaultValue: 'Couldn’t add to cart' }),
+					description: name,
+					duration: ALERT_DURATION,
 				});
 			},
 			notFound: (code) => {

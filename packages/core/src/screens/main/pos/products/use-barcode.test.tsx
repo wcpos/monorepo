@@ -801,4 +801,42 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).not.toHaveBeenCalled();
 		expect(mockClearSearch).not.toHaveBeenCalled();
 	});
+
+	it('replaces the searching-online toast with terminal feedback when the online add fails', async () => {
+		const product = productDocument();
+		product.payload.barcode = 'STALE';
+		mockFetcher.mockResolvedValue(
+			onlineResponse({ match: { id: 41, type: 'product', parent_id: 0 } })
+		);
+		engineProducts.push(product);
+		mockEngineRequire.mockImplementation(() => {
+			product.payload.barcode = 'ABC';
+			return {
+				ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
+				release: jest.fn(),
+			};
+		});
+		mockAddProduct.mockResolvedValue(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		const toasts = mockToastShow.mock.calls.map(([toast]) => toast);
+		const searching = toasts.find(
+			(toast) =>
+				toast.title === 'common.barcode_searching_online:{"defaultValue":"Searching store…"}'
+		);
+		const failed = toasts.find((toast) => toast.type === 'error');
+		expect(searching).toBeDefined();
+		expect(failed).toMatchObject({
+			type: 'error',
+			title: expect.stringContaining('pos_products.scan_add_failed'),
+			description: 'Keyboard',
+		});
+		// The terminal toast reuses the scan id, so it replaces the persistent
+		// "Searching store…" toast in place instead of leaving it up indefinitely.
+		expect(failed.id).toBe(searching.id);
+		expect(mockClearSearch).not.toHaveBeenCalled();
+	});
 });
