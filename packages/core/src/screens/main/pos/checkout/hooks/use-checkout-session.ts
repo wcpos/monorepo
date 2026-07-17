@@ -225,7 +225,18 @@ export function useCheckoutSession(order: OrderDocument) {
 						wooIds,
 						forceRefresh: true,
 					});
-					handle.ready.finally(() => handle.release());
+					void handle.ready
+						.finally(() => handle.release())
+						.catch((refreshError) => {
+							checkoutLogger.error('Failed to refresh rejected stock records', {
+								saveToDb: true,
+								context: {
+									collection,
+									error:
+										refreshError instanceof Error ? refreshError.message : String(refreshError),
+								},
+							});
+						});
 				}
 				return;
 			}
