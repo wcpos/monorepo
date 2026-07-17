@@ -149,7 +149,9 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 					</VStack>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose testID="cancel-checkout-button">{t('common.cancel')}</ModalClose>
+					{!showStockRejection && (
+						<ModalClose testID="cancel-checkout-button">{t('common.cancel')}</ModalClose>
+					)}
 					{showStockRejection ? (
 						<ModalAction
 							testID="return-to-cart-button"
