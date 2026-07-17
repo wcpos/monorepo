@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 10,
+	version: 11,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -211,6 +211,12 @@ export const storesLiteral = {
 			description: 'This sets the number of decimals of displayed prices.',
 			type: 'number',
 			default: 2,
+		},
+		prevent_overselling: {
+			title: 'Prevent overselling',
+			description: 'Whether the server prevents checkout when there is insufficient stock.',
+			type: 'boolean',
+			default: false,
 		},
 		wc_price_decimals: {
 			title: 'WC Price Decimals (server-authoritative)',
@@ -585,3 +591,88 @@ export const storesLiteral = {
 		},
 	},
 } as const;
+
+/**
+ * Store fields whose canonical value comes from the WordPress store payload.
+ *
+ * Keep this list beside the schema when adding server-provided fields. Device-local
+ * preferences (sync tuning, barcode scanner settings, theme, etc.) must not be added.
+ * `wc_price_decimals` is derived from the server's `price_num_decimals` value at ingest.
+ */
+export const SERVER_OWNED_STORE_FIELDS = [
+	'id',
+	'name',
+	'locale',
+	'timezone',
+	'default_customer',
+	'default_customer_is_cashier',
+	'store_address',
+	'store_address_2',
+	'store_city',
+	'store_state',
+	'store_country',
+	'tax_address',
+	'store_postcode',
+	'default_customer_address',
+	'calc_taxes',
+	'enable_coupons',
+	'calc_discounts_sequentially',
+	'currency',
+	'currency_pos',
+	'price_thousand_sep',
+	'price_decimal_sep',
+	'price_num_decimals',
+	'wc_price_decimals',
+	'prevent_overselling',
+	'prices_include_tax',
+	'tax_based_on',
+	'shipping_tax_class',
+	'tax_round_at_subtotal',
+	'tax_display_shop',
+	'tax_display_cart',
+	'price_display_suffix',
+	'tax_total_display',
+	'meta_data',
+	'url',
+	'phone',
+	'email',
+	'opening_hours',
+	'opening_hours_notes',
+	'personal_notes',
+	'policies_and_conditions',
+	'footer_imprint',
+	'tax_ids',
+	'active_templates',
+] as const satisfies readonly (keyof typeof storesLiteral.properties)[];
+
+/**
+ * Server-owned fields the app ALSO lets the user edit locally (Settings > General).
+ * These must not auto-sync — a login must never revert an in-app edit. The manual
+ * "Restore server settings" action applies them explicitly.
+ */
+export const APP_EDITABLE_STORE_FIELDS = [
+	'name',
+	'locale',
+	'store_address',
+	'store_address_2',
+	'store_city',
+	'store_state',
+	'store_country',
+	'store_postcode',
+	'default_customer',
+	'default_customer_is_cashier',
+	'currency',
+	'currency_pos',
+	'price_thousand_sep',
+	'price_decimal_sep',
+	'price_num_decimals',
+] as const satisfies readonly (typeof SERVER_OWNED_STORE_FIELDS)[number][];
+
+/**
+ * The subset of SERVER_OWNED_STORE_FIELDS applied automatically on every
+ * hydration/cashier sync: authoritative for calculations or WP-Admin-only
+ * content, never editable in the app.
+ */
+export const AUTO_SYNCED_STORE_FIELDS = SERVER_OWNED_STORE_FIELDS.filter(
+	(field) => !(APP_EDITABLE_STORE_FIELDS as readonly string[]).includes(field)
+);

@@ -32,7 +32,7 @@ jest.mock('./initial-props', () => ({
 }));
 
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
-import { hydrateUserSession, testAuthorizationMethod } from './hydration-steps';
+import { hydrateUserSession, hydrationSteps, testAuthorizationMethod } from './hydration-steps';
 
 const documentLookup = (document: unknown) => ({
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => document) })),
@@ -73,6 +73,69 @@ describe('hydrateUserSession', () => {
 				{ siteID: 'site-1', wpCredentialsID: 'cred-1', storeID: 'store-1' }
 			)
 		).rejects.toThrow('Failed to create fast store database');
+	});
+});
+
+describe('PROCESS_INITIAL_PROPS', () => {
+	it('merges server-owned fields into existing stores and inserts new stores', async () => {
+		const existingStore: any = {
+			id: 1,
+			localID: '0123456789',
+			currency: 'USD',
+			theme: 'dark',
+			incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
+				Object.assign(existingStore, patch);
+			}),
+		};
+		existingStore.getLatest = jest.fn(() => existingStore);
+
+		const siteDoc = { uuid: 'site-1' };
+		const wpCredentialsDoc = {
+			uuid: 'credentials-1',
+			patch: jest.fn(async () => undefined),
+		};
+		const bulkInsert = jest.fn(async () => undefined);
+		const userDB = {
+			sites: { upsert: jest.fn(async () => siteDoc) },
+			wp_credentials: { upsert: jest.fn(async () => wpCredentialsDoc) },
+			stores: {
+				findOne: jest
+					.fn()
+					.mockReturnValueOnce({ exec: jest.fn(async () => existingStore) })
+					.mockReturnValueOnce({ exec: jest.fn(async () => null) }),
+				bulkInsert,
+			},
+		};
+		const appState = {
+			get: jest.fn(async () => ({ storeID: existingStore.localID })),
+			set: jest.fn(async () => undefined),
+		};
+		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS');
+
+		await step!.execute({
+			userDB: userDB as any,
+			appState,
+			user: { uuid: 'user-1' },
+			initialProps: {
+				site: siteDoc,
+				wp_credentials: wpCredentialsDoc,
+				stores: [
+					{ id: 1, currency: 'EUR', calc_taxes: 'yes', theme: 'light' },
+					{ id: 2, name: 'New Store' },
+				],
+			},
+		});
+
+		// calc_taxes is auto-synced; currency is app-editable and must NOT auto-sync
+		expect(existingStore.incrementalPatch).toHaveBeenCalledWith({ calc_taxes: 'yes' });
+		expect(existingStore.theme).toBe('dark');
+		expect(bulkInsert).toHaveBeenCalledWith([
+			expect.objectContaining({
+				id: 2,
+				name: 'New Store',
+				prevent_overselling: false,
+			}),
+		]);
 	});
 });
 

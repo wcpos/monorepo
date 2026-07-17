@@ -39,15 +39,114 @@ const makeUserDB = () => ({
 	stores: {
 		bulkInsert: jest.fn().mockResolvedValue(undefined),
 		bulkRemove: jest.fn().mockResolvedValue(undefined),
-		findOne: jest.fn().mockReturnValue({
-			exec: jest.fn().mockResolvedValue({
-				incrementalPatch: jest.fn().mockResolvedValue(undefined),
-			}),
-		}),
+		findOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }),
 	},
 });
 
+const getLocalID = (storeID: number) => {
+	const dataString = JSON.stringify({
+		user: 'user-uuid',
+		siteID: 'site-1',
+		wpCredentialsID: 'wp-user-uuid',
+		storeID,
+	});
+	let hash = 0;
+	for (let i = 0; i < dataString.length; i++) {
+		hash = ((hash << 5) - hash + dataString.charCodeAt(i)) | 0;
+	}
+	return Math.abs(hash).toString(16).padStart(10, '0').substring(0, 10);
+};
+
+const makeStoreDocument = (data: Record<string, unknown>) => {
+	const document: any = {
+		...data,
+		incrementalPatch: jest.fn(async (patch: Record<string, unknown>) => {
+			Object.assign(document, patch);
+		}),
+	};
+	document.getLatest = jest.fn(() => document);
+	return document;
+};
+
 describe('mergeStoresWithResponse', () => {
+	it('updates changed server-owned fields on an existing store and preserves local preferences', async () => {
+		const existingStore = makeStoreDocument({
+			id: 1,
+			localID: getLocalID(1),
+			currency: 'USD',
+			calc_taxes: 'no',
+			price_num_decimals: 2,
+			wc_price_decimals: 2,
+			prevent_overselling: false,
+			theme: 'dark',
+			barcode_scanning_prefix: 'LOCAL-',
+			sync_pull_batch_size: 75,
+		});
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([existingStore]);
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores: [
+				{
+					id: 1,
+					currency: 'EUR',
+					calc_taxes: 'yes',
+					price_num_decimals: 3,
+					prevent_overselling: true,
+					theme: 'light',
+					barcode_scanning_prefix: 'SERVER-',
+					sync_pull_batch_size: 10,
+				},
+			],
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		// currency and price_num_decimals are app-editable → manual restore only;
+		// wc_price_decimals is the server-authoritative copy and still auto-syncs.
+		expect(existingStore.incrementalPatch).toHaveBeenCalledWith({
+			calc_taxes: 'yes',
+			wc_price_decimals: 3,
+			prevent_overselling: true,
+		});
+		expect(existingStore).toMatchObject({
+			theme: 'dark',
+			barcode_scanning_prefix: 'LOCAL-',
+			sync_pull_batch_size: 75,
+		});
+		expect(userDB.stores.bulkInsert).not.toHaveBeenCalled();
+	});
+
+	it('leaves existing values unchanged when server-owned fields are absent', async () => {
+		const existingStore = makeStoreDocument({
+			id: 1,
+			localID: getLocalID(1),
+			name: 'Store 1',
+			currency: 'GBP',
+			prevent_overselling: true,
+			tax_ids: [{ type: 'VAT', value: 'GB123' }],
+		});
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([existingStore]);
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores: [{ id: 1, name: 'Store 1' }],
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		expect(existingStore.incrementalPatch).not.toHaveBeenCalled();
+		expect(existingStore).toMatchObject({
+			currency: 'GBP',
+			prevent_overselling: true,
+			tax_ids: [{ type: 'VAT', value: 'GB123' }],
+		});
+	});
+
 	it('should insert new stores and update wpUser', async () => {
 		const userDB = makeUserDB();
 		const wpUser = makeWpUser([]);
@@ -63,7 +162,12 @@ describe('mergeStoresWithResponse', () => {
 
 		expect(userDB.stores.bulkInsert).toHaveBeenCalledWith(
 			expect.arrayContaining([
-				expect.objectContaining({ id: 1, name: 'Store 1', localID: expect.any(String) }),
+				expect.objectContaining({
+					id: 1,
+					name: 'Store 1',
+					localID: expect.any(String),
+					prevent_overselling: false,
+				}),
 			])
 		);
 		expect(wpUser.incrementalPatch).toHaveBeenCalledWith({

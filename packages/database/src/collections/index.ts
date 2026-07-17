@@ -153,6 +153,10 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.sync_pull_batch_size = 50;
 			return oldDoc;
 		},
+		11(oldDoc: StoreDocumentType) {
+			oldDoc.prevent_overselling = false;
+			return oldDoc;
+		},
 	},
 };
 

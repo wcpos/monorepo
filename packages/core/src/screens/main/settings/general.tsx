@@ -18,9 +18,12 @@ import {
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
+import { getLogger } from '@wcpos/utils/logger';
+import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { getServerOwnedStorePatch } from '../../../utils/merge-stores';
 import { CountryCombobox } from '../components/country-state-select/country-combobox';
 import { StateFormInput } from '../components/country-state-select/state-forminput';
 import { CurrencyPositionSelect } from '../components/currency-position-select';
@@ -33,6 +36,8 @@ import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 
 /**
  *
@@ -146,28 +151,18 @@ export function GeneralSettings() {
 		try {
 			const response = await http.get(`stores/${store.id}`);
 			const data = response.data;
-			await localPatch({
-				document: store,
-				data: {
-					name: data.name,
-					store_country: data.store_country,
-					store_state: data.store_state,
-					store_city: data.store_city,
-					store_postcode: data.store_postcode,
-					locale: data.locale,
-					default_customer: data.default_customer,
-					default_customer_is_cashier: data.default_customer_is_cashier,
-					currency: data.currency,
-					currency_pos: data.currency_pos,
-					price_thousand_sep: data.price_thousand_sep,
-					price_decimal_sep: data.price_decimal_sep,
-					price_num_decimals: data.price_num_decimals,
-					wc_price_decimals: data.price_num_decimals,
-					// thousands_group_style: data.thousands_group_style,
-				},
-			});
+			const patch = getServerOwnedStorePatch(
+				store.getLatest() as unknown as Record<string, unknown>,
+				data,
+				SERVER_OWNED_STORE_FIELDS
+			);
+			if (Object.keys(patch).length > 0) {
+				await localPatch({ document: store, data: patch as never });
+			}
 		} catch (error) {
-			console.error(error);
+			uiLogger.error('Failed to restore server settings', {
+				context: { error: error instanceof Error ? error.message : String(error) },
+			});
 		} finally {
 			setLoading(false);
 		}
