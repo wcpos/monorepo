@@ -12,6 +12,7 @@ import { EditCartItemButton } from './edit-cart-item-button';
 import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
 import { EditableField } from '../../../components/editable-field';
+import { useCurrentOrder } from '../../contexts/current-order';
 import { stockRejection$ } from '../../hooks/stock-rejection';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
@@ -29,6 +30,7 @@ interface Props {
  */
 export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
+	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 	const stockRejection = useObservableEagerState(stockRejection$);
 	const t = useT();
@@ -38,6 +40,7 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 	 * longer exceeds what the server said was available (self-clearing).
 	 */
 	const rejectedItem = React.useMemo(() => {
+		if (stockRejection?.orderUuid !== currentOrder.uuid) return null;
 		const match = stockRejection?.items.find(
 			(rejected) =>
 				rejected.product_id === (item.product_id ?? 0) &&
@@ -46,7 +49,7 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 		if (!match) return null;
 		if (match.available !== null && (item.quantity ?? 0) <= match.available) return null;
 		return match;
-	}, [stockRejection, item.product_id, item.variation_id, item.quantity]);
+	}, [stockRejection, currentOrder.uuid, item.product_id, item.variation_id, item.quantity]);
 
 	/**
 	 * filter out the private meta data
