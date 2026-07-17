@@ -10,6 +10,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { VariationButtons } from './buttons';
 import { VariationSelect } from './select';
+import { useVariationStock, VariationStockBadge } from './stock-status';
 import { parseAttributes } from './utils';
 import { useT } from '../../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
@@ -20,6 +21,7 @@ import {
 import { useQueryState, useQueryStateActions } from '../../../../../../query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
 
@@ -44,7 +46,6 @@ export function Variations({ binding, parent, addToCart }: VariationPopoverProps
 	>((state) => state.filters.attributeMatches);
 	const actions = useQueryStateActions<'variations'>();
 	const selectedVariation = result.count === 1 && result.hits[0].document;
-	const { format } = useCurrencyFormat();
 	const t = useT();
 
 	/**
@@ -117,11 +118,7 @@ export function Variations({ binding, parent, addToCart }: VariationPopoverProps
 				</VStack>
 			))}
 			{selectedVariation ? (
-				<Button testID="variation-popover-add-to-cart" onPress={handleAddToCart}>
-					<ButtonText>
-						{t('common.add_to_cart') + ': ' + format(selectedVariation.price)}
-					</ButtonText>
-				</Button>
+				<VariationAddToCart variation={selectedVariation} onAddToCart={handleAddToCart} />
 			) : result.count === 0 ? (
 				loading ? (
 					<HStack testID="variation-popover-syncing" space="xs" className="justify-center">
@@ -137,6 +134,37 @@ export function Variations({ binding, parent, addToCart }: VariationPopoverProps
 					</HStack>
 				)
 			) : null}
+		</VStack>
+	);
+}
+
+/**
+ * Resolved-variation footer: stock badge + add-to-cart, disabled when the
+ * variation isn't sellable (only reachable when out-of-stock items are shown).
+ */
+function VariationAddToCart({
+	variation,
+	onAddToCart,
+}: {
+	variation: ProductVariationDocument;
+	onAddToCart: () => void;
+}) {
+	const stock = useVariationStock(variation);
+	const { format } = useCurrencyFormat();
+	const t = useT();
+
+	return (
+		<VStack space="xs">
+			<VariationStockBadge stock={stock} />
+			<Button
+				testID="variation-popover-add-to-cart"
+				onPress={onAddToCart}
+				disabled={!stock.sellable}
+			>
+				<ButtonText>
+					{t('common.add_to_cart') + ': ' + format(Number(variation.price ?? 0))}
+				</ButtonText>
+			</Button>
 		</VStack>
 	);
 }

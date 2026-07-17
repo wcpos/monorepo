@@ -47,6 +47,10 @@ jest.mock('./buttons', () => ({
 	),
 }));
 jest.mock('./select', () => ({ VariationSelect: () => null }));
+jest.mock('./stock-status', () => ({
+	useVariationStock: () => ({ status: 'instock', quantity: null, sellable: true }),
+	VariationStockBadge: () => null,
+}));
 jest.mock('../../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
