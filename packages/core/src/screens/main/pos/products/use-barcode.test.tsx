@@ -20,6 +20,7 @@ const mockOnKeyPress = jest.fn();
 const engineProducts: EngineDocument[] = [];
 const engineVariations: EngineDocument[] = [];
 let mockSubscriptionCallback: ((barcode: unknown) => Promise<void> | void) | undefined;
+let mockShowOutOfStock = true;
 
 interface EngineDocument {
 	id: string;
@@ -43,7 +44,7 @@ jest.mock('@wcpos/utils/logger', () => {
 });
 
 jest.mock('observable-hooks', () => ({
-	useObservableEagerState: () => true,
+	useObservableEagerState: () => mockShowOutOfStock,
 	useSubscription: (_observable: unknown, callback: (barcode: unknown) => Promise<void> | void) => {
 		mockSubscriptionCallback = callback;
 	},
@@ -175,6 +176,7 @@ function renderBarcodeHook() {
 
 describe('useBarcode online escalation', () => {
 	beforeEach(() => {
+		mockShowOutOfStock = true;
 		for (const mock of [
 			mockAddProduct,
 			mockAddVariation,
@@ -281,6 +283,42 @@ describe('useBarcode online escalation', () => {
 		expect(parent.id).toBe(41);
 		expect(parent.isInstanceOfRxDocument).toBe(true);
 		expect(metaData).toEqual([{ attr_id: 7, display_key: 'Colour', display_value: 'Black' }]);
+	});
+
+	it('does not add an unsellable managed variation when out-of-stock items are hidden', async () => {
+		mockShowOutOfStock = false;
+		engineProducts.push(productDocument(41, 'PARENT'));
+		const variation = variationDocument();
+		variation.payload.manage_stock = true;
+		(variation as { stockQuantity?: number }).stockQuantity = 0;
+		variation.stockStatus = 'instock';
+		variation.payload.backorders = 'no';
+		engineVariations.push(variation);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddVariation).not.toHaveBeenCalled();
+		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				toast: { text2: 'pos_products.out_of_stock:{"name":"Keyboard / Black"}' },
+			})
+		);
+	});
+
+	it('adds an on-backorder variation when out-of-stock items are hidden', async () => {
+		mockShowOutOfStock = false;
+		engineProducts.push(productDocument(41, 'PARENT'));
+		const variation = variationDocument();
+		variation.stockStatus = 'onbackorder';
+		engineVariations.push(variation);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddVariation).toHaveBeenCalledTimes(1);
+		expect(mockBarcodeLogger.warn).not.toHaveBeenCalled();
 	});
 
 	it('target-requires a missing parent for a local variation before adding it', async () => {

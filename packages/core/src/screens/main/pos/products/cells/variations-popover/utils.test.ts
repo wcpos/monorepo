@@ -1,6 +1,6 @@
 import type { ProductDocument, ProductVariationDocument } from '@wcpos/database';
 
-import { parseAttributes } from './utils';
+import { getDisabledVariationOptions, parseAttributes } from './utils';
 
 /**
  * PARSEATTRIBUTES TEST SUITE
@@ -971,5 +971,73 @@ describe('parseAttributes', () => {
 			// This case is still fast enough, but with more missing attrs it compounds
 			expect(duration).toBeLessThan(100);
 		});
+	});
+});
+
+describe('getDisabledVariationOptions', () => {
+	const attribute = {
+		id: 1,
+		name: 'Color',
+		variation: true,
+		options: ['Red', 'Blue', 'Green'],
+	};
+	const hit = (
+		color: string,
+		size: string,
+		stock: Partial<ProductVariationDocument>
+	): { document: ProductVariationDocument } => ({
+		document: {
+			attributes: [
+				{ id: 1, name: 'Color', option: color },
+				{ id: 2, name: 'Size', option: size },
+			],
+			manage_stock: false,
+			stock_status: 'instock',
+			backorders: 'no',
+			...stock,
+		} as ProductVariationDocument,
+	});
+	const hits = [
+		hit('Red', 'Small', { stock_status: 'outofstock' }),
+		hit('Red', 'Small', { stock_status: 'instock' }),
+		hit('Blue', 'Small', { stock_status: 'outofstock' }),
+		hit('Blue', 'Large', { stock_status: 'instock' }),
+		hit('Green', 'Small', {
+			manage_stock: true,
+			stock_quantity: 0,
+			stock_status: 'instock',
+			backorders: 'no',
+		}),
+	];
+
+	it('disables an option only when every variation matching the partial selection is unsellable', () => {
+		expect(
+			getDisabledVariationOptions(attribute, [{ id: 2, name: 'Size', option: 'Small' }], hits, true)
+		).toEqual({ Red: false, Blue: true, Green: true });
+	});
+
+	it('evaluates alternatives to the currently selected target attribute', () => {
+		expect(
+			getDisabledVariationOptions(
+				attribute,
+				[
+					{ id: 1, name: 'Color', option: 'Red' },
+					{ id: 2, name: 'Size', option: 'Large' },
+				],
+				hits,
+				true
+			)
+		).toEqual({ Red: false, Blue: false, Green: false });
+	});
+
+	it('does not disable sellability options when out-of-stock items are shown', () => {
+		expect(
+			getDisabledVariationOptions(
+				attribute,
+				[{ id: 2, name: 'Size', option: 'Small' }],
+				hits,
+				false
+			)
+		).toEqual({ Red: false, Blue: false, Green: false });
 	});
 });

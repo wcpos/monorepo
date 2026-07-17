@@ -43,6 +43,7 @@ export function VariableProductRow({
 		| {
 				expanded$: import('rxjs').Observable<Record<string, boolean>>;
 				setRowExpanded?: (rowId: string, expanded: boolean) => void;
+				hideOutOfStockVariations?: boolean;
 		  }
 		| undefined;
 	const isExpanded = useObservableEagerState(
@@ -130,7 +131,9 @@ export function VariableProductRow({
 							height.value = h;
 						}}
 					>
-						{shouldRender ? <Variations row={item} /> : null}
+						{shouldRender ? (
+							<Variations row={item} hideOutOfStock={meta?.hideOutOfStockVariations} />
+						) : null}
 					</ScrollView>
 				</Animated.View>
 			</VariationRowProvider>

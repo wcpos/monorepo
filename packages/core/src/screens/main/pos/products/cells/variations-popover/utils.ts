@@ -1,5 +1,7 @@
 import type { ProductDocument, ProductVariationDocument } from '@wcpos/database';
 
+import { resolveVariationStock } from './variation-stock';
+
 /**
  * VARIATIONS POPOVER - PURPOSE & LOGIC
  * =====================================
@@ -152,3 +154,38 @@ export const parseAttributes = (
 			return { attribute: { ...attribute, characterCount }, optionCounts, selected: autoSelected };
 		});
 };
+
+/**
+ * Resolve stock-disabled options without changing the existing availability counts.
+ * The target attribute's current selection is ignored so alternative values are
+ * evaluated against the rest of the partial selection.
+ */
+export function getDisabledVariationOptions(
+	attribute: NonNullable<ProductDocument['attributes']>[number],
+	selectedAttributes: SelectedAttribute[] | undefined,
+	hits: { document: ProductVariationDocument }[],
+	hideOutOfStock: boolean
+): Record<string, boolean> {
+	const disabledOptions: Record<string, boolean> = {};
+	const targetAttrId = attribute.id ?? 0;
+	const targetAttrName = attribute.name ?? '';
+	const partialSelection = selectedAttributes?.filter(
+		(selected) => !isSameAttribute(selected, targetAttrId, targetAttrName)
+	);
+
+	for (const option of attribute.options ?? []) {
+		if (!hideOutOfStock) {
+			disabledOptions[option] = false;
+			continue;
+		}
+
+		const matchingHits = hits.filter((hit) =>
+			hitMatchesOption(hit, targetAttrId, targetAttrName, option, partialSelection)
+		);
+		disabledOptions[option] =
+			matchingHits.length > 0 &&
+			matchingHits.every((hit) => !resolveVariationStock(hit.document).sellable);
+	}
+
+	return disabledOptions;
+}

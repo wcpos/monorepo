@@ -11,7 +11,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { VariationButtons } from './buttons';
 import { VariationSelect } from './select';
 import { useVariationStock, VariationStockBadge } from './stock-status';
-import { parseAttributes } from './utils';
+import { getDisabledVariationOptions, parseAttributes } from './utils';
 import { useT } from '../../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 import {
@@ -30,15 +30,26 @@ interface VariationPopoverProps {
 		ReturnType<typeof import('../../../../../../query').useCollectionBinding<'variations'>>,
 		'resource' | 'active$'
 	>;
+	allVariationsResource?: ReturnType<
+		typeof import('../../../../../../query').useCollectionBinding<'variations'>
+	>['resource'];
 	parent: import('@wcpos/database').ProductDocument;
 	addToCart: (variation: ProductDocument, metaData: LineItem['meta_data']) => void;
+	hideOutOfStock?: boolean;
 }
 
 /**
  *
  */
-export function Variations({ binding, parent, addToCart }: VariationPopoverProps) {
+export function Variations({
+	binding,
+	allVariationsResource,
+	parent,
+	addToCart,
+	hideOutOfStock = false,
+}: VariationPopoverProps) {
 	const result = useObservableSuspense(binding.resource);
+	const allVariationsResult = useObservableSuspense(allVariationsResource ?? binding.resource);
 	const loading = useObservableEagerState(binding.active$);
 	const selectedAttributes = useQueryState<
 		'variations',
@@ -98,25 +109,35 @@ export function Variations({ binding, parent, addToCart }: VariationPopoverProps
 	 */
 	return (
 		<VStack className="min-w-52">
-			{attributeOptions.map(({ attribute, optionCounts, selected }) => (
-				<VStack key={attribute.name} space="xs">
-					<Text>{attribute.name}</Text>
-					{attribute.characterCount < 15 ? (
-						<VariationButtons
-							attribute={attribute}
-							onSelect={handleSelect}
-							selected={selected?.option}
-							optionCounts={optionCounts}
-						/>
-					) : (
-						<VariationSelect
-							attribute={attribute}
-							onSelect={handleSelect}
-							selected={selected?.option}
-						/>
-					)}
-				</VStack>
-			))}
+			{attributeOptions.map(({ attribute, optionCounts, selected }) => {
+				const disabledOptions = getDisabledVariationOptions(
+					attribute,
+					selectedAttributes,
+					allVariationsResult.hits,
+					hideOutOfStock
+				);
+				return (
+					<VStack key={attribute.name} space="xs">
+						<Text>{attribute.name}</Text>
+						{attribute.characterCount < 15 ? (
+							<VariationButtons
+								attribute={attribute}
+								onSelect={handleSelect}
+								selected={selected?.option}
+								optionCounts={optionCounts}
+								disabledOptions={disabledOptions}
+							/>
+						) : (
+							<VariationSelect
+								attribute={attribute}
+								onSelect={handleSelect}
+								selected={selected?.option}
+								disabledOptions={disabledOptions}
+							/>
+						)}
+					</VStack>
+				);
+			})}
 			{selectedVariation ? (
 				<VariationAddToCart variation={selectedVariation} onAddToCart={handleAddToCart} />
 			) : result.count === 0 ? (
