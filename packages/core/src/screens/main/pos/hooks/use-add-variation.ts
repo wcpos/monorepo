@@ -67,7 +67,7 @@ export const useAddVariation = () => {
 							name: parent.name,
 						})
 					: { allowed: true, warning: null, available: null, name: parent.name ?? '' };
-			if (!stockResult.allowed) return;
+			if (!stockResult.allowed) return false;
 
 			// check if variation is already in order, if so increment quantity
 			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && parent.id !== 0) {
@@ -121,6 +121,8 @@ export const useAddVariation = () => {
 					},
 				});
 			}
+
+			return Boolean(success);
 		},
 		[
 			currentOrder,

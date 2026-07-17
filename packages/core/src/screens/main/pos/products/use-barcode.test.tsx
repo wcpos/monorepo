@@ -225,6 +225,29 @@ describe('useBarcode online escalation', () => {
 			ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
 			release: jest.fn(),
 		}));
+		mockAddProduct.mockResolvedValue(true);
+		mockAddVariation.mockResolvedValue(true);
+	});
+
+	it.each([
+		['product', mockAddProduct, () => engineProducts.push(productDocument())],
+		[
+			'variation',
+			mockAddVariation,
+			() => {
+				engineProducts.push(productDocument(41, 'PARENT'));
+				engineVariations.push(variationDocument());
+			},
+		],
+	] as const)('does not report or clear a blocked %s scan', async (_type, add, arrange) => {
+		arrange();
+		add.mockResolvedValue(false);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockBarcodeLogger.success).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
 	});
 
 	it.each(['sku', 'barcode', 'global_unique_id'] as const)(
