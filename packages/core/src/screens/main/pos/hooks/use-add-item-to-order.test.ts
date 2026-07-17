@@ -39,6 +39,10 @@ jest.mock('@wcpos/query', () => ({
 	useQueryManager: () => ({ engine: { write: mockWrite } }),
 }));
 
+jest.mock('@wcpos/query/engine-compat', () => ({
+	wrapEngineDocument: (_collection: string, resident: unknown) => resident,
+}));
+
 jest.mock('uuid', () => ({
 	v4: () => 'line-item-uuid',
 }));
@@ -106,6 +110,43 @@ describe('useAddItemToOrder', () => {
 
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
 		expect(mockCheckCartStock).not.toHaveBeenCalled();
+	});
+
+	it('serializes stock checks while the first item persists a new order', async () => {
+		mockStockGuardEnabled = true;
+		order.isNew = true;
+		const resident = { ...order, isNew: false, line_items: [] } as typeof order;
+		resident.getLatest = () => resident;
+		mockCheckCartStock.mockImplementation(
+			async ({ lineItems }: { lineItems: Record<string, unknown>[] }) => ({
+				allowed: lineItems.length === 0,
+				warning: null,
+				available: 1,
+				name: 'Product',
+			})
+		);
+		mockInsertEngineResident.mockImplementation(
+			async ({ payload }: { payload: { line_items: Record<string, unknown>[] } }) => {
+				resident.line_items = payload.line_items;
+				return resident;
+			}
+		);
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		const item = () => ({ product_id: 1, quantity: 1, meta_data: [] });
+
+		await act(async () => {
+			await Promise.all([
+				result.current.addItemToOrder('line_items', item() as never),
+				result.current.addItemToOrder('line_items', item() as never),
+			]);
+		});
+
+		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockCheckCartStock).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({ lineItems: [expect.objectContaining({ product_id: 1 })] })
+		);
 	});
 
 	it('keeps both items when two appends overlap for the same order', async () => {

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryManager } from '@wcpos/query';
+import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
@@ -17,6 +18,7 @@ type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items'
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type OrderDocument = import('@wcpos/database').OrderDocument;
 type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 
@@ -30,6 +32,7 @@ export const useAddItemToOrder = () => {
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const appendChains = React.useRef(new Map<string, Promise<void>>());
+	const createdOrders = React.useRef(new Map<string, OrderDocument>());
 
 	/**
 	 *
@@ -60,7 +63,7 @@ export const useAddItemToOrder = () => {
 			});
 			await order.remove();
 			setCurrentOrderID(recordId);
-			return resident;
+			return wrapEngineDocument('orders', resident) as unknown as OrderDocument;
 		},
 		[currentOrder, manager, setCurrentOrderID]
 	);
@@ -104,19 +107,17 @@ export const useAddItemToOrder = () => {
 				});
 			}
 
-			if ((order as unknown as { isNew?: boolean }).isNew) {
-				if (shouldCheckStock && !(await checkStock(order.line_items ?? []))) return;
-				const result = await saveNewOrder(type, data);
-				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
-				return result;
-			}
-
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
 			const previous = appendChains.current.get(recordId) ?? Promise.resolve();
 			const append = previous.then(async () => {
-				const latest = order.getLatest();
+				const latest = createdOrders.current.get(recordId)?.getLatest() ?? order.getLatest();
 				if (shouldCheckStock && !(await checkStock(latest.line_items ?? []))) return;
+				if ((latest as unknown as { isNew?: boolean }).isNew) {
+					const resident = await saveNewOrder(type, data);
+					createdOrders.current.set(recordId, resident);
+					return resident;
+				}
 				return localPatch({
 					document: latest,
 					data: {
@@ -132,6 +133,7 @@ export const useAddItemToOrder = () => {
 			void tail.then(() => {
 				if (appendChains.current.get(recordId) === tail) {
 					appendChains.current.delete(recordId);
+					createdOrders.current.delete(recordId);
 				}
 			});
 			const result = await append;
