@@ -107,7 +107,11 @@ export const useCartStockGuard = () => {
 				? latest(suppliedProduct)
 				: await readStockDocument('products', productId);
 			if (!product) {
-				return { ...ALLOWED_RESULT, name: suppliedName ?? '' };
+				const name = suppliedName ?? '';
+				cartLogger.warn('Cart stock check blocked because the product record is missing', {
+					context: { productId, variationId },
+				});
+				return { allowed: false, warning: null, available: null, name };
 			}
 			const variation = variationId
 				? suppliedVariation

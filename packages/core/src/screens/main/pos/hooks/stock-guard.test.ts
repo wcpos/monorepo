@@ -28,6 +28,16 @@ describe('evaluateStockForCartChange', () => {
 		).toEqual({ allowed: false, warning: null, available: 2 });
 	});
 
+	it('blocks a managed product with zero stock', () => {
+		expect(
+			evaluateStockForCartChange({
+				product: { ...managedProduct, stock_quantity: 0 },
+				existingCartQuantity: 0,
+				requestedQuantity: 1,
+			})
+		).toEqual({ allowed: false, warning: null, available: 0 });
+	});
+
 	it('allows backorders silently', () => {
 		expect(
 			evaluateStockForCartChange({
