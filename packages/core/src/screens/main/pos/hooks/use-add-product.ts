@@ -27,7 +27,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  *
  */
 export const useAddProduct = () => {
-	const { addItemToOrder } = useAddItemToOrder();
+	const { addItemToOrder, runOrderMutation } = useAddItemToOrder();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const { currentOrder } = useCurrentOrder();
@@ -52,7 +52,7 @@ export const useAddProduct = () => {
 	 *
 	 * NOTE: for the miscellaneous product we pass in an object!! Not a document
 	 */
-	const addProduct = React.useCallback(
+	const addProductMutation = React.useCallback(
 		async (data: ProductDocument | { id: number; [key: string]: any }) => {
 			let success;
 			let product = data;
@@ -96,7 +96,10 @@ export const useAddProduct = () => {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
+				success = await addItemToOrder('line_items', newLineItem, {
+					skipStockGuard: true,
+					skipMutationQueue: true,
+				});
 			}
 
 			if (success && stockResult.warning === 'backorder') {
@@ -137,6 +140,11 @@ export const useAddProduct = () => {
 			t,
 			orderLogger,
 		]
+	);
+	const addProduct = React.useCallback(
+		(data: ProductDocument | { id: number; [key: string]: any }) =>
+			runOrderMutation(() => addProductMutation(data)),
+		[addProductMutation, runOrderMutation]
 	);
 
 	return { addProduct };

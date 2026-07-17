@@ -31,7 +31,7 @@ interface MetaData {
 }
 
 export const useAddVariation = () => {
-	const { addItemToOrder } = useAddItemToOrder();
+	const { addItemToOrder, runOrderMutation } = useAddItemToOrder();
 	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 	const t = useT();
@@ -43,7 +43,7 @@ export const useAddVariation = () => {
 	/**
 	 *
 	 */
-	const addVariation = React.useCallback(
+	const addVariationMutation = React.useCallback(
 		async (
 			variationDoc: ProductVariationDocument,
 			parentDoc: ProductDocument,
@@ -89,7 +89,10 @@ export const useAddVariation = () => {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
 				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem, { skipStockGuard: true });
+				success = await addItemToOrder('line_items', newLineItem, {
+					skipStockGuard: true,
+					skipMutationQueue: true,
+				});
 			}
 
 			if (success && stockResult.warning === 'backorder') {
@@ -133,6 +136,11 @@ export const useAddVariation = () => {
 			stockGuardEnabled,
 			t,
 		]
+	);
+	const addVariation = React.useCallback(
+		(variationDoc: ProductVariationDocument, parentDoc: ProductDocument, metaData?: MetaData[]) =>
+			runOrderMutation(() => addVariationMutation(variationDoc, parentDoc, metaData)),
+		[addVariationMutation, runOrderMutation]
 	);
 
 	return { addVariation };

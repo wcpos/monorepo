@@ -12,10 +12,11 @@ const mockSetCurrentOrderID = jest.fn();
 const mockInsertEngineResident = jest.fn();
 const mockWrite = jest.fn();
 const mockCheckCartStock = jest.fn();
+let mockStockGuardEnabled = false;
 
 jest.mock('./use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({
-		stockGuardEnabled: false,
+		stockGuardEnabled: mockStockGuardEnabled,
 		checkCartStock: mockCheckCartStock,
 		showBackorderWarning: jest.fn(),
 	}),
@@ -62,6 +63,7 @@ jest.mock('../contexts/current-order', () => ({
 describe('useAddItemToOrder', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockStockGuardEnabled = false;
 		mockCheckCartStock.mockResolvedValue({
 			allowed: true,
 			warning: null,
@@ -138,5 +140,37 @@ describe('useAddItemToOrder', () => {
 		await act(async () => Promise.all([firstAppend, secondAppend]));
 
 		expect(order.line_items.map((item) => item.product_id)).toEqual([1, 2]);
+	});
+
+	it('serializes order mutations so each callback reads the latest cart', async () => {
+		const { result } = renderHook(() => useAddItemToOrder());
+		const observedCartSizes: number[] = [];
+		let releaseFirst!: () => void;
+		const firstMutationMayFinish = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		let calls = 0;
+		const mutate = async () => {
+			observedCartSizes.push(order.line_items.length);
+			calls += 1;
+			if (calls === 1) await firstMutationMayFinish;
+			if (order.line_items.length === 0) {
+				order.line_items = [{ product_id: 1 }];
+			}
+		};
+
+		let mutations!: Promise<void[]>;
+		act(() => {
+			mutations = Promise.all([
+				result.current.runOrderMutation(mutate),
+				result.current.runOrderMutation(mutate),
+			]);
+		});
+		await Promise.resolve();
+		expect(observedCartSizes).toEqual([0]);
+		releaseFirst();
+		await act(async () => mutations);
+
+		expect(observedCartSizes).toEqual([0, 1]);
 	});
 });

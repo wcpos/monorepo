@@ -22,6 +22,25 @@ type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_line
 
 interface AddItemOptions {
 	skipStockGuard?: boolean;
+	skipMutationQueue?: boolean;
+}
+
+const mutationChains = new Map<string, Promise<void>>();
+
+async function serializeOrderMutation<T>(recordId: string, mutation: () => Promise<T>) {
+	const previous = mutationChains.get(recordId) ?? Promise.resolve();
+	const result = previous.then(mutation);
+	const tail = result.then(
+		() => undefined,
+		() => undefined
+	);
+	mutationChains.set(recordId, tail);
+	void tail.then(() => {
+		if (mutationChains.get(recordId) === tail) {
+			mutationChains.delete(recordId);
+		}
+	});
+	return result;
 }
 
 export const useAddItemToOrder = () => {
@@ -29,7 +48,16 @@ export const useAddItemToOrder = () => {
 	const manager = useQueryManager();
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
-	const appendChains = React.useRef(new Map<string, Promise<void>>());
+
+	const runOrderMutation = React.useCallback(
+		async <T>(mutation: () => Promise<T>) => {
+			const order = currentOrder.getLatest();
+			const recordId = documentRecordId(order);
+			if (!recordId) throw new Error('Order is missing its uuid');
+			return serializeOrderMutation(recordId, mutation);
+		},
+		[currentOrder]
+	);
 
 	/**
 	 *
@@ -113,8 +141,7 @@ export const useAddItemToOrder = () => {
 
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
-			const previous = appendChains.current.get(recordId) ?? Promise.resolve();
-			const append = previous.then(async () => {
+			const append = async () => {
 				const latest = order.getLatest();
 				return localPatch({
 					document: latest,
@@ -122,18 +149,10 @@ export const useAddItemToOrder = () => {
 						[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
 					} as never,
 				});
-			});
-			const tail = append.then(
-				() => undefined,
-				() => undefined
-			);
-			appendChains.current.set(recordId, tail);
-			void tail.then(() => {
-				if (appendChains.current.get(recordId) === tail) {
-					appendChains.current.delete(recordId);
-				}
-			});
-			const result = await append;
+			};
+			const result = await (options?.skipMutationQueue
+				? append()
+				: serializeOrderMutation(recordId, append));
 			if (stockWarningName !== null) showBackorderWarning(stockWarningName);
 			return result;
 		},
@@ -147,5 +166,5 @@ export const useAddItemToOrder = () => {
 		]
 	);
 
-	return { addItemToOrder };
+	return { addItemToOrder, runOrderMutation };
 };
