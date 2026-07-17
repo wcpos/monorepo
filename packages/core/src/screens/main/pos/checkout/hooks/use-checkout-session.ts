@@ -225,7 +225,7 @@ export function useCheckoutSession(order: OrderDocument) {
 						wooIds,
 						forceRefresh: true,
 					});
-					handle.ready.finally(() => handle.release());
+					void handle.ready.finally(() => handle.release()).catch(() => undefined);
 				}
 				return;
 			}

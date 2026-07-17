@@ -213,4 +213,38 @@ describe('useCheckoutSession', () => {
 		expect(result.current.error).toBe('checkout_poll_timeout');
 		jest.useRealTimers();
 	});
+
+	it('releases a failed stock-rejection refresh without another rejection', async () => {
+		const release = jest.fn();
+		const refreshError = new Error('refresh failed');
+		const ready = Promise.reject(refreshError);
+		mockEngineRequire.mockReturnValue({ ready, release });
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		mockPost.mockResolvedValueOnce({ data: { status: 'ready' } }).mockRejectedValueOnce({
+			response: {
+				data: {
+					code: 'wcpos_insufficient_stock',
+					data: { items: [{ product_id: 10, variation_id: 0, available: 1 }] },
+				},
+			},
+		});
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => result.current.startCheckout());
+		await expect(ready).rejects.toBe(refreshError);
+		await Promise.resolve();
+
+		expect(result.current.error).toBe('insufficient_stock');
+		expect(release).toHaveBeenCalledTimes(1);
+	});
 });
