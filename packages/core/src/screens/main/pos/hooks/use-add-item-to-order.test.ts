@@ -5,7 +5,7 @@ import { serialize } from 'node:v8';
 
 import { act, renderHook } from '@testing-library/react';
 
-import { useAddItemToOrder } from './use-add-item-to-order';
+import { serializeCartAdd, useAddItemToOrder } from './use-add-item-to-order';
 
 const mockLocalPatch = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -138,5 +138,22 @@ describe('useAddItemToOrder', () => {
 		await act(async () => Promise.all([firstAppend, secondAppend]));
 
 		expect(order.line_items.map((item) => item.product_id)).toEqual([1, 2]);
+	});
+
+	it('serializes stock checks with cart mutations for the same order', async () => {
+		const calls: string[] = [];
+		let releaseFirst!: () => void;
+		const first = serializeCartAdd('order-uuid', async () => {
+			calls.push('first:start');
+			await new Promise<void>((resolve) => (releaseFirst = resolve));
+			calls.push('first:end');
+		});
+		const second = serializeCartAdd('order-uuid', async () => calls.push('second'));
+		await Promise.resolve();
+
+		expect(calls).toEqual(['first:start']);
+		releaseFirst();
+		await Promise.all([first, second]);
+		expect(calls).toEqual(['first:start', 'first:end', 'second']);
 	});
 });

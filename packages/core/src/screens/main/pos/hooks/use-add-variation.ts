@@ -5,7 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { useAddItemToOrder } from './use-add-item-to-order';
+import { serializeCartAdd, useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { useUpdateLineItem } from './use-update-line-item';
@@ -43,7 +43,7 @@ export const useAddVariation = () => {
 	/**
 	 *
 	 */
-	const addVariation = React.useCallback(
+	const performAddVariation = React.useCallback(
 		async (
 			variationDoc: ProductVariationDocument,
 			parentDoc: ProductDocument,
@@ -133,6 +133,13 @@ export const useAddVariation = () => {
 			stockGuardEnabled,
 			t,
 		]
+	);
+	const addVariation = React.useCallback(
+		(variationDoc: ProductVariationDocument, parentDoc: ProductDocument, metaData?: MetaData[]) =>
+			serializeCartAdd(currentOrder.uuid!, () =>
+				performAddVariation(variationDoc, parentDoc, metaData)
+			),
+		[currentOrder.uuid, performAddVariation]
 	);
 
 	return { addVariation };

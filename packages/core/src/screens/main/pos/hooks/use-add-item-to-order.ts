@@ -24,6 +24,18 @@ interface AddItemOptions {
 	skipStockGuard?: boolean;
 }
 
+const cartAddChains = new Map<string, Promise<void>>();
+
+export function serializeCartAdd<Result>(orderUuid: string, add: () => Promise<Result>) {
+	const result = (cartAddChains.get(orderUuid) ?? Promise.resolve()).then(add);
+	const tail = result.then(() => undefined).catch(() => undefined);
+	cartAddChains.set(orderUuid, tail);
+	void tail.then(() => {
+		if (cartAddChains.get(orderUuid) === tail) cartAddChains.delete(orderUuid);
+	});
+	return result;
+}
+
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const manager = useQueryManager();

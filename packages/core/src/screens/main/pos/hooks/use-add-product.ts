@@ -6,7 +6,7 @@ import { isRxDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { useAddItemToOrder } from './use-add-item-to-order';
+import { serializeCartAdd, useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { useUpdateLineItem } from './use-update-line-item';
@@ -52,7 +52,7 @@ export const useAddProduct = () => {
 	 *
 	 * NOTE: for the miscellaneous product we pass in an object!! Not a document
 	 */
-	const addProduct = React.useCallback(
+	const performAddProduct = React.useCallback(
 		async (data: ProductDocument | { id: number; [key: string]: any }) => {
 			let success;
 			let product = data;
@@ -137,6 +137,11 @@ export const useAddProduct = () => {
 			t,
 			orderLogger,
 		]
+	);
+	const addProduct = React.useCallback(
+		(data: ProductDocument | { id: number; [key: string]: any }) =>
+			serializeCartAdd(currentOrder.uuid!, () => performAddProduct(data)),
+		[currentOrder.uuid, performAddProduct]
 	);
 
 	return { addProduct };
