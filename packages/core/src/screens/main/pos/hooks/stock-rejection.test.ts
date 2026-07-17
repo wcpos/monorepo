@@ -1,5 +1,6 @@
 import {
 	clearStockRejection,
+	getStockRejectionForLine,
 	parseInsufficientStockError,
 	setStockRejection,
 	stockRejection$,
@@ -39,6 +40,36 @@ describe('parseInsufficientStockError', () => {
 			data: { items: [items[0], null, { name: 'no ids' }] },
 		};
 		expect(parseInsufficientStockError(body)).toEqual(items);
+	});
+});
+
+describe('getStockRejectionForLine', () => {
+	it('keeps sibling lines highlighted until aggregate usage is within availability', () => {
+		const lineItem = { product_id: 12, variation_id: 34, quantity: 2 };
+		const stockRejection = {
+			orderUuid: 'order-a',
+			items: [
+				{ product_id: 12, variation_id: 34, requested: 2, available: 3 },
+				{ product_id: 12, variation_id: 35, requested: 2, available: 3 },
+			],
+		};
+		expect(
+			getStockRejectionForLine({
+				stockRejection,
+				orderUuid: 'order-a',
+				lineItems: [lineItem, { product_id: 12, variation_id: 35, quantity: 2 }],
+				lineItem,
+			})
+		).toEqual(stockRejection.items[0]);
+
+		expect(
+			getStockRejectionForLine({
+				stockRejection,
+				orderUuid: 'order-a',
+				lineItems: [lineItem, { product_id: 12, variation_id: 35, quantity: 1 }],
+				lineItem,
+			})
+		).toBeNull();
 	});
 });
 

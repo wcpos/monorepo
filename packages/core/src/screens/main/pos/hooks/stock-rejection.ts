@@ -15,6 +15,19 @@ export interface StockRejectionState {
 	items: StockRejectionItem[];
 }
 
+interface StockRejectionLine {
+	product_id?: number | null;
+	variation_id?: number | null;
+	quantity?: number | null;
+}
+
+interface GetStockRejectionForLineArgs {
+	stockRejection: StockRejectionState | null;
+	orderUuid: string;
+	lineItems: StockRejectionLine[];
+	lineItem: StockRejectionLine;
+}
+
 /**
  * The last server-side wcpos_insufficient_stock rejection, shared between the
  * checkout modal (which sets it) and the cart line cells (which highlight the
@@ -30,6 +43,39 @@ export function setStockRejection(state: StockRejectionState) {
 
 export function clearStockRejection() {
 	stockRejection$.next(null);
+}
+
+/**
+ * Returns the active rejection for a cart line until its rejected stock-owner
+ * group is back within the server-reported availability.
+ */
+export function getStockRejectionForLine({
+	stockRejection,
+	orderUuid,
+	lineItems,
+	lineItem,
+}: GetStockRejectionForLineArgs): StockRejectionItem | null {
+	if (!stockRejection || stockRejection.orderUuid !== orderUuid) return null;
+	const productId = lineItem.product_id ?? 0;
+	const variationId = lineItem.variation_id ?? 0;
+	const match = stockRejection.items.find(
+		(item) => item.product_id === productId && item.variation_id === variationId
+	);
+	if (!match || match.available === null) return match ?? null;
+
+	const rejectedVariationIds = new Set(
+		stockRejection.items
+			.filter((item) => item.product_id === productId)
+			.map((item) => item.variation_id)
+	);
+	const aggregateQuantity = lineItems.reduce(
+		(total, item) =>
+			item.product_id === productId && rejectedVariationIds.has(item.variation_id ?? 0)
+				? total + (item.quantity ?? 0)
+				: total,
+		0
+	);
+	return aggregateQuantity > match.available ? match : null;
 }
 
 /**
