@@ -17,14 +17,18 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (...args: unknown[]) => mockUseObservableEagerState(...args),
 }));
 
-jest.mock('rxdb', () => ({ isRxDocument: (...args: unknown[]) => mockIsRxDocument(...args) }));
+jest.mock('rxdb', () => ({
+	isRxDocument: (...args: unknown[]) => mockIsRxDocument(...args),
+}));
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
 
 jest.mock('./hooks/use-checkout-session', () => ({
 	useCheckoutSession: (...args: unknown[]) => mockUseCheckoutSession(...args),
 }));
 
-jest.mock('./components/payment-webview', () => ({ PaymentWebview: () => null }));
+jest.mock('./components/payment-webview', () => ({
+	PaymentWebview: () => null,
+}));
 jest.mock('./components/title', () => ({ CheckoutTitle: () => null }));
 
 jest.mock('@wcpos/components/modal', () => ({
@@ -76,6 +80,26 @@ describe('Checkout', () => {
 		render(<Checkout resource={{} as never} />);
 
 		expect(screen.queryByText('common.cancel')).toBeNull();
+		expect(screen.getByText('pos_checkout.return_to_cart')).toBeTruthy();
+	});
+
+	it('shows structured stock rejection details in legacy webview mode', () => {
+		mockUseObservableSuspense.mockReturnValue({ uuid: 'order-1', number$: {} });
+		mockIsRxDocument.mockReturnValue(true);
+		mockUseObservableEagerState.mockReturnValueOnce('100').mockReturnValueOnce({
+			orderUuid: 'order-1',
+			items: [{ product_id: 1, variation_id: 0, available: 0 }],
+		});
+		mockUseCheckoutSession.mockReturnValue({
+			mode: 'webview',
+			error: 'insufficient_stock',
+			startCheckout: jest.fn(),
+			handleCheckoutError: jest.fn(),
+		});
+
+		render(<Checkout resource={{} as never} />);
+
+		expect(screen.getByText('pos_checkout.insufficient_stock_message')).toBeTruthy();
 		expect(screen.getByText('pos_checkout.return_to_cart')).toBeTruthy();
 	});
 });

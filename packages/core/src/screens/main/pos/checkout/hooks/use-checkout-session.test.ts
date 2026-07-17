@@ -12,8 +12,12 @@ const mockHttp = { get: mockGet, post: mockPost };
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: mockReplace }),
+}));
+jest.mock('../../../../../contexts/translations', () => ({
+	useT: () => (key: string) => key,
+}));
 jest.mock('@wcpos/query', () => ({
 	useQueryManager: () => ({ engine: { require: mockEngineRequire } }),
 }));
@@ -46,7 +50,10 @@ describe('useCheckoutSession', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		jest.useRealTimers();
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve(),
+			release: jest.fn(),
+		});
 	});
 
 	it('uses contract mode whenever supports_checkout is true, even for non-wcpos providers', async () => {
@@ -212,5 +219,42 @@ describe('useCheckoutSession', () => {
 
 		expect(result.current.error).toBe('checkout_poll_timeout');
 		jest.useRealTimers();
+	});
+
+	it('handles a stock rejection even when its forced refresh fails', async () => {
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		mockPost.mockResolvedValueOnce({ data: { status: 'ready' } }).mockRejectedValueOnce({
+			response: {
+				data: {
+					code: 'wcpos_insufficient_stock',
+					data: { items: [{ product_id: 1, variation_id: 0, available: 0 }] },
+				},
+			},
+		});
+		const release = jest.fn();
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.reject(new Error('offline')),
+			release,
+		});
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+
+		await act(async () => {
+			await result.current.startCheckout();
+			await Promise.resolve();
+		});
+
+		expect(result.current.error).toBe('insufficient_stock');
+		expect(release).toHaveBeenCalledTimes(1);
 	});
 });

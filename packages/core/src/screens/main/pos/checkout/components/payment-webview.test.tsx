@@ -31,7 +31,9 @@ jest.mock('observable-hooks', () => ({
 	// Return the synchronous default; the component only needs the resolved value.
 	useObservableState: (_observable: unknown, defaultValue: unknown) => defaultValue,
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: mockReplace }),
+}));
 jest.mock('@wcpos/query', () => ({
 	useQueryManager: () => ({ engine: { require: mockEngineRequire } }),
 }));
@@ -40,7 +42,9 @@ jest.mock('../../../../../contexts/app-state', () => ({
 		wpCredentials: { access_token: 'jwt-token', access_token$: {} },
 	}),
 }));
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../../contexts/translations', () => ({
+	useT: () => (key: string) => key,
+}));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt } }),
 }));
@@ -56,7 +60,9 @@ const makeOrder = () =>
 		id: 42,
 		uuid: 'uuid-42',
 		number: '42',
-		links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
+		links: {
+			payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }],
+		},
 		links$: { pipe: () => ({}) },
 		getLatest: () => ({ status: 'pos-open', links: {}, line_items: [] }),
 	}) as never;
@@ -67,7 +73,10 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 		webViewProps = {};
 		autoShowReceipt = false;
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve(),
+			release: jest.fn(),
+		});
 	});
 
 	it('refreshes the engine order before routing a successful payment to its receipt', async () => {
@@ -131,6 +140,31 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 	});
 
+	it('routes structured payment failures to the checkout rejection handler', async () => {
+		const onCheckoutError = jest.fn().mockResolvedValue(true);
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				onCheckoutError={onCheckoutError}
+			/>
+		);
+		const payload = {
+			code: 'wcpos_insufficient_stock',
+			data: { items: [{ product_id: 1, variation_id: 0, available: 0 }] },
+		};
+
+		await act(async () => {
+			await webViewProps.onMessage({
+				nativeEvent: { data: { payload: { data: payload } } },
+			});
+		});
+
+		expect(onCheckoutError).toHaveBeenCalledWith(payload);
+		expect(logger.error).not.toHaveBeenCalled();
+	});
+
 	it('does not log a payment-gateway error when the fallback server probe fails', async () => {
 		jest.useFakeTimers();
 		mockGet.mockRejectedValue(new Error('Request failed with status code 404'));
@@ -144,7 +178,9 @@ describe('PaymentWebview fallback order refresh', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockGet).toHaveBeenCalledWith('orders', {
+			params: { include: 42, per_page: 1 },
+		});
 		// The probe failed before any local catch-up was warranted.
 		expect(mockEngineRequire).not.toHaveBeenCalled();
 		// The regression: a failed safety-net poll must NOT be raised as an error
@@ -173,7 +209,9 @@ describe('PaymentWebview fallback order refresh', () => {
 			await jest.advanceTimersByTimeAsync(1000);
 		});
 
-		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(mockGet).toHaveBeenCalledWith('orders', {
+			params: { include: 42, per_page: 1 },
+		});
 		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });

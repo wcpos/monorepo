@@ -63,7 +63,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	const t = useT();
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [legacyLoading, setLegacyLoading] = React.useState(false);
-	const { loading, mode, error, startCheckout } = useCheckoutSession(
+	const { loading, mode, error, startCheckout, handleCheckoutError } = useCheckoutSession(
 		order as import('@wcpos/database').OrderDocument
 	);
 	const showStockRejection =
@@ -109,8 +109,38 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
-						{mode === 'webview' ? (
-							<PaymentWebview order={order} ref={webViewRef} setLoading={setLegacyLoading} />
+						{showStockRejection ? (
+							<VStack
+								space="xs"
+								className="border-destructive bg-destructive/10 rounded-md border p-3"
+							>
+								<Text className="text-destructive font-semibold">
+									{t('pos_checkout.insufficient_stock_message')}
+								</Text>
+								{stockRejection.items.map((item) => (
+									<Text
+										key={`${item.product_id}-${item.variation_id}`}
+										className="text-destructive text-sm"
+										decodeHtml
+									>
+										{item.available === null
+											? t('pos_products.out_of_stock', {
+													name: item.name ?? '',
+												})
+											: t('pos_cart.only_n_available', {
+													quantity: item.available,
+													name: item.name ?? '',
+												})}
+									</Text>
+								))}
+							</VStack>
+						) : mode === 'webview' ? (
+							<PaymentWebview
+								order={order}
+								ref={webViewRef}
+								setLoading={setLegacyLoading}
+								onCheckoutError={handleCheckoutError}
+							/>
 						) : (
 							<VStack space="sm">
 								{mode === 'pending' ? (
@@ -118,32 +148,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 								) : (
 									<Text>{t('pos_checkout.amount_to_pay')}</Text>
 								)}
-								{showStockRejection ? (
-									<VStack
-										space="xs"
-										className="border-destructive bg-destructive/10 rounded-md border p-3"
-									>
-										<Text className="text-destructive font-semibold">
-											{t('pos_checkout.insufficient_stock_message')}
-										</Text>
-										{stockRejection!.items.map((item) => (
-											<Text
-												key={`${item.product_id}-${item.variation_id}`}
-												className="text-destructive text-sm"
-												decodeHtml
-											>
-												{item.available === null
-													? t('pos_products.out_of_stock', { name: item.name ?? '' })
-													: t('pos_cart.only_n_available', {
-															quantity: item.available,
-															name: item.name ?? '',
-														})}
-											</Text>
-										))}
-									</VStack>
-								) : (
-									error && <Text className="text-destructive">{error}</Text>
-								)}
+								{error && <Text className="text-destructive">{error}</Text>}
 							</VStack>
 						)}
 					</VStack>
