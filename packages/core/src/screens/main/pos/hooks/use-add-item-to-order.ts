@@ -24,6 +24,28 @@ interface AddItemOptions {
 	skipStockGuard?: boolean;
 }
 
+const stockGuardedAddChains = new Map<string, Promise<void>>();
+
+/** Serialize a stock check and its mutation across every hook instance for an order. */
+export function serializeStockGuardedAdd<T>(
+	orderUuid: string,
+	operation: () => Promise<T>
+): Promise<T> {
+	const previous = stockGuardedAddChains.get(orderUuid) ?? Promise.resolve();
+	const result = previous.then(operation);
+	const tail = result.then(
+		() => undefined,
+		() => undefined
+	);
+	stockGuardedAddChains.set(orderUuid, tail);
+	void tail.then(() => {
+		if (stockGuardedAddChains.get(orderUuid) === tail) {
+			stockGuardedAddChains.delete(orderUuid);
+		}
+	});
+	return result;
+}
+
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const manager = useQueryManager();
