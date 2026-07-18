@@ -30,16 +30,11 @@ export interface ScanSession {
 	reset: () => void;
 }
 
-const RETAIL_SYMBOLOGIES = new Set([
-	'ean13',
-	'ean8',
-	'upc_a',
-	'upc_e',
-	'ean-13',
-	'ean-8',
-	'upc-a',
-	'upc-e',
-]);
+// Symbologies whose check digit is the standard alternating-weight mod-10 over
+// the literal digits (see hasValidRetailCheckDigit). UPC-E is deliberately
+// excluded: its check digit is computed over the *expanded* UPC-A, so running
+// the EAN-8 algorithm on its 8 literal digits would wrongly reject valid codes.
+const RETAIL_SYMBOLOGIES = new Set(['ean13', 'ean8', 'upc_a', 'ean-13', 'ean-8', 'upc-a']);
 
 /**
  * Validates the check digit of an EAN-13/EAN-8/UPC-A code (UPC-A is a 12-digit
@@ -67,10 +62,18 @@ export function hasValidRetailCheckDigit(code: string): boolean {
 }
 
 function looksRetail(code: string, symbology?: string): boolean {
-	if (symbology && RETAIL_SYMBOLOGIES.has(symbology.toLowerCase())) {
-		return true;
+	// An explicit symbology is authoritative: only the mod-10 retail types are
+	// gated. code128 / qr / upc_e report a symbology that is NOT in the set, so a
+	// numeric payload like a Code 128 SKU passes through instead of being
+	// rejected as a bad EAN/UPC check digit.
+	if (symbology) {
+		return RETAIL_SYMBOLOGIES.has(symbology.toLowerCase());
 	}
-	return /^\d+$/.test(code) && (code.length === 8 || code.length === 12 || code.length === 13);
+	// No symbology (e.g. keyboard-wedge input): fall back to length. Length 8 is
+	// dropped because it is ambiguous between EAN-8 and UPC-E — validating it as
+	// EAN-8 would false-reject UPC-E — so only the unambiguous UPC-A (12) and
+	// EAN-13 (13) lengths are gated.
+	return /^\d+$/.test(code) && (code.length === 12 || code.length === 13);
 }
 
 export function createScanSession(options: ScanSessionOptions): ScanSession {
