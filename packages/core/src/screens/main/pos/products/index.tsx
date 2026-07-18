@@ -20,6 +20,7 @@ import { StockQuantity } from './cells/stock-quantity';
 import { VariableActions } from './cells/variable-actions';
 import { ProductVariationActions } from './cells/variation-actions';
 import { ProductVariationName } from './cells/variation-name';
+import { EngineOutageBanner } from './engine-outage-banner';
 import { ProductGrid } from './grid';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
@@ -288,6 +289,9 @@ function POSProductsContent({
 							</HStack>
 							<ErrorBoundary>
 								<FilterBar />
+							</ErrorBoundary>
+							<ErrorBoundary>
+								<EngineOutageBanner />
 							</ErrorBoundary>
 						</VStack>
 					</ErrorBoundary>
