@@ -97,6 +97,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
 		plugins: [
 			'./plugins/with-printer-support',
+			'./plugins/with-wedge-key-events',
 			[
 				'expo-router',
 				{

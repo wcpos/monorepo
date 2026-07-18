@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 import { useBarcodeDetection } from './use-barcode-detection';
 
@@ -23,6 +23,14 @@ jest.mock('expo-router', () => ({
 	},
 }));
 
+// Stable storeDB stub: the attributed-wedge source (merged into scanEvents$)
+// reads scanner_profiles through useCollection.
+const mockScannerProfiles = { find: () => ({ $: new BehaviorSubject([]) }) };
+const mockStoreDB = {
+	reset$: new Subject(),
+	collections: { scanner_profiles: mockScannerProfiles },
+};
+
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		store: {
@@ -31,6 +39,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 			barcode_scanning_suffix$: suffix$,
 			barcode_scanning_avg_time_input_threshold$: avgThreshold$,
 		},
+		storeDB: mockStoreDB,
 	}),
 }));
 
