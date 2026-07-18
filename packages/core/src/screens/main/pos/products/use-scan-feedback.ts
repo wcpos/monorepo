@@ -42,17 +42,24 @@ export const useScanFeedback = () => {
 	// every non-success terminal outcome plays the distinct failure tone (plus a
 	// native error haptic). The searching-online stage stays silent.
 	const soundEnabled = useObservableEagerState(store.barcode_scanning_sound_enabled$) as boolean;
+	// A handle outlives begin() (an online lookup can terminate seconds later), so
+	// read the toggle at play-time via a ref — toggling it off silences even an
+	// in-flight scan instead of playing the value captured when begin() ran.
+	const soundEnabledRef = React.useRef(soundEnabled);
+	React.useEffect(() => {
+		soundEnabledRef.current = soundEnabled;
+	}, [soundEnabled]);
 
 	const begin = React.useCallback((): ScanFeedbackHandle => {
 		const id = nextScanId();
 
 		const success = () => {
-			if (soundEnabled) {
+			if (soundEnabledRef.current) {
 				playScanSuccess();
 			}
 		};
 		const failure = () => {
-			if (soundEnabled) {
+			if (soundEnabledRef.current) {
 				playScanFailure();
 			}
 		};
@@ -146,7 +153,7 @@ export const useScanFeedback = () => {
 				});
 			},
 		};
-	}, [t, soundEnabled]);
+	}, [t]);
 
 	return { begin };
 };

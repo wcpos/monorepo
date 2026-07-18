@@ -41,16 +41,9 @@ function getContext(): MinimalAudioContext | null {
 	return sharedContext;
 }
 
-function playTones(segments: Segment[]): void {
-	const context = getContext();
-	if (!context) {
-		return;
-	}
-	// Autoplay policies suspend the context until a user gesture; a hardware
-	// scan usually follows one, so resuming best-effort is enough.
-	if (context.state === 'suspended') {
-		void context.resume();
-	}
+function scheduleTones(context: MinimalAudioContext, segments: Segment[]): void {
+	// Read currentTime here (not before an async resume) so the schedule starts
+	// from the moment the context is actually running.
 	let start = context.currentTime;
 	for (const segment of segments) {
 		const oscillator = context.createOscillator();
@@ -67,6 +60,23 @@ function playTones(segments: Segment[]): void {
 		oscillator.stop(end + 0.02);
 		start = end;
 	}
+}
+
+function playTones(segments: Segment[]): void {
+	const context = getContext();
+	if (!context) {
+		return;
+	}
+	// Autoplay policies suspend the context until a user gesture; a hardware scan
+	// usually follows one. Schedule only once it's running so no tone is clipped.
+	if (context.state === 'suspended') {
+		void context
+			.resume()
+			.then(() => scheduleTones(context, segments))
+			.catch(() => undefined);
+		return;
+	}
+	scheduleTones(context, segments);
 }
 
 /** Bright rising two-note blip for a product added to the cart. */
