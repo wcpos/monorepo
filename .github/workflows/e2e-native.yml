@@ -125,7 +125,7 @@ jobs:
           disable-animations: true
           script: |
             adb install e2e-builds/wcpos-e2e-android.apk
-            maestro test apps/main/.maestro/flows
+            maestro test apps/main/.maestro
 
       - name: ⬆️ Upload failure artifacts
         if: failure()
@@ -181,7 +181,7 @@ jobs:
           echo "MAESTRO_UDID=$UDID" >> "$GITHUB_ENV"
 
       - name: 📱 Run Maestro suite on simulator
-        run: maestro --udid "$MAESTRO_UDID" test apps/main/.maestro/flows
+        run: maestro --udid "$MAESTRO_UDID" test apps/main/.maestro
 
       - name: ⬆️ Upload failure artifacts
         if: failure()
