@@ -1,6 +1,7 @@
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
+import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, resolveScan } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
@@ -65,7 +66,7 @@ function isVariationDocument(
 }
 
 export const useBarcode = (setSearch: (search: string) => void, clearSearch: () => void) => {
-	const { barcode$, onKeyPress } = useBarcodeDetection();
+	const { scanEvents$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
@@ -78,8 +79,8 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	/**
 	 *
 	 */
-	useSubscription(barcode$, async (barcode: unknown) => {
-		const barcodeStr = String(barcode);
+	useSubscription(scanEvents$, async (event: ScanEvent) => {
+		const barcodeStr = event.code;
 		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
 		const scan = begin();
 		let results = await barcodeSearch(barcodeStr);

@@ -2,8 +2,7 @@ import * as React from 'react';
 import type { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
 
 import { getKeyFromEvent, RNKeyboardEvent, useHotkeys } from '@wcpos/hooks/use-hotkeys';
-
-import type { TraceKey } from './analyze-scan-trace';
+import type { TraceKey } from '@wcpos/scanner';
 
 // A scanner burst never pauses this long; a bigger gap starts a new attempt.
 const ATTEMPT_GAP_MS = 1000;

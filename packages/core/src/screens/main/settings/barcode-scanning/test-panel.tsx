@@ -9,8 +9,8 @@ import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from '@wcpos/scanner';
 
-import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from './analyze-scan-trace';
 import { useScanTraceCapture } from './use-scan-trace-capture';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
