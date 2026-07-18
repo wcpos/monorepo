@@ -1,0 +1,192 @@
+# Nightly native E2E (Maestro) — spec: wayfinder wcpos/monorepo#688.
+# Runs the P0 suite on iOS simulators (macOS runners) and Android emulators
+# (Linux/KVM runners) against fingerprint-cached e2e-test EAS builds.
+# Budget guardrail: $150/mo ceiling (~40 macOS-min + ~40 Linux-min per night).
+name: E2E Native
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  EXPO_USE_FAST_RESOLVER: true
+  E2E_STORE_URL: https://dev-pro.wcpos.com
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 📦 Resolve e2e-test builds
+    runs-on: ubuntu-latest
+    outputs:
+      fingerprint: ${{ steps.fingerprint.outputs.hash }}
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: next
+          submodules: false
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+
+      - name: 🔑 Compute native fingerprint
+        id: fingerprint
+        working-directory: apps/main
+        run: |
+          HASH=$(npx --yes @expo/fingerprint@latest . | jq -r '.hash')
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "Native fingerprint: $HASH"
+
+      # EAS artifacts expire after ~2 weeks (observed in #696), so finished
+      # builds are cached by fingerprint on the GHA side.
+      - name: ♻️ Restore cached builds
+        id: cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: e2e-builds
+          key: e2e-native-build-${{ steps.fingerprint.outputs.hash }}
+
+      - name: 🛠 Build e2e-test profile on EAS (fingerprint changed)
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: apps/main
+        run: |
+          mkdir -p ../../e2e-builds
+          eas build --profile e2e-test --platform all --non-interactive --wait --json > /tmp/builds.json
+          IOS_URL=$(jq -r '.[] | select(.platform=="IOS") | .artifacts.buildUrl' /tmp/builds.json)
+          ANDROID_URL=$(jq -r '.[] | select(.platform=="ANDROID") | .artifacts.buildUrl' /tmp/builds.json)
+          curl -fsSL "$IOS_URL" -o ../../e2e-builds/wcpos-e2e-ios.tar.gz
+          curl -fsSL "$ANDROID_URL" -o ../../e2e-builds/wcpos-e2e-android.apk
+
+      - name: ⬆️ Share builds with test jobs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-builds
+          path: e2e-builds
+          retention-days: 3
+
+  android:
+    name: 🤖 Android (${{ matrix.device.name }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        device:
+          - { name: phone, profile: pixel_6 }
+          - { name: tablet, profile: pixel_tablet }
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: next
+          submodules: false
+
+      - name: ⬇️ Download builds
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: e2e-builds
+          path: e2e-builds
+
+      - name: 🧰 Install Maestro
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: 🔓 Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: 🌱 Seed test store
+        env:
+          WC_CONSUMER_KEY: ${{ secrets.E2E_WC_CONSUMER_KEY }}
+          WC_CONSUMER_SECRET: ${{ secrets.E2E_WC_CONSUMER_SECRET }}
+        run: node scripts/e2e-native-seed.mjs
+
+      - name: 📱 Run Maestro suite on emulator
+        uses: reactivecircus/android-emulator-runner@1dcd0090116d15e7c562f8db72807de5e036a4ed # v2.34.0
+        with:
+          api-level: 35
+          profile: ${{ matrix.device.profile }}
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb install e2e-builds/wcpos-e2e-android.apk
+            maestro test apps/main/.maestro/flows
+
+      - name: ⬆️ Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maestro-android-${{ matrix.device.name }}
+          path: ~/.maestro/tests
+          retention-days: 7
+
+  ios:
+    name: 🍎 iOS (${{ matrix.device.name }})
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        device:
+          - { name: phone, simulator: iPhone 16 Pro }
+          - { name: tablet, simulator: iPad Pro 11-inch (M4) }
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: next
+          submodules: false
+
+      - name: ⬇️ Download builds
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: e2e-builds
+          path: e2e-builds
+
+      - name: 🧰 Install Maestro
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: 🌱 Seed test store
+        env:
+          WC_CONSUMER_KEY: ${{ secrets.E2E_WC_CONSUMER_KEY }}
+          WC_CONSUMER_SECRET: ${{ secrets.E2E_WC_CONSUMER_SECRET }}
+        run: node scripts/e2e-native-seed.mjs
+
+      - name: 📱 Boot simulator and install app
+        run: |
+          UDID=$(xcrun simctl create "e2e-${{ matrix.device.name }}" "${{ matrix.device.simulator }}")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          mkdir -p /tmp/e2e-app && tar -xzf e2e-builds/wcpos-e2e-ios.tar.gz -C /tmp/e2e-app
+          APP_PATH=$(find /tmp/e2e-app -maxdepth 2 -name "*.app" | head -1)
+          xcrun simctl install "$UDID" "$APP_PATH"
+          echo "MAESTRO_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: 📱 Run Maestro suite on simulator
+        run: maestro --udid "$MAESTRO_UDID" test apps/main/.maestro/flows
+
+      - name: ⬆️ Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maestro-ios-${{ matrix.device.name }}
+          path: ~/.maestro/tests
+          retention-days: 7
