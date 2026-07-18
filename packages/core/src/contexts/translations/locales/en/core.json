@@ -630,6 +630,7 @@
 	"settings.auto_open_cash_drawer": "Auto-open cash drawer",
 	"settings.barcode_average_time_input_threshold_ms": "Barcode Average Time Input Threshold (ms)",
 	"settings.barcode_minimum_length": "Barcode Minimum Length",
+	"settings.barcode_scan_sound": "Play a sound on scan",
 	"settings.barcode_scanner_prefix": "Barcode Scanner Prefix",
 	"settings.barcode_scanner_suffix": "Barcode Scanner Suffix",
 	"settings.barcode_scanning": "Barcode Scanning",

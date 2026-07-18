@@ -98,6 +98,17 @@ jest.mock('../hooks/use-add-variation', () => ({
 	useAddVariation: () => ({ addVariation: mockAddVariation }),
 }));
 
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: { barcode_scanning_sound_enabled$: {} } }),
+}));
+
+// Scan sounds are exercised in play-scan-sound's own tests; here they are no-ops
+// so the native/web audio backends never load under jsdom.
+jest.mock('./play-scan-sound', () => ({
+	playScanSuccess: jest.fn(),
+	playScanFailure: jest.fn(),
+}));
+
 const mockBarcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogger as {
 	debug: jest.Mock;
 	info: jest.Mock;

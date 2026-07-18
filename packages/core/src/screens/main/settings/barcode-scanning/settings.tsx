@@ -6,7 +6,13 @@ import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, useFormChangeHandler } from '@wcpos/components/form';
+import {
+	Form,
+	FormField,
+	FormInput,
+	FormSwitch,
+	useFormChangeHandler,
+} from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -21,6 +27,7 @@ const formSchema = z.object({
 	barcode_scanning_min_chars: z.number().default(8),
 	barcode_scanning_prefix: z.string().default(''),
 	barcode_scanning_suffix: z.string().default(''),
+	barcode_scanning_sound_enabled: z.boolean().default(false),
 });
 
 /**
@@ -43,12 +50,14 @@ export function BarcodeSettings() {
 				barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
 				barcode_scanning_prefix: latest.barcode_scanning_prefix || '',
 				barcode_scanning_suffix: latest.barcode_scanning_suffix || '',
+				barcode_scanning_sound_enabled: latest.barcode_scanning_sound_enabled ?? false,
 			};
 		},
 		'barcode_scanning_avg_time_input_threshold',
 		'barcode_scanning_min_chars',
 		'barcode_scanning_prefix',
-		'barcode_scanning_suffix'
+		'barcode_scanning_suffix',
+		'barcode_scanning_sound_enabled'
 	);
 
 	/**
@@ -132,6 +141,18 @@ export function BarcodeSettings() {
 						)}
 					/>
 				</HStack>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_sound_enabled"
+					render={({ field }) => (
+						<FormSwitch
+							label={t('settings.barcode_scan_sound', {
+								defaultValue: 'Play a sound on scan',
+							})}
+							{...field}
+						/>
+					)}
+				/>
 			</VStack>
 		</Form>
 	);

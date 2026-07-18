@@ -57,6 +57,7 @@
 		"@wcpos/sync-engine": "workspace:*",
 		"@wcpos/utils": "workspace:*",
 		"expo": "~56.0.11",
+		"expo-audio": "~56.0.12",
 		"expo-auth-session": "~56.0.14",
 		"expo-blob": "~56.0.3",
 		"expo-blur": "~56.0.3",
