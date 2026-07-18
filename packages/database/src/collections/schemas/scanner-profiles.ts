@@ -1,7 +1,7 @@
 export const scannerProfilesLiteral = {
 	title: 'Scanner Profiles schema',
-	version: 0,
-	description: 'Local barcode-scanner profiles for attributed input sources',
+	version: 1,
+	description: 'Local barcode-scanner profiles for direct/attributed input sources',
 	type: 'object',
 	primaryKey: 'id',
 	properties: {
@@ -15,13 +15,14 @@ export const scannerProfilesLiteral = {
 		},
 		connectionType: {
 			type: 'string',
-			enum: ['wedge-attributed'],
+			enum: ['wedge-attributed', 'serial', 'hid-pos'],
 			default: 'wedge-attributed',
-			description: 'How this scanner connects; wedge-attributed = device-identified HID keyboard',
+			description:
+				'How this scanner connects: wedge-attributed = device-identified HID keyboard (Android); serial = Web Serial (USB-CDC / BT-SPP); hid-pos = WebHID USB HID POS',
 		},
 		deviceName: {
 			type: 'string',
-			description: 'The InputDevice name reported by the platform',
+			description: 'The device name reported by the platform',
 		},
 		vendorId: {
 			type: 'integer',
@@ -30,6 +31,14 @@ export const scannerProfilesLiteral = {
 		productId: {
 			type: 'integer',
 			description: 'USB/Bluetooth product id of the device',
+		},
+		serialNumber: {
+			type: 'string',
+			description: 'USB serial number, when the platform exposes one (helps re-match on reconnect)',
+		},
+		hidUsagePage: {
+			type: 'integer',
+			description: 'For hid-pos: the HID usage page (0x8C for POS) used to re-open the device',
 		},
 		createdAt: {
 			type: 'string',
