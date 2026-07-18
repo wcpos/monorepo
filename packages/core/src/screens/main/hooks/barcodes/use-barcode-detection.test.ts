@@ -4,6 +4,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
+import type { ScanEvent } from '@wcpos/scanner';
+
 import { useBarcodeDetection } from './use-barcode-detection';
 
 const minChars$ = new BehaviorSubject(8);
@@ -13,6 +15,13 @@ const avgThreshold$ = new BehaviorSubject(24);
 
 const focusEffectCleanups: (() => void)[] = [];
 const mockToastShow = jest.fn();
+const attributedEvents$ = new Subject<ScanEvent>();
+const mockUseAttributedWedge = jest.fn((_enabled?: boolean) => ({
+	scanEvents$: attributedEvents$,
+	available: true,
+	profiles: [],
+}));
+let mockIsFocused = true;
 
 jest.mock('expo-router', () => ({
 	useFocusEffect: (callback: () => void | (() => void)) => {
@@ -21,6 +30,12 @@ jest.mock('expo-router', () => ({
 			focusEffectCleanups.push(cleanup);
 		}
 	},
+}));
+jest.mock('expo-router/react-navigation', () => ({
+	useIsFocused: () => mockIsFocused,
+}));
+jest.mock('./use-attributed-wedge', () => ({
+	useAttributedWedge: (enabled?: boolean) => mockUseAttributedWedge(enabled),
 }));
 
 // Stable storeDB stub: the attributed-wedge source (merged into scanEvents$)
@@ -82,6 +97,7 @@ describe('useBarcodeDetection', () => {
 		prefix$.next('');
 		suffix$.next('');
 		avgThreshold$.next(24);
+		mockIsFocused = true;
 	});
 
 	afterEach(() => {
@@ -246,5 +262,35 @@ describe('useBarcodeDetection', () => {
 		);
 
 		subscription.unsubscribe();
+	});
+
+	it('bridges attributed scans to barcode$ without duplicating scanEvents$', () => {
+		const barcodes: string[] = [];
+		const events: ScanEvent[] = [];
+		const { result } = renderHook(() => useBarcodeDetection());
+		const barcodeSubscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+		const eventSubscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+		const attributedEvent: ScanEvent = {
+			code: '9310988001234',
+			source: { kind: 'wedge-attributed', profileId: 'profile-1' },
+			timestamp: 123,
+		};
+
+		act(() => attributedEvents$.next(attributedEvent));
+
+		expect(barcodes).toEqual(['9310988001234']);
+		expect(events).toEqual([attributedEvent]);
+		barcodeSubscription.unsubscribe();
+		eventSubscription.unsubscribe();
+	});
+
+	it('disables attributed capture when the screen loses focus', () => {
+		const { rerender } = renderHook(() => useBarcodeDetection());
+		expect(mockUseAttributedWedge).toHaveBeenLastCalledWith(true);
+
+		mockIsFocused = false;
+		rerender();
+
+		expect(mockUseAttributedWedge).toHaveBeenLastCalledWith(false);
 	});
 });

@@ -36,6 +36,20 @@ describe('createBurstAssembler', () => {
 		expect(scans).toEqual(['12345678']);
 	});
 
+	it('does not complete on elapsed time when settling is disabled', () => {
+		const scans: string[] = [];
+		const instance = createBurstAssembler({
+			onScan: (code) => scans.push(code),
+			getSettings: () => NO_BOUNDARY,
+			settleMs: null,
+		});
+		for (const key of '12345678'.split('')) instance.push(key);
+		vi.advanceTimersByTime(BURST_SETTLE_MS * 2);
+		expect(scans).toEqual([]);
+		instance.push('Enter');
+		expect(scans).toEqual(['12345678']);
+	});
+
 	it('ignores non-printable keys inside a burst', () => {
 		const { scans, instance } = assembler();
 		for (const key of ['1', 'Shift', '2', 'Shift', '3']) instance.push(key);

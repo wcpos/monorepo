@@ -76,10 +76,12 @@ jest.mock('../../../../contexts/translations', () => ({
 		values ? `${key}:${JSON.stringify(values)}` : key,
 }));
 
-function key(payload: Partial<{ key: string; vendorId: number; productId: number }>) {
+function key(
+	payload: Partial<{ key: string; deviceId: number; vendorId: number; productId: number }>
+) {
 	capturedListener?.({
 		key: payload.key ?? 'x',
-		deviceId: 7,
+		deviceId: payload.deviceId ?? 7,
 		deviceName: 'ACME Scanner',
 		vendorId: payload.vendorId ?? 1234,
 		productId: payload.productId ?? 5678,
@@ -93,6 +95,7 @@ describe('useAttributedWedge', () => {
 		jest.clearAllMocks();
 		capturedListener = undefined;
 	});
+	afterEach(() => jest.useRealTimers());
 
 	it('registers profile identities with the native interceptor', () => {
 		renderHook(() => useAttributedWedge());
@@ -116,6 +119,41 @@ describe('useAttributedWedge', () => {
 			code: '9310988001234',
 			source: { kind: 'wedge-attributed', profileId: 'profile-1', deviceName: 'ACME Scanner' },
 		});
+		subscription.unsubscribe();
+	});
+
+	it('keeps burst state separate for identical scanner models', () => {
+		const { result } = renderHook(() => useAttributedWedge());
+		const events: ScanEvent[] = [];
+		const subscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+
+		act(() => {
+			for (let index = 0; index < 8; index += 1) {
+				key({ deviceId: 7, key: '12345678'[index] });
+				key({ deviceId: 8, key: '98765432'[index] });
+			}
+			key({ deviceId: 7, key: 'Enter' });
+			key({ deviceId: 8, key: 'Enter' });
+		});
+
+		expect(events.map((event) => event.code)).toEqual(['12345678', '98765432']);
+		subscription.unsubscribe();
+	});
+
+	it('waits for a terminator instead of settling attributed input', () => {
+		jest.useFakeTimers();
+		const { result } = renderHook(() => useAttributedWedge());
+		const events: ScanEvent[] = [];
+		const subscription = result.current.scanEvents$.subscribe((event) => events.push(event));
+
+		act(() => {
+			for (const character of '93109880'.split('')) key({ key: character });
+			jest.advanceTimersByTime(1000);
+		});
+
+		expect(events).toEqual([]);
+		act(() => key({ key: 'Enter' }));
+		expect(events.map((event) => event.code)).toEqual(['93109880']);
 		subscription.unsubscribe();
 	});
 
@@ -154,6 +192,35 @@ describe('useAttributedWedge', () => {
 	it('clears the native registry and listener on unmount', () => {
 		const { unmount } = renderHook(() => useAttributedWedge());
 		unmount();
+		expect(mockRemove).toHaveBeenCalled();
+		expect(mockSetCapturedDevices).toHaveBeenLastCalledWith([]);
+	});
+
+	it('does not clear the native registry while another consumer remains mounted', () => {
+		const first = renderHook(() => useAttributedWedge());
+		const second = renderHook(() => useAttributedWedge());
+
+		first.unmount();
+		expect(mockSetCapturedDevices).not.toHaveBeenLastCalledWith([]);
+
+		second.unmount();
+		expect(mockSetCapturedDevices).toHaveBeenLastCalledWith([]);
+	});
+
+	it('tears down native capture when its consumer becomes inactive', () => {
+		const { rerender } = renderHook(
+			({ enabled }) =>
+				(
+					useAttributedWedge as unknown as (
+						enabled: boolean
+					) => ReturnType<typeof useAttributedWedge>
+				)(enabled),
+			{ initialProps: { enabled: true } }
+		);
+		jest.clearAllMocks();
+
+		rerender({ enabled: false });
+
 		expect(mockRemove).toHaveBeenCalled();
 		expect(mockSetCapturedDevices).toHaveBeenLastCalledWith([]);
 	});

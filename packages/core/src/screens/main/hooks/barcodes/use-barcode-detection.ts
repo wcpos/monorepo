@@ -2,6 +2,7 @@ import * as React from 'react';
 import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'react-native';
 
 import { useFocusEffect } from 'expo-router';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
 import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
@@ -32,6 +33,7 @@ type BarcodeScanEvent = {
  */
 export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	const t = useT();
+	const isFocused = useIsFocused();
 	const { store } = useAppState();
 	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
 	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
@@ -40,7 +42,7 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	) as number;
 
 	// Subject to emit detected barcodes
-	const [onBarcodeScan, barcode$] = useObservableCallback<
+	const [onBarcodeScan, wedgeBarcode$] = useObservableCallback<
 		string,
 		BarcodeScanEvent,
 		[string, (barcode: string) => void]
@@ -147,10 +149,14 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	 * the POS product route subscribe here; additional sources (attributed
 	 * wedge, serial, HID-POS, camera) will feed the same shape.
 	 */
-	const attributed = useAttributedWedge();
+	const attributed = useAttributedWedge(isFocused);
+	const barcode$ = React.useMemo(
+		() => merge(wedgeBarcode$, attributed.scanEvents$.pipe(map((event) => event.code))),
+		[wedgeBarcode$, attributed.scanEvents$]
+	);
 	const scanEvents$ = React.useMemo(
-		() => merge(barcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$),
-		[barcode$, attributed.scanEvents$]
+		() => merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$),
+		[wedgeBarcode$, attributed.scanEvents$]
 	);
 
 	/**

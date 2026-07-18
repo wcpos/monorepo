@@ -47,13 +47,14 @@ export const wedgeKeyEventsModule: WedgeKeyEventsNativeModule | null =
 		: null;
 
 const NO_PROFILES: ScannerProfileDocument[] = [];
+let capturedDeviceConsumers = 0;
 
 /**
  * The attributed-wedge input source (architecture: wcpos/monorepo#715): keys
  * from a registered scanner are swallowed at the Activity level and assembled
  * into bursts with no timing heuristic — device identity replaces guessing.
  */
-export const useAttributedWedge = () => {
+export const useAttributedWedge = (enabled = true) => {
 	const t = useT();
 	const { store } = useAppState();
 	const { collection } = useCollection('scanner_profiles');
@@ -82,7 +83,7 @@ export const useAttributedWedge = () => {
 	// External-subscription lifecycle: register device identities with the
 	// native interceptor and assemble its key events into scans.
 	React.useEffect(() => {
-		if (!wedgeKeyEventsModule || profiles.length === 0) {
+		if (!enabled || !wedgeKeyEventsModule || profiles.length === 0) {
 			return;
 		}
 		const assemblers = new Map<string, BurstAssembler>();
@@ -93,6 +94,7 @@ export const useAttributedWedge = () => {
 				deviceName: profile.deviceName,
 			}))
 		);
+		capturedDeviceConsumers += 1;
 		const subscription = wedgeKeyEventsModule.addListener('onWedgeKey', (payload) => {
 			if (!payload.captured) {
 				return;
@@ -106,11 +108,12 @@ export const useAttributedWedge = () => {
 			if (!profile) {
 				return;
 			}
-			const deviceKey = `${payload.vendorId}:${payload.productId}:${payload.deviceName}`;
+			const deviceKey = `${payload.deviceId}:${payload.vendorId}:${payload.productId}:${payload.deviceName}`;
 			let assembler = assemblers.get(deviceKey);
 			if (!assembler) {
 				assembler = createBurstAssembler({
 					getSettings: () => settingsRef.current,
+					settleMs: null,
 					onScan: (code) => {
 						const { minChars: currentMinChars } = settingsRef.current;
 						if (code.length < currentMinChars) {
@@ -135,12 +138,15 @@ export const useAttributedWedge = () => {
 
 		return () => {
 			subscription.remove();
-			wedgeKeyEventsModule.setCapturedDevices([]);
+			capturedDeviceConsumers -= 1;
+			if (capturedDeviceConsumers === 0) {
+				wedgeKeyEventsModule.setCapturedDevices([]);
+			}
 			for (const assembler of assemblers.values()) {
 				assembler.dispose();
 			}
 		};
-	}, [profiles, emitScan]);
+	}, [enabled, profiles, emitScan]);
 
 	return {
 		scanEvents$,
