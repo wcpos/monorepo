@@ -148,7 +148,11 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 
 				return () => {
 					document.removeEventListener('keydown', onKeyUp);
+					// Drop the detector with its latched state: a partial burst must not
+					// survive refocus and corrupt the next scan. A fresh detector is
+					// created lazily on the next keystroke.
 					detectorRef.current?.dispose();
+					detectorRef.current = null;
 				};
 			}
 		}, [onKeyUp])
