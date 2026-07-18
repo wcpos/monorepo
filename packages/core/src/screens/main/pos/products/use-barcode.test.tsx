@@ -22,7 +22,10 @@ const engineProducts: EngineDocument[] = [];
 const engineVariations: EngineDocument[] = [];
 let mockSubscriptionCallback: ((barcode: unknown) => Promise<void> | void) | undefined;
 let mockShowOutOfStock = true;
+let mockSoundEnabled = false;
+const mockSoundEnabledObservable = {};
 const mockToastShow = jest.fn();
+const mockPlayScanSuccess = jest.fn();
 
 interface EngineDocument {
 	id: string;
@@ -57,7 +60,8 @@ jest.mock('@wcpos/sync-core', () => {
 });
 
 jest.mock('observable-hooks', () => ({
-	useObservableEagerState: () => mockShowOutOfStock,
+	useObservableEagerState: (observable: unknown) =>
+		observable === mockSoundEnabledObservable ? mockSoundEnabled : mockShowOutOfStock,
 	useSubscription: (_observable: unknown, callback: (barcode: unknown) => Promise<void> | void) => {
 		mockSubscriptionCallback = callback;
 	},
@@ -96,6 +100,19 @@ jest.mock('../hooks/use-add-product', () => ({
 
 jest.mock('../hooks/use-add-variation', () => ({
 	useAddVariation: () => ({ addVariation: mockAddVariation }),
+}));
+
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({
+		store: { barcode_scanning_sound_enabled$: mockSoundEnabledObservable },
+	}),
+}));
+
+// Scan sounds are exercised in play-scan-sound's own tests; here they are no-ops
+// so the native/web audio backends never load under jsdom.
+jest.mock('./play-scan-sound', () => ({
+	playScanSuccess: (...args: unknown[]) => mockPlayScanSuccess(...args),
+	playScanFailure: jest.fn(),
 }));
 
 const mockBarcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogger as {
@@ -192,6 +209,7 @@ function renderBarcodeHook() {
 describe('useBarcode online escalation', () => {
 	beforeEach(() => {
 		mockShowOutOfStock = true;
+		mockSoundEnabled = false;
 		for (const mock of [
 			mockAddProduct,
 			mockAddVariation,
@@ -206,6 +224,7 @@ describe('useBarcode online escalation', () => {
 			mockOnKeyPress,
 			mockSetSearch,
 			mockClearSearch,
+			mockPlayScanSuccess,
 			mockBarcodeLogger.info,
 			mockBarcodeLogger.debug,
 			mockBarcodeLogger.error,
@@ -812,6 +831,40 @@ describe('useBarcode online escalation', () => {
 			})
 		);
 	});
+
+	it.each([
+		{ initial: false, latest: true, expectedCalls: 1 },
+		{ initial: true, latest: false, expectedCalls: 0 },
+	])(
+		'uses the latest sound setting when terminal feedback runs ($initial → $latest)',
+		async ({ initial, latest, expectedCalls }) => {
+			let resolveAdd: ((success: boolean) => void) | undefined;
+			mockSoundEnabled = initial;
+			mockAddProduct.mockImplementation(
+				() =>
+					new Promise<boolean>((resolve) => {
+						resolveAdd = resolve;
+					})
+			);
+			engineProducts.push(productDocument());
+			const { rerender } = renderBarcodeHook();
+
+			let scanPromise: Promise<void> | undefined;
+			await act(async () => {
+				scanPromise = scan();
+				await Promise.resolve();
+			});
+
+			act(() => {
+				mockSoundEnabled = latest;
+				rerender();
+			});
+			resolveAdd?.(true);
+			await act(async () => scanPromise);
+
+			expect(mockPlayScanSuccess).toHaveBeenCalledTimes(expectedCalls);
+		}
+	);
 
 	it('does not show scan success when the cart mutation reports failure', async () => {
 		mockAddProduct.mockResolvedValue(false);

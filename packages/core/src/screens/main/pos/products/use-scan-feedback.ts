@@ -1,8 +1,12 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+
 import { Toast } from '@wcpos/components/toast';
 
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { playScanFailure, playScanSuccess } from './play-scan-sound';
 
 const SUCCESS_DURATION = 2500;
 const ALERT_DURATION = 6000;
@@ -33,9 +37,32 @@ export interface ScanFeedbackHandle {
 
 export const useScanFeedback = () => {
 	const t = useT();
+	const { store } = useAppState();
+	// Scan sounds are opt-in per station (#717). Success plays a bright blip;
+	// every non-success terminal outcome plays the distinct failure tone (plus a
+	// native error haptic). The searching-online stage stays silent.
+	const soundEnabled = useObservableEagerState(store.barcode_scanning_sound_enabled$) as boolean;
+	// A handle outlives begin() (an online lookup can terminate seconds later), so
+	// read the toggle at play-time via a ref — toggling it off silences even an
+	// in-flight scan instead of playing the value captured when begin() ran.
+	const soundEnabledRef = React.useRef(soundEnabled);
+	React.useEffect(() => {
+		soundEnabledRef.current = soundEnabled;
+	}, [soundEnabled]);
 
 	const begin = React.useCallback((): ScanFeedbackHandle => {
 		const id = nextScanId();
+
+		const success = () => {
+			if (soundEnabledRef.current) {
+				playScanSuccess();
+			}
+		};
+		const failure = () => {
+			if (soundEnabledRef.current) {
+				playScanFailure();
+			}
+		};
 
 		return {
 			searchingOnline: (code) => {
@@ -47,6 +74,7 @@ export const useScanFeedback = () => {
 				});
 			},
 			added: (name) => {
+				success();
 				Toast.show({
 					id,
 					type: 'success',
@@ -56,6 +84,7 @@ export const useScanFeedback = () => {
 				});
 			},
 			addFailed: (name) => {
+				failure();
 				Toast.show({
 					id,
 					type: 'error',
@@ -65,6 +94,7 @@ export const useScanFeedback = () => {
 				});
 			},
 			notFound: (code) => {
+				failure();
 				Toast.show({
 					id,
 					type: 'warning',
@@ -77,6 +107,7 @@ export const useScanFeedback = () => {
 				});
 			},
 			ambiguous: (count, code) => {
+				failure();
 				Toast.show({
 					id,
 					type: 'warning',
@@ -86,6 +117,7 @@ export const useScanFeedback = () => {
 				});
 			},
 			error: (code) => {
+				failure();
 				Toast.show({
 					id,
 					type: 'error',
@@ -98,6 +130,7 @@ export const useScanFeedback = () => {
 				});
 			},
 			outOfStock: (name, code) => {
+				failure();
 				Toast.show({
 					id,
 					type: 'warning',
@@ -107,6 +140,7 @@ export const useScanFeedback = () => {
 				});
 			},
 			unavailable: (code) => {
+				failure();
 				Toast.show({
 					id,
 					type: 'error',

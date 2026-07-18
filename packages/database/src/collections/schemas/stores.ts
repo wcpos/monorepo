@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 11,
+	version: 12,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -535,6 +535,11 @@ export const storesLiteral = {
 		barcode_scanning_suffix: {
 			title: 'Barcode scanner suffix',
 			type: 'string',
+		},
+		barcode_scanning_sound_enabled: {
+			title: 'Barcode scan sound feedback',
+			type: 'boolean',
+			default: false,
 		},
 		theme: {
 			title: 'App Theme',

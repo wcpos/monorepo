@@ -158,6 +158,12 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.prevent_overselling = false;
 			return oldDoc;
 		},
+		12(oldDoc: StoreDocumentType) {
+			// Scan sounds are opt-in per station (#717): default off so quiet
+			// counters stay quiet until a cashier turns feedback on.
+			oldDoc.barcode_scanning_sound_enabled = false;
+			return oldDoc;
+		},
 	},
 };
 
