@@ -136,6 +136,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		const port = portRef.current;
 		readerRef.current = null;
 		portRef.current = null;
+		setConnected(false);
 		closingRef.current = true;
 		try {
 			await reader?.cancel().catch(() => undefined);

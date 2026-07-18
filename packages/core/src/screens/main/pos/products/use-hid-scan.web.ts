@@ -112,6 +112,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 		const listener = listenerRef.current;
 		deviceRef.current = null;
 		listenerRef.current = null;
+		setConnected(false);
 		if (previous) {
 			if (listener) {
 				previous.removeEventListener('inputreport', listener);
