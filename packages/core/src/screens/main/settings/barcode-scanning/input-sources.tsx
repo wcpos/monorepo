@@ -37,13 +37,33 @@ export function InputSources() {
 	}
 
 	const handleSave = async () => {
-		await registration.save(label);
-		setLabel('');
-		Toast.show({
-			type: 'success',
-			title: t('settings.scanner_registered', { defaultValue: 'Scanner registered' }),
-			duration: 2500,
-		});
+		try {
+			await registration.save(label);
+			setLabel('');
+			Toast.show({
+				type: 'success',
+				title: t('settings.scanner_registered', { defaultValue: 'Scanner registered' }),
+				duration: 2500,
+			});
+		} catch (error) {
+			Toast.show({
+				type: 'error',
+				title: t('common.error', { defaultValue: 'Error' }),
+				description: error instanceof Error ? error.message : String(error),
+			});
+		}
+	};
+
+	const handleRemove = async (profile: ScannerProfileDocument) => {
+		try {
+			await profile.getLatest().remove();
+		} catch (error) {
+			Toast.show({
+				type: 'error',
+				title: t('common.error', { defaultValue: 'Error' }),
+				description: error instanceof Error ? error.message : String(error),
+			});
+		}
 	};
 
 	return (
@@ -74,7 +94,7 @@ export function InputSources() {
 						variant="destructive"
 						size="sm"
 						testID="scanner-profile-delete"
-						onPress={() => profile.getLatest().remove()}
+						onPress={() => handleRemove(profile)}
 					>
 						<ButtonText>{t('settings.scanner_remove', { defaultValue: 'Remove' })}</ButtonText>
 					</Button>
