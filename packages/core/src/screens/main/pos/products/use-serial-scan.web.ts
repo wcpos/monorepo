@@ -67,9 +67,10 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 	}, [prefix, suffix, minChars]);
 
 	const portRef = React.useRef<SerialPortLike | null>(null);
-	const abortRef = React.useRef<AbortController | null>(null);
 	const sessionRef = React.useRef<ScanSession | null>(null);
 	const decoderRef = React.useRef<SerialLineDecoder | null>(null);
+	const readerRef = React.useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+	const closingRef = React.useRef(false);
 
 	const getSession = React.useCallback((): ScanSession => {
 		if (!sessionRef.current) {
@@ -106,28 +107,44 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 		async (port: SerialPortLike) => {
 			const decoder = getDecoder();
 			const textDecoder = new TextDecoder();
-			while (port.readable) {
+			while (port.readable && !closingRef.current) {
 				const reader = port.readable.getReader();
+				readerRef.current = reader;
 				try {
 					for (let result = await reader.read(); !result.done; result = await reader.read()) {
 						decoder.push(textDecoder.decode(result.value, { stream: true }));
 					}
-				} catch (error) {
-					serialLogger.error('serial read error', { context: { error: String(error) } });
+				} catch {
+					// A read error usually means the port was cancelled/closed.
 					break;
 				} finally {
 					reader.releaseLock();
+					readerRef.current = null;
 				}
 			}
 		},
 		[getDecoder]
 	);
 
+	const teardown = React.useCallback(async () => {
+		closingRef.current = true;
+		try {
+			await readerRef.current?.cancel().catch(() => undefined);
+			if (portRef.current) {
+				await portRef.current.close().catch(() => undefined);
+			}
+		} finally {
+			portRef.current = null;
+			closingRef.current = false;
+		}
+	}, []);
+
 	const attachPort = React.useCallback(
 		async (port: SerialPortLike, save: boolean) => {
+			// Never keep two ports/read loops live at once.
+			await teardown();
 			await port.open({ baudRate: DEFAULT_BAUD_RATE });
 			portRef.current = port;
-			abortRef.current = new AbortController();
 			setConnected(true);
 			decoderRef.current?.reset();
 			sessionRef.current?.reset();
@@ -146,7 +163,7 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			// The read loop runs for the port's lifetime; failures are logged.
 			void readLoop(port);
 		},
-		[collection, readLoop]
+		[collection, readLoop, teardown]
 	);
 
 	const connect = React.useCallback(async () => {
@@ -182,6 +199,9 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			}
 			const match = ports.find((port) => {
 				const info = port.getInfo();
+				if (info.usbVendorId === undefined || info.usbProductId === undefined) {
+					return false;
+				}
 				return profiles.some(
 					(profile: ScannerProfileDocument) =>
 						profile.vendorId === info.usbVendorId && profile.productId === info.usbProductId
@@ -197,13 +217,12 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 	}, [collection, attachPort]);
 
 	const disconnect = React.useCallback(async () => {
-		abortRef.current?.abort();
-		if (portRef.current) {
-			await portRef.current.close().catch(() => undefined);
-			portRef.current = null;
-		}
+		await teardown();
 		setConnected(false);
-	}, []);
+	}, [teardown]);
+
+	// Release the port + read loop when the provider unmounts (logout / teardown).
+	React.useEffect(() => () => void teardown(), [teardown]);
 
 	return {
 		available: isWebSerialSupported(),

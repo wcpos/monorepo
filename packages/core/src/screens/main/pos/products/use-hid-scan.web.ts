@@ -104,17 +104,29 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 		return sessionRef.current;
 	}, []);
 
+	const detach = React.useCallback(async () => {
+		const previous = deviceRef.current;
+		if (previous && listenerRef.current) {
+			previous.removeEventListener('inputreport', listenerRef.current);
+			await previous.close().catch(() => undefined);
+		}
+		deviceRef.current = null;
+		listenerRef.current = null;
+	}, []);
+
 	const attachDevice = React.useCallback(
 		async (device: HIDDeviceLike, save: boolean) => {
 			if (!device.open) {
 				return;
 			}
+			// Never keep two devices/listeners live at once.
+			await detach();
 			await device.open();
 			const session = getSession();
 			const listener = (event: HIDInputReportEventLike) => {
-				// reportId is delivered separately from the report body's data view.
-				const bytes = [event.reportId, ...dataViewToBytes(event.data)];
-				const decoded = decodeHidPosReport(bytes, { hasReportId: event.reportId !== 0 });
+				// WebHID delivers event.data as the report body *without* the report id
+				// (it is carried separately as event.reportId), so decode it directly.
+				const decoded = decodeHidPosReport(dataViewToBytes(event.data));
 				if (decoded) {
 					session.offer(decoded.code, decoded.symbology);
 				}
@@ -137,7 +149,7 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 				});
 			}
 		},
-		[collection, getSession]
+		[collection, getSession, detach]
 	);
 
 	const connect = React.useCallback(async () => {
@@ -187,15 +199,12 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 	}, [collection, attachDevice]);
 
 	const disconnect = React.useCallback(async () => {
-		const device = deviceRef.current;
-		if (device && listenerRef.current) {
-			device.removeEventListener('inputreport', listenerRef.current);
-			await device.close().catch(() => undefined);
-		}
-		deviceRef.current = null;
-		listenerRef.current = null;
+		await detach();
 		setConnected(false);
-	}, []);
+	}, [detach]);
+
+	// Release the device when the provider unmounts (logout / app teardown).
+	React.useEffect(() => () => void detach(), [detach]);
 
 	return {
 		available: isWebHidSupported(),
