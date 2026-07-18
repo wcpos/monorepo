@@ -84,6 +84,9 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 	const deviceRef = React.useRef<HIDDeviceLike | null>(null);
 	const listenerRef = React.useRef<((event: HIDInputReportEventLike) => void) | null>(null);
 	const sessionRef = React.useRef<ScanSession | null>(null);
+	const attachRequestRef = React.useRef(0);
+	const lifecycleQueueRef = React.useRef<Promise<void>>(Promise.resolve());
+	const mountedRef = React.useRef(true);
 
 	const getSession = React.useCallback((): ScanSession => {
 		if (!sessionRef.current) {
@@ -106,12 +109,15 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 
 	const detach = React.useCallback(async () => {
 		const previous = deviceRef.current;
-		if (previous && listenerRef.current) {
-			previous.removeEventListener('inputreport', listenerRef.current);
-			await previous.close().catch(() => undefined);
-		}
+		const listener = listenerRef.current;
 		deviceRef.current = null;
 		listenerRef.current = null;
+		if (previous) {
+			if (listener) {
+				previous.removeEventListener('inputreport', listener);
+			}
+			await previous.close().catch(() => undefined);
+		}
 	}, []);
 
 	const attachDevice = React.useCallback(
@@ -119,24 +125,40 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 			if (!device.open) {
 				return;
 			}
-			// Never keep two devices/listeners live at once.
-			await detach();
-			await device.open();
-			const session = getSession();
-			const listener = (event: HIDInputReportEventLike) => {
-				// WebHID delivers event.data as the report body *without* the report id
-				// (it is carried separately as event.reportId), so decode it directly.
-				const decoded = decodeHidPosReport(dataViewToBytes(event.data));
-				if (decoded) {
-					session.offer(decoded.code, decoded.symbology);
+			const request = ++attachRequestRef.current;
+			let attached = false;
+			const pending = lifecycleQueueRef.current.then(async () => {
+				if (!mountedRef.current || request !== attachRequestRef.current) {
+					return;
 				}
-			};
-			device.addEventListener('inputreport', listener);
-			deviceRef.current = device;
-			listenerRef.current = listener;
-			sessionRef.current?.reset();
-			setConnected(true);
-			if (save) {
+				await detach();
+				if (!mountedRef.current || request !== attachRequestRef.current) {
+					return;
+				}
+				await device.open();
+				if (!mountedRef.current || request !== attachRequestRef.current) {
+					await device.close().catch(() => undefined);
+					return;
+				}
+				const session = getSession();
+				const listener = (event: HIDInputReportEventLike) => {
+					// WebHID delivers event.data as the report body *without* the report id
+					// (it is carried separately as event.reportId), so decode it directly.
+					const decoded = decodeHidPosReport(dataViewToBytes(event.data));
+					if (decoded) {
+						session.offer(decoded.code, decoded.symbology);
+					}
+				};
+				device.addEventListener('inputreport', listener);
+				deviceRef.current = device;
+				listenerRef.current = listener;
+				sessionRef.current?.reset();
+				setConnected(true);
+				attached = true;
+			});
+			lifecycleQueueRef.current = pending.catch(() => undefined);
+			await pending;
+			if (attached && save) {
 				await collection.insert({
 					id: uuidv4(),
 					label: '',
@@ -199,12 +221,23 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 	}, [collection, attachDevice]);
 
 	const disconnect = React.useCallback(async () => {
-		await detach();
+		attachRequestRef.current += 1;
+		const pending = lifecycleQueueRef.current.then(detach);
+		lifecycleQueueRef.current = pending.catch(() => undefined);
+		await pending;
 		setConnected(false);
 	}, [detach]);
 
 	// Release the device when the provider unmounts (logout / app teardown).
-	React.useEffect(() => () => void detach(), [detach]);
+	React.useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+			attachRequestRef.current += 1;
+			const pending = lifecycleQueueRef.current.then(detach);
+			lifecycleQueueRef.current = pending.catch(() => undefined);
+		};
+	}, [detach]);
 
 	return {
 		available: isWebHidSupported(),

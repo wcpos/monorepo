@@ -71,6 +71,9 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 	const decoderRef = React.useRef<SerialLineDecoder | null>(null);
 	const readerRef = React.useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 	const closingRef = React.useRef(false);
+	const attachRequestRef = React.useRef(0);
+	const lifecycleQueueRef = React.useRef<Promise<void>>(Promise.resolve());
+	const mountedRef = React.useRef(true);
 
 	const getSession = React.useCallback((): ScanSession => {
 		if (!sessionRef.current) {
@@ -119,7 +122,9 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 					break;
 				} finally {
 					reader.releaseLock();
-					readerRef.current = null;
+					if (readerRef.current === reader) {
+						readerRef.current = null;
+					}
 				}
 			}
 		},
@@ -127,28 +132,49 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 	);
 
 	const teardown = React.useCallback(async () => {
+		const reader = readerRef.current;
+		const port = portRef.current;
+		readerRef.current = null;
+		portRef.current = null;
 		closingRef.current = true;
 		try {
-			await readerRef.current?.cancel().catch(() => undefined);
-			if (portRef.current) {
-				await portRef.current.close().catch(() => undefined);
+			await reader?.cancel().catch(() => undefined);
+			if (port) {
+				await port.close().catch(() => undefined);
 			}
 		} finally {
-			portRef.current = null;
 			closingRef.current = false;
 		}
 	}, []);
 
 	const attachPort = React.useCallback(
 		async (port: SerialPortLike, save: boolean) => {
-			// Never keep two ports/read loops live at once.
-			await teardown();
-			await port.open({ baudRate: DEFAULT_BAUD_RATE });
-			portRef.current = port;
-			setConnected(true);
-			decoderRef.current?.reset();
-			sessionRef.current?.reset();
-			if (save) {
+			const request = ++attachRequestRef.current;
+			let attached = false;
+			const pending = lifecycleQueueRef.current.then(async () => {
+				if (!mountedRef.current || request !== attachRequestRef.current) {
+					return;
+				}
+				await teardown();
+				if (!mountedRef.current || request !== attachRequestRef.current) {
+					return;
+				}
+				await port.open({ baudRate: DEFAULT_BAUD_RATE });
+				if (!mountedRef.current || request !== attachRequestRef.current) {
+					await port.close().catch(() => undefined);
+					return;
+				}
+				portRef.current = port;
+				setConnected(true);
+				decoderRef.current?.reset();
+				sessionRef.current?.reset();
+				// The read loop runs for the port's lifetime; failures are logged.
+				void readLoop(port);
+				attached = true;
+			});
+			lifecycleQueueRef.current = pending.catch(() => undefined);
+			await pending;
+			if (attached && save) {
 				const info = port.getInfo();
 				await collection.insert({
 					id: uuidv4(),
@@ -160,8 +186,6 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 					createdAt: new Date().toISOString(),
 				});
 			}
-			// The read loop runs for the port's lifetime; failures are logged.
-			void readLoop(port);
 		},
 		[collection, readLoop, teardown]
 	);
@@ -217,12 +241,23 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 	}, [collection, attachPort]);
 
 	const disconnect = React.useCallback(async () => {
-		await teardown();
+		attachRequestRef.current += 1;
+		const pending = lifecycleQueueRef.current.then(teardown);
+		lifecycleQueueRef.current = pending.catch(() => undefined);
+		await pending;
 		setConnected(false);
 	}, [teardown]);
 
 	// Release the port + read loop when the provider unmounts (logout / teardown).
-	React.useEffect(() => () => void teardown(), [teardown]);
+	React.useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+			attachRequestRef.current += 1;
+			const pending = lifecycleQueueRef.current.then(teardown);
+			lifecycleQueueRef.current = pending.catch(() => undefined);
+		};
+	}, [teardown]);
 
 	return {
 		available: isWebSerialSupported(),
