@@ -1,6 +1,6 @@
 # Nightly native E2E (Maestro) — spec: wayfinder wcpos/monorepo#688.
 # Runs the P0 suite on iOS simulators (macOS runners) and Android emulators
-# (Linux/KVM runners) against fingerprint-cached e2e-test EAS builds.
+# (Linux/KVM runners) against SHA-keyed cached e2e-test EAS builds.
 # Budget guardrail: $150/mo ceiling (~40 macOS-min + ~40 Linux-min per night).
 name: E2E Native
 
@@ -25,13 +25,25 @@ jobs:
     name: 📦 Resolve e2e-test builds
     runs-on: ubuntu-latest
     outputs:
-      fingerprint: ${{ steps.fingerprint.outputs.hash }}
+      sha: ${{ steps.resolve.outputs.sha }}
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: next
           submodules: false
+
+      # Pin the exact revision under test: the cache key and both test jobs
+      # use this SHA, so build and tests always agree on one revision, and a
+      # cached build is only reused when the code is truly identical (e2e
+      # builds embed the JS bundle — keying on the native fingerprint alone
+      # would test stale JS after JS-only changes).
+      - name: 🔑 Resolve revision under test
+        id: resolve
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Testing next @ $SHA"
 
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
@@ -40,24 +52,17 @@ jobs:
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
-      - name: 🔑 Compute native fingerprint
-        id: fingerprint
-        working-directory: apps/main
-        run: |
-          HASH=$(npx --yes @expo/fingerprint@latest . | jq -r '.hash')
-          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
-          echo "Native fingerprint: $HASH"
-
       # EAS artifacts expire after ~2 weeks (observed in #696), so finished
-      # builds are cached by fingerprint on the GHA side.
+      # builds are cached on the GHA side. Nights where next hasn't moved hit
+      # the cache and cost no EAS build.
       - name: ♻️ Restore cached builds
         id: cache
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: e2e-builds
-          key: e2e-native-build-${{ steps.fingerprint.outputs.hash }}
+          key: e2e-native-build-${{ steps.resolve.outputs.sha }}
 
-      - name: 🛠 Build e2e-test profile on EAS (fingerprint changed)
+      - name: 🛠 Build e2e-test profile on EAS (revision changed)
         if: steps.cache.outputs.cache-hit != 'true'
         working-directory: apps/main
         run: |
@@ -90,7 +95,7 @@ jobs:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: next
+          ref: ${{ needs.build.outputs.sha }}
           submodules: false
 
       - name: ⬇️ Download builds
@@ -101,8 +106,12 @@ jobs:
 
       - name: 🧰 Install Maestro
         run: |
-          curl -fsSL https://get.maestro.mobile.dev | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          curl -fsSL -o /tmp/maestro.zip \
+            https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip
+          unzip -q /tmp/maestro.zip -d "$HOME/.maestro-cli"
+          echo "$HOME/.maestro-cli/maestro/bin" >> "$GITHUB_PATH"
+        env:
+          MAESTRO_VERSION: 2.6.1
 
       - name: 🔓 Enable KVM
         run: |
@@ -150,7 +159,7 @@ jobs:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: next
+          ref: ${{ needs.build.outputs.sha }}
           submodules: false
 
       - name: ⬇️ Download builds
@@ -161,8 +170,12 @@ jobs:
 
       - name: 🧰 Install Maestro
         run: |
-          curl -fsSL https://get.maestro.mobile.dev | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          curl -fsSL -o /tmp/maestro.zip \
+            https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip
+          unzip -q /tmp/maestro.zip -d "$HOME/.maestro-cli"
+          echo "$HOME/.maestro-cli/maestro/bin" >> "$GITHUB_PATH"
+        env:
+          MAESTRO_VERSION: 2.6.1
 
       - name: 🌱 Seed test store
         env:
