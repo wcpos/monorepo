@@ -11,6 +11,7 @@ import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/
 
 import { showTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
+import { useCameraScanBus } from './camera-scan-context';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
@@ -150,13 +151,19 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	 * wedge, serial, HID-POS, camera) will feed the same shape.
 	 */
 	const attributed = useAttributedWedge(isFocused);
+	const camera = useCameraScanBus();
 	const barcode$ = React.useMemo(
-		() => merge(wedgeBarcode$, attributed.scanEvents$.pipe(map((event) => event.code))),
-		[wedgeBarcode$, attributed.scanEvents$]
+		() =>
+			merge(
+				wedgeBarcode$,
+				attributed.scanEvents$.pipe(map((event) => event.code)),
+				camera.events$.pipe(map((event) => event.code))
+			),
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$]
 	);
 	const scanEvents$ = React.useMemo(
-		() => merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$),
-		[wedgeBarcode$, attributed.scanEvents$]
+		() => merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, camera.events$),
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$]
 	);
 
 	/**

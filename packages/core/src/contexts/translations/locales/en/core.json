@@ -899,5 +899,8 @@
 	"settings.scanner_detected": "Detected \"{deviceName}\" — name it and save",
 	"settings.scanner_save": "Save scanner",
 	"settings.scanner_registered": "Scanner registered",
-	"settings.scanner_remove": "Remove"
+	"settings.scanner_remove": "Remove",
+	"pos_products.camera_scan_title": "Scan barcode",
+	"pos_products.camera_permission_prompt": "WCPOS needs camera access to scan barcodes.",
+	"pos_products.camera_permission_grant": "Allow camera"
 }

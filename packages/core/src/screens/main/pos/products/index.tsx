@@ -20,10 +20,12 @@ import { StockQuantity } from './cells/stock-quantity';
 import { VariableActions } from './cells/variable-actions';
 import { ProductVariationActions } from './cells/variation-actions';
 import { ProductVariationName } from './cells/variation-name';
+import { CameraScannerDialog } from './camera-scanner-dialog';
 import { EngineOutageBanner } from './engine-outage-banner';
 import { ProductGrid } from './grid';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
+import { CameraScanProvider } from '../../hooks/barcodes/camera-scan-context';
 import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
@@ -283,6 +285,7 @@ function POSProductsContent({
 									/>
 								</ErrorBoundary>
 								<ViewModeToggle />
+								<CameraScannerDialog />
 								<UISettingsDialog title={t('common.product_settings')}>
 									<UISettingsForm />
 								</UISettingsDialog>
@@ -343,7 +346,9 @@ export function POSProducts({ isColumn = false }) {
 			initialSort={initialSort}
 			initialFilters={initialFilters}
 		>
-			<POSProductsContent isColumn={isColumn} showOutOfStock={showOutOfStock} />
+			<CameraScanProvider>
+				<POSProductsContent isColumn={isColumn} showOutOfStock={showOutOfStock} />
+			</CameraScanProvider>
 		</QueryStateProvider>
 	);
 }
