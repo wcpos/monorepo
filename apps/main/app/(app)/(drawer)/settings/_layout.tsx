@@ -17,6 +17,7 @@ export default function SettingsLayout() {
 			indexHref="/settings"
 			areaLabel={t('common.settings')}
 			testID="settings-navigation"
+			screenTestID="settings-screen"
 		>
 			<Slot />
 		</NavigationAreaLayout>

@@ -58,12 +58,14 @@ export function NavigationAreaLayout({
 	indexHref,
 	areaLabel,
 	testID,
+	screenTestID,
 	children,
 }: {
 	items: NavigationAreaItem[];
 	indexHref: Extract<Href, string>;
 	areaLabel: string;
 	testID: string;
+	screenTestID?: string;
 	children: React.ReactNode;
 }) {
 	const { screenSize } = useTheme();
@@ -75,7 +77,7 @@ export function NavigationAreaLayout({
 		// bar is its only in-app route to the area index and its siblings.
 		const current = items.find((item) => pathname === item.href);
 		return (
-			<View className="flex-1">
+			<View testID={screenTestID} className="flex-1">
 				{current ? (
 					<HStack
 						testID={`${testID}-back`}
@@ -103,7 +105,9 @@ export function NavigationAreaLayout({
 			>
 				<NavigationItems items={items} showChevron={false} />
 			</View>
-			<View className="min-w-0 flex-1">{children}</View>
+			<View testID={screenTestID} className="min-w-0 flex-1">
+				{children}
+			</View>
 		</View>
 	);
 }

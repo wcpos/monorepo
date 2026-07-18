@@ -96,7 +96,12 @@ export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormP
 						name="first_name"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('common.first_name')} {...field} value={field.value ?? ''} />
+								<FormInput
+									testID="customer-first-name-input"
+									label={t('common.first_name')}
+									{...field}
+									value={field.value ?? ''}
+								/>
 							</View>
 						)}
 					/>
@@ -105,7 +110,12 @@ export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormP
 						name="last_name"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('common.last_name')} {...field} value={field.value ?? ''} />
+								<FormInput
+									testID="customer-last-name-input"
+									label={t('common.last_name')}
+									{...field}
+									value={field.value ?? ''}
+								/>
 							</View>
 						)}
 					/>
@@ -116,7 +126,7 @@ export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormP
 						name="email"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('common.email')} {...field} />
+								<FormInput testID="customer-email-input" label={t('common.email')} {...field} />
 							</View>
 						)}
 					/>

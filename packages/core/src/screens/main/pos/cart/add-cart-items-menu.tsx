@@ -107,7 +107,7 @@ export function AddCartItemsMenu() {
 					onOpenChange={(open) => !open && setOpenDialog(null)}
 					style={{ display: 'none' }}
 				>
-					<DialogContent size="lg" portalHost="pos">
+					<DialogContent testID="add-misc-product-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_miscellaneous_product')}</DialogTitle>
 						</DialogHeader>
@@ -126,7 +126,7 @@ export function AddCartItemsMenu() {
 					onOpenChange={(open) => !open && setOpenDialog(null)}
 					style={{ display: 'none' }}
 				>
-					<DialogContent size="lg" portalHost="pos">
+					<DialogContent testID="add-fee-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_fee')}</DialogTitle>
 						</DialogHeader>
@@ -145,7 +145,7 @@ export function AddCartItemsMenu() {
 					onOpenChange={(open) => !open && setOpenDialog(null)}
 					style={{ display: 'none' }}
 				>
-					<DialogContent size="lg" portalHost="pos">
+					<DialogContent testID="add-shipping-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_shipping')}</DialogTitle>
 						</DialogHeader>

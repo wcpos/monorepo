@@ -63,12 +63,18 @@ export function AddNoteButton() {
 					{t('pos_cart.order_note')}
 				</Button>
 			</DialogTrigger>
-			<DialogContent portalHost="pos">
+			<DialogContent testID="order-note-dialog" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.order_note')}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
-					<Textarea autoFocus value={text} minHeight={80} onChangeText={onChangeText} />
+					<Textarea
+						testID="order-note-input"
+						autoFocus
+						value={text}
+						minHeight={80}
+						onChangeText={onChangeText}
+					/>
 				</DialogBody>
 				<DialogFooter>
 					<DialogClose>{t('common.cancel')}</DialogClose>

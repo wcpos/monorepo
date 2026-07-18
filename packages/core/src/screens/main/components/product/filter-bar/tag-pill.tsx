@@ -46,6 +46,7 @@ export function TagPill({ resource, selectedID }: Props) {
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
+					removeTestID="filter-pill-remove-tags"
 					onRemove={() => actions.clearFilter('tags')}
 				>
 					<ButtonText decodeHtml>

@@ -82,6 +82,7 @@ export function CategoryPill() {
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
+					removeTestID="filter-pill-remove-categories"
 					onRemove={handleRemove}
 				>
 					<React.Suspense fallback={<ButtonText>{t('common.loading')}</ButtonText>}>

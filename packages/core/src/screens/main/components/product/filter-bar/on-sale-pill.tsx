@@ -20,6 +20,7 @@ export function OnSalePill() {
 			variant={isActive ? undefined : 'muted'}
 			onPress={() => actions.setFilter('on_sale', true)}
 			removable={isActive}
+			removeTestID="filter-pill-remove-on_sale"
 			onRemove={() => actions.clearFilter('on_sale')}
 		>
 			<ButtonText>{t('common.on_sale')}</ButtonText>
