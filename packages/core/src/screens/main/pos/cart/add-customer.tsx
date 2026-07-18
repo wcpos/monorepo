@@ -116,7 +116,7 @@ export function AddNewCustomer() {
 						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent size="xl" portalHost="pos">
+				<DialogContent testID="add-customer-dialog" size="xl" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
@@ -208,7 +208,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
-			<DialogContent size="xl" portalHost="pos">
+			<DialogContent testID="add-customer-dialog" size="xl" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>

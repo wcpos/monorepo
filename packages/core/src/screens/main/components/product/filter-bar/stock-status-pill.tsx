@@ -47,6 +47,7 @@ export function StockStatusPill() {
 					leftIcon="warehouseFull"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
+					removeTestID="filter-pill-remove-stock_status"
 					onRemove={() => actions.clearFilter('stock_status')}
 				>
 					<ButtonText decodeHtml>{value?.label || t('common.stock_status')}</ButtonText>

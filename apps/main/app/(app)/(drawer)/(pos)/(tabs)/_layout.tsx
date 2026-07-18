@@ -55,6 +55,7 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 				listeners={tabPressListener}
 				options={{
 					title: 'Products',
+					tabBarButtonTestID: 'pos-tab-products',
 					tabBarIcon: ({ focused }) => (
 						<Icon name="gifts" className={focused ? 'text-primary' : 'text-muted-foreground'} />
 					),
@@ -65,6 +66,7 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 				listeners={tabPressListener}
 				options={{
 					title: 'Cart',
+					tabBarButtonTestID: 'pos-tab-cart',
 					tabBarIcon: ({ focused }) => (
 						<Icon
 							name="cartShopping"
@@ -123,7 +125,7 @@ export default function TabsLayout() {
 	}
 
 	return (
-		<View className="bg-background flex-1">
+		<View testID="screen-pos" className="bg-background flex-1">
 			<ThemedTabs tabPressListener={tabPressListener} />
 		</View>
 	);

@@ -346,6 +346,7 @@ type ButtonPillProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 		removable?: boolean;
 		onRemove?: () => void;
 		removeAccessibilityLabel?: string;
+		removeTestID?: string;
 	};
 
 function ButtonPill({
@@ -353,6 +354,7 @@ function ButtonPill({
 	removable,
 	onRemove,
 	removeAccessibilityLabel,
+	removeTestID,
 	...props
 }: ButtonPillProps) {
 	const handleRemovePress = React.useCallback(
@@ -377,6 +379,7 @@ function ButtonPill({
 				leftIcon="xmark"
 				onPress={handleRemovePress}
 				accessibilityLabel={removeAccessibilityLabel ?? 'Remove'}
+				testID={removeTestID}
 			/>
 		</ButtonGroup>
 	) : (

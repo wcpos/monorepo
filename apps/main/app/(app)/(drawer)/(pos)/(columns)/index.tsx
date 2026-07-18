@@ -67,6 +67,7 @@ export default function ResizablePOSColumns() {
 				{/* Tab bar */}
 				<View className="border-border bg-card flex-row justify-around border-t py-2">
 					<Pressable
+						testID="pos-tab-products"
 						onPress={() => setActiveTab('products')}
 						className="flex-1 items-center gap-1 py-2"
 					>
@@ -80,6 +81,7 @@ export default function ResizablePOSColumns() {
 						</Text>
 					</Pressable>
 					<Pressable
+						testID="pos-tab-cart"
 						onPress={() => setActiveTab('cart')}
 						className="flex-1 items-center gap-1 py-2"
 					>

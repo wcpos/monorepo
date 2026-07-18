@@ -20,6 +20,7 @@ export function FeaturedPill() {
 			variant={isActive ? undefined : 'muted'}
 			onPress={() => actions.setFilter('featured', true)}
 			removable={isActive}
+			removeTestID="filter-pill-remove-featured"
 			onRemove={() => actions.clearFilter('featured')}
 		>
 			<ButtonText>{t('common.featured')}</ButtonText>

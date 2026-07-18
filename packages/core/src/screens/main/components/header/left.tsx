@@ -38,6 +38,7 @@ export function HeaderLeft() {
 	if (screenSize === 'sm') {
 		return (
 			<Button
+				testID="drawer-open-button"
 				onPress={handleOpenDrawer}
 				className="web:hover:bg-white/10 rounded-none bg-transparent px-3"
 			>
@@ -51,6 +52,7 @@ export function HeaderLeft() {
 	 */
 	return (
 		<Button
+			testID="drawer-open-button"
 			onPress={handleOpenDrawer}
 			className="web:hover:bg-white/10 rounded-none bg-transparent px-3"
 		>

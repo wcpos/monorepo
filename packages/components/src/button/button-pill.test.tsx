@@ -6,12 +6,13 @@ import { ButtonPill } from './index';
 
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
-	Pressable: ({ children, onPress, accessibilityLabel, ...props }: any) =>
+	Pressable: ({ children, onPress, accessibilityLabel, testID, ...props }: any) =>
 		React.createElement(
 			'button',
 			{
 				...props,
 				'aria-label': accessibilityLabel,
+				'data-testid': testID,
 				onClick: onPress,
 			},
 			typeof children === 'function' ? children({ pressed: false }) : children
@@ -75,5 +76,15 @@ describe('ButtonPill', () => {
 
 		expect(onRemove).toHaveBeenCalledTimes(1);
 		expect(onParentClick).not.toHaveBeenCalled();
+	});
+
+	it('passes a testID to the remove control', () => {
+		render(
+			<ButtonPill removable removeTestID="filter-pill-remove-stock_status">
+				Stock status
+			</ButtonPill>
+		);
+
+		expect(screen.getByTestId('filter-pill-remove-stock_status')).toBeInTheDocument();
 	});
 });

@@ -42,7 +42,7 @@ export function Checkout({ resource }: Props) {
 	if (!isRxDocument(order)) {
 		return (
 			<Modal>
-				<ModalContent size="lg">
+				<ModalContent testID="checkout-dialog" size="lg">
 					<ModalHeader>
 						<ModalTitle>
 							<Text>{t('common.no_order_found')}</Text>
@@ -96,7 +96,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	 */
 	return (
 		<Modal>
-			<ModalContent size="xl" className="h-full">
+			<ModalContent testID="checkout-dialog" size="xl" className="h-full">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>

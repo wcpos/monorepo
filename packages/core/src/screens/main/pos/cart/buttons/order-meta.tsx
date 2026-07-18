@@ -28,7 +28,7 @@ export function OrderMetaButton() {
 					{t('pos_cart.order_meta')}
 				</Button>
 			</DialogTrigger>
-			<DialogContent size="lg" portalHost="pos">
+			<DialogContent testID="order-meta-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.order_meta')}</DialogTitle>
 				</DialogHeader>

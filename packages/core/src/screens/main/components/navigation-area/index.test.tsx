@@ -78,12 +78,14 @@ describe('NavigationAreaLayout', () => {
 				indexHref="/settings"
 				areaLabel="Settings"
 				testID="settings-navigation"
+				screenTestID="settings-screen"
 			>
 				<div data-testid="settings-content" />
 			</NavigationAreaLayout>
 		);
 
 		expect(screen.getByTestId('settings-navigation-rail')).toBeTruthy();
+		expect(screen.getByTestId('settings-screen')).toBeTruthy();
 		expect(screen.getByTestId('settings-nav-tax').getAttribute('aria-selected')).toBe('true');
 
 		fireEvent.click(screen.getByTestId('settings-nav-general'));
@@ -100,6 +102,7 @@ describe('NavigationAreaLayout', () => {
 				indexHref="/settings"
 				areaLabel="Settings"
 				testID="settings-navigation"
+				screenTestID="settings-screen"
 			>
 				<div data-testid="settings-content" />
 			</NavigationAreaLayout>
@@ -108,6 +111,7 @@ describe('NavigationAreaLayout', () => {
 		expect(screen.queryByTestId('settings-navigation-rail')).toBeNull();
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
 		expect(screen.getByTestId('settings-navigation-back')).toBeTruthy();
+		expect(screen.getByTestId('settings-screen')).toBeTruthy();
 	});
 });
 

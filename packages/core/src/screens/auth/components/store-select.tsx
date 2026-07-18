@@ -149,6 +149,7 @@ export function StoreSelect({
 							{stores.map((store) => (
 								<Pressable
 									key={store.localID}
+									testID={store.localID ? `store-option-${store.localID}` : undefined}
 									onPress={() => onStoreSelect(store.localID ?? null)}
 									className={`web:cursor-pointer web:transition-colors rounded-lg border p-3 ${
 										selectedStoreId === store.localID
