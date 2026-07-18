@@ -606,6 +606,14 @@ export type ScannerProfileDocument = RxDocument<ScannerProfileDocumentType>;
 export type ScannerProfileCollection = RxCollection<ScannerProfileDocumentType>;
 const scanner_profiles: RxCollectionCreator<ScannerProfileDocumentType> = {
 	schema: scannerProfileSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			// v1: added the serial/hid-pos connection types and their optional
+			// device-identity fields. Existing wedge-attributed profiles are
+			// unchanged — the new fields are optional.
+			return oldDoc;
+		},
+	},
 };
 
 /**

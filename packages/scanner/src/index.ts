@@ -4,6 +4,13 @@ export {
 	type BurstAssembler,
 	type BurstAssemblerOptions,
 } from './burst-assembler';
+export { isWebSerialSupported, isWebHidSupported } from './capabilities';
+export {
+	createSerialLineDecoder,
+	type SerialLineDecoder,
+	type SerialLineDecoderOptions,
+} from './serial-line-decoder';
+export { decodeHidPosReport, type HidPosDecodeOptions, type HidPosResult } from './hid-pos-decoder';
 export {
 	createScanSession,
 	hasValidRetailCheckDigit,

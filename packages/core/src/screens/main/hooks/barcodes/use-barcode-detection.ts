@@ -12,6 +12,7 @@ import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/
 import { showTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
 import { useCameraScanBus } from './camera-scan-context';
+import { useDeviceScanBus } from './device-scan-context';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
@@ -152,18 +153,26 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	 */
 	const attributed = useAttributedWedge(isFocused);
 	const camera = useCameraScanBus();
+	const device = useDeviceScanBus();
 	const barcode$ = React.useMemo(
 		() =>
 			merge(
 				wedgeBarcode$,
 				attributed.scanEvents$.pipe(map((event) => event.code)),
-				camera.events$.pipe(map((event) => event.code))
+				camera.events$.pipe(map((event) => event.code)),
+				device.events$.pipe(map((event) => event.code))
 			),
-		[wedgeBarcode$, attributed.scanEvents$, camera.events$]
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$]
 	);
 	const scanEvents$ = React.useMemo(
-		() => merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, camera.events$),
-		[wedgeBarcode$, attributed.scanEvents$, camera.events$]
+		() =>
+			merge(
+				wedgeBarcode$.pipe(map(toWedgeScanEvent)),
+				attributed.scanEvents$,
+				camera.events$,
+				device.events$
+			),
+		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$]
 	);
 
 	/**

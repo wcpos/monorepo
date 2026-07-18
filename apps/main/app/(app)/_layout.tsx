@@ -12,6 +12,7 @@ import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
+import { DeviceScanProvider } from '@wcpos/core/screens/main/hooks/barcodes/device-scan-context';
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
@@ -98,23 +99,24 @@ function AppStack() {
 			<SyncConfigBridge />
 			<UISettingsProvider>
 				<CompatGate>
-					<View className="bg-background flex-1">
-						<Stack
-							screenOptions={{
-								headerShown: false,
-								contentStyle: { backgroundColor: screenBackgroundColor },
-							}}
-						>
-							<Stack.Screen name="(drawer)" />
-							<Stack.Screen
-								name="(modals)/tax-rates"
-								options={{
-									presentation: 'containedTransparentModal',
-									animation: 'fade',
-									contentStyle: { backgroundColor: 'transparent' },
+					<DeviceScanProvider>
+						<View className="bg-background flex-1">
+							<Stack
+								screenOptions={{
+									headerShown: false,
+									contentStyle: { backgroundColor: screenBackgroundColor },
 								}}
-							/>
-							{/* <Stack.Screen
+							>
+								<Stack.Screen name="(drawer)" />
+								<Stack.Screen
+									name="(modals)/tax-rates"
+									options={{
+										presentation: 'containedTransparentModal',
+										animation: 'fade',
+										contentStyle: { backgroundColor: 'transparent' },
+									}}
+								/>
+								{/* <Stack.Screen
 							name="(modals)/login"
 							options={{
 								presentation: 'containedTransparentModal',
@@ -122,14 +124,15 @@ function AppStack() {
 								contentStyle: { backgroundColor: 'transparent' },
 							}}
 						/> */}
-						</Stack>
-						{/**
-						 * We need to have a PortalHost inside the UISettingsProvider
-						 */}
-						<ErrorBoundary>
-							<PortalHost />
-						</ErrorBoundary>
-					</View>
+							</Stack>
+							{/**
+							 * We need to have a PortalHost inside the UISettingsProvider
+							 */}
+							<ErrorBoundary>
+								<PortalHost />
+							</ErrorBoundary>
+						</View>
+					</DeviceScanProvider>
 				</CompatGate>
 			</UISettingsProvider>
 		</QueryProvider>
