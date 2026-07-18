@@ -879,7 +879,7 @@
 	"settings.barcode_test_result_typing": "typing",
 	"settings.barcode_test_result_too_short": "too short",
 	"settings.barcode_test_docs_link": "Setup guides and common problems → WCPOS docs",
-	"settings.barcode_test_capture_placeholder": "Tap here, then scan"
+	"settings.barcode_test_capture_placeholder": "Tap here, then scan",
 	"pos_products.scan_added": "Added to cart",
 	"pos_products.scan_not_found": "Barcode not found",
 	"pos_products.scan_not_found_description": "{code} — not in this store, locally or online",
