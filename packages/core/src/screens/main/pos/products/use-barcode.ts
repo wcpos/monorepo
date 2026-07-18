@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
@@ -75,6 +77,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	const { uiSettings } = useUISettings('pos-products');
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const { begin } = useScanFeedback();
+	// Rapid scans run concurrent async handlers; only the newest one may touch
+	// the shared search-box state, so a slow older scan can't clobber it.
+	const scanTicketRef = React.useRef(0);
 
 	/**
 	 *
@@ -83,6 +88,14 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		const barcodeStr = event.code;
 		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
 		const scan = begin();
+		scanTicketRef.current += 1;
+		const scanTicket = scanTicketRef.current;
+		const guardedSetSearch = (value: string) => {
+			if (scanTicketRef.current === scanTicket) setSearch(value);
+		};
+		const guardedClearSearch = () => {
+			if (scanTicketRef.current === scanTicket) clearSearch();
+		};
 		let results = await barcodeSearch(barcodeStr);
 		let onlineParentRequired = false;
 		// The online lookup shows a persistent "Searching store…" toast; track it so a
@@ -99,7 +112,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					resultsCount: count,
 				},
 			});
-			setSearch(barcodeStr);
+			guardedSetSearch(barcodeStr);
 		};
 
 		const showNotFound = () => {
@@ -111,7 +124,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					barcode: barcodeStr,
 				},
 			});
-			setSearch(barcodeStr);
+			guardedSetSearch(barcodeStr);
 		};
 
 		const showLookupError = (errorCode: string, error?: string) => {
@@ -124,7 +137,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					...(error ? { error } : {}),
 				},
 			});
-			setSearch(barcodeStr);
+			guardedSetSearch(barcodeStr);
 		};
 
 		if (results.length > 1) {
@@ -146,7 +159,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						gatedBy: engineStatus.gatedBy,
 					},
 				});
-				setSearch(barcodeStr);
+				guardedSetSearch(barcodeStr);
 				return;
 			}
 
@@ -333,7 +346,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			 */
 			const parent_id = product.parent_id;
 			if (!parent_id) {
-				setSearch(barcodeStr);
+				guardedSetSearch(barcodeStr);
 				return;
 			}
 
@@ -362,7 +375,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				}
 			}
 			if (!parent) {
-				setSearch(barcodeStr);
+				guardedSetSearch(barcodeStr);
 				return;
 			}
 
@@ -406,7 +419,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		});
 
 		// Successful scans clear both committed search and any pending input draft.
-		clearSearch();
+		guardedClearSearch();
 	});
 
 	return { onKeyPress };
