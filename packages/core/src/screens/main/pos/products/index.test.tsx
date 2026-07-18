@@ -119,6 +119,7 @@ jest.mock('./use-barcode', () => ({
 	useBarcode: (setSearch: (search: string) => void, clearSearch: () => void) =>
 		mockUseBarcode(setSearch, clearSearch),
 }));
+jest.mock('./engine-outage-banner', () => ({ EngineOutageBanner: () => null }));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./view-mode-toggle', () => ({ ViewModeToggle: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
