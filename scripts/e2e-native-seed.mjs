@@ -69,6 +69,15 @@ if (!products.length) {
 	console.error(`✖ No product named exactly "${PRODUCT}" on ${STORE_URL} — flows will fail.`);
 	process.exit(1);
 }
+// The flows tap `product-tile`, which only renders for SIMPLE products
+// (variable products get `variable-product-tile`).
+const nonSimple = products.filter((p) => p.type !== 'simple');
+if (nonSimple.length === products.length) {
+	console.error(
+		`✖ "${PRODUCT}" exists but no simple-type variant — flows tap product-tile and will fail.`
+	);
+	process.exit(1);
+}
 for (const p of products) {
 	if (p.stock_status !== 'instock') {
 		const fix = await api(`products/${p.id}`, {
