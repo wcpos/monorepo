@@ -8,6 +8,8 @@ interface RecordedOscillator {
 }
 
 const oscillators: RecordedOscillator[] = [];
+let audioContextState = 'running';
+let resumeAudioContext: (() => void) | undefined;
 
 class FakeGain {
 	gain = { setValueAtTime: jest.fn(), linearRampToValueAtTime: jest.fn() };
@@ -25,9 +27,16 @@ class FakeOscillator {
 
 class FakeAudioContext {
 	currentTime = 0;
-	state = 'running';
+	get state() {
+		return audioContextState;
+	}
 	destination = {};
-	resume = jest.fn(async () => undefined);
+	resume = jest.fn(
+		() =>
+			new Promise<void>((resolve) => {
+				resumeAudioContext = resolve;
+			})
+	);
 	createGain = jest.fn(() => new FakeGain());
 	createOscillator = jest.fn(() => {
 		const oscillator = new FakeOscillator();
@@ -50,6 +59,8 @@ beforeAll(() => {
 
 beforeEach(() => {
 	oscillators.length = 0;
+	audioContextState = 'running';
+	resumeAudioContext = undefined;
 });
 
 describe('web scan sounds', () => {
@@ -62,5 +73,17 @@ describe('web scan sounds', () => {
 		playScanFailure();
 		expect(oscillators.map((o) => o.frequency.value)).toEqual([330, 220]);
 		expect(oscillators.every((o) => o.type === 'square')).toBe(true);
+	});
+
+	it('waits for a suspended audio context to resume before scheduling tones', async () => {
+		audioContextState = 'suspended';
+
+		playScanSuccess();
+		expect(oscillators).toHaveLength(0);
+
+		resumeAudioContext?.();
+		await Promise.resolve();
+
+		expect(oscillators.map((o) => o.frequency.value)).toEqual([880, 1320]);
 	});
 });
