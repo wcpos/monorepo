@@ -1,0 +1,33 @@
+appId: com.wcpos.main.dev
+env:
+  STORE_URL: https://dev-pro.wcpos.com
+---
+# P0-1: clean launch → connect screen renders; invalid URL does not connect.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: "store-url-input"
+    timeout: 60000
+- assertVisible:
+    id: "connect-store-button"
+- assertVisible:
+    id: "enter-demo-store-button"
+# Invalid URL must not produce a connected site.
+- tapOn:
+    id: "store-url-input"
+- inputText: "https://not-a-real-store.invalid"
+- hideKeyboard
+- tapOn:
+    id: "connect-store-button"
+# The button disables while the discovery request is in flight; waiting for it
+# to be enabled again proves the request settled (there is no "Loading" text).
+- extendedWaitUntil:
+    visible:
+      id: "connect-store-button"
+      enabled: true
+    timeout: 30000
+- assertNotVisible:
+    id: "logged-in-users-label"
+- assertVisible:
+    id: "store-url-input"
