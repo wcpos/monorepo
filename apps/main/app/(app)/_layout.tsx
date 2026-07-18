@@ -98,8 +98,8 @@ function AppStack() {
 		<QueryProvider localDB={storeDB} engine={engine} http={http} locale={locale}>
 			<SyncConfigBridge />
 			<UISettingsProvider>
-				<DeviceScanProvider>
-					<CompatGate>
+				<CompatGate>
+					<DeviceScanProvider>
 						<View className="bg-background flex-1">
 							<Stack
 								screenOptions={{
@@ -132,8 +132,8 @@ function AppStack() {
 								<PortalHost />
 							</ErrorBoundary>
 						</View>
-					</CompatGate>
-				</DeviceScanProvider>
+					</DeviceScanProvider>
+				</CompatGate>
 			</UISettingsProvider>
 		</QueryProvider>
 	);

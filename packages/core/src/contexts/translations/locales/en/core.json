@@ -904,7 +904,7 @@
 	"pos_products.camera_permission_prompt": "WCPOS needs camera access to scan barcodes.",
 	"pos_products.camera_permission_grant": "Allow camera",
 	"settings.scanner_connect_serial": "Connect serial scanner",
-	"settings.scanner_serial_connected": "Serial connected",
 	"settings.scanner_connect_hid": "Connect HID scanner",
-	"settings.scanner_hid_connected": "HID connected"
+	"settings.scanner_serial_disconnect": "Disconnect serial scanner",
+	"settings.scanner_hid_disconnect": "Disconnect HID scanner"
 }

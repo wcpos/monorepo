@@ -88,12 +88,14 @@ export function InputSources() {
 						<Button
 							size="sm"
 							variant={serial.connected ? 'outline' : 'default'}
-							onPress={() => serial.connect()}
+							onPress={() => (serial.connected ? serial.disconnect() : serial.connect())}
 							testID="serial-connect-button"
 						>
 							<ButtonText>
 								{serial.connected
-									? t('settings.scanner_serial_connected', { defaultValue: 'Serial connected' })
+									? t('settings.scanner_serial_disconnect', {
+											defaultValue: 'Disconnect serial scanner',
+										})
 									: t('settings.scanner_connect_serial', {
 											defaultValue: 'Connect serial scanner',
 										})}
@@ -104,12 +106,12 @@ export function InputSources() {
 						<Button
 							size="sm"
 							variant={hid.connected ? 'outline' : 'default'}
-							onPress={() => hid.connect()}
+							onPress={() => (hid.connected ? hid.disconnect() : hid.connect())}
 							testID="hid-connect-button"
 						>
 							<ButtonText>
 								{hid.connected
-									? t('settings.scanner_hid_connected', { defaultValue: 'HID connected' })
+									? t('settings.scanner_hid_disconnect', { defaultValue: 'Disconnect HID scanner' })
 									: t('settings.scanner_connect_hid', { defaultValue: 'Connect HID scanner' })}
 							</ButtonText>
 						</Button>
