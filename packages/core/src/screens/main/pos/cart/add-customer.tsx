@@ -116,7 +116,7 @@ export function AddNewCustomer() {
 						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent testID="add-customer-dialog" size="xl" portalHost="pos">
+				<DialogContent testID="add-new-customer-dialog" size="xl" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
