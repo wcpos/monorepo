@@ -98,7 +98,7 @@ describe('PrinterService', () => {
 			isBuiltIn: false,
 		};
 
-		await (service as any).printReceipt(sampleReceiptData, profile, undefined, undefined, 3);
+		await (service as any).printReceipt(sampleReceiptData, profile, undefined, 3);
 
 		expect(encodeReceiptMock).toHaveBeenCalledWith(
 			sampleReceiptData,
