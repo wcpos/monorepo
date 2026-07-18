@@ -14,7 +14,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		? iosInfoPlist.UISupportedExternalAccessoryProtocols
 		: [];
 
-	const isDev = easProfile === 'development';
+	const isDev = easProfile === 'development' || easProfile === 'e2e-test';
 	const isAdhoc = easProfile === 'adhoc';
 
 	// Set env var for web builds (used by @wcpos/utils/app-info)

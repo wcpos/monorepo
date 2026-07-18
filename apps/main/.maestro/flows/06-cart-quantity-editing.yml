@@ -1,0 +1,51 @@
+appId: com.wcpos.main.dev
+env:
+  PRODUCT_SEARCH: Beanie
+---
+# P0-6: cart quantity editing with the native soft keyboard (the web numpad
+# does not exist on native — number-input.tsx is a plain TextInput).
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 120000
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+- tapOn:
+    id: "search-products"
+- inputText: ${PRODUCT_SEARCH}
+- extendedWaitUntil:
+    visible:
+      id: "product-tile"
+    timeout: 30000
+- tapOn:
+    id: "product-tile"
+    index: 0
+- hideKeyboard
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-cart"
+    commands:
+      - tapOn:
+          id: "pos-tab-cart"
+- extendedWaitUntil:
+    visible:
+      id: "cart-quantity-input"
+    timeout: 30000
+- tapOn:
+    id: "cart-quantity-input"
+- eraseText
+- inputText: "3"
+- hideKeyboard
+# Totals recalculate; subtotal stays visible and the cart is intact.
+- assertVisible:
+    id: "cart-subtotal"
+- assertVisible:
+    id: "checkout-button"

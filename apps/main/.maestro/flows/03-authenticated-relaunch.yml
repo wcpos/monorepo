@@ -1,0 +1,13 @@
+appId: com.wcpos.main.dev
+---
+# P0-3: authenticated relaunch — the session hydrates from native SQLite and
+# the POS appears WITHOUT reconnecting. This behavior is also the mechanism
+# every later flow relies on (auth decision #698: OAuth once, reuse session).
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "search-products"
+    timeout: 120000
+- assertNotVisible:
+    id: "store-url-input"
