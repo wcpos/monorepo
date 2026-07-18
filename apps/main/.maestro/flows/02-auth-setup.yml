@@ -61,6 +61,13 @@ env:
     timeout: 120000
 - tapOn:
     id: "store-option-.*"
+# StoreSelect keeps the button disabled while cashier validation is in flight;
+# tapping a disabled native button no-ops silently.
+- extendedWaitUntil:
+    visible:
+      id: "open-pos-button"
+      enabled: true
+    timeout: 60000
 - tapOn:
     id: "open-pos-button"
 # Initial RxDB product sync on a cold database (240s budget was never

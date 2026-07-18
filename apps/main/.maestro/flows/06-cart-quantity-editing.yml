@@ -10,6 +10,14 @@ env:
     visible:
       id: "search-products"
     timeout: 120000
+# The In-Stock filter resets on every relaunch — clear it before searching.
+- runFlow:
+    when:
+      visible:
+        id: "filter-pill-remove-stock_status"
+    commands:
+      - tapOn:
+          id: "filter-pill-remove-stock_status"
 - runFlow:
     when:
       visible:

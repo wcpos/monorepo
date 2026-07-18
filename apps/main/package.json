@@ -9,7 +9,7 @@
 		"web": "expo start --web",
 		"test": "jest --watchAll",
 		"test:e2e": "playwright test",
-		"test:e2e:native": "maestro test .maestro/flows",
+		"test:e2e:native": "maestro test .maestro",
 		"test:e2e:native:check": "node ../../scripts/check-maestro-testids.mjs",
 		"test:e2e:native:seed": "node ../../scripts/e2e-native-seed.mjs",
 		"test:e2e:ui": "playwright test --ui",

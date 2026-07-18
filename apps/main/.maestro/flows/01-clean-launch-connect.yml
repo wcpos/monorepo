@@ -20,8 +20,12 @@ env:
 - hideKeyboard
 - tapOn:
     id: "connect-store-button"
+# The button disables while the discovery request is in flight; waiting for it
+# to be enabled again proves the request settled (there is no "Loading" text).
 - extendedWaitUntil:
-    notVisible: "Loading.*"
+    visible:
+      id: "connect-store-button"
+      enabled: true
     timeout: 30000
 - assertNotVisible:
     id: "logged-in-users-label"

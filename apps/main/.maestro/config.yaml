@@ -1,15 +1,18 @@
 # Maestro workspace for the WCPOS native E2E suite (P0).
 # Spec: wayfinder map wcpos/monorepo#688 handoff spec.
-# Flows run in the order below: 02 authenticates once (real OAuth against
-# the dev-pro store); every later flow reuses the SQLite-persisted session
-# and must NOT clear state.
+# The suite is deliberately stateful: 02 authenticates once (real OAuth
+# against the dev-pro store) and every later flow reuses the SQLite-persisted
+# session, so execution order is pinned explicitly — Maestro's default flow
+# order is non-deterministic.
 flows:
-  - flows/01-clean-launch-connect.yml
-  - flows/02-auth-setup.yml
-  - flows/03-authenticated-relaunch.yml
-  - flows/04-cash-sale.yml
-  - flows/05-drawer-navigation.yml
-  - flows/06-cart-quantity-editing.yml
-  - flows/07-void-order.yml
+  - flows/*.yml
 executionOrder:
   continueOnFailure: false
+  flowsOrder:
+    - 01-clean-launch-connect
+    - 02-auth-setup
+    - 03-authenticated-relaunch
+    - 04-cash-sale
+    - 05-drawer-navigation
+    - 06-cart-quantity-editing
+    - 07-void-order

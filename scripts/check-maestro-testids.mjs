@@ -42,6 +42,9 @@ const prefixes = new Set();
 for (const dir of sourceDirs) {
 	for (const file of walk(dir, ['.tsx', '.ts'])) {
 		if (file.endsWith('.web.tsx') || file.endsWith('.web.ts')) continue;
+		// Test-only literals must not satisfy the lint — a removed production
+		// testID would otherwise stay "present" via its unit test.
+		if (/\.(test|spec)\.[jt]sx?$/.test(file) || file.includes('__tests__')) continue;
 		const text = fs.readFileSync(file, 'utf8');
 		// Any *TestID prop (testID, removeTestID, screenTestID, …), string literal value.
 		for (const m of text.matchAll(/\w*[tT]estID\s*[=:]\s*\{?\s*["']([^"']+)["']/g)) {

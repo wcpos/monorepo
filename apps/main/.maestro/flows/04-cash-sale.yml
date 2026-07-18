@@ -10,6 +10,15 @@ env:
     visible:
       id: "search-products"
     timeout: 120000
+# The In-Stock filter resets on every relaunch (POSProducts remounts with
+# showOutOfStock=false) — clear it here, not just in 02-auth-setup.
+- runFlow:
+    when:
+      visible:
+        id: "filter-pill-remove-stock_status"
+    commands:
+      - tapOn:
+          id: "filter-pill-remove-stock_status"
 # Phone layout splits Products/Cart into tabs; tablet shows both columns.
 - runFlow:
     when:
