@@ -1,5 +1,13 @@
 import * as React from 'react';
-import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
+import {
+	Linking,
+	type NativeSyntheticEvent,
+	Platform,
+	Pressable,
+	ScrollView,
+	type TextInputKeyPressEventData,
+	View,
+} from 'react-native';
 
 import { useObservablePickState, useObservableState } from 'observable-hooks';
 
@@ -9,8 +17,8 @@ import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from '@wcpos/scanner';
 
-import { analyzeScanTrace, type TraceAnalysis, type TraceSuggestion } from './analyze-scan-trace';
 import { useScanTraceCapture } from './use-scan-trace-capture';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -83,13 +91,21 @@ export function TestPanel() {
 	const t = useT();
 	const { store } = useAppState();
 	const { localPatch } = useLocalMutation();
-	const { barcode$ } = useBarcodeDetection();
+	const { barcode$, onKeyPress: detectorOnKeyPress } = useBarcodeDetection();
 	const detectedBarcode = useObservableState(barcode$) as string | undefined;
-	const { currentKeys, attempts, onKeyPress } = useScanTraceCapture();
+	const { currentKeys, attempts, onKeyPress: captureOnKeyPress } = useScanTraceCapture();
 	// On web a global key listener captures scans; on native `useHotkeys` is
-	// inert, so the readout below doubles as a focused capture input that feeds
-	// keystrokes in through `onKeyPress`.
+	// inert, so the readout below doubles as a focused capture input. Its keys
+	// must feed BOTH the trace capture and the production detector — otherwise
+	// the detected-barcode readout stays empty on native.
 	const isWeb = Platform.OS === 'web';
+	const handleNativeKeyPress = React.useCallback(
+		(event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+			captureOnKeyPress(event);
+			detectorOnKeyPress(event);
+		},
+		[captureOnKeyPress, detectorOnKeyPress]
+	);
 
 	const storeSettings = useObservablePickState(
 		store.$,
@@ -149,7 +165,7 @@ export function TestPanel() {
 					value={liveKeys}
 					editable={!isWeb}
 					aria-disabled={isWeb}
-					onKeyPress={isWeb ? undefined : onKeyPress}
+					onKeyPress={isWeb ? undefined : handleNativeKeyPress}
 					autoFocus={!isWeb}
 					placeholder={
 						isWeb

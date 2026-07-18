@@ -1,4 +1,6 @@
-import { analyzeScanTrace, type TraceKey } from './analyze-scan-trace';
+import { analyzeScanTrace } from './analyze-trace';
+
+import type { TraceKey } from './wedge-detector';
 
 const SETTINGS = { threshold: 24, minChars: 8, prefix: '', suffix: '' };
 

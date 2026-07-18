@@ -94,6 +94,7 @@
 		"@wcpos/order-math": "workspace:*",
 		"@wcpos/printer": "workspace:*",
 		"@wcpos/query": "workspace:*",
+		"@wcpos/scanner": "workspace:*",
 		"@wcpos/sync-core": "workspace:*",
 		"@wcpos/utils": "workspace:*",
 		"@widgetbot/react-embed": "^1.11.3",

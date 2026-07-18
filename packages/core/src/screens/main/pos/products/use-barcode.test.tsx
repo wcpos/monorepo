@@ -87,7 +87,7 @@ jest.mock('../../contexts/ui-settings', () => ({
 }));
 
 jest.mock('../../hooks/barcodes', () => ({
-	useBarcodeDetection: () => ({ barcode$: {}, onKeyPress: mockOnKeyPress }),
+	useBarcodeDetection: () => ({ barcode$: {}, scanEvents$: {}, onKeyPress: mockOnKeyPress }),
 }));
 
 jest.mock('../hooks/use-add-product', () => ({
@@ -176,7 +176,7 @@ function variationDocument(id = 51, parentId = 41, barcode = 'ABC'): EngineDocum
 
 async function scan(barcode = 'ABC'): Promise<void> {
 	if (!mockSubscriptionCallback) throw new Error('barcode subscription was not registered');
-	await mockSubscriptionCallback(barcode);
+	await mockSubscriptionCallback({ code: barcode, source: { kind: 'wedge' }, timestamp: 0 });
 }
 
 function renderBarcodeHook() {
