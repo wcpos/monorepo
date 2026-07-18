@@ -1,4 +1,10 @@
 export {
+	BURST_SETTLE_MS,
+	createBurstAssembler,
+	type BurstAssembler,
+	type BurstAssemblerOptions,
+} from './burst-assembler';
+export {
 	createWedgeDetector,
 	createWedgeState,
 	foldWedgeKey,

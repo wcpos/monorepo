@@ -2,17 +2,17 @@ import * as React from 'react';
 import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'react-native';
 
 import { useFocusEffect } from 'expo-router';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
+import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
-import { Toast } from '@wcpos/components/toast';
 import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/scanner';
-import { getLogger } from '@wcpos/utils/logger';
 
+import { showTooShortFeedback } from './too-short-feedback';
+import { useAttributedWedge } from './use-attributed-wedge';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-
-const barcodeLogger = getLogger(['wcpos', 'barcode', 'detection']);
 
 // Runs at scan time (not render): wraps a detected code in the normalized event.
 function toWedgeScanEvent(code: unknown): ScanEvent {
@@ -33,6 +33,7 @@ type BarcodeScanEvent = {
  */
 export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	const t = useT();
+	const isFocused = useIsFocused();
 	const { store } = useAppState();
 	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
 	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
@@ -41,7 +42,7 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	) as number;
 
 	// Subject to emit detected barcodes
-	const [onBarcodeScan, barcode$] = useObservableCallback<
+	const [onBarcodeScan, wedgeBarcode$] = useObservableCallback<
 		string,
 		BarcodeScanEvent,
 		[string, (barcode: string) => void]
@@ -54,22 +55,7 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 					if (event.barcode.length >= currentMinLengthNumber) {
 						return true;
 					}
-					// Scan feedback toasts directly; the logger only records the event.
-					Toast.show({
-						type: 'warning',
-						title: t('common.barcode_scanned', { barcode: event.barcode }),
-						description: t('common.barcode_must_be_at_least_characters', {
-							minLength: currentMinLengthNumber,
-						}),
-						duration: 6000,
-					});
-					barcodeLogger.warn(t('common.barcode_scanned', { barcode: event.barcode }), {
-						context: {
-							barcode: event.barcode,
-							minLength: currentMinLengthNumber,
-							actualLength: event.barcode.length,
-						},
-					});
+					showTooShortFeedback(t, event.barcode, currentMinLengthNumber);
 					return false;
 				}),
 				tap(([event]) => {
@@ -163,7 +149,15 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 	 * the POS product route subscribe here; additional sources (attributed
 	 * wedge, serial, HID-POS, camera) will feed the same shape.
 	 */
-	const scanEvents$ = React.useMemo(() => barcode$.pipe(map(toWedgeScanEvent)), [barcode$]);
+	const attributed = useAttributedWedge(isFocused);
+	const barcode$ = React.useMemo(
+		() => merge(wedgeBarcode$, attributed.scanEvents$.pipe(map((event) => event.code))),
+		[wedgeBarcode$, attributed.scanEvents$]
+	);
+	const scanEvents$ = React.useMemo(
+		() => merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$),
+		[wedgeBarcode$, attributed.scanEvents$]
+	);
 
 	/**
 	 * Return the detected-barcode observables and the onKeyPress handler for

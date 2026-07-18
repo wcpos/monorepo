@@ -20,6 +20,7 @@ import { usersLiteral } from './schemas/users';
 import { variationsLiteral } from './schemas/variations';
 import { wpCredentialsLiteral } from './schemas/wp-credientials';
 import { printerProfilesLiteral } from './schemas/printer-profiles';
+import { scannerProfilesLiteral } from './schemas/scanner-profiles';
 import { templatePrinterOverridesLiteral } from './schemas/template-printer-overrides';
 import { toSortableInteger } from './utils';
 import { sanitizeProductData } from './products';
@@ -595,6 +596,19 @@ const templates: RxCollectionCreator<TemplateDocumentType> = {
 };
 
 /**
+ * Scanner Profiles (local-only, not synced to server)
+ */
+const scannerProfileSchema: RxJsonSchema<ScannerProfileDocumentType> = scannerProfilesLiteral;
+type ScannerProfileDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof scannerProfilesLiteral
+>;
+export type ScannerProfileDocument = RxDocument<ScannerProfileDocumentType>;
+export type ScannerProfileCollection = RxCollection<ScannerProfileDocumentType>;
+const scanner_profiles: RxCollectionCreator<ScannerProfileDocumentType> = {
+	schema: scannerProfileSchema,
+};
+
+/**
  * Printer Profiles (local-only, not synced to server)
  */
 const printerProfileSchema: RxJsonSchema<PrinterProfileDocumentType> = printerProfilesLiteral;
@@ -694,6 +708,7 @@ export type StoreCollections = {
 	notifications: NotificationCollection;
 	templates: TemplateCollection;
 	printer_profiles: PrinterProfileCollection;
+	scanner_profiles: ScannerProfileCollection;
 	template_printer_overrides: TemplatePrinterOverrideCollection;
 };
 
@@ -743,6 +758,7 @@ export const storeCollections = {
 	notifications,
 	templates,
 	printer_profiles,
+	scanner_profiles,
 	template_printer_overrides,
 };
 

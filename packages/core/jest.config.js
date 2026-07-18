@@ -29,6 +29,7 @@ module.exports = {
 		'^@wcpos/utils/logger$': '<rootDir>/jest/__mocks__/@wcpos/utils/logger.js',
 		// Other mocks
 		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',
+		'^expo-modules-core$': '<rootDir>/jest/__mocks__/expo-modules-core.js',
 		'^react-native$': 'react-native-web',
 		'^@wcpos/printer$': '<rootDir>/../printer/src/index.ts',
 		'^@wcpos/scanner$': '<rootDir>/../scanner/src/index.ts',
