@@ -120,6 +120,14 @@ jest.mock('./use-barcode', () => ({
 		mockUseBarcode(setSearch, clearSearch),
 }));
 jest.mock('./engine-outage-banner', () => ({ EngineOutageBanner: () => null }));
+jest.mock('./camera-scanner-dialog', () => ({ CameraScannerDialog: () => null }));
+jest.mock('../../hooks/barcodes/camera-scan-context', () => ({
+	CameraScanProvider: ({ children }: { children: React.ReactNode }) => children,
+	useCameraScanBus: () => ({
+		events$: { subscribe: () => ({ unsubscribe() {} }) },
+		emit: () => {},
+	}),
+}));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./view-mode-toggle', () => ({ ViewModeToggle: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));

@@ -99,6 +99,7 @@
 		"@wcpos/sync-core": "workspace:*",
 		"@wcpos/utils": "workspace:*",
 		"@widgetbot/react-embed": "^1.11.3",
+		"barcode-detector": "^3.2.1",
 		"date-fns": "^4.4.0",
 		"html-entities": "2.6.0",
 		"i18next": "^26.3.1",

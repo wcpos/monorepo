@@ -5,6 +5,15 @@ export {
 	type BurstAssemblerOptions,
 } from './burst-assembler';
 export {
+	createScanSession,
+	hasValidRetailCheckDigit,
+	DEFAULT_COOLDOWN_MS,
+	type ScanSession,
+	type ScanSessionOptions,
+	type ScanOfferResult,
+	type ScanRejectReason,
+} from './scan-session';
+export {
 	createWedgeDetector,
 	createWedgeState,
 	foldWedgeKey,

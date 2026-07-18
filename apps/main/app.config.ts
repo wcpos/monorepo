@@ -99,6 +99,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			'./plugins/with-printer-support',
 			'./plugins/with-wedge-key-events',
 			[
+				'expo-camera',
+				{
+					cameraPermission: 'WCPOS uses the camera to scan product barcodes.',
+					recordAudioAndroid: false,
+				},
+			],
+			[
 				'expo-router',
 				{
 					sitemap: false,
