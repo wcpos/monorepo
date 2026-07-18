@@ -1,4 +1,4 @@
-import type { ScannerProfileDocument } from '@wcpos/database';
+import type { ScanBus } from '@wcpos/scanner';
 
 /**
  * WebHID (HID POS) barcode source. Direct connections only exist on
@@ -8,16 +8,13 @@ export interface UseHidScanResult {
 	available: boolean;
 	/** Open the browser HID-device chooser (must run inside a click gesture). */
 	connect: () => Promise<void>;
-	/** Re-open a previously granted device matching a saved profile. */
-	reconnect: (profile: ScannerProfileDocument) => Promise<void>;
 	disconnect: () => Promise<void>;
 	connected: boolean;
 }
 
-export const useHidScan = (): UseHidScanResult => ({
+export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => ({
 	available: false,
 	connect: async () => undefined,
-	reconnect: async () => undefined,
 	disconnect: async () => undefined,
 	connected: false,
 });

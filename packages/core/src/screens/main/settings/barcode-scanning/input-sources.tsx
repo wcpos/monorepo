@@ -12,6 +12,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { ScannerProfileDocument } from '@wcpos/database';
 
 import { useT } from '../../../../contexts/translations';
+import { useDeviceScanControls } from '../../hooks/barcodes/device-scan-context';
 import { useScannerRegistration } from '../../hooks/barcodes/use-scanner-registration';
 import { useCollection } from '../../hooks/use-collection';
 
@@ -30,9 +31,12 @@ export function InputSources() {
 		NO_PROFILES
 	) as ScannerProfileDocument[];
 	const registration = useScannerRegistration();
+	const { serial, hid } = useDeviceScanControls();
 	const [label, setLabel] = React.useState('');
 
-	if (!registration.available) {
+	// The section renders if any input source can be added on this platform:
+	// the attributed wedge (Android) or a direct Web Serial / WebHID connection.
+	if (!registration.available && !serial.available && !hid.available) {
 		return null;
 	}
 
@@ -78,6 +82,41 @@ export function InputSources() {
 				})}
 			</Text>
 
+			{serial.available || hid.available ? (
+				<HStack space="sm" testID="add-scanner-direct">
+					{serial.available ? (
+						<Button
+							size="sm"
+							variant={serial.connected ? 'outline' : 'default'}
+							onPress={() => serial.connect()}
+							testID="serial-connect-button"
+						>
+							<ButtonText>
+								{serial.connected
+									? t('settings.scanner_serial_connected', { defaultValue: 'Serial connected' })
+									: t('settings.scanner_connect_serial', {
+											defaultValue: 'Connect serial scanner',
+										})}
+							</ButtonText>
+						</Button>
+					) : null}
+					{hid.available ? (
+						<Button
+							size="sm"
+							variant={hid.connected ? 'outline' : 'default'}
+							onPress={() => hid.connect()}
+							testID="hid-connect-button"
+						>
+							<ButtonText>
+								{hid.connected
+									? t('settings.scanner_hid_connected', { defaultValue: 'HID connected' })
+									: t('settings.scanner_connect_hid', { defaultValue: 'Connect HID scanner' })}
+							</ButtonText>
+						</Button>
+					) : null}
+				</HStack>
+			) : null}
+
 			{profiles.map((profile) => (
 				<HStack
 					key={profile.id}
@@ -101,7 +140,7 @@ export function InputSources() {
 				</HStack>
 			))}
 
-			{registration.candidate ? (
+			{registration.available && registration.candidate ? (
 				<VStack space="sm" className="border-info/40 bg-info/10 rounded-md border p-2">
 					<Text className="text-sm">
 						{t('settings.scanner_detected', {
@@ -139,7 +178,7 @@ export function InputSources() {
 						</Button>
 					</HStack>
 				</View>
-			) : (
+			) : registration.available ? (
 				<View className="items-start">
 					<Button size="sm" onPress={registration.start} testID="register-scanner-button">
 						<ButtonText>
@@ -147,7 +186,7 @@ export function InputSources() {
 						</ButtonText>
 					</Button>
 				</View>
-			)}
+			) : null}
 		</VStack>
 	);
 }

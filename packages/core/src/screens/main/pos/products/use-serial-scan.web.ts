@@ -8,13 +8,13 @@ import {
 	createScanSession,
 	createSerialLineDecoder,
 	isWebSerialSupported,
+	type ScanBus,
 	type ScanSession,
 	type SerialLineDecoder,
 } from '@wcpos/scanner';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
-import { useDeviceScanBus } from '../../hooks/barcodes/device-scan-context';
 import { useCollection } from '../../hooks/use-collection';
 
 import type { UseSerialScanResult } from './use-serial-scan';
@@ -48,8 +48,7 @@ function getSerial(): SerialLike | undefined {
  * via the scan-session, and emits `serial` ScanEvents onto the device scan bus
  * (merged into scanEvents$ by useBarcodeDetection).
  */
-export const useSerialScan = (): UseSerialScanResult => {
-	const { emit } = useDeviceScanBus();
+export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 	const { store } = useAppState();
 	const { collection } = useCollection('scanner_profiles');
 	const minChars = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
@@ -165,23 +164,37 @@ export const useSerialScan = (): UseSerialScanResult => {
 		}
 	}, [attachPort]);
 
-	const reconnect = React.useCallback(
-		async (profile: ScannerProfileDocument) => {
-			const serial = getSerial();
-			if (!serial) {
+	// On mount, silently re-open any already-granted port that matches a saved
+	// serial profile (the browser remembers granted devices across reloads).
+	React.useEffect(() => {
+		const serial = getSerial();
+		if (!serial) {
+			return;
+		}
+		let cancelled = false;
+		(async () => {
+			const [ports, profiles] = await Promise.all([
+				serial.getPorts(),
+				collection.find({ selector: { connectionType: 'serial' } }).exec(),
+			]);
+			if (cancelled) {
 				return;
 			}
-			const ports = await serial.getPorts();
 			const match = ports.find((port) => {
 				const info = port.getInfo();
-				return info.usbVendorId === profile.vendorId && info.usbProductId === profile.productId;
+				return profiles.some(
+					(profile: ScannerProfileDocument) =>
+						profile.vendorId === info.usbVendorId && profile.productId === info.usbProductId
+				);
 			});
-			if (match) {
+			if (match && !cancelled) {
 				await attachPort(match, false);
 			}
-		},
-		[attachPort]
-	);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [collection, attachPort]);
 
 	const disconnect = React.useCallback(async () => {
 		abortRef.current?.abort();
@@ -195,7 +208,6 @@ export const useSerialScan = (): UseSerialScanResult => {
 	return {
 		available: isWebSerialSupported(),
 		connect,
-		reconnect,
 		disconnect,
 		connected,
 	};

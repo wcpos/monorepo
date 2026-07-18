@@ -8,12 +8,12 @@ import {
 	createScanSession,
 	decodeHidPosReport,
 	isWebHidSupported,
+	type ScanBus,
 	type ScanSession,
 } from '@wcpos/scanner';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
-import { useDeviceScanBus } from '../../hooks/barcodes/device-scan-context';
 import { useCollection } from '../../hooks/use-collection';
 
 import type { UseHidScanResult } from './use-hid-scan';
@@ -65,8 +65,7 @@ function dataViewToBytes(view: DataView): number[] {
  * carries a complete decoded barcode; decode it, dedup via the scan-session,
  * and emit `hid-pos` ScanEvents onto the device scan bus.
  */
-export const useHidScan = (): UseHidScanResult => {
-	const { emit } = useDeviceScanBus();
+export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 	const { store } = useAppState();
 	const { collection } = useCollection('scanner_profiles');
 	const minChars = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
@@ -156,22 +155,36 @@ export const useHidScan = (): UseHidScanResult => {
 		}
 	}, [attachDevice]);
 
-	const reconnect = React.useCallback(
-		async (profile: ScannerProfileDocument) => {
-			const hid = getHid();
-			if (!hid) {
+	// On mount, silently re-open any already-granted HID device matching a saved
+	// hid-pos profile (the browser remembers granted devices across reloads).
+	React.useEffect(() => {
+		const hid = getHid();
+		if (!hid) {
+			return;
+		}
+		let cancelled = false;
+		(async () => {
+			const [devices, profiles] = await Promise.all([
+				hid.getDevices(),
+				collection.find({ selector: { connectionType: 'hid-pos' } }).exec(),
+			]);
+			if (cancelled) {
 				return;
 			}
-			const devices = await hid.getDevices();
-			const match = devices.find(
-				(device) => device.vendorId === profile.vendorId && device.productId === profile.productId
+			const match = devices.find((device) =>
+				profiles.some(
+					(profile: ScannerProfileDocument) =>
+						profile.vendorId === device.vendorId && profile.productId === device.productId
+				)
 			);
-			if (match) {
+			if (match && !cancelled) {
 				await attachDevice(match, false);
 			}
-		},
-		[attachDevice]
-	);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [collection, attachDevice]);
 
 	const disconnect = React.useCallback(async () => {
 		const device = deviceRef.current;
@@ -187,7 +200,6 @@ export const useHidScan = (): UseHidScanResult => {
 	return {
 		available: isWebHidSupported(),
 		connect,
-		reconnect,
 		disconnect,
 		connected,
 	};
