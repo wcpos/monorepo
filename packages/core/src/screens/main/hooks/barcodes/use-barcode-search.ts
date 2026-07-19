@@ -36,22 +36,22 @@ function engineDocuments(value: unknown): EngineRxDocument[] {
 	return Array.isArray(value) ? value.filter(isEngineRxDocument) : [];
 }
 
-/** The document carries the scanned code verbatim in any discovery field. */
-function matchesExactBarcode(document: EngineRxDocument, barcode: string): boolean {
+/** The document carries the scanned code verbatim in a barcode-symbology field. */
+function matchesExactSymbology(document: EngineRxDocument, barcode: string): boolean {
 	const payload = document.payload;
 	if (!payload) {
 		return false;
 	}
-	return buildLocalBarcodeIndex([{ id: document.id, payload }]).index.has(barcode);
+	return buildBarcodeSymbologyIndex([{ id: document.id, payload }]).index.has(barcode);
 }
 
 /**
  * The document carries the UPC-A/EAN-13 counterpart of the scanned code in a
  * barcode-symbology field (#740). Scoped to barcode fields so a numeric SKU
- * never gains an equivalent form, and excludes the exact code (handled by
- * `matchesExactBarcode`) so this is strictly the equivalence fallback.
+ * never gains an equivalent form, and excludes the exact code (a higher tier) so
+ * this is strictly the equivalence match.
  */
-function matchesEquivalentBarcode(document: EngineRxDocument, barcode: string): boolean {
+function matchesEquivalentSymbology(document: EngineRxDocument, barcode: string): boolean {
 	const payload = document.payload;
 	if (!payload) {
 		return false;
@@ -60,6 +60,15 @@ function matchesEquivalentBarcode(document: EngineRxDocument, barcode: string): 
 	return barcodeMatchCandidates(barcode).some(
 		(candidate) => candidate !== barcode && index.has(candidate)
 	);
+}
+
+/** The document carries the scanned code verbatim in any discovery field (incl. SKU). */
+function matchesExactAnyField(document: EngineRxDocument, barcode: string): boolean {
+	const payload = document.payload;
+	if (!payload) {
+		return false;
+	}
+	return buildLocalBarcodeIndex([{ id: document.id, payload }]).index.has(barcode);
 }
 
 export const useBarcodeSearch = () => {
@@ -104,15 +113,26 @@ export const useBarcodeSearch = () => {
 					.map((document) => wrapEngineDocument<ProductVariationDocument>('variations', document)),
 			];
 
-			// Exact matches win: a product carrying the scanned code verbatim takes
-			// precedence over one that only matches via UPC-A/EAN-13 equivalence (#740),
-			// so an exact hit never turns ambiguous. Fall back to equivalence only when
-			// nothing carries the exact code.
-			const exact = select((document) => matchesExactBarcode(document, normalizedBarcode));
-			if (exact.length > 0) {
-				return exact;
+			// Precedence (#740), first non-empty tier wins so a scan never turns
+			// falsely ambiguous:
+			//   1. exact match on a barcode field — the product literally has this barcode;
+			//   2. UPC-A/EAN-13 equivalent on a barcode field — the leading-zero twin;
+			//   3. exact match on any field, incl. SKU — a coincidental SKU string.
+			// Barcode semantics rank above a SKU coincidence: an unrelated product whose
+			// SKU equals the scanned digits must not preempt a genuine barcode equivalence.
+			const symbologyExact = select((document) =>
+				matchesExactSymbology(document, normalizedBarcode)
+			);
+			if (symbologyExact.length > 0) {
+				return symbologyExact;
 			}
-			return select((document) => matchesEquivalentBarcode(document, normalizedBarcode));
+			const symbologyEquivalent = select((document) =>
+				matchesEquivalentSymbology(document, normalizedBarcode)
+			);
+			if (symbologyEquivalent.length > 0) {
+				return symbologyEquivalent;
+			}
+			return select((document) => matchesExactAnyField(document, normalizedBarcode));
 		},
 		[manager]
 	);

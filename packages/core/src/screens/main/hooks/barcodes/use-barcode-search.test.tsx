@@ -83,4 +83,15 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 		const exact = (await search('012345678905')) as unknown as FakeDoc[];
 		expect(exact.map((r) => r.id)).toEqual(['sku-only']);
 	});
+
+	it('does not let an exact SKU preempt a barcode-equivalence match (#740 P1)', async () => {
+		productDocs = [
+			doc('barcode-equiv', { barcode: '012345678905' }), // equivalent to the scan
+			doc('sku-coincidence', { sku: '0012345678905' }), // coincidental exact SKU string
+		];
+		// Barcode semantics win: the genuine barcode-equivalence product is chosen, not
+		// the unrelated product whose SKU happens to equal the scanned digits.
+		const results = (await search('0012345678905')) as unknown as FakeDoc[];
+		expect(results.map((r) => r.id)).toEqual(['barcode-equiv']);
+	});
 });
