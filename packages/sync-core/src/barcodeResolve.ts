@@ -91,6 +91,54 @@ export function buildLocalBarcodeIndex(
 	return buildBarcodeIndexFromFields(docs, BARCODE_PAYLOAD_FIELDS);
 }
 
+// --- UPC-A ↔ EAN-13 equivalence (#740) ------------------------------------------
+
+/**
+ * The barcode-symbology fields where UPC-A ↔ EAN-13 leading-zero equivalence is
+ * valid. `sku` is deliberately excluded: a SKU is an arbitrary stock code, not a
+ * scanned barcode symbol, so a numeric SKU must NOT gain a `0`-prefixed twin
+ * (that would resolve a scan to an unrelated product).
+ */
+export const BARCODE_SYMBOLOGY_FIELDS = ['barcode', 'global_unique_id'] as const;
+
+/**
+ * Builds a local index over only the barcode-symbology fields
+ * (`BARCODE_SYMBOLOGY_FIELDS`) — the subset for which UPC-A/EAN-13 equivalence
+ * applies. Same shape as `buildLocalBarcodeIndex`, minus `sku`.
+ */
+export function buildBarcodeSymbologyIndex(
+	docs: { id: string; payload: Record<string, unknown> }[]
+): BarcodeIndexResult {
+	return buildBarcodeIndexFromFields(docs, BARCODE_SYMBOLOGY_FIELDS);
+}
+
+/**
+ * A UPC-A symbol is an EAN-13 with an implied leading zero, so the 12-digit
+ * UPC-A `012345678905` and the 13-digit `0012345678905` denote the *same*
+ * physical barcode. iOS camera decoders report the 13-digit `0`-prefixed form
+ * while Android/HID wedges report the bare 12 digits, so a store keyed on one
+ * form would otherwise miss scans from the other source.
+ *
+ * Return the scanned code plus its UPC-A/EAN-13 counterpart (scanned form first)
+ * so a lookup can try both — this never rewrites the scanned code, so genuine
+ * EAN-13 codes (13 digits not starting with 0) are returned unchanged. The
+ * prepended/stripped zero doesn't change the check digit, so no recomputation is
+ * needed. Apply the candidates only against a barcode-symbology index (see
+ * `buildBarcodeSymbologyIndex`) so a numeric SKU never gains an equivalent form.
+ */
+export function barcodeMatchCandidates(code: string): string[] {
+	const trimmed = code.trim();
+	// 13-digit, leading zero → also try the 12-digit UPC-A form.
+	if (/^0\d{12}$/.test(trimmed)) {
+		return [trimmed, trimmed.slice(1)];
+	}
+	// 12-digit UPC-A → also try its 13-digit EAN-13 encoding.
+	if (/^\d{12}$/.test(trimmed)) {
+		return [trimmed, `0${trimmed}`];
+	}
+	return [trimmed];
+}
+
 // --- Config-driven re-derivation (ADR 0006, products specialization) ----------
 
 export type RebuildBarcodeIndexResult = BarcodeIndexResult & {
@@ -255,8 +303,10 @@ export function buildResolveBarcodeUrl(input: {
  * invoked (the contract — pinned by tests), then the resolve endpoint
  * answers with resolved-online / not-found / error.
  *
- * Normalization is trim-only for now; UPC-A/EAN-13 check-digit and
- * leading-zero normalization is future work.
+ * Normalization is trim-only here; UPC-A/EAN-13 leading-zero equivalence (#740)
+ * is applied by the POS barcode-search layer, which owns local matching (this
+ * flow is invoked with an empty local index and drives the online resolve).
+ * Check-digit normalization is still future work.
  */
 export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> {
 	const startMs = input.now();

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
 	type BarcodeIndexEntry,
+	barcodeMatchCandidates,
 	type BarcodeResolveFetcher,
+	buildBarcodeSymbologyIndex,
 	buildLocalBarcodeIndex,
 	buildResolveBarcodeUrl,
 	type ResolveBarcodeResponse,
@@ -86,6 +88,53 @@ describe('buildLocalBarcodeIndex', () => {
 		]);
 		expect(index.get('SAME')).toEqual({ docId: 'doc-1' });
 		expect(diagnostics).toEqual([]);
+	});
+});
+
+describe('barcodeMatchCandidates (UPC-A ↔ EAN-13 equivalence, #740)', () => {
+	it('offers the 12-digit UPC-A form for a 13-digit leading-zero code', () => {
+		expect(barcodeMatchCandidates('0012345678905')).toEqual(['0012345678905', '012345678905']);
+	});
+
+	it('offers the 13-digit EAN-13 form for a 12-digit UPC-A code', () => {
+		expect(barcodeMatchCandidates('012345678905')).toEqual(['012345678905', '0012345678905']);
+	});
+
+	it('leaves a genuine EAN-13 (13 digits, non-zero prefix) unchanged', () => {
+		expect(barcodeMatchCandidates('4006381333931')).toEqual(['4006381333931']);
+	});
+
+	it('leaves non-UPC/EAN codes (wrong length or non-digit) unchanged', () => {
+		expect(barcodeMatchCandidates('ABC123')).toEqual(['ABC123']);
+		expect(barcodeMatchCandidates('12345')).toEqual(['12345']);
+	});
+
+	it('trims before classifying', () => {
+		expect(barcodeMatchCandidates('  012345678905  ')).toEqual(['012345678905', '0012345678905']);
+	});
+});
+
+describe('buildBarcodeSymbologyIndex (#740)', () => {
+	it('indexes barcode and global_unique_id but NOT sku', () => {
+		const { index } = buildBarcodeSymbologyIndex([
+			{
+				id: 'doc-1',
+				payload: { sku: '012345678905', barcode: 'BAR-1', global_unique_id: 'GTIN-1' },
+			},
+		]);
+		expect(index.has('BAR-1')).toBe(true);
+		expect(index.has('GTIN-1')).toBe(true);
+		// A numeric SKU must not enter the symbology index (no false equivalence).
+		expect(index.has('012345678905')).toBe(false);
+		expect(index.size).toBe(2);
+	});
+
+	it('supports UPC-A/EAN-13 equivalence only for genuine barcode fields', () => {
+		const { index } = buildBarcodeSymbologyIndex([
+			{ id: 'doc-2', payload: { barcode: '012345678905' } },
+		]);
+		// The camera (13-digit) form matches when combined with barcodeMatchCandidates.
+		expect(barcodeMatchCandidates('0012345678905').some((c) => index.has(c))).toBe(true);
 	});
 });
 
