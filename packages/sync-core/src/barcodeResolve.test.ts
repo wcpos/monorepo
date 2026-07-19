@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
 	type BarcodeIndexEntry,
+	barcodeMatchCandidates,
 	type BarcodeResolveFetcher,
 	buildLocalBarcodeIndex,
 	buildResolveBarcodeUrl,
+	lookupBarcodeIndex,
 	type ResolveBarcodeResponse,
 	resolveScan,
 	type ScanEvent,
@@ -89,6 +91,60 @@ describe('buildLocalBarcodeIndex', () => {
 	});
 });
 
+describe('barcodeMatchCandidates (UPC-A ↔ EAN-13 equivalence, #740)', () => {
+	it('offers the 12-digit UPC-A form for a 13-digit leading-zero code', () => {
+		expect(barcodeMatchCandidates('0012345678905')).toEqual(['0012345678905', '012345678905']);
+	});
+
+	it('offers the 13-digit EAN-13 form for a 12-digit UPC-A code', () => {
+		expect(barcodeMatchCandidates('012345678905')).toEqual(['012345678905', '0012345678905']);
+	});
+
+	it('leaves a genuine EAN-13 (13 digits, non-zero prefix) unchanged', () => {
+		expect(barcodeMatchCandidates('4006381333931')).toEqual(['4006381333931']);
+	});
+
+	it('leaves non-UPC/EAN codes (wrong length or non-digit) unchanged', () => {
+		expect(barcodeMatchCandidates('ABC123')).toEqual(['ABC123']);
+		expect(barcodeMatchCandidates('12345')).toEqual(['12345']);
+	});
+
+	it('trims before classifying', () => {
+		expect(barcodeMatchCandidates('  012345678905  ')).toEqual(['012345678905', '0012345678905']);
+	});
+});
+
+describe('lookupBarcodeIndex (UPC-A ↔ EAN-13 equivalence, #740)', () => {
+	it('matches a 13-digit camera scan against a store keyed on 12-digit UPC-A', () => {
+		const { index } = buildLocalBarcodeIndex([
+			{ id: 'doc-1', payload: { barcode: '012345678905' } },
+		]);
+		expect(lookupBarcodeIndex(index, '0012345678905')).toEqual({ docId: 'doc-1' });
+	});
+
+	it('matches a 12-digit wedge scan against a store keyed on 13-digit EAN-13', () => {
+		const { index } = buildLocalBarcodeIndex([
+			{ id: 'doc-2', payload: { barcode: '0012345678905' } },
+		]);
+		expect(lookupBarcodeIndex(index, '012345678905')).toEqual({ docId: 'doc-2' });
+	});
+
+	it('prefers an exact match over the equivalent form', () => {
+		const { index } = buildLocalBarcodeIndex([
+			{ id: 'exact', payload: { barcode: '012345678905' } },
+			{ id: 'padded', payload: { barcode: '0012345678905' } },
+		]);
+		expect(lookupBarcodeIndex(index, '012345678905')).toEqual({ docId: 'exact' });
+	});
+
+	it('does not equate two distinct genuine EAN-13 codes', () => {
+		const { index } = buildLocalBarcodeIndex([
+			{ id: 'doc-3', payload: { barcode: '4006381333931' } },
+		]);
+		expect(lookupBarcodeIndex(index, '5011321000000')).toBeUndefined();
+	});
+});
+
 describe('resolveScan local hit', () => {
 	it('short-circuits without any network call', async () => {
 		const fetcher = vi.fn<BarcodeResolveFetcher>();
@@ -112,6 +168,16 @@ describe('resolveScan local hit', () => {
 		const result = await resolveScan(scanInput({ code: '  ABC  ', fetcher, index }));
 		expect(result.outcome).toBe('local');
 		expect(result.code).toBe('ABC');
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('resolves a 13-digit camera scan against a 12-digit UPC-A store (#740)', async () => {
+		const fetcher = vi.fn<BarcodeResolveFetcher>();
+		const { index } = buildLocalBarcodeIndex([
+			{ id: 'doc-upc', payload: { barcode: '012345678905' } },
+		]);
+		const result = await resolveScan(scanInput({ code: '0012345678905', fetcher, index }));
+		expect(result).toMatchObject({ outcome: 'local', docId: 'doc-upc' });
 		expect(fetcher).not.toHaveBeenCalled();
 	});
 

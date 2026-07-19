@@ -91,6 +91,52 @@ export function buildLocalBarcodeIndex(
 	return buildBarcodeIndexFromFields(docs, BARCODE_PAYLOAD_FIELDS);
 }
 
+// --- UPC-A ↔ EAN-13 equivalence (#740) ------------------------------------------
+
+/**
+ * A UPC-A symbol is an EAN-13 with an implied leading zero, so the 12-digit
+ * UPC-A `012345678905` and the 13-digit `0012345678905` denote the *same*
+ * physical barcode. iOS camera decoders report the 13-digit `0`-prefixed form
+ * while Android/HID wedges report the bare 12 digits, so a store keyed on one
+ * form would otherwise miss scans from the other source.
+ *
+ * Return the scanned code plus its UPC-A/EAN-13 counterpart (scanned form first)
+ * so a lookup can try both — this never rewrites the scanned code, so genuine
+ * EAN-13 codes (13 digits not starting with 0) are returned unchanged. The
+ * prepended/stripped zero doesn't change the check digit, so no recomputation is
+ * needed.
+ */
+export function barcodeMatchCandidates(code: string): string[] {
+	const trimmed = code.trim();
+	// 13-digit, leading zero → also try the 12-digit UPC-A form.
+	if (/^0\d{12}$/.test(trimmed)) {
+		return [trimmed, trimmed.slice(1)];
+	}
+	// 12-digit UPC-A → also try its 13-digit EAN-13 encoding.
+	if (/^\d{12}$/.test(trimmed)) {
+		return [trimmed, `0${trimmed}`];
+	}
+	return [trimmed];
+}
+
+/**
+ * Look up a scanned code in a local barcode index, trying the scanned form first
+ * and then its UPC-A/EAN-13 equivalent (#740). Shared by `resolveScan` and the
+ * POS `barcodeSearch` so every scan source resolves a barcode identically.
+ */
+export function lookupBarcodeIndex(
+	index: Map<string, BarcodeIndexEntry>,
+	code: string
+): BarcodeIndexEntry | undefined {
+	for (const candidate of barcodeMatchCandidates(code)) {
+		const hit = index.get(candidate);
+		if (hit) {
+			return hit;
+		}
+	}
+	return undefined;
+}
+
 // --- Config-driven re-derivation (ADR 0006, products specialization) ----------
 
 export type RebuildBarcodeIndexResult = BarcodeIndexResult & {
@@ -255,8 +301,9 @@ export function buildResolveBarcodeUrl(input: {
  * invoked (the contract — pinned by tests), then the resolve endpoint
  * answers with resolved-online / not-found / error.
  *
- * Normalization is trim-only for now; UPC-A/EAN-13 check-digit and
- * leading-zero normalization is future work.
+ * Normalization is trim-only, plus UPC-A/EAN-13 leading-zero equivalence on the
+ * local lookup (#740, via `lookupBarcodeIndex`). Check-digit normalization is
+ * still future work.
  */
 export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> {
 	const startMs = input.now();
@@ -280,7 +327,7 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 		};
 	}
 
-	const hit = input.index.get(code);
+	const hit = lookupBarcodeIndex(input.index, code);
 	if (hit) {
 		const terminal = emit('local-hit');
 		return {

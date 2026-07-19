@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useQueryManager } from '@wcpos/query';
 import { wrapEngineDocument } from '@wcpos/query/engine-compat';
-import { buildLocalBarcodeIndex } from '@wcpos/sync-core';
+import { buildLocalBarcodeIndex, lookupBarcodeIndex } from '@wcpos/sync-core';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
@@ -37,7 +37,11 @@ function matchesBarcode(document: EngineRxDocument, barcode: string): boolean {
 	if (!payload) {
 		return false;
 	}
-	return buildLocalBarcodeIndex([{ id: document.id, payload }]).index.has(barcode);
+	// UPC-A ↔ EAN-13 equivalence (#740): match the scanned code or its leading-zero
+	// counterpart, so camera (13-digit 0-prefixed) and wedge (12-digit) scans of the
+	// same barcode resolve to the same product.
+	const { index } = buildLocalBarcodeIndex([{ id: document.id, payload }]);
+	return lookupBarcodeIndex(index, barcode) !== undefined;
 }
 
 export const useBarcodeSearch = () => {
