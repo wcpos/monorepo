@@ -15,6 +15,7 @@ import { useT } from '../../../../contexts/translations';
 import { useDeviceScanControls } from '../../hooks/barcodes/device-scan-context';
 import { useScannerRegistration } from '../../hooks/barcodes/use-scanner-registration';
 import { useCollection } from '../../hooks/use-collection';
+import { ScannerDeviceChooser } from './scanner-device-chooser';
 
 const NO_PROFILES: ScannerProfileDocument[] = [];
 
@@ -118,6 +119,9 @@ export function InputSources() {
 					) : null}
 				</HStack>
 			) : null}
+
+			{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
+			<ScannerDeviceChooser />
 
 			{profiles.map((profile) => (
 				<HStack

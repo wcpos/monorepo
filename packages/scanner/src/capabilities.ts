@@ -18,19 +18,13 @@ function nav(navLike?: NavigatorLike): NavigatorLike | undefined {
 	return typeof navigator !== 'undefined' ? (navigator as NavigatorLike) : undefined;
 }
 
-// Electron exposes navigator.serial/hid but device access needs main-process
-// handlers (select-serial-port / select-hid-device) that live in the separate
-// electron repo and aren't wired yet (wcpos/monorepo#742). Until they land,
-// report unsupported on Electron so the UI doesn't offer a dead connect button.
-function isElectron(navLike?: NavigatorLike): boolean {
-	const ua = nav(navLike)?.userAgent;
-	return typeof ua === 'string' && /electron/i.test(ua);
-}
-
+// Electron is now supported: the main-process serial/HID device handlers landed
+// in wcpos/electron (wcpos/monorepo#742), so navigator.serial/hid device access
+// works there just like Chromium desktop.
 export function isWebSerialSupported(navLike?: NavigatorLike): boolean {
-	return !!nav(navLike)?.serial && !isElectron(navLike);
+	return !!nav(navLike)?.serial;
 }
 
 export function isWebHidSupported(navLike?: NavigatorLike): boolean {
-	return !!nav(navLike)?.hid && !isElectron(navLike);
+	return !!nav(navLike)?.hid;
 }

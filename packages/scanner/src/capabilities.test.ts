@@ -14,9 +14,9 @@ describe('capability gates', () => {
 		expect(isWebHidSupported({ userAgent: 'Chrome' })).toBe(false);
 	});
 
-	it('reports unavailable on Electron until main-process handlers land (#742)', () => {
+	it('reports available on Electron now that main-process handlers have landed (#742)', () => {
 		const nav = { serial: {}, hid: {}, userAgent: 'Mozilla/5.0 Electron/30 wcpos' };
-		expect(isWebSerialSupported(nav)).toBe(false);
-		expect(isWebHidSupported(nav)).toBe(false);
+		expect(isWebSerialSupported(nav)).toBe(true);
+		expect(isWebHidSupported(nav)).toBe(true);
 	});
 });

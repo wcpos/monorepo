@@ -907,5 +907,7 @@
 	"settings.scanner_connect_serial": "Connect serial scanner",
 	"settings.scanner_connect_hid": "Connect HID scanner",
 	"settings.scanner_serial_disconnect": "Disconnect serial scanner",
-	"settings.scanner_hid_disconnect": "Disconnect HID scanner"
+	"settings.scanner_hid_disconnect": "Disconnect HID scanner",
+	"settings.scanner_choose_device": "Choose a scanner to connect",
+	"settings.scanner_searching_devices": "Searching for devices…"
 }
