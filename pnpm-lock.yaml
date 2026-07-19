@@ -808,6 +808,9 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+      zxing-wasm:
+        specifier: 3.1.1
+        version: 3.1.1(@types/emscripten@1.41.5)
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.9.1

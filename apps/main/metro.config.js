@@ -9,6 +9,13 @@ const { withUniwindConfig } = require('uniwind/metro');
 
 let config = getDefaultConfig(__dirname);
 
+// Bundle the zxing-wasm barcode reader as a static asset so the Electron shell
+// can load it from the app origin instead of the CSP-blocked jsDelivr CDN
+// (wcpos/monorepo#741). Harmless on plain web, which keeps the CDN default.
+if (!config.resolver.assetExts.includes('wasm')) {
+	config.resolver.assetExts.push('wasm');
+}
+
 // rxdb and rxdb-premium ship both CJS and ESM builds. Metro resolves bare-specifier
 // imports (e.g. `rxdb/plugins/utils`, `rxdb-premium/plugins/shared`) via the "require"
 // export condition → CJS, while internal relative imports within the ESM builds stay ESM.
