@@ -2,7 +2,11 @@ import * as React from 'react';
 
 import { useQueryManager } from '@wcpos/query';
 import { wrapEngineDocument } from '@wcpos/query/engine-compat';
-import { buildLocalBarcodeIndex, lookupBarcodeIndex } from '@wcpos/sync-core';
+import {
+	barcodeMatchCandidates,
+	buildBarcodeSymbologyIndex,
+	buildLocalBarcodeIndex,
+} from '@wcpos/sync-core';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
@@ -32,16 +36,30 @@ function engineDocuments(value: unknown): EngineRxDocument[] {
 	return Array.isArray(value) ? value.filter(isEngineRxDocument) : [];
 }
 
-function matchesBarcode(document: EngineRxDocument, barcode: string): boolean {
+/** The document carries the scanned code verbatim in any discovery field. */
+function matchesExactBarcode(document: EngineRxDocument, barcode: string): boolean {
 	const payload = document.payload;
 	if (!payload) {
 		return false;
 	}
-	// UPC-A ↔ EAN-13 equivalence (#740): match the scanned code or its leading-zero
-	// counterpart, so camera (13-digit 0-prefixed) and wedge (12-digit) scans of the
-	// same barcode resolve to the same product.
-	const { index } = buildLocalBarcodeIndex([{ id: document.id, payload }]);
-	return lookupBarcodeIndex(index, barcode) !== undefined;
+	return buildLocalBarcodeIndex([{ id: document.id, payload }]).index.has(barcode);
+}
+
+/**
+ * The document carries the UPC-A/EAN-13 counterpart of the scanned code in a
+ * barcode-symbology field (#740). Scoped to barcode fields so a numeric SKU
+ * never gains an equivalent form, and excludes the exact code (handled by
+ * `matchesExactBarcode`) so this is strictly the equivalence fallback.
+ */
+function matchesEquivalentBarcode(document: EngineRxDocument, barcode: string): boolean {
+	const payload = document.payload;
+	if (!payload) {
+		return false;
+	}
+	const { index } = buildBarcodeSymbologyIndex([{ id: document.id, payload }]);
+	return barcodeMatchCandidates(barcode).some(
+		(candidate) => candidate !== barcode && index.has(candidate)
+	);
 }
 
 export const useBarcodeSearch = () => {
@@ -77,14 +95,24 @@ export const useBarcodeSearch = () => {
 			const products = engineDocuments(productResult);
 			const variations = engineDocuments(variationResult);
 
-			return [
+			const select = (predicate: (document: EngineRxDocument) => boolean) => [
 				...products
-					.filter((document) => matchesBarcode(document, normalizedBarcode))
+					.filter(predicate)
 					.map((document) => wrapEngineDocument<ProductDocument>('products', document)),
 				...variations
-					.filter((document) => matchesBarcode(document, normalizedBarcode))
+					.filter(predicate)
 					.map((document) => wrapEngineDocument<ProductVariationDocument>('variations', document)),
 			];
+
+			// Exact matches win: a product carrying the scanned code verbatim takes
+			// precedence over one that only matches via UPC-A/EAN-13 equivalence (#740),
+			// so an exact hit never turns ambiguous. Fall back to equivalence only when
+			// nothing carries the exact code.
+			const exact = select((document) => matchesExactBarcode(document, normalizedBarcode));
+			if (exact.length > 0) {
+				return exact;
+			}
+			return select((document) => matchesEquivalentBarcode(document, normalizedBarcode));
 		},
 		[manager]
 	);
