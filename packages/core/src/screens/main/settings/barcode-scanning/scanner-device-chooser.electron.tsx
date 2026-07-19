@@ -11,10 +11,13 @@ import { useT } from '../../../../contexts/translations';
  * Electron device chooser for direct scanner connection (#742). In a browser
  * `navigator.serial.requestPort()` / `navigator.hid.requestDevice()` show the
  * platform chooser; in the Electron shell the main process instead surfaces its
- * candidates over the `serial-ports` / `hid-devices` channels and blocks on a
- * reply. This inline picker lists them and replies with the chosen id (or an
- * empty string to cancel), unblocking the pending request — mirroring the
- * Bluetooth chooser flow. Rendered only on Electron; the base component is inert.
+ * candidates over the `serial-ports` / `hid-devices` channels and BLOCKS until it
+ * receives a reply on `serial-port-selected` / `hid-device-selected` (an empty
+ * string cancels). This inline picker lists the candidates and always sends that
+ * reply — including when the user switches to the other transport or navigates
+ * away mid-chooser — so a pending request is never left hanging. Mirrors the
+ * Bluetooth chooser; the base component is inert (browsers picker themselves,
+ * native has no serial/HID).
  */
 
 interface ScannerCandidate {
@@ -46,6 +49,28 @@ export function ScannerDeviceChooser() {
 	const t = useT();
 	const [kind, setKind] = React.useState<DeviceKind | null>(null);
 	const [candidates, setCandidates] = React.useState<ScannerCandidate[]>([]);
+	// Mirrors `kind` for event-time reads (switch/unmount cancellation) without
+	// making the subscription effect depend on render state.
+	const pendingKindRef = React.useRef<DeviceKind | null>(null);
+
+	const sendReply = React.useCallback((replyKind: DeviceKind, id: string) => {
+		getIpc()?.send(REPLY_CHANNEL[replyKind], id);
+	}, []);
+
+	const openChooser = React.useCallback(
+		(nextKind: DeviceKind, devices: ScannerCandidate[]) => {
+			// A chooser still pending on the OTHER channel would otherwise hang its
+			// requestPort()/requestDevice() forever — cancel it before switching.
+			const previous = pendingKindRef.current;
+			if (previous && previous !== nextKind) {
+				sendReply(previous, '');
+			}
+			pendingKindRef.current = nextKind;
+			setKind(nextKind);
+			setCandidates(devices);
+		},
+		[sendReply]
+	);
 
 	// Subscribes to the main-process chooser pushes; an external event source, so
 	// an effect (with teardown) is required rather than derived render state.
@@ -54,31 +79,36 @@ export function ScannerDeviceChooser() {
 		if (!ipc?.on) {
 			return undefined;
 		}
-		const offSerial = ipc.on('serial-ports', (devices) => {
-			setKind('serial');
-			setCandidates(Array.isArray(devices) ? devices : []);
-		});
-		const offHid = ipc.on('hid-devices', (devices) => {
-			setKind('hid');
-			setCandidates(Array.isArray(devices) ? devices : []);
-		});
+		const offSerial = ipc.on('serial-ports', (devices) =>
+			openChooser('serial', Array.isArray(devices) ? devices : [])
+		);
+		const offHid = ipc.on('hid-devices', (devices) =>
+			openChooser('hid', Array.isArray(devices) ? devices : [])
+		);
 		return () => {
 			offSerial?.();
 			offHid?.();
-		};
-	}, []);
-
-	const reply = React.useCallback((id: string) => {
-		const ipc = getIpc();
-		// Capture kind before clearing so the correct reply channel is used.
-		setKind((current) => {
-			if (current && ipc) {
-				ipc.send(REPLY_CHANNEL[current], id);
+			// Leaving the screen mid-chooser must cancel the pending request so the
+			// main process isn't left blocked waiting for a reply.
+			if (pendingKindRef.current) {
+				sendReply(pendingKindRef.current, '');
+				pendingKindRef.current = null;
 			}
-			return null;
-		});
-		setCandidates([]);
-	}, []);
+		};
+	}, [openChooser, sendReply]);
+
+	const reply = React.useCallback(
+		(id: string) => {
+			const replyKind = pendingKindRef.current;
+			if (replyKind) {
+				sendReply(replyKind, id);
+			}
+			pendingKindRef.current = null;
+			setKind(null);
+			setCandidates([]);
+		},
+		[sendReply]
+	);
 
 	if (!kind) {
 		return null;
