@@ -37,7 +37,11 @@ export function ensureBarcodeDecoder(): void {
 	if (installed) {
 		return;
 	}
-	installed = true;
+	// Install the polyfill first (the essential step), then point it at the
+	// bundled wasm. `installed` is set only after setup completes, so if
+	// setZXingModuleOverrides throws the next scanner open retries instead of
+	// being permanently stuck with decoding disabled.
+	(globalThis as { BarcodeDetector?: unknown }).BarcodeDetector = BarcodeDetector;
 	const wasmUrl = resolveAssetUrl(zxingReaderWasm);
 	if (wasmUrl) {
 		setZXingModuleOverrides({
@@ -45,5 +49,5 @@ export function ensureBarcodeDecoder(): void {
 				locatePath.endsWith('.wasm') ? wasmUrl : `${prefix}${locatePath}`,
 		});
 	}
-	(globalThis as { BarcodeDetector?: unknown }).BarcodeDetector = BarcodeDetector;
+	installed = true;
 }
