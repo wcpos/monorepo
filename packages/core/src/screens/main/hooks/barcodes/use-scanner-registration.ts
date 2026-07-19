@@ -18,14 +18,17 @@ export interface ScannerCandidate {
 /**
  * Registration flow for an attributed scanner: capture-all mode listens to
  * every external key event (without swallowing) and promotes a device to the
- * registration candidate only once it produces a scanner-like burst — several
- * fast keystrokes that latch the wedge heuristic and reach the minimum length.
+ * registration candidate only once it produces a scanner-like burst — a
+ * contiguous run of fast keystrokes that latches the wedge heuristic and reaches
+ * the minimum length. A gap at/above the detection threshold ends the burst.
  *
  * A single keypress from an ordinary USB/BT keyboard must never register that
  * keyboard as a scanner (#739): the interceptor would then swallow its keys and
  * assemble ordinary typing into scans. Each device gets its own wedge state so
- * one fast device isn't masked by slow typing on another, and the shared
- * `foldWedgeKey` reducer keeps this detection identical to the live scan path.
+ * one fast device isn't masked by slow typing on another. Detection reuses the
+ * shared `foldWedgeKey` reducer but is deliberately stricter than the live scan
+ * path — registration persistently swallows a device's input, so it demands a
+ * contiguous fast burst rather than latching on a single fast keypair.
  */
 export const useScannerRegistration = () => {
 	const { store } = useAppState();
@@ -76,6 +79,15 @@ export const useScannerRegistration = () => {
 					detectorsRef.current.set(deviceKey, state);
 				}
 				const { threshold: currentThreshold, minChars: currentMinChars } = settingsRef.current;
+				// End-of-burst reset (#739): only a *contiguous* run of scanner-fast
+				// keystrokes may accumulate. Any inter-key gap at/above the detection
+				// threshold ends the burst, so a fast keypair followed by ordinary typing
+				// can never keep `detecting` latched and creep up to minChars. Without
+				// this, `foldWedgeKey` keeps appending slow keys once latched.
+				if (state.lastTimeMs !== null && payload.timeMs - state.lastTimeMs >= currentThreshold) {
+					state = createWedgeState();
+					detectorsRef.current.set(deviceKey, state);
+				}
 				foldWedgeKey(state, payload.key, payload.timeMs, currentThreshold);
 				// Latch only on a scanner-fast burst that reaches the min length; slow
 				// typing never sets `detecting`, and a lone key never reaches the stack.

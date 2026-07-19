@@ -110,6 +110,26 @@ describe('useScannerRegistration', () => {
 		expect(result.current.capturing).toBe(true);
 	});
 
+	it('does not register on a fast keypair followed by ordinary typing (#739 P1)', () => {
+		const { result } = renderHook(() => useScannerRegistration());
+		act(() => result.current.start());
+
+		// Two quick presses latch the wedge heuristic, then six ordinary keystrokes.
+		// The gap at/above threshold must end the burst so it never reaches minChars.
+		act(() => {
+			capturedListener?.({ key: 'a', timeMs: 1000, captured: false, ...KEYBOARD });
+			capturedListener?.({ key: 'b', timeMs: 1005, captured: false, ...KEYBOARD });
+			let t = 1105;
+			for (const key of 'cdefgh') {
+				capturedListener?.({ key, timeMs: t, captured: false, ...KEYBOARD });
+				t += 100;
+			}
+		});
+
+		expect(result.current.candidate).toBeNull();
+		expect(result.current.capturing).toBe(true);
+	});
+
 	it('ignores the virtual keyboard even on a fast burst', () => {
 		const { result } = renderHook(() => useScannerRegistration());
 		act(() => result.current.start());
