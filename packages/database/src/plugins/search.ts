@@ -23,6 +23,30 @@ function normalizeLocale(locale: string): string {
 }
 
 /**
+ * Version tag baked into the search index identifier.
+ *
+ * Bump this whenever the index configuration changes in a way that requires
+ * existing persisted indexes to be rebuilt. The rxdb-premium flexsearch plugin
+ * builds its index through an RxDB pipeline that resumes from a checkpoint and
+ * rehydrates the previously serialized index via import(); it does NOT
+ * re-tokenize already-indexed documents. Changing options like `tokenize` in
+ * place would therefore only affect newly-synced documents, leaving existing
+ * catalogues on the old behaviour. A new identifier gives the pipeline a fresh
+ * checkpoint and an empty index collection, forcing a one-time full rebuild.
+ *
+ * v2: tokenize 'forward' -> 'full' for WooCommerce-parity mid-word matching (#679).
+ */
+const SEARCH_INDEX_VERSION = 'v2';
+
+/**
+ * Build the FlexSearch instance identifier for a collection + locale.
+ * FlexSearch appends `_flexsearch` to this string to name its persisted collection.
+ */
+export function getSearchIdentifier(collectionName: string, locale: string): string {
+	return `${collectionName}-search-${SEARCH_INDEX_VERSION}-${locale}`;
+}
+
+/**
  * Update LRU tracking - move locale to end (most recently used).
  */
 function touchLRU(collection: RxCollection, locale: string): void {
@@ -92,7 +116,7 @@ async function createSearchInstance(
 	const searchFields = options?.searchFields ?? collection.options?.searchFields;
 	const documentSnapshot = options?.documentSnapshot ?? ((document: unknown) => document);
 	// FlexSearch appends _flexsearch to the identifier (note: underscore, not hyphen)
-	const searchCollectionName = `${collection.name}-search-${locale}_flexsearch`;
+	const searchCollectionName = `${getSearchIdentifier(collection.name, locale)}_flexsearch`;
 	const database = collection.database;
 
 	searchLogger.debug('Creating search instance', {
@@ -122,7 +146,7 @@ async function createSearchInstance(
 	}
 
 	const searchInstance = await addFulltextSearch({
-		identifier: `${collection.name}-search-${locale}`,
+		identifier: getSearchIdentifier(collection.name, locale),
 		collection,
 		docToString: (doc: any) => {
 			const snapshot = documentSnapshot(doc);
@@ -132,7 +156,13 @@ async function createSearchInstance(
 		initialization: 'lazy',
 		indexOptions: {
 			preset: 'performance',
-			tokenize: 'forward',
+			// 'full' indexes every substring so mid-word matches work (e.g. "saippua"
+			// finds "Kuorintasaippua"), which compound-word languages (fi/de/sv/nl…) need.
+			// It also mirrors WooCommerce's own product search, which is a LIKE '%term%'
+			// substring match — 'forward' (prefix-only) diverged from that. We deliberately
+			// do NOT enable `suggest` on queries: WooCommerce search is not fuzzy, and
+			// best-effort partial results would return matches Woo would not. See #679.
+			tokenize: 'full',
 			language: locale,
 		},
 	});
@@ -150,7 +180,7 @@ async function createSearchInstance(
  */
 async function destroySearchCollection(collection: RxCollection, locale: string): Promise<boolean> {
 	// FlexSearch appends _flexsearch to the identifier (note: underscore, not hyphen)
-	const searchCollectionName = `${collection.name}-search-${locale}_flexsearch`;
+	const searchCollectionName = `${getSearchIdentifier(collection.name, locale)}_flexsearch`;
 	const database = collection.database;
 
 	searchLogger.debug('Attempting to destroy search collection', {
@@ -404,7 +434,7 @@ export const searchPlugin: RxPlugin = {
 												mainCollection: this.name,
 												locale: loc,
 												searchCollectionName,
-												expectedPattern: `${this.name}-search-${loc}_flexsearch`,
+												expectedPattern: `${getSearchIdentifier(this.name, loc)}_flexsearch`,
 											},
 										});
 										continue;
