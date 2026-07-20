@@ -271,7 +271,7 @@ describe('search plugin', () => {
 	});
 
 	describe('FlexSearch initialization', () => {
-		it('indexes a caller-provided legacy snapshot instead of the raw engine document', async () => {
+		it('passes the caller snapshot and intended index options to FlexSearch', async () => {
 			const collectionPrototype: Record<string, unknown> = {};
 			const install = searchPlugin.prototypes?.RxCollection;
 			if (!install) throw new Error('search plugin RxCollection prototype is missing');
@@ -295,7 +295,9 @@ describe('search plugin', () => {
 
 			const config = (addFulltextSearch as jest.Mock).mock.calls[0][0] as {
 				docToString(document: Record<string, unknown>): string;
+				indexOptions: { minlength?: number };
 			};
+			expect(config.indexOptions.minlength).toBe(3);
 			expect(
 				config.docToString({
 					id: 'product-1',
