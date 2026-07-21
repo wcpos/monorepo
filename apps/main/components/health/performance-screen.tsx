@@ -310,10 +310,7 @@ export function PerformanceScreen() {
 						<TrendLine
 							testID="pos-requests-trend"
 							label={t('health.performance.pos_requests', 'POS requests · same period')}
-							points={summary.recent.map((bucket) => ({
-								x: bucket.hourStartMs,
-								y: bucket.requests,
-							}))}
+							points={summary.requestPoints}
 							tone="accent"
 						/>
 						{hasHistory && summary.serverMinutes !== null ? (

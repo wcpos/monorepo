@@ -63,6 +63,9 @@ export function trendDisplay(points: TrendPoint[]): TrendDisplay {
 export function summarizeLast24h(buckets: MetricsBucket[], nowMs: number) {
 	const cutoff = nowMs - 24 * 60 * 60 * 1000;
 	const recent = buckets.filter((bucket) => bucket.hourStartMs >= cutoff);
+	const requestPoints = recent
+		.filter((bucket) => bucket.requests > 0)
+		.map((bucket) => ({ x: bucket.hourStartMs, y: bucket.requests }));
 	const requests = recent.reduce((sum, bucket) => sum + bucket.requests, 0);
 	const bytes = recent.reduce((sum, bucket) => sum + bucket.bytes, 0);
 	const durationTotal = recent.reduce((sum, bucket) => sum + bucket.durationTotalMs, 0);
@@ -71,6 +74,7 @@ export function summarizeLast24h(buckets: MetricsBucket[], nowMs: number) {
 	const serverSeconds = Math.round(durationTotal / 1000);
 	return {
 		recent,
+		requestPoints,
 		requests,
 		megabytes: bytes / 1_048_576,
 		typicalMs: durationCount > 0 ? Math.round(durationTotal / durationCount) : null,

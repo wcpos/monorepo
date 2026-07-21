@@ -39,6 +39,30 @@ describe('performance page logic', () => {
 		expect(summary.typicalMs).toBeNull();
 		expect(summary.serverMinutes).toBeNull();
 	});
+
+	it('keeps load-only buckets out of the POS request trend', () => {
+		const { summarizeLast24h, trendDisplay } = loadLogic();
+		const now = 3 * HOUR_MS;
+		const summary = summarizeLast24h(
+			[HOUR_MS, 2 * HOUR_MS].map((hourStartMs) => ({
+				hourStartMs,
+				requests: 0,
+				bytes: 0,
+				durationTotalMs: 0,
+				durationCount: 0,
+				errors: 0,
+				loadLast: 0.5,
+				loadMax: 0.5,
+			})),
+			now
+		);
+
+		expect(summary.requestPoints).toEqual([]);
+		expect(trendDisplay(summary.requestPoints)).toMatchObject({
+			mode: 'placeholder',
+			latest: null,
+		});
+	});
 });
 
 describe('trend display', () => {
