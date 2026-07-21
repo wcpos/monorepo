@@ -305,17 +305,17 @@ export function PerformanceScreen() {
 								)}
 							</Text>
 						)}
-						{hasHistory ? (
-							<TrendLine
-								testID="pos-requests-trend"
-								label={t('health.performance.pos_requests', 'POS requests · same period')}
-								points={summary.recent.map((bucket) => ({
-									x: bucket.hourStartMs,
-									y: bucket.requests,
-								}))}
-								tone="accent"
-							/>
-						) : null}
+						{/* Always rendered: with under two samples TrendLine draws its own
+						    muted "Waiting for more data" placeholder rather than collapsing. */}
+						<TrendLine
+							testID="pos-requests-trend"
+							label={t('health.performance.pos_requests', 'POS requests · same period')}
+							points={summary.recent.map((bucket) => ({
+								x: bucket.hourStartMs,
+								y: bucket.requests,
+							}))}
+							tone="accent"
+						/>
 						{hasHistory && summary.serverMinutes !== null ? (
 							<Text className="text-muted-foreground text-sm">
 								{t(
