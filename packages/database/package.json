@@ -41,6 +41,7 @@
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.24",
     "expo-sqlite": "~56.0.5",
+    "flexsearch": "0.7.43",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11"
   }
