@@ -57,6 +57,16 @@ let toastShow: ((config: any) => void) | null = null;
 let dbCollection: any | null = null;
 let hasPruned = false;
 
+const SEARCH_CONTEXT_KEY =
+	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|productId|productName|sku|itemName|couponCode|feeName|methodTitle|customerId|errorCode|reason)$/;
+
+function searchableContext(context: Record<string, any>): string {
+	return Object.entries(context)
+		.filter(([key, value]) => SEARCH_CONTEXT_KEY.test(key) && value != null)
+		.map(([, value]) => value)
+		.join(' ');
+}
+
 // Log level severity (lower = more verbose)
 const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
 	debug: 0,
@@ -244,6 +254,7 @@ const mainTransport = (props: any) => {
 	// 3. Save to database if available and requested
 	if (options.saveToDb && dbCollection) {
 		const errorCode = options.context?.errorCode || '';
+		const context = options.context || {};
 
 		dbCollection
 			.insert({
@@ -251,7 +262,7 @@ const mainTransport = (props: any) => {
 				code: errorCode,
 				level: level.text,
 				message,
-				context: options.context || {},
+				context: { ...context, search: searchableContext(context) },
 			})
 			.catch(console.error);
 	}

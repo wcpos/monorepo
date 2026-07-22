@@ -4,6 +4,8 @@
 import { renderHook } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { useAddCoupon } from './use-add-coupon';
 
 jest.mock('uuid', () => ({ v4: () => 'coupon-line-uuid' }));
@@ -132,5 +134,16 @@ describe('useAddCoupon engine reads', () => {
 		});
 		expect(recalculate).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
+		expect(getLogger([]).warn).toHaveBeenCalledWith(
+			'Coupon application rejected',
+			expect.objectContaining({
+				saveToDb: true,
+				context: expect.objectContaining({
+					event: 'coupon.rejected',
+					couponCode: 'bonus',
+					reason: 'Coupon "solo" cannot be used with other coupons.',
+				}),
+			})
+		);
 	});
 });

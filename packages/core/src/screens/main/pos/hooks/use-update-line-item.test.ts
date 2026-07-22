@@ -3,6 +3,8 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { useUpdateLineItem } from './use-update-line-item';
 
 // Mock uuid ESM module
@@ -124,6 +126,7 @@ jest.mock('./use-line-item-data', () => ({
 describe('useUpdateLineItem', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockLocalPatch.mockResolvedValue({ changes: {} });
 		mockLineItemQuantity = 1;
 		mockCheckCartStock.mockResolvedValue({
 			allowed: true,
@@ -279,6 +282,46 @@ describe('useUpdateLineItem', () => {
 						}),
 					]),
 				}),
+			})
+		);
+	});
+
+	it('persists searchable before-and-after values for quantity changes', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+
+		await act(async () => {
+			await result.current.updateLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3', {
+				quantity: 3,
+			});
+		});
+
+		expect(getLogger([]).info).toHaveBeenCalledWith(
+			'Cart line item updated',
+			expect.objectContaining({
+				saveToDb: true,
+				context: expect.objectContaining({
+					event: 'cart.line-item.updated',
+					productName: 'Item 1',
+					previousQuantity: 1,
+					quantity: 3,
+				}),
+			})
+		);
+	});
+
+	it('persists searchable before-and-after values for price changes', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+
+		await act(async () => {
+			await result.current.updateLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3', {
+				price: 20,
+			});
+		});
+
+		expect(getLogger([]).info).toHaveBeenCalledWith(
+			'Cart line item updated',
+			expect.objectContaining({
+				context: expect.objectContaining({ previousPrice: 10, price: 20 }),
 			})
 		);
 	});

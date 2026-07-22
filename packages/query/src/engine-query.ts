@@ -1,5 +1,5 @@
-import { defer, from, Observable, of } from 'rxjs';
-import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
+import { defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
+import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
@@ -14,6 +14,7 @@ import {
 	type EngineRxDocument,
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
+import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 
 import type { LegacyMangoSelector } from './engine-adapter/translate-selector';
 import type { QueryResult } from './query-result';
@@ -163,6 +164,15 @@ export function observeEngineQuery(
 							document: wrapEngineDocument(descriptor.collection, document),
 						})),
 					})
+				),
+				catchError((error) =>
+					from(
+						recoverEngineCollectionStorage(
+							engine,
+							engineCollectionNameFor(descriptor.collection),
+							error
+						)
+					).pipe(switchMap((recovered) => (recovered ? EMPTY : throwError(() => error))))
 				)
 			);
 		})

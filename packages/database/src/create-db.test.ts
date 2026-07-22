@@ -53,6 +53,10 @@ describe('create-db', () => {
 		jest.clearAllMocks();
 	});
 
+	it('indexes the logger searchable summary for health-log queries', () => {
+		expect(storeCollections.logs.options?.searchFields).toContain('context.search');
+	});
+
 	it.each([
 		[
 			'createUserDB',

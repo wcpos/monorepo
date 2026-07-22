@@ -567,7 +567,7 @@ export type LogCollection = RxCollection<LogDocumentType>;
 const logs: RxCollectionCreator<LogDocumentType> = {
 	schema: logSchema,
 	options: {
-		searchFields: ['message', 'context.error', 'context.errorCode'],
+		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],
 	},
 };
 

@@ -50,6 +50,17 @@ export const useAddCoupon = () => {
 
 	const addCoupon = React.useCallback(
 		async (couponCode: string) => {
+			const rejectCoupon = (reason: string) => {
+				orderLogger.warn('Coupon application rejected', {
+					saveToDb: true,
+					context: {
+						event: 'coupon.rejected',
+						couponCode: couponCode.toLowerCase().trim(),
+						reason,
+					},
+				});
+				return { success: false, error: reason };
+			};
 			try {
 				// 1. Preserve the legacy selector semantics: normalize only the input value,
 				// then match payload.code exactly against the resident Tier-0 coupon scan.
@@ -137,9 +148,7 @@ export const useAddCoupon = () => {
 					customerId: order.customer_id || null,
 				});
 
-				if (!validation.valid) {
-					return { success: false, error: validation.error };
-				}
+				if (!validation.valid) return rejectCoupon(validation.error ?? 'Coupon validation failed.');
 
 				// 5. Create new coupon line and recalculate all coupons from scratch
 				const couponData = coupon.toJSON();
@@ -221,6 +230,7 @@ export const useAddCoupon = () => {
 					(cl: any) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
 				);
 				orderLogger.info(t('pos_cart.coupon_applied', { defaultValue: 'Coupon applied' }), {
+					saveToDb: true,
 					context: {
 						couponCode: couponData.code,
 						discountType: couponData.discount_type,

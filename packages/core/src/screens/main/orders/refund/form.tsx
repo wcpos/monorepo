@@ -365,6 +365,7 @@ export function RefundOrderForm({ order }: Props) {
 				context: {
 					orderId: order.id,
 					amount: freshRefundTotal,
+					reason: values.reason || '',
 				},
 			});
 

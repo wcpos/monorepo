@@ -35,6 +35,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
+import { getLogger } from '@wcpos/utils/logger';
 
 import {
 	getReceiptPreviewPaperWidth,
@@ -213,6 +214,11 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		// (the same `wcpos_template` id the receipt URL uses as `?template=`).
 		orderId,
 		templateId: templateInfo?.id,
+		onAfterPrint: () =>
+			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
+				saveToDb: true,
+				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
+			}),
 	});
 
 	/**

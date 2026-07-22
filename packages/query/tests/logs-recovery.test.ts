@@ -1,5 +1,6 @@
 import {
 	isRecoverableLogsStorageError,
+	recoverEngineCollectionStorage,
 	recoverLogsCollectionStorage,
 } from '../src/logs-storage-recovery';
 
@@ -16,6 +17,9 @@ describe('logs storage recovery', () => {
 				},
 				setItem(key: string, value: string) {
 					this.store.set(key, value);
+				},
+				removeItem(key: string) {
+					this.store.delete(key);
 				},
 			},
 		});
@@ -110,6 +114,104 @@ describe('logs storage recovery', () => {
 
 		expect(remove).toHaveBeenCalledTimes(1);
 		expect(globalThis.sessionStorage.getItem('wcpos_logs_storage_recovery_attempted')).toBeNull();
+		expect(reload).not.toHaveBeenCalled();
+	});
+
+	it('resets one corrupted server-backed collection per scope and reloads once', async () => {
+		const resetCollection = jest.fn(
+			async (
+				_collection: string,
+				options?: { beforeDrop?: (active: { scopeId: string }) => Promise<void> }
+			) => {
+				await options?.beforeDrop?.({ scopeId: 'store-7' });
+				return 'reset' as const;
+			}
+		);
+		const engine = { active: () => ({ scopeId: 'store-7' }), scope: { resetCollection } };
+		const reload = jest.fn();
+		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
+
+		await expect(
+			recoverEngineCollectionStorage(engine as never, 'products', error, { reload })
+		).resolves.toBe(true);
+		await expect(
+			recoverEngineCollectionStorage(engine as never, 'products', error, { reload })
+		).resolves.toBe(false);
+
+		expect(resetCollection).toHaveBeenCalledTimes(1);
+		expect(resetCollection).toHaveBeenCalledWith(
+			'products',
+			expect.objectContaining({ beforeDrop: expect.any(Function) })
+		);
+		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps recovery guards independent across store scopes', async () => {
+		let scopeId = 'store-a';
+		const resetCollection = jest.fn(
+			async (
+				_collection: string,
+				options?: { beforeDrop?: (active: { scopeId: string }) => Promise<void> }
+			) => {
+				await options?.beforeDrop?.({ scopeId });
+				return 'reset' as const;
+			}
+		);
+		const engine = { active: () => ({ scopeId }), scope: { resetCollection } };
+		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
+
+		await recoverEngineCollectionStorage(engine as never, 'orders', error, { reload: jest.fn() });
+		scopeId = 'store-b';
+		await expect(
+			recoverEngineCollectionStorage(engine as never, 'orders', error, { reload: jest.fn() })
+		).resolves.toBe(true);
+		expect(resetCollection).toHaveBeenCalledTimes(2);
+	});
+
+	it('allows a later recovery attempt when reset fails after claiming the guard', async () => {
+		const resetError = new Error('drop failed');
+		const resetCollection = jest.fn(
+			async (
+				_collection: string,
+				options: { beforeDrop: (active: { scopeId: string }) => Promise<void> }
+			) => {
+				await options.beforeDrop({ scopeId: 'store-a' });
+				throw resetError;
+			}
+		);
+		const engine = {
+			active: () => ({ scopeId: 'store-a' }),
+			scope: { resetCollection },
+		};
+		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
+
+		await expect(recoverEngineCollectionStorage(engine as never, 'orders', error)).rejects.toBe(
+			resetError
+		);
+		await expect(recoverEngineCollectionStorage(engine as never, 'orders', error)).rejects.toBe(
+			resetError
+		);
+
+		expect(resetCollection).toHaveBeenCalledTimes(2);
+	});
+
+	it('does not reset a collection after the active store changes', async () => {
+		const resetCollection = jest.fn(
+			async (
+				_collection: string,
+				options?: { beforeDrop?: (active: { scopeId: string }) => Promise<void> }
+			) => {
+				await options?.beforeDrop?.({ scopeId: 'store-b' });
+				return 'reset' as const;
+			}
+		);
+		const engine = { active: () => ({ scopeId: 'store-a' }), scope: { resetCollection } };
+		const reload = jest.fn();
+		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
+
+		await expect(
+			recoverEngineCollectionStorage(engine as never, 'orders', error, { reload })
+		).rejects.toBe(error);
 		expect(reload).not.toHaveBeenCalled();
 	});
 });
