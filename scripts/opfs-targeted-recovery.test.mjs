@@ -268,7 +268,9 @@ test("skips the write preflight for ids already verified clean", async () => {
   await recovering.bulkWrite(rows, "second");
   assert.equal(probeCalls, 1);
 
-  await recovering.findDocumentsById(["cache:customers"], false);
+  // A withDeleted read proves the requested ids parsed or are absent; a
+  // withDeleted=false read cannot (tombstones are filtered unparsed).
+  await recovering.findDocumentsById(["cache:customers"], true);
   assert.equal(probeCalls, 2);
   await recovering.bulkWrite(
     [{ document: document("cache:customers", 2) }],
@@ -352,6 +354,84 @@ test("re-probes cached ids after repair failure", async () => {
   await recovering.bulkWrite([{ document: record }], "retry");
 
   assert.ok(probeCalls > beforeRetry, "retry after repair failure must probe");
+});
+
+test("does not treat tombstones filtered from a read as verified clean", async () => {
+  const live = document("cache:orders", 0);
+  let probeCalls = 0;
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async (ids, withDeleted) => {
+      if (withDeleted) probeCalls += 1;
+      // Without withDeleted the storage filters tombstoned rows by index key
+      // and never parses their bytes — only the live document comes back.
+      return JSON.stringify(ids.includes(live.id) ? [live] : []);
+    },
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("tombstone-cache"));
+
+  await recovering.findDocumentsById(["cache:orders", "cache:deleted"], false);
+  await recovering.bulkWrite([{ document: live }], "returned-doc");
+  assert.equal(probeCalls, 0, "a returned document is proven clean");
+
+  await recovering.bulkWrite(
+    [{ document: document("cache:deleted", 1) }],
+    "filtered-tombstone",
+  );
+  assert.equal(probeCalls, 1, "a filtered tombstone id must still preflight");
+
+  await recovering.findDocumentsById(["cache:gone"], true);
+  await recovering.bulkWrite(
+    [{ document: document("cache:gone", 2) }],
+    "with-deleted",
+  );
+  assert.equal(probeCalls, 2, "a withDeleted read proves absent ids clean");
+});
+
+test("re-probes after the raw write itself reports malformed bytes", async () => {
+  const record = document("cache:orders", 0);
+  let probeCalls = 0;
+  let failNextWrite = false;
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async () => {
+      probeCalls += 1;
+      return "[]";
+    },
+    bulkWrite: async () => {
+      if (failNextWrite) {
+        failNextWrite = false;
+        throw new SyntaxError("stored bytes rotted after verification");
+      }
+      return { error: [] };
+    },
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("raw-write-malformed"));
+
+  await recovering.bulkWrite([{ document: record }], "prime-cache");
+  assert.equal(probeCalls, 1);
+
+  failNextWrite = true;
+  await assert.rejects(
+    recovering.bulkWrite([{ document: record }], "rotted"),
+    /stored bytes rotted/,
+  );
+
+  await recovering.bulkWrite([{ document: record }], "retry");
+  assert.ok(probeCalls > 1, "retry after a malformed write must re-probe");
 });
 
 test("repairs one malformed record without removing its collection siblings", async () => {

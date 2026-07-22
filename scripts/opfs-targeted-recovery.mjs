@@ -348,12 +348,21 @@ export function withTargetedOpfsRecovery(storage) {
 
       instance.findDocumentsById = async (ids, withDeleted) => {
         try {
-          const result = parseStorageResult(
-            await findDocumentsById(ids, withDeleted),
-          );
-          // Success means every requested id either parsed or is absent —
-          // exactly what the write preflight would establish.
-          for (const id of ids) cleanIds.add(id);
+          const result = await findDocumentsById(ids, withDeleted);
+          const documents =
+            typeof result === "string" ? JSON.parse(result) : result;
+          // A withDeleted read proves every requested id either parsed or is
+          // absent — exactly what the write preflight establishes. Without
+          // withDeleted the storage filters tombstones by index key alone,
+          // never parsing their bytes, so only ids actually returned are
+          // proven clean.
+          if (withDeleted) {
+            for (const id of ids) cleanIds.add(id);
+          } else {
+            for (const row of documents) {
+              cleanIds.add(row[instance.primaryPath]);
+            }
+          }
           return result;
         } catch (error) {
           if (!isMalformedJson(error)) throw error;
@@ -399,7 +408,15 @@ export function withTargetedOpfsRecovery(storage) {
             for (const id of ids) cleanIds.add(id);
           }
         }
-        return bulkWrite(documentWrites, context);
+        try {
+          return await bulkWrite(documentWrites, context);
+        } catch (error) {
+          // A malformed failure here means stored bytes rotted after their
+          // ids were verified — drop the cache so retries re-probe and can
+          // repair instead of skipping the preflight forever.
+          if (isMalformedJson(error)) cleanIds.clear();
+          throw error;
+        }
       };
 
       // When every per-document probe parses but an index-driven read is
