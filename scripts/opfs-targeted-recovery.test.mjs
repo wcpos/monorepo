@@ -595,7 +595,10 @@ test("declines an index rebuild when the storage is multi-instance", async () =>
         sort: [{ beta: "asc" }],
       }),
     );
-    await assert.rejects(recovering.query(betaQuery), { name: "SyntaxError" });
+    await assert.rejects(recovering.query(betaQuery), {
+      name: "SyntaxError",
+      message: /index reconciliation refused: multi-instance$/,
+    });
     await recovering.close();
   } finally {
     await rm(basePath, { recursive: true, force: true });
@@ -645,7 +648,11 @@ test("refuses an index rebuild when the primary index is itself unsound", async 
         sort: [{ beta: "asc" }],
       }),
     );
-    await assert.rejects(recovering.query(betaQuery), { name: "SyntaxError" });
+    await assert.rejects(recovering.query(betaQuery), {
+      name: "SyntaxError",
+      message:
+        /index reconciliation refused: uncorroborated-primary-range:lane:bbb$/,
+    });
     await recovering.close();
   } finally {
     await rm(basePath, { recursive: true, force: true });
@@ -742,7 +749,11 @@ test("refuses a rebuild when the primary points at a stale duplicate revision", 
         sort: [{ beta: "asc" }],
       }),
     );
-    await assert.rejects(recovering.query(betaQuery), { name: "SyntaxError" });
+    await assert.rejects(recovering.query(betaQuery), {
+      name: "SyntaxError",
+      message:
+        /index reconciliation refused: uncorroborated-primary-range:lane:ccc$/,
+    });
     await recovering.close();
   } finally {
     await rm(basePath, { recursive: true, force: true });
@@ -789,7 +800,10 @@ test("refuses a rebuild when the primary index is missing rows", async () => {
         sort: [{ beta: "asc" }],
       }),
     );
-    await assert.rejects(recovering.query(betaQuery), { name: "SyntaxError" });
+    await assert.rejects(recovering.query(betaQuery), {
+      name: "SyntaxError",
+      message: /index reconciliation refused: cardinality-mismatch$/,
+    });
     await recovering.close();
   } finally {
     await rm(basePath, { recursive: true, force: true });

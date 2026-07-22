@@ -131,7 +131,7 @@ async function reconcileSecondaryIndexes(instance) {
         (indexState) => indexState.rows.length !== state.firstIdx.rows.length,
       )
     ) {
-      return false;
+      return "cardinality-mismatch";
     }
     const keyLength = state.firstIdx.primaryKeyLength;
     const secondaryRanges = secondaries.map((indexState) => {
@@ -152,16 +152,15 @@ async function reconcileSecondaryIndexes(instance) {
         const range = ranges.get(documentId);
         return range && range[0] === start && range[1] === end;
       }).length;
-      if (corroborating * 2 <= secondaries.length) return false;
+      if (corroborating * 2 <= secondaries.length)
+        return `uncorroborated-primary-range:${documentId.trim()}`;
       const document = JSON.parse(
         instance._decode(await accessHandle.read(start, end)),
       );
-      if (
-        state.firstIdx.getIndexableString(document) !== indexKey ||
-        seenRanges.has(start)
-      ) {
-        return false;
-      }
+      if (state.firstIdx.getIndexableString(document) !== indexKey)
+        return `primary-row-mismatch:${documentId.trim()}`;
+      if (seenRanges.has(start))
+        return `duplicate-primary-range:${documentId.trim()}`;
       seenRanges.add(start);
       documents.push({ document, start, end });
     }
@@ -181,7 +180,7 @@ async function reconcileSecondaryIndexes(instance) {
         repaired = true;
       }
     }
-    if (!repaired) return false;
+    if (!repaired) return "no-divergence";
 
     // Emptying the changelog drops pending row operations for every index, so
     // every index must be persisted from its current in-memory rows — the same
@@ -286,7 +285,7 @@ export function withTargetedOpfsRecovery(storage) {
         if (!pendingReconcile) {
           pendingReconcile = reconcileSecondaryIndexes(instance)
             .then((repaired) => {
-              if (repaired) reconcileGeneration += 1;
+              if (repaired === true) reconcileGeneration += 1;
               return repaired;
             })
             .finally(() => {
@@ -303,16 +302,19 @@ export function withTargetedOpfsRecovery(storage) {
         // A rebuild changes row offsets without emitting changelog operations,
         // so a multi-instance peer's stale in-memory rows could later persist
         // over it — only reconcile when this instance is the sole owner.
-        if (params.multiInstance) return false;
-        try {
-          if (await reconcileOnce()) return true;
-        } catch (reconcileError) {
-          error.message += `; index reconciliation failed: ${
-            reconcileError?.message ?? reconcileError
-          }`;
-          return false;
+        let refusal = "multi-instance";
+        if (!params.multiInstance) {
+          try {
+            const outcome = await reconcileOnce();
+            if (outcome === true) return true;
+            refusal = outcome;
+          } catch (reconcileError) {
+            refusal = `error ${reconcileError?.message ?? reconcileError}`;
+          }
         }
-        return reconcileGeneration !== generationAtStart;
+        if (reconcileGeneration !== generationAtStart) return true;
+        error.message += `; index reconciliation refused: ${refusal}`;
+        return false;
       };
 
       instance.query = async (preparedQuery) => {
