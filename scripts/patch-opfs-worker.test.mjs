@@ -7,6 +7,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
+import { patchOpfsWorker } from "./patch-opfs-worker.mjs";
+
 const patcher = fileURLToPath(
   new URL("./patch-opfs-worker.mjs", import.meta.url),
 );
@@ -90,6 +92,67 @@ test("patcher runs when invoked through a symlink", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(readFileSync(workerPath, "utf8"), /WCPOS_OPFS_COMPLETE_WRITES/);
+});
+
+test("patched worker tolerates scopes without sync access handles", () => {
+  for (const FileSystemSyncAccessHandle of [undefined, class {}]) {
+    const self = {};
+    vm.runInNewContext(patchOpfsWorker("self.vendorWorkerLoaded = true;\n"), {
+      self,
+      FileSystemSyncAccessHandle,
+      ArrayBuffer,
+      Uint8Array,
+      Error,
+    });
+    assert.equal(self.vendorWorkerLoaded, true);
+  }
+});
+
+test("patched worker preserves native option and empty-write semantics", () => {
+  const calls = [];
+  class FakeAccessHandle {}
+  FakeAccessHandle.prototype.write = function (buffer, options) {
+    calls.push({ at: options?.at, length: buffer.byteLength });
+    return buffer.byteLength === 0
+      ? 0
+      : Math.max(1, Math.floor(buffer.byteLength / 2));
+  };
+  vm.runInNewContext(patchOpfsWorker(""), {
+    FileSystemSyncAccessHandle: FakeAccessHandle,
+    Uint8Array,
+    ArrayBuffer,
+    Error,
+  });
+
+  const handle = new FakeAccessHandle();
+  assert.equal(handle.write(new Uint8Array(0), { at: 20 }), 0);
+  assert.equal(handle.write(new Uint8Array(4), { at: "8" }), 4);
+  assert.equal(handle.write(new Uint8Array(1), null), 1);
+  assert.deepEqual(calls, [
+    { at: 20, length: 0 },
+    { at: 8, length: 4 },
+    { at: 10, length: 2 },
+    { at: 11, length: 1 },
+    { at: undefined, length: 1 },
+  ]);
+});
+
+test("patched worker rejects non-buffer inputs before native write", () => {
+  let callCount = 0;
+  class FakeAccessHandle {}
+  FakeAccessHandle.prototype.write = () => {
+    callCount += 1;
+    return 1;
+  };
+  vm.runInNewContext(patchOpfsWorker(""), {
+    FileSystemSyncAccessHandle: FakeAccessHandle,
+    Uint8Array,
+    ArrayBuffer,
+    Error,
+  });
+
+  assert.throws(() => new FakeAccessHandle().write(4), /BufferSource/);
+  assert.equal(callCount, 0);
 });
 
 test("shipped OPFS worker contains the complete-write shim exactly once", () => {
