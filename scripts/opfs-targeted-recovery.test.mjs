@@ -253,3 +253,35 @@ test("refuses to recover a matching nested object as the whole document", async 
     await rm(basePath, { recursive: true, force: true });
   }
 });
+
+test("refuses a matching id whose recovered index values differ", async () => {
+  const basePath = await mkdtemp(
+    join(tmpdir(), "wcpos-targeted-index-refusal-"),
+  );
+  const id = "product:index-mismatch";
+
+  try {
+    const initial = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(storageParams("index-mismatch-initial"));
+    await initial.bulkWrite([{ document: document(id, 0) }], "seed");
+    await initial.cleanup(0);
+    await initial.close();
+    await corruptRecord(basePath, id, () =>
+      Buffer.from(`{"id":"${id}"}garbage`),
+    );
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance(storageParams("index-mismatch-recovering"));
+    await assert.rejects(
+      recovering.findDocumentsById([id], false),
+      SyntaxError,
+    );
+    await recovering.close();
+  } finally {
+    await rm(basePath, { recursive: true, force: true });
+  }
+});

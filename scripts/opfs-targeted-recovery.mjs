@@ -67,6 +67,18 @@ async function repairDocument(instance, documentId) {
       documentId,
     );
     if (!document) return false;
+    try {
+      if (
+        indexRows.some(
+          ({ indexState, position }) =>
+            indexState.getIndexableString(document) !==
+            indexState.rows[position][0],
+        )
+      )
+        return false;
+    } catch {
+      return false;
+    }
 
     const recoveredBytes = instance._encode(JSON.stringify(document));
     const newStart = await accessHandle.getSize();
