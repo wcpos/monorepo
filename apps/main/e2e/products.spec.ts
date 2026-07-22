@@ -52,14 +52,10 @@ test.describe('Products in POS', () => {
 	test('should search products by name', async ({ posPage: page }) => {
 		const searchInput = page.getByTestId('search-products');
 		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_000);
 
 		const countEl = page.getByTestId('data-table-count');
 		const noResults = page.getByTestId('no-data-message');
-
-		const hasResults = await countEl.isVisible().catch(() => false);
-		const hasNoResults = await noResults.isVisible().catch(() => false);
-		expect(hasResults || hasNoResults).toBeTruthy();
+		await expect(countEl.or(noResults).first()).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should clear search and show all products', async ({ posPage: page }) => {
@@ -89,14 +85,10 @@ test.describe('Products in POS', () => {
 
 		const searchInput = page.getByTestId('search-products');
 		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_500);
 
+		const noResults = page.getByTestId('no-data-message');
+		await expect(countEl.or(noResults).first()).toBeVisible({ timeout: 15_000 });
 		const hasResults = await countEl.isVisible().catch(() => false);
-		const noResults = await page
-			.getByTestId('no-data-message')
-			.isVisible()
-			.catch(() => false);
-		expect(hasResults || noResults).toBeTruthy();
 
 		if (hasResults) {
 			const filteredText = await countEl.textContent();
