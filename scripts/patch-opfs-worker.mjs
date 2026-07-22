@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const MARKER = "WCPOS_OPFS_COMPLETE_WRITES";
@@ -40,10 +40,15 @@ function main(paths) {
 
   for (const path of paths) {
     const source = readFileSync(path, "utf8");
-    writeFileSync(path, patchOpfsWorker(source));
+    const temporaryPath = `${path}.${process.pid}.tmp`;
+    writeFileSync(temporaryPath, patchOpfsWorker(source));
+    renameSync(temporaryPath, path);
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (
+  process.argv[1] &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+) {
   main(process.argv.slice(2));
 }

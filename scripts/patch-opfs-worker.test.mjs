@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-const patcher = new URL("./patch-opfs-worker.mjs", import.meta.url);
+const patcher = fileURLToPath(
+  new URL("./patch-opfs-worker.mjs", import.meta.url),
+);
 const shippedWorker = new URL(
   "../apps/main/public/opfs.worker.js",
   import.meta.url,
@@ -18,7 +21,7 @@ test("patched OPFS worker completes partial writes without duplicating the shim"
   writeFileSync(workerPath, "self.vendorWorkerLoaded = true;\n");
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const result = spawnSync(process.execPath, [patcher.pathname, workerPath], {
+    const result = spawnSync(process.execPath, [patcher, workerPath], {
       encoding: "utf8",
     });
     assert.equal(result.status, 0, result.stderr);
@@ -56,7 +59,7 @@ test("patched OPFS worker rejects invalid native write progress", () => {
   const directory = mkdtempSync(join(tmpdir(), "wcpos-opfs-worker-"));
   const workerPath = join(directory, "opfs.worker.js");
   writeFileSync(workerPath, "self.vendorWorkerLoaded = true;\n");
-  const result = spawnSync(process.execPath, [patcher.pathname, workerPath], {
+  const result = spawnSync(process.execPath, [patcher, workerPath], {
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
@@ -73,6 +76,20 @@ test("patched OPFS worker rejects invalid native write progress", () => {
 
   const handle = new FakeAccessHandle();
   assert.throws(() => handle.write(new Uint8Array(8)), /invalid progress/);
+});
+
+test("patcher runs when invoked through a symlink", () => {
+  const directory = mkdtempSync(join(tmpdir(), "wcpos-opfs-worker-"));
+  const workerPath = join(directory, "opfs.worker.js");
+  const symlinkPath = join(directory, "patch-opfs-worker.mjs");
+  writeFileSync(workerPath, "self.vendorWorkerLoaded = true;\n");
+  symlinkSync(patcher, symlinkPath);
+
+  const result = spawnSync(process.execPath, [symlinkPath, workerPath], {
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(readFileSync(workerPath, "utf8"), /WCPOS_OPFS_COMPLETE_WRITES/);
 });
 
 test("shipped OPFS worker contains the complete-write shim exactly once", () => {
