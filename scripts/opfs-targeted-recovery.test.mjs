@@ -164,8 +164,14 @@ test("falls back to singleton reads when only a combined response is malformed",
 });
 
 test("falls back to singleton writes when a combined write is malformed", async () => {
-  const records = [document("cache:orders", 0), document("cache:products", 1)];
+  const records = [
+    document("cache:orders", 0),
+    { ...document("cache:orders", 1), _rev: "2-recovery1" },
+    document("cache:products", 2),
+  ];
   const written = [];
+  let activeWrites = 0;
+  let maxActiveWrites = 0;
   let combinedWriteAttempted = false;
   let idleAwaited = false;
   const instance = {
@@ -181,7 +187,11 @@ test("falls back to singleton writes when a combined write is malformed", async 
         combinedWriteAttempted = true;
         throw new SyntaxError("malformed combined write");
       }
-      written.push(rows[0].document.id);
+      activeWrites += 1;
+      maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+      await new Promise((resolve) => setImmediate(resolve));
+      written.push(rows[0].document._rev);
+      activeWrites -= 1;
       return { error: [] };
     },
     query: async () => JSON.stringify({ documents: [] }),
@@ -201,9 +211,10 @@ test("falls back to singleton writes when a combined write is malformed", async 
   assert.deepEqual(result, { error: [] });
   assert.equal(combinedWriteAttempted, false);
   assert.equal(idleAwaited, true);
+  assert.equal(maxActiveWrites, 1);
   assert.deepEqual(
     written,
-    records.map(({ id }) => id),
+    records.map(({ _rev }) => _rev),
   );
 });
 
@@ -242,6 +253,248 @@ test("refuses malformed-document read and write repair when multi-instance", asy
   );
   assert.equal(writeAttempted, false);
 });
+
+test("skips the write preflight for ids already verified clean", async () => {
+  const records = [document("cache:orders", 0), document("cache:products", 1)];
+  let probeCalls = 0;
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async () => {
+      probeCalls += 1;
+      return "[]";
+    },
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("clean-cache"));
+  const rows = records.map((item) => ({ document: item }));
+
+  await recovering.bulkWrite(rows, "first");
+  assert.equal(probeCalls, 1);
+  await recovering.bulkWrite(rows, "second");
+  assert.equal(probeCalls, 1);
+
+  // A withDeleted read proves the requested ids parsed or are absent; a
+  // withDeleted=false read cannot (tombstones are filtered unparsed).
+  await recovering.findDocumentsById(["cache:customers"], true);
+  assert.equal(probeCalls, 2);
+  await recovering.bulkWrite(
+    [{ document: document("cache:customers", 2) }],
+    "after-read",
+  );
+  assert.equal(probeCalls, 2);
+});
+
+test("re-probes writes after observing malformed data", async () => {
+  const record = document("cache:orders", 0);
+  let probeCalls = 0;
+  let malformedOnce = true;
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async (ids) => {
+      probeCalls += 1;
+      if (ids.length > 1 && malformedOnce) {
+        malformedOnce = false;
+        return "[{malformed";
+      }
+      return "[]";
+    },
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("cache-invalidate"));
+
+  await recovering.bulkWrite([{ document: record }], "first");
+  const cleanProbes = probeCalls;
+  await recovering.findDocumentsById(["cache:orders", "cache:products"], false);
+
+  const beforeReprobe = probeCalls;
+  await recovering.bulkWrite([{ document: record }], "after-malformed");
+  assert.ok(probeCalls > beforeReprobe, "write after malformed must re-probe");
+  assert.ok(cleanProbes > 0);
+});
+
+test("re-probes cached ids after repair failure", async () => {
+  const record = document("cache:orders", 0);
+  let malformed = false;
+  let probeCalls = 0;
+  const instance = {
+    primaryPath: "id",
+    internals: { statePromise: Promise.resolve({}) },
+    taskQueue: {
+      runCleanup: async () => {
+        throw new Error("repair failed");
+      },
+    },
+    findDocumentsById: async () => {
+      probeCalls += 1;
+      return malformed ? "[{malformed" : "[]";
+    },
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("repair-failure-cache"));
+
+  await recovering.bulkWrite([{ document: record }], "prime-cache");
+  malformed = true;
+  await assert.rejects(
+    recovering.bulkWrite(
+      [{ document: record }, { document: document("cache:new", 1) }],
+      "repair-failure",
+    ),
+    /repair failed/,
+  );
+  malformed = false;
+  const beforeRetry = probeCalls;
+
+  await recovering.bulkWrite([{ document: record }], "retry");
+
+  assert.ok(probeCalls > beforeRetry, "retry after repair failure must probe");
+});
+
+test("does not treat tombstones filtered from a read as verified clean", async () => {
+  const live = document("cache:orders", 0);
+  let probeCalls = 0;
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async (ids, withDeleted) => {
+      if (withDeleted) probeCalls += 1;
+      // Without withDeleted the storage filters tombstoned rows by index key
+      // and never parses their bytes — only the live document comes back.
+      return JSON.stringify(ids.includes(live.id) ? [live] : []);
+    },
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("tombstone-cache"));
+
+  await recovering.findDocumentsById(["cache:orders", "cache:deleted"], false);
+  await recovering.bulkWrite([{ document: live }], "returned-doc");
+  assert.equal(probeCalls, 0, "a returned document is proven clean");
+
+  await recovering.bulkWrite(
+    [{ document: document("cache:deleted", 1) }],
+    "filtered-tombstone",
+  );
+  assert.equal(probeCalls, 1, "a filtered tombstone id must still preflight");
+
+  await recovering.findDocumentsById(["cache:gone"], true);
+  await recovering.bulkWrite(
+    [{ document: document("cache:gone", 2) }],
+    "with-deleted",
+  );
+  assert.equal(probeCalls, 2, "a withDeleted read proves absent ids clean");
+});
+
+test("re-probes after the raw write itself reports malformed bytes", async () => {
+  const record = document("cache:orders", 0);
+  let probeCalls = 0;
+  let failNextWrite = false;
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async () => {
+      probeCalls += 1;
+      return "[]";
+    },
+    bulkWrite: async () => {
+      if (failNextWrite) {
+        failNextWrite = false;
+        throw new SyntaxError("stored bytes rotted after verification");
+      }
+      return { error: [] };
+    },
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("raw-write-malformed"));
+
+  await recovering.bulkWrite([{ document: record }], "prime-cache");
+  assert.equal(probeCalls, 1);
+
+  failNextWrite = true;
+  await assert.rejects(
+    recovering.bulkWrite([{ document: record }], "rotted"),
+    /stored bytes rotted/,
+  );
+
+  await recovering.bulkWrite([{ document: record }], "retry");
+  assert.ok(probeCalls > 1, "retry after a malformed write must re-probe");
+});
+
+for (const method of [
+  "findDocumentsById",
+  "query",
+  "getChangedDocumentsSince",
+]) {
+  test(`${method} validates the result returned after recovery`, async () => {
+    const basePath = await mkdtemp(join(tmpdir(), "wcpos-retry-validation-"));
+    const record = document(`retry:${method}`, 0);
+
+    try {
+      const rawStorage = getRxStorageFilesystemNode({ basePath });
+      const initial = await rawStorage.createStorageInstance(
+        storageParams(`${method}-initial`),
+      );
+      await initial.bulkWrite([{ document: record }], "seed");
+      await initial.cleanup(0);
+      await initial.close();
+      await corruptRecord(basePath, record.id);
+
+      const malformedStorage = {
+        ...rawStorage,
+        async createStorageInstance(params) {
+          const instance = await rawStorage.createStorageInstance(params);
+          instance[method] = async () => "[{malformed";
+          return instance;
+        },
+      };
+      const { withTargetedOpfsRecovery } =
+        await import("./opfs-targeted-recovery.mjs");
+      const recovering = await withTargetedOpfsRecovery(
+        malformedStorage,
+      ).createStorageInstance(storageParams(`${method}-recovering`));
+      const args =
+        method === "findDocumentsById"
+          ? [[record.id], false]
+          : method === "query"
+            ? [{}]
+            : [10];
+      try {
+        await assert.rejects(recovering[method](...args), {
+          name: "SyntaxError",
+        });
+      } finally {
+        await recovering.close();
+      }
+    } finally {
+      await rm(basePath, { recursive: true, force: true });
+    }
+  });
+}
 
 test("repairs one malformed record without removing its collection siblings", async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-targeted-recovery-"));
@@ -845,7 +1098,7 @@ test("refuses a rebuild when the primary index is missing rows", async () => {
   }
 });
 
-test("rebuilds when several secondary indexes are stale in different ways", async () => {
+test("reports an incomplete index rollback and recovers on retry", async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-scattered-"));
   const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
 
@@ -864,11 +1117,42 @@ test("rebuilds when several secondary indexes are stale in different ways", asyn
     await shiftSecondaryIndexOffsets(basePath, "lane:bbb", -2, 1);
     await shiftSecondaryIndexOffsets(basePath, "lane:bbb", -4, 2);
 
+    const directory = join(basePath, (await readdir(basePath))[0]);
+    const indexPaths = (await readdir(directory))
+      .filter((name) => name.startsWith("index-"))
+      .sort()
+      .map((name) => join(directory, name));
+    const before = await Promise.all(
+      indexPaths.map((path) => readFile(path, "utf8")),
+    );
+
     const { withTargetedOpfsRecovery } =
       await import("./opfs-targeted-recovery.mjs");
     const recovering = await withTargetedOpfsRecovery(
       getRxStorageFilesystemNode({ basePath }),
     ).createStorageInstance(laneStorageParams("scattered-recovering"));
+    const state = await recovering.internals.statePromise;
+    const rollbackIndex = state.indexStates.at(-2);
+    const persistRollbackIndex =
+      rollbackIndex.persistInMemoryRows.bind(rollbackIndex);
+    let rollbackWrites = 0;
+    rollbackIndex.persistInMemoryRows = async (...args) => {
+      rollbackWrites += 1;
+      if (rollbackWrites === 2) {
+        throw new Error("injected rollback persistence failure");
+      }
+      return persistRollbackIndex(...args);
+    };
+    const laterIndex = state.indexStates.at(-1);
+    const persistLaterIndex = laterIndex.persistInMemoryRows.bind(laterIndex);
+    let rejectOnce = true;
+    laterIndex.persistInMemoryRows = async (...args) => {
+      if (rejectOnce) {
+        rejectOnce = false;
+        throw new Error("injected later-index persistence failure");
+      }
+      return persistLaterIndex(...args);
+    };
     const betaQuery = prepareQuery(
       laneSchema,
       normalizeMangoQuery(laneSchema, {
@@ -876,6 +1160,18 @@ test("rebuilds when several secondary indexes are stale in different ways", asyn
         sort: [{ beta: "asc" }],
       }),
     );
+    await assert.rejects(recovering.query(betaQuery), (error) => {
+      assert.equal(error.name, "SyntaxError");
+      assert.match(error.message, /injected later-index persistence failure/);
+      assert.match(error.message, /rollback incomplete/);
+      assert.match(error.message, /injected rollback persistence failure/);
+      return true;
+    });
+    assert.equal(rollbackWrites, 2);
+    const afterIncompleteRollback = await Promise.all(
+      indexPaths.map((path) => readFile(path, "utf8")),
+    );
+    assert.notDeepEqual(afterIncompleteRollback, before);
     const recovered = (await recovering.query(betaQuery)).documents;
     assert.deepEqual(
       recovered.map((item) => item.id),
