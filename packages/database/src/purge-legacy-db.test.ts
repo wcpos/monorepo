@@ -1,10 +1,4 @@
-const events: string[] = [];
-const mockCloseAllCachedNativeDatabases = jest.fn(async () => {
-	events.push('close');
-});
-const mockDeleteDatabaseAsync = jest.fn(async (name: string) => {
-	events.push(`delete:${name}`);
-});
+const mockDeleteDatabaseAsync = jest.fn(async (_name: string) => {});
 
 const sqliteEntries = [
 	'wcposusers_v4',
@@ -61,10 +55,6 @@ jest.mock('expo-file-system', () => ({
 	},
 }));
 
-jest.mock('./adapters/storage', () => ({
-	closeAllCachedNativeDatabases: () => mockCloseAllCachedNativeDatabases(),
-}));
-
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		debug: jest.fn(),
@@ -83,10 +73,9 @@ describe('purgeLegacyDatabases native', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		jest.resetModules();
-		events.length = 0;
 	});
 
-	it('closes cached connections and deletes only legacy SQLite and OPFS entries', async () => {
+	it('deletes only legacy SQLite and OPFS entries', async () => {
 		const { purgeLegacyDatabases } = await import('./purge-legacy-db');
 
 		await expect(purgeLegacyDatabases()).resolves.toEqual({
@@ -94,7 +83,6 @@ describe('purgeLegacyDatabases native', () => {
 			message: 'Successfully purged 8 legacy database entries',
 			databasesDeleted: 8,
 		});
-		expect(events[0]).toBe('close');
 		expect(mockDeleteDatabaseAsync.mock.calls.map(([name]) => name)).toEqual([
 			'wcposusers_v2',
 			'wcposusers_v3',

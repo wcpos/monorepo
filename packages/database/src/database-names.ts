@@ -1,21 +1,30 @@
+import { DATABASE_GENERATION } from './database-generation';
+
 /**
  * WCPOS 1.9.x used the v4/v5 databases. V6 is the new engine's clean
  * generation for cold resync; bump this generation on every future reset.
  */
-const USER_DATABASE_NAME = 'wcposusers_v6';
-const STORE_DATABASE_PREFIX = 'store_v6_';
-const FAST_STORE_DATABASE_PREFIX = 'fast_store_v6_';
+const USER_DATABASE_NAME = `wcposusers_${DATABASE_GENERATION}`;
+const STORE_DATABASE_PREFIX = `store_${DATABASE_GENERATION}_`;
+const FAST_STORE_DATABASE_PREFIX = `fast_store_${DATABASE_GENERATION}_`;
 
 export const LEGACY_USER_DATABASE_NAMES = [
 	'wcposusers_v2',
 	'wcposusers_v3',
 	'wcposusers_v4',
+	...(String(DATABASE_GENERATION) === 'v7' ? ['wcposusers_v6'] : []),
 ] as const;
-export const LEGACY_STORE_PREFIXES = ['store_v2_', 'store_v3_', 'store_v4_'] as const;
+export const LEGACY_STORE_PREFIXES = [
+	'store_v2_',
+	'store_v3_',
+	'store_v4_',
+	...(String(DATABASE_GENERATION) === 'v7' ? ['store_v6_'] : []),
+] as const;
 export const LEGACY_FAST_STORE_PREFIXES = [
 	'fast_store_v3_',
 	'fast_store_v4_',
 	'fast_store_v5_',
+	...(String(DATABASE_GENERATION) === 'v7' ? ['fast_store_v6_'] : []),
 ] as const;
 
 /**

@@ -4,7 +4,6 @@ import * as SQLite from 'expo-sqlite';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { closeAllCachedNativeDatabases } from './adapters/storage';
 import {
 	APP_DATABASE_PREFIXES,
 	getUserDatabaseName,
@@ -118,9 +117,6 @@ const deleteFilesystemDatabases = () => {
 export const clearAllDB = async (): Promise<ClearDBResult> => {
 	try {
 		dbLogger.debug('Starting to clear all application databases');
-		dbLogger.debug('Closing cached native SQLite connections');
-		await closeAllCachedNativeDatabases();
-
 		const deletedSQLiteDatabases = await deleteLegacySQLiteDatabases();
 		const deletedFilesystemDatabases = deleteFilesystemDatabases();
 		const deletedCount = deletedSQLiteDatabases + deletedFilesystemDatabases;
