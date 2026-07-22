@@ -122,10 +122,14 @@ async function reconcileSecondaryIndexes(instance) {
     );
     // The primary index is the rebuild source, so it must be corroborated,
     // not merely self-consistent: every index must hold one row per document,
-    // and for each document a majority of the secondary indexes must
-    // reference the primary's exact byte range. A stale-but-parseable primary
-    // (or a truncated one) loses that vote and reconciliation refuses rather
-    // than persisting rebuilt indexes against the wrong bytes.
+    // its bytes must parse to the document its own index key names, and no
+    // competing byte range with equal-or-better support across the other
+    // indexes may also parse to this document. Indexes can go stale in
+    // DIFFERENT ways (each index file is written separately), so scattered
+    // disagreement does not outvote a validated primary — but a coherent
+    // competing consensus that also holds a valid copy (a stale primary
+    // pointing at an old revision) still refuses rather than persisting
+    // rebuilt indexes against the wrong bytes.
     if (
       secondaries.some(
         (indexState) => indexState.rows.length !== state.firstIdx.rows.length,
@@ -134,38 +138,112 @@ async function reconcileSecondaryIndexes(instance) {
       return "cardinality-mismatch";
     }
     const keyLength = state.firstIdx.primaryKeyLength;
-    const secondaryRanges = secondaries.map((indexState) => {
-      const ranges = new Map();
-      for (const [indexKey, start, end] of indexState.rows) {
-        ranges.set(getPrimaryKeyFromIndexableString(indexKey, keyLength), [
-          start,
-          end,
-        ]);
+    const secondaryRows = [];
+    for (const indexState of secondaries) {
+      const rowsById = new Map();
+      for (const row of indexState.rows) {
+        rowsById.set(getPrimaryKeyFromIndexableString(row[0], keyLength), row);
       }
-      return ranges;
-    });
+      // Equal counts plus one row per distinct ID (in every index, primary
+      // included) plus every primary ID present in every secondary guarantees
+      // identical ID sets — rebuilding must never drop a document a secondary
+      // still knows about.
+      if (rowsById.size !== indexState.rows.length)
+        return "duplicate-secondary-id";
+      secondaryRows.push(rowsById);
+    }
     const documents = [];
+    const seenIds = new Set();
     const seenRanges = new Set();
+    let previousKey = "";
     for (const [indexKey, start, end] of state.firstIdx.rows) {
+      // RxDB binary-searches index rows, so an out-of-order source would
+      // persist a broken index even when every row validates individually.
+      if (indexKey < previousKey) return "unsorted-primary";
+      previousKey = indexKey;
       const documentId = getPrimaryKeyFromIndexableString(indexKey, keyLength);
-      const corroborating = secondaryRanges.filter((ranges) => {
-        const range = ranges.get(documentId);
-        return range && range[0] === start && range[1] === end;
-      }).length;
-      if (corroborating * 2 <= secondaries.length)
-        return `uncorroborated-primary-range:${documentId.trim()}`;
-      const document = JSON.parse(
-        instance._decode(await accessHandle.read(start, end)),
-      );
-      if (state.firstIdx.getIndexableString(document) !== indexKey)
+      if (seenIds.has(documentId))
+        return `duplicate-primary-id:${documentId.trim()}`;
+      seenIds.add(documentId);
+      let document;
+      try {
+        document = JSON.parse(
+          instance._decode(await accessHandle.read(start, end)),
+        );
+      } catch {
+        return `primary-row-mismatch:${documentId.trim()}`;
+      }
+      if (
+        document?.[instance.primaryPath] !== documentId ||
+        state.firstIdx.getIndexableString(document) !== indexKey
+      )
         return `primary-row-mismatch:${documentId.trim()}`;
       if (seenRanges.has(start))
         return `duplicate-primary-range:${documentId.trim()}`;
+      // A corroborating vote only counts when the voter is self-consistent:
+      // its own index key must match the document at the primary's range.
+      // A secondary whose key was updated but whose range was not (or vice
+      // versa) is evidence of nothing.
+      let primaryVotes = 1;
+      const competing = new Map();
+      for (let i = 0; i < secondaries.length; i += 1) {
+        const row = secondaryRows[i].get(documentId);
+        if (!row) return `id-set-mismatch:${documentId.trim()}`;
+        if (row[1] === start && row[2] === end) {
+          try {
+            if (secondaries[i].getIndexableString(document) === row[0])
+              primaryVotes += 1;
+          } catch {}
+        } else {
+          const key = `${row[1]}-${row[2]}`;
+          const entry = competing.get(key) ?? {
+            range: [row[1], row[2]],
+            voters: [],
+          };
+          entry.voters.push([secondaries[i], row[0]]);
+          competing.set(key, entry);
+        }
+      }
+      for (const { range, voters } of competing.values()) {
+        if (voters.length < primaryVotes) continue;
+        let candidate;
+        try {
+          candidate = JSON.parse(
+            instance._decode(await accessHandle.read(range[0], range[1])),
+          );
+        } catch {
+          continue;
+        }
+        if (candidate?.[instance.primaryPath] !== documentId) continue;
+        let validVotes = 0;
+        for (const [indexState, rowKey] of voters) {
+          try {
+            if (indexState.getIndexableString(candidate) === rowKey)
+              validVotes += 1;
+          } catch {}
+        }
+        if (validVotes >= primaryVotes)
+          return `uncorroborated-primary-range:${documentId.trim()}`;
+      }
       seenRanges.add(start);
       documents.push({ document, start, end });
     }
 
-    let repaired = false;
+    const previousRows = new Map();
+    // Accepted ranges must be pairwise disjoint — a range nested inside
+    // another row's bytes can parse and match its key, but persisting
+    // overlapping records corrupts later compaction.
+    const ordered = [...documents].sort(
+      (left, right) => left.start - right.start,
+    );
+    for (let i = 1; i < ordered.length; i += 1) {
+      if (ordered[i].start < ordered[i - 1].end) return "overlapping-ranges";
+    }
+
+    // Compute every rebuilt array before assigning any — an exception halfway
+    // through (e.g. a schema-corrupt document breaking key derivation) must
+    // not leave the instance partially repaired in memory.
+    const rebuiltRows = [];
     for (const indexState of state.indexStates) {
       if (indexState === state.firstIdx) continue;
       const rebuilt = documents
@@ -176,19 +254,31 @@ async function reconcileSecondaryIndexes(instance) {
         ])
         .sort((left, right) => (left[0] < right[0] ? -1 : 1));
       if (JSON.stringify(rebuilt) !== JSON.stringify(indexState.rows)) {
-        indexState.rows = rebuilt;
-        repaired = true;
+        rebuiltRows.push([indexState, rebuilt]);
       }
     }
-    if (!repaired) return "no-divergence";
+    if (rebuiltRows.length === 0) return "no-divergence";
+    for (const [indexState, rebuilt] of rebuiltRows) {
+      previousRows.set(indexState, indexState.rows);
+      indexState.rows = rebuilt;
+    }
 
     // Emptying the changelog drops pending row operations for every index, so
     // every index must be persisted from its current in-memory rows — the same
-    // pairing the storage's own cleanupChangelogOperations maintains.
-    for (const indexState of state.indexStates) {
-      await indexState.persistInMemoryRows(runState);
+    // pairing the storage's own cleanupChangelogOperations maintains. A failed
+    // commit restores the previous in-memory rows so memory never claims a
+    // repair the files don't hold.
+    try {
+      for (const indexState of state.indexStates) {
+        await indexState.persistInMemoryRows(runState);
+      }
+      await state.changelog.empty(runState);
+    } catch (persistError) {
+      for (const [indexState, rows] of previousRows) {
+        indexState.rows = rows;
+      }
+      throw persistError;
     }
-    await state.changelog.empty(runState);
     return true;
   });
 }
@@ -297,8 +387,13 @@ export function withTargetedOpfsRecovery(storage) {
 
       const repairIndexedRead = async (error, generationAtStart) => {
         const state = await instance.internals.statePromise;
-        if (await repairMalformedIds(state.firstIdx.metaIdMap.keys()))
-          return true;
+        // Document repair and index reconciliation address independent damage
+        // that can coexist in one failure, so a repaired document does not
+        // skip the reconcile attempt — otherwise the single retry would fail
+        // again on a still-stale index.
+        const repairedDocuments = await repairMalformedIds(
+          state.firstIdx.metaIdMap.keys(),
+        );
         // A rebuild changes row offsets without emitting changelog operations,
         // so a multi-instance peer's stale in-memory rows could later persist
         // over it — only reconcile when this instance is the sole owner.
@@ -312,6 +407,7 @@ export function withTargetedOpfsRecovery(storage) {
             refusal = `error ${reconcileError?.message ?? reconcileError}`;
           }
         }
+        if (repairedDocuments) return true;
         if (reconcileGeneration !== generationAtStart) return true;
         error.message += `; index reconciliation refused: ${refusal}`;
         return false;
