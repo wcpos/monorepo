@@ -69,7 +69,7 @@ importers:
         version: 7.15.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))
       axios:
         specifier: ^1.17.0
-        version: 1.17.0
+        version: 1.18.0
       better-sqlite3:
         specifier: 12.10.0
         version: 12.10.0
@@ -804,7 +804,7 @@ importers:
         version: 7.8.2
       semver:
         specifier: ^7.8.4
-        version: 7.8.4
+        version: 7.8.5
       use-deep-compare-effect:
         specifier: ^1.8.1
         version: 1.8.1(react@19.2.3)
@@ -5969,9 +5969,6 @@ packages:
   await-lock@2.2.2:
     resolution: {integrity: sha512-aDczADvlvTGajTDjcjpJMqRkOF6Qdz3YbPZm/PyW6tKPkx2hlYBzxMhEywM/tU72HrVZjgl5VCdRuMlA7pZ8Gw==}
 
-  axios@1.17.0:
-    resolution: {integrity: sha512-J8SwNxprqqpbfenehxWYXE7CW+wM1BB4w3+N+g+/Wx40xM4rsLrfPmHHxSWIxJLYDgSY/HqlFPIYb2/S3rxafw==}
-
   axios@1.18.0:
     resolution: {integrity: sha512-E32NzpYKp++W7XRe52rHiXV2ehxmh3wbdgO7MHeFM+vqxLBYHzt0ElkiImtOBxtOmyp0yoC8C6uESVV84Y2/hw==}
 
@@ -11022,11 +11019,6 @@ packages:
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
-    hasBin: true
-
-  semver@7.8.4:
-    resolution: {integrity: sha512-rUCObTnP32Q08R2uuIrt7r9PlEonuTmtuXYcW6s5kjdlj3xbnwe+21yXptAUYcMAABLkYYTtnmzb3w3EDZfueA==}
-    engines: {node: '>=10'}
     hasBin: true
 
   semver@7.8.5:
@@ -18615,16 +18607,6 @@ snapshots:
 
   await-lock@2.2.2: {}
 
-  axios@1.17.0:
-    dependencies:
-      follow-redirects: 1.16.0(debug@4.4.3)
-      form-data: 4.0.5
-      https-proxy-agent: 5.0.1
-      proxy-from-env: 2.1.0
-    transitivePeerDependencies:
-      - debug
-      - supports-color
-
   axios@1.18.0:
     dependencies:
       follow-redirects: 1.16.0(debug@4.4.3)
@@ -24966,8 +24948,6 @@ snapshots:
   semver@5.7.2: {}
 
   semver@6.3.1: {}
-
-  semver@7.8.4: {}
 
   semver@7.8.5: {}
 
