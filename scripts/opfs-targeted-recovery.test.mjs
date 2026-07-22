@@ -152,7 +152,7 @@ test("repairs one malformed record without removing its collection siblings", as
     await initial.close();
     await corruptRecordInPlace(basePath, "product:6660", () =>
       Buffer.from(
-        `          ,${JSON.stringify({ ...records[1], value: "x" })}`,
+        `          ,{,${JSON.stringify({ ...records[1], value: "x" })}`,
       ),
     );
 

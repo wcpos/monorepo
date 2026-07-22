@@ -10,25 +10,31 @@ function parseStorageResult(result) {
 }
 
 function extractDocument(text, primaryPath, expectedId) {
-  const start = text.indexOf("{");
-  if (start < 0) return;
-
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let cursor = start; cursor < text.length; cursor += 1) {
-    const character = text[cursor];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === '"') inString = false;
-      continue;
-    }
-    if (character === '"') inString = true;
-    else if (character === "{") depth += 1;
-    else if (character === "}" && --depth === 0) {
-      const document = JSON.parse(text.slice(start, cursor + 1));
-      return document?.[primaryPath] === expectedId ? document : undefined;
+  for (
+    let start = text.indexOf("{");
+    start >= 0;
+    start = text.indexOf("{", start + 1)
+  ) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let cursor = start; cursor < text.length; cursor += 1) {
+      const character = text[cursor];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') inString = false;
+        continue;
+      }
+      if (character === '"') inString = true;
+      else if (character === "{") depth += 1;
+      else if (character === "}" && --depth === 0) {
+        try {
+          const document = JSON.parse(text.slice(start, cursor + 1));
+          if (document?.[primaryPath] === expectedId) return document;
+        } catch {}
+        break;
+      }
     }
   }
 }
