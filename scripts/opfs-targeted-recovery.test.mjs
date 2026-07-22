@@ -291,7 +291,9 @@ test("refuses to recover a matching nested object as the whole document", async 
       recovering.findDocumentsById([id], false),
       {
         name: "SyntaxError",
-        message: new RegExp(`targeted recovery failed for ${id}$`),
+        message: new RegExp(
+          `targeted recovery failed for ${id}: index-mismatch$`,
+        ),
       },
     );
     await recovering.close();
@@ -322,10 +324,12 @@ test("refuses a matching id whose recovered index values differ", async () => {
     const recovering = await withTargetedOpfsRecovery(
       getRxStorageFilesystemNode({ basePath }),
     ).createStorageInstance(storageParams("index-mismatch-recovering"));
-    await assert.rejects(
-      recovering.findDocumentsById([id], false),
-      SyntaxError,
-    );
+    await assert.rejects(recovering.findDocumentsById([id], false), {
+      name: "SyntaxError",
+      message: new RegExp(
+        `targeted recovery failed for ${id}: index-mismatch$`,
+      ),
+    });
     await recovering.close();
   } finally {
     await rm(basePath, { recursive: true, force: true });

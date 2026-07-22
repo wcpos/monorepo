@@ -43,7 +43,7 @@ async function repairDocument(instance, documentId) {
   const state = await instance.internals.statePromise;
   return instance.taskQueue.runCleanup(async (runState) => {
     const primaryRow = state.firstIdx.metaIdMap.get(documentId);
-    if (!primaryRow) return false;
+    if (!primaryRow) return "missing-primary-row";
 
     const oldStart = primaryRow[1];
     const oldEnd = primaryRow[2];
@@ -53,7 +53,7 @@ async function repairDocument(instance, documentId) {
       );
       return { indexState, position };
     });
-    if (indexRows.some(({ position }) => position < 0)) return false;
+    if (indexRows.some(({ position }) => position < 0)) return "missing-index-row";
 
     let accessHandlePromise = runState.accessHandlers.get(
       state.documentFileHandle,
@@ -72,7 +72,7 @@ async function repairDocument(instance, documentId) {
       instance.primaryPath,
       documentId,
     );
-    if (!document) return false;
+    if (!document) return "no-valid-document";
     try {
       if (
         indexRows.some(
@@ -81,14 +81,14 @@ async function repairDocument(instance, documentId) {
             indexState.rows[position][0],
         )
       )
-        return false;
+        return "index-mismatch";
     } catch {
-      return false;
+      return "index-mismatch";
     }
 
     const recoveredBytes = instance._encode(JSON.stringify(document));
     const repairedBytes = new Uint8Array(oldEnd - oldStart);
-    if (recoveredBytes.byteLength > repairedBytes.byteLength) return false;
+    if (recoveredBytes.byteLength > repairedBytes.byteLength) return "recovered-document-too-large";
     repairedBytes.fill(32);
     repairedBytes.set(recoveredBytes);
 
@@ -119,8 +119,9 @@ export function withTargetedOpfsRecovery(storage) {
           } catch (error) {
             if (!isMalformedJson(error)) throw error;
             if (batch.length === 1) {
-              if (!(await repairDocument(instance, batch[0]))) {
-                error.message += `; targeted recovery failed for ${batch[0]}`;
+              const failure = await repairDocument(instance, batch[0]);
+              if (typeof failure === "string") {
+                error.message += `; targeted recovery failed for ${batch[0]}: ${failure}`;
                 throw error;
               }
               return true;
