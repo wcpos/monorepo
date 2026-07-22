@@ -151,7 +151,9 @@ test("repairs one malformed record without removing its collection siblings", as
     await initial.cleanup(0);
     await initial.close();
     await corruptRecordInPlace(basePath, "product:6660", () =>
-      Buffer.from(`${JSON.stringify({ ...records[1], value: "x" })}garbage`),
+      Buffer.from(
+        `          ,{,${JSON.stringify({ ...records[1], value: "x" })}`,
+      ),
     );
 
     const { withTargetedOpfsRecovery } =
