@@ -143,16 +143,21 @@ test("falls back to singleton reads when only a combined response is malformed",
         : JSON.stringify(records.filter(({ id }) => ids.includes(id))),
     bulkWrite: async () => ({ error: [] }),
     query: async () => JSON.stringify({ documents: records }),
-    getChangedDocumentsSince: async () => JSON.stringify({ documents: records }),
+    getChangedDocumentsSince: async () =>
+      JSON.stringify({ documents: records }),
   };
-  const { withTargetedOpfsRecovery } = await import("./opfs-targeted-recovery.mjs");
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
   const recovering = await withTargetedOpfsRecovery({
     createStorageInstance: async () => instance,
   }).createStorageInstance(storageParams("combined-read"));
 
   assert.deepEqual(
     JSON.parse(
-      await recovering.findDocumentsById(records.map(({ id }) => id), false),
+      await recovering.findDocumentsById(
+        records.map(({ id }) => id),
+        false,
+      ),
     ),
     records,
   );
@@ -356,15 +361,12 @@ test("refuses to recover a matching nested object as the whole document", async 
     const recovering = await withTargetedOpfsRecovery(
       getRxStorageFilesystemNode({ basePath }),
     ).createStorageInstance(storageParams("nested-recovering"));
-    await assert.rejects(
-      recovering.findDocumentsById([id], false),
-      {
-        name: "SyntaxError",
-        message: new RegExp(
-          `targeted recovery failed for ${id}: index-mismatch$`,
-        ),
-      },
-    );
+    await assert.rejects(recovering.findDocumentsById([id], false), {
+      name: "SyntaxError",
+      message: new RegExp(
+        `targeted recovery failed for ${id}: index-mismatch$`,
+      ),
+    });
     await recovering.close();
   } finally {
     await rm(basePath, { recursive: true, force: true });
@@ -399,6 +401,395 @@ test("refuses a matching id whose recovered index values differ", async () => {
         `targeted recovery failed for ${id}: index-mismatch$`,
       ),
     });
+    await recovering.close();
+  } finally {
+    await rm(basePath, { recursive: true, force: true });
+  }
+});
+
+const laneSchema = {
+  title: "coverage lane probe",
+  version: 0,
+  primaryKey: "id",
+  type: "object",
+  properties: {
+    id: { type: "string", maxLength: 100 },
+    alpha: { type: "string", maxLength: 100 },
+    beta: { type: "string", maxLength: 100 },
+    value: { type: "string" },
+    _deleted: { type: "boolean" },
+    _rev: { type: "string", minLength: 1 },
+    _meta: {
+      type: "object",
+      properties: {
+        lwt: {
+          type: "number",
+          minimum: 1,
+          maximum: 1_000_000_000_000_000,
+          multipleOf: 0.01,
+        },
+      },
+      required: ["lwt"],
+      additionalProperties: false,
+    },
+    _attachments: { type: "object" },
+  },
+  required: [
+    "id",
+    "alpha",
+    "beta",
+    "value",
+    "_deleted",
+    "_rev",
+    "_meta",
+    "_attachments",
+  ],
+  indexes: [
+    ["_deleted", "alpha", "id"],
+    ["_deleted", "beta", "id"],
+  ],
+};
+
+function laneStorageParams(token) {
+  return {
+    databaseName: "index-reconcile-db",
+    collectionName: "lanes",
+    schema: laneSchema,
+    options: {},
+    multiInstance: false,
+    devMode: false,
+    databaseInstanceToken: token,
+  };
+}
+
+function laneDocument(id, sequence) {
+  return {
+    id,
+    alpha: `alpha-${id}`,
+    beta: `beta-${id}`,
+    value: `expects product:6660 for ${id}`,
+    _deleted: false,
+    _rev: `1-lane${sequence}`,
+    _meta: { lwt: Date.now() + sequence },
+    _attachments: {},
+  };
+}
+
+async function shiftSecondaryIndexOffsets(basePath, id, shift) {
+  const directory = join(basePath, (await readdir(basePath))[0]);
+  const indexNames = (await readdir(directory))
+    .filter((name) => name.startsWith("index-"))
+    .sort();
+  // index-00000 backs the primary metaIdMap; index-00001 is the second
+  // schema index (["_deleted", "beta", "id"]) that queries plan onto.
+  const indexPath = join(directory, indexNames[1]);
+  const rows = JSON.parse(await readFile(indexPath, "utf8"));
+  const targetRow = rows.find((row) => row[0].includes(id));
+  assert.ok(targetRow, `missing index row for ${id}`);
+  targetRow[1] += shift;
+  targetRow[2] += shift;
+  await writeFile(indexPath, JSON.stringify(rows));
+}
+
+test("rebuilds a secondary index whose rows point at stale byte ranges", async () => {
+  const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-reconcile-"));
+  const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
+  const records = ids.map((id, index) => laneDocument(id, index));
+
+  try {
+    const initial = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("lane-initial"));
+    const seed = await initial.bulkWrite(
+      records.map((item) => ({ document: item })),
+      "seed",
+    );
+    assert.deepEqual(seed.error, []);
+    await initial.cleanup(0);
+    await initial.close();
+    await shiftSecondaryIndexOffsets(basePath, "lane:bbb", -2);
+
+    const betaQuery = prepareQuery(
+      laneSchema,
+      normalizeMangoQuery(laneSchema, {
+        selector: {},
+        sort: [{ beta: "asc" }],
+      }),
+    );
+    assert.ok(
+      betaQuery.queryPlan.index.includes("beta"),
+      "query must plan onto the corrupted secondary index",
+    );
+
+    const unwrapped = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("lane-unwrapped"));
+    await assert.rejects(unwrapped.query(betaQuery), { name: "SyntaxError" });
+    // Singleton reads go through the intact primary index, so probing every
+    // document individually finds nothing to repair — the live dev-next shape.
+    const probed = await unwrapped.findDocumentsById(ids, true);
+    assert.deepEqual(probed.map((item) => item.id).sort(), [...ids].sort());
+    await unwrapped.close();
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance(laneStorageParams("lane-recovering"));
+    const recovered = (await recovering.query(betaQuery)).documents;
+    assert.deepEqual(
+      recovered.map((item) => item.id),
+      ids,
+    );
+    let cleaned = false;
+    for (let attempt = 0; attempt < 5 && !cleaned; attempt += 1) {
+      cleaned = await recovering.cleanup(0);
+    }
+    assert.equal(cleaned, true);
+    await recovering.close();
+
+    // The repair must persist: a plain storage instance with no recovery
+    // wrapper reads through the rebuilt index after reopen.
+    const reopened = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("lane-reopened"));
+    const persisted = (await reopened.query(betaQuery)).documents;
+    assert.deepEqual(
+      persisted.map((item) => item.id),
+      ids,
+    );
+    await reopened.close();
+  } finally {
+    await rm(basePath, { recursive: true, force: true });
+  }
+});
+
+test("declines an index rebuild when the storage is multi-instance", async () => {
+  const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-multi-"));
+  const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
+
+  try {
+    const initial = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("multi-initial"));
+    await initial.bulkWrite(
+      ids.map((id, index) => ({ document: laneDocument(id, index) })),
+      "seed",
+    );
+    await initial.cleanup(0);
+    await initial.close();
+    await shiftSecondaryIndexOffsets(basePath, "lane:bbb", -2);
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance({
+      ...laneStorageParams("multi-recovering"),
+      multiInstance: true,
+    });
+    const betaQuery = prepareQuery(
+      laneSchema,
+      normalizeMangoQuery(laneSchema, {
+        selector: {},
+        sort: [{ beta: "asc" }],
+      }),
+    );
+    await assert.rejects(recovering.query(betaQuery), { name: "SyntaxError" });
+    await recovering.close();
+  } finally {
+    await rm(basePath, { recursive: true, force: true });
+  }
+});
+
+test("refuses an index rebuild when the primary index is itself unsound", async () => {
+  const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-unsound-"));
+  const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
+
+  try {
+    const initial = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("unsound-initial"));
+    await initial.bulkWrite(
+      ids.map((id, index) => ({ document: laneDocument(id, index) })),
+      "seed",
+    );
+    await initial.cleanup(0);
+    await initial.close();
+    await shiftSecondaryIndexOffsets(basePath, "lane:bbb", -2);
+    // Point the primary row for lane:bbb at lane:aaa's byte range: parseable
+    // bytes, wrong document — the rebuild source itself cannot be trusted.
+    const directory = join(basePath, (await readdir(basePath))[0]);
+    const primaryPath = join(
+      directory,
+      (await readdir(directory))
+        .filter((n) => n.startsWith("index-"))
+        .sort()[0],
+    );
+    const rows = JSON.parse(await readFile(primaryPath, "utf8"));
+    const aaaRow = rows.find((row) => row[0].includes("lane:aaa"));
+    const bbbRow = rows.find((row) => row[0].includes("lane:bbb"));
+    bbbRow[1] = aaaRow[1];
+    bbbRow[2] = aaaRow[2];
+    await writeFile(primaryPath, JSON.stringify(rows));
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance(laneStorageParams("unsound-recovering"));
+    const betaQuery = prepareQuery(
+      laneSchema,
+      normalizeMangoQuery(laneSchema, {
+        selector: {},
+        sort: [{ beta: "asc" }],
+      }),
+    );
+    await assert.rejects(recovering.query(betaQuery), { name: "SyntaxError" });
+    await recovering.close();
+  } finally {
+    await rm(basePath, { recursive: true, force: true });
+  }
+});
+
+test("recovers every concurrent query against the same stale index", async () => {
+  const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-concurrent-"));
+  const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
+
+  try {
+    const initial = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("concurrent-initial"));
+    await initial.bulkWrite(
+      ids.map((id, index) => ({ document: laneDocument(id, index) })),
+      "seed",
+    );
+    await initial.cleanup(0);
+    await initial.close();
+    await shiftSecondaryIndexOffsets(basePath, "lane:bbb", -2);
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance(laneStorageParams("concurrent-recovering"));
+    const betaQuery = prepareQuery(
+      laneSchema,
+      normalizeMangoQuery(laneSchema, {
+        selector: {},
+        sort: [{ beta: "asc" }],
+      }),
+    );
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () => recovering.query(betaQuery)),
+    );
+    for (const result of results) {
+      assert.deepEqual(
+        result.documents.map((item) => item.id),
+        ids,
+      );
+    }
+    await recovering.close();
+  } finally {
+    await rm(basePath, { recursive: true, force: true });
+  }
+});
+
+test("refuses a rebuild when the primary points at a stale duplicate revision", async () => {
+  const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-stale-rev-"));
+  const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
+
+  try {
+    const initial = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("stale-rev-initial"));
+    await initial.bulkWrite(
+      ids.map((id, index) => ({ document: laneDocument(id, index) })),
+      "seed",
+    );
+    await initial.cleanup(0);
+    await initial.close();
+    await shiftSecondaryIndexOffsets(basePath, "lane:bbb", -2);
+    // Append a byte-identical copy of lane:ccc's record and point ONLY the
+    // primary index at the copy. Secondary indexes still reference the
+    // original range, so the primary loses the corroboration vote.
+    const directory = join(basePath, (await readdir(basePath))[0]);
+    const primaryPath = join(
+      directory,
+      (await readdir(directory))
+        .filter((n) => n.startsWith("index-"))
+        .sort()[0],
+    );
+    const rows = JSON.parse(await readFile(primaryPath, "utf8"));
+    const cccRow = rows.find((row) => row[0].includes("lane:ccc"));
+    const documentsPath = join(directory, "documents.json");
+    const documentsBytes = await readFile(documentsPath);
+    const copy = documentsBytes.subarray(cccRow[1], cccRow[2]);
+    await writeFile(documentsPath, Buffer.concat([documentsBytes, copy]));
+    cccRow[1] = documentsBytes.length;
+    cccRow[2] = documentsBytes.length + copy.length;
+    await writeFile(primaryPath, JSON.stringify(rows));
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance(laneStorageParams("stale-rev-recovering"));
+    const betaQuery = prepareQuery(
+      laneSchema,
+      normalizeMangoQuery(laneSchema, {
+        selector: {},
+        sort: [{ beta: "asc" }],
+      }),
+    );
+    await assert.rejects(recovering.query(betaQuery), { name: "SyntaxError" });
+    await recovering.close();
+  } finally {
+    await rm(basePath, { recursive: true, force: true });
+  }
+});
+
+test("refuses a rebuild when the primary index is missing rows", async () => {
+  const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-truncated-"));
+  const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
+
+  try {
+    const initial = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("truncated-initial"));
+    await initial.bulkWrite(
+      ids.map((id, index) => ({ document: laneDocument(id, index) })),
+      "seed",
+    );
+    await initial.cleanup(0);
+    await initial.close();
+    await shiftSecondaryIndexOffsets(basePath, "lane:bbb", -2);
+    const directory = join(basePath, (await readdir(basePath))[0]);
+    const primaryPath = join(
+      directory,
+      (await readdir(directory))
+        .filter((n) => n.startsWith("index-"))
+        .sort()[0],
+    );
+    const rows = JSON.parse(await readFile(primaryPath, "utf8"));
+    await writeFile(
+      primaryPath,
+      JSON.stringify(rows.filter((row) => !row[0].includes("lane:ccc"))),
+    );
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance(laneStorageParams("truncated-recovering"));
+    const betaQuery = prepareQuery(
+      laneSchema,
+      normalizeMangoQuery(laneSchema, {
+        selector: {},
+        sort: [{ beta: "asc" }],
+      }),
+    );
+    await assert.rejects(recovering.query(betaQuery), { name: "SyntaxError" });
     await recovering.close();
   } finally {
     await rm(basePath, { recursive: true, force: true });
