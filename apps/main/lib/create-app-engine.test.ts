@@ -25,6 +25,7 @@ function loadCreateAppEngine(
 	const recordTransport = jest.fn();
 	const recordServerLoad = jest.fn();
 	const networkInfo = jest.fn();
+	const networkWarn = jest.fn();
 	const networkError = jest.fn();
 	const getDatabaseEpoch = jest.fn(() => 0);
 	const createRxdbSyncEngine = jest.fn(
@@ -54,7 +55,7 @@ function loadCreateAppEngine(
 		defaultConfig: { storage: { name: 'test-storage' } },
 	}));
 	jest.doMock('@wcpos/utils/logger', () => ({
-		getLogger: jest.fn(() => ({ info: networkInfo, error: networkError })),
+		getLogger: jest.fn(() => ({ info: networkInfo, warn: networkWarn, error: networkError })),
 		getDatabaseEpoch,
 	}));
 	jest.doMock('./metrics', () => ({
@@ -74,6 +75,7 @@ function loadCreateAppEngine(
 		recordTransport,
 		recordServerLoad,
 		networkInfo,
+		networkWarn,
 		networkError,
 		getDatabaseEpoch,
 	};
@@ -187,7 +189,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const result = await ports?.fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		expect(result).toBe(response);
-		expect(ports?.diagnostics).toBe(appMetricsObserver);
+		expect(ports?.diagnostics).toEqual(expect.any(Function));
 		expect(appMetricsObserver).toHaveBeenCalledWith({
 			type: 'transport.request',
 			level: 'info',
@@ -204,6 +206,80 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(response.bodyUsed).toBe(false);
 		now.mockRestore();
 		fetch.mockRestore();
+	});
+
+	it('persists readiness diagnostics to the health log but keeps lane ticks metrics-only', () => {
+		const {
+			createAppSyncEngine,
+			createRxdbSyncEngine,
+			appMetricsObserver,
+			networkWarn,
+			networkError,
+		} = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const diagnostics = createRxdbSyncEngine.mock.calls[0]?.[0].diagnostics;
+
+		diagnostics?.({
+			type: 'engine.ready-stalled',
+			level: 'error',
+			message: 'open stalled',
+			fields: { phase: 'create-database', elapsedMs: 15_000 },
+		});
+		diagnostics?.({
+			type: 'engine.pos-bootstrap-error',
+			level: 'warn',
+			message: 'seed failed',
+			fields: { scopeId: 'scope-1' },
+		});
+		// Periodic lane summaries emit at error level on every failing poll —
+		// they must stay metrics-only or a degraded session floods the log.
+		diagnostics?.({
+			type: 'engine.lane.tick',
+			level: 'error',
+			fields: { lane: 'change-signal', status: 'error' },
+		});
+
+		expect(appMetricsObserver).toHaveBeenCalledTimes(3);
+		expect(networkError).toHaveBeenCalledTimes(1);
+		expect(networkError).toHaveBeenCalledWith('open stalled', {
+			saveToDb: true,
+			context: expect.objectContaining({
+				type: 'engine.ready-stalled',
+				phase: 'create-database',
+				elapsedMs: 15_000,
+			}),
+		});
+		expect(networkWarn).toHaveBeenCalledTimes(1);
+		expect(networkWarn).toHaveBeenCalledWith('seed failed', {
+			saveToDb: true,
+			context: expect.objectContaining({ type: 'engine.pos-bootstrap-error', scopeId: 'scope-1' }),
+		});
+	});
+
+	it('drops a superseded engine’s late diagnostics from the health log', () => {
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver, networkError } =
+			loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const outgoingDiagnostics = createRxdbSyncEngine.mock.calls[0]?.[0].diagnostics;
+		// A scope change disposes the first engine and caches the second.
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+		});
+		const incomingDiagnostics = createRxdbSyncEngine.mock.calls[1]?.[0].diagnostics;
+
+		// The outgoing engine's initial-open chain settles late: metrics still
+		// tally it, but nothing lands in the incoming store's health log.
+		outgoingDiagnostics?.({ type: 'engine.ready-failed', level: 'error', message: 'late failure' });
+		expect(appMetricsObserver).toHaveBeenCalledTimes(1);
+		expect(networkError).not.toHaveBeenCalled();
+
+		incomingDiagnostics?.({ type: 'engine.ready-failed', level: 'error', message: 'live failure' });
+		expect(networkError).toHaveBeenCalledTimes(1);
+		expect(networkError).toHaveBeenCalledWith('live failure', {
+			saveToDb: true,
+			context: expect.objectContaining({ type: 'engine.ready-failed' }),
+		});
 	});
 
 	it('records a network error and rethrows it', async () => {

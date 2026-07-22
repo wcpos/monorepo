@@ -259,6 +259,10 @@ export type EngineIntervals = {
 	existenceReconcileMs: number;
 };
 
+/** First stall report for a still-unsettled initial open, then repeats. */
+const READY_STALL_FIRST_MS = 15_000;
+const READY_STALL_REPEAT_MS = 60_000;
+
 const DEFAULT_INTERVALS: EngineIntervals = {
 	changeSignalPollMs: 10_000,
 	writeDrainPollMs: 10_000,
@@ -537,12 +541,29 @@ export function createRxdbSyncEngine(
 	const nowMs = ports.now ?? (() => Date.now());
 	let pullBatchSize: number | undefined;
 
+	// The initial open is the one lifecycle op with no caller obliged to observe
+	// its outcome: hosts render from status()/events and rarely await `ready`,
+	// and readySettledForSync deliberately handles ready's rejection. A hang or
+	// failure inside the open chain therefore used to produce ZERO signal —
+	// status stayed gatedBy:'lifecycle' (or flipped to 'bootstrap-failed') with
+	// nothing naming the blocked step. Lifecycle ops serialize (invariant 3), so
+	// one phase slot suffices; the readiness watchdog below reads it while
+	// `ready` is unsettled.
+	let lifecyclePhase = { phase: 'constructed', sinceMs: nowMs() };
+	const setLifecyclePhase = (phase: string): void => {
+		lifecyclePhase = { phase, sinceMs: nowMs() };
+	};
+
 	const openScopeDatabase = async (scopeId: string): Promise<ScopeDatabase> => {
 		const identity = identityByScopeId.get(scopeId);
 		if (!identity) {
 			throw new Error(`No identity registered for scope ${scopeId}`);
 		}
-		if (ports.databaseOpenBarrier) await ports.databaseOpenBarrier;
+		if (ports.databaseOpenBarrier) {
+			setLifecyclePhase('database-open-barrier');
+			await ports.databaseOpenBarrier;
+		}
+		setLifecyclePhase('create-database');
 		const storage = typeof ports.storage === 'function' ? ports.storage(identity) : ports.storage;
 		const db = await createRxDatabase({
 			name: scopeDatabaseName(identity),
@@ -554,7 +575,9 @@ export function createRxdbSyncEngine(
 			...(ports.hashFunction !== undefined ? { hashFunction: ports.hashFunction } : {}),
 		});
 		try {
+			setLifecyclePhase('add-collections');
 			await db.addCollections(engineCollectionCreators() as never);
+			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =
 				await db.collections[ENGINE_KV_COLLECTION].findOne(CHANGE_SIGNAL_STATE_KEY).exec();
 			if (!engineCheckpoint) {
@@ -1105,10 +1128,12 @@ export function createRxdbSyncEngine(
 		const scopeId = scopeKeyFor(identity);
 		identityByScopeId.set(scopeId, identity);
 		return enqueueLifecycle(async () => {
+			setLifecyclePhase('scope-open');
 			await manager.switchTo(scopeId);
 			if (!bootstrappedScopes.has(scopeId)) {
 				const database = databaseByScopeId.get(scopeId);
 				if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
+				setLifecyclePhase('pos-bootstrap-seed');
 				try {
 					await seedPosBootstrapLanes({
 						getRepository: async () => ({ getDatabase: () => database as never }),
@@ -1135,6 +1160,7 @@ export function createRxdbSyncEngine(
 				level: 'info',
 				message: `active scope: ${scopeId}`,
 			});
+			setLifecyclePhase('idle');
 			return activeScopeOf(scopeId);
 		});
 	};
@@ -1309,6 +1335,58 @@ export function createRxdbSyncEngine(
 	const readySettledForSync = ready.then(
 		() => undefined,
 		() => undefined
+	);
+
+	// The readiness watchdog: while `ready` is unsettled, periodically name the
+	// exact phase the open chain is waiting on, and report a rejection the same
+	// way — a hung storage worker or a corrupt persisted document otherwise
+	// leaves the engine gatedBy:'lifecycle' forever with no signal anywhere
+	// (readySettledForSync handles the rejection, so not even an
+	// unhandled-rejection event fires).
+	const readyArmedAtMs = nowMs();
+	// A pending watchdog on a hung open must not pin a Node host/test process
+	// (browser timers have no unref; this is a no-op there).
+	const unrefTimer = (timer: ReturnType<typeof setTimeout>): void => {
+		(timer as unknown as { unref?: () => void }).unref?.();
+	};
+	let readyWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
+	const emitReadyStalled = (): void => {
+		const elapsedMs = nowMs() - readyArmedAtMs;
+		const phaseElapsedMs = nowMs() - lifecyclePhase.sinceMs;
+		diagnostics({
+			type: 'engine.ready-stalled',
+			level: 'error',
+			message: `sync engine initial open not ready after ${elapsedMs}ms — waiting on "${lifecyclePhase.phase}" for ${phaseElapsedMs}ms`,
+			fields: { phase: lifecyclePhase.phase, elapsedMs, phaseElapsedMs },
+		});
+		readyWatchdogTimer = setTimeout(emitReadyStalled, READY_STALL_REPEAT_MS);
+		unrefTimer(readyWatchdogTimer);
+	};
+	readyWatchdogTimer = setTimeout(emitReadyStalled, READY_STALL_FIRST_MS);
+	unrefTimer(readyWatchdogTimer);
+	const clearReadyWatchdog = (): void => {
+		if (readyWatchdogTimer !== null) clearTimeout(readyWatchdogTimer);
+		readyWatchdogTimer = null;
+	};
+	void ready.then(
+		() => {
+			clearReadyWatchdog();
+			diagnostics({
+				type: 'engine.ready',
+				level: 'info',
+				message: 'sync engine ready',
+				fields: { durationMs: nowMs() - readyArmedAtMs },
+			});
+		},
+		(error) => {
+			clearReadyWatchdog();
+			diagnostics({
+				type: 'engine.ready-failed',
+				level: 'error',
+				message: `sync engine initial open failed in phase "${lifecyclePhase.phase}": ${error instanceof Error ? error.message : String(error)}`,
+				fields: { phase: lifecyclePhase.phase, elapsedMs: nowMs() - readyArmedAtMs },
+			});
+		}
 	);
 
 	// mode:'auto' arms the poll AFTER the initial scope opened; a tick that
@@ -2146,6 +2224,9 @@ export function createRxdbSyncEngine(
 			for (const timer of maintenanceTimers.splice(0)) {
 				clearInterval(timer);
 			}
+			// A dispose before the initial open settles is deliberate teardown, not
+			// a stall — stop the watchdog's reports.
+			clearReadyWatchdog();
 			laneNextDueAtMs.clear();
 			scheduleStatusChange();
 			return enqueueLifecycle(async () => {
