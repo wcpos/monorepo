@@ -19,10 +19,10 @@ import type {
 
 import { PrinterRow } from './printer-row';
 import { PrintersEmptyState } from './printers-empty-state';
-import { SectionHeader } from './section-header';
 import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
 import { AUTO_VALUE } from './utils';
+import { SettingsSection } from '../components/settings-section';
 import { PrinterDialog } from '../printer/add-printer';
 import { useAvailablePrinterProfiles } from '../printer/use-available-printer-profiles';
 import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
@@ -152,7 +152,9 @@ export function PrintingSettings() {
 					if (!profile.cloudPrinterId) {
 						throw new Error('Cloud printer profile is missing a cloudPrinterId');
 					}
-					await cloudHttp.post('/print-jobs/test', { printer_id: profile.cloudPrinterId });
+					await cloudHttp.post('/print-jobs/test', {
+						printer_id: profile.cloudPrinterId,
+					});
 				} else {
 					await printerService.testPrint(profile);
 				}
@@ -193,24 +195,22 @@ export function PrintingSettings() {
 	const hasVisiblePrinterTargets = printers.some((p) => p.connectionType !== 'system');
 
 	return (
-		<VStack className="gap-6">
+		<VStack className="gap-5">
 			{/* Printers section */}
-			<VStack className="gap-3">
-				<SectionHeader
-					icon="printer"
-					title={t('settings.printers', 'Printers')}
-					description={t('settings.printers_description', 'Devices receipts can be sent to.')}
-				/>
+			<SettingsSection
+				first
+				title={t('settings.printers', 'Printers')}
+				description={t('settings.printers_description', 'Devices receipts can be sent to.')}
+			>
 				{!hasVisiblePrinterTargets ? (
 					<PrintersEmptyState onAddPrinter={openAddDialog} />
 				) : (
 					<>
-						<View className="border-border overflow-hidden rounded-lg border">
-							{printers.map((profile, index) => (
+						<View>
+							{printers.map((profile) => (
 								<PrinterRow
 									key={profile.id}
 									profile={profile}
-									isFirst={index === 0}
 									isTesting={testingPrinterIds.has(profile.id)}
 									onTest={handleTestPrint}
 									onEdit={openEditDialog}
@@ -219,8 +219,10 @@ export function PrintingSettings() {
 								/>
 							))}
 						</View>
-						<HStack className="gap-2">
+						<HStack className="gap-2 pt-2">
 							<Button
+								variant="outline"
+								size="sm"
 								leftIcon="plus"
 								className="self-start"
 								onPress={openAddDialog}
@@ -231,25 +233,23 @@ export function PrintingSettings() {
 						</HStack>
 					</>
 				)}
-			</VStack>
+			</SettingsSection>
 
 			{/* Receipt Templates section */}
-			<VStack className="gap-3">
-				<SectionHeader
-					icon="receipt"
-					title={t('receipt.receipt_templates', 'Receipt Templates')}
-					description={t(
-						'settings.templates_description',
-						'Choose which printer each template prints to.'
-					)}
-				/>
+			<SettingsSection
+				title={t('receipt.receipt_templates', 'Receipt Templates')}
+				description={t(
+					'settings.templates_description',
+					'Choose which printer each template prints to.'
+				)}
+			>
 				{templates.length === 0 ? (
 					<Text className="text-muted-foreground text-sm">
 						{t('settings.no_templates', 'No active templates found.')}
 					</Text>
 				) : (
-					<View className="border-border overflow-hidden rounded-lg border">
-						{templates.map((tmpl, index) => {
+					<View>
+						{templates.map((tmpl) => {
 							const tmplId = String(tmpl.id);
 							const currentOverride = overrides.get(tmplId);
 							const autoLabel = autoMatchLabel(tmpl);
@@ -271,7 +271,6 @@ export function PrintingSettings() {
 								<TemplateRow
 									key={tmplId}
 									template={tmpl}
-									isFirst={index === 0}
 									currentValue={currentValue}
 									selectedLabel={selectedLabel}
 									autoLabel={autoLabel}
@@ -283,7 +282,7 @@ export function PrintingSettings() {
 						})}
 					</View>
 				)}
-			</VStack>
+			</SettingsSection>
 
 			<PrinterDialog
 				open={dialogOpen}

@@ -7,7 +7,7 @@ export default function GeneralSettingsPage() {
 	const t = useT();
 
 	return (
-		<SettingsPage title={t('settings.general_settings')} testID="screen-settings-general">
+		<SettingsPage title={t('settings.general', 'General')} testID="screen-settings-general">
 			<GeneralSettings />
 		</SettingsPage>
 	);

@@ -173,8 +173,8 @@ jest.mock('./printers-empty-state', () => ({
 	PrintersEmptyState: () => null,
 }));
 
-jest.mock('./section-header', () => ({
-	SectionHeader: () => null,
+jest.mock('../components/settings-section', () => ({
+	SettingsSection: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 jest.mock('./template-row', () => ({

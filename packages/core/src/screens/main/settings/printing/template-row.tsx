@@ -19,7 +19,6 @@ import { useT } from '../../../../contexts/translations';
 
 interface TemplateRowProps {
 	template: TemplateDocument;
-	isFirst: boolean;
 	currentValue: string;
 	selectedLabel: string;
 	autoLabel: string;
@@ -34,7 +33,6 @@ interface TemplateRowProps {
  */
 export function TemplateRow({
 	template,
-	isFirst,
 	currentValue,
 	selectedLabel,
 	autoLabel,
@@ -46,40 +44,40 @@ export function TemplateRow({
 	const templateId = String(template.id);
 
 	return (
-		<>
-			{!isFirst && <View className="border-border border-t" />}
-			<View testID={`template-row-${templateId}`} className="flex-row items-center gap-3 p-3">
-				<Text className="flex-1 text-sm font-medium">{template.title}</Text>
-				<StatusBadge variant="muted" label={templateTypeLabel(template)} />
-				<View testID={`template-row-${templateId}-printer-select`}>
-					<Select
-						value={{ value: currentValue, label: selectedLabel }}
-						onValueChange={(option) => {
-							if (option) {
-								onRoutingChange(templateId, option.value);
-							}
-						}}
-					>
-						<SelectTrigger>
-							<SelectValue placeholder={t('settings.select_printer', 'Select printer...')} />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectGroup>
-								<SelectItem value={AUTO_VALUE} label={autoLabel} />
-								{unavailablePrinterId && (
-									<SelectItem
-										value={unavailablePrinterId}
-										label={t('settings.printer_unavailable', 'Unavailable printer')}
-									/>
-								)}
-								{printers.map((printer) => (
-									<SelectItem key={printer.id} value={printer.id} label={printer.name} />
-								))}
-							</SelectGroup>
-						</SelectContent>
-					</Select>
-				</View>
+		<View
+			testID={`template-row-${templateId}`}
+			className="web:hover:bg-accent flex-row items-center gap-3 rounded-lg px-2 py-2"
+		>
+			<Text className="flex-1 text-sm font-medium">{template.title}</Text>
+			<StatusBadge variant="muted" label={templateTypeLabel(template)} />
+			<View testID={`template-row-${templateId}-printer-select`}>
+				<Select
+					value={{ value: currentValue, label: selectedLabel }}
+					onValueChange={(option) => {
+						if (option) {
+							onRoutingChange(templateId, option.value);
+						}
+					}}
+				>
+					<SelectTrigger>
+						<SelectValue placeholder={t('settings.select_printer', 'Select printer...')} />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectGroup>
+							<SelectItem value={AUTO_VALUE} label={autoLabel} />
+							{unavailablePrinterId && (
+								<SelectItem
+									value={unavailablePrinterId}
+									label={t('settings.printer_unavailable', 'Unavailable printer')}
+								/>
+							)}
+							{printers.map((printer) => (
+								<SelectItem key={printer.id} value={printer.id} label={printer.name} />
+							))}
+						</SelectGroup>
+					</SelectContent>
+				</Select>
 			</View>
-		</>
+		</View>
 	);
 }

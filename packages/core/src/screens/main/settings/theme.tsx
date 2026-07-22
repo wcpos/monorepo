@@ -5,10 +5,10 @@ import { Uniwind, useUniwind } from 'uniwind';
 
 import { Icon, IconName } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
-import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
+import { SettingsSection } from './components/settings-section';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
@@ -42,8 +42,8 @@ function ThemeOptionButton({
 			}}
 			accessibilityRole="button"
 			accessibilityState={{ selected: isActive }}
-			className={`flex-1 items-center gap-2 rounded-lg border-2 p-3 ${
-				isActive ? 'border-primary bg-primary/10' : 'border-border bg-card'
+			className={`bg-card flex-1 items-center gap-2 rounded-lg border-2 p-3 ${
+				isActive ? 'border-primary' : 'border-border/60 web:hover:border-border'
 			}`}
 		>
 			<Icon
@@ -200,16 +200,14 @@ export function ThemeSettings() {
 	);
 
 	return (
-		<VStack className="gap-6">
-			{/* Appearance Section */}
-			<VStack className="gap-3">
-				<Label className="text-base font-medium">{t('settings.appearance')}</Label>
-				<Text className="text-muted-foreground text-sm">
-					{t('settings.choose_a_theme_for_the_app')}
-				</Text>
-
+		<VStack className="gap-5">
+			<SettingsSection
+				first
+				title={t('settings.appearance')}
+				description={t('settings.choose_a_theme_for_the_app')}
+			>
 				<ThemeGrid themeOptions={themeOptions} onThemeChange={handleThemeChange} t={t} />
-			</VStack>
+			</SettingsSection>
 		</VStack>
 	);
 }
