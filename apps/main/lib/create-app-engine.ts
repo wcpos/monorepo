@@ -35,22 +35,21 @@ const networkLogger = getLogger(['wcpos', 'network', 'sync']);
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
 
 /**
- * Engine lifecycle problems previously went ONLY to the in-memory metrics
- * collector — a stalled or failed initial open ("sync engine isn't ready" with
- * zero console/health-log output) and a failed POS bootstrap seed were
- * invisible outside the metrics snapshot. Persist the engine's own warn/error
- * diagnostics (`engine.*` — lifecycle, guards, readiness watchdog) to the
- * health log; lane/transport events keep their existing metrics-only path so
- * an offline session can't flood the log at poll cadence.
+ * The engine diagnostics persisted to the health log. Engine lifecycle
+ * problems previously went ONLY to the in-memory metrics collector — a
+ * stalled or failed initial open ("sync engine isn't ready" with zero
+ * console/health-log output) and a failed POS bootstrap seed were invisible
+ * outside the metrics snapshot. An explicit whitelist, not an `engine.`
+ * prefix match: periodic events like `engine.lane.tick` emit at error level
+ * on every failing poll and would flood the log in a degraded session.
  */
-const engineDiagnosticsLogObserver = (event: SyncEvent): void => {
-	if (!event.type.startsWith('engine.')) return;
-	if (event.level !== 'warn' && event.level !== 'error') return;
-	engineLogger[event.level](event.message ?? event.type, {
-		saveToDb: true,
-		context: { type: event.type, ...event.fields },
-	});
-};
+const PERSISTED_ENGINE_DIAGNOSTICS = new Set([
+	'engine.ready-stalled',
+	'engine.ready-failed',
+	'engine.pos-bootstrap-error',
+	'engine.guard',
+	'engine.reset-needs-confirmation',
+]);
 export interface CreateAppSyncEngineOptions {
 	/** The site's wp-json root (`site.wp_api_url`). */
 	wpApiUrl: string;
@@ -311,6 +310,24 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		return total;
 	};
 
+	// Per-engine so late events from a superseded engine can be dropped: a scope
+	// change disposes the previous engine, but its initial-open chain can settle
+	// afterward, and a late `engine.ready-failed` must not be saved into the
+	// INCOMING store's health log. Guarded by cache identity rather than a
+	// captured database epoch — the engine is constructed during render, before
+	// the effect that rebinds the logger database runs, so an epoch captured
+	// here could be permanently stale.
+	let engineSelf: RxdbSyncEngine | null = null;
+	const engineDiagnosticsLogObserver = (event: SyncEvent): void => {
+		if (!PERSISTED_ENGINE_DIAGNOSTICS.has(event.type)) return;
+		if (event.level !== 'warn' && event.level !== 'error') return;
+		if (engineSelf !== null && cachedEngine?.engine !== engineSelf) return;
+		engineLogger[event.level](event.message ?? event.type, {
+			saveToDb: true,
+			context: { type: event.type, ...event.fields },
+		});
+	};
+
 	const engine = createRxdbSyncEngine(
 		{
 			site,
@@ -324,6 +341,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		},
 		options.scope
 	);
+	engineSelf = engine;
 	cachedEngine = { key: cacheKey, engine, fetcherOptions };
 	return engine;
 }
