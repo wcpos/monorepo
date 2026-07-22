@@ -289,7 +289,10 @@ test("refuses to recover a matching nested object as the whole document", async 
     ).createStorageInstance(storageParams("nested-recovering"));
     await assert.rejects(
       recovering.findDocumentsById([id], false),
-      SyntaxError,
+      {
+        name: "SyntaxError",
+        message: new RegExp(`targeted recovery failed for ${id}$`),
+      },
     );
     await recovering.close();
   } finally {
