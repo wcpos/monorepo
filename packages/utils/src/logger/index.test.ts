@@ -208,6 +208,9 @@ describe('logger/index', () => {
 					quantity: 3,
 					previousPrice: 10,
 					price: 20,
+					method: 'POST',
+					endpoint: '/wp-json/wcpos/v2/push/orders',
+					status: 201,
 					billing: 'must not be copied',
 				},
 			});
@@ -221,6 +224,9 @@ describe('logger/index', () => {
 			expect(context.search).toContain('3');
 			expect(context.search).toContain('10');
 			expect(context.search).toContain('20');
+			expect(context.search).toContain('POST');
+			expect(context.search).toContain('/wp-json/wcpos/v2/push/orders');
+			expect(context.search).toContain('201');
 			expect(context.search).toContain('wcpos.pos.cart');
 			expect(context.search).not.toContain('must not be copied');
 		});

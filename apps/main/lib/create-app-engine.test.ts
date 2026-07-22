@@ -24,6 +24,9 @@ function loadCreateAppEngine(
 	const appMetricsObserver = jest.fn();
 	const recordTransport = jest.fn();
 	const recordServerLoad = jest.fn();
+	const networkInfo = jest.fn();
+	const networkError = jest.fn();
+	const getDatabaseEpoch = jest.fn(() => 0);
 	const createRxdbSyncEngine = jest.fn(
 		(
 			_ports: {
@@ -50,6 +53,10 @@ function loadCreateAppEngine(
 	jest.doMock('@wcpos/database/adapters/default', () => ({
 		defaultConfig: { storage: { name: 'test-storage' } },
 	}));
+	jest.doMock('@wcpos/utils/logger', () => ({
+		getLogger: jest.fn(() => ({ info: networkInfo, error: networkError })),
+		getDatabaseEpoch,
+	}));
 	jest.doMock('./metrics', () => ({
 		appMetricsObserver,
 		recordTransport,
@@ -66,6 +73,9 @@ function loadCreateAppEngine(
 		appMetricsObserver,
 		recordTransport,
 		recordServerLoad,
+		networkInfo,
+		networkError,
+		getDatabaseEpoch,
 	};
 }
 
@@ -198,10 +208,17 @@ describe('createAppSyncEngine scope cache', () => {
 
 	it('records a network error and rethrows it', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_040);
-		const networkError = new Error('network down');
+		const networkError = new Error(
+			'network down for https://store.example.test/wp-json/wcpos/v2/products?authorization=secret'
+		);
 		const fetch = jest.spyOn(globalThis, 'fetch').mockRejectedValue(networkError);
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver, recordTransport } =
-			loadCreateAppEngine();
+		const {
+			createAppSyncEngine,
+			createRxdbSyncEngine,
+			appMetricsObserver,
+			recordTransport,
+			networkError: logNetworkError,
+		} = loadCreateAppEngine();
 		createAppSyncEngine(BASE_OPTIONS);
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -221,7 +238,53 @@ describe('createAppSyncEngine scope cache', () => {
 			ok: false,
 			epoch: 0,
 		});
+		expect(logNetworkError).toHaveBeenCalledWith('Sync request failed', {
+			saveToDb: true,
+			context: expect.objectContaining({
+				method: 'GET',
+				endpoint: '/wp-json/wcpos/v2/products',
+				status: 0,
+			}),
+		});
 		now.mockRestore();
+		fetch.mockRestore();
+	});
+
+	it('does not persist expected sync aborts as errors', async () => {
+		const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+		const fetch = jest.spyOn(globalThis, 'fetch').mockRejectedValue(abort);
+		const { createAppSyncEngine, createRxdbSyncEngine, networkError } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+
+		await expect(
+			createRxdbSyncEngine.mock.calls[0]?.[0].fetcher?.(
+				'https://store.example.test/wp-json/wcpos/v2/products'
+			)
+		).rejects.toBe(abort);
+		expect(networkError).not.toHaveBeenCalled();
+		fetch.mockRestore();
+	});
+
+	it('persists successful sync mutations without query credentials', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 200 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, networkInfo } = loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, useJwtAsParam: true });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/push/orders?cursor=secret', {
+			method: 'POST',
+		});
+
+		expect(networkInfo).toHaveBeenCalledWith('Sync request result', {
+			saveToDb: true,
+			context: expect.objectContaining({
+				method: 'POST',
+				endpoint: '/wp-json/wcpos/v2/push/orders',
+				status: 200,
+			}),
+		});
 		fetch.mockRestore();
 	});
 
@@ -347,7 +410,8 @@ describe('createAppSyncEngine scope cache', () => {
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValueOnce(new Response(null, { status: 401 }))
 			.mockResolvedValueOnce(new Response(null, { status: 200 }));
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver, networkError } =
+			loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -356,6 +420,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(response?.status).toBe(200);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(networkError).not.toHaveBeenCalled();
 		expect(appMetricsObserver).toHaveBeenNthCalledWith(
 			1,
 			expect.objectContaining({
@@ -412,7 +477,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const originalUnauthorized = new Response(null, { status: 401 });
 		const refreshAuth = jest.fn().mockResolvedValue(null);
 		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(originalUnauthorized);
-		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, networkError } = loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -421,6 +486,10 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(response?.status).toBe(originalUnauthorized.status);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(networkError).toHaveBeenCalledWith('Sync request result', {
+			saveToDb: true,
+			context: expect.objectContaining({ status: 401 }),
+		});
 		fetch.mockRestore();
 	});
 
@@ -454,6 +523,22 @@ describe('createAppSyncEngine scope cache', () => {
 
 		expect(refreshAuth).not.toHaveBeenCalled();
 		expect(fetch).toHaveBeenCalledTimes(1);
+		fetch.mockRestore();
+	});
+
+	it('does not persist a sync completion after the active store changes', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 500 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, getDatabaseEpoch, networkError } =
+			loadCreateAppEngine();
+		getDatabaseEpoch.mockReturnValueOnce(0).mockReturnValue(1);
+		createAppSyncEngine(BASE_OPTIONS);
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(networkError).not.toHaveBeenCalled();
 		fetch.mockRestore();
 	});
 

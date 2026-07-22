@@ -234,7 +234,12 @@ export default function AppLayout() {
 	const { site } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
 	const { collection: logCollection } = useCollection('logs');
-	setDatabase(logCollection);
+
+	// The logger holds its collection outside React, so release the outgoing store on unmount.
+	React.useEffect(() => {
+		setDatabase(logCollection);
+		return () => setDatabase(null);
+	}, [logCollection]);
 
 	// Fetch fresh site data (versions, license) on mount
 	useSiteInfo({ site });

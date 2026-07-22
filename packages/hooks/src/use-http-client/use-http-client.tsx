@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import set from 'lodash/set';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { getDatabaseEpoch, getLogger } from '@wcpos/utils/logger';
 
 import { http } from './http';
 import { parseWpError } from './parse-wp-error';
@@ -188,6 +188,8 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			throw error;
 		}
 
+		const databaseEpoch = getDatabaseEpoch();
+
 		// If token refresh is in progress, wait for it to complete
 		if (requestStateManager.isTokenRefreshing()) {
 			httpLogger.debug('Token refresh in progress, waiting before making request', {
@@ -223,7 +225,18 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			set(processedConfig, ['params', 'XDEBUG_SESSION'], 'start');
 		}
 
-		return scheduleRequest(() => http.request(processedConfig));
+		const method = (processedConfig.method ?? 'GET').toUpperCase();
+		const endpoint = processedConfig.url
+			? new URL(processedConfig.url, 'http://localhost').pathname
+			: 'unknown';
+		const response = await scheduleRequest(() => http.request(processedConfig));
+		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
+			httpLogger.info('HTTP request completed', {
+				saveToDb: true,
+				context: { method, endpoint, status: response.status },
+			});
+		}
+		return response;
 	}, []);
 
 	/**
@@ -231,6 +244,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 	 */
 	const request = React.useCallback(
 		async (reqConfig: AxiosRequestConfig = {}) => {
+			const databaseEpoch = getDatabaseEpoch();
 			try {
 				const response = await makeRequest(reqConfig);
 				return response;
@@ -271,6 +285,16 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 					// - Set active$ = false
 					// - Let polling retry later
 					throw error;
+				}
+				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
+					const method = (reqConfig.method ?? 'GET').toUpperCase();
+					const endpoint = reqConfig.url
+						? new URL(reqConfig.url, 'http://localhost').pathname
+						: 'unknown';
+					httpLogger.error('HTTP request failed', {
+						saveToDb: true,
+						context: { method, endpoint, status: (error as AxiosError).response?.status ?? 0 },
+					});
 				}
 
 				// Enrich error with WordPress/WooCommerce error details before throwing
