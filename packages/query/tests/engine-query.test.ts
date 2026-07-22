@@ -1,4 +1,5 @@
 import { waitFor } from '@testing-library/react';
+import { of } from 'rxjs';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
@@ -13,6 +14,44 @@ import {
 import type { RxDatabase } from 'rxdb';
 
 describe('observeEngineQuery', () => {
+	it('does not reset the data collection when only the search index is corrupt', async () => {
+		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
+		const resetCollection = jest.fn().mockRejectedValue(error);
+		const database = {
+			collections: {
+				products: {
+					initSearch: async () => ({
+						collection: { $: of(null) },
+						find: async () => Promise.reject(error),
+					}),
+				},
+			},
+		};
+		const engine = {
+			active: () => ({ database, scopeId: 'store-a' }),
+			db$: (listener) => {
+				listener(database);
+				return () => undefined;
+			},
+			ready: Promise.resolve({ database }),
+			scope: { resetCollection },
+		};
+
+		await new Promise<void>((resolve) => {
+			observeEngineQuery(engine as never, 'en', {
+				collection: 'products',
+				search: 'coffee',
+			}).subscribe({
+				error: (received) => {
+					expect(received).toBe(error);
+					resolve();
+				},
+			});
+		});
+
+		expect(resetCollection).not.toHaveBeenCalled();
+	});
+
 	it('runs the real products query after null-to-live and database-identity transitions', async () => {
 		const database = await createEngineDatabase(['products']);
 		await database.collections.products.insert(

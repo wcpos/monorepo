@@ -195,6 +195,37 @@ describe('logs storage recovery', () => {
 		expect(resetCollection).toHaveBeenCalledTimes(2);
 	});
 
+	it('keeps a successful recovery guard when a duplicate reset is rejected', async () => {
+		const pending: {
+			options: { beforeDrop: (active: { scopeId: string }) => Promise<void> };
+			resolve: () => void;
+			reject: (error: unknown) => void;
+		}[] = [];
+		const resetCollection = jest.fn(
+			(_collection, options) =>
+				new Promise<void>((resolve, reject) => pending.push({ options, resolve, reject }))
+		);
+		const engine = {
+			active: () => ({ scopeId: 'store-a' }),
+			scope: { resetCollection },
+		};
+		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
+
+		const first = recoverEngineCollectionStorage(engine as never, 'orders', error, {
+			reload: jest.fn(),
+		});
+		const duplicate = recoverEngineCollectionStorage(engine as never, 'orders', error);
+		await pending[0]!.options.beforeDrop({ scopeId: 'store-a' });
+		await pending[1]!.options.beforeDrop({ scopeId: 'store-a' }).catch(pending[1]!.reject);
+		await expect(duplicate).rejects.toBe(error);
+
+		expect(
+			globalThis.sessionStorage.getItem('wcpos_engine_storage_recovery_attempted_store-a_orders')
+		).toBe('1');
+		pending[0]!.resolve();
+		await expect(first).resolves.toBe(true);
+	});
+
 	it('does not reset a collection after the active store changes', async () => {
 		const resetCollection = jest.fn(
 			async (

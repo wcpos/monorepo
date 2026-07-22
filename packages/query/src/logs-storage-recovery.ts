@@ -96,14 +96,19 @@ export async function recoverEngineCollectionStorage(
 	const sessionStorage = getSessionStorage();
 	if (sessionStorage?.getItem(sessionKey) === '1') return false;
 
-	await engine.scope
-		.resetCollection(collection, {
+	let claimed = false;
+	try {
+		await engine.scope.resetCollection(collection, {
 			beforeDrop: async (active) => {
 				if (active.scopeId !== scopeId || sessionStorage?.getItem(sessionKey) === '1') throw error;
 				sessionStorage?.setItem(sessionKey, '1');
+				claimed = true;
 			},
-		})
-		.catch((resetError) => (sessionStorage?.removeItem(sessionKey), Promise.reject(resetError)));
+		});
+	} catch (resetError) {
+		if (claimed) sessionStorage?.removeItem(sessionKey);
+		throw resetError;
+	}
 	(options.reload ?? reloadPage)();
 	return true;
 }

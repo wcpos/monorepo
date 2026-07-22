@@ -36,6 +36,8 @@ type SearchableCollection = {
 	): Promise<SearchInstance>;
 };
 
+const SEARCH_INDEX_ERROR = Symbol('search-index-error');
+
 export interface EngineQueryDescriptor {
 	collection: LegacyCollectionName;
 	selector?: LegacyMangoSelector;
@@ -114,7 +116,8 @@ function matchingSelectors$(
 				selector,
 				documents.map((document) => document.primary)
 			)
-		)
+		),
+		catchError((error) => throwError(() => ({ [SEARCH_INDEX_ERROR]: error })))
 	);
 }
 
@@ -165,15 +168,18 @@ export function observeEngineQuery(
 						})),
 					})
 				),
-				catchError((error) =>
-					from(
+				catchError((error) => {
+					if (error && SEARCH_INDEX_ERROR in error) {
+						return throwError(() => error[SEARCH_INDEX_ERROR]);
+					}
+					return from(
 						recoverEngineCollectionStorage(
 							engine,
 							engineCollectionNameFor(descriptor.collection),
 							error
 						)
-					).pipe(switchMap((recovered) => (recovered ? EMPTY : throwError(() => error))))
-				)
+					).pipe(switchMap((recovered) => (recovered ? EMPTY : throwError(() => error))));
+				})
 			);
 		})
 	);

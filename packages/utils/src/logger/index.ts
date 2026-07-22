@@ -58,7 +58,7 @@ let dbCollection: any | null = null;
 let hasPruned = false;
 
 const SEARCH_CONTEXT_KEY =
-	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|productId|productName|sku|itemName|couponCode|feeName|methodTitle|customerId|errorCode|reason)$/;
+	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|productId|productName|sku|itemName|couponCode|feeName|methodTitle|customerId|errorCode|reason|previousQuantity|quantity|previousPrice|price)$/;
 
 function searchableContext(context: Record<string, any>): string {
 	return Object.entries(context)

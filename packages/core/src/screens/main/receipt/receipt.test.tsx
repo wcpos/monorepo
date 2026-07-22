@@ -187,10 +187,10 @@ jest.mock('../contexts/tax-rates/resolve-price-num-decimals', () => ({
 }));
 
 jest.mock('@wcpos/printer', () => ({
-	usePrint: (options: { onAfterPrint?: () => void }) => ({
+	usePrint: (options: { onBeforePrint?: () => void }) => ({
 		print: async () => {
+			options.onBeforePrint?.();
 			await mockPrint();
-			options.onAfterPrint?.();
 		},
 		isPrinting: false,
 	}),
@@ -309,12 +309,16 @@ describe('Receipt PDF download action', () => {
 		);
 	});
 
-	it('persists a print event with the local order identifier', async () => {
-		mockPrint.mockResolvedValue(undefined);
+	it('persists a print attempt before invoking the printer transport', async () => {
+		let loggedBeforeTransport = false;
+		mockPrint.mockImplementation(async () => {
+			loggedBeforeTransport = jest.mocked(getLogger([]).info).mock.calls.length > 0;
+		});
 		render(<Receipt resource={{} as never} />);
 
 		fireEvent.click(screen.getByTestId('receipt-print-button'));
 		await act(async () => Promise.resolve());
+		expect(loggedBeforeTransport).toBe(true);
 		expect(getLogger([]).info).toHaveBeenCalledWith(
 			'Receipt print attempted',
 			expect.objectContaining({

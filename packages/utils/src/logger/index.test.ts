@@ -204,6 +204,10 @@ describe('logger/index', () => {
 					orderID: 2468,
 					orderNumber: '67882',
 					productName: 'Diagnostic Coffee',
+					previousQuantity: 1,
+					quantity: 3,
+					previousPrice: 10,
+					price: 20,
 					billing: 'must not be copied',
 				},
 			});
@@ -213,6 +217,10 @@ describe('logger/index', () => {
 			expect(context.search).toContain('2468');
 			expect(context.search).toContain('67882');
 			expect(context.search).toContain('Diagnostic Coffee');
+			expect(context.search).toContain('1');
+			expect(context.search).toContain('3');
+			expect(context.search).toContain('10');
+			expect(context.search).toContain('20');
 			expect(context.search).toContain('wcpos.pos.cart');
 			expect(context.search).not.toContain('must not be copied');
 		});

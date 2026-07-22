@@ -214,7 +214,7 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		// (the same `wcpos_template` id the receipt URL uses as `?template=`).
 		orderId,
 		templateId: templateInfo?.id,
-		onAfterPrint: () =>
+		onBeforePrint: () =>
 			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
 				saveToDb: true,
 				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
