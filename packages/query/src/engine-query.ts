@@ -1,5 +1,5 @@
-import { defer, from, Observable, of } from 'rxjs';
-import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
+import { defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
+import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
@@ -14,6 +14,7 @@ import {
 	type EngineRxDocument,
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
+import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 
 import type { LegacyMangoSelector } from './engine-adapter/translate-selector';
 import type { QueryResult } from './query-result';
@@ -34,6 +35,8 @@ type SearchableCollection = {
 		}
 	): Promise<SearchInstance>;
 };
+
+const SEARCH_INDEX_ERROR = Symbol('search-index-error');
 
 export interface EngineQueryDescriptor {
 	collection: LegacyCollectionName;
@@ -113,7 +116,8 @@ function matchingSelectors$(
 				selector,
 				documents.map((document) => document.primary)
 			)
-		)
+		),
+		catchError((error) => throwError(() => ({ [SEARCH_INDEX_ERROR]: error })))
 	);
 }
 
@@ -163,7 +167,19 @@ export function observeEngineQuery(
 							document: wrapEngineDocument(descriptor.collection, document),
 						})),
 					})
-				)
+				),
+				catchError((error) => {
+					if (error && SEARCH_INDEX_ERROR in error) {
+						return throwError(() => error[SEARCH_INDEX_ERROR]);
+					}
+					return from(
+						recoverEngineCollectionStorage(
+							engine,
+							engineCollectionNameFor(descriptor.collection),
+							error
+						)
+					).pipe(switchMap((recovered) => (recovered ? EMPTY : throwError(() => error))));
+				})
 			);
 		})
 	);

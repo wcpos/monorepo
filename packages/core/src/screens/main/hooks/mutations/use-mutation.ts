@@ -84,6 +84,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					documentId: document.id,
 					collectionName,
 					collectionLabel,
+					couponCode: document.code,
 				},
 			});
 		},

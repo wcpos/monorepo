@@ -3,6 +3,8 @@ import * as React from 'react';
 import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { useLineItemData } from './use-line-item-data';
@@ -12,6 +14,8 @@ import { documentRecordId, useLocalMutation } from '../../hooks/mutations/use-lo
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'line-item']);
 
 interface Changes extends Partial<Omit<LineItem, 'price'>> {
 	price?: number;
@@ -52,6 +56,7 @@ export const useUpdateLineItem = () => {
 					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
 				)
 			);
+			const previousData = lineItemToUpdate ? getLineItemData(lineItemToUpdate) : undefined;
 
 			if (
 				stockGuardEnabled &&
@@ -114,6 +119,20 @@ export const useUpdateLineItem = () => {
 					document: order,
 					data: { line_items: updatedLineItems },
 				});
+				if (result && lineItemToUpdate) {
+					cartLogger.info('Cart line item updated', {
+						saveToDb: true,
+						context: {
+							event: 'cart.line-item.updated',
+							orderId: order.uuid ?? order.id,
+							productName: lineItemToUpdate.name,
+							previousQuantity: lineItemToUpdate.quantity,
+							quantity: changes.quantity,
+							previousPrice: previousData?.price,
+							price: changes.price,
+						},
+					});
+				}
 				if (stockWarningName !== null) showBackorderWarning(stockWarningName);
 				return result;
 			}

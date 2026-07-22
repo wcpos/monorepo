@@ -1,4 +1,7 @@
+import type { RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
+
 const RECOVERY_SESSION_KEY = 'wcpos_logs_storage_recovery_attempted';
+const ENGINE_RECOVERY_SESSION_KEY_PREFIX = 'wcpos_engine_storage_recovery_attempted_';
 
 type RemovableCollection = {
 	name?: string;
@@ -76,6 +79,36 @@ export async function recoverLogsCollectionStorage(
 
 	await collection.remove();
 	sessionStorage?.setItem(RECOVERY_SESSION_KEY, '1');
+	(options.reload ?? reloadPage)();
+	return true;
+}
+
+export async function recoverEngineCollectionStorage(
+	engine: RxdbSyncEngine,
+	collection: SyncCollectionName,
+	error: unknown,
+	options: RecoveryOptions = {}
+): Promise<boolean> {
+	const scopeId = engine.active()?.scopeId;
+	if (!scopeId || !isRecoverableLogsStorageError(error)) return false;
+
+	const sessionKey = `${ENGINE_RECOVERY_SESSION_KEY_PREFIX}${scopeId}_${collection}`;
+	const sessionStorage = getSessionStorage();
+	if (sessionStorage?.getItem(sessionKey) === '1') return false;
+
+	let claimed = false;
+	try {
+		await engine.scope.resetCollection(collection, {
+			beforeDrop: async (active) => {
+				if (active.scopeId !== scopeId || sessionStorage?.getItem(sessionKey) === '1') throw error;
+				sessionStorage?.setItem(sessionKey, '1');
+				claimed = true;
+			},
+		});
+	} catch (resetError) {
+		if (claimed) sessionStorage?.removeItem(sessionKey);
+		throw resetError;
+	}
 	(options.reload ?? reloadPage)();
 	return true;
 }

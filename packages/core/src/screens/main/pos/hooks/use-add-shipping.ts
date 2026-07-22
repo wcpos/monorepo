@@ -64,10 +64,11 @@ export const useAddShipping = () => {
 					meta_data,
 				});
 
-				await addItemToOrder('shipping_lines', newShippingLine);
+				if (!(await addItemToOrder('shipping_lines', newShippingLine))) return;
 
 				// Log shipping added success
 				orderLogger.info(t('pos.shipping_added', { methodTitle: data.method_title }), {
+					saveToDb: true,
 					context: {
 						methodTitle: data.method_title,
 						methodId: data.method_id,

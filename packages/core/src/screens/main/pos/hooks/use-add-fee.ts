@@ -64,10 +64,11 @@ export const useAddFee = () => {
 					meta_data,
 				});
 
-				await addItemToOrder('fee_lines', newFeeLine);
+				if (!(await addItemToOrder('fee_lines', newFeeLine))) return;
 
 				// Log fee added success
 				orderLogger.info(t('pos.fee_added', { feeName: data.name }), {
+					saveToDb: true,
 					context: {
 						feeName: data.name,
 						amount: data.amount,

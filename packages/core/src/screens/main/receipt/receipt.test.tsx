@@ -6,6 +6,8 @@ import * as React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { Receipt } from './receipt';
 
 const mockDownload = jest.fn();
@@ -18,6 +20,7 @@ const mockUseDownloadReceiptPdf = jest.fn(() => ({
 let mockSuspenseValue: unknown;
 
 const mockOrder = {
+	uuid: 'local-order-42',
 	id$: new BehaviorSubject(42),
 	links$: new BehaviorSubject(undefined),
 	billing: {},
@@ -184,7 +187,13 @@ jest.mock('../contexts/tax-rates/resolve-price-num-decimals', () => ({
 }));
 
 jest.mock('@wcpos/printer', () => ({
-	usePrint: () => ({ print: mockPrint, isPrinting: false }),
+	usePrint: (options: { onBeforePrint?: () => void }) => ({
+		print: async () => {
+			options.onBeforePrint?.();
+			await mockPrint();
+		},
+		isPrinting: false,
+	}),
 }));
 
 jest.mock('expo-router/react-navigation', () => ({
@@ -297,6 +306,28 @@ describe('Receipt PDF download action', () => {
 
 		expect((screen.getByTestId('receipt-download-pdf-button') as HTMLButtonElement).disabled).toBe(
 			true
+		);
+	});
+
+	it('persists a print attempt before invoking the printer transport', async () => {
+		let loggedBeforeTransport = false;
+		mockPrint.mockImplementation(async () => {
+			loggedBeforeTransport = jest.mocked(getLogger([]).info).mock.calls.length > 0;
+		});
+		render(<Receipt resource={{} as never} />);
+
+		fireEvent.click(screen.getByTestId('receipt-print-button'));
+		await act(async () => Promise.resolve());
+		expect(loggedBeforeTransport).toBe(true);
+		expect(getLogger([]).info).toHaveBeenCalledWith(
+			'Receipt print attempted',
+			expect.objectContaining({
+				saveToDb: true,
+				context: expect.objectContaining({
+					event: 'receipt.print_attempted',
+					orderId: 'local-order-42',
+				}),
+			})
 		);
 	});
 });

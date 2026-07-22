@@ -189,5 +189,40 @@ describe('logger/index', () => {
 			});
 			expect(mockRemove).toHaveBeenCalled();
 		});
+
+		it('persists searchable operational identifiers without copying arbitrary context', async () => {
+			const insert = jest.fn().mockResolvedValue(undefined);
+			setDatabase({
+				insert,
+				find: jest.fn().mockReturnValue({ remove: jest.fn().mockResolvedValue([]) }),
+			});
+
+			getLogger(['wcpos', 'pos', 'cart']).info('Cart line item updated', {
+				saveToDb: true,
+				context: {
+					event: 'cart.line-item.updated',
+					orderID: 2468,
+					orderNumber: '67882',
+					productName: 'Diagnostic Coffee',
+					previousQuantity: 1,
+					quantity: 3,
+					previousPrice: 10,
+					price: 20,
+					billing: 'must not be copied',
+				},
+			});
+			await Promise.resolve();
+
+			const [{ context }] = insert.mock.calls[0];
+			expect(context.search).toContain('2468');
+			expect(context.search).toContain('67882');
+			expect(context.search).toContain('Diagnostic Coffee');
+			expect(context.search).toContain('1');
+			expect(context.search).toContain('3');
+			expect(context.search).toContain('10');
+			expect(context.search).toContain('20');
+			expect(context.search).toContain('wcpos.pos.cart');
+			expect(context.search).not.toContain('must not be copied');
+		});
 	});
 });

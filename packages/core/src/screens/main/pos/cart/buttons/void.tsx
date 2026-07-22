@@ -100,7 +100,7 @@ export function VoidButton() {
 				},
 			},
 			context: {
-				orderId: currentOrder.id,
+				orderId: currentOrder.uuid ?? currentOrder.id,
 				orderNumber: currentOrder.number,
 			},
 		});
