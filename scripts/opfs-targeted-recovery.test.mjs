@@ -311,6 +311,49 @@ test("re-probes writes after observing malformed data", async () => {
   assert.ok(cleanProbes > 0);
 });
 
+test("re-probes cached ids after repair failure", async () => {
+  const record = document("cache:orders", 0);
+  let malformed = false;
+  let probeCalls = 0;
+  const instance = {
+    primaryPath: "id",
+    internals: { statePromise: Promise.resolve({}) },
+    taskQueue: {
+      runCleanup: async () => {
+        throw new Error("repair failed");
+      },
+    },
+    findDocumentsById: async () => {
+      probeCalls += 1;
+      return malformed ? "[{malformed" : "[]";
+    },
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("repair-failure-cache"));
+
+  await recovering.bulkWrite([{ document: record }], "prime-cache");
+  malformed = true;
+  await assert.rejects(
+    recovering.bulkWrite(
+      [{ document: record }, { document: document("cache:new", 1) }],
+      "repair-failure",
+    ),
+    /repair failed/,
+  );
+  malformed = false;
+  const beforeRetry = probeCalls;
+
+  await recovering.bulkWrite([{ document: record }], "retry");
+
+  assert.ok(probeCalls > beforeRetry, "retry after repair failure must probe");
+});
+
 test("repairs one malformed record without removing its collection siblings", async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-targeted-recovery-"));
   const ids = ["product:111", "product:6660", "product:999"];

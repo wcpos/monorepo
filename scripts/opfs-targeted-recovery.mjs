@@ -383,9 +383,9 @@ export function withTargetedOpfsRecovery(storage) {
           let malformedBatch = false;
           await repairMalformedIds(ids, () => {
             malformedBatch = true;
+            cleanIds.clear();
           });
           if (malformedBatch) {
-            cleanIds.clear();
             if (documentWrites.length > 1) {
               const results = await Promise.all(
                 documentWrites.map((row) => bulkWrite([row], context)),
