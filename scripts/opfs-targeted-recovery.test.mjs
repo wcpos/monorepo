@@ -801,7 +801,7 @@ test("refuses a rebuild when the primary index is missing rows", async () => {
     );
     await assert.rejects(recovering.query(betaQuery), {
       name: "SyntaxError",
-      message: /index reconciliation refused: cardinality-mismatch$/,
+      message: /index reconciliation refused: id-set-mismatch:lane:ccc$/,
     });
     await recovering.close();
   } finally {
@@ -909,7 +909,7 @@ test("refuses a rebuild when index ID sets differ despite equal counts", async (
     );
     await assert.rejects(recovering.query(betaQuery), {
       name: "SyntaxError",
-      message: /index reconciliation refused: id-set-mismatch:lane:ccc$/,
+      message: /index reconciliation refused: id-set-mismatch:lane:ddd$/,
     });
     await recovering.close();
   } finally {
@@ -971,6 +971,69 @@ test("refuses a rebuild when the primary index holds duplicate IDs", async () =>
       message: /index reconciliation refused: duplicate-primary-id:lane:aaa$/,
     });
     await recovering.close();
+  } finally {
+    await rm(basePath, { recursive: true, force: true });
+  }
+});
+
+test("rebuilds a secondary index that duplicates one document and drops another", async () => {
+  const basePath = await mkdtemp(join(tmpdir(), "wcpos-index-dup-drop-"));
+  const ids = ["lane:aaa", "lane:bbb", "lane:ccc"];
+
+  try {
+    const initial = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("dup-drop-initial"));
+    await initial.bulkWrite(
+      ids.map((id, index) => ({ document: laneDocument(id, index) })),
+      "seed",
+    );
+    await initial.cleanup(0);
+    await initial.close();
+    // The live dev-next shape: an applied changelog add whose matching delete
+    // was lost leaves the index with one document twice (current + stale
+    // range) and another document's row gone, at unchanged cardinality.
+    const directory = join(basePath, (await readdir(basePath))[0]);
+    const betaPath = join(
+      directory,
+      (await readdir(directory))
+        .filter((n) => n.startsWith("index-"))
+        .sort()[1],
+    );
+    const rows = JSON.parse(await readFile(betaPath, "utf8"));
+    const bbbRow = rows.find((row) => row[0].includes("lane:bbb"));
+    const cccPosition = rows.findIndex((row) => row[0].includes("lane:ccc"));
+    rows[cccPosition] = [bbbRow[0], bbbRow[1] - 2, bbbRow[2] - 2];
+    await writeFile(betaPath, JSON.stringify(rows));
+
+    const { withTargetedOpfsRecovery } =
+      await import("./opfs-targeted-recovery.mjs");
+    const recovering = await withTargetedOpfsRecovery(
+      getRxStorageFilesystemNode({ basePath }),
+    ).createStorageInstance(laneStorageParams("dup-drop-recovering"));
+    const betaQuery = prepareQuery(
+      laneSchema,
+      normalizeMangoQuery(laneSchema, {
+        selector: {},
+        sort: [{ beta: "asc" }],
+      }),
+    );
+    const recovered = (await recovering.query(betaQuery)).documents;
+    assert.deepEqual(
+      recovered.map((item) => item.id),
+      ids,
+    );
+    await recovering.close();
+
+    const reopened = await getRxStorageFilesystemNode({
+      basePath,
+    }).createStorageInstance(laneStorageParams("dup-drop-reopened"));
+    const persisted = (await reopened.query(betaQuery)).documents;
+    assert.deepEqual(
+      persisted.map((item) => item.id),
+      ids,
+    );
+    await reopened.close();
   } finally {
     await rm(basePath, { recursive: true, force: true });
   }

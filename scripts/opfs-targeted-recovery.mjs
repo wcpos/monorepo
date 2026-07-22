@@ -121,50 +121,51 @@ async function reconcileSecondaryIndexes(instance) {
       (indexState) => indexState !== state.firstIdx,
     );
     // The primary index is the rebuild source, so it must be corroborated,
-    // not merely self-consistent: every index must hold one row per document,
-    // its bytes must parse to the document its own index key names, and no
-    // competing byte range with equal-or-better support across the other
-    // indexes may also parse to this document. Indexes can go stale in
-    // DIFFERENT ways (each index file is written separately), so scattered
-    // disagreement does not outvote a validated primary — but a coherent
-    // competing consensus that also holds a valid copy (a stale primary
-    // pointing at an old revision) still refuses rather than persisting
-    // rebuilt indexes against the wrong bytes.
-    if (
-      secondaries.some(
-        (indexState) => indexState.rows.length !== state.firstIdx.rows.length,
-      )
-    ) {
-      return "cardinality-mismatch";
-    }
+    // not merely self-consistent. Secondaries are first CLASSIFIED: one whose
+    // rows duplicate a document, miss one, or diverge in count is demonstrably
+    // damaged — it casts no vote and simply gets rebuilt (the live corruption
+    // shape: an applied changelog add whose matching delete was lost). Healthy
+    // secondaries vote; a corroborating vote counts only when the voter's own
+    // index key matches the document at the primary's range; and a competing
+    // range with equal-or-better validated support that also parses to this
+    // document (a coherent stale-revision consensus) still refuses. An ID a
+    // secondary knows that the primary lacks refuses outright — the rebuild
+    // must never drop a document — and with no healthy secondary at all there
+    // is no corroborating evidence, so reconciliation refuses too.
     const keyLength = state.firstIdx.primaryKeyLength;
-    const secondaryRows = [];
-    for (const indexState of secondaries) {
-      const rowsById = new Map();
-      for (const row of indexState.rows) {
-        rowsById.set(getPrimaryKeyFromIndexableString(row[0], keyLength), row);
-      }
-      // Equal counts plus one row per distinct ID (in every index, primary
-      // included) plus every primary ID present in every secondary guarantees
-      // identical ID sets — rebuilding must never drop a document a secondary
-      // still knows about.
-      if (rowsById.size !== indexState.rows.length)
-        return "duplicate-secondary-id";
-      secondaryRows.push(rowsById);
-    }
-    const documents = [];
-    const seenIds = new Set();
-    const seenRanges = new Set();
+    const primaryIds = new Set();
     let previousKey = "";
-    for (const [indexKey, start, end] of state.firstIdx.rows) {
+    for (const [indexKey] of state.firstIdx.rows) {
       // RxDB binary-searches index rows, so an out-of-order source would
       // persist a broken index even when every row validates individually.
       if (indexKey < previousKey) return "unsorted-primary";
       previousKey = indexKey;
       const documentId = getPrimaryKeyFromIndexableString(indexKey, keyLength);
-      if (seenIds.has(documentId))
+      if (primaryIds.has(documentId))
         return `duplicate-primary-id:${documentId.trim()}`;
-      seenIds.add(documentId);
+      primaryIds.add(documentId);
+    }
+    const classified = [];
+    for (const indexState of secondaries) {
+      const rowsById = new Map();
+      let duplicated = false;
+      for (const row of indexState.rows) {
+        const rowId = getPrimaryKeyFromIndexableString(row[0], keyLength);
+        if (!primaryIds.has(rowId)) return `id-set-mismatch:${rowId.trim()}`;
+        const rows = rowsById.get(rowId) ?? [];
+        if (rows.length > 0) duplicated = true;
+        rows.push(row);
+        rowsById.set(rowId, rows);
+      }
+      const healthy = !duplicated && rowsById.size === primaryIds.size;
+      classified.push({ indexState, rowsById, healthy });
+    }
+    if (!classified.some(({ healthy }) => healthy))
+      return "no-healthy-secondary";
+    const documents = [];
+    const seenRanges = new Set();
+    for (const [indexKey, start, end] of state.firstIdx.rows) {
+      const documentId = getPrimaryKeyFromIndexableString(indexKey, keyLength);
       let document;
       try {
         document = JSON.parse(
@@ -180,28 +181,36 @@ async function reconcileSecondaryIndexes(instance) {
         return `primary-row-mismatch:${documentId.trim()}`;
       if (seenRanges.has(start))
         return `duplicate-primary-range:${documentId.trim()}`;
-      // A corroborating vote only counts when the voter is self-consistent:
-      // its own index key must match the document at the primary's range.
-      // A secondary whose key was updated but whose range was not (or vice
-      // versa) is evidence of nothing.
+      // A corroborating vote only counts when the voter is healthy AND
+      // self-consistent: its own index key must match the document at the
+      // primary's range. Damaged secondaries cast no corroborating vote, but
+      // their rows still join the competing scan below — even a damaged index
+      // can hold veto evidence of a valid current revision elsewhere.
       let primaryVotes = 1;
       const competing = new Map();
-      for (let i = 0; i < secondaries.length; i += 1) {
-        const row = secondaryRows[i].get(documentId);
-        if (!row) return `id-set-mismatch:${documentId.trim()}`;
-        if (row[1] === start && row[2] === end) {
-          try {
-            if (secondaries[i].getIndexableString(document) === row[0])
-              primaryVotes += 1;
-          } catch {}
-        } else {
-          const key = `${row[1]}-${row[2]}`;
-          const entry = competing.get(key) ?? {
-            range: [row[1], row[2]],
-            voters: [],
-          };
-          entry.voters.push([secondaries[i], row[0]]);
-          competing.set(key, entry);
+      for (const { indexState, rowsById, healthy } of classified) {
+        for (const row of rowsById.get(documentId) ?? []) {
+          if (row[1] === start && row[2] === end) {
+            if (!healthy) continue;
+            try {
+              if (indexState.getIndexableString(document) === row[0])
+                primaryVotes += 1;
+            } catch {}
+          } else {
+            const key = `${row[1]}-${row[2]}`;
+            const entry = competing.get(key) ?? {
+              range: [row[1], row[2]],
+              voters: [],
+              voterIndexes: new Set(),
+            };
+            // One vote per index per range — a damaged secondary's duplicate
+            // rows must not stack up into a fabricated competing consensus.
+            if (!entry.voterIndexes.has(indexState)) {
+              entry.voterIndexes.add(indexState);
+              entry.voters.push([indexState, row[0]]);
+            }
+            competing.set(key, entry);
+          }
         }
       }
       for (const { range, voters } of competing.values()) {
