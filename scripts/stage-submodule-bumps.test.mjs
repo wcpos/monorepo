@@ -123,6 +123,17 @@ test('respects an explicitly staged non-descendant gitlink', (t) => {
 	assert.equal(stagedGitlink(superRepo), A, 'explicit backwards stage must survive');
 });
 
+test('respects an explicitly staged gitlink deletion', (t) => {
+	const { superRepo, subPath, C } = makeFixture(t);
+	git(subPath, 'checkout', C);
+	git(superRepo, 'rm', '--cached', 'apps/electron');
+
+	const [result] = run(superRepo);
+
+	assert.equal(result.action, 'kept-explicit-stage');
+	assert.equal(git(superRepo, 'diff', '--cached', '--name-status', '--', 'apps/electron'), 'D\tapps/electron');
+});
+
 test('skips submodules that are not initialized', (t) => {
 	const { superRepo, B } = makeFixture(t);
 	git(superRepo, 'submodule', 'deinit', '-f', 'apps/electron');

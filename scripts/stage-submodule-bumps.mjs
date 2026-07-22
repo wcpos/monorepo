@@ -55,8 +55,9 @@ export function syncSubmoduleGitlinks({ repoRoot, paths = SUBMODULE_PATHS, log =
 		const staged = git(['rev-parse', '--verify', '--quiet', `:${path}`], { cwd: repoRoot, allowFailure: true });
 		const checkout = git(['-C', subDir, 'rev-parse', 'HEAD'], { cwd: repoRoot }).out;
 
-		if (staged.ok && committed.ok && staged.out !== committed.out) {
-			log(`${path}: gitlink already staged (${staged.out.slice(0, 12)}), leaving it as-is`);
+		if (committed.ok && (!staged.ok || staged.out !== committed.out)) {
+			const stagedPointer = staged.ok ? staged.out.slice(0, 12) : 'deleted';
+			log(`${path}: gitlink already staged (${stagedPointer}), leaving it as-is`);
 			record('kept-explicit-stage');
 			continue;
 		}
