@@ -15,11 +15,11 @@
   },
   "dependencies": {
     "@wcpos/sync-core": "workspace:*",
-    "rxdb": "17.2.0"
+    "rxdb": "17.4.0"
   },
   "devDependencies": {
     "@wcpos/utils": "workspace:*",
-    "rxdb-premium": "17.2.0",
+    "rxdb-premium": "17.4.0",
     "vitest": "^4.1.6"
   }
 }

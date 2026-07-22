@@ -58,9 +58,6 @@ importers:
       '@sentry/electron':
         specifier: ^7.13.0
         version: 7.15.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))
-      '@wcpos/printer':
-        specifier: workspace:*
-        version: link:../../packages/printer
       axios:
         specifier: ^1.17.0
         version: 1.17.0
@@ -80,11 +77,11 @@ importers:
         specifier: ^26.3.1
         version: 26.3.1(typescript@5.9.3)
       rxdb:
-        specifier: 17.2.0
-        version: 17.2.0(react@19.2.3)(rxjs@7.8.2)
+        specifier: 17.4.0
+        version: 17.4.0(react@19.2.3)(rxjs@7.8.2)
       rxdb-premium:
-        specifier: 17.2.0
-        version: 17.2.0(rxdb@17.2.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
+        specifier: 17.4.0
+        version: 17.4.0(rxdb@17.4.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -885,11 +882,11 @@ importers:
         specifier: 4.2.4
         version: 4.2.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rxjs@7.8.2)
       rxdb:
-        specifier: 17.2.0
-        version: 17.2.0(react@19.2.3)(rxjs@7.8.2)
+        specifier: 17.4.0
+        version: 17.4.0(react@19.2.3)(rxjs@7.8.2)
       rxdb-premium:
-        specifier: 17.2.0
-        version: 17.2.0(rxdb@17.2.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
+        specifier: 17.4.0
+        version: 17.4.0(rxdb@17.4.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -1088,8 +1085,8 @@ importers:
         specifier: ^4.2.4
         version: 4.2.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rxjs@7.8.2)
       rxdb:
-        specifier: 17.2.0
-        version: 17.2.0(react@19.2.3)(rxjs@7.8.2)
+        specifier: 17.4.0
+        version: 17.4.0(react@19.2.3)(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -1176,15 +1173,15 @@ importers:
         specifier: workspace:*
         version: link:../sync-core
       rxdb:
-        specifier: 17.2.0
-        version: 17.2.0(react@19.2.3)(rxjs@7.8.2)
+        specifier: 17.4.0
+        version: 17.4.0(react@19.2.3)(rxjs@7.8.2)
     devDependencies:
       '@wcpos/utils':
         specifier: workspace:*
         version: link:../utils
       rxdb-premium:
-        specifier: 17.2.0
-        version: 17.2.0(rxdb@17.2.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
+        specifier: 17.4.0
+        version: 17.4.0(rxdb@17.4.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
       vitest:
         specifier: ^4.1.6
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(jsdom@26.1.0)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
@@ -1746,10 +1743,6 @@ packages:
 
   '@babel/runtime@7.28.6':
     resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
-    engines: {node: '>=6.9.0'}
-
-  '@babel/runtime@7.29.2':
-    resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
 
   '@babel/runtime@7.29.7':
@@ -6764,8 +6757,8 @@ packages:
   detect-node@2.1.0:
     resolution: {integrity: sha512-T0NIuQpnTvFDATNuHN5roPwSBG83rFsuO+MXXH9/3N1eFbn4wcPjttvjMLEPWJ0RGUYgQE7cGgS3tNxbqCGM7g==}
 
-  dexie@4.0.10:
-    resolution: {integrity: sha512-eM2RzuR3i+M046r2Q0Optl3pS31qTWf8aFuA7H9wnsHTwl8EPvroVLwvQene/6paAs39Tbk6fWZcn2aZaHkc/w==}
+  dexie@4.4.2:
+    resolution: {integrity: sha512-zMtV8q79EFE5U8FKZvt0Y/77PCU/Hr/RDxv1EDeo228L+m/HTbeN2AjoQm674rhQCX8n3ljK87lajt7UQuZfvw==}
 
   diff-sequences@29.6.3:
     resolution: {integrity: sha512-EjePK1srD3P08o2j4f0ExnylqRs5B9tJjcp9t1krH2qRi8CCdsYfwe9JgSLurFBWwq4uOlipzfk5fHNvwFKr8Q==}
@@ -8061,8 +8054,8 @@ packages:
     peerDependencies:
       graphql: '>=0.11 <=16'
 
-  graphql@16.13.2:
-    resolution: {integrity: sha512-5bJ+nf/UCpAjHM8i06fl7eLyVC9iuNAjm9qzkiu2ZGhM0VscSvS6WDPfAwkdkBuoXGM9FJSbKl6wylMwP9Ktig==}
+  graphql@16.14.2:
+    resolution: {integrity: sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
 
   handle-thing@2.0.1:
@@ -8855,6 +8848,9 @@ packages:
   js-base64@3.7.8:
     resolution: {integrity: sha512-hNngCeKxIUQiEUN3GPJOkz4wF/YvdUdbNL9hsBcMQTkKzboD7T/q3OYOuuPZLUE6dBxSGpwhk5mwuDud7JVAow==}
 
+  js-base64@3.8.0:
+    resolution: {integrity: sha512-65kvbemyZhj+ExQt1PEFyBEjL5vAHysu1lJdW1AwhhChkO8ZBPizYk/m9GVrpbS2Je1hF+UYZ+6KywqtZV8mHw==}
+
   js-sha3@0.8.0:
     resolution: {integrity: sha512-gF1cRrHhIzNfToc802P800N8PpXS+evLLXfsVpowqmAFR9uwbi89WvXg2QspOmXL8QL86J4T1EpFu+yUkwJY3Q==}
 
@@ -9355,8 +9351,8 @@ packages:
     resolution: {integrity: sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==}
     engines: {node: '>=4'}
 
-  mingo@7.2.1:
-    resolution: {integrity: sha512-MEIQPOSJS2sVCueyQeE2rzgEeW3HpIIhizPbeuwD4v7+miVj7NI3ZVPqqw8t3YPIWCivpIaXA4KsoRI7koyNOA==}
+  mingo@7.2.2:
+    resolution: {integrity: sha512-ll8DV+C5RnV2zF3Jwendxhgqknofzp7KaDwmlpvqo4xrdMC5F7JTc2ToZOz//de84QymZTFY7LPHMViE8uNHhA==}
 
   minimalistic-assert@1.0.1:
     resolution: {integrity: sha512-UtJcAD4yEaGtjPezWuO9wC4nwUnVH/8/Im3yEHQP4b67cXlD/Qr9hdITCU1xDbSEXg2XKNaP8jsReV7vQd00/A==}
@@ -10737,14 +10733,14 @@ packages:
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
 
-  rxdb-premium@17.2.0:
-    resolution: {integrity: sha512-34wgsJ3VvJU/WDtA4sflV9I9vkYX3A2x4ky9k808KeDDuk3fyF4WJ3XinhmK5sE91YVSRU9NK0xn1uOYcnZ8zg==}
+  rxdb-premium@17.4.0:
+    resolution: {integrity: sha512-zS9kwin2fldMWqSpp8G6qKFCM4p2fjmu/2elphm8M7p7OkXCZl3B5unG2stMFK8O5pLVEmWVgTxrYTaOJTOoNA==}
     peerDependencies:
-      rxdb: 17.2.0
+      rxdb: 17.4.0
       rxjs: '*'
 
-  rxdb@17.2.0:
-    resolution: {integrity: sha512-reaxpRM7dq/px3BuWEKYNKhrjX/bOtg7b1PmGrCcedQ24B2uveIHXJwebntnjK1379v13lM0+v0rjYyNtZUm7w==}
+  rxdb@17.4.0:
+    resolution: {integrity: sha512-P/I9XpeJ/XS5SpDNoO94Y2cZprDOUhdE29Z7WtpFV2sMY3dYiFPvKj1TVQ/t7MAi6Mh8vjWpUe5srsMA5nEBwA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@angular/core': '*'
@@ -12162,18 +12158,6 @@ packages:
       utf-8-validate:
         optional: true
 
-  ws@8.20.0:
-    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
   ws@8.21.0:
     resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
     engines: {node: '>=10.0.0'}
@@ -12293,8 +12277,8 @@ packages:
     resolution: {integrity: sha512-U/PBtDf35ff0D8X8D0jfdzHYEPFxAI7jJlxZXwCSez5M3190m+QobIfh+sWDWSHMCWWJN2AWamkegn6vr6YBTw==}
     engines: {node: '>=18'}
 
-  z-schema@12.1.1:
-    resolution: {integrity: sha512-7SORj2MsRL/wLPN4DUZcIjLbzO5hRqTAJ5PQt835vCE1SaHicawTh2IYYVdl3+cBSWk3sgeDpuRK6QIA1eYpkA==}
+  z-schema@12.3.1:
+    resolution: {integrity: sha512-vSLA62BENIHrltcviPzxLyoPg+XxjKwS75w6PyN4gNVWFnobTIEYexLhL2086ulT7bELMH9zD07lSxcAgB6Gjw==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
@@ -13008,8 +12992,6 @@ snapshots:
   '@babel/runtime@7.27.6': {}
 
   '@babel/runtime@7.28.6': {}
-
-  '@babel/runtime@7.29.2': {}
 
   '@babel/runtime@7.29.7': {}
 
@@ -19529,7 +19511,7 @@ snapshots:
 
   detect-node@2.1.0: {}
 
-  dexie@4.0.10: {}
+  dexie@4.4.2: {}
 
   diff-sequences@29.6.3: {}
 
@@ -21515,11 +21497,11 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  graphql-ws@5.16.2(graphql@16.13.2):
+  graphql-ws@5.16.2(graphql@16.14.2):
     dependencies:
-      graphql: 16.13.2
+      graphql: 16.14.2
 
-  graphql@16.13.2: {}
+  graphql@16.14.2: {}
 
   handle-thing@2.0.1: {}
 
@@ -22593,6 +22575,8 @@ snapshots:
 
   js-base64@3.7.8: {}
 
+  js-base64@3.8.0: {}
+
   js-sha3@0.8.0: {}
 
   js-tokens@4.0.0: {}
@@ -23198,7 +23182,7 @@ snapshots:
 
   min-indent@1.0.1: {}
 
-  mingo@7.2.1: {}
+  mingo@7.2.2: {}
 
   minimalistic-assert@1.0.1: {}
 
@@ -24548,7 +24532,7 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  rxdb-premium@17.2.0(rxdb@17.2.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2):
+  rxdb-premium@17.4.0(rxdb@17.4.0(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2):
     dependencies:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
@@ -24556,7 +24540,7 @@ snapshots:
       eth-crypto: 3.1.0
       flexsearch: 0.7.43
       percom: 1.1.3
-      rxdb: 17.2.0(react@19.2.3)(rxjs@7.8.2)
+      rxdb: 17.4.0(react@19.2.3)(rxjs@7.8.2)
       rxjs: 7.8.2
       web-locks: 0.0.8
       web-worker: 1.5.0
@@ -24564,9 +24548,9 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  rxdb@17.2.0(react@19.2.3)(rxjs@7.8.2):
+  rxdb@17.4.0(react@19.2.3)(rxjs@7.8.2):
     dependencies:
-      '@babel/runtime': 7.29.2
+      '@babel/runtime': 7.29.7
       '@types/simple-peer': 9.11.9
       '@types/ws': 8.18.1
       ajv: 8.20.0
@@ -24576,21 +24560,21 @@ snapshots:
       broadcast-channel: 7.3.0
       crypto-js: 4.2.0
       custom-idle-queue: 5.0.2
-      dexie: 4.0.10
+      dexie: 4.4.2
       event-reduce-js: 6.0.0
       get-graphql-from-jsonschema: 8.1.0
-      graphql: 16.13.2
-      graphql-ws: 5.16.2(graphql@16.13.2)
+      graphql: 16.14.2
+      graphql-ws: 5.16.2(graphql@16.14.2)
       is-my-json-valid: 2.20.6
-      js-base64: 3.7.8
+      js-base64: 3.8.0
       jsonschema-key-compression: 1.7.0
-      mingo: 7.2.1
+      mingo: 7.2.2
       oblivious-set: 2.0.0
       reconnecting-websocket: 4.4.0
       rxjs: 7.8.2
       simple-peer: 9.11.1
-      ws: 8.20.0
-      z-schema: 12.1.1
+      ws: 8.21.0
+      z-schema: 12.3.1
     optionalDependencies:
       react: 19.2.3
     transitivePeerDependencies:
@@ -26154,8 +26138,6 @@ snapshots:
 
   ws@8.18.0: {}
 
-  ws@8.20.0: {}
-
   ws@8.21.0: {}
 
   wsl-utils@0.3.1:
@@ -26246,7 +26228,7 @@ snapshots:
 
   yoctocolors-cjs@2.1.3: {}
 
-  z-schema@12.1.1:
+  z-schema@12.3.1:
     dependencies:
       punycode: 2.3.1
       safe-regex2: 5.1.1
