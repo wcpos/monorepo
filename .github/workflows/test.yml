@@ -55,6 +55,11 @@ jobs:
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
           skip-install-scripts: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
 
+      # The OPFS recovery sync test (scripts/opfs-recovery-electron-sync.test.mjs)
+      # compares monorepo sources against the pinned apps/electron copies.
+      - name: "\U0001F3D7 Init electron submodule"
+        run: git submodule update --init --depth 1 apps/electron
+
       - name: "\U0001F9F9 Run ESLint"
         run: pnpm lint
 
