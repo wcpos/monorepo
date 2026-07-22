@@ -121,7 +121,10 @@ async function openRefundModalForNewCompletedOrder(page: Page) {
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
 		timeout: 30_000,
 	});
-	await page.getByTestId('refund-custom-amount').fill('10.00');
+	// The refund must not exceed the order total, and the order is built from
+	// whatever product happens to sort first in the store catalog — so keep the
+	// custom amount below any plausible product price.
+	await page.getByTestId('refund-custom-amount').fill('1.00');
 }
 
 test.describe('POS refunds (Pro)', () => {

@@ -7,32 +7,32 @@ export function useSettingsNavigationItems(): NavigationAreaItem[] {
 	return [
 		{
 			href: '/settings/general',
-			label: t('settings.general_settings'),
+			label: t('settings.general', 'General'),
+			icon: 'sliders',
 			testID: 'settings-nav-general',
 		},
 		{
 			href: '/settings/tax',
-			label: t('settings.tax_settings'),
+			label: t('settings.tax', 'Tax'),
+			icon: 'percent',
 			testID: 'settings-nav-tax',
 		},
 		{
 			href: '/settings/printing',
 			label: t('settings.printing', 'Printing'),
+			icon: 'printer',
 			testID: 'settings-nav-printing',
 		},
 		{
 			href: '/settings/barcode-scanning',
 			label: t('settings.barcode_scanning'),
+			icon: 'barcodeScan',
 			testID: 'settings-nav-barcode-scanning',
-		},
-		{
-			href: '/settings/shortcuts',
-			label: t('settings.keyboard_shortcuts'),
-			testID: 'settings-nav-shortcuts',
 		},
 		{
 			href: '/settings/theme',
 			label: t('settings.theme'),
+			icon: 'circleHalfStroke',
 			testID: 'settings-nav-theme',
 		},
 	];

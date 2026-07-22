@@ -5,7 +5,7 @@ import { Redirect, usePathname, useRouter } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
+import { Icon, type IconName } from '@wcpos/components/icon';
 import { cn } from '@wcpos/components/lib/utils';
 
 import { useTheme } from '../../../../contexts/theme';
@@ -16,6 +16,7 @@ export type NavigationAreaItem = {
 	href: Extract<Href, string>;
 	label: string;
 	testID: string;
+	icon?: IconName;
 	badge?: React.ReactNode;
 };
 
@@ -39,9 +40,19 @@ function NavigationItems({
 				testID={item.testID}
 				onPress={() => router.push(item.href)}
 				accessibilityState={{ selected }}
-				className={cn('h-12 w-full justify-start px-3', selected && 'bg-muted web:hover:bg-muted')}
+				className={cn(
+					'h-10 w-full justify-start px-3',
+					selected && 'bg-primary/10 web:hover:bg-primary/10'
+				)}
 			>
 				<HStack className="w-full flex-1 items-center justify-between gap-3">
+					{item.icon ? (
+						<Icon
+							name={item.icon}
+							size="sm"
+							className={selected ? 'text-primary' : 'text-muted-foreground'}
+						/>
+					) : null}
 					<ButtonText className={cn('flex-1', selected && 'text-primary font-semibold')}>
 						{item.label}
 					</ButtonText>
@@ -77,11 +88,11 @@ export function NavigationAreaLayout({
 		// bar is its only in-app route to the area index and its siblings.
 		const current = items.find((item) => pathname === item.href);
 		return (
-			<View testID={screenTestID} className="flex-1">
+			<View testID={screenTestID} className="bg-card flex-1">
 				{current ? (
 					<HStack
 						testID={`${testID}-back`}
-						className="border-border bg-card h-12 items-center gap-2 border-b px-1"
+						className="border-border/50 bg-card h-12 items-center gap-2 border-b px-1"
 					>
 						<Button variant="ghost" onPress={() => router.navigate(indexHref)}>
 							<HStack className="items-center gap-1">
@@ -101,11 +112,11 @@ export function NavigationAreaLayout({
 		<View testID={testID} className="flex-1 flex-row">
 			<View
 				testID={`${testID}-rail`}
-				className="border-border bg-card w-56 shrink-0 gap-1 border-r p-3"
+				className="border-border/50 bg-card w-56 shrink-0 gap-0.5 border-r p-3"
 			>
 				<NavigationItems items={items} showChevron={false} />
 			</View>
-			<View testID={screenTestID} className="min-w-0 flex-1">
+			<View testID={screenTestID} className="bg-card min-w-0 flex-1">
 				{children}
 			</View>
 		</View>
@@ -128,8 +139,8 @@ export function NavigationAreaIndex({
 	}
 
 	return (
-		<ScrollView testID={testID} className="flex-1">
-			<View className="gap-2 p-4">
+		<ScrollView testID={testID} className="bg-card flex-1">
+			<View className="gap-1 p-4">
 				<NavigationItems items={items} showChevron />
 			</View>
 		</ScrollView>

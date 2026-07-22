@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservablePickState } from 'observable-hooks';
@@ -13,12 +12,12 @@ import {
 	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { FormErrors } from '../../components/form-errors';
+import { SettingsRow } from '../components/settings-row';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const formSchema = z.object({
@@ -82,75 +81,74 @@ export function BarcodeSettings() {
 		[localPatch, store]
 	);
 
-	useFormChangeHandler({ form: form as never, onChange: handleChange as never });
+	useFormChangeHandler({
+		form: form as never,
+		onChange: handleChange as never,
+	});
 
 	/**
 	 *
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<VStack className="gap-1">
 				<FormErrors />
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="barcode_scanning_avg_time_input_threshold"
-						render={({ field: { value, ...rest } }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('settings.barcode_average_time_input_threshold_ms')}
-									type="numeric"
-									value={value != null ? String(value) : undefined}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="barcode_scanning_min_chars"
-						render={({ field: { value, ...rest } }) => (
-							<View className="flex-1">
-								<FormInput
-									label={t('settings.barcode_minimum_length')}
-									type="numeric"
-									value={value != null ? String(value) : undefined}
-									{...rest}
-								/>
-							</View>
-						)}
-					/>
-				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="barcode_scanning_prefix"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('settings.barcode_scanner_prefix')} {...field} />
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="barcode_scanning_suffix"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormInput label={t('settings.barcode_scanner_suffix')} {...field} />
-							</View>
-						)}
-					/>
-				</HStack>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_avg_time_input_threshold"
+					render={({ field: { value, ...rest } }) => (
+						<SettingsRow label={t('settings.barcode_average_time_input_threshold_ms')}>
+							<FormInput
+								type="numeric"
+								value={value != null ? String(value) : undefined}
+								{...rest}
+							/>
+						</SettingsRow>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_min_chars"
+					render={({ field: { value, ...rest } }) => (
+						<SettingsRow label={t('settings.barcode_minimum_length')}>
+							<FormInput
+								type="numeric"
+								value={value != null ? String(value) : undefined}
+								{...rest}
+							/>
+						</SettingsRow>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_prefix"
+					render={({ field }) => (
+						<SettingsRow label={t('settings.barcode_scanner_prefix')}>
+							<FormInput {...field} />
+						</SettingsRow>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="barcode_scanning_suffix"
+					render={({ field }) => (
+						<SettingsRow label={t('settings.barcode_scanner_suffix')}>
+							<FormInput {...field} />
+						</SettingsRow>
+					)}
+				/>
 				<FormField
 					control={form.control}
 					name="barcode_scanning_sound_enabled"
 					render={({ field }) => (
-						<FormSwitch
+						<SettingsRow
+							inline
 							label={t('settings.barcode_scan_sound', {
 								defaultValue: 'Play a sound on scan',
 							})}
-							{...field}
-						/>
+						>
+							<FormSwitch {...field} />
+						</SettingsRow>
 					)}
 				/>
 			</VStack>

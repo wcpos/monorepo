@@ -21,7 +21,6 @@ import { useT } from '../../../../contexts/translations';
 
 interface PrinterRowProps {
 	profile: PrinterProfile;
-	isFirst: boolean;
 	/** True only when a test print for *this* profile is in progress. */
 	isTesting: boolean;
 	onTest: (profile: PrinterProfile) => void;
@@ -36,7 +35,6 @@ interface PrinterRowProps {
  */
 export function PrinterRow({
 	profile,
-	isFirst,
 	isTesting,
 	onTest,
 	onEdit,
@@ -79,73 +77,73 @@ export function PrinterRow({
 	const showMenu = canSetDefault || canDelete;
 
 	return (
-		<>
-			{!isFirst && <View className="border-border border-t" />}
-			<View testID={`printer-row-${profile.id}`} className="flex-row items-center gap-3 p-3">
-				<View className="bg-muted rounded-md p-2">
-					<Icon name={printerIconName(profile)} variant="muted" size="lg" />
-				</View>
-				<VStack className="flex-1 gap-0.5">
-					<Text className="text-sm font-medium">{profile.name}</Text>
-					<Text className="text-muted-foreground text-xs">{connectionLabel}</Text>
-				</VStack>
-				<HStack className="items-center gap-2">
-					{profile.isDefault && (
-						<StatusBadge variant="default" label={t('common.default', 'Default')} />
-					)}
+		<View
+			testID={`printer-row-${profile.id}`}
+			className="web:hover:bg-accent flex-row items-center gap-3 rounded-lg px-2 py-2.5"
+		>
+			<View className="bg-muted rounded-md p-2">
+				<Icon name={printerIconName(profile)} variant="muted" size="lg" />
+			</View>
+			<VStack className="flex-1 gap-0.5">
+				<Text className="text-sm font-medium">{profile.name}</Text>
+				<Text className="text-muted-foreground text-xs">{connectionLabel}</Text>
+			</VStack>
+			<HStack className="items-center gap-2">
+				{profile.isDefault && (
+					<StatusBadge variant="default" label={t('common.default', 'Default')} />
+				)}
+				<Button
+					variant="outline"
+					size="sm"
+					loading={isTesting}
+					onPress={() => onTest(profile)}
+					testID={`printer-row-${profile.id}-test`}
+				>
+					<Text>{t('settings.test_print', 'Test')}</Text>
+				</Button>
+				{!profile.isBuiltIn && (
 					<Button
 						variant="outline"
 						size="sm"
-						loading={isTesting}
-						onPress={() => onTest(profile)}
-						testID={`printer-row-${profile.id}-test`}
+						leftIcon="penToSquare"
+						onPress={() => onEdit(profile)}
+						testID={`printer-row-${profile.id}-edit`}
 					>
-						<Text>{t('settings.test_print', 'Test')}</Text>
+						<Text>{t('common.edit', 'Edit')}</Text>
 					</Button>
-					{!profile.isBuiltIn && (
-						<Button
-							variant="outline"
-							size="sm"
-							leftIcon="penToSquare"
-							onPress={() => onEdit(profile)}
-							testID={`printer-row-${profile.id}-edit`}
-						>
-							<Text>{t('common.edit', 'Edit')}</Text>
-						</Button>
-					)}
-					{showMenu && (
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<IconButton name="ellipsisVertical" testID={`printer-row-${profile.id}-menu`} />
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								{canSetDefault && (
-									<DropdownMenuItem
-										onPress={() => onSetDefault(profile.id)}
-										testID={`printer-row-${profile.id}-set-default`}
-									>
-										<Icon name="star" />
-										<Text>{t('settings.set_default', 'Set Default')}</Text>
-									</DropdownMenuItem>
-								)}
-								{canDelete && (
-									<DropdownMenuItem
-										variant="destructive"
-										onPress={() => onDelete(profile.id)}
-										testID={`printer-row-${profile.id}-delete`}
-									>
-										<Icon
-											name="trash"
-											className="fill-destructive web:group-focus:fill-accent-foreground"
-										/>
-										<Text>{t('common.delete', 'Delete')}</Text>
-									</DropdownMenuItem>
-								)}
-							</DropdownMenuContent>
-						</DropdownMenu>
-					)}
-				</HStack>
-			</View>
-		</>
+				)}
+				{showMenu && (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<IconButton name="ellipsisVertical" testID={`printer-row-${profile.id}-menu`} />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							{canSetDefault && (
+								<DropdownMenuItem
+									onPress={() => onSetDefault(profile.id)}
+									testID={`printer-row-${profile.id}-set-default`}
+								>
+									<Icon name="star" />
+									<Text>{t('settings.set_default', 'Set Default')}</Text>
+								</DropdownMenuItem>
+							)}
+							{canDelete && (
+								<DropdownMenuItem
+									variant="destructive"
+									onPress={() => onDelete(profile.id)}
+									testID={`printer-row-${profile.id}-delete`}
+								>
+									<Icon
+										name="trash"
+										className="fill-destructive web:group-focus:fill-accent-foreground"
+									/>
+									<Text>{t('common.delete', 'Delete')}</Text>
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
+			</HStack>
+		</View>
 	);
 }

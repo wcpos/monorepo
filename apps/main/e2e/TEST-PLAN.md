@@ -1,6 +1,6 @@
 # WCPOS E2E Test Plan
 
-Inventory of the Playwright web suite in `apps/main/e2e/` — 120 tests across 15 spec files.
+Inventory of the Playwright web suite in `apps/main/e2e/` — 119 tests across 15 spec files.
 Regenerated from the spec files themselves (see #691 for the audit that found the previous
 version stale). If you add, remove, or rename tests, update this file.
 
@@ -238,7 +238,7 @@ Reports Page (free only):
 - [x] Upgrade overlay shown
 - [x] View Demo button visible
 
-### settings.spec.ts (authenticated, free + pro) — 10 tests
+### settings.spec.ts (authenticated, free + pro) — 9 tests
 
 Settings Modal:
 
@@ -246,7 +246,6 @@ Settings Modal:
 - [x] General settings page
 - [x] Tax settings page
 - [x] Barcode Scanning tab
-- [x] Keyboard Shortcuts tab
 - [x] Theme tab
 - [x] Leave settings area (route-based; closes via back navigation)
 

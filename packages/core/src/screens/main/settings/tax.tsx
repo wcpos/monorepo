@@ -14,12 +14,15 @@ import {
 	FormInput,
 	FormRadioGroup,
 	FormSelect,
+	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { SettingsDangerZone } from './components/settings-danger-zone';
+import { SettingsRow } from './components/settings-row';
+import { SettingsSection } from './components/settings-section';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
@@ -27,7 +30,6 @@ import { InclExclRadioGroup } from '../components/incl-excl-tax-radio-group';
 import { TaxBasedOnSelect } from '../components/tax-based-on-select';
 import { TaxClassSelect } from '../components/tax-class-select';
 import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
-import { YesNoRadioGroup } from '../components/yes-no-radio-group';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
@@ -108,7 +110,10 @@ export function TaxSettings() {
 		[localPatch, store]
 	);
 
-	useFormChangeHandler({ form: form as never, onChange: handleChange as never });
+	useFormChangeHandler({
+		form: form as never,
+		onChange: handleChange as never,
+	});
 
 	/**
 	 * Restore server settings
@@ -134,7 +139,9 @@ export function TaxSettings() {
 			});
 		} catch (error) {
 			uiLogger.error('Failed to restore server settings', {
-				context: { error: error instanceof Error ? error.message : String(error) },
+				context: {
+					error: error instanceof Error ? error.message : String(error),
+				},
 			});
 		} finally {
 			setLoading(false);
@@ -145,150 +152,141 @@ export function TaxSettings() {
 	 *
 	 */
 	return (
-		<VStack>
-			<View className="flex-row">
-				<Button variant="muted" onPress={() => router.push('/(app)/(modals)/tax-rates')}>
-					<ButtonText>{t('common.view_all_tax_rates')}</ButtonText>
-				</Button>
-			</View>
-			<Form {...form}>
-				<VStack className="gap-4">
-					<FormErrors />
-					<HStack className="gap-4">
-						<FormField
-							control={form.control}
-							name="calc_taxes"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormRadioGroup
-										customComponent={YesNoRadioGroup}
-										label={t('settings.enable_taxes')}
-										{...field}
-									/>
-								</View>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="prices_include_tax"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormRadioGroup
-										customComponent={YesNoRadioGroup}
-										label={t('settings.prices_entered_with_tax')}
-										{...field}
-									/>
-								</View>
-							)}
-						/>
-					</HStack>
-					<HStack className="gap-4">
-						<FormField
-							control={form.control}
-							name="tax_based_on"
-							render={({ field: { value, onChange, ...rest } }) => (
-								<View className="flex-1">
-									<FormSelect
-										customComponent={TaxBasedOnSelect}
-										label={t('common.calculate_tax_based_on')}
-										value={value}
-										onChange={onChange}
-										{...rest}
-									/>
-								</View>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="shipping_tax_class"
-							render={({ field: { value, onChange, ...rest } }) => (
-								<View className="flex-1">
-									<FormSelect
-										customComponent={TaxClassSelect}
-										label={t('settings.shipping_tax_class')}
-										value={value}
-										onChange={onChange}
-										{...rest}
-									/>
-								</View>
-							)}
-						/>
-					</HStack>
-					<HStack className="gap-4">
-						<FormField
-							control={form.control}
-							name="tax_total_display"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormRadioGroup
-										customComponent={TaxDisplayRadioGroup}
-										label={t('settings.display_tax_totals')}
-										{...field}
-									/>
-								</View>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="tax_round_at_subtotal"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormRadioGroup
-										customComponent={YesNoRadioGroup}
-										label={t('settings.round_tax_at_subtotal_level')}
-										{...field}
-									/>
-								</View>
-							)}
-						/>
-					</HStack>
-					<HStack className="gap-4">
-						<FormField
-							control={form.control}
-							name="tax_display_shop"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormRadioGroup
-										customComponent={InclExclRadioGroup}
-										label={t('settings.display_prices_in_the_shop')}
-										{...field}
-									/>
-								</View>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="tax_display_cart"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormRadioGroup
-										customComponent={InclExclRadioGroup}
-										label={t('settings.display_prices_during_cart_and_checkout')}
-										{...field}
-									/>
-								</View>
-							)}
-						/>
-					</HStack>
-					<HStack className="gap-4">
-						<FormField
-							control={form.control}
-							name="price_display_suffix"
-							render={({ field }) => (
-								<View className="flex-1">
-									<FormInput label={t('settings.price_display_suffix')} {...field} />
-								</View>
-							)}
-						/>
-						<View className="flex-1"></View>
-					</HStack>
-					<HStack className="px-0">
-						<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
-							{t('settings.restore_server_settings')}
+		<Form {...form}>
+			<VStack className="gap-5">
+				<FormErrors />
+				<SettingsSection first title={t('settings.tax_calculation', 'Calculation')}>
+					<FormField
+						control={form.control}
+						name="calc_taxes"
+						render={({ field: { value, onChange, ...rest } }) => (
+							<SettingsRow inline label={t('settings.enable_taxes')}>
+								<FormSwitch
+									value={value === 'yes'}
+									onChange={(checked: boolean) => onChange(checked ? 'yes' : 'no')}
+									{...rest}
+								/>
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="prices_include_tax"
+						render={({ field: { value, onChange, ...rest } }) => (
+							<SettingsRow inline label={t('settings.prices_entered_with_tax')}>
+								<FormSwitch
+									value={value === 'yes'}
+									onChange={(checked: boolean) => onChange(checked ? 'yes' : 'no')}
+									{...rest}
+								/>
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="tax_based_on"
+						render={({ field: { value, onChange, ...rest } }) => (
+							<SettingsRow label={t('common.calculate_tax_based_on')}>
+								<FormSelect
+									customComponent={TaxBasedOnSelect}
+									value={value}
+									onChange={onChange}
+									{...rest}
+								/>
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="shipping_tax_class"
+						render={({ field: { value, onChange, ...rest } }) => (
+							<SettingsRow label={t('settings.shipping_tax_class')}>
+								<FormSelect
+									customComponent={TaxClassSelect}
+									value={value}
+									onChange={onChange}
+									{...rest}
+								/>
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="tax_round_at_subtotal"
+						render={({ field: { value, onChange, ...rest } }) => (
+							<SettingsRow inline label={t('settings.round_tax_at_subtotal_level')}>
+								<FormSwitch
+									value={value === 'yes'}
+									onChange={(checked: boolean) => onChange(checked ? 'yes' : 'no')}
+									{...rest}
+								/>
+							</SettingsRow>
+						)}
+					/>
+				</SettingsSection>
+
+				<SettingsSection title={t('settings.tax_display', 'Display')}>
+					<FormField
+						control={form.control}
+						name="tax_total_display"
+						render={({ field }) => (
+							<SettingsRow label={t('settings.display_tax_totals')}>
+								<FormRadioGroup customComponent={TaxDisplayRadioGroup} {...field} />
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="tax_display_shop"
+						render={({ field }) => (
+							<SettingsRow label={t('settings.display_prices_in_the_shop')}>
+								<FormRadioGroup customComponent={InclExclRadioGroup} {...field} />
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="tax_display_cart"
+						render={({ field }) => (
+							<SettingsRow label={t('settings.display_prices_during_cart_and_checkout')}>
+								<FormRadioGroup customComponent={InclExclRadioGroup} {...field} />
+							</SettingsRow>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="price_display_suffix"
+						render={({ field }) => (
+							<SettingsRow label={t('settings.price_display_suffix')}>
+								<FormInput {...field} />
+							</SettingsRow>
+						)}
+					/>
+				</SettingsSection>
+
+				<SettingsSection title={t('tax_rates.tax_rates', 'Tax Rates')}>
+					<View className="flex-row py-2">
+						<Button
+							variant="outline"
+							size="sm"
+							onPress={() => router.push('/(app)/(modals)/tax-rates')}
+						>
+							<ButtonText>{t('common.view_all_tax_rates')}</ButtonText>
 						</Button>
-					</HStack>
-				</VStack>
-			</Form>
-		</VStack>
+					</View>
+				</SettingsSection>
+
+				<SettingsDangerZone
+					description={t(
+						'settings.restore_server_settings_description',
+						'These settings were copied from your WooCommerce store. Restoring will overwrite local changes with the server’s values.'
+					)}
+					buttonLabel={t('settings.restore_server_settings')}
+					onPress={handleRestoreServerSettings}
+					loading={loading}
+					testID="settings-tax-restore-server"
+				/>
+			</VStack>
+		</Form>
 	);
 }

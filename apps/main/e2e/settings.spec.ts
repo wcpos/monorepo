@@ -22,7 +22,6 @@ test.describe('Settings Area', () => {
 		await expect(page.getByTestId('settings-nav-tax')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-printing')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-barcode-scanning')).toBeVisible();
-		await expect(page.getByTestId('settings-nav-shortcuts')).toBeVisible();
 		await expect(page.getByTestId('settings-nav-theme')).toBeVisible();
 	});
 
@@ -47,14 +46,6 @@ test.describe('Settings Area', () => {
 		await openSettings(page);
 		await page.getByTestId('settings-nav-barcode-scanning').click();
 		await expect(page.getByTestId('screen-settings-barcode-scanning')).toBeVisible({
-			timeout: 10_000,
-		});
-	});
-
-	test('should show Keyboard Shortcuts page', async ({ posPage: page }) => {
-		await openSettings(page);
-		await page.getByTestId('settings-nav-shortcuts').click();
-		await expect(page.getByTestId('screen-settings-shortcuts')).toBeVisible({
 			timeout: 10_000,
 		});
 	});

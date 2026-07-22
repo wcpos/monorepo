@@ -16,6 +16,7 @@ import { useDeviceScanControls } from '../../hooks/barcodes/device-scan-context'
 import { useScannerRegistration } from '../../hooks/barcodes/use-scanner-registration';
 import { useCollection } from '../../hooks/use-collection';
 import { ScannerDeviceChooser } from './scanner-device-chooser';
+import { SettingsSection } from '../components/settings-section';
 
 const NO_PROFILES: ScannerProfileDocument[] = [];
 
@@ -47,7 +48,9 @@ export function InputSources() {
 			setLabel('');
 			Toast.show({
 				type: 'success',
-				title: t('settings.scanner_registered', { defaultValue: 'Scanner registered' }),
+				title: t('settings.scanner_registered', {
+					defaultValue: 'Scanner registered',
+				}),
 				duration: 2500,
 			});
 		} catch (error) {
@@ -72,127 +75,134 @@ export function InputSources() {
 	};
 
 	return (
-		<VStack space="sm" testID="barcode-input-sources">
-			<Text className="text-md font-bold">
-				{t('settings.barcode_input_sources', { defaultValue: 'Registered scanners' })}
-			</Text>
-			<Text className="text-muted-foreground text-sm">
-				{t('settings.barcode_input_sources_description', {
-					defaultValue:
-						'A registered scanner is recognised by its device identity — every scan from it is captured directly, with no typing-speed guesswork.',
-				})}
-			</Text>
+		<SettingsSection
+			testID="barcode-input-sources"
+			title={t('settings.barcode_input_sources', {
+				defaultValue: 'Registered scanners',
+			})}
+			description={t('settings.barcode_input_sources_description', {
+				defaultValue:
+					'A registered scanner is recognised by its device identity — every scan from it is captured directly, with no typing-speed guesswork.',
+			})}
+		>
+			<VStack space="sm" className="pt-1">
+				{serial.available || hid.available ? (
+					<HStack space="sm" testID="add-scanner-direct">
+						{serial.available ? (
+							<Button
+								size="sm"
+								variant={serial.connected ? 'outline' : 'default'}
+								onPress={() => (serial.connected ? serial.disconnect() : serial.connect())}
+								testID="serial-connect-button"
+							>
+								<ButtonText>
+									{serial.connected
+										? t('settings.scanner_serial_disconnect', {
+												defaultValue: 'Disconnect serial scanner',
+											})
+										: t('settings.scanner_connect_serial', {
+												defaultValue: 'Connect serial scanner',
+											})}
+								</ButtonText>
+							</Button>
+						) : null}
+						{hid.available ? (
+							<Button
+								size="sm"
+								variant={hid.connected ? 'outline' : 'default'}
+								onPress={() => (hid.connected ? hid.disconnect() : hid.connect())}
+								testID="hid-connect-button"
+							>
+								<ButtonText>
+									{hid.connected
+										? t('settings.scanner_hid_disconnect', {
+												defaultValue: 'Disconnect HID scanner',
+											})
+										: t('settings.scanner_connect_hid', {
+												defaultValue: 'Connect HID scanner',
+											})}
+								</ButtonText>
+							</Button>
+						) : null}
+					</HStack>
+				) : null}
 
-			{serial.available || hid.available ? (
-				<HStack space="sm" testID="add-scanner-direct">
-					{serial.available ? (
-						<Button
-							size="sm"
-							variant={serial.connected ? 'outline' : 'default'}
-							onPress={() => (serial.connected ? serial.disconnect() : serial.connect())}
-							testID="serial-connect-button"
-						>
-							<ButtonText>
-								{serial.connected
-									? t('settings.scanner_serial_disconnect', {
-											defaultValue: 'Disconnect serial scanner',
-										})
-									: t('settings.scanner_connect_serial', {
-											defaultValue: 'Connect serial scanner',
-										})}
-							</ButtonText>
-						</Button>
-					) : null}
-					{hid.available ? (
-						<Button
-							size="sm"
-							variant={hid.connected ? 'outline' : 'default'}
-							onPress={() => (hid.connected ? hid.disconnect() : hid.connect())}
-							testID="hid-connect-button"
-						>
-							<ButtonText>
-								{hid.connected
-									? t('settings.scanner_hid_disconnect', { defaultValue: 'Disconnect HID scanner' })
-									: t('settings.scanner_connect_hid', { defaultValue: 'Connect HID scanner' })}
-							</ButtonText>
-						</Button>
-					) : null}
-				</HStack>
-			) : null}
+				{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
+				<ScannerDeviceChooser />
 
-			{/* Electron surfaces its serial/HID chooser candidates here; inert elsewhere. */}
-			<ScannerDeviceChooser />
-
-			{profiles.map((profile) => (
-				<HStack
-					key={profile.id}
-					className="border-border rounded-md border p-2"
-					testID="scanner-profile-row"
-				>
-					<VStack className="flex-1" space="xs">
-						<Text className="text-sm font-medium">{profile.label || profile.deviceName}</Text>
-						<Text className="text-muted-foreground font-mono text-xs">
-							{profile.deviceName} · {profile.vendorId}:{profile.productId}
-						</Text>
-					</VStack>
-					<Button
-						variant="destructive"
-						size="sm"
-						testID="scanner-profile-delete"
-						onPress={() => handleRemove(profile)}
+				{profiles.map((profile) => (
+					<HStack
+						key={profile.id}
+						className="border-border rounded-md border p-2"
+						testID="scanner-profile-row"
 					>
-						<ButtonText>{t('settings.scanner_remove', { defaultValue: 'Remove' })}</ButtonText>
-					</Button>
-				</HStack>
-			))}
-
-			{registration.available && registration.candidate ? (
-				<VStack space="sm" className="border-info/40 bg-info/10 rounded-md border p-2">
-					<Text className="text-sm">
-						{t('settings.scanner_detected', {
-							deviceName: registration.candidate.deviceName,
-							defaultValue: 'Detected "{deviceName}" — name it and save',
-						})}
-					</Text>
-					<Input
-						value={label}
-						onChangeText={setLabel}
-						placeholder={registration.candidate.deviceName}
-						testID="scanner-label-input"
-					/>
-					<HStack space="sm">
-						<Button size="sm" onPress={handleSave} testID="scanner-save-button">
-							<ButtonText>
-								{t('settings.scanner_save', { defaultValue: 'Save scanner' })}
-							</ButtonText>
-						</Button>
-						<Button variant="outline" size="sm" onPress={registration.discard}>
-							<ButtonText>{t('common.cancel')}</ButtonText>
+						<VStack className="flex-1" space="xs">
+							<Text className="text-sm font-medium">{profile.label || profile.deviceName}</Text>
+							<Text className="text-muted-foreground font-mono text-xs">
+								{profile.deviceName} · {profile.vendorId}:{profile.productId}
+							</Text>
+						</VStack>
+						<Button
+							variant="destructive"
+							size="sm"
+							testID="scanner-profile-delete"
+							onPress={() => handleRemove(profile)}
+						>
+							<ButtonText>{t('settings.scanner_remove', { defaultValue: 'Remove' })}</ButtonText>
 						</Button>
 					</HStack>
-				</VStack>
-			) : registration.capturing ? (
-				<View className="border-info/40 bg-info/10 rounded-md border p-2">
-					<HStack>
-						<Text className="flex-1 text-sm">
-							{t('settings.scanner_capture_prompt', {
-								defaultValue: 'Scan any barcode now with the scanner you want to register…',
+				))}
+
+				{registration.available && registration.candidate ? (
+					<VStack space="sm" className="border-info/40 bg-info/10 rounded-md border p-2">
+						<Text className="text-sm">
+							{t('settings.scanner_detected', {
+								deviceName: registration.candidate.deviceName,
+								defaultValue: 'Detected "{deviceName}" — name it and save',
 							})}
 						</Text>
-						<Button variant="outline" size="sm" onPress={registration.stop}>
-							<ButtonText>{t('common.cancel')}</ButtonText>
+						<Input
+							value={label}
+							onChangeText={setLabel}
+							placeholder={registration.candidate.deviceName}
+							testID="scanner-label-input"
+						/>
+						<HStack space="sm">
+							<Button size="sm" onPress={handleSave} testID="scanner-save-button">
+								<ButtonText>
+									{t('settings.scanner_save', { defaultValue: 'Save scanner' })}
+								</ButtonText>
+							</Button>
+							<Button variant="outline" size="sm" onPress={registration.discard}>
+								<ButtonText>{t('common.cancel')}</ButtonText>
+							</Button>
+						</HStack>
+					</VStack>
+				) : registration.capturing ? (
+					<View className="border-info/40 bg-info/10 rounded-md border p-2">
+						<HStack>
+							<Text className="flex-1 text-sm">
+								{t('settings.scanner_capture_prompt', {
+									defaultValue: 'Scan any barcode now with the scanner you want to register…',
+								})}
+							</Text>
+							<Button variant="outline" size="sm" onPress={registration.stop}>
+								<ButtonText>{t('common.cancel')}</ButtonText>
+							</Button>
+						</HStack>
+					</View>
+				) : registration.available ? (
+					<View className="items-start">
+						<Button size="sm" onPress={registration.start} testID="register-scanner-button">
+							<ButtonText>
+								{t('settings.scanner_register', {
+									defaultValue: 'Register scanner',
+								})}
+							</ButtonText>
 						</Button>
-					</HStack>
-				</View>
-			) : registration.available ? (
-				<View className="items-start">
-					<Button size="sm" onPress={registration.start} testID="register-scanner-button">
-						<ButtonText>
-							{t('settings.scanner_register', { defaultValue: 'Register scanner' })}
-						</ButtonText>
-					</Button>
-				</View>
-			) : null}
-		</VStack>
+					</View>
+				) : null}
+			</VStack>
+		</SettingsSection>
 	);
 }

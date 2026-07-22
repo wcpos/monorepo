@@ -7,7 +7,7 @@ export default function TaxSettingsPage() {
 	const t = useT();
 
 	return (
-		<SettingsPage title={t('settings.tax_settings')} testID="screen-settings-tax">
+		<SettingsPage title={t('settings.tax', 'Tax')} testID="screen-settings-tax">
 			<TaxSettings />
 		</SettingsPage>
 	);
