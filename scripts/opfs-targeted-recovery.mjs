@@ -119,7 +119,10 @@ export function withTargetedOpfsRecovery(storage) {
           } catch (error) {
             if (!isMalformedJson(error)) throw error;
             if (batch.length === 1) {
-              if (!(await repairDocument(instance, batch[0]))) throw error;
+              if (!(await repairDocument(instance, batch[0]))) {
+                error.message += `; targeted recovery failed for ${batch[0]}`;
+                throw error;
+              }
               return true;
             }
             const middle = Math.ceil(batch.length / 2);
