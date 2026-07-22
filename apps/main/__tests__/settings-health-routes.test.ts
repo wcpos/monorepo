@@ -10,7 +10,6 @@ const settingsRoutes = [
 	'tax.tsx',
 	'printing.tsx',
 	'barcode-scanning.tsx',
-	'shortcuts.tsx',
 	'theme.tsx',
 ];
 const healthRoutes = ['index.tsx', 'database.tsx', 'performance.tsx', 'logs.tsx'];
