@@ -10,8 +10,8 @@ function parseStorageResult(result) {
 }
 
 function extractDocument(text, primaryPath, expectedId) {
-  const start = text.search(/\S/);
-  if (start < 0 || text[start] !== "{") return;
+  const start = text.indexOf("{");
+  if (start < 0) return;
 
   let depth = 0;
   let inString = false;
