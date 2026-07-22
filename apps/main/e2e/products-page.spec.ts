@@ -44,7 +44,7 @@ test.describe('Products Page (Pro)', () => {
 
 		// Use deterministic fixture data known to include multiple hoodie products.
 		const searchInput = screen.getByTestId('search-products');
-		await searchInput.fill('hoodie');
+		await searchInput.fill('hoodie with');
 		await page.waitForTimeout(1_500);
 
 		const hoodieWithPocketRow = screen

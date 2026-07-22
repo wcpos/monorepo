@@ -208,7 +208,9 @@ describe('createAppSyncEngine scope cache', () => {
 
 	it('records a network error and rethrows it', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_040);
-		const networkError = new Error('network down');
+		const networkError = new Error(
+			'network down for https://store.example.test/wp-json/wcpos/v2/products?authorization=secret'
+		);
 		const fetch = jest.spyOn(globalThis, 'fetch').mockRejectedValue(networkError);
 		const {
 			createAppSyncEngine,
@@ -236,7 +238,7 @@ describe('createAppSyncEngine scope cache', () => {
 			ok: false,
 			epoch: 0,
 		});
-		expect(logNetworkError).toHaveBeenCalledWith('Sync request failed: network down', {
+		expect(logNetworkError).toHaveBeenCalledWith('Sync request failed', {
 			saveToDb: true,
 			context: expect.objectContaining({
 				method: 'GET',

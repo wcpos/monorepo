@@ -195,8 +195,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					(error as { name?: string })?.name !== 'AbortError' &&
 					databaseEpoch === getDatabaseEpoch()
 				) {
-					const reason = error instanceof Error ? error.message : String(error);
-					networkLogger.error(`Sync request failed: ${reason}`, {
+					networkLogger.error('Sync request failed', {
 						saveToDb: true,
 						context: { method, endpoint: new URL(finalUrl).pathname, status: 0 },
 					});

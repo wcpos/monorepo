@@ -23,6 +23,7 @@ jest.mock('./request-state-manager', () => ({
 	requestStateManager: {
 		checkCanProceed: jest.fn(() => ({ ok: true })),
 		isTokenRefreshing: jest.fn(() => false),
+		awaitTokenRefresh: jest.fn(),
 	},
 }));
 
@@ -39,13 +40,20 @@ const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
 };
 
 describe('useHttpClient network audit logs', () => {
-	beforeEach(() => jest.clearAllMocks());
+	beforeEach(() => {
+		jest.clearAllMocks();
+		loggerMock.getDatabaseEpoch.mockReturnValue(0);
+		(requestStateManager.isTokenRefreshing as jest.Mock).mockReturnValue(false);
+	});
 
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {
 		(http.request as jest.Mock).mockResolvedValue({ status: 201, data: {} });
 		const { result } = renderHook(() => useHttpClient());
 
-		await result.current.post('/wc/v3/orders?authorization=secret', {});
+		await result.current.post(
+			'https://user:password@store.example.test/wc/v3/orders?authorization=secret',
+			{}
+		);
 
 		expect(loggerMock.__info).toHaveBeenCalledWith('HTTP request completed', {
 			saveToDb: true,
@@ -62,7 +70,11 @@ describe('useHttpClient network audit logs', () => {
 		(http.request as jest.Mock).mockRejectedValue(failure);
 		const { result } = renderHook(() => useHttpClient());
 
-		await expect(result.current.get('/wc/v3/products?authorization=secret')).rejects.toBe(failure);
+		await expect(
+			result.current.get(
+				'https://user:password@store.example.test/wc/v3/products?authorization=secret'
+			)
+		).rejects.toBe(failure);
 
 		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
 			saveToDb: true,
@@ -71,6 +83,19 @@ describe('useHttpClient network audit logs', () => {
 				endpoint: '/wc/v3/products',
 				status: 503,
 			}),
+		});
+	});
+
+	it('persists status zero for response-less transport failures', async () => {
+		const failure = new Error('network down');
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
+
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+			saveToDb: true,
+			context: expect.objectContaining({ status: 0 }),
 		});
 	});
 
@@ -113,6 +138,19 @@ describe('useHttpClient network audit logs', () => {
 
 	it('does not persist a completion after the active store changes', async () => {
 		loggerMock.getDatabaseEpoch.mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(1);
+		(http.request as jest.Mock).mockResolvedValue({ status: 201, data: {} });
+		const { result } = renderHook(() => useHttpClient());
+
+		await result.current.post('/wc/v3/orders', {});
+
+		expect(loggerMock.__info).not.toHaveBeenCalled();
+	});
+
+	it('does not persist a completion when the store changes during token refresh', async () => {
+		(requestStateManager.isTokenRefreshing as jest.Mock).mockReturnValue(true);
+		(requestStateManager.awaitTokenRefresh as jest.Mock).mockImplementation(async () => {
+			loggerMock.getDatabaseEpoch.mockReturnValue(1);
+		});
 		(http.request as jest.Mock).mockResolvedValue({ status: 201, data: {} });
 		const { result } = renderHook(() => useHttpClient());
 

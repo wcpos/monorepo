@@ -188,6 +188,8 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			throw error;
 		}
 
+		const databaseEpoch = getDatabaseEpoch();
+
 		// If token refresh is in progress, wait for it to complete
 		if (requestStateManager.isTokenRefreshing()) {
 			httpLogger.debug('Token refresh in progress, waiting before making request', {
@@ -224,8 +226,9 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 		}
 
 		const method = (processedConfig.method ?? 'GET').toUpperCase();
-		const endpoint = (processedConfig.url ?? 'unknown').split(/[?#]/, 1)[0];
-		const databaseEpoch = getDatabaseEpoch();
+		const endpoint = processedConfig.url
+			? new URL(processedConfig.url, 'http://localhost').pathname
+			: 'unknown';
 		const response = await scheduleRequest(() => http.request(processedConfig));
 		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
 			httpLogger.info('HTTP request completed', {
@@ -285,10 +288,12 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 				}
 				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
 					const method = (reqConfig.method ?? 'GET').toUpperCase();
-					const endpoint = (reqConfig.url ?? 'unknown').split(/[?#]/, 1)[0];
+					const endpoint = reqConfig.url
+						? new URL(reqConfig.url, 'http://localhost').pathname
+						: 'unknown';
 					httpLogger.error('HTTP request failed', {
 						saveToDb: true,
-						context: { method, endpoint, status: (error as AxiosError).response?.status },
+						context: { method, endpoint, status: (error as AxiosError).response?.status ?? 0 },
 					});
 				}
 
