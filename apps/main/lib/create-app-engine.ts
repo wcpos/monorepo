@@ -18,6 +18,7 @@
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { QueryTotalWooRequest, RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
+import { getDatabaseEpoch, getLogger } from '@wcpos/utils/logger';
 
 import { getEngineConnectivity } from './connectivity';
 import {
@@ -29,6 +30,7 @@ import {
 } from './metrics';
 import { deriveSyncSite } from './sync-site';
 
+const networkLogger = getLogger(['wcpos', 'network', 'sync']);
 export interface CreateAppSyncEngineOptions {
 	/** The site's wp-json root (`site.wp_api_url`). */
 	wpApiUrl: string;
@@ -152,6 +154,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
 		let tokenUsed: string | undefined;
+		const method = (init?.method ?? 'GET').toUpperCase();
+		const databaseEpoch = getDatabaseEpoch();
 		const fetchWithLatestToken = async (): Promise<Response> => {
 			const token = fetcherOptions.credentials.getLatest().access_token;
 			tokenUsed = token;
@@ -187,6 +191,16 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					fields: { durationMs, bytes: 0, status: 0 },
 				});
 				recordTransport({ atMs, durationMs, bytes: 0, ok: false, epoch: epochAtStart });
+				if (
+					(error as { name?: string })?.name !== 'AbortError' &&
+					databaseEpoch === getDatabaseEpoch()
+				) {
+					const reason = error instanceof Error ? error.message : String(error);
+					networkLogger.error(`Sync request failed: ${reason}`, {
+						saveToDb: true,
+						context: { method, endpoint: new URL(finalUrl).pathname, status: 0 },
+					});
+				}
 				throw error;
 			}
 
@@ -224,7 +238,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			return response;
 		};
 
-		const response = await fetchWithLatestToken();
+		let response = await fetchWithLatestToken();
 		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
 		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
 		if (response.status === 401 && fetcherOptions.refreshAuth && !isRefreshRequest) {
@@ -232,13 +246,20 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			// flight. If the current token differs from the one this request used, retry with it
 			// before starting another refresh — avoids redundant refreshes on staggered 401s.
 			const currentToken = fetcherOptions.credentials.getLatest().access_token;
-			if (currentToken && currentToken !== tokenUsed) {
-				return fetchWithLatestToken();
-			}
-			const refreshedToken = await fetcherOptions.refreshAuth();
-			if (refreshedToken) {
-				return fetchWithLatestToken();
-			}
+			const retryToken =
+				currentToken && currentToken !== tokenUsed
+					? currentToken
+					: await fetcherOptions.refreshAuth();
+			if (retryToken) response = await fetchWithLatestToken();
+		}
+		if (
+			databaseEpoch === getDatabaseEpoch() &&
+			(!response.ok || (method !== 'GET' && method !== 'HEAD'))
+		) {
+			networkLogger[response.ok ? 'info' : 'error']('Sync request result', {
+				saveToDb: true,
+				context: { method, endpoint: new URL(url).pathname, status: response.status },
+			});
 		}
 
 		return response;

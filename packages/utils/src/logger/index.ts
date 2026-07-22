@@ -55,10 +55,11 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 // Global state
 let toastShow: ((config: any) => void) | null = null;
 let dbCollection: any | null = null;
+let databaseEpoch = 0;
 let hasPruned = false;
 
 const SEARCH_CONTEXT_KEY =
-	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|productId|productName|sku|itemName|couponCode|feeName|methodTitle|customerId|errorCode|reason|previousQuantity|quantity|previousPrice|price)$/;
+	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|endpoint|status|customerId|errorCode|reason|previousQuantity|quantity|previousPrice|price)$/;
 
 function searchableContext(context: Record<string, any>): string {
 	return Object.entries(context)
@@ -130,6 +131,7 @@ export const setToast = (toastShowFunction: (config: any) => void) => {
  * Prunes log entries older than 30 days once on first initialization.
  */
 export const setDatabase = (collection: any) => {
+	if (collection !== dbCollection) databaseEpoch += 1;
 	dbCollection = collection;
 
 	if (collection && !hasPruned) {
@@ -148,6 +150,8 @@ export const setDatabase = (collection: any) => {
 			});
 	}
 };
+
+export const getDatabaseEpoch = () => databaseEpoch;
 
 /**
  * Main transport - handles console, toast, and database
