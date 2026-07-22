@@ -159,3 +159,8 @@ test("shipped OPFS worker contains the complete-write shim exactly once", () => 
   const source = readFileSync(shippedWorker, "utf8");
   assert.equal(source.match(/WCPOS_OPFS_COMPLETE_WRITES/g)?.length, 1);
 });
+
+test("shipped OPFS worker contains targeted record recovery exactly once", () => {
+  const source = readFileSync(shippedWorker, "utf8");
+  assert.equal(source.match(/WCPOS_OPFS_TARGETED_RECOVERY/g)?.length, 1);
+});
