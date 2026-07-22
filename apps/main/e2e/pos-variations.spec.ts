@@ -8,8 +8,7 @@ import { authenticatedTest as test } from './fixtures';
  */
 async function ensureTableView(page: Page) {
 	const toggle = page.getByTestId('view-mode-toggle');
-	const posScreen = page.locator('[data-testid="screen-pos"]:visible');
-	const tableHeader = posScreen.getByTestId('data-table-header-name').first();
+	const tableHeader = page.getByTestId('data-table-header-name').first();
 	const variablePopoverButton = page.getByTestId('variable-product-popover-button').first();
 
 	// Check if table indicators are already present (wait up to 2s for visibility).
