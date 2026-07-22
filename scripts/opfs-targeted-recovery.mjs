@@ -304,6 +304,19 @@ export function withTargetedOpfsRecovery(storage) {
       const getChangedDocumentsSince =
         instance.getChangedDocumentsSince.bind(instance);
 
+      // The write preflight exists so the storage's write path never parses
+      // unverified stored bytes (a parse failure there poisons the task
+      // queue). But the probe is a read, and the storage serializes reads
+      // behind pending write persistence, so probing every bulkWrite costs a
+      // disk flush per call (~3ms; 63-98% sustained throughput, see
+      // opfs-targeted-recovery.bench.mjs). An id whose stored bytes already
+      // parsed this session — via a wrapped read or a clean preflight — gives
+      // the same guarantee the probe would, so verified ids skip it. Damage
+      // predates the session (complete-write shim guards our own writes), but
+      // any malformed observation still clears the cache so a damage episode
+      // re-enables full probing.
+      const cleanIds = new Set();
+
       const repairMalformedIds = async (ids, onMalformedBatch) => {
         const repairBatch = async (batch) => {
           try {
@@ -335,9 +348,16 @@ export function withTargetedOpfsRecovery(storage) {
 
       instance.findDocumentsById = async (ids, withDeleted) => {
         try {
-          return parseStorageResult(await findDocumentsById(ids, withDeleted));
+          const result = parseStorageResult(
+            await findDocumentsById(ids, withDeleted),
+          );
+          // Success means every requested id either parsed or is absent —
+          // exactly what the write preflight would establish.
+          for (const id of ids) cleanIds.add(id);
+          return result;
         } catch (error) {
           if (!isMalformedJson(error)) throw error;
+          cleanIds.clear();
           if (await repairMalformedIds(ids))
             return findDocumentsById(ids, withDeleted);
           if (ids.length > 1) {
@@ -359,18 +379,25 @@ export function withTargetedOpfsRecovery(storage) {
         const ids = documentWrites.map(
           (row) => row.document[instance.primaryPath],
         );
-        let malformedBatch = false;
-        await repairMalformedIds(ids, () => {
-          malformedBatch = true;
-        });
-        if (malformedBatch && documentWrites.length > 1) {
-          const results = await Promise.all(
-            documentWrites.map((row) => bulkWrite([row], context)),
-          );
-          await instance.taskQueue?.awaitIdle?.();
-          return {
-            error: results.flatMap((result) => result.error),
-          };
+        if (ids.some((id) => !cleanIds.has(id))) {
+          let malformedBatch = false;
+          await repairMalformedIds(ids, () => {
+            malformedBatch = true;
+          });
+          if (malformedBatch) {
+            cleanIds.clear();
+            if (documentWrites.length > 1) {
+              const results = await Promise.all(
+                documentWrites.map((row) => bulkWrite([row], context)),
+              );
+              await instance.taskQueue?.awaitIdle?.();
+              return {
+                error: results.flatMap((result) => result.error),
+              };
+            }
+          } else {
+            for (const id of ids) cleanIds.add(id);
+          }
         }
         return bulkWrite(documentWrites, context);
       };
@@ -399,6 +426,7 @@ export function withTargetedOpfsRecovery(storage) {
       };
 
       const repairIndexedRead = async (error, generationAtStart) => {
+        cleanIds.clear();
         const state = await instance.internals.statePromise;
         // Document repair and index reconciliation address independent damage
         // that can coexist in one failure, so a repaired document does not

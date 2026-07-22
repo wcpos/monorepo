@@ -243,6 +243,74 @@ test("refuses malformed-document read and write repair when multi-instance", asy
   assert.equal(writeAttempted, false);
 });
 
+test("skips the write preflight for ids already verified clean", async () => {
+  const records = [document("cache:orders", 0), document("cache:products", 1)];
+  let probeCalls = 0;
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async () => {
+      probeCalls += 1;
+      return "[]";
+    },
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("clean-cache"));
+  const rows = records.map((item) => ({ document: item }));
+
+  await recovering.bulkWrite(rows, "first");
+  assert.equal(probeCalls, 1);
+  await recovering.bulkWrite(rows, "second");
+  assert.equal(probeCalls, 1);
+
+  await recovering.findDocumentsById(["cache:customers"], false);
+  assert.equal(probeCalls, 2);
+  await recovering.bulkWrite(
+    [{ document: document("cache:customers", 2) }],
+    "after-read",
+  );
+  assert.equal(probeCalls, 2);
+});
+
+test("re-probes writes after observing malformed data", async () => {
+  const record = document("cache:orders", 0);
+  let probeCalls = 0;
+  let malformedOnce = true;
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async (ids) => {
+      probeCalls += 1;
+      if (ids.length > 1 && malformedOnce) {
+        malformedOnce = false;
+        return "[{malformed";
+      }
+      return "[]";
+    },
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("cache-invalidate"));
+
+  await recovering.bulkWrite([{ document: record }], "first");
+  const cleanProbes = probeCalls;
+  await recovering.findDocumentsById(["cache:orders", "cache:products"], false);
+
+  const beforeReprobe = probeCalls;
+  await recovering.bulkWrite([{ document: record }], "after-malformed");
+  assert.ok(probeCalls > beforeReprobe, "write after malformed must re-probe");
+  assert.ok(cleanProbes > 0);
+});
+
 test("repairs one malformed record without removing its collection siblings", async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-targeted-recovery-"));
   const ids = ["product:111", "product:6660", "product:999"];
