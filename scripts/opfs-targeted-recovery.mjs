@@ -1,3 +1,5 @@
+import { getPrimaryKeyFromIndexableString } from "rxdb/plugins/core";
+
 function isMalformedJson(error) {
   return error?.name === "SyntaxError";
 }
@@ -53,7 +55,8 @@ async function repairDocument(instance, documentId) {
       );
       return { indexState, position };
     });
-    if (indexRows.some(({ position }) => position < 0)) return "missing-index-row";
+    if (indexRows.some(({ position }) => position < 0))
+      return "missing-index-row";
 
     let accessHandlePromise = runState.accessHandlers.get(
       state.documentFileHandle,
@@ -88,13 +91,105 @@ async function repairDocument(instance, documentId) {
 
     const recoveredBytes = instance._encode(JSON.stringify(document));
     const repairedBytes = new Uint8Array(oldEnd - oldStart);
-    if (recoveredBytes.byteLength > repairedBytes.byteLength) return "recovered-document-too-large";
+    if (recoveredBytes.byteLength > repairedBytes.byteLength)
+      return "recovered-document-too-large";
     repairedBytes.fill(32);
     repairedBytes.set(recoveredBytes);
 
     const writable = await accessHandle.getWritable();
     await writable.write(repairedBytes, { at: oldStart });
     await writable.flush?.();
+    return true;
+  });
+}
+
+async function reconcileSecondaryIndexes(instance) {
+  const state = await instance.internals.statePromise;
+  return instance.taskQueue.runCleanup(async (runState) => {
+    let accessHandlePromise = runState.accessHandlers.get(
+      state.documentFileHandle,
+    );
+    if (!accessHandlePromise) {
+      accessHandlePromise = state.documentFileHandle.createAccessHandle();
+      runState.accessHandlers.set(
+        state.documentFileHandle,
+        accessHandlePromise,
+      );
+    }
+    const accessHandle = await accessHandlePromise;
+    const secondaries = state.indexStates.filter(
+      (indexState) => indexState !== state.firstIdx,
+    );
+    // The primary index is the rebuild source, so it must be corroborated,
+    // not merely self-consistent: every index must hold one row per document,
+    // and for each document a majority of the secondary indexes must
+    // reference the primary's exact byte range. A stale-but-parseable primary
+    // (or a truncated one) loses that vote and reconciliation refuses rather
+    // than persisting rebuilt indexes against the wrong bytes.
+    if (
+      secondaries.some(
+        (indexState) => indexState.rows.length !== state.firstIdx.rows.length,
+      )
+    ) {
+      return false;
+    }
+    const keyLength = state.firstIdx.primaryKeyLength;
+    const secondaryRanges = secondaries.map((indexState) => {
+      const ranges = new Map();
+      for (const [indexKey, start, end] of indexState.rows) {
+        ranges.set(getPrimaryKeyFromIndexableString(indexKey, keyLength), [
+          start,
+          end,
+        ]);
+      }
+      return ranges;
+    });
+    const documents = [];
+    const seenRanges = new Set();
+    for (const [indexKey, start, end] of state.firstIdx.rows) {
+      const documentId = getPrimaryKeyFromIndexableString(indexKey, keyLength);
+      const corroborating = secondaryRanges.filter((ranges) => {
+        const range = ranges.get(documentId);
+        return range && range[0] === start && range[1] === end;
+      }).length;
+      if (corroborating * 2 <= secondaries.length) return false;
+      const document = JSON.parse(
+        instance._decode(await accessHandle.read(start, end)),
+      );
+      if (
+        state.firstIdx.getIndexableString(document) !== indexKey ||
+        seenRanges.has(start)
+      ) {
+        return false;
+      }
+      seenRanges.add(start);
+      documents.push({ document, start, end });
+    }
+
+    let repaired = false;
+    for (const indexState of state.indexStates) {
+      if (indexState === state.firstIdx) continue;
+      const rebuilt = documents
+        .map(({ document, start, end }) => [
+          indexState.getIndexableString(document),
+          start,
+          end,
+        ])
+        .sort((left, right) => (left[0] < right[0] ? -1 : 1));
+      if (JSON.stringify(rebuilt) !== JSON.stringify(indexState.rows)) {
+        indexState.rows = rebuilt;
+        repaired = true;
+      }
+    }
+    if (!repaired) return false;
+
+    // Emptying the changelog drops pending row operations for every index, so
+    // every index must be persisted from its current in-memory rows — the same
+    // pairing the storage's own cleanupChangelogOperations maintains.
+    for (const indexState of state.indexStates) {
+      await indexState.persistInMemoryRows(runState);
+    }
+    await state.changelog.empty(runState);
     return true;
   });
 }
@@ -178,14 +273,56 @@ export function withTargetedOpfsRecovery(storage) {
         return bulkWrite(documentWrites, context);
       };
 
+      // When every per-document probe parses but an index-driven read is
+      // malformed, the documents are healthy and a secondary index's byte
+      // ranges are stale — rebuild the secondary indexes from the primary.
+      // Concurrent reads hit a stale index together (startup runs queries in
+      // parallel), so reconciliation is shared: one rebuild runs at a time,
+      // and a read whose failure predates someone else's successful rebuild
+      // retries instead of rethrowing its stale error.
+      let reconcileGeneration = 0;
+      let pendingReconcile;
+      const reconcileOnce = () => {
+        if (!pendingReconcile) {
+          pendingReconcile = reconcileSecondaryIndexes(instance)
+            .then((repaired) => {
+              if (repaired) reconcileGeneration += 1;
+              return repaired;
+            })
+            .finally(() => {
+              pendingReconcile = undefined;
+            });
+        }
+        return pendingReconcile;
+      };
+
+      const repairIndexedRead = async (error, generationAtStart) => {
+        const state = await instance.internals.statePromise;
+        if (await repairMalformedIds(state.firstIdx.metaIdMap.keys()))
+          return true;
+        // A rebuild changes row offsets without emitting changelog operations,
+        // so a multi-instance peer's stale in-memory rows could later persist
+        // over it — only reconcile when this instance is the sole owner.
+        if (params.multiInstance) return false;
+        try {
+          if (await reconcileOnce()) return true;
+        } catch (reconcileError) {
+          error.message += `; index reconciliation failed: ${
+            reconcileError?.message ?? reconcileError
+          }`;
+          return false;
+        }
+        return reconcileGeneration !== generationAtStart;
+      };
+
       instance.query = async (preparedQuery) => {
+        const generationAtStart = reconcileGeneration;
         try {
           return parseStorageResult(await query(preparedQuery));
         } catch (error) {
-          const state = await instance.internals.statePromise;
           if (
             !isMalformedJson(error) ||
-            !(await repairMalformedIds(state.firstIdx.metaIdMap.keys()))
+            !(await repairIndexedRead(error, generationAtStart))
           ) {
             throw error;
           }
@@ -194,15 +331,15 @@ export function withTargetedOpfsRecovery(storage) {
       };
 
       instance.getChangedDocumentsSince = async (limit, checkpoint) => {
+        const generationAtStart = reconcileGeneration;
         try {
           return parseStorageResult(
             await getChangedDocumentsSince(limit, checkpoint),
           );
         } catch (error) {
-          const state = await instance.internals.statePromise;
           if (
             !isMalformedJson(error) ||
-            !(await repairMalformedIds(state.firstIdx.metaIdMap.keys()))
+            !(await repairIndexedRead(error, generationAtStart))
           ) {
             throw error;
           }
