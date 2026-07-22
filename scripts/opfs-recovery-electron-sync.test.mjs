@@ -29,8 +29,22 @@ const submoduleInitialized = existsSync(
   join(repoRoot, "apps/electron/package.json"),
 );
 
-// CI initializes the submodule (test.yml lint job), so the skip only applies
-// to local checkouts that never ran `git submodule update --init apps/electron`.
+// CI enforces via a dedicated lint-job step that initializes the submodule and
+// runs this file with REQUIRE_ELECTRON_SUBMODULE=1 (so a failed init cannot
+// turn into a silent skip). The submodule must appear only after every pnpm
+// command has run: once apps/electron/package.json exists, pnpm's deps-status
+// check treats it as a workspace package missing from the CI-rewritten
+// lockfile and aborts. The skip below applies to local checkouts that never
+// ran `git submodule update --init apps/electron` — and to the test:scripts
+// invocation in CI, which runs before the submodule is initialized.
+const requireSubmodule = process.env.REQUIRE_ELECTRON_SUBMODULE === "1";
+if (requireSubmodule) {
+  assert.ok(
+    submoduleInitialized,
+    "REQUIRE_ELECTRON_SUBMODULE=1 but the apps/electron submodule is not initialized",
+  );
+}
+
 test(
   "electron carries byte-identical copies of the OPFS recovery module",
   {
