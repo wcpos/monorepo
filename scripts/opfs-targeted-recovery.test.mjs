@@ -97,6 +97,34 @@ async function corruptRecord(basePath, id, makeCorruptBytes) {
   }
 }
 
+async function corruptRecordInPlace(basePath, id, makeCorruptBytes) {
+  const directory = join(basePath, (await readdir(basePath))[0]);
+  const indexPath = join(
+    directory,
+    (await readdir(directory)).find((name) => name.startsWith("index-")),
+  );
+  const targetRow = JSON.parse(await readFile(indexPath, "utf8")).find((row) =>
+    row[0].includes(id),
+  );
+  assert.ok(targetRow, `missing index row for ${id}`);
+
+  const documentsPath = join(directory, "documents.json");
+  const documents = await readFile(documentsPath);
+  const original = documents.subarray(targetRow[1], targetRow[2]);
+  const corrupt = makeCorruptBytes(original);
+  assert.ok(corrupt.length <= original.length);
+  const replacement = Buffer.alloc(original.length, 32);
+  corrupt.copy(replacement);
+  await writeFile(
+    documentsPath,
+    Buffer.concat([
+      documents.subarray(0, targetRow[1]),
+      replacement,
+      documents.subarray(targetRow[2]),
+    ]),
+  );
+}
+
 test("exports a targeted OPFS recovery storage wrapper", async () => {
   const recoveryModule = await import("./opfs-targeted-recovery.mjs").catch(
     () => ({}),
@@ -108,6 +136,7 @@ test("exports a targeted OPFS recovery storage wrapper", async () => {
 test("repairs one malformed record without removing its collection siblings", async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-targeted-recovery-"));
   const ids = ["product:111", "product:6660", "product:999"];
+  const records = ids.map((id, index) => document(id, index));
 
   try {
     const rawStorage = getRxStorageFilesystemNode({ basePath });
@@ -115,13 +144,15 @@ test("repairs one malformed record without removing its collection siblings", as
       storageParams("initial"),
     );
     const writeResult = await initial.bulkWrite(
-      ids.map((id, index) => ({ document: document(id, index) })),
+      records.map((item) => ({ document: item })),
       "seed",
     );
     assert.deepEqual(writeResult.error, []);
     await initial.cleanup(0);
     await initial.close();
-    await corruptRecord(basePath, "product:6660");
+    await corruptRecordInPlace(basePath, "product:6660", () =>
+      Buffer.from(`${JSON.stringify({ ...records[1], value: "x" })}garbage`),
+    );
 
     const { withTargetedOpfsRecovery } =
       await import("./opfs-targeted-recovery.mjs");
@@ -141,6 +172,16 @@ test("repairs one malformed record without removing its collection siblings", as
     const recovered = (await recovering.query(query)).documents;
     assert.deepEqual(
       recovered.map((item) => item.id),
+      ids,
+    );
+    let cleaned = false;
+    for (let attempt = 0; attempt < 5 && !cleaned; attempt += 1) {
+      cleaned = await recovering.cleanup(0);
+    }
+    assert.equal(cleaned, true);
+    const afterCleanup = await recovering.findDocumentsById(ids, false);
+    assert.deepEqual(
+      afterCleanup.map((item) => item.id),
       ids,
     );
     await recovering.close();

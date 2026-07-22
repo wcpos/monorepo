@@ -81,27 +81,14 @@ async function repairDocument(instance, documentId) {
     }
 
     const recoveredBytes = instance._encode(JSON.stringify(document));
-    const newStart = await accessHandle.getSize();
-    const newEnd = newStart + recoveredBytes.byteLength;
-    const operations = indexRows.map(({ indexState, position }) => [
-      indexState.indexId,
-      position,
-      "R",
-      [indexState.rows[position][0], newStart, newEnd],
-    ]);
+    const repairedBytes = new Uint8Array(oldEnd - oldStart);
+    if (recoveredBytes.byteLength > repairedBytes.byteLength) return false;
+    repairedBytes.fill(32);
+    repairedBytes.set(recoveredBytes);
 
     const writable = await accessHandle.getWritable();
-    await writable.write(recoveredBytes, { at: newStart });
+    await writable.write(repairedBytes, { at: oldStart });
     await writable.flush?.();
-    await state.changelog.addChangelogOperations(runState, operations);
-    for (const operation of operations) {
-      state.indexStates[operation[0]].runChangelogOperation(operation);
-    }
-    state.broadcastChannel?.postMessage({
-      type: "event",
-      eventBulks: [],
-      changelogOperations: operations,
-    });
     return true;
   });
 }
