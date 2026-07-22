@@ -16,6 +16,7 @@
  */
 
 import { defaultConfig } from '@wcpos/database/adapters/default';
+import { composeObservers, type SyncEvent } from '@wcpos/sync-core';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { QueryTotalWooRequest, RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 import { getDatabaseEpoch, getLogger } from '@wcpos/utils/logger';
@@ -31,6 +32,25 @@ import {
 import { deriveSyncSite } from './sync-site';
 
 const networkLogger = getLogger(['wcpos', 'network', 'sync']);
+const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
+
+/**
+ * Engine lifecycle problems previously went ONLY to the in-memory metrics
+ * collector — a stalled or failed initial open ("sync engine isn't ready" with
+ * zero console/health-log output) and a failed POS bootstrap seed were
+ * invisible outside the metrics snapshot. Persist the engine's own warn/error
+ * diagnostics (`engine.*` — lifecycle, guards, readiness watchdog) to the
+ * health log; lane/transport events keep their existing metrics-only path so
+ * an offline session can't flood the log at poll cadence.
+ */
+const engineDiagnosticsLogObserver = (event: SyncEvent): void => {
+	if (!event.type.startsWith('engine.')) return;
+	if (event.level !== 'warn' && event.level !== 'error') return;
+	engineLogger[event.level](event.message ?? event.type, {
+		saveToDb: true,
+		context: { type: event.type, ...event.fields },
+	});
+};
 export interface CreateAppSyncEngineOptions {
 	/** The site's wp-json root (`site.wp_api_url`). */
 	wpApiUrl: string;
@@ -298,7 +318,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			fetcher,
 			queryTotal: { fetchWooQueryTotal },
 			connectivity: getEngineConnectivity,
-			diagnostics: appMetricsObserver,
+			diagnostics: composeObservers(appMetricsObserver, engineDiagnosticsLogObserver),
 			multiInstance: options.multiInstance ?? false,
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
