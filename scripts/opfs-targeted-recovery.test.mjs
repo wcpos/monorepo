@@ -158,6 +158,50 @@ test("falls back to singleton reads when only a combined response is malformed",
   );
 });
 
+test("falls back to singleton writes when a combined write is malformed", async () => {
+  const records = [document("cache:orders", 0), document("cache:products", 1)];
+  const written = [];
+  let combinedWriteAttempted = false;
+  let idleAwaited = false;
+  const instance = {
+    primaryPath: "id",
+    taskQueue: {
+      awaitIdle: async () => {
+        idleAwaited = true;
+      },
+    },
+    findDocumentsById: async (ids) => (ids.length > 1 ? "[{malformed" : "[]"),
+    bulkWrite: async (rows) => {
+      if (rows.length > 1) {
+        combinedWriteAttempted = true;
+        throw new SyntaxError("malformed combined write");
+      }
+      written.push(rows[0].document.id);
+      return { error: [] };
+    },
+    query: async () => JSON.stringify({ documents: [] }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+  };
+  const { withTargetedOpfsRecovery } =
+    await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("combined-write"));
+
+  const result = await recovering.bulkWrite(
+    records.map((item) => ({ document: item })),
+    "test",
+  );
+
+  assert.deepEqual(result, { error: [] });
+  assert.equal(combinedWriteAttempted, false);
+  assert.equal(idleAwaited, true);
+  assert.deepEqual(
+    written,
+    records.map(({ id }) => id),
+  );
+});
+
 test("repairs one malformed record without removing its collection siblings", async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-targeted-recovery-"));
   const ids = ["product:111", "product:6660", "product:999"];
