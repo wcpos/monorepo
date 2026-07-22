@@ -139,9 +139,21 @@ export function withTargetedOpfsRecovery(storage) {
         try {
           return parseStorageResult(await findDocumentsById(ids, withDeleted));
         } catch (error) {
-          if (!isMalformedJson(error) || !(await repairMalformedIds(ids)))
-            throw error;
-          return findDocumentsById(ids, withDeleted);
+          if (!isMalformedJson(error)) throw error;
+          if (await repairMalformedIds(ids))
+            return findDocumentsById(ids, withDeleted);
+          if (ids.length > 1) {
+            const batches = await Promise.all(
+              ids.map((id) => findDocumentsById([id], withDeleted)),
+            );
+            const documents = batches.flatMap((batch) =>
+              typeof batch === "string" ? JSON.parse(batch) : batch,
+            );
+            return typeof batches[0] === "string"
+              ? JSON.stringify(documents)
+              : documents;
+          }
+          throw error;
         }
       };
 

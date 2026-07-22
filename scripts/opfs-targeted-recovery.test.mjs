@@ -133,6 +133,31 @@ test("exports a targeted OPFS recovery storage wrapper", async () => {
   assert.equal(typeof recoveryModule.withTargetedOpfsRecovery, "function");
 });
 
+test("falls back to singleton reads when only a combined response is malformed", async () => {
+  const records = [document("cache:orders", 0), document("cache:products", 1)];
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async (ids) =>
+      ids.length > 1
+        ? "[{malformed"
+        : JSON.stringify(records.filter(({ id }) => ids.includes(id))),
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => JSON.stringify({ documents: records }),
+    getChangedDocumentsSince: async () => JSON.stringify({ documents: records }),
+  };
+  const { withTargetedOpfsRecovery } = await import("./opfs-targeted-recovery.mjs");
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance(storageParams("combined-read"));
+
+  assert.deepEqual(
+    JSON.parse(
+      await recovering.findDocumentsById(records.map(({ id }) => id), false),
+    ),
+    records,
+  );
+});
+
 test("repairs one malformed record without removing its collection siblings", async () => {
   const basePath = await mkdtemp(join(tmpdir(), "wcpos-targeted-recovery-"));
   const ids = ["product:111", "product:6660", "product:999"];
