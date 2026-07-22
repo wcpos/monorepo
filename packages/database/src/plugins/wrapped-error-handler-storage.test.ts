@@ -176,6 +176,15 @@ describe('wrappedErrorHandlerStorage', () => {
 			await expect(wrappedInstance.findDocumentsById(['1'], false)).rejects.toThrow(
 				'could not requestRemote'
 			);
+			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+				'Storage worker error in findDocumentsById',
+				expect.objectContaining({
+					context: expect.objectContaining({
+						collectionName: 'test-collection',
+						documentId: '1',
+					}),
+				})
+			);
 		});
 
 		it('should re-throw for unknown errors', async () => {

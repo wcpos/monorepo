@@ -9,7 +9,11 @@ const storageLogger = getLogger(['wcpos', 'db', 'storage']);
  * Classify an error from the RxDB storage layer and log it appropriately.
  * Returns true if the error was handled (callers may provide a fallback value).
  */
-function handleStorageError(methodName: string, error: unknown): boolean {
+function handleStorageError(
+	methodName: string,
+	error: unknown,
+	context: Record<string, unknown> = {}
+): boolean {
 	const message = error instanceof Error ? error.message : String(error);
 
 	// CONFLICT errors (409) -- typically harmless, retried on next sync cycle
@@ -79,6 +83,7 @@ function handleStorageError(methodName: string, error: unknown): boolean {
 			context: {
 				errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
 				method: methodName,
+				...context,
 			},
 		});
 		// Don't suppress -- this is critical
@@ -116,7 +121,10 @@ function wrapStorageInstance<RxDocType>(
 		try {
 			return await originalFindDocumentsById(ids, withDeleted);
 		} catch (error) {
-			const handled = handleStorageError('findDocumentsById', error);
+			const handled = handleStorageError('findDocumentsById', error, {
+				collectionName: instance.collectionName,
+				documentId: ids.join(' '),
+			});
 			if (handled) {
 				// Return empty results as graceful fallback
 				return [] as any;
