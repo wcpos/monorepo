@@ -85,35 +85,39 @@ async function openVariationPopover(page: Page): Promise<Locator> {
 }
 
 /**
- * Select variation options until a valid combination resolves.
+ * Select one enabled variation option from each attribute group.
  */
 async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
-	const options = popoverDialog.locator('[data-testid^="variation-option-"]');
-	await expect(options.first()).toBeVisible({ timeout: 15_000 });
+	const optionGroups = popoverDialog.locator(
+		'[role="group"]:has([data-testid^="variation-option-"])'
+	);
+	await expect(optionGroups.first()).toBeVisible({ timeout: 15_000 });
 
-	const optionCount = await options.count();
-	expect(optionCount).toBeGreaterThan(0);
+	const groupCount = await optionGroups.count();
+	expect(groupCount).toBeGreaterThan(0);
 
-	const addToCartButton = page.getByTestId('variation-popover-add-to-cart');
-	for (let i = 0; i < optionCount; i++) {
-		const option = options.nth(i);
-		const isDisabled = await option.isDisabled().catch(() => true);
-		if (isDisabled) {
-			continue;
+	for (let groupIndex = 0; groupIndex < groupCount; groupIndex++) {
+		const options = optionGroups.nth(groupIndex).locator('[data-testid^="variation-option-"]');
+		const optionCount = await options.count();
+		let selected = false;
+
+		for (let optionIndex = 0; optionIndex < optionCount; optionIndex++) {
+			const option = options.nth(optionIndex);
+			if (await option.isDisabled().catch(() => true)) {
+				continue;
+			}
+
+			await option.click();
+			selected = true;
+			break;
 		}
 
-		await option.click();
-
-		const isReady = await expect
-			.poll(async () => addToCartButton.isVisible().catch(() => false), { timeout: 1_000 })
-			.toBeTruthy()
-			.then(() => true)
-			.catch(() => false);
-
-		if (isReady) {
-			return;
-		}
+		expect(selected).toBeTruthy();
 	}
+
+	await expect(page.getByTestId('variation-popover-add-to-cart')).toBeVisible({
+		timeout: 15_000,
+	});
 }
 
 /**
