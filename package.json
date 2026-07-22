@@ -7,6 +7,7 @@
     "dev:main": "turbo dev --filter=\"{./apps/main}...\"",
     "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
     "build": "turbo build",
+    "build:opfs-worker": "node scripts/build-opfs-worker.mjs",
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "test": "turbo run test --filter='{./packages/*}' --filter='{./apps/main}'",
     "test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
@@ -39,11 +40,14 @@
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
   "devDependencies": {
+    "esbuild": "0.28.1",
     "eslint": "^9.39.4",
     "expo": "~56.0.11",
     "glob": "^13.0.6",
     "lint-staged": "^16.4.0",
-    "prettier-plugin-tailwindcss": "^0.8.0"
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "rxdb": "17.4.0",
+    "rxdb-premium": "17.4.0"
   },
   "dependencies": {
     "turbo": "^2.9.18",
