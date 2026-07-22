@@ -111,13 +111,14 @@ export function withTargetedOpfsRecovery(storage) {
       const getChangedDocumentsSince =
         instance.getChangedDocumentsSince.bind(instance);
 
-      const repairMalformedIds = async (ids) => {
+      const repairMalformedIds = async (ids, onMalformedBatch) => {
         const repairBatch = async (batch) => {
           try {
             parseStorageResult(await findDocumentsById(batch, true));
             return false;
           } catch (error) {
             if (!isMalformedJson(error)) throw error;
+            onMalformedBatch?.();
             if (batch.length === 1) {
               const failure = await repairDocument(instance, batch[0]);
               if (typeof failure === "string") {
@@ -161,7 +162,19 @@ export function withTargetedOpfsRecovery(storage) {
         const ids = documentWrites.map(
           (row) => row.document[instance.primaryPath],
         );
-        await repairMalformedIds(ids);
+        let malformedBatch = false;
+        await repairMalformedIds(ids, () => {
+          malformedBatch = true;
+        });
+        if (malformedBatch && documentWrites.length > 1) {
+          const results = await Promise.all(
+            documentWrites.map((row) => bulkWrite([row], context)),
+          );
+          await instance.taskQueue?.awaitIdle?.();
+          return {
+            error: results.flatMap((result) => result.error),
+          };
+        }
         return bulkWrite(documentWrites, context);
       };
 
