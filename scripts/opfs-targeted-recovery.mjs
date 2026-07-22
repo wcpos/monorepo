@@ -275,16 +275,32 @@ async function reconcileSecondaryIndexes(instance) {
     // Emptying the changelog drops pending row operations for every index, so
     // every index must be persisted from its current in-memory rows — the same
     // pairing the storage's own cleanupChangelogOperations maintains. A failed
-    // commit restores the previous in-memory rows so memory never claims a
-    // repair the files don't hold.
+    // commit restores the previous in-memory rows and attempts every on-disk
+    // rollback, reporting any restoration failures with the commit failure.
+    const persistedRebuilds = [];
     try {
       for (const indexState of state.indexStates) {
         await indexState.persistInMemoryRows(runState);
+        if (previousRows.has(indexState)) persistedRebuilds.push(indexState);
       }
       await state.changelog.empty(runState);
     } catch (persistError) {
       for (const [indexState, rows] of previousRows) {
         indexState.rows = rows;
+      }
+      const rollbackErrors = [];
+      for (let i = persistedRebuilds.length - 1; i >= 0; i -= 1) {
+        try {
+          await persistedRebuilds[i].persistInMemoryRows(runState);
+        } catch (rollbackError) {
+          rollbackErrors.push(rollbackError);
+        }
+      }
+      if (rollbackErrors.length > 0) {
+        throw new AggregateError(
+          [persistError, ...rollbackErrors],
+          `index persistence failed: ${persistError?.message ?? persistError}; rollback incomplete: ${rollbackErrors.map((error) => error?.message ?? error).join("; ")}`,
+        );
       }
       throw persistError;
     }
@@ -368,7 +384,9 @@ export function withTargetedOpfsRecovery(storage) {
           if (!isMalformedJson(error)) throw error;
           cleanIds.clear();
           if (await repairMalformedIds(ids))
-            return findDocumentsById(ids, withDeleted);
+            return parseStorageResult(
+              await findDocumentsById(ids, withDeleted),
+            );
           if (ids.length > 1) {
             const batches = await Promise.all(
               ids.map((id) => findDocumentsById([id], withDeleted)),
@@ -396,9 +414,12 @@ export function withTargetedOpfsRecovery(storage) {
           });
           if (malformedBatch) {
             if (documentWrites.length > 1) {
-              const results = await Promise.all(
-                documentWrites.map((row) => bulkWrite([row], context)),
-              );
+              // Sequential on purpose: parallel singleton writes can
+              // interleave revisions of the same document.
+              const results = [];
+              for (const row of documentWrites) {
+                results.push(await bulkWrite([row], context));
+              }
               await instance.taskQueue?.awaitIdle?.();
               return {
                 error: results.flatMap((result) => result.error),
@@ -482,7 +503,7 @@ export function withTargetedOpfsRecovery(storage) {
           ) {
             throw error;
           }
-          return query(preparedQuery);
+          return parseStorageResult(await query(preparedQuery));
         }
       };
 
@@ -499,7 +520,9 @@ export function withTargetedOpfsRecovery(storage) {
           ) {
             throw error;
           }
-          return getChangedDocumentsSince(limit, checkpoint);
+          return parseStorageResult(
+            await getChangedDocumentsSince(limit, checkpoint),
+          );
         }
       };
 
