@@ -67,6 +67,15 @@ jobs:
       - name: "\U0001F310 Check translation source strings"
         run: pnpm translations:check
 
+      # Must stay the LAST step that touches the repo: initializing the
+      # submodule makes apps/electron a visible workspace package, and any
+      # later pnpm command would abort because the CI-rewritten lockfile has
+      # no importer for it. Plain node only — the test uses node builtins.
+      - name: "\U0001F501 OPFS recovery electron sync check"
+        run: |
+          git submodule update --init --depth 1 apps/electron
+          REQUIRE_ELECTRON_SUBMODULE=1 node --test scripts/opfs-recovery-electron-sync.test.mjs
+
   unit-tests:
     name: "\U0001F9EA Unit Tests"
     runs-on: ubuntu-latest
