@@ -27,7 +27,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ error: jest.fn() }),
+	getLogger: () => ({ error: jest.fn(), warn: jest.fn() }),
 }));
 
 describe('buildRefundPayload', () => {
@@ -144,7 +144,36 @@ describe('useRefundMutation', () => {
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 	});
 
-	it('rejects when the engine refresh fails so the existing error toast path can report it', async () => {
+	it('resolves when engine.require itself throws synchronously — the refund already succeeded', async () => {
+		const order = {
+			id: 78,
+			collection: {},
+		};
+		mockEngineRequire.mockImplementationOnce(() => {
+			throw new Error('engine_disposed');
+		});
+
+		const { result } = renderHook(() => useRefundMutation());
+
+		await act(async () => {
+			// The scheduling call can throw before a handle exists (e.g. the engine is
+			// mid-dispose on a store switch). Same funds-safety rule as a failed
+			// handle.ready: the POST already succeeded, so the mutation must resolve.
+			await expect(
+				result.current({
+					order: order as never,
+					amount: '10.00',
+					reason: 'Counter refund',
+					lineItems: [],
+					refundDestination: 'cash',
+				})
+			).resolves.toEqual({ refund_id: 123 });
+		});
+
+		expect(mockPost).toHaveBeenCalledTimes(1);
+	});
+
+	it('resolves when the engine refresh fails — the refund already succeeded server-side', async () => {
 		const order = {
 			id: 77,
 			collection: {},
@@ -160,6 +189,10 @@ describe('useRefundMutation', () => {
 		const { result } = renderHook(() => useRefundMutation());
 
 		await act(async () => {
+			// Ported guard from the 1.9 lane ('returns a successful refund response
+			// even when the local refresh fails'): once the POST succeeds, a refresh
+			// failure must NOT reject — the error toast would invite a retry, and a
+			// retry mints a fresh idempotency key, i.e. a second refund.
 			await expect(
 				result.current({
 					order: order as never,
@@ -168,7 +201,7 @@ describe('useRefundMutation', () => {
 					lineItems: [],
 					refundDestination: 'cash',
 				})
-			).rejects.toThrow('refresh_failed');
+			).resolves.toEqual({ refund_id: 123 });
 		});
 
 		expect(mockPost).toHaveBeenCalledTimes(1);
