@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 // Intentional version splits. Map of dependency name -> reason it is allowed
 // to resolve to more than one version across workspace packages.
 export const ALLOWED_DUPLICATES = new Map([
+  ['expo-constants', 'Workspaces resolve compatible patches against different Expo 56 peers'],
   // example: ['jest', 'apps/main needs jest-expo (jest 29); packages use jest 30'],
 ]);
 
