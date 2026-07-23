@@ -29,7 +29,12 @@ import {
 
 // --- Fake source builder ------------------------------------------------------
 
-type SequencePage = { rows: SequenceLogRow[]; cursor: { sequence: number }; hasMore: boolean };
+type SequencePage = {
+	rows: SequenceLogRow[];
+	cursor: { sequence: number };
+	hasMore: boolean;
+	head?: number;
+};
 
 type FakeSourceConfig = {
 	/** Successive sequence-log pages handed out in order; the last repeats. */
@@ -407,6 +412,121 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		expect(outcome.changes).toHaveLength(5);
 		// Cursor reached the cap and is preserved for the next poll to resume.
 		expect(outcome.cursor).toEqual({ sequence: 5 });
+	});
+});
+
+describe('TIER 1 — sequence-log backlog guard', () => {
+	const row = (sequence: number): SequenceLogRow => ({
+		sequence,
+		id: sequence,
+		collection: 'products',
+		type: 'update',
+	});
+
+	it('re-baselines to head from the first page and discards the historical rows', async () => {
+		const { source, calls } = makeFakeSource({
+			sequencePages: [
+				{ rows: [row(1)], cursor: { sequence: 1 }, hasMore: true, head: 100 },
+				{ rows: [row(2)], cursor: { sequence: 2 }, hasMore: false, head: 100 },
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			policy: { maxReplayBacklog: 50, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+			now: () => 0,
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome).toMatchObject({
+			changes: [],
+			cursor: { sequence: 100 },
+			rebaseline: true,
+			sweepRan: false,
+		});
+		expect(calls.pollSequenceLog).toHaveLength(1);
+	});
+
+	it('does not fire at the exact backlog threshold', async () => {
+		const { source, calls } = makeFakeSource({
+			sequencePages: [
+				{ rows: [row(1)], cursor: { sequence: 1 }, hasMore: true, head: 50 },
+				{ rows: [row(2)], cursor: { sequence: 2 }, hasMore: false, head: 100 },
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			policy: { maxReplayBacklog: 50, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+			now: () => 0,
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome.rebaseline).toBe(false);
+		expect(outcome.changes.map((change) => change.id)).toEqual([1, 2]);
+		expect(outcome.cursor).toEqual({ sequence: 2 });
+		expect(calls.pollSequenceLog).toHaveLength(2);
+	});
+
+	it('drains normally when head is absent', async () => {
+		const { source, calls } = makeFakeSource({
+			sequencePages: [
+				{ rows: [row(1)], cursor: { sequence: 1 }, hasMore: true },
+				{ rows: [row(2)], cursor: { sequence: 2 }, hasMore: false },
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			policy: { maxReplayBacklog: 1, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+			now: () => 0,
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome.rebaseline).toBe(false);
+		expect(outcome.changes.map((change) => change.id)).toEqual([1, 2]);
+		expect(calls.pollSequenceLog).toHaveLength(2);
+	});
+
+	it('is disabled when maxReplayBacklog is zero', async () => {
+		const { source, calls } = makeFakeSource({
+			sequencePages: [
+				{ rows: [row(1)], cursor: { sequence: 1 }, hasMore: true, head: 100 },
+				{ rows: [row(2)], cursor: { sequence: 2 }, hasMore: false, head: 100 },
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+			now: () => 0,
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome.rebaseline).toBe(false);
+		expect(outcome.changes.map((change) => change.id)).toEqual([1, 2]);
+		expect(calls.pollSequenceLog).toHaveLength(2);
+	});
+
+	it('defers a due sweep until the poll after re-baselining', async () => {
+		const { source, calls } = makeFakeSource({
+			sequencePages: [
+				{ rows: [row(1)], cursor: { sequence: 1 }, hasMore: true, head: 100 },
+				{ rows: [], cursor: { sequence: 100 }, hasMore: false, head: 100 },
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			policy: { maxReplayBacklog: 50, sweepEveryNPolls: 1, sweepIntervalMs: 0 },
+			now: () => 0,
+		});
+
+		const guarded = await engine.poll();
+		const next = await engine.poll();
+
+		expect(guarded).toMatchObject({ rebaseline: true, sweepRan: false });
+		expect(next).toMatchObject({ rebaseline: false, sweepRan: true });
+		expect(calls.hashChecksumScan).toHaveLength(1);
 	});
 });
 
@@ -1525,6 +1645,7 @@ describe('provenance + policy', () => {
 	it('exposes matrix-derived defaults', () => {
 		expect(DEFAULT_HYBRID_POLICY).toMatchObject({
 			sequenceLogLimit: 100,
+			maxReplayBacklog: 5_000,
 			sweepEveryNPolls: 10,
 			hashChecksumBucketSize: 1000,
 			rangeChecksumBucketSize: 1000,

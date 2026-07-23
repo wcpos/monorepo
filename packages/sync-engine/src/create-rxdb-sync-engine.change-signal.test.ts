@@ -13,8 +13,13 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { scopeKeyFor, type StoreScopeIdentity, type SyncEvent } from '@wcpos/sync-core';
 
-import { createRxdbSyncEngine, type RxdbSyncEngine } from './create-rxdb-sync-engine';
-import { memoryEngineStorage, scriptedConnectivity } from './testing';
+import {
+	createRxdbSyncEngine,
+	type EngineEvent,
+	EngineStringStore,
+	type RxdbSyncEngine,
+} from './create-rxdb-sync-engine';
+import { memoryEngineStorage, memoryStringStore, scriptedConnectivity } from './testing';
 
 import type { RxStorage } from 'rxdb';
 
@@ -41,6 +46,10 @@ function scriptedServer() {
 		rows: [] as SequenceRow[],
 		poisonSequenceLog: false,
 		productPulls: 0,
+		productIncludes: [] as number[][],
+		variationPulls: 0,
+		customerPulls: 0,
+		sequenceLogFetches: 0,
 		headFetches: 0,
 		products: new Map<number, Record<string, unknown>>([
 			[
@@ -72,6 +81,7 @@ function scriptedServer() {
 		const u = new URL(url);
 		const path = u.pathname;
 		if (path.endsWith('/changes/sequence-log')) {
+			state.sequenceLogFetches += 1;
 			if (state.poisonSequenceLog) {
 				return new Response('<html>maintenance</html>', {
 					status: 200,
@@ -109,7 +119,53 @@ function scriptedServer() {
 		if (path.endsWith('/products')) {
 			state.productPulls += 1;
 			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
+			state.productIncludes.push(include);
 			return json(include.map((id) => state.products.get(id)).filter(Boolean));
+		}
+		if (path.endsWith('/variations')) {
+			state.variationPulls += 1;
+			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
+			return json({
+				documents: include.map((id) => ({
+					id,
+					parent_id: 9,
+					payload: {
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: '22222222-2222-4222-8222-222222222222',
+							},
+						],
+						price: '4.00',
+						stock_status: 'instock',
+						attributes: [],
+					},
+				})),
+			});
+		}
+		if (path.endsWith('/customers')) {
+			state.customerPulls += 1;
+			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
+			return json(
+				include.map((id) => ({
+					id,
+					meta_data: [
+						{
+							key: '_woocommerce_pos_uuid',
+							value: '33333333-3333-4333-8333-333333333333',
+						},
+					],
+				}))
+			);
+		}
+		if (
+			path.endsWith('/taxes') ||
+			path.endsWith('/products/categories') ||
+			path.endsWith('/products/brands') ||
+			path.endsWith('/products/tags') ||
+			path.endsWith('/coupons')
+		) {
+			return json([]);
 		}
 		throw new Error(`scripted server: unexpected ${path}`);
 	};
@@ -128,12 +184,14 @@ function engineWith(input: {
 	identity: StoreScopeIdentity;
 	connectivity?: () => 'online' | 'offline' | 'degraded';
 	diagnostics?: (event: SyncEvent) => void;
+	checkpoints?: EngineStringStore;
 }): RxdbSyncEngine {
 	return createRxdbSyncEngine(
 		{
 			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
 			storage: input.storage,
 			fetcher: (url, init) => input.fetch(url, init),
+			...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
 			...(input.connectivity ? { connectivity: input.connectivity } : {}),
 			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
 			mode: 'manual',
@@ -196,6 +254,258 @@ describe('sync("change-signal") through the public handle', () => {
 		expect(server.state.productPulls).toBe(1);
 		expect(await productCount(revived)).toBe(1);
 		await revived.dispose();
+	});
+
+	it('re-baselines a restored far-behind cursor in one page and refreshes locally synced docs', async () => {
+		const server = scriptedServer();
+		const storage = memoryEngineStorage();
+		const checkpoints = memoryStringStore();
+		const identity = freshIdentity();
+		const engine = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		await engine.ready;
+		await engine.sync('change-signal');
+
+		server.state.head = 8;
+		server.state.rows.push(
+			{
+				sequence: 6,
+				id: 9,
+				type: 'update',
+				collection: 'products',
+				modified_gmt: '2026-07-10T00:00:01',
+			},
+			{
+				sequence: 7,
+				id: 20,
+				type: 'update',
+				collection: 'variations',
+				modified_gmt: '2026-07-10T00:00:02',
+			},
+			{
+				sequence: 8,
+				id: 30,
+				type: 'update',
+				collection: 'customers',
+				modified_gmt: '2026-07-10T00:00:03',
+			}
+		);
+		expect((await engine.sync('change-signal')).status).toBe('ran');
+		await engine.dispose();
+
+		const key = `${scopeKeyFor(identity)}:checkpoint:change-signal`;
+		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
+		server.state.head = 6_000;
+		server.state.sequenceLogFetches = 0;
+		const pullsBefore = {
+			products: server.state.productPulls,
+			variations: server.state.variationPulls,
+			customers: server.state.customerPulls,
+		};
+
+		const revived = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		await revived.ready;
+		expect(await revived.sync('change-signal')).toMatchObject({ status: 'ran', rebaselined: true });
+
+		expect(server.state.sequenceLogFetches).toBe(1);
+		expect(server.state.productPulls).toBe(pullsBefore.products + 1);
+		expect(server.state.variationPulls).toBe(pullsBefore.variations + 1);
+		expect(server.state.customerPulls).toBe(pullsBefore.customers + 1);
+		expect(JSON.parse((await checkpoints.get(key))!)).toMatchObject({
+			cursor: { sequence: 6_000 },
+		});
+		await revived.dispose();
+	});
+
+	it('rebaseline tolerates a server-deleted record: prunes it locally and still persists head', async () => {
+		const server = scriptedServer();
+		const storage = memoryEngineStorage();
+		const checkpoints = memoryStringStore();
+		const identity = freshIdentity();
+		const engine = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		await engine.ready;
+		await engine.sync('change-signal'); // prime at head 5
+
+		// Seed product 9 locally through the normal signal → pull path.
+		server.state.head = 6;
+		server.state.rows.push({
+			sequence: 6,
+			id: 9,
+			type: 'update',
+			collection: 'products',
+			modified_gmt: '2026-07-10T00:00:01',
+		});
+		await engine.sync('change-signal');
+		expect(await productCount(engine)).toBe(1);
+		await engine.dispose();
+
+		// The record is deleted server-side during the skipped window; the include
+		// pull now returns a SHORT page. The strict arms would fail the tick — the
+		// rebaseline arm must instead prune the id and commit head (a thrown
+		// shortfall here would wedge the guard in a permanent retry loop).
+		server.state.products.delete(9);
+		const key = `${scopeKeyFor(identity)}:checkpoint:change-signal`;
+		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
+		server.state.head = 7_000;
+
+		const revived = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		await revived.ready;
+		expect(await revived.sync('change-signal')).toMatchObject({ status: 'ran', rebaselined: true });
+		expect(await productCount(revived)).toBe(0); // pruned, not wedged
+		expect(JSON.parse((await checkpoints.get(key))!)).toMatchObject({
+			cursor: { sequence: 7_000 },
+		});
+		await revived.dispose();
+	});
+
+	it('rebaseline pulls the MIRRORED woo id and skips docs with pending local work', async () => {
+		const server = scriptedServer();
+		const storage = memoryEngineStorage();
+		const checkpoints = memoryStringStore();
+		const identity = freshIdentity();
+		const engine = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		await engine.ready;
+		await engine.sync('change-signal'); // prime at head 5
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const products = scope.database.collections.products as {
+			insert(doc: Record<string, unknown>): Promise<unknown>;
+		};
+		// A locally-created-then-acked record: the server id lives ONLY in the
+		// mirrored field; the original create payload never carried `id`.
+		await products.insert({
+			id: '44444444-4444-4444-8444-444444444444',
+			wooProductId: 77,
+			price: 7,
+			stockStatus: 'instock',
+			type: 'simple',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { name: 'acked local create' },
+			sync: { revision: 'r', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		// A record with pending local work: its payload must not be re-pulled (the
+		// local-work guard would discard it anyway).
+		await products.insert({
+			id: '55555555-5555-4555-8555-555555555555',
+			wooProductId: 88,
+			price: 8,
+			stockStatus: 'instock',
+			type: 'simple',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { id: 88, name: 'dirty local edit' },
+			sync: { revision: 'r', partial: false, source: 'woo-rest' },
+			local: { dirty: true, pendingMutationIds: [] },
+		});
+		server.state.products.set(77, {
+			id: 77,
+			meta_data: [
+				{ id: 1, key: '_woocommerce_pos_uuid', value: '44444444-4444-4444-8444-444444444444' },
+			],
+			date_modified_gmt: '2026-07-10T00:00:00',
+			price: '7.00',
+			stock_status: 'instock',
+			type: 'simple',
+			categories: [],
+			brands: [],
+			on_sale: false,
+			featured: false,
+			stock_quantity: null,
+		});
+		await engine.dispose();
+
+		const key = `${scopeKeyFor(identity)}:checkpoint:change-signal`;
+		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
+		server.state.head = 8_000;
+		server.state.productIncludes = [];
+
+		const revived = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		await revived.ready;
+		expect(await revived.sync('change-signal')).toMatchObject({ status: 'ran', rebaselined: true });
+		// Mirrored id 77 pulled; dirty 88 never requested.
+		expect(server.state.productIncludes).toEqual([[77]]);
+		await revived.dispose();
+	});
+
+	it('auto mode converges the existence/seed lanes immediately after a rebaseline tick', async () => {
+		const server = scriptedServer();
+		const identity = freshIdentity();
+		const checkpoints = memoryStringStore();
+		// The cursor is far behind head BEFORE the engine boots — the first
+		// automatic change-signal tick must rebaseline and then kick the lanes
+		// that deliver what the discarded rows would have (creates, refills),
+		// instead of leaving them to their 5–17 min cadences.
+		const key = `${scopeKeyFor(identity)}:checkpoint:change-signal`;
+		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
+		server.state.head = 9_000;
+
+		const intervals: { callback: () => void; delay: number }[] = [];
+		vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+			callback: () => void,
+			delay: number
+		) => {
+			intervals.push({ callback, delay });
+			return intervals.length as unknown as ReturnType<typeof setInterval>;
+		}) as typeof setInterval);
+		vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => undefined);
+
+		const engine = createRxdbSyncEngine(
+			{
+				site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
+				storage: memoryEngineStorage(),
+				fetcher: (url) => server.fetch(url),
+				checkpoints,
+				mode: 'auto',
+			},
+			identity
+		);
+		try {
+			const events: EngineEvent[] = [];
+			engine.events((event) => events.push(event));
+			await engine.ready;
+			await vi.waitFor(() => expect(intervals.some(({ delay }) => delay === 10_000)).toBe(true));
+			events.length = 0;
+
+			// Fire the change-signal interval: the tick rebaselines (cursor 0 →
+			// 9,000) and the follow-up chain must run the existence/seed lanes now.
+			intervals.find(({ delay }) => delay === 10_000)!.callback();
+			await vi.waitFor(() => {
+				for (const lane of [
+					'existence-prime',
+					'existence-reconcile',
+					'product-browse-window-seed',
+					'scheduler-drain',
+				] as const) {
+					expect(
+						events.filter((event) => event.type === 'lane-start' && event.lane === lane)
+					).toHaveLength(1);
+				}
+			});
+
+			// Negative control: a routine (non-rebaseline) tick kicks nothing.
+			events.length = 0;
+			intervals.find(({ delay }) => delay === 10_000)!.callback();
+			await vi.waitFor(() =>
+				expect(
+					events.filter((event) => event.type === 'lane-finish' && event.lane === 'change-signal')
+				).toHaveLength(1)
+			);
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			expect(
+				events.filter((event) => event.type === 'lane-start' && event.lane === 'existence-prime')
+			).toHaveLength(0);
+		} finally {
+			vi.restoreAllMocks();
+			await engine.dispose();
+		}
 	});
 
 	it('adopts the server _rxdb_revision stamp as sync.revision and strips it from the stored payload (#423 step 1b)', async () => {

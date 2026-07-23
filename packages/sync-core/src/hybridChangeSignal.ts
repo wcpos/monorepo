@@ -190,10 +190,12 @@ export type ChangeSignalSource = {
 	 * deletes as tombstones). The returned cursor is the new high-water mark;
 	 * `hasMore` is true when the page was capped and another drain is needed.
 	 */
-	pollSequenceLog(input: {
+	pollSequenceLog(input: { cursor: SequenceCursor; limit: number }): Promise<{
+		rows: SequenceLogRow[];
 		cursor: SequenceCursor;
-		limit: number;
-	}): Promise<{ rows: SequenceLogRow[]; cursor: SequenceCursor; hasMore: boolean }>;
+		hasMore: boolean;
+		head?: number;
+	}>;
 
 	/**
 	 * TIER 2 — products. Paginated BIT_XOR-aggregate scan over wp_posts id
@@ -269,6 +271,8 @@ export type HybridChangeSignalPolicy = {
 	 * cursor it reached; the next poll() resumes from there.
 	 */
 	maxSequenceLogPages: number;
+	/** TIER 1 backlog threshold; 0 disables the first-page rebaseline guard. */
+	maxReplayBacklog: number;
 	/**
 	 * TIER 2 cadence by poll count: run the integrity sweep every Nth poll(). The
 	 * routine TIER 1 poll is cheap and frequent; the integrity sweep is the
@@ -331,6 +335,7 @@ export const DEFAULT_HYBRID_POLICY: HybridChangeSignalPolicy = {
 	// A 100-page drain covers a 10k backlog in one poll; the cap is a runaway
 	// guard, not an expected limit.
 	maxSequenceLogPages: 100,
+	maxReplayBacklog: 5_000,
 	// The matrix calls TIER 2 a "periodic" backstop, not a per-poll cost: with a
 	// ~10s freshness target the routine poll runs often, so 1-in-10 keeps the
 	// ~140ms scan's amortized cost negligible while still catching a
@@ -381,6 +386,8 @@ export type HybridRepairTarget = {
 export type HybridPollOutcome = {
 	/** Routine changes from TIER 1, each tagged source: 'sequence-log'. */
 	changes: HybridChange[];
+	/** Whether this poll abandoned a large replay and moved directly to the reported head. */
+	rebaseline: boolean;
 	/** The advanced TIER 1 cursor. A sweep-only poll returns it UNCHANGED. */
 	cursor: SequenceCursor;
 	/** Whether the TIER 2 integrity sweep ran this poll. */
@@ -563,6 +570,7 @@ export function createHybridChangeSignalEngine(input: {
 	async function drainSequenceLog(startCursor: SequenceCursor): Promise<{
 		changes: HybridChange[];
 		nextCursor: SequenceCursor;
+		rebaseline: boolean;
 	}> {
 		const changes: HybridChange[] = [];
 		let nextCursor = startCursor;
@@ -579,6 +587,15 @@ export function createHybridChangeSignalEngine(input: {
 				limit: policy.sequenceLogLimit,
 			});
 			pages += 1;
+			if (
+				pages === 1 &&
+				policy.maxReplayBacklog > 0 &&
+				typeof page.head === 'number' &&
+				Number.isFinite(page.head) &&
+				page.head - startCursor.sequence > policy.maxReplayBacklog
+			) {
+				return { changes: [], nextCursor: { sequence: page.head }, rebaseline: true };
+			}
 			nextCursor = page.cursor;
 			for (const row of page.rows) {
 				changes.push({
@@ -592,7 +609,7 @@ export function createHybridChangeSignalEngine(input: {
 				break;
 			}
 		}
-		return { changes, nextCursor };
+		return { changes, nextCursor, rebaseline: false };
 	}
 
 	// --- TIER 2: scan both detectors, diff against retained baselines ----------
@@ -841,7 +858,27 @@ export function createHybridChangeSignalEngine(input: {
 
 			// TIER 1 — always. Drained into a local cursor; not committed until the
 			// whole poll succeeds (see drainSequenceLog).
-			const { changes, nextCursor } = await drainSequenceLog(cursor);
+			const { changes, nextCursor, rebaseline } = await drainSequenceLog(cursor);
+
+			if (rebaseline) {
+				cursor = nextCursor;
+				if (due) {
+					sweepRetryPending = true;
+				}
+				config?.commit();
+				return {
+					changes,
+					cursor,
+					rebaseline: true,
+					sweepRan: false,
+					sweepIncomplete: false,
+					integrityMismatches: [],
+					idsToPull: [],
+					escalatedIds: [],
+					baselineDigests: cloneBaselines(baselines),
+					...configTier,
+				};
+			}
 
 			// TIER 2 — on cadence. A sweep does NOT advance the sequence cursor.
 			if (!due) {
@@ -850,6 +887,7 @@ export function createHybridChangeSignalEngine(input: {
 				return {
 					changes,
 					cursor,
+					rebaseline: false,
 					sweepRan: false,
 					sweepIncomplete: false,
 					integrityMismatches: [],
@@ -875,6 +913,7 @@ export function createHybridChangeSignalEngine(input: {
 			return {
 				changes,
 				cursor,
+				rebaseline: false,
 				sweepRan: true,
 				sweepIncomplete: false,
 				integrityMismatches: mismatches,

@@ -65,6 +65,11 @@ export type ChangeSignalReport = {
 	status: 'ran' | 'skipped' | 'error';
 	reason?: string;
 	error?: string;
+	/** This tick's poll abandoned an excessive replay and re-baselined to head.
+	 * The facade uses it to converge the existence/seed lanes NOW instead of
+	 * waiting out their 5–17 min cadences (server-side creates and reset refills
+	 * are exactly what the discarded backlog rows would have delivered). */
+	rebaselined?: boolean;
 };
 
 export type ChangeSignalLaneDeps = {
@@ -202,9 +207,11 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				activeFetch = bound.bindFetch(tickFetcher);
 				const engine = await engineFor(scopeId);
 				let report: ChangeSignalReport = { lane: 'change-signal', status: 'ran' };
+				let rebaselined = false;
 				const wrote = await bound.guardWrite(async () => {
 					const outcome = await engine.poll();
 					const actions = planReplicationActions(outcome);
+					rebaselined = actions.rebaselineCollections.length > 0;
 					cycleSummary = {
 						pulls: actions.targetedPulls.reduce((n, group) => n + group.ids.length, 0),
 						deletes: actions.deletes.reduce((n, group) => n + group.ids.length, 0),
@@ -235,6 +242,8 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						status: 'skipped',
 						reason: 'scope moved mid-tick (writes dropped)',
 					};
+				} else if (rebaselined) {
+					report = { ...report, rebaselined: true };
 				}
 				if (wrote !== 'dropped' && cycleSummary !== null) {
 					deps.diagnostics({

@@ -47,6 +47,8 @@ export type ReplicationActions = {
 	targetedPulls: { collection: HybridCollection; ids: number[] }[];
 	/** tombstones (delete/trash-type changes + idsToPull status 'deleted') → local delete, NOT a fetch. */
 	deletes: { collection: HybridCollection; ids: number[] }[];
+	/** All collections to refresh after abandoning an excessive sequence-log replay. */
+	rebaselineCollections: HybridCollection[];
 	/** staleCollections that reported configBarcodeFields → try local re-derive first. */
 	reDeriveBarcode: { collection: BarcodeConfigCollection; activeFields: string[] }[];
 	/** staleCollections WITHOUT configBarcodeFields → must re-fetch the whole collection. */
@@ -60,6 +62,17 @@ export type ReplicationActions = {
 		configBaseline?: ConfigFingerprintBaseline;
 	};
 };
+
+const REBASELINE_COLLECTIONS: readonly HybridCollection[] = [
+	'products',
+	'variations',
+	'customers',
+	'tax_rates',
+	'categories',
+	'brands',
+	'tags',
+	'coupons',
+];
 
 /**
  * A TIER 1 change `type` is a tombstone when its VERB names a delete or trash.
@@ -171,6 +184,7 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 	return {
 		targetedPulls: pulls.toArray(),
 		deletes: deletes.toArray(),
+		rebaselineCollections: outcome.rebaseline ? [...REBASELINE_COLLECTIONS] : [],
 		reDeriveBarcode,
 		reFetchCollections,
 		escalations: outcome.escalatedIds,

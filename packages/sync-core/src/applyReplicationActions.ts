@@ -44,6 +44,10 @@ import type { ReplicationActions } from './changeSignalReplication';
 /** An already-synced document the barcode re-derive reads (id + payload only). */
 export type SyncedDocument = { id: string; payload: Record<string, unknown> };
 
+/** Outcome of one collection's rebaseline pull: every locally synced id is
+ * either re-pulled (`applied`) or pruned as server-deleted (`pruned`). */
+export type RebaselineTargetedResult = { requested: number; applied: number; pruned: number };
+
 /**
  * The thin host adapter surface. EVERY handler is required: omitting one is a
  * compile error, which is what makes "forget to handle an arm" (the original
@@ -97,6 +101,21 @@ export type ReplicationActionHandlers = {
 	 * products/customers, and unlike tax rates whose lane only upserts).
 	 */
 	refreshReferenceCollection(collection: ReferenceCollection): Promise<void> | void;
+	/**
+	 * Re-baseline one TARGETED collection after the backlog guard abandoned a
+	 * replay: re-pull the current server state of every locally synced record,
+	 * TOLERATING server-side deletions — an id missing from the pull was deleted
+	 * during the skipped window (its tombstone row was discarded with the
+	 * backlog), so the host prunes it through its delete path instead of failing
+	 * the tick. The strict pull arms above stay shortfall-fatal because their
+	 * ids come from sequence-log rows whose delete case re-polls; rebaseline ids
+	 * come from the local replica and have no such upstream cover. `requested`
+	 * counts the locally synced ids (pending local work excluded), and
+	 * `applied + pruned` accounts for every one of them on success.
+	 */
+	rebaselineTargeted(
+		collection: 'products' | 'variations' | 'customers'
+	): Promise<RebaselineTargetedResult> | RebaselineTargetedResult;
 	/**
 	 * Read already-synced docs for a stale collection, driving the local barcode
 	 * re-derive. A host that cannot re-derive a given collection (e.g. it has no
@@ -223,6 +242,7 @@ export function emptyApplyReplicationActionsResult(): ApplyReplicationActionsRes
 		actions: {
 			targetedPulls: [],
 			deletes: [],
+			rebaselineCollections: [],
 			reDeriveBarcode: [],
 			reFetchCollections: [],
 			escalations: [],
@@ -304,6 +324,26 @@ export async function applyReplicationActions(
 			collection,
 			fields: { requested, applied },
 		});
+
+	for (const collection of actions.rebaselineCollections) {
+		if (collection === 'products' || collection === 'variations' || collection === 'customers') {
+			const { requested, applied, pruned } = await handlers.rebaselineTargeted(collection);
+			log(
+				applied + pruned < requested
+					? `change-signal: WARNING ${collection} rebaseline reconciled ${applied + pruned}/${requested} — unreconciled record(s) consumed by the cursor; a re-sync may be needed`
+					: `change-signal: rebaseline ${collection} — pulled ${applied}, pruned ${pruned} of ${requested} synced id(s)`
+			);
+			emitCount('apply.rebaseline', collection, requested, applied + pruned);
+		} else if (collection === 'tax_rates') {
+			await handlers.refreshTaxRates();
+			log('change-signal: rebaseline refreshed the tax_rates collection');
+			emitCount('apply.rebaseline', collection, 1, 1);
+		} else {
+			await handlers.refreshReferenceCollection(collection);
+			log(`change-signal: rebaseline refreshed the ${collection} collection`);
+			emitCount('apply.rebaseline', collection, 1, 1);
+		}
+	}
 
 	// 1) PRODUCT targeted pulls. Variations are NOT fetchable via wc/v3
 	//    products?include= (a separate resource) so they are deferred below.

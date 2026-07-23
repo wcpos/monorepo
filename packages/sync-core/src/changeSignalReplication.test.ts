@@ -25,6 +25,7 @@ function baseOutcome(overrides: Partial<HybridPollOutcome> = {}): HybridPollOutc
 	return {
 		changes: [],
 		cursor,
+		rebaseline: false,
 		sweepRan: false,
 		sweepIncomplete: false,
 		integrityMismatches: [],
@@ -251,6 +252,29 @@ describe('planReplicationActions — nextState threads through', () => {
 	});
 });
 
+describe('planReplicationActions — rebaseline', () => {
+	it('refreshes every hybrid collection without planning targeted pulls or deletes', () => {
+		const actions = planReplicationActions(baseOutcome({ rebaseline: true }));
+
+		expect(actions.rebaselineCollections).toEqual([
+			'products',
+			'variations',
+			'customers',
+			'tax_rates',
+			'categories',
+			'brands',
+			'tags',
+			'coupons',
+		]);
+		expect(actions.targetedPulls).toEqual([]);
+		expect(actions.deletes).toEqual([]);
+	});
+
+	it('plans no rebaseline collections for existing outcomes', () => {
+		expect(planReplicationActions(baseOutcome()).rebaselineCollections).toEqual([]);
+	});
+});
+
 describe('planReplicationActions — empty outcome', () => {
 	it('produces empty actions for an empty poll outcome', () => {
 		const actions = planReplicationActions(baseOutcome());
@@ -258,6 +282,7 @@ describe('planReplicationActions — empty outcome', () => {
 		expect(actions.deletes).toEqual([]);
 		expect(actions.reDeriveBarcode).toEqual([]);
 		expect(actions.reFetchCollections).toEqual([]);
+		expect(actions.rebaselineCollections).toEqual([]);
 		expect(actions.escalations).toEqual([]);
 	});
 });

@@ -1260,7 +1260,27 @@ export function createRxdbSyncEngine(
 		'existence-reconcile': (signal) => maintenanceLanes.existenceReconcile.tick(signal),
 	};
 	const dispatchLaneTick = (name: EngineLane, signal?: AbortSignal): Promise<SyncReport> => {
-		if (name === 'change-signal') return changeSignalLane.tick(signal);
+		if (name === 'change-signal') {
+			return changeSignalLane.tick(signal).then((report) => {
+				// A rebaseline consumed the skipped sequence-log history; whatever
+				// those rows would have delivered that the targeted re-pull cannot
+				// (server-side CREATES, a reset collection's refill) converges through
+				// the existence/seed lanes — so in auto mode run them NOW instead of
+				// waiting out their 5–17 min cadences. Mirrors the reconnect-retick
+				// ordering: seeds land before the drain scans for runnable tasks.
+				// Manual mode is untouched: an all-lane sync() already runs these
+				// lanes after change-signal in the same ordered pass, and a targeted
+				// manual tick stays exactly one lane (deterministic tests).
+				if (report.rebaselined === true && mode === 'auto' && !disposed) {
+					void runAutomaticTick(() => tickLaneWithEvents('existence-prime'))
+						.then(() => runAutomaticTick(() => tickLaneWithEvents('existence-reconcile')))
+						.then(() => runAutomaticTick(() => tickLaneWithEvents('product-browse-window-seed')))
+						.then(() => runAutomaticTick(() => tickLaneWithEvents('scheduler-drain')))
+						.catch(() => undefined);
+				}
+				return report;
+			});
+		}
 		if (name === 'write-drain') return writeDrainLane.tick(signal);
 		return MAINTENANCE_LANES[name](signal);
 	};
