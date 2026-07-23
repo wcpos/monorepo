@@ -15,9 +15,17 @@ export type RerunOrReseedOutcome = 'rerun-requested' | 'requeued' | 'skipped';
 export type CompleteOrRequeueOutcome = 'completed' | 'requeued' | 'claim-lost';
 
 function toDocument(state: PersistedSchedulerTaskState): SchedulerTaskStateDocument {
-	const { collection, ...rest } = state;
+	// The optional fields must be ABSENT keys when unset, never `ids: undefined`:
+	// dev-mode z-schema validation type-checks a present key's value (VD2, 422),
+	// and key-absence is load-bearing downstream (migrateSchedulerTaskStateV4,
+	// the sameSchedulerTaskState CAS compare). Lane/query states arrive with the
+	// keys present-but-undefined (toQueuedState spreads task.ids/task.wooIds).
+	const { collection, ids, wooIds, rerunRequested, ...rest } = state;
 	return {
 		...rest,
+		...(ids === undefined ? {} : { ids }),
+		...(wooIds === undefined ? {} : { wooIds }),
+		...(rerunRequested === undefined ? {} : { rerunRequested }),
 		stateKey: schedulerTaskStateKey(state.taskId),
 		collectionName: collection,
 		schemaVersion: 4,
@@ -176,7 +184,10 @@ export class RxSchedulerTaskStateRepository {
 				current.claimedUntilMs > nowMs
 			) {
 				outcome = 'rerun-requested';
-				return { ...currentDocument, rerunRequested: true };
+				// Route through toDocument so an existing invalid lane row (ids/wooIds
+				// present-but-undefined) has those keys stripped before the flag-set
+				// re-writes the doc — otherwise z-schema throws VD2 (#318).
+				return toDocument({ ...current, rerunRequested: true });
 			}
 			// Only a COMPLETED task needs a re-seed: it advanced the cursor past the change with
 			// no future run scheduled. A failed / queued / lease-expired task will run again on
