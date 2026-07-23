@@ -184,6 +184,33 @@ run_case "fix-bot workflow-only commit without trailer fails" fail \
   MOCK_COMMIT_FILES_c1=$'modified\t.github/workflows/tests.yml' \
   MOCK_COMMIT_MSG_c1="fix: tweak CI"
 
+for config_path in \
+  apps/main/package.json \
+  packages/core/package.json \
+  turbo.json \
+  tsconfig.json \
+  packages/core/tsconfig.jest.json \
+  .github/dependabot.yml \
+  apps/main/eas.json \
+  app.json \
+  .npmrc \
+  yarn.lock \
+  bun.lock \
+  bun.lockb \
+  npm-shrinkwrap.json; do
+  run_case "fix-bot config-only commit without trailer fails ($config_path)" fail \
+    PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+    MOCK_PR_COMMITS="$bot_commits" \
+    MOCK_COMMIT_FILES_c1="modified"$'\t'"$config_path" \
+    MOCK_COMMIT_MSG_c1="fix: tweak config"
+done
+
+run_case "fix-bot issue-template-only commit is exempt" pass \
+  PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\t.github/ISSUE_TEMPLATE/bug.yml' \
+  MOCK_COMMIT_MSG_c1="fix: tweak issue template"
+
 run_case "fix-bot config commit with trailer passes without a new test" pass \
   PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
   MOCK_PR_COMMITS="$bot_commits" \

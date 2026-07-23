@@ -62,7 +62,13 @@ is_source_path() {
 # config-class bot commits require the Tested: trailer, not a new test.
 is_config_path() {
   case "$1" in
-    .github/workflows/*|.github/*.json|composer.json|composer.lock|package.json|pnpm-workspace.yaml|pnpm-lock.yaml|package-lock.json) return 0 ;;
+    .github/workflows/*|.github/*.json|.github/dependabot.yml|.github/dependabot.yaml) return 0 ;;
+    package.json|*/package.json|composer.json|*/composer.json) return 0 ;;
+    pnpm-workspace.yaml|*/pnpm-workspace.yaml|turbo.json|*/turbo.json) return 0 ;;
+    tsconfig*.json|*/tsconfig*.json|app.json|*/app.json|eas.json|*/eas.json|.npmrc|*/.npmrc) return 0 ;;
+    composer.lock|*/composer.lock|pnpm-lock.yaml|*/pnpm-lock.yaml) return 0 ;;
+    package-lock.json|*/package-lock.json|npm-shrinkwrap.json|*/npm-shrinkwrap.json) return 0 ;;
+    yarn.lock|*/yarn.lock|bun.lock|*/bun.lock|bun.lockb|*/bun.lockb) return 0 ;;
     *) return 1 ;;
   esac
 }
