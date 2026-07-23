@@ -174,7 +174,13 @@ describe('POSProducts query-state wiring', () => {
 
 		expect(latestState()).toEqual({
 			search: '',
-			filters: { categories: [], tags: [], brands: [], stock_status: 'instock' },
+			filters: {
+				categories: [],
+				tags: [],
+				brands: [],
+				stock_status: 'instock',
+				status: 'publish',
+			},
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		});
@@ -200,7 +206,10 @@ describe('POSProducts query-state wiring', () => {
 
 	it('maps showOutOfStock and runtime sort changes exactly onto products query state', () => {
 		const { rerender } = render(<POSProducts />);
-		expect(latestState().filters.stock_status).toBe('instock');
+		expect(latestState().filters).toMatchObject({
+			stock_status: 'instock',
+			status: 'publish',
+		});
 
 		mockShowOutOfStock = true;
 		mockSortBy = 'total_sales';
@@ -208,7 +217,7 @@ describe('POSProducts query-state wiring', () => {
 		rerender(<POSProducts />);
 
 		expect(latestState()).toMatchObject({
-			filters: { categories: [], tags: [], brands: [] },
+			filters: { categories: [], tags: [], brands: [], status: 'publish' },
 			sort: { field: 'total_sales', direction: 'desc' },
 		});
 		expect(latestState().filters).not.toHaveProperty('stock_status');
@@ -231,6 +240,7 @@ describe('POSProducts query-state wiring', () => {
 		fireEvent.click(screen.getByTestId('clear-and-refresh'));
 
 		expect(latestState().filters).not.toHaveProperty('stock_status');
+		expect(latestState().filters).toMatchObject({ status: 'publish' });
 	});
 
 	it('normalizes the persisted price column key to sortable_price', () => {

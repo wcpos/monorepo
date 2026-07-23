@@ -7,8 +7,41 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { QueryStateProvider, useQueryState } from '../../../../../../query';
+import { VariationsPopover } from './index';
 import { Variations } from './variations';
 
+const mockVariationDocuments = [
+	{
+		id: 11,
+		status: 'draft',
+		attributes: [{ id: 1, name: 'Color', option: 'Red' }],
+	},
+	{
+		id: 12,
+		status: 'publish',
+		attributes: [{ id: 1, name: 'Color', option: 'Blue' }],
+	},
+];
+const mockUseCollectionBinding = jest.fn(
+	(_collection: string, state: { filters: { status?: string } }) => {
+		const hits = mockVariationDocuments
+			.filter((document) => !state.filters.status || document.status === state.filters.status)
+			.map((document) => ({ document }));
+		return {
+			resource: { value: { count: hits.length, hits } },
+			active$: of(false),
+		};
+	}
+);
+
+jest.mock('../../../../../../query', () => {
+	const actual = jest.requireActual('../../../../../../query');
+	return {
+		...actual,
+		useCollectionBinding: (collection: string, state: { filters: { status?: string } }) =>
+			mockUseCollectionBinding(collection, state),
+	};
+});
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => false,
 	useObservableSuspense: (resource: { value: unknown }) => resource.value,
@@ -34,14 +67,33 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/suspense', () => ({
+	Suspense: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('./buttons', () => ({
 	VariationButtons: ({
+		attribute,
 		onSelect,
+		optionCounts,
 	}: {
+		attribute: { id: number; name: string; options: string[] };
 		onSelect: (attribute: { id: number; name: string; option?: string }) => void;
+		optionCounts: Record<string, number>;
 	}) => (
 		<>
-			<button onClick={() => onSelect({ id: 1, name: 'Color', option: 'Red' })}>select-red</button>
+			{attribute.options
+				.filter((option) => optionCounts[option] > 0)
+				.map((option) => (
+					<button
+						key={option}
+						onClick={() => onSelect({ id: attribute.id, name: attribute.name, option })}
+					>
+						{`select-${option.toLowerCase()}`}
+					</button>
+				))}
 			<button onClick={() => onSelect({ id: 1, name: 'Color' })}>clear-color</button>
 		</>
 	),
@@ -57,6 +109,9 @@ jest.mock('../../../../../../contexts/translations', () => ({
 jest.mock('../../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: string) => value }),
 }));
+jest.mock('../../../../contexts/ui-settings', () => ({
+	useUISettings: () => ({ uiSettings: { showOutOfStock$: false } }),
+}));
 
 function StateProbe() {
 	const matches = useQueryState<'variations', import('../../../../../../query').VariationMatch[]>(
@@ -66,6 +121,23 @@ function StateProbe() {
 }
 
 describe('Variations popover query state', () => {
+	it('does not show draft variations', () => {
+		render(
+			<VariationsPopover
+				parent={
+					{
+						variations: [11, 12],
+						attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+					} as never
+				}
+				addToCart={jest.fn()}
+			/>
+		);
+
+		expect(screen.queryByText('select-red')).toBeNull();
+		expect(screen.queryByText('select-blue')).not.toBeNull();
+	});
+
 	it('adds and removes an attribute match through the provider actions', () => {
 		const Component = Variations as unknown as React.ComponentType<Record<string, unknown>>;
 		const binding = {

@@ -18,7 +18,12 @@ let productDocs: FakeDoc[] = [];
 let variationDocs: FakeDoc[] = [];
 
 function doc(id: string, payload: Payload, name: 'products' | 'variations' = 'products'): FakeDoc {
-	const d: FakeDoc = { id, payload, collection: { name }, getLatest: () => d };
+	const d: FakeDoc = {
+		id,
+		payload: { status: 'publish', ...payload },
+		collection: { name },
+		getLatest: () => d,
+	};
 	return d;
 }
 
@@ -50,6 +55,26 @@ function search(code: string) {
 beforeEach(() => {
 	productDocs = [];
 	variationDocs = [];
+});
+
+describe('barcodeSearch product visibility', () => {
+	it('does not match a draft product but still matches a published product', async () => {
+		productDocs = [
+			doc('draft', { barcode: 'DRAFT-123', status: 'draft' }),
+			doc('published', { barcode: 'LIVE-123' }),
+		];
+
+		expect(await search('DRAFT-123')).toEqual([]);
+		expect((await search('LIVE-123')) as unknown as FakeDoc[]).toMatchObject([{ id: 'published' }]);
+	});
+
+	it('does not match a draft variation', async () => {
+		variationDocs = [
+			doc('draft-variation', { barcode: 'DRAFT-VARIATION', status: 'draft' }, 'variations'),
+		];
+
+		expect(await search('DRAFT-VARIATION')).toEqual([]);
+	});
 });
 
 describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
