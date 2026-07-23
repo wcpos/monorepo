@@ -39,9 +39,13 @@ jobs:
           app-id: ${{ secrets.WCPOS_BOT_APP_ID }}
           private-key: ${{ secrets.WCPOS_BOT_PRIVATE_KEY }}
           owner: wcpos
+          # .wiki is a private submodule in the same org; the checkout below uses
+          # submodules: true, so the App token must be scoped to it too or the
+          # recursive clone 404s. (web-bundle + electron are public.)
           repositories: |
             monorepo
             web-bundle
+            wiki
 
       - name: 📥 Check out monorepo (with submodules)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
