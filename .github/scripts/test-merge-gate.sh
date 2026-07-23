@@ -185,6 +185,8 @@ run_case "fix-bot workflow-only commit without trailer fails" fail \
   MOCK_COMMIT_MSG_c1="fix: tweak CI"
 
 for config_path in \
+  apps/electron \
+  apps/web \
   apps/main/package.json \
   packages/core/package.json \
   tests/package.json \

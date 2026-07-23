@@ -31,7 +31,6 @@ jobs:
           owner: wcpos
           repositories: |
             monorepo
-            wiki
 
       - name: Checkout monorepo (with submodules)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -40,8 +39,8 @@ jobs:
           ref: refs/heads/main
           submodules: true
           fetch-depth: 0
-          # .wiki is a private submodule in the same org; the default
-          # GITHUB_TOKEN is scoped to the current repository only.
+          # Push with the App token so CI workflows run on the bump commit
+          # (pushes made with the default GITHUB_TOKEN don't trigger them).
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Update submodules to latest remote main
@@ -49,24 +48,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          # .wiki does not declare `branch` in .gitmodules → fall back to the
-          # default branch by pulling origin HEAD explicitly.
-          git -C .wiki fetch origin
-          git -C .wiki checkout origin/HEAD
-
           # apps/electron tracks `main` per .gitmodules.
           git submodule update --remote --checkout apps/electron
 
-          git add .wiki apps/electron
+          git add apps/electron
           if git diff --staged --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No submodule updates."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git -C .wiki rev-parse --short HEAD > /tmp/wiki-sha
-            git -C apps/electron rev-parse --short HEAD > /tmp/electron-sha
-            echo "wiki_sha=$(cat /tmp/wiki-sha)" >> "$GITHUB_OUTPUT"
-            echo "electron_sha=$(cat /tmp/electron-sha)" >> "$GITHUB_OUTPUT"
+            echo "electron_sha=$(git -C apps/electron rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Commit and push
@@ -75,7 +66,7 @@ jobs:
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore(submodules): bump .wiki @ ${{ steps.bump.outputs.wiki_sha }}, apps/electron @ ${{ steps.bump.outputs.electron_sha }}"
+          git commit -m "chore(submodules): bump apps/electron @ ${{ steps.bump.outputs.electron_sha }}"
           # If main advanced between checkout and push (e.g. another
           # workflow merged a PR), rebase onto it so the push is a
           # fast-forward rather than rejected as non-ff.

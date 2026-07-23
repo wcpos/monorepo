@@ -16,10 +16,6 @@ const checks = [
     pattern: /repositories:\s*\|[\s\S]*?\n\s*monorepo\s*$/m,
   },
   {
-    description: 'scopes token to wiki repository',
-    pattern: /repositories:\s*\|[\s\S]*?\n\s*wiki\s*$/m,
-  },
-  {
     description: 'uses the WCPOS bot app id secret',
     pattern: /app-id:\s*\$\{\{\s*secrets\.WCPOS_BOT_APP_ID\s*\}\}/m,
   },
@@ -36,11 +32,11 @@ const checks = [
 const failures = checks.filter(({ pattern }) => !pattern.test(workflow));
 
 if (failures.length > 0) {
-  console.error('bump-submodules workflow is missing required private-submodule auth wiring:');
+  console.error('bump-submodules workflow is missing required GitHub App auth wiring:');
   for (const failure of failures) {
     console.error(`- ${failure.description}`);
   }
   process.exit(1);
 }
 
-console.log('bump-submodules workflow has GitHub App auth wiring for private submodules.');
+console.log('bump-submodules workflow has the required GitHub App auth wiring.');

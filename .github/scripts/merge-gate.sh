@@ -63,6 +63,7 @@ is_source_path() {
 is_config_path() {
   case "$1" in
     .github/workflows/*|.github/*.json|.github/dependabot.yml|.github/dependabot.yaml) return 0 ;;
+    apps/electron|apps/web) return 0 ;;
     package.json|*/package.json|composer.json|*/composer.json) return 0 ;;
     pnpm-workspace.yaml|*/pnpm-workspace.yaml|turbo.json|*/turbo.json) return 0 ;;
     tsconfig*.json|*/tsconfig*.json|app.json|*/app.json|eas.json|*/eas.json|.npmrc|*/.npmrc) return 0 ;;
