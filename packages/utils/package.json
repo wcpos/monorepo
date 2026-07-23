@@ -39,7 +39,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "expo-constants": "~56.0.16",
+    "expo-constants": "~57.0.7",
     "react-native": "*"
   },
   "peerDependenciesMeta": {
