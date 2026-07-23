@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
-import { addRxPlugin, createRxDatabase } from 'rxdb';
+import { afterEach, describe, expect, it } from 'vitest';
+import { addRxPlugin, createRxDatabase, type RxDatabase } from 'rxdb';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
@@ -27,12 +27,21 @@ addRxPlugin(RxDBMigrationSchemaPlugin);
  */
 
 let dbCounter = 0;
+const openDatabases: RxDatabase[] = [];
+
+afterEach(async () => {
+	// Close every RxDatabase created during the test so its storage, listeners,
+	// and internal resources are released — repeated watch-mode runs stay isolated.
+	await Promise.all(openDatabases.splice(0).map((db) => db.close()));
+});
+
 async function taskStateRepository() {
 	dbCounter += 1;
 	const db = await createRxDatabase({
 		name: `taskstatedevvalidation${dbCounter}`,
 		storage: wrappedValidateZSchemaStorage({ storage: getRxStorageMemory() }),
 	});
+	openDatabases.push(db);
 	await db.addCollections({
 		schedulerTaskStates: {
 			schema: schedulerTaskStateSchema,
