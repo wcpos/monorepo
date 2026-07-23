@@ -656,6 +656,7 @@
   "logs": {
     "sortBy": "timestamp",
     "sortDirection": "desc",
+    "showSyncStatus": true,
     "columns": [
       {
         "key": "timestamp",

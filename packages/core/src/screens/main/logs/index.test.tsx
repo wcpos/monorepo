@@ -22,6 +22,7 @@ const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown)
 let mockDataTableProps: Record<string, unknown> = {};
 let mockSortBy = 'timestamp';
 let mockSortDirection = 'desc';
+let mockShowSyncStatus = true;
 
 jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
@@ -88,11 +89,18 @@ jest.mock('../components/data-table/skeleton', () => ({ DataTableSkeleton: () =>
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('../contexts/ui-settings', () => ({
-	useUISettings: () => ({
-		uiSettings: { sortBy: mockSortBy, sortDirection: mockSortDirection },
-	}),
-}));
+jest.mock('../contexts/ui-settings', () => {
+	const { of: rxOf } = jest.requireActual('rxjs');
+	return {
+		useUISettings: () => ({
+			uiSettings: {
+				sortBy: mockSortBy,
+				sortDirection: mockSortDirection,
+				showSyncStatus$: rxOf(mockShowSyncStatus),
+			},
+		}),
+	};
+});
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
@@ -101,6 +109,9 @@ jest.mock('./filter-bar', () => ({
 	FilterBar: () => null,
 }));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
+jest.mock('./sync-status-strip', () => ({
+	SyncStatusStrip: () => <div data-testid="logs-sync-status-strip" />,
+}));
 jest.mock('./footer', () => ({ LogsFooter: () => null }));
 jest.mock('../components/text-cell', () => ({ TextCell: () => null }));
 jest.mock('./cells/context', () => ({ Context: () => null }));
@@ -121,6 +132,7 @@ describe('LogsScreen query-state wiring', () => {
 		mockDataTableProps = {};
 		mockSortBy = 'timestamp';
 		mockSortDirection = 'desc';
+		mockShowSyncStatus = true;
 	});
 
 	afterEach(() => jest.useRealTimers());
@@ -192,5 +204,21 @@ describe('LogsScreen query-state wiring', () => {
 			limit: 10,
 		});
 		expect(mockDataTableProps.sort).toEqual({ field: 'level', direction: 'asc' });
+	});
+
+	it('mounts the sync status strip when showSyncStatus is enabled', () => {
+		mockShowSyncStatus = true;
+
+		render(<LogsScreen />);
+
+		expect(screen.getByTestId('logs-sync-status-strip')).toBeTruthy();
+	});
+
+	it('hides the sync status strip when showSyncStatus is disabled', () => {
+		mockShowSyncStatus = false;
+
+		render(<LogsScreen />);
+
+		expect(screen.queryByTestId('logs-sync-status-strip')).toBeNull();
 	});
 });

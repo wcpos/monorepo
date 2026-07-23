@@ -566,6 +566,12 @@ export type LogDocument = RxDocument<LogDocumentType>;
 export type LogCollection = RxCollection<LogDocumentType>;
 const logs: RxCollectionCreator<LogDocumentType> = {
 	schema: logSchema,
+	migrationStrategies: {
+		1: (oldDoc: any) => {
+			oldDoc.level = String(oldDoc.level ?? 'info').slice(0, 16);
+			return oldDoc;
+		}, // v0→v1 only adds indexes; documents are unchanged
+	},
 	options: {
 		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],
 	},
