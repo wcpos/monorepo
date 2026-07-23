@@ -187,8 +187,10 @@ run_case "fix-bot workflow-only commit without trailer fails" fail \
 for config_path in \
   apps/main/package.json \
   packages/core/package.json \
+  tests/package.json \
   turbo.json \
   tsconfig.json \
+  tsconfig.test.json \
   packages/core/tsconfig.jest.json \
   .github/dependabot.yml \
   apps/main/eas.json \

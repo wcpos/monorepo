@@ -104,13 +104,14 @@ enforce_bot_fix_discipline() {
     has_config=false
     while IFS=$'\t' read -r fstatus file; do
       [[ -n "$file" ]] || continue
+      if is_config_path "$file"; then
+        has_config=true
+      fi
       if is_test_path "$file"; then
         # Deleting a test is not pinning one.
         [[ "$fstatus" != "removed" ]] && has_test=true
       elif is_source_path "$file"; then
         has_source=true
-      elif is_config_path "$file"; then
-        has_config=true
       fi
     done <<< "$files"
     [[ "$has_source" == "true" || "$has_config" == "true" ]] || continue
