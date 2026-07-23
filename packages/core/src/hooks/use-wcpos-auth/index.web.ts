@@ -114,8 +114,7 @@ function parseAuthFromUrl(): WcposAuthResult | null {
 	if (result.type === 'success' && result.params) {
 		const savedState = getSavedCsrfState();
 		const returnedState = (result.params as unknown as Record<string, unknown>)?.state as
-			| string
-			| undefined;
+			string | undefined;
 
 		if (savedState && returnedState !== savedState) {
 			oauthLogger.error('State parameter mismatch - possible CSRF attack');

@@ -11,9 +11,7 @@ import { useAvailablePrinterProfiles } from '../../settings/printer/use-availabl
 import { useAppState } from '../../../../contexts/app-state';
 
 export type PrinterSelection =
-	| { type: 'auto' }
-	| { type: 'system' }
-	| { type: 'manual'; printerId: string };
+	{ type: 'auto' } | { type: 'system' } | { type: 'manual'; printerId: string };
 
 interface UseResolvedPrinterOptions {
 	template: TemplateInfo | null;

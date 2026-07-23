@@ -8,6 +8,20 @@ import { ESLint } from "eslint";
 
 import { config } from "../index.js";
 
+test("loads Expo React rules with the workspace ESLint version", async () => {
+  const eslint = new ESLint({
+    baseConfig: config,
+    overrideConfigFile: true,
+  });
+
+  const [result] = await eslint.lintText(
+    "export function Example() { return null; }",
+    { filePath: "src/example.tsx" },
+  );
+
+  assert.equal(result.fatalErrorCount, 0);
+});
+
 async function lintE2E(code) {
   const eslint = new ESLint({
     baseConfig: config,
