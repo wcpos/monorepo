@@ -6,6 +6,7 @@ import {
 	getSyncStatusEpoch,
 	getSyncStatusState,
 	hydrateSyncStatus,
+	markSyncStatusStale,
 	resetSyncStatus,
 	subscribeSyncStatus,
 	syncStatusObserver,
@@ -157,6 +158,58 @@ describe('sync status store', () => {
 				lastError: { at: 200, type: 'new.error', message: 'new' },
 			},
 		});
+	});
+
+	it('markSyncStatusStale does not mutate state or notify listeners', () => {
+		hydrateSyncStatus({
+			products: { lastCheckedAt: 10, lastChangedAt: null, lastError: null },
+		});
+		const before = getSyncStatusState();
+		const listener = jest.fn();
+		subscribeSyncStatus(listener);
+		markSyncStatusStale();
+		expect(getSyncStatusState()).toBe(before);
+		expect(getSyncStatusState().products.lastCheckedAt).toBe(10);
+		expect(listener).not.toHaveBeenCalled();
+	});
+
+	it('wipes prior stamps on the first observed event after markSyncStatusStale', () => {
+		jest.spyOn(Date, 'now').mockReturnValue(777);
+		hydrateSyncStatus({
+			products: { lastCheckedAt: 10, lastChangedAt: null, lastError: null },
+		});
+		markSyncStatusStale();
+		syncStatusObserver(
+			event({
+				type: 'apply.pull',
+				collection: 'customers',
+				fields: { requested: 1, applied: 1 },
+			})
+		);
+		expect(getSyncStatusState().products).toBeUndefined();
+		expect(getSyncStatusState().customers.lastChangedAt).toBe(777);
+	});
+
+	it('resetSyncStatus clears a pending stale flag so lazy reset does not double-wipe', () => {
+		jest.spyOn(Date, 'now').mockReturnValue(888);
+		markSyncStatusStale();
+		resetSyncStatus();
+		syncStatusObserver(
+			event({
+				type: 'apply.pull',
+				collection: 'products',
+				fields: { requested: 1, applied: 1 },
+			})
+		);
+		syncStatusObserver(
+			event({
+				type: 'apply.pull',
+				collection: 'customers',
+				fields: { requested: 1, applied: 1 },
+			})
+		);
+		expect(getSyncStatusState().products.lastChangedAt).toBe(888);
+		expect(getSyncStatusState().customers.lastChangedAt).toBe(888);
 	});
 
 	it('notifies subscribers on state change until they unsubscribe', () => {

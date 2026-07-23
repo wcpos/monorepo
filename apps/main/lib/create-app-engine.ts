@@ -31,7 +31,7 @@ import {
 } from './metrics';
 import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
-import { resetSyncStatus, syncStatusObserver } from './sync-status';
+import { markSyncStatusStale, syncStatusObserver } from './sync-status';
 
 const networkLogger = getLogger(['wcpos', 'network', 'sync']);
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
@@ -307,6 +307,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// captured database epoch — the engine is constructed during render, before
 	// the effect that rebinds the logger database runs, so an epoch captured
 	// here could be permanently stale.
+	// Constructed per engine-construction, so its rate-limit windows are always
+	// fresh — no explicit reset needed on supersede.
 	const syncLogObserver = createSyncLogObserver({
 		persist: (level, message, context) => {
 			engineLogger[level](message, { saveToDb: true, context });
@@ -321,8 +323,15 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	};
 
 	if (supersedesCachedEngine) {
-		syncLogObserver.reset();
-		resetSyncStatus();
+		// Defer the sync-status wipe instead of doing it now: this construction runs
+		// during render, but the outgoing store's persistence bridge flushes its final
+		// snapshot on effect cleanup — AFTER this render. An eager reset would make that
+		// flush persist an empty snapshot into the outgoing store's doc, destroying its
+		// history. Marking stale defers the wipe to the new engine's first observed
+		// event, which is always after commit (engine I/O is async). On a genuine store
+		// switch the incoming bridge's own reset-before-hydrate clears the flag first, so
+		// the lazy reset can never wipe freshly hydrated history.
+		markSyncStatusStale();
 	}
 
 	const engine = createRxdbSyncEngine(

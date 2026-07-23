@@ -80,6 +80,7 @@ export function foldSyncStatus(
 
 let syncStatusState: SyncStatusState = {};
 let syncStatusEpoch = 0;
+let staleFlag = false;
 const listeners = new Set<() => void>();
 
 function setSyncStatusState(next: SyncStatusState): void {
@@ -89,6 +90,12 @@ function setSyncStatusState(next: SyncStatusState): void {
 }
 
 export const syncStatusObserver: SyncObserver = (event) => {
+	// A lazy reset (markSyncStatusStale) runs here, on the first observed event —
+	// never during render — so the outgoing store's persistence-bridge flush has
+	// already snapshotted the old state before this fresh session overwrites it.
+	if (staleFlag) resetSyncStatus();
+	// The emitter stamps `at` at emit time; the fallback covers events from
+	// emitters that omit it.
 	setSyncStatusState(foldSyncStatus(syncStatusState, event, event.at ?? Date.now()));
 };
 
@@ -96,7 +103,22 @@ export function getSyncStatusState(): SyncStatusState {
 	return syncStatusState;
 }
 
+/**
+ * Defer a wipe of the module state to the next observed event instead of doing it
+ * now. Setting the flag does NOT touch state and fires NO listeners — critical so
+ * that a store switch (which supersedes the engine during render) cannot make the
+ * outgoing bridge's cleanup flush persist an empty snapshot into the old store's
+ * doc. The incoming bridge's own reset-before-hydrate clears this flag on a genuine
+ * store switch, so a lazy reset never wipes freshly hydrated history.
+ */
+export function markSyncStatusStale(): void {
+	staleFlag = true;
+}
+
 export function resetSyncStatus(): void {
+	// A bridge-level reset supersedes a pending lazy one — they serve the same
+	// purpose, so clear the flag to avoid a redundant second wipe.
+	staleFlag = false;
 	syncStatusState = {};
 	syncStatusEpoch += 1;
 	for (const listener of listeners) listener();
