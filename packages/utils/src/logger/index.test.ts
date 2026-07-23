@@ -164,6 +164,9 @@ describe('logger/index', () => {
 				find: jest.fn().mockReturnValue({
 					remove: jest.fn().mockResolvedValue([]),
 				}),
+				count: jest.fn().mockReturnValue({
+					exec: jest.fn().mockResolvedValue(0),
+				}),
 			};
 			expect(() => setDatabase(mockCollection)).not.toThrow();
 		});
@@ -172,7 +175,13 @@ describe('logger/index', () => {
 			// Use isolateModules to get a fresh module where hasPruned is false
 			const mockRemove = jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }]);
 			const mockFind = jest.fn().mockReturnValue({ remove: mockRemove });
-			const mockCollection = { insert: jest.fn(), find: mockFind };
+			const mockCollection = {
+				insert: jest.fn(),
+				find: mockFind,
+				count: jest.fn().mockReturnValue({
+					exec: jest.fn().mockResolvedValue(0),
+				}),
+			};
 
 			let freshSetDatabase: typeof setDatabase;
 			jest.isolateModules(() => {
@@ -190,11 +199,45 @@ describe('logger/index', () => {
 			expect(mockRemove).toHaveBeenCalled();
 		});
 
+		it('prunes beyond MAX_LOG_ROWS on setDatabase', async () => {
+			const oldLogRemove = jest.fn().mockResolvedValue([]);
+			const excessLogRemove = jest.fn().mockResolvedValue(new Array(600).fill({}));
+			const mockFind = jest
+				.fn()
+				.mockReturnValueOnce({ remove: oldLogRemove })
+				.mockReturnValueOnce({ remove: excessLogRemove });
+			const mockCountExec = jest.fn().mockResolvedValue(5600);
+			const mockCollection = {
+				insert: jest.fn(),
+				find: mockFind,
+				count: jest.fn().mockReturnValue({ exec: mockCountExec }),
+			};
+
+			let freshSetDatabase: typeof setDatabase;
+			jest.isolateModules(() => {
+				freshSetDatabase = require('./index').setDatabase;
+			});
+
+			freshSetDatabase!(mockCollection);
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(mockCountExec).toHaveBeenCalled();
+			expect(mockFind).toHaveBeenCalledWith({
+				sort: [{ timestamp: 'asc' }],
+				limit: 600,
+			});
+			expect(excessLogRemove).toHaveBeenCalled();
+		});
+
 		it('persists searchable operational identifiers without copying arbitrary context', async () => {
 			const insert = jest.fn().mockResolvedValue(undefined);
 			setDatabase({
 				insert,
 				find: jest.fn().mockReturnValue({ remove: jest.fn().mockResolvedValue([]) }),
+				count: jest.fn().mockReturnValue({
+					exec: jest.fn().mockResolvedValue(0),
+				}),
 			});
 
 			getLogger(['wcpos', 'pos', 'cart']).info('Cart line item updated', {
@@ -229,6 +272,34 @@ describe('logger/index', () => {
 			expect(context.search).toContain('201');
 			expect(context.search).toContain('wcpos.pos.cart');
 			expect(context.search).not.toContain('must not be copied');
+		});
+
+		it('includes collection, type and lane in the search string', async () => {
+			const insert = jest.fn().mockResolvedValue(undefined);
+			setDatabase({
+				insert,
+				find: jest.fn().mockReturnValue({ remove: jest.fn().mockResolvedValue([]) }),
+				count: jest.fn().mockReturnValue({
+					exec: jest.fn().mockResolvedValue(0),
+				}),
+			});
+
+			getLogger(['wcpos', 'sync']).info('Applied sync changes', {
+				saveToDb: true,
+				context: {
+					collection: 'products',
+					type: 'apply.pull',
+					lane: 'change-signal',
+					applied: 3,
+				},
+			});
+			await Promise.resolve();
+
+			const [{ context }] = insert.mock.calls[0];
+			expect(context.search).toContain('products');
+			expect(context.search).toContain('apply.pull');
+			expect(context.search).toContain('change-signal');
+			expect(context.search).not.toContain('3');
 		});
 	});
 });
