@@ -120,7 +120,7 @@ describe('SyncStatusStrip', () => {
 		};
 		mockCensus = {
 			...emptyCensus(),
-			products: { total: 2038, updatedAtMs: NOW, fresh: true },
+			products: { total: 2038, updatedAtMs: NOW, freshUntilMs: NOW + MINUTE, fresh: true },
 		};
 		mockCounts = { orders: 12, products: 1204, variations: 640, customers: 0, taxRates: 3 };
 	});

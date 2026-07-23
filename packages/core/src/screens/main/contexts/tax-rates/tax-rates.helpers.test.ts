@@ -61,10 +61,7 @@ describe('tax-rates.helpers', () => {
 				];
 				const result = filterTaxRates(rates, 'US');
 
-				// Should match US and empty country rates
-				const ids = result.map((r) => r.id);
-				expect(ids).toContain(1);
-				expect(ids).not.toContain(2);
+				expect(result).toEqual([rates[0]]);
 			});
 
 			it('should be case-insensitive for country', () => {
@@ -81,9 +78,7 @@ describe('tax-rates.helpers', () => {
 				];
 				const result = filterTaxRates(rates, 'US', 'CA');
 
-				const ids = result.map((r) => r.id);
-				expect(ids).toContain(1);
-				expect(ids).not.toContain(2);
+				expect(result).toEqual([rates[0]]);
 			});
 
 			it('should be case-insensitive for state', () => {

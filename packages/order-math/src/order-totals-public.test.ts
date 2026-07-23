@@ -81,3 +81,24 @@ test('getOrderTotals with empty snapshot returns zeroed totals', () => {
 	expect(result.discount_total).toBe('0');
 	expect(result.tax_lines).toEqual([]);
 });
+
+test('getOrderTotals with zero tax rates leaves an untaxed order total unaffected', () => {
+	const snapshot = snapshotFromOrderJSON({
+		line_items: [
+			{
+				subtotal: '100',
+				total: '100',
+				subtotal_tax: '0',
+				total_tax: '0',
+				taxes: [],
+			},
+		],
+	});
+	const noTaxConfig = createCartConfig({ ...config, rates: [], allRates: [] });
+
+	const result = getOrderTotals(snapshot, noTaxConfig);
+
+	expect(result.tax_lines).toEqual([]);
+	expect(result.cart_tax).toBe('0');
+	expect(result.total).toBe('100');
+});
