@@ -134,7 +134,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			],
 			'expo-image',
 			'expo-localization',
-			'expo-sqlite',
 			'expo-web-browser',
 		],
 

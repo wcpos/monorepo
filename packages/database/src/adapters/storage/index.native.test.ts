@@ -1,4 +1,4 @@
-const mockDeleteDatabaseAsync = jest.fn();
+const mockDeleteDirectory = jest.fn();
 const mockGetRxStorageExpoAsync = jest.fn(() => ({ name: 'expo-filesystem-storage' }));
 const mockWithTargetedOpfsRecovery = jest.fn((storage: unknown) => ({
 	name: 'targeted-recovery-storage',
@@ -13,7 +13,6 @@ const mockLogger = {
 class MockDirectory {
 	name: string;
 	uri: string;
-	exists = false;
 
 	constructor(...parts: ({ uri?: string } | string)[]) {
 		this.uri = parts
@@ -23,17 +22,22 @@ class MockDirectory {
 		this.name = String(parts[parts.length - 1] ?? '');
 	}
 
+	get exists() {
+		return this.uri.endsWith('/SQLite');
+	}
+
 	list() {
+		if (this.uri.endsWith('/SQLite')) {
+			return [{ name: 'wcposusers_v6' }];
+		}
+
 		return [];
 	}
 
-	delete() {}
+	delete() {
+		mockDeleteDirectory(this.uri);
+	}
 }
-
-jest.mock('expo-sqlite', () => ({
-	deleteDatabaseAsync: (name: string) => mockDeleteDatabaseAsync(name),
-	defaultDatabaseDirectory: 'sqlite-dir',
-}));
 
 jest.mock('expo-file-system', () => ({
 	Directory: MockDirectory,
@@ -79,10 +83,10 @@ describe('native storage', () => {
 		});
 	});
 
-	it('rethrows real sqlite deletion failures during clear-all-db', async () => {
-		mockDeleteDatabaseAsync.mockRejectedValueOnce(new Error('disk I/O error'));
+	it('removes the legacy SQLite directory during clear-all-db', async () => {
 		const { clearAllDB } = await import('../../clear-all-db');
 
-		await expect(clearAllDB()).rejects.toThrow('disk I/O error');
+		await expect(clearAllDB()).resolves.toMatchObject({ databasesDeleted: 1 });
+		expect(mockDeleteDirectory).toHaveBeenCalledWith('document-dir/SQLite');
 	});
 });
