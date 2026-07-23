@@ -56,6 +56,24 @@ is_source_path() {
   esac
 }
 
+# Config that steers CI or dependency resolution: a same-commit pinning test
+# usually has no meaningful form here (what test pins a version bump?), but
+# the change still needs proof the suite ran — mirror requires_php_tests:
+# config-class bot commits require the Tested: trailer, not a new test.
+is_config_path() {
+  case "$1" in
+    .github/workflows/*|.github/*.json|.github/dependabot.yml|.github/dependabot.yaml) return 0 ;;
+    apps/electron|apps/web) return 0 ;;
+    package.json|*/package.json|composer.json|*/composer.json) return 0 ;;
+    pnpm-workspace.yaml|*/pnpm-workspace.yaml|turbo.json|*/turbo.json) return 0 ;;
+    tsconfig*.json|*/tsconfig*.json|app.json|*/app.json|eas.json|*/eas.json|.npmrc|*/.npmrc) return 0 ;;
+    composer.lock|*/composer.lock|pnpm-lock.yaml|*/pnpm-lock.yaml) return 0 ;;
+    package-lock.json|*/package-lock.json|npm-shrinkwrap.json|*/npm-shrinkwrap.json) return 0 ;;
+    yarn.lock|*/yarn.lock|bun.lock|*/bun.lock|bun.lockb|*/bun.lockb) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Fix-bot commits must carry their own proof: a bot-authored commit that
 # changes source must (a) touch a test in the SAME commit and (b) record a
 # local suite run as a `Tested:` trailer. Mechanical backstop for the fleet's
@@ -84,8 +102,12 @@ enforce_bot_fix_discipline() {
     fi
     has_source=false
     has_test=false
+    has_config=false
     while IFS=$'\t' read -r fstatus file; do
       [[ -n "$file" ]] || continue
+      if is_config_path "$file"; then
+        has_config=true
+      fi
       if is_test_path "$file"; then
         # Deleting a test is not pinning one.
         [[ "$fstatus" != "removed" ]] && has_test=true
@@ -93,8 +115,8 @@ enforce_bot_fix_discipline() {
         has_source=true
       fi
     done <<< "$files"
-    [[ "$has_source" == "true" ]] || continue
-    if [[ "$has_test" != "true" ]]; then
+    [[ "$has_source" == "true" || "$has_config" == "true" ]] || continue
+    if [[ "$has_source" == "true" && "$has_test" != "true" ]]; then
       log "✗ Fix-bot commit ${sha:0:8} ($author) changes source without touching any test. A fix is not a fix until a test pins it — ship the pinning test in the same commit."
       failed=1
     fi

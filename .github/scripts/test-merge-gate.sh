@@ -178,4 +178,47 @@ run_case "fix-bot 300-file commit fails closed (files API truncation)" fail \
   MOCK_COMMIT_FILES_c1="$big_files" \
   MOCK_COMMIT_MSG_c1=$'fix: x\n\nTested: OK (79 tests) — wp-env'
 
+run_case "fix-bot workflow-only commit without trailer fails" fail \
+  PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\t.github/workflows/tests.yml' \
+  MOCK_COMMIT_MSG_c1="fix: tweak CI"
+
+for config_path in \
+  apps/electron \
+  apps/web \
+  apps/main/package.json \
+  packages/core/package.json \
+  tests/package.json \
+  turbo.json \
+  tsconfig.json \
+  tsconfig.test.json \
+  packages/core/tsconfig.jest.json \
+  .github/dependabot.yml \
+  apps/main/eas.json \
+  app.json \
+  .npmrc \
+  yarn.lock \
+  bun.lock \
+  bun.lockb \
+  npm-shrinkwrap.json; do
+  run_case "fix-bot config-only commit without trailer fails ($config_path)" fail \
+    PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+    MOCK_PR_COMMITS="$bot_commits" \
+    MOCK_COMMIT_FILES_c1="modified"$'\t'"$config_path" \
+    MOCK_COMMIT_MSG_c1="fix: tweak config"
+done
+
+run_case "fix-bot issue-template-only commit is exempt" pass \
+  PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\t.github/ISSUE_TEMPLATE/bug.yml' \
+  MOCK_COMMIT_MSG_c1="fix: tweak issue template"
+
+run_case "fix-bot config commit with trailer passes without a new test" pass \
+  PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tcomposer.json' \
+  MOCK_COMMIT_MSG_c1=$'fix: bump dep\n\nTested: OK (79 tests, 334 assertions) — wp-env WC 10.4.3'
+
 echo "All merge-gate tests passed."
