@@ -143,4 +143,27 @@ describe('scheduler task state repository under dev-mode (z-schema) validation',
 		expect(Object.keys(stored!)).not.toContain('ids');
 		expect(Object.keys(stored!)).not.toContain('wooIds');
 	});
+
+	it('the in-flight rerun-requested write path also passes validation for lane tasks', async () => {
+		const { repository, storedJson } = await taskStateRepository();
+		// Claim an in-flight lane task whose ids/wooIds are explicitly undefined on the
+		// source state (as toQueuedState/lane states arrive).
+		const inFlight = laneTaskState({ status: 'in-flight', ownerId: 'tab-a', claimedUntilMs: 5_000 });
+		await repository.claimNew(inFlight);
+
+		// Seeder-side coalescing: a change arrives while the lease is still valid (nowMs <
+		// claimedUntilMs) → flag the in-flight row for rerun. This rewrites the doc via the
+		// in-flight branch, which must strip the present-but-undefined ids/wooIds keys the
+		// same way toDocument does, or z-schema throws VD2 on the rewrite (#318).
+		const reseeded = laneTaskState({ status: 'queued', updatedAtMs: 2_000 });
+		await expect(repository.requestRerunOrReseed(inFlight, reseeded, 1_000)).resolves.toBe(
+			'rerun-requested'
+		);
+
+		const stored = await storedJson('orders:orders:open:windowed');
+		expect(stored?.status).toBe('in-flight');
+		expect(stored?.rerunRequested).toBe(true);
+		expect(Object.keys(stored!)).not.toContain('ids');
+		expect(Object.keys(stored!)).not.toContain('wooIds');
+	});
 });

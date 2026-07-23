@@ -472,6 +472,55 @@ describe('RxSchedulerTaskStateRepository — change-signal coalescing (#318)', (
 			expect(doc?.claimedUntilMs).toBe(6_000);
 		});
 
+		it('strips present-but-undefined ids/wooIds from a legacy in-flight lane row when flagging a rerun', async () => {
+			// A legacy/corrupt in-flight lane row whose optional keys are PRESENT with value
+			// undefined (as written before toDocument stripped them). A change arriving while the
+			// lease is still valid takes the in-flight branch, which rewrites the doc — it must run
+			// through the same omit-undefined logic as toDocument or z-schema rejects the rewrite
+			// with VD2 ("Expected type array but found type undefined").
+			const corruptInFlight: StoredTaskState = {
+				stateKey: schedulerTaskStateKey('orders:orders:open:windowed'),
+				taskId: 'orders:orders:open:windowed',
+				requirementId: 'orders.open',
+				collectionName: 'orders',
+				queryKey: 'orders:open',
+				ids: undefined,
+				wooIds: undefined,
+				limit: 25,
+				priority: 600,
+				mode: 'windowed',
+				status: 'in-flight',
+				ownerId: 'tab-a',
+				claimedUntilMs: 6_000,
+				attempt: 1,
+				retryAfterMs: null,
+				updatedAtMs: 1_000,
+				schemaVersion: 4,
+			};
+			const fixture = createCollection([corruptInFlight]);
+			const repository = new RxSchedulerTaskStateRepository({
+				schedulerTaskStates: fixture.collection,
+			} as never);
+
+			const outcome = await repository.requestRerunOrReseed(
+				taskState({ status: 'in-flight', claimedUntilMs: 6_000, updatedAtMs: 1_000, attempt: 1 }),
+				taskState({ status: 'queued' }),
+				nowMs
+			);
+
+			expect(outcome).toBe('rerun-requested');
+			const doc = fixture.stored.get(corruptInFlight.stateKey)!;
+			expect(doc.rerunRequested).toBe(true);
+			// The present-but-undefined optional keys must be ABSENT after the rewrite, not
+			// re-written as `ids: undefined` (which z-schema rejects, VD2).
+			expect(Object.keys(doc)).not.toContain('ids');
+			expect(Object.keys(doc)).not.toContain('wooIds');
+			// CAS-compared fields stay untouched so the owner's completion still matches.
+			expect(doc.status).toBe('in-flight');
+			expect(doc.claimedUntilMs).toBe(6_000);
+			expect(doc.updatedAtMs).toBe(1_000);
+		});
+
 		it('leaves a lease-expired task untouched (it will be re-claimed and run on its own)', async () => {
 			const expired = taskState({ status: 'in-flight', claimedUntilMs: 4_000 }); // <= nowMs
 			const { repository, stored } = repositoryFor([expired]);

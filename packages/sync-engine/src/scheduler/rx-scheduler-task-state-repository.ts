@@ -184,7 +184,10 @@ export class RxSchedulerTaskStateRepository {
 				current.claimedUntilMs > nowMs
 			) {
 				outcome = 'rerun-requested';
-				return { ...currentDocument, rerunRequested: true };
+				// Route through toDocument so an existing invalid lane row (ids/wooIds
+				// present-but-undefined) has those keys stripped before the flag-set
+				// re-writes the doc — otherwise z-schema throws VD2 (#318).
+				return toDocument({ ...current, rerunRequested: true });
 			}
 			// Only a COMPLETED task needs a re-seed: it advanced the cursor past the change with
 			// no future run scheduled. A failed / queued / lease-expired task will run again on
