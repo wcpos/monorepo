@@ -148,7 +148,11 @@ describe('scheduler task state repository under dev-mode (z-schema) validation',
 		const { repository, storedJson } = await taskStateRepository();
 		// Claim an in-flight lane task whose ids/wooIds are explicitly undefined on the
 		// source state (as toQueuedState/lane states arrive).
-		const inFlight = laneTaskState({ status: 'in-flight', ownerId: 'tab-a', claimedUntilMs: 5_000 });
+		const inFlight = laneTaskState({
+			status: 'in-flight',
+			ownerId: 'tab-a',
+			claimedUntilMs: 5_000,
+		});
 		await repository.claimNew(inFlight);
 
 		// Seeder-side coalescing: a change arrives while the lease is still valid (nowMs <
