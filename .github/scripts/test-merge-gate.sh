@@ -153,4 +153,22 @@ run_case "UNKNOWN merge state fails closed after retries" fail \
   MERGE_GATE_MERGE_STATE_MAX_ATTEMPTS="2" \
   MOCK_PR_COMMITS=""
 
+run_case "fix-bot meaningless Tested trailer fails" fail \
+  PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/x.ts\nadded\tpackages/core/src/x.test.ts' \
+  MOCK_COMMIT_MSG_c1=$'fix: x\n\nTested: N/A'
+
+run_case "fix-bot gate-script edit needs its harness touched" fail \
+  PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\t.github/scripts/merge-gate.sh' \
+  MOCK_COMMIT_MSG_c1=$'fix: x\n\nTested: 9/9 cases'
+
+run_case "fix-bot gate-script edit with harness passes" pass \
+  PR_AUTHOR="kilbot" PR_TITLE="fix: x" MOCK_CHANGED_FILES="x" MOCK_PATCH="" \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\t.github/scripts/merge-gate.sh\nmodified\t.github/scripts/test-merge-gate.sh' \
+  MOCK_COMMIT_MSG_c1=$'fix: x\n\nTested: 12/12 cases pass — local harness'
+
 echo "All merge-gate tests passed."
