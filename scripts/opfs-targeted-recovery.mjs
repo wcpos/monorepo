@@ -301,6 +301,7 @@ export function withTargetedOpfsRecovery(storage) {
       const findDocumentsById = instance.findDocumentsById.bind(instance);
       const bulkWrite = instance.bulkWrite.bind(instance);
       const query = instance.query.bind(instance);
+      const count = instance.count.bind(instance);
       const getChangedDocumentsSince =
         instance.getChangedDocumentsSince.bind(instance);
 
@@ -435,6 +436,28 @@ export function withTargetedOpfsRecovery(storage) {
           }
           return query(preparedQuery);
         }
+      };
+
+      instance.count = async (preparedQuery) => {
+        const result = await count(preparedQuery);
+        if (
+          result &&
+          typeof result === "object" &&
+          typeof result.count === "number"
+        )
+          return result;
+        console.error(
+          `[count-recovery] typeof=${typeof result} result=${JSON.stringify(result)?.slice(0, 200)} collection=${params.collectionName}`,
+        );
+        const queryResult = await instance.query(preparedQuery);
+        const parsedResult =
+          typeof queryResult === "string"
+            ? JSON.parse(queryResult)
+            : queryResult;
+        // "fast" despite the query-derived path: the count is exact, and
+        // reporting "slow" would trip rx-query's allowSlowCount gate (QU14),
+        // defeating the recovery.
+        return { count: parsedResult.documents.length, mode: "fast" };
       };
 
       instance.getChangedDocumentsSince = async (limit, checkpoint) => {
