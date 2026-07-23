@@ -1,19 +1,9 @@
-const mockCloseAsync = jest.fn();
-const mockGetAllAsync = jest.fn();
-const mockExecAsync = jest.fn();
-const mockOpenDatabaseAsync = jest.fn(async (_name: string, _options?: unknown) => ({
-	closeAsync: mockCloseAsync,
-	getAllAsync: mockGetAllAsync,
-	execAsync: mockExecAsync,
-	runAsync: jest.fn(),
-}));
 const mockDeleteDatabaseAsync = jest.fn();
-const mockGetRxStorageSQLite = jest.fn(
-	(config: { sqliteBasics: { open(name: string): Promise<unknown> } }) => ({
-		name: 'sqlite-storage',
-		config,
-	})
-);
+const mockGetRxStorageExpoAsync = jest.fn(() => ({ name: 'expo-filesystem-storage' }));
+const mockWithTargetedOpfsRecovery = jest.fn((storage: unknown) => ({
+	name: 'targeted-recovery-storage',
+	storage,
+}));
 const mockLogger = {
 	debug: jest.fn(),
 	info: jest.fn(),
@@ -41,7 +31,6 @@ class MockDirectory {
 }
 
 jest.mock('expo-sqlite', () => ({
-	openDatabaseAsync: (name: string, options?: unknown) => mockOpenDatabaseAsync(name, options),
 	deleteDatabaseAsync: (name: string) => mockDeleteDatabaseAsync(name),
 	defaultDatabaseDirectory: 'sqlite-dir',
 }));
@@ -53,14 +42,13 @@ jest.mock('expo-file-system', () => ({
 	},
 }));
 
-jest.mock(
-	'rxdb-premium/plugins/storage-sqlite',
-	() => ({
-		getRxStorageSQLite: (config: { sqliteBasics: { open(name: string): Promise<unknown> } }) =>
-			mockGetRxStorageSQLite(config),
-	}),
-	{ virtual: true }
-);
+jest.mock('rxdb-premium/plugins/storage-filesystem-expo', () => ({
+	getRxStorageExpoAsync: () => mockGetRxStorageExpoAsync(),
+}));
+
+jest.mock('../../plugins/opfs-targeted-recovery.mjs', () => ({
+	withTargetedOpfsRecovery: (storage: unknown) => mockWithTargetedOpfsRecovery(storage),
+}));
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => mockLogger,
@@ -78,27 +66,17 @@ describe('native storage', () => {
 		jest.resetModules();
 	});
 
-	it('creates the expo-sqlite storage with the shared database cache', async () => {
+	it('wraps the async Expo filesystem storage with targeted recovery', async () => {
 		const { getNativeNewStorage } = await import('./index');
 
 		expect(getNativeNewStorage()).toEqual({
-			name: 'sqlite-storage',
-			config: {
-				sqliteBasics: expect.objectContaining({
-					open: expect.any(Function),
-				}),
-			},
+			name: 'targeted-recovery-storage',
+			storage: { name: 'expo-filesystem-storage' },
 		});
-	});
-
-	it('closes cached sqlite connections before cleanup', async () => {
-		const { closeAllCachedNativeDatabases, getSQLiteBasicsExpoSQLiteAsync } =
-			await import('./index');
-
-		await getSQLiteBasicsExpoSQLiteAsync().open('wcposusers_v4');
-		await closeAllCachedNativeDatabases();
-
-		expect(mockCloseAsync).toHaveBeenCalledTimes(1);
+		expect(mockGetRxStorageExpoAsync).toHaveBeenCalledTimes(1);
+		expect(mockWithTargetedOpfsRecovery).toHaveBeenCalledWith({
+			name: 'expo-filesystem-storage',
+		});
 	});
 
 	it('rethrows real sqlite deletion failures during clear-all-db', async () => {

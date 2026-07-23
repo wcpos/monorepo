@@ -4,7 +4,6 @@ import * as SQLite from 'expo-sqlite';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { closeAllCachedNativeDatabases } from './adapters/storage';
 import { isLegacyAppDatabaseName, LEGACY_USER_DATABASE_NAMES } from './database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'purge-legacy']);
@@ -112,9 +111,6 @@ const deleteLegacyFilesystemDatabases = () => {
 export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
 	try {
 		dbLogger.debug('Starting to purge legacy application databases');
-		dbLogger.debug('Closing cached native SQLite connections');
-		await closeAllCachedNativeDatabases();
-
 		const deletedSQLiteDatabases = await deleteLegacySQLiteDatabases();
 		const deletedFilesystemDatabases = deleteLegacyFilesystemDatabases();
 		const databasesDeleted = deletedSQLiteDatabases + deletedFilesystemDatabases;
