@@ -147,6 +147,18 @@ export function censusFreshnessWindow(census: CensusTotals): {
 }
 
 /**
+ * True when the earliest census expiry has already passed — the totals-retry
+ * lane (30s cadence) will refresh it imminently, so the footer says
+ * "refreshing now…" instead of counting down into the past.
+ */
+export function censusRefreshDue(
+	window: { nextUpdateAtMs: number | null },
+	nowMs: number
+): boolean {
+	return window.nextUpdateAtMs !== null && window.nextUpdateAtMs <= nowMs;
+}
+
+/**
  * Elapsed fraction (0..1) of the census freshness window at `nowMs` — drives
  * the countdown meter under the freshness lines. Null when the window is
  * unknown or degenerate.

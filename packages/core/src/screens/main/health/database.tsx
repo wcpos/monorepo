@@ -43,6 +43,7 @@ import {
 } from '../hooks/use-engine-monitor';
 import {
 	censusFreshnessWindow,
+	censusRefreshDue,
 	censusWindowProgress,
 	type CollectionKey,
 	type CollectionRow,
@@ -704,13 +705,18 @@ export function DatabaseScreen() {
 								? t('health.database.totals_pending', {
 										defaultValue: 'Server totals — first check pending',
 									})
-								: t('health.database.totals_updated', {
-										defaultValue: 'Server totals updated {ago} ago · next update in ~{next}',
-										ago: relative(censusWindow.updatedAtMs, nowMs),
-										next: relative(nowMs, censusWindow.nextUpdateAtMs ?? nowMs),
-									})}
+								: censusRefreshDue(censusWindow, nowMs)
+									? t('health.database.totals_refreshing', {
+											defaultValue: 'Server totals updated {ago} ago · refreshing now…',
+											ago: relative(censusWindow.updatedAtMs, nowMs),
+										})
+									: t('health.database.totals_updated', {
+											defaultValue: 'Server totals updated {ago} ago · next update in ~{next}',
+											ago: relative(censusWindow.updatedAtMs, nowMs),
+											next: relative(nowMs, censusWindow.nextUpdateAtMs ?? nowMs),
+										})}
 						</Text>
-						{censusProgress !== null ? (
+						{censusProgress !== null && !censusRefreshDue(censusWindow, nowMs) ? (
 							<View className="bg-muted mt-1 ml-3.5 h-0.5 w-40 overflow-hidden rounded-full">
 								<View
 									className="bg-border h-0.5 rounded-full"

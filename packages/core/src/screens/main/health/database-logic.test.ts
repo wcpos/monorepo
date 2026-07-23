@@ -2,6 +2,7 @@ import type { CensusTotals } from '@wcpos/query';
 
 import {
 	censusFreshnessWindow,
+	censusRefreshDue,
 	censusWindowProgress,
 	deriveCollectionRow,
 	deriveRows,
@@ -103,6 +104,14 @@ describe('database page logic', () => {
 			updatedAtMs: null,
 			nextUpdateAtMs: null,
 		});
+	});
+
+	it('reports a due refresh instead of counting down into the past', () => {
+		// An expired entry means the 30s totals-retry lane refreshes imminently —
+		// the footer says "refreshing now…" rather than "next update in ~just now".
+		expect(censusRefreshDue({ nextUpdateAtMs: 1_000 }, 2_000)).toBe(true);
+		expect(censusRefreshDue({ nextUpdateAtMs: 3_000 }, 2_000)).toBe(false);
+		expect(censusRefreshDue({ nextUpdateAtMs: null }, 2_000)).toBe(false);
 	});
 
 	it('computes countdown progress across the freshness window', () => {

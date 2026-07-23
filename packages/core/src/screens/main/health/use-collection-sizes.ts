@@ -42,12 +42,20 @@ export function useCollectionSizes(
 		let cancelled = false;
 		const timer = setTimeout(() => {
 			void (async () => {
+				let scope: ReturnType<typeof engine.active>;
 				try {
-					const scope = engine.active();
-					const database = scope?.database as { collections: Record<string, unknown> } | undefined;
-					if (!database) return;
-					const next: CollectionSizes = {};
-					for (const key of keysRef.current) {
+					scope = engine.active();
+				} catch {
+					return; // engine disposed mid-debounce — nothing to sample
+				}
+				const database = scope?.database as { collections: Record<string, unknown> } | undefined;
+				if (!database) return;
+				const next: CollectionSizes = {};
+				for (const key of keysRef.current) {
+					// Failures isolate per collection: one bad sample nulls ITS cell
+					// ("—") while every other estimate still lands — a shared catch
+					// would keep stale sizes on screen after a reset.
+					try {
 						const count = countsRef.current[key] ?? 0;
 						const collection = database.collections[key] as
 							| {
@@ -63,11 +71,11 @@ export function useCollectionSizes(
 						const docs = await collection.find({ limit: SAMPLE_LIMIT }).exec();
 						const lengths = docs.map((doc) => JSON.stringify(doc.toJSON()).length);
 						next[key] = estimateCollectionBytes(count, lengths);
+					} catch {
+						next[key] = null;
 					}
-					if (!cancelled) setSizes(next);
-				} catch {
-					// Sampling is best-effort decoration; a failed pass keeps the last sizes.
 				}
+				if (!cancelled) setSizes(next);
 			})();
 		}, RECOMPUTE_DEBOUNCE_MS);
 		return () => {
