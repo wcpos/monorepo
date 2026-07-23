@@ -100,7 +100,10 @@ const CENSUS_WC_ROUTES: Record<string, string | null> = {
 	// honest cheap collection-wide census request. The engine leaves it unknown.
 	variations: null,
 	customers: 'wc/v3/customers',
-	taxRates: 'wc/v3/taxes',
+	// Raw wc/v3/taxes requires `manage_woocommerce`, which cashier-tier POS users
+	// (e.g. the demo role) don't have — every census probe 403s and spams the error
+	// log. The POS proxy serves the same rows + X-WP-Total under the POS grant.
+	taxRates: 'wcpos/v2/taxes',
 	categories: 'wc/v3/products/categories',
 	brands: 'wc/v3/products/brands',
 	tags: 'wc/v3/products/tags',

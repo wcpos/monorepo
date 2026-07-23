@@ -86,7 +86,7 @@ describe('createAppSyncEngine scope cache', () => {
 		['orders', 'wc/v3/orders'],
 		['products', 'wc/v3/products'],
 		['customers', 'wc/v3/customers'],
-		['taxRates', 'wc/v3/taxes'],
+		['taxRates', 'wcpos/v2/taxes'],
 		['categories', 'wc/v3/products/categories'],
 		['brands', 'wc/v3/products/brands'],
 		['tags', 'wc/v3/products/tags'],
