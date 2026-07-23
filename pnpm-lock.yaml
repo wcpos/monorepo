@@ -721,8 +721,8 @@ importers:
         specifier: ~56.0.3
         version: 56.0.3(expo@56.0.17)
       expo-constants:
-        specifier: ~56.0.16
-        version: 56.0.21(expo@56.0.17)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))
+        specifier: ~56.0.18
+        version: 56.0.18(expo@56.0.17)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))
       expo-crypto:
         specifier: ~56.0.4
         version: 56.0.4(expo@56.0.17)
