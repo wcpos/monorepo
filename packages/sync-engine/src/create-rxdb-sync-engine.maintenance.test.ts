@@ -263,8 +263,14 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 	it('republishes a census snapshot when its freshness deadline passes', async () => {
 		const fetchWooQueryTotal = vi.fn(async () => 25);
 		const engine = engineWith({
+			// Real timers here (no `now` override), so the window must comfortably
+			// exceed the async publish latency: publishCensusChanges() reads the
+			// cache before emitting, and a window shorter than that read makes the
+			// very first snapshot compute fresh:false (and skips the expiry timer),
+			// so fresh:true is never observed. 500ms clears that latency while the
+			// republish still fires well inside the 2s deadline asserted below.
 			queryTotal: { fetchWooQueryTotal },
-			intervals: { censusFreshForMs: 40 },
+			intervals: { censusFreshForMs: 500 },
 		});
 		await engine.ready;
 
