@@ -223,6 +223,7 @@ export function emptyApplyReplicationActionsResult(): ApplyReplicationActionsRes
 		actions: {
 			targetedPulls: [],
 			deletes: [],
+			rebaselineCollections: [],
 			reDeriveBarcode: [],
 			reFetchCollections: [],
 			escalations: [],
@@ -233,6 +234,14 @@ export function emptyApplyReplicationActionsResult(): ApplyReplicationActionsRes
 
 function dedupeSorted(ids: number[]): number[] {
 	return [...new Set(ids)].sort((left, right) => left - right);
+}
+
+function wooIdsFromDocs(docs: SyncedDocument[]): number[] {
+	return dedupeSorted(
+		docs
+			.map((doc) => Number((doc.payload as { id?: unknown }).id))
+			.filter((id) => Number.isSafeInteger(id) && id > 0)
+	);
 }
 
 function idsFor(
@@ -304,6 +313,35 @@ export async function applyReplicationActions(
 			collection,
 			fields: { requested, applied },
 		});
+
+	for (const collection of actions.rebaselineCollections) {
+		if (collection === 'products' || collection === 'variations' || collection === 'customers') {
+			const ids = wooIdsFromDocs(await handlers.loadSyncedDocs(collection));
+			let applied = 0;
+			if (ids.length > 0) {
+				applied =
+					collection === 'products'
+						? await handlers.pullProducts(ids)
+						: collection === 'variations'
+							? await handlers.pullVariations(ids)
+							: await handlers.pullCustomers(ids);
+			}
+			log(
+				applied < ids.length
+					? `change-signal: WARNING ${collection} rebaseline pull applied ${applied}/${ids.length} — unapplied record(s) consumed by the cursor; a re-sync may be needed`
+					: `change-signal: rebaseline ${collection} pull applied ${applied}/${ids.length} id(s)`
+			);
+			emitCount('apply.rebaseline', collection, ids.length, applied);
+		} else if (collection === 'tax_rates') {
+			await handlers.refreshTaxRates();
+			log('change-signal: rebaseline refreshed the tax_rates collection');
+			emitCount('apply.rebaseline', collection, 1, 1);
+		} else {
+			await handlers.refreshReferenceCollection(collection);
+			log(`change-signal: rebaseline refreshed the ${collection} collection`);
+			emitCount('apply.rebaseline', collection, 1, 1);
+		}
+	}
 
 	// 1) PRODUCT targeted pulls. Variations are NOT fetchable via wc/v3
 	//    products?include= (a separate resource) so they are deferred below.

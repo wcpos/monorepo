@@ -30,6 +30,7 @@ function actions(overrides: Partial<ReplicationActions> = {}): ReplicationAction
 	return {
 		targetedPulls: [],
 		deletes: [],
+		rebaselineCollections: [],
 		reDeriveBarcode: [],
 		reFetchCollections: [],
 		escalations: [],
@@ -168,6 +169,63 @@ function fakeHandlers(opts: FakeOptions = {}): {
 	};
 	return { handlers, calls };
 }
+
+describe('applyReplicationActions — rebaseline', () => {
+	it('refreshes all hybrid collections from locally synced targeted ids before persisting head', async () => {
+		const nextState = { cursor: { sequence: 9_000 }, baselineDigests: new Map() };
+		const docsByCollection: Partial<Record<HybridCollection, SyncedDocument[]>> = {
+			products: [
+				{ id: 'product-a', payload: { id: 12 } },
+				{ id: 'product-b', payload: { id: 10 } },
+			],
+			variations: [{ id: 'variation-a', payload: { id: 20 } }],
+			customers: [{ id: 'customer-a', payload: { id: 30 } }],
+		};
+		const { handlers, calls } = fakeHandlers({
+			docs: (collection) => docsByCollection[collection] ?? [],
+		});
+
+		await applyReplicationActions(
+			actions({
+				rebaselineCollections: [
+					'products',
+					'variations',
+					'customers',
+					'tax_rates',
+					'categories',
+					'brands',
+					'tags',
+					'coupons',
+				],
+				nextState,
+			}),
+			handlers
+		);
+
+		expect(calls.loadedCollections).toEqual(['products', 'variations', 'customers']);
+		expect(calls.pulledIds).toEqual([[10, 12]]);
+		expect(calls.pulledVariationIds).toEqual([[20]]);
+		expect(calls.pulledCustomerIds).toEqual([[30]]);
+		expect(calls.refreshCount).toBe(1);
+		expect(calls.referenceRefreshes).toEqual(['categories', 'brands', 'tags', 'coupons']);
+		expect(calls.persisted).toEqual([nextState]);
+		expect(calls.events.filter((event) => event.type === 'apply.rebaseline')).toHaveLength(8);
+	});
+
+	it('skips targeted rebaseline pulls when no synced docs exist', async () => {
+		const { handlers, calls } = fakeHandlers();
+
+		await applyReplicationActions(
+			actions({ rebaselineCollections: ['products', 'variations', 'customers'] }),
+			handlers
+		);
+
+		expect(calls.loadedCollections).toEqual(['products', 'variations', 'customers']);
+		expect(calls.pulledIds).toEqual([]);
+		expect(calls.pulledVariationIds).toEqual([]);
+		expect(calls.pulledCustomerIds).toEqual([]);
+	});
+});
 
 describe('applyReplicationActions — products', () => {
 	it('routes product targetedPulls to pullProducts and reports the applied count', async () => {

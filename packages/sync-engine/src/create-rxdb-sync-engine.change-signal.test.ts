@@ -14,9 +14,10 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { scopeKeyFor, type StoreScopeIdentity, type SyncEvent } from '@wcpos/sync-core';
 
 import { createRxdbSyncEngine, type RxdbSyncEngine } from './create-rxdb-sync-engine';
-import { memoryEngineStorage, scriptedConnectivity } from './testing';
+import { memoryEngineStorage, memoryStringStore, scriptedConnectivity } from './testing';
 
 import type { RxStorage } from 'rxdb';
+import type { EngineStringStore } from './create-rxdb-sync-engine';
 
 setPremiumFlag();
 
@@ -41,6 +42,9 @@ function scriptedServer() {
 		rows: [] as SequenceRow[],
 		poisonSequenceLog: false,
 		productPulls: 0,
+		variationPulls: 0,
+		customerPulls: 0,
+		sequenceLogFetches: 0,
 		headFetches: 0,
 		products: new Map<number, Record<string, unknown>>([
 			[
@@ -72,6 +76,7 @@ function scriptedServer() {
 		const u = new URL(url);
 		const path = u.pathname;
 		if (path.endsWith('/changes/sequence-log')) {
+			state.sequenceLogFetches += 1;
 			if (state.poisonSequenceLog) {
 				return new Response('<html>maintenance</html>', {
 					status: 200,
@@ -111,6 +116,51 @@ function scriptedServer() {
 			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
 			return json(include.map((id) => state.products.get(id)).filter(Boolean));
 		}
+		if (path.endsWith('/variations')) {
+			state.variationPulls += 1;
+			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
+			return json({
+				documents: include.map((id) => ({
+					id,
+					parent_id: 9,
+					payload: {
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: '22222222-2222-4222-8222-222222222222',
+							},
+						],
+						price: '4.00',
+						stock_status: 'instock',
+						attributes: [],
+					},
+				})),
+			});
+		}
+		if (path.endsWith('/customers')) {
+			state.customerPulls += 1;
+			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
+			return json(
+				include.map((id) => ({
+					id,
+					meta_data: [
+						{
+							key: '_woocommerce_pos_uuid',
+							value: '33333333-3333-4333-8333-333333333333',
+						},
+					],
+				}))
+			);
+		}
+		if (
+			path.endsWith('/taxes') ||
+			path.endsWith('/products/categories') ||
+			path.endsWith('/products/brands') ||
+			path.endsWith('/products/tags') ||
+			path.endsWith('/coupons')
+		) {
+			return json([]);
+		}
 		throw new Error(`scripted server: unexpected ${path}`);
 	};
 
@@ -128,12 +178,14 @@ function engineWith(input: {
 	identity: StoreScopeIdentity;
 	connectivity?: () => 'online' | 'offline' | 'degraded';
 	diagnostics?: (event: SyncEvent) => void;
+	checkpoints?: EngineStringStore;
 }): RxdbSyncEngine {
 	return createRxdbSyncEngine(
 		{
 			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
 			storage: input.storage,
 			fetcher: (url, init) => input.fetch(url, init),
+			...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
 			...(input.connectivity ? { connectivity: input.connectivity } : {}),
 			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
 			mode: 'manual',
@@ -195,6 +247,66 @@ describe('sync("change-signal") through the public handle', () => {
 		expect(server.state.headFetches).toBe(1);
 		expect(server.state.productPulls).toBe(1);
 		expect(await productCount(revived)).toBe(1);
+		await revived.dispose();
+	});
+
+	it('re-baselines a restored far-behind cursor in one page and refreshes locally synced docs', async () => {
+		const server = scriptedServer();
+		const storage = memoryEngineStorage();
+		const checkpoints = memoryStringStore();
+		const identity = freshIdentity();
+		const engine = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		await engine.ready;
+		await engine.sync('change-signal');
+
+		server.state.head = 8;
+		server.state.rows.push(
+			{
+				sequence: 6,
+				id: 9,
+				type: 'update',
+				collection: 'products',
+				modified_gmt: '2026-07-10T00:00:01',
+			},
+			{
+				sequence: 7,
+				id: 20,
+				type: 'update',
+				collection: 'variations',
+				modified_gmt: '2026-07-10T00:00:02',
+			},
+			{
+				sequence: 8,
+				id: 30,
+				type: 'update',
+				collection: 'customers',
+				modified_gmt: '2026-07-10T00:00:03',
+			}
+		);
+		expect((await engine.sync('change-signal')).status).toBe('ran');
+		await engine.dispose();
+
+		const key = `${scopeKeyFor(identity)}:checkpoint:change-signal`;
+		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
+		server.state.head = 6_000;
+		server.state.sequenceLogFetches = 0;
+		const pullsBefore = {
+			products: server.state.productPulls,
+			variations: server.state.variationPulls,
+			customers: server.state.customerPulls,
+		};
+
+		const revived = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		await revived.ready;
+		expect((await revived.sync('change-signal')).status).toBe('ran');
+
+		expect(server.state.sequenceLogFetches).toBe(1);
+		expect(server.state.productPulls).toBe(pullsBefore.products + 1);
+		expect(server.state.variationPulls).toBe(pullsBefore.variations + 1);
+		expect(server.state.customerPulls).toBe(pullsBefore.customers + 1);
+		expect(JSON.parse((await checkpoints.get(key))!)).toMatchObject({
+			cursor: { sequence: 6_000 },
+		});
 		await revived.dispose();
 	});
 

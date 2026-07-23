@@ -239,11 +239,13 @@ export function createLiveChangeSignalSource(
 				});
 			}
 			const echoed = checkpointNumber(envelope, 'since', cursor.sequence);
+			const head = checkpointNumber(envelope, 'head', Number.NaN);
 			const maxSeen = rows.reduce((max, row) => Math.max(max, row.sequence), cursor.sequence);
 			return {
 				rows,
 				cursor: { sequence: Math.max(echoed, maxSeen) },
 				hasMore: envelope.complete === false,
+				...(Number.isFinite(head) ? { head } : {}),
 			};
 		},
 

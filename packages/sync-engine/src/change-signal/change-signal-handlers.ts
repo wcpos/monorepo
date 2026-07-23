@@ -304,13 +304,17 @@ function collectShapeEffects(ctx: HandlerContext): ShapeEffects {
 	return { targeted, refreshTaxRates, deleteTaxRates, refreshReference };
 }
 
-/** Products are the barcode/config-tier collection — same as the web tick. */
-async function loadSyncedProducts(
+/** Read synced docs for the descriptor-backed targeted collections. */
+async function loadSyncedTargetedDocs(
 	ctx: HandlerContext,
 	collection: HybridCollection
 ): Promise<SyncedDocument[]> {
-	if (collection !== 'products') return [];
-	const docs = await collectionOf(ctx, 'products').find().exec();
+	const descriptor = COLLECTION_DESCRIPTORS.find(
+		(candidate): candidate is TargetedDescriptor =>
+			candidate.shape === 'targeted' && candidate.hybrid === collection
+	);
+	if (!descriptor) return [];
+	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
 	return docs.map((doc) => {
 		const json = doc.toJSON() as { id: string; payload: Record<string, unknown> };
 		return { id: json.id, payload: json.payload };
@@ -334,7 +338,7 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 		refreshTaxRates: () => effects.refreshTaxRates(),
 		deleteTaxRates: (ids) => effects.deleteTaxRates(ids),
 		refreshReferenceCollection: (collection) => effects.refreshReference(collection),
-		loadSyncedDocs: (collection) => loadSyncedProducts(ctx, collection),
+		loadSyncedDocs: (collection) => loadSyncedTargetedDocs(ctx, collection),
 		// The engine package carries no scan-index store (the web host's stance
 		// too): log and report applied so the config baseline can advance with
 		// the (vacuous) index it represents.
@@ -346,7 +350,7 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 		},
 		reFetchCollection: async (collection) => {
 			if (collection !== 'products') return 0;
-			const synced = await loadSyncedProducts(ctx, 'products');
+			const synced = await loadSyncedTargetedDocs(ctx, 'products');
 			const wooIds = synced
 				.map((doc) => Number((doc.payload as { id?: unknown }).id))
 				.filter((id) => Number.isSafeInteger(id) && id > 0);
