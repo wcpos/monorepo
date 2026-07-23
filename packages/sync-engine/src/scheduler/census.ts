@@ -10,7 +10,13 @@ export const SUPPORTED_CENSUS_COLLECTIONS = CENSUS_COLLECTIONS.filter(
 		collection !== 'variations'
 );
 
-export type CensusTotal = { total: number; updatedAtMs: number; fresh: boolean };
+export type CensusTotal = {
+	total: number;
+	updatedAtMs: number;
+	/** When this total stops being fresh — lets UIs show "next update in ~N min". */
+	freshUntilMs: number;
+	fresh: boolean;
+};
 export type CensusTotals = Record<SyncCollectionName, CensusTotal | null>;
 
 export function censusQueryKey(collection: SyncCollectionName): `census:${SyncCollectionName}` {
@@ -39,6 +45,7 @@ export function censusTotalsFromCache(
 					? {
 							total: entry.totalMatchingRecords,
 							updatedAtMs: entry.updatedAtMs,
+							freshUntilMs: entry.freshUntilMs,
 							fresh: entry.freshUntilMs > nowMs,
 						}
 					: null,

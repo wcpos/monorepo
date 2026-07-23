@@ -45,11 +45,16 @@ describe('useCensusTotals', () => {
 			for (const subscriber of mockSubscribers) {
 				subscriber({
 					...emptyTotals,
-					orders: { total: 9, updatedAtMs: 1_000, fresh: true },
+					orders: { total: 9, updatedAtMs: 1_000, freshUntilMs: 901_000, fresh: true },
 				});
 			}
 		});
-		expect(result.current.orders).toEqual({ total: 9, updatedAtMs: 1_000, fresh: true });
+		expect(result.current.orders).toEqual({
+			total: 9,
+			updatedAtMs: 1_000,
+			freshUntilMs: 901_000,
+			fresh: true,
+		});
 
 		unmount();
 		expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
