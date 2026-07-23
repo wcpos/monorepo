@@ -1,4 +1,4 @@
-export const TRANSLATION_VERSION = '2026.7.2';
+export const TRANSLATION_VERSION = '2026.7.3';
 
 /**
  * Custom i18next backend that loads translations from jsDelivr CDN

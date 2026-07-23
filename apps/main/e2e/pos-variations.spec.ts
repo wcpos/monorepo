@@ -77,7 +77,19 @@ async function searchForVariableProduct(page: Page) {
  */
 async function openVariationPopover(page: Page): Promise<Locator> {
 	const popoverButton = page.getByTestId('variable-product-popover-button').first();
-	await popoverButton.click();
+
+	// Opening the popover mounts the variations binding, which lazily syncs the
+	// parent's variations from WooCommerce. Wait for that response before
+	// interacting so attribute selection resolves against complete data rather
+	// than racing an in-flight sync (which would leave the "Add to Cart" button
+	// hidden). Mirrors the guard the expanded-row tests already use.
+	await Promise.all([
+		page.waitForResponse(
+			(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+			{ timeout: 30_000 }
+		),
+		popoverButton.click(),
+	]);
 
 	const popoverDialog = page.getByRole('dialog').last();
 	await expect(popoverDialog).toBeVisible({ timeout: 10_000 });
