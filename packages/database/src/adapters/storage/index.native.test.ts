@@ -1,4 +1,5 @@
 const mockDeleteDirectory = jest.fn();
+const mockDeleteLegacySQLiteEntry = jest.fn();
 const mockGetRxStorageExpoAsync = jest.fn(() => ({ name: 'expo-filesystem-storage' }));
 const mockWithTargetedOpfsRecovery = jest.fn((storage: unknown) => ({
 	name: 'targeted-recovery-storage',
@@ -28,7 +29,10 @@ class MockDirectory {
 
 	list() {
 		if (this.uri.endsWith('/SQLite')) {
-			return [{ name: 'wcposusers_v6' }];
+			return [
+				{ name: 'wcposusers_v4', delete: mockDeleteLegacySQLiteEntry },
+				{ name: 'wcposusers_v6', delete: jest.fn() },
+			];
 		}
 
 		return [];
@@ -46,9 +50,13 @@ jest.mock('expo-file-system', () => ({
 	},
 }));
 
-jest.mock('rxdb-premium/plugins/storage-filesystem-expo', () => ({
-	getRxStorageExpoAsync: () => mockGetRxStorageExpoAsync(),
-}));
+jest.mock(
+	'rxdb-premium/plugins/storage-filesystem-expo',
+	() => ({
+		getRxStorageExpoAsync: () => mockGetRxStorageExpoAsync(),
+	}),
+	{ virtual: true }
+);
 
 jest.mock('../../plugins/opfs-targeted-recovery.mjs', () => ({
 	withTargetedOpfsRecovery: (storage: unknown) => mockWithTargetedOpfsRecovery(storage),
@@ -88,5 +96,13 @@ describe('native storage', () => {
 
 		await expect(clearAllDB()).resolves.toMatchObject({ databasesDeleted: 1 });
 		expect(mockDeleteDirectory).toHaveBeenCalledWith('document-dir/SQLite');
+	});
+
+	it('removes only legacy SQLite entries during purge-legacy-db', async () => {
+		const { purgeLegacyDatabases } = await import('../../purge-legacy-db');
+
+		await expect(purgeLegacyDatabases()).resolves.toMatchObject({ databasesDeleted: 1 });
+		expect(mockDeleteLegacySQLiteEntry).toHaveBeenCalledTimes(1);
+		expect(mockDeleteDirectory).not.toHaveBeenCalled();
 	});
 });

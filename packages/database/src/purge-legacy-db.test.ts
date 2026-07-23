@@ -1,5 +1,12 @@
 const mockDeleteLegacySQLiteDirectory = jest.fn();
 
+const sqliteEntries = [
+	'store_v4_shop',
+	'store_v4_shop-wal',
+	'store_v4_shop-shm',
+	'store_v6_shop',
+	'unrelated',
+].map((name) => ({ name, delete: jest.fn() }));
 const opfsEntries = [
 	'rxdb-wcposusers_v4-sites-0',
 	'rxdb-store_v4_shop-products-0',
@@ -28,7 +35,7 @@ class MockDirectory {
 			return opfsEntries;
 		}
 
-		return [];
+		return sqliteEntries;
 	}
 
 	delete() {
@@ -63,7 +70,7 @@ describe('purgeLegacyDatabases native', () => {
 		jest.resetModules();
 	});
 
-	it('deletes the legacy SQLite directory and only legacy OPFS entries', async () => {
+	it('deletes only legacy SQLite and OPFS entries', async () => {
 		const { purgeLegacyDatabases } = await import('./purge-legacy-db');
 
 		await expect(purgeLegacyDatabases()).resolves.toEqual({
@@ -71,7 +78,8 @@ describe('purgeLegacyDatabases native', () => {
 			message: 'Successfully purged 4 legacy database entries',
 			databasesDeleted: 4,
 		});
-		expect(mockDeleteLegacySQLiteDirectory).toHaveBeenCalledWith('document-dir/SQLite');
+		expect(mockDeleteLegacySQLiteDirectory).not.toHaveBeenCalled();
+		expect(sqliteEntries.map((entry) => entry.delete.mock.calls.length)).toEqual([1, 1, 1, 0, 0]);
 		expect(
 			opfsEntries.filter((entry) => entry.delete.mock.calls.length > 0).map(({ name }) => name)
 		).toEqual([

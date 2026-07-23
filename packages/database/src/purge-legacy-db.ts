@@ -30,8 +30,16 @@ const deleteLegacySQLiteDatabases = () => {
 		return 0;
 	}
 
-	LEGACY_SQLITE_DIRECTORY.delete();
-	return 1;
+	const legacyEntries = LEGACY_SQLITE_DIRECTORY.list().filter((entry) =>
+		isLegacyAppDatabaseName(entry.name)
+	);
+	for (const entry of legacyEntries) {
+		entry.delete();
+	}
+
+	return legacyEntries.filter(
+		(entry) => !entry.name.endsWith('-wal') && !entry.name.endsWith('-shm')
+	).length;
 };
 
 const deleteLegacyFilesystemDatabases = () => {
