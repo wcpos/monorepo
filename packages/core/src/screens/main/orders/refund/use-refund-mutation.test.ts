@@ -27,7 +27,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ error: jest.fn() }),
+	getLogger: () => ({ error: jest.fn(), warn: jest.fn() }),
 }));
 
 describe('buildRefundPayload', () => {
@@ -144,7 +144,7 @@ describe('useRefundMutation', () => {
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 	});
 
-	it('rejects when the engine refresh fails so the existing error toast path can report it', async () => {
+	it('resolves when the engine refresh fails — the refund already succeeded server-side', async () => {
 		const order = {
 			id: 77,
 			collection: {},
@@ -160,6 +160,10 @@ describe('useRefundMutation', () => {
 		const { result } = renderHook(() => useRefundMutation());
 
 		await act(async () => {
+			// Ported guard from the 1.9 lane ('returns a successful refund response
+			// even when the local refresh fails'): once the POST succeeds, a refresh
+			// failure must NOT reject — the error toast would invite a retry, and a
+			// retry mints a fresh idempotency key, i.e. a second refund.
 			await expect(
 				result.current({
 					order: order as never,
@@ -168,7 +172,7 @@ describe('useRefundMutation', () => {
 					lineItems: [],
 					refundDestination: 'cash',
 				})
-			).rejects.toThrow('refresh_failed');
+			).resolves.toEqual({ refund_id: 123 });
 		});
 
 		expect(mockPost).toHaveBeenCalledTimes(1);

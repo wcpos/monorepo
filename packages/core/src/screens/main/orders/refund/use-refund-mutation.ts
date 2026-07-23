@@ -3,9 +3,12 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryManager } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+
+const refundLogger = getLogger(['wcpos', 'orders', 'refund']);
 
 interface RefundLineItem {
 	id?: number;
@@ -97,6 +100,19 @@ export function useRefundMutation() {
 			});
 			try {
 				await handle.ready;
+			} catch (error) {
+				// The refund POST already succeeded — money has moved. A failed local
+				// refresh must never reject the mutation: the error toast would invite
+				// the cashier to retry, and each retry mints a fresh idempotency key,
+				// so a retry POSTs a SECOND refund. Log it; the local order heals on
+				// the next sync pass.
+				refundLogger.warn('Refund succeeded but the local order refresh failed', {
+					saveToDb: true,
+					context: {
+						orderId: order.id,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
 			} finally {
 				handle.release();
 			}
