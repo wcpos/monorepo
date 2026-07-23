@@ -72,13 +72,13 @@
   },
   "peerDependencies": {
     "@shopify/flash-list": "^2.0.2",
-    "expo-haptics": "~56.0.3",
-    "expo-image": "~56.0.9",
-    "expo-router": "~56.2.7",
-    "react-native-gesture-handler": "~2.31.1",
+    "expo-haptics": "~57.0.1",
+    "expo-image": "~57.0.1",
+    "expo-router": "~57.0.8",
+    "react-native-gesture-handler": "~2.32.0",
     "react-native-svg": "15.15.4",
     "react-native-webview": "~13.16.1",
-    "react-native-worklets": "~0.8.3"
+    "react-native-worklets": "0.10.0"
   },
   "devDependencies": {
     "@svgr/cli": "^8.1.0",
@@ -86,9 +86,9 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/lodash": "^4.17.24",
-    "expo-haptics": "~56.0.3",
-    "expo-image": "~56.0.11",
-    "expo-router": "~56.2.10",
+    "expo-haptics": "~57.0.1",
+    "expo-image": "~57.0.1",
+    "expo-router": "~57.0.8",
     "react-native-svg": "15.15.4"
   },
   "dependencies": {
@@ -140,7 +140,7 @@
     "lodash": "^4.18.1",
     "react-hook-form": "^7.78.0",
     "react-native-calendars": "^1.1314.0",
-    "react-native-keyboard-controller": "1.21.6",
+    "react-native-keyboard-controller": "1.21.9",
     "react-native-resizable-panels": "^0.0.3",
     "sonner": "^2.0.7",
     "sonner-native": "^0.26.1",
