@@ -307,7 +307,8 @@ describe('sync("change-signal") through the public handle', () => {
 		expect(await revived.sync('change-signal')).toMatchObject({ status: 'ran', rebaselined: true });
 
 		expect(server.state.sequenceLogFetches).toBe(1);
-		expect(server.state.productPulls).toBe(pullsBefore.products + 1);
+		// The direct rebaseline refresh is followed by the browse-window seed drain.
+		expect(server.state.productPulls).toBe(pullsBefore.products + 2);
 		expect(server.state.variationPulls).toBe(pullsBefore.variations + 1);
 		expect(server.state.customerPulls).toBe(pullsBefore.customers + 1);
 		expect(JSON.parse((await checkpoints.get(key))!)).toMatchObject({
@@ -431,8 +432,41 @@ describe('sync("change-signal") through the public handle', () => {
 		await revived.ready;
 		expect(await revived.sync('change-signal')).toMatchObject({ status: 'ran', rebaselined: true });
 		// Mirrored id 77 pulled; dirty 88 never requested.
-		expect(server.state.productIncludes).toEqual([[77]]);
+		expect(server.state.productIncludes).toContainEqual([77]);
+		expect(server.state.productIncludes.flat()).not.toContain(88);
 		await revived.dispose();
+	});
+
+	it('manual change-signal sync completes the existence/seed lanes after a rebaseline', async () => {
+		const server = scriptedServer();
+		const identity = freshIdentity();
+		const checkpoints = memoryStringStore();
+		const key = `${scopeKeyFor(identity)}:checkpoint:change-signal`;
+		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
+		server.state.head = 9_000;
+
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity,
+			checkpoints,
+		});
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		await engine.ready;
+
+		expect(await engine.sync('change-signal')).toMatchObject({ status: 'ran', rebaselined: true });
+		for (const lane of [
+			'existence-prime',
+			'existence-reconcile',
+			'product-browse-window-seed',
+			'scheduler-drain',
+		] as const) {
+			expect(
+				events.filter((event) => event.type === 'lane-finish' && event.lane === lane)
+			).toHaveLength(1);
+		}
+		await engine.dispose();
 	});
 
 	it('auto mode converges the existence/seed lanes immediately after a rebaseline tick', async () => {

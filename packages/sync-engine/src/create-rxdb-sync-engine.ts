@@ -1268,9 +1268,8 @@ export function createRxdbSyncEngine(
 				// the existence/seed lanes — so in auto mode run them NOW instead of
 				// waiting out their 5–17 min cadences. Mirrors the reconnect-retick
 				// ordering: seeds land before the drain scans for runnable tasks.
-				// Manual mode is untouched: an all-lane sync() already runs these
-				// lanes after change-signal in the same ordered pass, and a targeted
-				// manual tick stays exactly one lane (deterministic tests).
+				// An all-lane manual sync() already runs these later in its ordered
+				// pass; the targeted manual path awaits them in the facade below.
 				if (report.rebaselined === true && mode === 'auto' && !disposed) {
 					void runAutomaticTick(() => tickLaneWithEvents('existence-prime'))
 						.then(() => runAutomaticTick(() => tickLaneWithEvents('existence-reconcile')))
@@ -2125,7 +2124,26 @@ export function createRxdbSyncEngine(
 					reason: 'lifecycle operation pending',
 				});
 			}
-			if (lane !== undefined) return finish(await tickLaneWithEvents(lane, options?.signal));
+			if (lane !== undefined) {
+				const report = await tickLaneWithEvents(lane, options?.signal);
+				if (
+					lane === 'change-signal' &&
+					mode === 'manual' &&
+					'rebaselined' in report &&
+					report.rebaselined === true &&
+					!disposed
+				) {
+					for (const name of [
+						'existence-prime',
+						'existence-reconcile',
+						'product-browse-window-seed',
+						'scheduler-drain',
+					] as const) {
+						await tickLaneWithEvents(name, options?.signal);
+					}
+				}
+				return finish(report);
+			}
 			// ADR 0018 all-lane tick order is stable: detection, write drain, then
 			// maintenance in dependency order — SEEDS BEFORE the scheduler drain
 			// (gate2 #516 item 6): the seeds only ENQUEUE persisted tasks, so a
