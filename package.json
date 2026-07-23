@@ -26,13 +26,13 @@
     "hooks": "pnpm --filter @wcpos/hooks",
     "query": "pnpm --filter @wcpos/query",
     "utils": "pnpm --filter @wcpos/utils",
-    "preinstall": "pnpm ignored-builds || true; git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git submodule update --init || true",
+    "preinstall": "pnpm ignored-builds || true; git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git submodule update --init apps/web || true",
     "expo:install": "pnpm --filter main exec expo install",
     "extract:translations": "node scripts/extract-js-strings.js",
     "translations:check": "node scripts/extract-js-strings.js --check",
     "prepare": "git config core.hooksPath .githooks",
     "virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
-    "submodules:update": "git submodule update --init --remote .wiki apps/electron apps/web && git add .wiki apps/electron apps/web"
+    "submodules:update": "git submodule update --init --remote apps/electron apps/web && git add apps/electron apps/web"
   },
   "packageManager": "pnpm@11.1.1",
   "lint-staged": {
