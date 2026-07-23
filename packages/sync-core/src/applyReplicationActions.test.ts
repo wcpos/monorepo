@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { type SyncEvent } from './telemetry';
 import {
 	applyReplicationActions,
+	RebaselineTargetedResult,
 	type ReplicationActionHandlers,
 	type SyncedDocument,
 } from './applyReplicationActions';
@@ -49,6 +50,7 @@ type Recorder = {
 	taxRateDeletedIds: number[][];
 	refreshCount: number;
 	referenceRefreshes: ReferenceCollection[];
+	rebaselined: ('products' | 'variations' | 'customers')[];
 	loadedCollections: HybridCollection[];
 	appliedBarcode: HybridCollection[];
 	reFetched: HybridCollection[];
@@ -71,6 +73,9 @@ type FakeOptions = {
 	deleteProductsResult?: (ids: number[]) => number | Promise<number>;
 	deleteTaxRatesResult?: (ids: number[]) => number | Promise<number>;
 	refresh?: () => void;
+	rebaseline?: (
+		collection: 'products' | 'variations' | 'customers'
+	) => RebaselineTargetedResult | Promise<RebaselineTargetedResult>;
 	docs?: (collection: HybridCollection) => SyncedDocument[] | Promise<SyncedDocument[]>;
 	reFetchResult?: (collection: HybridCollection) => number | Promise<number>;
 	onApplyBarcode?: (collection: HybridCollection, index: RebuildBarcodeIndexResult) => void;
@@ -91,6 +96,7 @@ function fakeHandlers(opts: FakeOptions = {}): {
 		taxRateDeletedIds: [],
 		refreshCount: 0,
 		referenceRefreshes: [],
+		rebaselined: [],
 		loadedCollections: [],
 		appliedBarcode: [],
 		reFetched: [],
@@ -139,6 +145,13 @@ function fakeHandlers(opts: FakeOptions = {}): {
 			calls.referenceRefreshes.push(collection);
 			calls.order.push('refreshReferenceCollection');
 		},
+		rebaselineTargeted: async (collection) => {
+			calls.rebaselined.push(collection);
+			calls.order.push('rebaselineTargeted');
+			return opts.rebaseline
+				? opts.rebaseline(collection)
+				: { requested: 0, applied: 0, pruned: 0 };
+		},
 		deleteTaxRates: async (ids) => {
 			calls.taxRateDeletedIds.push([...ids]);
 			calls.order.push('deleteTaxRates');
@@ -171,18 +184,13 @@ function fakeHandlers(opts: FakeOptions = {}): {
 }
 
 describe('applyReplicationActions — rebaseline', () => {
-	it('refreshes all hybrid collections from locally synced targeted ids before persisting head', async () => {
+	it('rebaselines every hybrid collection through its arm before persisting head', async () => {
 		const nextState = { cursor: { sequence: 9_000 }, baselineDigests: new Map() };
-		const docsByCollection: Partial<Record<HybridCollection, SyncedDocument[]>> = {
-			products: [
-				{ id: 'product-a', payload: { id: 12 } },
-				{ id: 'product-b', payload: { id: 10 } },
-			],
-			variations: [{ id: 'variation-a', payload: { id: 20 } }],
-			customers: [{ id: 'customer-a', payload: { id: 30 } }],
-		};
 		const { handlers, calls } = fakeHandlers({
-			docs: (collection) => docsByCollection[collection] ?? [],
+			rebaseline: (collection) =>
+				collection === 'customers'
+					? { requested: 5, applied: 3, pruned: 2 }
+					: { requested: 2, applied: 2, pruned: 0 },
 		});
 
 		await applyReplicationActions(
@@ -202,28 +210,47 @@ describe('applyReplicationActions — rebaseline', () => {
 			handlers
 		);
 
-		expect(calls.loadedCollections).toEqual(['products', 'variations', 'customers']);
-		expect(calls.pulledIds).toEqual([[10, 12]]);
-		expect(calls.pulledVariationIds).toEqual([[20]]);
-		expect(calls.pulledCustomerIds).toEqual([[30]]);
+		expect(calls.rebaselined).toEqual(['products', 'variations', 'customers']);
 		expect(calls.refreshCount).toBe(1);
 		expect(calls.referenceRefreshes).toEqual(['categories', 'brands', 'tags', 'coupons']);
 		expect(calls.persisted).toEqual([nextState]);
-		expect(calls.events.filter((event) => event.type === 'apply.rebaseline')).toHaveLength(8);
+		const events = calls.events.filter((event) => event.type === 'apply.rebaseline');
+		expect(events).toHaveLength(8);
+		// applied + pruned fully accounts for requested — info, not warn — and the
+		// pruned deletions surface in the log line.
+		expect(events.every((event) => event.level === 'info')).toBe(true);
+		expect(calls.logs.some((line) => line.includes('customers — pulled 3, pruned 2 of 5'))).toBe(
+			true
+		);
 	});
 
-	it('skips targeted rebaseline pulls when no synced docs exist', async () => {
+	it('warns when a rebaseline leaves ids unreconciled', async () => {
+		const { handlers, calls } = fakeHandlers({
+			rebaseline: () => ({ requested: 4, applied: 2, pruned: 1 }),
+		});
+
+		await applyReplicationActions(actions({ rebaselineCollections: ['products'] }), handlers);
+
+		const [event] = calls.events.filter((e) => e.type === 'apply.rebaseline');
+		expect(event.level).toBe('warn');
+		expect(event.fields).toEqual({ requested: 4, applied: 3 });
+		expect(calls.logs.some((line) => line.includes('WARNING products rebaseline'))).toBe(true);
+	});
+
+	it('persists head even when rebaseline finds nothing local to reconcile', async () => {
+		const nextState = { cursor: { sequence: 700 }, baselineDigests: new Map() };
 		const { handlers, calls } = fakeHandlers();
 
 		await applyReplicationActions(
-			actions({ rebaselineCollections: ['products', 'variations', 'customers'] }),
+			actions({ rebaselineCollections: ['products', 'variations', 'customers'], nextState }),
 			handlers
 		);
 
-		expect(calls.loadedCollections).toEqual(['products', 'variations', 'customers']);
+		expect(calls.rebaselined).toEqual(['products', 'variations', 'customers']);
 		expect(calls.pulledIds).toEqual([]);
 		expect(calls.pulledVariationIds).toEqual([]);
 		expect(calls.pulledCustomerIds).toEqual([]);
+		expect(calls.persisted).toEqual([nextState]);
 	});
 });
 

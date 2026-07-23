@@ -21,6 +21,7 @@ import { assertBulkSuccess } from '@wcpos/sync-core';
 import type {
 	Fetcher,
 	HybridCollection,
+	RebaselineTargetedResult,
 	ReferenceCollection,
 	ReplicationActionHandlers,
 	ReplicationActions,
@@ -113,12 +114,21 @@ async function fetchPayloadPage(
  * the cursor advance past a record that was never applied. The self-healing
  * delete case is covered upstream: a record deleted between signal and pull
  * re-polls as a DELETE row, and the router makes delete win over pull.
+ *
+ * `missingSink` flips the shortfall contract for the ONE caller with no
+ * upstream delete row to lean on — the rebaseline pull, whose ids come from
+ * the local replica, not from sequence-log rows. There a short response is the
+ * EXPECTED signature of a record deleted during the skipped window: the
+ * missing ids are collected into the sink (for the caller to tombstone)
+ * instead of failing the tick, which would wedge the backlog guard in a
+ * permanent retry loop. Transport/parse errors still throw in both modes.
  */
 async function pullByIds(
 	ctx: HandlerContext,
 	d: TargetedDescriptor,
 	ids: number[],
-	persist?: (documents: Record<string, unknown>[]) => Promise<void>
+	persist?: (documents: Record<string, unknown>[]) => Promise<void>,
+	missingSink?: number[]
 ): Promise<number> {
 	if (ids.length === 0) return 0;
 	const collection = collectionOf(ctx, d.collection);
@@ -133,9 +143,15 @@ async function pullByIds(
 			})
 		);
 		if (payloads.length < chunk.length) {
-			throw new Error(
-				`${d.pullPath} include pull returned ${payloads.length}/${chunk.length} records — failing the tick so the cursor cannot advance past an unapplied record`
-			);
+			if (missingSink === undefined) {
+				throw new Error(
+					`${d.pullPath} include pull returned ${payloads.length}/${chunk.length} records — failing the tick so the cursor cannot advance past an unapplied record`
+				);
+			}
+			const present = new Set(payloads.map((payload) => Number((payload as { id?: unknown }).id)));
+			for (const id of chunk) {
+				if (!present.has(id)) missingSink.push(id);
+			}
 		}
 		const documents = payloads.map((payload) => d.project(payload));
 		const applicable = await withoutLocallyProtected(
@@ -322,6 +338,46 @@ async function loadSyncedTargetedDocs(
 }
 
 /**
+ * Rebaseline one targeted collection: re-pull every locally synced record's
+ * current server state, tolerating server-side deletions by pruning them — a
+ * record that vanishes from an include pull was deleted during the skipped
+ * window, so it routes through the same tombstone path the delete arm uses
+ * (pending local work stays protected there). Docs with pending local work are
+ * excluded from the pull outright: the local-work guard would discard their
+ * payloads anyway, so fetching them is pure waste during an operation whose
+ * point is bounding sync cost. Ids come from the MIRRORED woo-id field first
+ * (the write-ack path records the assigned server id there while the original
+ * create payload carries no `id`), falling back to `payload.id`.
+ */
+async function rebaselineTargeted(
+	ctx: HandlerContext,
+	collection: 'products' | 'variations' | 'customers'
+): Promise<RebaselineTargetedResult> {
+	const descriptor = COLLECTION_DESCRIPTORS.find(
+		(candidate): candidate is TargetedDescriptor =>
+			candidate.shape === 'targeted' && candidate.hybrid === collection
+	);
+	if (!descriptor) return { requested: 0, applied: 0, pruned: 0 };
+	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+	const wooIds = new Set<number>();
+	for (const doc of docs) {
+		const json = doc.toJSON() as Record<string, unknown> & { payload?: Record<string, unknown> };
+		if (hasPendingLocalWork(json)) continue;
+		const mirrored = json[descriptor.wooIdField];
+		const wooId = typeof mirrored === 'number' ? mirrored : Number(json.payload?.id);
+		if (Number.isSafeInteger(wooId) && wooId > 0) wooIds.add(wooId);
+	}
+	const requested = [...wooIds].sort((left, right) => left - right);
+	const missingIds: number[] = [];
+	const applied = await pullByIds(ctx, descriptor, requested, undefined, missingIds);
+	const pruned =
+		missingIds.length > 0
+			? await removeByWooIds(ctx, descriptor.collection, descriptor.wooIdField, missingIds)
+			: 0;
+	return { requested: requested.length, applied, pruned };
+}
+
+/**
  * Compile-time lock #2: this literal is typed against the fully-REQUIRED
  * `ReplicationActionHandlers` — a 14th arm added in sync-core is a compile
  * error on this package, not on any host.
@@ -338,6 +394,7 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 		refreshTaxRates: () => effects.refreshTaxRates(),
 		deleteTaxRates: (ids) => effects.deleteTaxRates(ids),
 		refreshReferenceCollection: (collection) => effects.refreshReference(collection),
+		rebaselineTargeted: (collection) => rebaselineTargeted(ctx, collection),
 		loadSyncedDocs: (collection) => loadSyncedTargetedDocs(ctx, collection),
 		// The engine package carries no scan-index store (the web host's stance
 		// too): log and report applied so the config baseline can advance with

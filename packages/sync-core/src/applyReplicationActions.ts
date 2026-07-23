@@ -44,6 +44,10 @@ import type { ReplicationActions } from './changeSignalReplication';
 /** An already-synced document the barcode re-derive reads (id + payload only). */
 export type SyncedDocument = { id: string; payload: Record<string, unknown> };
 
+/** Outcome of one collection's rebaseline pull: every locally synced id is
+ * either re-pulled (`applied`) or pruned as server-deleted (`pruned`). */
+export type RebaselineTargetedResult = { requested: number; applied: number; pruned: number };
+
 /**
  * The thin host adapter surface. EVERY handler is required: omitting one is a
  * compile error, which is what makes "forget to handle an arm" (the original
@@ -97,6 +101,21 @@ export type ReplicationActionHandlers = {
 	 * products/customers, and unlike tax rates whose lane only upserts).
 	 */
 	refreshReferenceCollection(collection: ReferenceCollection): Promise<void> | void;
+	/**
+	 * Re-baseline one TARGETED collection after the backlog guard abandoned a
+	 * replay: re-pull the current server state of every locally synced record,
+	 * TOLERATING server-side deletions — an id missing from the pull was deleted
+	 * during the skipped window (its tombstone row was discarded with the
+	 * backlog), so the host prunes it through its delete path instead of failing
+	 * the tick. The strict pull arms above stay shortfall-fatal because their
+	 * ids come from sequence-log rows whose delete case re-polls; rebaseline ids
+	 * come from the local replica and have no such upstream cover. `requested`
+	 * counts the locally synced ids (pending local work excluded), and
+	 * `applied + pruned` accounts for every one of them on success.
+	 */
+	rebaselineTargeted(
+		collection: 'products' | 'variations' | 'customers'
+	): Promise<RebaselineTargetedResult> | RebaselineTargetedResult;
 	/**
 	 * Read already-synced docs for a stale collection, driving the local barcode
 	 * re-derive. A host that cannot re-derive a given collection (e.g. it has no
@@ -236,14 +255,6 @@ function dedupeSorted(ids: number[]): number[] {
 	return [...new Set(ids)].sort((left, right) => left - right);
 }
 
-function wooIdsFromDocs(docs: SyncedDocument[]): number[] {
-	return dedupeSorted(
-		docs
-			.map((doc) => Number((doc.payload as { id?: unknown }).id))
-			.filter((id) => Number.isSafeInteger(id) && id > 0)
-	);
-}
-
 function idsFor(
 	groups: readonly { collection: HybridCollection; ids: number[] }[],
 	collection: HybridCollection
@@ -316,22 +327,13 @@ export async function applyReplicationActions(
 
 	for (const collection of actions.rebaselineCollections) {
 		if (collection === 'products' || collection === 'variations' || collection === 'customers') {
-			const ids = wooIdsFromDocs(await handlers.loadSyncedDocs(collection));
-			let applied = 0;
-			if (ids.length > 0) {
-				applied =
-					collection === 'products'
-						? await handlers.pullProducts(ids)
-						: collection === 'variations'
-							? await handlers.pullVariations(ids)
-							: await handlers.pullCustomers(ids);
-			}
+			const { requested, applied, pruned } = await handlers.rebaselineTargeted(collection);
 			log(
-				applied < ids.length
-					? `change-signal: WARNING ${collection} rebaseline pull applied ${applied}/${ids.length} — unapplied record(s) consumed by the cursor; a re-sync may be needed`
-					: `change-signal: rebaseline ${collection} pull applied ${applied}/${ids.length} id(s)`
+				applied + pruned < requested
+					? `change-signal: WARNING ${collection} rebaseline reconciled ${applied + pruned}/${requested} — unreconciled record(s) consumed by the cursor; a re-sync may be needed`
+					: `change-signal: rebaseline ${collection} — pulled ${applied}, pruned ${pruned} of ${requested} synced id(s)`
 			);
-			emitCount('apply.rebaseline', collection, ids.length, applied);
+			emitCount('apply.rebaseline', collection, requested, applied + pruned);
 		} else if (collection === 'tax_rates') {
 			await handlers.refreshTaxRates();
 			log('change-signal: rebaseline refreshed the tax_rates collection');
