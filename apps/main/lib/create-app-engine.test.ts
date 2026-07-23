@@ -208,7 +208,7 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
-	it('persists readiness diagnostics to the health log but keeps lane ticks metrics-only', () => {
+	it('persists warn/error readiness and lane diagnostics to the health log', () => {
 		const {
 			createAppSyncEngine,
 			createRxdbSyncEngine,
@@ -231,8 +231,6 @@ describe('createAppSyncEngine scope cache', () => {
 			message: 'seed failed',
 			fields: { scopeId: 'scope-1' },
 		});
-		// Periodic lane summaries emit at error level on every failing poll —
-		// they must stay metrics-only or a degraded session floods the log.
 		diagnostics?.({
 			type: 'engine.lane.tick',
 			level: 'error',
@@ -240,7 +238,7 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(appMetricsObserver).toHaveBeenCalledTimes(3);
-		expect(networkError).toHaveBeenCalledTimes(1);
+		expect(networkError).toHaveBeenCalledTimes(2);
 		expect(networkError).toHaveBeenCalledWith('open stalled', {
 			saveToDb: true,
 			context: expect.objectContaining({
@@ -249,10 +247,36 @@ describe('createAppSyncEngine scope cache', () => {
 				elapsedMs: 15_000,
 			}),
 		});
+		expect(networkError).toHaveBeenCalledWith('engine.lane.tick', {
+			saveToDb: true,
+			context: expect.objectContaining({
+				type: 'engine.lane.tick',
+				lane: 'change-signal',
+				status: 'error',
+			}),
+		});
 		expect(networkWarn).toHaveBeenCalledTimes(1);
 		expect(networkWarn).toHaveBeenCalledWith('seed failed', {
 			saveToDb: true,
 			context: expect.objectContaining({ type: 'engine.pos-bootstrap-error', scopeId: 'scope-1' }),
+		});
+	});
+
+	it('persists a warn/error diagnostics event to the log database', () => {
+		const { createAppSyncEngine, createRxdbSyncEngine, networkError } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const diagnostics = createRxdbSyncEngine.mock.calls[0]?.[0].diagnostics;
+
+		diagnostics?.({
+			type: 'push.error',
+			level: 'error',
+			collection: 'orders',
+			message: 'HTTP 500',
+		});
+
+		expect(networkError).toHaveBeenCalledWith('HTTP 500', {
+			saveToDb: true,
+			context: expect.objectContaining({ type: 'push.error' }),
 		});
 	});
 

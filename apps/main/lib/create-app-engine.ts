@@ -29,27 +29,13 @@ import {
 	recordServerLoad,
 	recordTransport,
 } from './metrics';
+import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
+import { resetSyncStatus, syncStatusObserver } from './sync-status';
 
 const networkLogger = getLogger(['wcpos', 'network', 'sync']);
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
 
-/**
- * The engine diagnostics persisted to the health log. Engine lifecycle
- * problems previously went ONLY to the in-memory metrics collector — a
- * stalled or failed initial open ("sync engine isn't ready" with zero
- * console/health-log output) and a failed POS bootstrap seed were invisible
- * outside the metrics snapshot. An explicit whitelist, not an `engine.`
- * prefix match: periodic events like `engine.lane.tick` emit at error level
- * on every failing poll and would flood the log in a degraded session.
- */
-const PERSISTED_ENGINE_DIAGNOSTICS = new Set([
-	'engine.ready-stalled',
-	'engine.ready-failed',
-	'engine.pos-bootstrap-error',
-	'engine.guard',
-	'engine.reset-needs-confirmation',
-]);
 export interface CreateAppSyncEngineOptions {
 	/** The site's wp-json root (`site.wp_api_url`). */
 	wpApiUrl: string;
@@ -157,6 +143,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
 		return cachedEngine.engine;
 	}
+	const supersedesCachedEngine = cachedEngine !== null;
 	// A genuine scope change has a different database name, so its construction can
 	// overlap the old scope's close. A later return to the old scope receives the
 	// disposal promise below as its engine-level database-open barrier.
@@ -320,16 +307,23 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// captured database epoch — the engine is constructed during render, before
 	// the effect that rebinds the logger database runs, so an epoch captured
 	// here could be permanently stale.
+	const syncLogObserver = createSyncLogObserver({
+		persist: (level, message, context) => {
+			engineLogger[level](message, { saveToDb: true, context });
+		},
+	});
+
 	let engineSelf: RxdbSyncEngine | null = null;
-	const engineDiagnosticsLogObserver = (event: SyncEvent): void => {
-		if (!PERSISTED_ENGINE_DIAGNOSTICS.has(event.type)) return;
-		if (event.level !== 'warn' && event.level !== 'error') return;
+	const guardedDiagnostics = (event: SyncEvent): void => {
 		if (engineSelf !== null && cachedEngine?.engine !== engineSelf) return;
-		engineLogger[event.level](event.message ?? event.type, {
-			saveToDb: true,
-			context: { type: event.type, ...event.fields },
-		});
+		syncLogObserver.observe(event);
+		syncStatusObserver(event);
 	};
+
+	if (supersedesCachedEngine) {
+		syncLogObserver.reset();
+		resetSyncStatus();
+	}
 
 	const engine = createRxdbSyncEngine(
 		{
@@ -338,7 +332,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			fetcher,
 			queryTotal: { fetchWooQueryTotal },
 			connectivity: getEngineConnectivity,
-			diagnostics: composeObservers(appMetricsObserver, engineDiagnosticsLogObserver),
+			diagnostics: composeObservers(appMetricsObserver, guardedDiagnostics),
 			multiInstance: options.multiInstance ?? false,
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
