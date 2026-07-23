@@ -167,7 +167,7 @@ function SyncStatusStripContent({ resource }: { resource: ObservableResource<Syn
 /**
  * A quiet, one-line-per-collection strip for the Logs screen: how long ago each
  * collection was last checked, how much of it is local, and a tappable badge that
- * jumps the log view to recent errors. Mounted by Task 9.
+ * jumps the log view to recent errors.
  */
 export function SyncStatusStrip() {
 	const resource = useSyncStatusResource();

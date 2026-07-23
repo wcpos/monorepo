@@ -1,6 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 
+import { useObservableEagerState } from 'observable-hooks';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
@@ -23,6 +24,7 @@ import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
 import { TextCell } from '../components/text-cell';
 import { LogsFooter } from './footer';
+import { SyncStatusStrip } from './sync-status-strip';
 import {
 	QueryStateProvider,
 	useCollectionBinding,
@@ -73,6 +75,8 @@ function LogsScreenContent() {
 	const state = useQueryState<'logs'>();
 	const actions = useQueryStateActions<'logs'>();
 	const binding = useCollectionBinding('logs', state);
+	const { uiSettings } = useUISettings('logs');
+	const showSyncStatus = useObservableEagerState(uiSettings.showSyncStatus$);
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'logs'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -115,25 +119,34 @@ function LogsScreenContent() {
 					</VStack>
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
-					<ErrorBoundary>
-						<Suspense fallback={<DataTableSkeleton id="logs" />}>
-							<DataTable<LogDocument>
-								id="logs"
-								collectionName="logs"
-								resource={binding.resource}
-								sort={state.sort}
-								actions={tableActions}
-								active$={binding.active$}
-								total$={binding.total$}
-								totalSource$={binding.totalSource$}
-								sync={binding.sync}
-								renderCell={renderCell}
-								noDataMessage={t('logs.no_logs_found')}
-								estimatedItemSize={100}
-								TableFooterComponent={LogsFooter}
-							/>
-						</Suspense>
-					</ErrorBoundary>
+					{showSyncStatus ? (
+						<ErrorBoundary>
+							<Suspense fallback={null}>
+								<SyncStatusStrip />
+							</Suspense>
+						</ErrorBoundary>
+					) : null}
+					<View className="flex-1">
+						<ErrorBoundary>
+							<Suspense fallback={<DataTableSkeleton id="logs" />}>
+								<DataTable<LogDocument>
+									id="logs"
+									collectionName="logs"
+									resource={binding.resource}
+									sort={state.sort}
+									actions={tableActions}
+									active$={binding.active$}
+									total$={binding.total$}
+									totalSource$={binding.totalSource$}
+									sync={binding.sync}
+									renderCell={renderCell}
+									noDataMessage={t('logs.no_logs_found')}
+									estimatedItemSize={100}
+									TableFooterComponent={LogsFooter}
+								/>
+							</Suspense>
+						</ErrorBoundary>
+					</View>
 				</CardContent>
 			</Card>
 		</View>

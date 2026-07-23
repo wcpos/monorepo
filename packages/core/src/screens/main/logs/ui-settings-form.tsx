@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, useFormChangeHandler } from '@wcpos/components/form';
+import { Form, FormField, FormSwitch, useFormChangeHandler } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 
 import {
@@ -16,6 +16,7 @@ import {
 import { useUISettings } from '../contexts/ui-settings';
 
 export const schema = z.object({
+	showSyncStatus: z.boolean(),
 	...columnsFormSchema.shape,
 });
 
@@ -51,6 +52,11 @@ export function UISettingsForm() {
 	return (
 		<Form {...form}>
 			<VStack>
+				<FormField
+					control={form.control}
+					name="showSyncStatus"
+					render={({ field }) => <FormSwitch label={getUILabel('showSyncStatus')} {...field} />}
+				/>
 				<UISettingsColumnsForm columns={formData.columns} getUILabel={getUILabel} />
 			</VStack>
 		</Form>

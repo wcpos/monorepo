@@ -144,6 +144,7 @@ export const useUILabel = () => {
 					total: t('common.total'),
 				},
 				logs: {
+					showSyncStatus: t('logs.show_sync_status'),
 					timestamp: t('common.time'),
 					level: t('common.level'),
 					message: t('common.message'),
