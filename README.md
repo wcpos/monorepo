@@ -69,7 +69,7 @@ The repo is a [pnpm](https://pnpm.io) workspace orchestrated with [Turborepo](ht
 | [`packages/virtual-printer`](./packages/virtual-printer) | `@wcpos/virtual-printer` | Dev tool: a virtual TCP printer for testing. |
 | [`packages/eslint`](./packages/eslint) | `@wcpos/eslint-config` | Shared ESLint configuration. |
 
-> Submodules: `apps/electron` and `apps/web`. `pnpm install` initialises them automatically; refresh them with `pnpm submodules:update`.
+> Submodules: `apps/electron` and `apps/web`. `pnpm install` initialises `apps/web` automatically; initialise/refresh `apps/electron` with `pnpm submodules:update` when working on the desktop app.
 
 ## 🏗 Architecture
 
@@ -96,7 +96,7 @@ Querying and replication against the WooCommerce REST API live in `@wcpos/query`
 ```bash
 git clone --recursive https://github.com/wcpos/monorepo.git
 cd monorepo
-pnpm install          # also initialises submodules
+pnpm install          # also initialises the apps/web submodule
 ```
 
 **Run the app**
