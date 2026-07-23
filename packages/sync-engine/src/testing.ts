@@ -9,7 +9,7 @@
  */
 
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
-import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
+import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
 import type { RxStorage } from 'rxdb';
 import type { EngineConnectivity, EngineStringStore } from './create-rxdb-sync-engine';
@@ -25,16 +25,17 @@ export { orderSchema, orderMigrationStrategies } from './collections/order-schem
 export { productSchema, productMigrationStrategies } from './collections/product-schema';
 
 /**
- * Memory storage for the engine's `storage` port. Ajv-validated by default so
- * tests catch schema-invalid documents the way the app's dev recipe does;
- * pass `validate: false` for raw speed.
+ * Memory storage for the engine's `storage` port. z-schema-validated by
+ * default — the same validator as the app's dev recipe (packages/database
+ * adapters), which unlike Ajv rejects present-but-`undefined` keys; pass
+ * `validate: false` for raw speed.
  */
 export function memoryEngineStorage(options?: { validate?: boolean }): RxStorage<unknown, unknown> {
 	const storage = getRxStorageMemory() as RxStorage<unknown, unknown>;
 	if (options?.validate === false) {
 		return storage;
 	}
-	return wrappedValidateAjvStorage({ storage }) as RxStorage<unknown, unknown>;
+	return wrappedValidateZSchemaStorage({ storage }) as RxStorage<unknown, unknown>;
 }
 
 /** In-memory `EngineStringStore` with test-side visibility into the entries. */
