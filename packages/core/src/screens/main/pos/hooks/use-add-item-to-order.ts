@@ -48,11 +48,18 @@ export const useAddItemToOrder = () => {
 				recordId,
 				payload: orderJSON,
 			});
+			const payload = resident.toMutableJSON().payload as Record<string, unknown>;
+			// A guest sale has no email, stored locally as ''. wc/v3 rejects '' with
+			// rest_invalid_email (400), which dead-letters the CREATE and strands the
+			// order (every later update 404s). Absent means "no email" — same strip as
+			// use-push-document's pay path.
+			const billing = payload.billing as Record<string, unknown> | undefined;
+			if (billing?.email === '') delete billing.email;
 			await manager.engine.write({
 				collection: 'orders',
 				operation: 'create',
 				recordId,
-				payload: resident.toMutableJSON().payload as Record<string, unknown>,
+				payload,
 			});
 			const savedOrder = wrapEngineDocument(
 				'orders',
