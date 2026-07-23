@@ -47,21 +47,18 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.inputs.monorepo_ref }}
-          # submodules: false — the checkout action's submodule handling hard-fails
-          # cloning the private .wiki submodule (the app token can't read it). We
-          # init the public submodules by name in the next step instead.
+          # submodules: false — we init the submodules by name in the next step
+          # instead, so this workflow controls exactly when they are populated.
           submodules: false
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: 📦 Init public submodules
+      - name: 📦 Init submodules
         # Populate apps/web BEFORE `pnpm install` scans the `apps/*` workspace glob
         # — otherwise apps/web is an empty dir, `@wcpos/web-bundle` isn't a
         # workspace project, and `pnpm web build` no-ops (leaving no build output).
-        # Name the paths explicitly so the private .wiki submodule is skipped
-        # rather than aborting the command. The repo preinstall hook's own
-        # `git submodule update --init` runs too late (after workspace discovery)
-        # and aborts on .wiki, so it can't be relied on here.
+        # The repo preinstall hook's own `git submodule update --init` runs too
+        # late (after workspace discovery), so it can't be relied on here.
         run: git submodule update --init apps/web apps/electron
 
       - name: 🏗 Setup monorepo

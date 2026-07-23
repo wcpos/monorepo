@@ -20,7 +20,7 @@ import { pathToFileURL } from 'node:url';
  * - submodule not initialized                          -> skip
  */
 
-export const SUBMODULE_PATHS = ['.wiki', 'apps/electron', 'apps/web'];
+export const SUBMODULE_PATHS = ['apps/electron', 'apps/web'];
 
 function git(args, { cwd, allowFailure = false } = {}) {
 	try {
