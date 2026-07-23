@@ -42,7 +42,7 @@ commit_message() {
 
 is_test_path() {
   case "$1" in
-    tests/*|*/tests/*|e2e/*|*/e2e/*|*.test.*|*.spec.*) return 0 ;;
+    tests/*|*/tests/*|e2e/*|*/e2e/*|*.test.*|*.spec.*|*/test-*.sh|test-*.sh) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -51,6 +51,7 @@ is_source_path() {
   is_test_path "$1" && return 1
   case "$1" in
     *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.mts|*.cts|*.php) return 0 ;;
+    .github/scripts/*.sh|scripts/*.sh) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -71,6 +72,15 @@ enforce_bot_fix_discipline() {
     if ! files="$(commit_files "$sha")"; then
       log "Could not read files for fix-bot commit ${sha:0:8}; failing closed."
       return 1
+    fi
+    # GitHub truncates the single-commit files array at 300 entries — beyond
+    # that the list can hide sources or tests in either direction. A fix-bot
+    # commit that large violates the small-directed-fix contract regardless,
+    # so fail closed rather than judge a partial list.
+    if [[ "$(wc -l <<< "$files" | tr -d ' ')" -ge 300 ]]; then
+      log "✗ Fix-bot commit ${sha:0:8} ($author) touches 300+ files — too large to verify (the files API truncates at 300) and far beyond a small, directed fix. Split it."
+      failed=1
+      continue
     fi
     has_source=false
     has_test=false
@@ -103,11 +113,19 @@ enforce_bot_fix_discipline() {
 # The Tested: line must sit in the message's FINAL paragraph (the git trailer
 # block) — prose that merely mentions "Tested:" mid-body does not count.
 trailer_block_has_tested() {
+  # The trailer value must be result-shaped: a real suite result quotes counts,
+  # so require at least one digit and a minimally substantive value — bare
+  # "Tested:", "Tested: N/A", or a command with no result do not count.
   printf '%s\n' "$1" | awk '
     BEGIN { block = "" }
     /^[[:space:]]*$/ { block = ""; next }
     { block = block $0 "\n" }
-    END { exit (block ~ /(^|\n)Tested:/) ? 0 : 1 }
+    END {
+      if (match(block, /(^|\n)Tested:[^\n]*/) == 0) exit 1
+      value = substr(block, RSTART, RLENGTH)
+      sub(/(^|\n)Tested:[[:space:]]*/, "", value)
+      exit (length(value) >= 8 && value ~ /[0-9]/) ? 0 : 1
+    }
   '
 }
 
