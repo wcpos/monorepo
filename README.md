@@ -69,7 +69,7 @@ The repo is a [pnpm](https://pnpm.io) workspace orchestrated with [Turborepo](ht
 | [`packages/virtual-printer`](./packages/virtual-printer) | `@wcpos/virtual-printer` | Dev tool: a virtual TCP printer for testing. |
 | [`packages/eslint`](./packages/eslint) | `@wcpos/eslint-config` | Shared ESLint configuration. |
 
-> Submodules: `apps/electron`, `apps/web` and `.wiki` (the [WCPOS wiki](https://github.com/wcpos/wiki)). `pnpm install` initialises them automatically; refresh them with `pnpm submodules:update`.
+> Submodules: `apps/electron` and `apps/web`. `pnpm install` initialises them automatically; refresh them with `pnpm submodules:update`.
 
 ## 🏗 Architecture
 
@@ -121,7 +121,7 @@ pnpm --filter @wcpos/main android
 | `pnpm lint` / `pnpm lint:fix` | Lint via Turborepo |
 | `pnpm typecheck` | Type-check all workspaces |
 | `pnpm extract:translations` | Extract source strings for translation |
-| `pnpm submodules:update` | Pull latest `.wiki` / `apps/electron` / `apps/web` |
+| `pnpm submodules:update` | Pull latest `apps/electron` / `apps/web` |
 
 ## 👷 Workflows
 
@@ -131,11 +131,11 @@ CI/CD lives in [`.github/workflows/`](./.github/workflows):
 - **[`build.yml`](./.github/workflows/build.yml)** — EAS Build for native iOS/Android apps (manually dispatched), with optional store submission.
 - **[`test.yml`](./.github/workflows/test.yml)** — lint, type-check and unit tests with a coverage ratchet, gating every PR.
 - **[`publish-web-bundle.yml`](./.github/workflows/publish-web-bundle.yml)** — builds `apps/web` and publishes the bundle to the [`web-bundle`](https://github.com/wcpos/web-bundle) repo for jsDelivr.
-- **[`bump-submodules.yml`](./.github/workflows/bump-submodules.yml)** — daily auto-bump of the submodules.
+- **[`bump-submodules.yml`](./.github/workflows/bump-submodules.yml)** — daily auto-bump of the `apps/electron` submodule.
 
 ## 📚 Documentation
 
-- Architecture, product and operations docs live in the [WCPOS wiki](https://github.com/wcpos/wiki) (vendored at `.wiki/`).
+- Architecture, product and operations docs live in the [WCPOS wiki](https://github.com/wcpos/wiki) — read it fresh from the repo (it changes daily; start with `INDEX.md` at its root).
 - User-facing documentation is at [docs.wcpos.com](https://docs.wcpos.com).
 
 ## 🔗 Links

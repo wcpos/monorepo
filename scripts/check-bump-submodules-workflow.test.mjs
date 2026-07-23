@@ -14,10 +14,6 @@ const requiredChecks = [
     patternSource: 'pattern: /repositories:\\s*\\|[\\s\\S]*?\\n\\s*monorepo\\s*$/m',
   },
   {
-    description: 'scopes token to wiki repository',
-    patternSource: 'pattern: /repositories:\\s*\\|[\\s\\S]*?\\n\\s*wiki\\s*$/m',
-  },
-  {
     description: 'uses the WCPOS bot app id secret',
     patternSource: 'pattern: /app-id:\\s*\\$\\{\\{\\s*secrets\\.WCPOS_BOT_APP_ID\\s*\\}\\}/m',
   },
@@ -31,7 +27,7 @@ const requiredChecks = [
   },
 ];
 
-test('workflow guard asserts all required private-submodule auth invariants', () => {
+test('workflow guard asserts all required GitHub App auth invariants', () => {
   for (const { description, patternSource } of requiredChecks) {
     assert.ok(scriptSource.includes(description), `missing description: ${description}`);
     assert.ok(scriptSource.includes(patternSource), `missing pattern source: ${patternSource}`);

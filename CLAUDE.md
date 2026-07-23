@@ -17,18 +17,24 @@ Before substantial work, agents should read the local rules and discover local s
 
 ## Wiki
 
-This repo includes the WCPOS wiki as a submodule at `.wiki/`. Pull latest before reading:
+Architecture, product and operations docs live in the [WCPOS wiki](https://github.com/wcpos/wiki) (`wcpos/wiki`, private). It is **not** vendored in this repo — the wiki changes daily, so a pinned copy goes stale fast; always read a fresh copy.
 
-```bash
-git submodule update --init --remote .wiki
-```
+- **Local agents** (on Paul's machine): read from the sibling clone at `/Users/kilbot/Projects/wiki`, but pull first — the clone can be stale:
 
-Relevant wiki pages:
+  ```bash
+  git -C /Users/kilbot/Projects/wiki pull --ff-only
+  ```
 
-- [Product Overview](.wiki/product/overview.md) — what WCPOS is, business context
-- [Client Architecture](.wiki/architecture/client.md) — React Native app architecture, state management, data flow
-- [Features](.wiki/product/features.md) — feature inventory (free vs Pro)
-- [Personas](.wiki/product/personas.md) — user personas and design implications
+- **Cloud/CI agents** (no sibling clone): fetch specific pages fresh via `gh api repos/wcpos/wiki/contents/<path> -H "Accept: application/vnd.github.raw"`, or `https://raw.githubusercontent.com/wcpos/wiki/main/<path>` if you have a token (the repo is private, so unauthenticated raw fetches fail).
+
+Start with `INDEX.md` at the wiki root — one line per page — then fetch only the pages you need.
+
+Relevant wiki pages (paths relative to the wiki repo root):
+
+- `product/overview.md` — what WCPOS is, business context
+- `architecture/client.md` — React Native app architecture, state management, data flow
+- `product/features.md` — feature inventory (free vs Pro)
+- `product/personas.md` — user personas and design implications
 
 ## E2E selector policy
 
