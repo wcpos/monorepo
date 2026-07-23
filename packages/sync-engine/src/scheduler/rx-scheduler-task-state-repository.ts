@@ -15,9 +15,17 @@ export type RerunOrReseedOutcome = 'rerun-requested' | 'requeued' | 'skipped';
 export type CompleteOrRequeueOutcome = 'completed' | 'requeued' | 'claim-lost';
 
 function toDocument(state: PersistedSchedulerTaskState): SchedulerTaskStateDocument {
-	const { collection, ...rest } = state;
+	// The optional fields must be ABSENT keys when unset, never `ids: undefined`:
+	// dev-mode z-schema validation type-checks a present key's value (VD2, 422),
+	// and key-absence is load-bearing downstream (migrateSchedulerTaskStateV4,
+	// the sameSchedulerTaskState CAS compare). Lane/query states arrive with the
+	// keys present-but-undefined (toQueuedState spreads task.ids/task.wooIds).
+	const { collection, ids, wooIds, rerunRequested, ...rest } = state;
 	return {
 		...rest,
+		...(ids === undefined ? {} : { ids }),
+		...(wooIds === undefined ? {} : { wooIds }),
+		...(rerunRequested === undefined ? {} : { rerunRequested }),
 		stateKey: schedulerTaskStateKey(state.taskId),
 		collectionName: collection,
 		schemaVersion: 4,
