@@ -136,8 +136,13 @@ test.describe('Products Page (Pro)', () => {
 		// Click the expand link on the variable product
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		// Variation rows should now be visible with their actions menus
 		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
@@ -158,8 +163,13 @@ test.describe('Products Page (Pro)', () => {
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		// Click the variation actions menu (ellipsis button)
 		const variationActionsMenu = screen
@@ -188,8 +198,13 @@ test.describe('Products Page (Pro)', () => {
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		const variationActionsMenu = screen.locator('[data-testid="variation-actions-menu"]:visible');
 		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });

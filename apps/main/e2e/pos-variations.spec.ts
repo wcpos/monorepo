@@ -189,10 +189,13 @@ test.describe('POS Variations', () => {
 
 		// Click the expand link on the first variable product
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-
-		// Wait for the expansion animation (500ms) and data loading
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		// Variation rows should now be visible with their "+" buttons
 		const variationPlusButtons = page.getByTestId('add-variation-to-cart-button');
@@ -206,8 +209,13 @@ test.describe('POS Variations', () => {
 
 		// Expand the variable product row
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		// Click the "+" button on the first variation
 		const variationPlusButton = page.getByTestId('add-variation-to-cart-button').first();
@@ -226,8 +234,13 @@ test.describe('POS Variations', () => {
 
 		// Expand
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		const variationPlusButtons = page.getByTestId('add-variation-to-cart-button');
 		await expect(variationPlusButtons.first()).toBeVisible({ timeout: 15_000 });
@@ -245,8 +258,13 @@ test.describe('POS Variations', () => {
 
 		// Expand the variable product row
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		const variationPlusButtons = page.getByTestId('add-variation-to-cart-button');
 		await expect(variationPlusButtons.first()).toBeVisible({ timeout: 15_000 });
@@ -273,8 +291,13 @@ test.describe('POS Variations', () => {
 
 		// Expand the variable product row
 		const expandLink = page.getByTestId('variable-product-expand').first();
-		await expandLink.click();
-		await page.waitForTimeout(1_500);
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().includes('/wp-json/wcpos/v2/variations?') && response.ok(),
+				{ timeout: 30_000 }
+			),
+			expandLink.click(),
+		]);
 
 		const variationPlusButton = page.getByTestId('add-variation-to-cart-button').first();
 		await expect(variationPlusButton).toBeVisible({ timeout: 15_000 });
