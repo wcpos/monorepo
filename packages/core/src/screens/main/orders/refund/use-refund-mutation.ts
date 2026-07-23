@@ -91,14 +91,15 @@ export function useRefundMutation() {
 				},
 			});
 
-			const handle = manager.engine.require({
-				id: `refund:order-refresh:${order.id}`,
-				collection: 'orders',
-				kind: 'targeted-records',
-				wooIds: [order.id],
-				forceRefresh: true,
-			});
+			let handle;
 			try {
+				handle = manager.engine.require({
+					id: `refund:order-refresh:${order.id}`,
+					collection: 'orders',
+					kind: 'targeted-records',
+					wooIds: [order.id],
+					forceRefresh: true,
+				});
 				await handle.ready;
 			} catch (error) {
 				// The refund POST already succeeded — money has moved. A failed local
@@ -114,7 +115,7 @@ export function useRefundMutation() {
 					},
 				});
 			} finally {
-				handle.release();
+				handle?.release();
 			}
 
 			return response?.data;
