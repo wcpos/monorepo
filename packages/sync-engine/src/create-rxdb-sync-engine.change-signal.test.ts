@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { scopeKeyFor, type StoreScopeIdentity } from '@wcpos/sync-core';
+import { scopeKeyFor, type StoreScopeIdentity, type SyncEvent } from '@wcpos/sync-core';
 
 import { createRxdbSyncEngine, type RxdbSyncEngine } from './create-rxdb-sync-engine';
 import { memoryEngineStorage, scriptedConnectivity } from './testing';
@@ -127,6 +127,7 @@ function engineWith(input: {
 	fetch: (url: string, init?: RequestInit) => Promise<Response>;
 	identity: StoreScopeIdentity;
 	connectivity?: () => 'online' | 'offline' | 'degraded';
+	diagnostics?: (event: SyncEvent) => void;
 }): RxdbSyncEngine {
 	return createRxdbSyncEngine(
 		{
@@ -134,6 +135,7 @@ function engineWith(input: {
 			storage: input.storage,
 			fetcher: (url, init) => input.fetch(url, init),
 			...(input.connectivity ? { connectivity: input.connectivity } : {}),
+			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
 			mode: 'manual',
 		},
 		input.identity
@@ -269,6 +271,51 @@ describe('sync("change-signal") through the public handle', () => {
 		expect(recovered.status).toBe('ran');
 		expect(engine.status().lanes['change-signal'].lastError).toBeNull();
 		expect(await productCount(engine)).toBe(1);
+		await engine.dispose();
+	});
+
+	it('emits signal.cycle with pulls: 0 on an idle poll', async () => {
+		const server = scriptedServer();
+		const diagnosticsEvents: SyncEvent[] = [];
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+			diagnostics: (event) => diagnosticsEvents.push(event),
+		});
+		await engine.ready;
+
+		await engine.sync('change-signal');
+
+		const cycles = diagnosticsEvents.filter((e) => e.type === 'signal.cycle');
+		expect(cycles).toHaveLength(1);
+		expect(cycles[0]!.level).toBe('info');
+		expect(cycles[0]!.fields).toMatchObject({ pulls: 0, deletes: 0 });
+		expect(cycles[0]!.fields?.collectionsChecked).toEqual(
+			expect.arrayContaining(['products', 'variations', 'customers', 'tax_rates'])
+		);
+		expect(typeof cycles[0]!.fields?.durationMs).toBe('number');
+		await engine.dispose();
+	});
+
+	it('does not emit signal.cycle when the poll fails', async () => {
+		const server = scriptedServer();
+		const diagnosticsEvents: SyncEvent[] = [];
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+			diagnostics: (event) => diagnosticsEvents.push(event),
+		});
+		await engine.ready;
+		await engine.sync('change-signal');
+		diagnosticsEvents.length = 0;
+		server.state.poisonSequenceLog = true;
+
+		await engine.sync('change-signal');
+
+		expect(diagnosticsEvents.some((e) => e.type === 'signal.cycle')).toBe(false);
+		expect(diagnosticsEvents.some((e) => e.type === 'signal.tick.error')).toBe(true);
 		await engine.dispose();
 	});
 
