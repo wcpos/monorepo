@@ -115,6 +115,35 @@ describe('createSyncLogObserver', () => {
 		expect(rows).toHaveLength(0);
 	});
 
+	it('never persists info events whose type is an inherited Object member', () => {
+		for (const type of ['constructor', 'toString', 'hasOwnProperty']) {
+			observer.observe(event({ type, fields: { applied: 5 } }));
+		}
+		expect(rows).toHaveLength(0);
+	});
+
+	it('normalizes engine camelCase collections to snake_case in persisted rows', () => {
+		observer.observe(
+			event({
+				type: 'coverage.require.error',
+				level: 'error',
+				collection: 'taxRates',
+				message: 'boom',
+			})
+		);
+		expect(rows[0].context.collection).toBe('tax_rates');
+	});
+
+	it('shares one rate-limit window across engine and apply vocabularies for a collection', () => {
+		observer.observe(
+			event({ type: 'coverage.require.error', level: 'error', collection: 'taxRates' })
+		);
+		observer.observe(
+			event({ type: 'coverage.require.error', level: 'error', collection: 'tax_rates' })
+		);
+		expect(rows).toHaveLength(1);
+	});
+
 	it('reset() clears rate-limit windows', () => {
 		observer.observe(event({ type: 'push.error', level: 'error' }));
 		observer.observe(event({ type: 'push.error', level: 'error' }));

@@ -148,21 +148,27 @@ export const setDatabase = (collection: any) => {
 			})
 			.catch((error: unknown) => {
 				console.error('Failed to prune old log entries', error);
-			});
-		collection
-			.count()
-			.exec()
-			.then((total: number) => {
-				const excess = total - MAX_LOG_ROWS;
-				if (excess <= 0) return;
-				return collection
-					.find({ sort: [{ timestamp: 'asc' }], limit: excess })
-					.remove()
-					.then((removed: any[]) =>
-						console.log(`Pruned ${removed.length} log entries over row cap`)
-					);
 			})
-			.catch((error: unknown) => console.error('Failed to enforce log row cap', error));
+			// Row-cap pass must start only after the age prune settles: its count()
+			// otherwise includes rows the age prune is about to delete, over-pruning
+			// retained recent rows by up to the expired count. Chained on both the
+			// .then and .catch paths so the cap still runs if the age prune fails.
+			.then(() =>
+				collection
+					.count()
+					.exec()
+					.then((total: number) => {
+						const excess = total - MAX_LOG_ROWS;
+						if (excess <= 0) return;
+						return collection
+							.find({ sort: [{ timestamp: 'asc' }], limit: excess })
+							.remove()
+							.then((removed: any[]) =>
+								console.log(`Pruned ${removed.length} log entries over row cap`)
+							);
+					})
+					.catch((error: unknown) => console.error('Failed to enforce log row cap', error))
+			);
 	}
 };
 

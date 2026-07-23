@@ -219,8 +219,9 @@ describe('logger/index', () => {
 			});
 
 			freshSetDatabase!(mockCollection);
-			await Promise.resolve();
-			await Promise.resolve();
+			// The row-cap pass is now chained after the age prune settles, so more
+			// microtask ticks are needed for the full chain to drain.
+			for (let i = 0; i < 8; i += 1) await Promise.resolve();
 
 			expect(mockCountExec).toHaveBeenCalled();
 			expect(mockFind).toHaveBeenCalledWith({
@@ -228,6 +229,41 @@ describe('logger/index', () => {
 				limit: 600,
 			});
 			expect(excessLogRemove).toHaveBeenCalled();
+		});
+
+		it('runs the row-cap count only after the age prune resolves', async () => {
+			let resolveAgeRemove!: (rows: any[]) => void;
+			const ageRemove = jest
+				.fn()
+				.mockReturnValue(new Promise<any[]>((resolve) => (resolveAgeRemove = resolve)));
+			const excessRemove = jest.fn().mockResolvedValue([]);
+			const mockFind = jest
+				.fn()
+				.mockReturnValueOnce({ remove: ageRemove })
+				.mockReturnValueOnce({ remove: excessRemove });
+			const mockCountExec = jest.fn().mockResolvedValue(0);
+			const mockCollection = {
+				insert: jest.fn(),
+				find: mockFind,
+				count: jest.fn().mockReturnValue({ exec: mockCountExec }),
+			};
+
+			let freshSetDatabase: typeof setDatabase;
+			jest.isolateModules(() => {
+				freshSetDatabase = require('./index').setDatabase;
+			});
+
+			freshSetDatabase!(mockCollection);
+			// Age prune is still pending (deferred not resolved): the row-cap count()
+			// must NOT have been reached yet.
+			for (let i = 0; i < 8; i += 1) await Promise.resolve();
+			expect(ageRemove).toHaveBeenCalled();
+			expect(mockCountExec).not.toHaveBeenCalled();
+
+			// Resolving the age prune releases the chained row-cap pass.
+			resolveAgeRemove([]);
+			for (let i = 0; i < 8; i += 1) await Promise.resolve();
+			expect(mockCountExec).toHaveBeenCalled();
 		});
 
 		it('persists searchable operational identifiers without copying arbitrary context', async () => {

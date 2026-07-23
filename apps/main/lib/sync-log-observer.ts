@@ -1,5 +1,7 @@
 import type { SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
+import { normalizeSyncCollection } from './sync-status';
+
 export type PersistLogRow = (
 	level: 'info' | 'warn' | 'error',
 	message: string,
@@ -44,10 +46,19 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		const fields = (event.fields ?? {}) as Record<string, unknown>;
 		const isFailure = event.level === 'warn' || event.level === 'error';
 		const isActivity =
-			event.level === 'info' && (ACTIVITY_ALLOWLIST[event.type]?.(fields) ?? false);
+			event.level === 'info' &&
+			// Own-property guard: bracket access on a plain object resolves inherited
+			// members, so 'constructor'/'toString' etc. would otherwise pass the gate.
+			Object.hasOwn(ACTIVITY_ALLOWLIST, event.type) &&
+			ACTIVITY_ALLOWLIST[event.type](fields);
 		if (!isFailure && !isActivity) return;
 
-		const key = `${event.type}|${event.collection ?? ''}`;
+		// Normalize engine camelCase names (e.g. 'taxRates') to the snake_case the
+		// rest of the app keys on, so engine-side and apply-side events for the same
+		// collection share one rate-limit window and persist under one name.
+		const collection =
+			event.collection !== undefined ? normalizeSyncCollection(event.collection) : undefined;
+		const key = `${event.type}|${collection ?? ''}`;
 		const at = nowMs();
 		const window = windows.get(key);
 		if (window !== undefined && at - window.startMs < RATE_LIMIT_WINDOW_MS) {
@@ -62,7 +73,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			event.message ?? event.type,
 			{
 				type: event.type,
-				...(event.collection !== undefined ? { collection: event.collection } : {}),
+				...(collection !== undefined ? { collection } : {}),
 				...fields,
 				...(suppressed > 0 ? { suppressed } : {}),
 			}

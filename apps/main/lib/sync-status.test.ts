@@ -83,6 +83,25 @@ describe('foldSyncStatus', () => {
 		expect(next.orders.lastError).toEqual({ at: 444, type: 'push.error', message: 'HTTP 500' });
 	});
 
+	it('normalizes engine camelCase collections to the snake_case state key', () => {
+		const next = foldSyncStatus(
+			{},
+			event({
+				type: 'coverage.require.error',
+				level: 'error',
+				collection: 'taxRates',
+				message: 'boom',
+			}),
+			555
+		);
+		expect(next.tax_rates.lastError).toEqual({
+			at: 555,
+			type: 'coverage.require.error',
+			message: 'boom',
+		});
+		expect(next.taxRates).toBeUndefined();
+	});
+
 	it('returns the same reference when the event is irrelevant', () => {
 		const state: SyncStatusState = {};
 		expect(

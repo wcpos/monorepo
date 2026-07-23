@@ -35,6 +35,7 @@ import {
 	resetMetricsBuckets,
 } from '../../lib/metrics';
 import {
+	getSyncStatusEpoch,
 	getSyncStatusState,
 	hydrateSyncStatus,
 	resetSyncStatus,
@@ -248,6 +249,7 @@ function SyncStatusPersistenceBridge() {
 		let cancelled = false;
 		let timer: ReturnType<typeof setTimeout> | null = null;
 		resetSyncStatus();
+		const bridgeEpoch = getSyncStatusEpoch();
 
 		const statePromise = storeDB.addState<SyncStatusState>(SYNC_STATUS_STATE_KEY);
 		void statePromise
@@ -284,6 +286,19 @@ function SyncStatusPersistenceBridge() {
 			cancelled = true;
 			unsubscribe();
 			if (timer !== null) clearTimeout(timer);
+			// Skip the terminal flush if any reset has bumped the epoch since this
+			// bridge captured it: on a fast store switch the incoming engine's first
+			// diagnostic can lazily reset module state before React runs this cleanup,
+			// and flushing then would persist the wrong (post-reset) state into the old
+			// store's doc. Only the terminal flush is unsafe after a reset — mid-life
+			// epoch bumps (cashier-swap engine supersede on the same storeDB) must keep
+			// persisting, so this guard is NOT applied to the debounced persist() nor
+			// re-baselined in subscribe. Accepted residuals: (a) a mid-life supersede
+			// forfeits only the final ≤5s window at teardown (debounced persists carried
+			// the session); (b) a pending debounce timer firing inside the sub-frame gap
+			// between a lazy reset and this cleanup could still write post-reset state —
+			// accepted as vanishingly narrow.
+			if (getSyncStatusEpoch() !== bridgeEpoch) return;
 			void persist(); // final flush — snapshot taken synchronously inside
 		};
 	}, [storeDB]);

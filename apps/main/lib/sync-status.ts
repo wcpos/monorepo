@@ -16,6 +16,23 @@ const EMPTY: CollectionSyncStatus = {
 	lastError: null,
 };
 
+/**
+ * Two collection-name vocabularies meet at this app boundary: engine-side events
+ * (require-plane coverage.require.*, queue.drain.progress) carry `collection` as
+ * SyncCollectionName — camelCase, e.g. 'taxRates' — while apply.x and signal.x
+ * telemetry uses snake_case, e.g. 'tax_rates'. Downstream (status-doc keys, strip
+ * cards, badge search) is snake_case only, so we normalize engine names to
+ * snake_case here. Only 'taxRates' differs today; all other names are identical in
+ * both vocabularies and pass through unchanged.
+ */
+const ENGINE_TO_SNAKE_COLLECTION: Record<string, string> = {
+	taxRates: 'tax_rates',
+};
+
+export function normalizeSyncCollection(name: string): string {
+	return ENGINE_TO_SNAKE_COLLECTION[name] ?? name;
+}
+
 function errorsEqual(
 	left: CollectionSyncStatus['lastError'],
 	right: CollectionSyncStatus['lastError']
@@ -68,10 +85,10 @@ export function foldSyncStatus(
 		typeof event.fields?.applied === 'number' &&
 		event.fields.applied > 0
 	) {
-		update(event.collection, { lastChangedAt: atMs });
+		update(normalizeSyncCollection(event.collection), { lastChangedAt: atMs });
 	}
 	if ((event.level === 'warn' || event.level === 'error') && event.collection) {
-		update(event.collection, {
+		update(normalizeSyncCollection(event.collection), {
 			lastError: { at: atMs, type: event.type, message: event.message ?? event.type },
 		});
 	}
