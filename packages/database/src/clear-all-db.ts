@@ -1,18 +1,13 @@
 import { Directory, Paths } from 'expo-file-system';
-import * as SQLite from 'expo-sqlite';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import {
-	APP_DATABASE_PREFIXES,
-	getUserDatabaseName,
-	isKnownAppDatabaseName,
-	LEGACY_USER_DATABASE_NAMES,
-} from './database-names';
+import { APP_DATABASE_PREFIXES } from './database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'clear']);
 const EXPO_OPFS_ROOT = new Directory(Paths.document, '.expo-opfs');
+const LEGACY_SQLITE_DIRECTORY = new Directory(Paths.document, 'SQLite');
 const RXDB_DIRECTORY_PREFIX = 'rxdb-';
 
 export interface ClearDBResult {
@@ -28,73 +23,16 @@ const isKnownAppFilesystemEntry = (name: string) =>
 		name.startsWith(`${RXDB_DIRECTORY_PREFIX}${prefix}`)
 	);
 
-const isMissingSQLiteDatabaseError = (error: unknown) => {
-	const message = error instanceof Error ? error.message : String(error);
-	const normalizedMessage = message.toLowerCase();
+const deleteLegacySQLiteDatabases = () => {
+	dbLogger.debug(`Checking SQLite database directory: ${LEGACY_SQLITE_DIRECTORY.uri}`);
 
-	return normalizedMessage.includes('not exist') || normalizedMessage.includes('no such');
-};
-
-const deleteKnownSQLiteDatabase = async (dbName: string) => {
-	try {
-		dbLogger.debug(`Attempting to delete SQLite database: ${dbName}`);
-		await SQLite.deleteDatabaseAsync(dbName);
-		return true;
-	} catch (error) {
-		if (isMissingSQLiteDatabaseError(error)) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			dbLogger.debug(`SQLite database ${dbName} was already absent: ${errorMessage}`);
-			return false;
-		}
-
-		throw error;
-	}
-};
-
-const deleteLegacySQLiteDatabases = async () => {
-	let deletedCount = 0;
-	const knownDatabases = [...LEGACY_USER_DATABASE_NAMES, getUserDatabaseName()];
-
-	for (const dbName of knownDatabases) {
-		if (await deleteKnownSQLiteDatabase(dbName)) {
-			deletedCount++;
-		}
+	if (!LEGACY_SQLITE_DIRECTORY.exists) {
+		dbLogger.debug('SQLite database directory does not exist');
+		return 0;
 	}
 
-	try {
-		const databaseDirectory = new Directory(SQLite.defaultDatabaseDirectory);
-		dbLogger.debug(`Checking SQLite database directory: ${databaseDirectory.uri}`);
-
-		if (!databaseDirectory.exists) {
-			dbLogger.debug('SQLite database directory does not exist');
-			return deletedCount;
-		}
-
-		const contents = databaseDirectory.list();
-		const fileNames = contents.map((item) => item.name);
-		const appDatabaseFiles = fileNames.filter((file) => {
-			if (file.endsWith('-wal') || file.endsWith('-shm')) {
-				return false;
-			}
-
-			return isKnownAppDatabaseName(file);
-		});
-
-		for (const fileName of appDatabaseFiles) {
-			if (knownDatabases.includes(fileName)) {
-				continue;
-			}
-
-			if (await deleteKnownSQLiteDatabase(fileName)) {
-				deletedCount++;
-			}
-		}
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		dbLogger.debug(`Could not access SQLite database directory: ${errorMessage}`);
-	}
-
-	return deletedCount;
+	LEGACY_SQLITE_DIRECTORY.delete();
+	return 1;
 };
 
 const deleteFilesystemDatabases = () => {
@@ -117,7 +55,7 @@ const deleteFilesystemDatabases = () => {
 export const clearAllDB = async (): Promise<ClearDBResult> => {
 	try {
 		dbLogger.debug('Starting to clear all application databases');
-		const deletedSQLiteDatabases = await deleteLegacySQLiteDatabases();
+		const deletedSQLiteDatabases = deleteLegacySQLiteDatabases();
 		const deletedFilesystemDatabases = deleteFilesystemDatabases();
 		const deletedCount = deletedSQLiteDatabases + deletedFilesystemDatabases;
 
