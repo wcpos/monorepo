@@ -107,3 +107,70 @@ export function formatBytes(bytes: number | null): string | null {
 	}
 	return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }
+
+/**
+ * Approximate on-disk bytes for a collection: average sampled serialized-record
+ * length × record count. Deliberately an estimate (storage adds index/metadata
+ * overhead the sample can't see) — the UI marks it with "≈". Null when nothing
+ * was sampled (empty collection or sampling unavailable).
+ */
+export function estimateCollectionBytes(
+	count: number,
+	sampledJsonLengths: readonly number[]
+): number | null {
+	if (count <= 0 || sampledJsonLengths.length === 0) return null;
+	const valid = sampledJsonLengths.filter((n) => Number.isFinite(n) && n > 0);
+	if (valid.length === 0) return null;
+	const average = valid.reduce((sum, n) => sum + n, 0) / valid.length;
+	return Math.round(average * count);
+}
+
+/**
+ * The census freshness window for the footer: when the totals were last taken
+ * (latest updatedAtMs across known collections) and when the next refresh
+ * lands (earliest freshUntilMs — the first collection to expire triggers the
+ * next census request). Nulls when no census entry exists yet.
+ */
+export function censusFreshnessWindow(census: CensusTotals): {
+	updatedAtMs: number | null;
+	nextUpdateAtMs: number | null;
+} {
+	let updatedAtMs: number | null = null;
+	let nextUpdateAtMs: number | null = null;
+	for (const entry of Object.values(census)) {
+		if (!entry) continue;
+		if (updatedAtMs === null || entry.updatedAtMs > updatedAtMs) updatedAtMs = entry.updatedAtMs;
+		if (nextUpdateAtMs === null || entry.freshUntilMs < nextUpdateAtMs)
+			nextUpdateAtMs = entry.freshUntilMs;
+	}
+	return { updatedAtMs, nextUpdateAtMs };
+}
+
+/**
+ * Elapsed fraction (0..1) of the census freshness window at `nowMs` — drives
+ * the countdown meter under the freshness lines. Null when the window is
+ * unknown or degenerate.
+ */
+export function censusWindowProgress(
+	window: { updatedAtMs: number | null; nextUpdateAtMs: number | null },
+	nowMs: number
+): number | null {
+	if (window.updatedAtMs === null || window.nextUpdateAtMs === null) return null;
+	const span = window.nextUpdateAtMs - window.updatedAtMs;
+	if (span <= 0) return null;
+	return Math.min(1, Math.max(0, (nowMs - window.updatedAtMs) / span));
+}
+
+/**
+ * Relative-time bucket for freshness copy. The UI owns the words (i18n); this
+ * owns the arithmetic so the buckets are testable.
+ */
+export function relativeTimeParts(
+	fromMs: number,
+	toMs: number
+): { unit: 'seconds' | 'minutes' | 'hours'; value: number } {
+	const deltaMs = Math.max(0, toMs - fromMs);
+	if (deltaMs < 60_000) return { unit: 'seconds', value: Math.round(deltaMs / 1000) };
+	if (deltaMs < 60 * 60_000) return { unit: 'minutes', value: Math.round(deltaMs / 60_000) };
+	return { unit: 'hours', value: Math.round(deltaMs / (60 * 60_000)) };
+}

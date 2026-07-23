@@ -251,6 +251,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		expect(emissions.at(-1)?.orders).toEqual({
 			total: 25,
 			updatedAtMs: 1_000_000,
+			freshUntilMs: 1_060_000,
 			fresh: true,
 		});
 

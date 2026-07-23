@@ -70,8 +70,18 @@ describe('collection census', () => {
 			1_000
 		);
 
-		expect(totals.orders).toEqual({ total: 25, updatedAtMs: 900, fresh: true });
-		expect(totals.products).toEqual({ total: 40, updatedAtMs: 800, fresh: false });
+		expect(totals.orders).toEqual({
+			total: 25,
+			updatedAtMs: 900,
+			freshUntilMs: 1_001,
+			fresh: true,
+		});
+		expect(totals.products).toEqual({
+			total: 40,
+			updatedAtMs: 800,
+			freshUntilMs: 1_000,
+			fresh: false,
+		});
 		expect(totals.variations).toBeNull();
 		expect(totals.customers).toBeNull();
 	});

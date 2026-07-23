@@ -251,10 +251,15 @@ export function prepareCollectionResetRefill(
 		engineCollections.has(collection)
 	);
 	const seedProductBrowse = engineCollections.has('products');
+	// Orders are NOT covered by the change-signal replay that refills catalog
+	// collections after a cursor rewind — without this seed, a cleared orders
+	// collection sits empty until the 5-minute order-window lane happens to run.
+	const seedOrderWindow = engineCollections.has('orders');
 
 	return async () => {
 		if (seedReferences) await engine.sync('reference-seed');
 		if (seedProductBrowse) await engine.sync('product-browse-window-seed');
+		if (seedOrderWindow) await engine.sync('order-window-seed');
 		const handles = declareRequirements(engine, requirements);
 		await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
 		for (const handle of handles) handle.release();

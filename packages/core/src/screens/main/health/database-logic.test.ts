@@ -1,22 +1,34 @@
+import type { CensusTotals } from '@wcpos/query';
+
 import {
+	censusFreshnessWindow,
+	censusWindowProgress,
 	deriveCollectionRow,
 	deriveRows,
+	estimateCollectionBytes,
 	formatBytes,
 	isReadyToSell,
+	relativeTimeParts,
 	totalLocalRecords,
 } from './database-logic';
 
+function census(total: number, opts?: { fresh?: boolean; updatedAtMs?: number }) {
+	const updatedAtMs = opts?.updatedAtMs ?? 1;
+	return {
+		total,
+		updatedAtMs,
+		freshUntilMs: updatedAtMs + 900_000,
+		fresh: opts?.fresh ?? true,
+	};
+}
+
 describe('database page logic', () => {
 	it('shows % local only against a fresh authoritative census', () => {
-		const fresh = deriveCollectionRow('products', 50, {
-			total: 100,
-			updatedAtMs: 1,
-			fresh: true,
-		});
+		const fresh = deriveCollectionRow('products', 50, census(100));
 		expect(fresh.percentLocal).toBe(50);
 		expect(fresh.serverTotal).toBe(100);
 
-		const stale = deriveCollectionRow('products', 50, { total: 100, updatedAtMs: 1, fresh: false });
+		const stale = deriveCollectionRow('products', 50, census(100, { fresh: false }));
 		expect(stale.percentLocal).toBeNull();
 		expect(stale.serverTotal).toBeNull();
 
@@ -26,17 +38,16 @@ describe('database page logic', () => {
 	});
 
 	it('never computes a percentage for windowed orders even with a fresh census', () => {
-		const orders = deriveCollectionRow('orders', 200, {
-			total: 17887,
-			updatedAtMs: 1,
-			fresh: true,
-		});
+		const orders = deriveCollectionRow('orders', 200, census(17887));
 		expect(orders.windowed).toBe(true);
 		expect(orders.percentLocal).toBeNull();
+		// The server total itself IS shown for windowed rows — the policy text
+		// explains why device ≠ server, the number stays honest.
+		expect(orders.serverTotal).toBe(17887);
 	});
 
 	it('caps percentage at 100 when local exceeds a stale-but-fresh total', () => {
-		const row = deriveCollectionRow('customers', 120, { total: 100, updatedAtMs: 1, fresh: true });
+		const row = deriveCollectionRow('customers', 120, census(100));
 		expect(row.percentLocal).toBe(100);
 	});
 
@@ -67,9 +78,47 @@ describe('database page logic', () => {
 
 	it('derives rows in order', () => {
 		const rows = deriveRows(['products', 'orders'], { products: 3, orders: 2 }, {
-			products: { total: 3, updatedAtMs: 1, fresh: true },
+			products: census(3),
 		} as never);
 		expect(rows.map((r) => r.key)).toEqual(['products', 'orders']);
 		expect(rows[0].percentLocal).toBe(100);
+	});
+
+	it('estimates collection bytes from a sample, or refuses honestly', () => {
+		expect(estimateCollectionBytes(100, [1000, 2000])).toBe(150_000);
+		expect(estimateCollectionBytes(0, [1000])).toBeNull();
+		expect(estimateCollectionBytes(100, [])).toBeNull();
+		expect(estimateCollectionBytes(100, [NaN, -5])).toBeNull();
+	});
+
+	it('derives the census freshness window from the entries themselves', () => {
+		const totals = {
+			products: { total: 10, updatedAtMs: 1_000, freshUntilMs: 5_000, fresh: true },
+			customers: { total: 20, updatedAtMs: 3_000, freshUntilMs: 4_000, fresh: true },
+			variations: null,
+		} as unknown as CensusTotals;
+		// Latest snapshot wins the "updated" line; the first expiry drives "next".
+		expect(censusFreshnessWindow(totals)).toEqual({ updatedAtMs: 3_000, nextUpdateAtMs: 4_000 });
+		expect(censusFreshnessWindow({} as CensusTotals)).toEqual({
+			updatedAtMs: null,
+			nextUpdateAtMs: null,
+		});
+	});
+
+	it('computes countdown progress across the freshness window', () => {
+		const window = { updatedAtMs: 1_000, nextUpdateAtMs: 2_000 };
+		expect(censusWindowProgress(window, 1_500)).toBe(0.5);
+		expect(censusWindowProgress(window, 500)).toBe(0);
+		expect(censusWindowProgress(window, 3_000)).toBe(1);
+		expect(censusWindowProgress({ updatedAtMs: null, nextUpdateAtMs: null }, 1_500)).toBeNull();
+		expect(censusWindowProgress({ updatedAtMs: 2_000, nextUpdateAtMs: 2_000 }, 2_000)).toBeNull();
+	});
+
+	it('buckets relative time for freshness copy', () => {
+		expect(relativeTimeParts(0, 6_000)).toEqual({ unit: 'seconds', value: 6 });
+		expect(relativeTimeParts(0, 130_000)).toEqual({ unit: 'minutes', value: 2 });
+		expect(relativeTimeParts(0, 2 * 60 * 60_000)).toEqual({ unit: 'hours', value: 2 });
+		// clock skew never yields negative ages
+		expect(relativeTimeParts(10_000, 5_000)).toEqual({ unit: 'seconds', value: 0 });
 	});
 });
