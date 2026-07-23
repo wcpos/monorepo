@@ -14,6 +14,7 @@ set -euo pipefail
 
 MAX_ATTEMPTS="${MERGE_GATE_MAX_ATTEMPTS:-80}"
 SLEEP_SECONDS="${MERGE_GATE_SLEEP_SECONDS:-30}"
+MERGE_STATE_MAX_ATTEMPTS="${MERGE_GATE_MERGE_STATE_MAX_ATTEMPTS:-5}"
 FIX_BOT_AUTHORS="|${MERGE_GATE_FIX_BOT_AUTHORS:-wcpos-agents[bot]}|"
 
 log() {
@@ -30,7 +31,9 @@ pr_commits() {
 }
 
 commit_files() {
-  gh api "repos/${GITHUB_REPOSITORY}/commits/$1" --jq '.files[].filename'
+  # status<TAB>filename — a REMOVED test must not satisfy the pinning-test
+  # requirement, so callers need the status.
+  gh api "repos/${GITHUB_REPOSITORY}/commits/$1" --jq '.files[] | [.status, .filename] | @tsv'
 }
 
 commit_message() {
@@ -47,7 +50,7 @@ is_test_path() {
 is_source_path() {
   is_test_path "$1" && return 1
   case "$1" in
-    *.ts|*.tsx|*.js|*.jsx|*.php) return 0 ;;
+    *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.mts|*.cts|*.php) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -71,10 +74,11 @@ enforce_bot_fix_discipline() {
     fi
     has_source=false
     has_test=false
-    while IFS= read -r file; do
+    while IFS=$'\t' read -r fstatus file; do
       [[ -n "$file" ]] || continue
       if is_test_path "$file"; then
-        has_test=true
+        # Deleting a test is not pinning one.
+        [[ "$fstatus" != "removed" ]] && has_test=true
       elif is_source_path "$file"; then
         has_source=true
       fi
@@ -88,12 +92,23 @@ enforce_bot_fix_discipline() {
       log "Could not read the message for fix-bot commit ${sha:0:8}; failing closed."
       return 1
     fi
-    if ! grep -qE '^Tested:' <<< "$msg"; then
+    if ! trailer_block_has_tested "$msg"; then
       log "✗ Fix-bot commit ${sha:0:8} ($author) has no 'Tested:' trailer. Run the touched suite locally and record the literal result line."
       failed=1
     fi
   done <<< "$commits"
   return "$failed"
+}
+
+# The Tested: line must sit in the message's FINAL paragraph (the git trailer
+# block) — prose that merely mentions "Tested:" mid-body does not count.
+trailer_block_has_tested() {
+  printf '%s\n' "$1" | awk '
+    BEGIN { block = "" }
+    /^[[:space:]]*$/ { block = ""; next }
+    { block = block $0 "\n" }
+    END { exit (block ~ /(^|\n)Tested:/) ? 0 : 1 }
+  '
 }
 
 check_bucket() {
@@ -165,9 +180,20 @@ wait_for_checks() {
 main() {
   # Conflicts block every PR. A failed or empty lookup fails closed: an
   # unknown merge state must never be treated as "not conflicted".
-  local merge_state
-  if ! merge_state="$(pr_merge_state)" || [[ -z "$merge_state" ]]; then
-    log "Could not determine the PR merge state; failing closed."
+  local merge_state attempt
+  for (( attempt=1; attempt<=MERGE_STATE_MAX_ATTEMPTS; attempt++ )); do
+    if ! merge_state="$(pr_merge_state)" || [[ -z "$merge_state" ]]; then
+      log "Could not determine the PR merge state; failing closed."
+      return 1
+    fi
+    [[ "$merge_state" == "UNKNOWN" ]] || break
+    if [[ "$attempt" -lt "$MERGE_STATE_MAX_ATTEMPTS" ]]; then
+      log "… merge state still computing (UNKNOWN), retrying"
+      sleep "$SLEEP_SECONDS"
+    fi
+  done
+  if [[ "$merge_state" == "UNKNOWN" ]]; then
+    log "Merge state stayed UNKNOWN after ${MERGE_STATE_MAX_ATTEMPTS} attempts; failing closed."
     return 1
   fi
   if [[ "$merge_state" == "DIRTY" ]]; then

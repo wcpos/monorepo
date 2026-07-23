@@ -92,7 +92,7 @@ mixed_commits=$'h1\tkilbot\nc1\twcpos-agents[bot]'
 
 run_case "clean human PR with green checks passes" pass \
   MOCK_PR_COMMITS=$'h1\tkilbot' \
-  MOCK_COMMIT_FILES_h1="packages/core/src/foo.ts" \
+  MOCK_COMMIT_FILES_h1=$'modified\tpackages/core/src/foo.ts' \
   MOCK_COMMIT_MSG_h1="fix: human change, exempt from bot rule"
 
 run_case "conflicted PR fails closed" fail \
@@ -105,24 +105,24 @@ run_case "merge-state lookup failure fails closed" fail \
 
 run_case "fix-bot source commit without test fails" fail \
   MOCK_PR_COMMITS="$bot_commits" \
-  MOCK_COMMIT_FILES_c1="packages/core/src/screens/main/orders/refund/use-refund-mutation.ts" \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/screens/main/orders/refund/use-refund-mutation.ts' \
   MOCK_COMMIT_MSG_c1="fix: change behavior"
 
 run_case "fix-bot commit with test but no Tested trailer fails" fail \
   MOCK_PR_COMMITS="$bot_commits" \
-  MOCK_COMMIT_FILES_c1=$'packages/core/src/foo.ts\npackages/core/src/foo.test.ts' \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/foo.ts\nadded\tpackages/core/src/foo.test.ts' \
   MOCK_COMMIT_MSG_c1="fix: change behavior"
 
 run_case "fix-bot commit with pinning test and Tested trailer passes" pass \
   MOCK_PR_COMMITS="$mixed_commits" \
-  MOCK_COMMIT_FILES_h1="packages/core/src/bar.ts" \
+  MOCK_COMMIT_FILES_h1=$'modified\tpackages/core/src/bar.ts' \
   MOCK_COMMIT_MSG_h1="fix: human commit" \
-  MOCK_COMMIT_FILES_c1=$'packages/core/src/foo.ts\npackages/core/src/foo.test.ts' \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/foo.ts\nadded\tpackages/core/src/foo.test.ts' \
   MOCK_COMMIT_MSG_c1=$'fix: change behavior\n\nTested: 8/8 green — jest use-refund-mutation'
 
 run_case "fix-bot docs-only commit is exempt" pass \
   MOCK_PR_COMMITS="$bot_commits" \
-  MOCK_COMMIT_FILES_c1="README.md" \
+  MOCK_COMMIT_FILES_c1=$'modified\tREADME.md' \
   MOCK_COMMIT_MSG_c1="docs: tweak"
 
 run_case "skipped required checks count as pass (paths-filter)" pass \
@@ -132,5 +132,25 @@ run_case "skipped required checks count as pass (paths-filter)" pass \
 run_case "failed required check fails the gate" fail \
   MOCK_PR_COMMITS="" \
   MOCK_FAIL_CHECK="🧹 Lint"
+
+run_case "fix-bot Tested line outside the trailer block fails" fail \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/foo.ts\nadded\tpackages/core/src/foo.test.ts' \
+  MOCK_COMMIT_MSG_c1=$'fix: change behavior\n\nThe contract says every commit needs a\nTested: trailer, which this prose merely mentions.\n\nSigned-off-by: bot'
+
+run_case "fix-bot deleting a test does not satisfy the pin" fail \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tpackages/core/src/foo.ts\nremoved\tpackages/core/src/foo.test.ts' \
+  MOCK_COMMIT_MSG_c1=$'fix: change behavior\n\nTested: 8/8 green — jest'
+
+run_case "fix-bot mjs source counts as source" fail \
+  MOCK_PR_COMMITS="$bot_commits" \
+  MOCK_COMMIT_FILES_c1=$'modified\tscripts/start-dev.mjs' \
+  MOCK_COMMIT_MSG_c1="fix: change behavior"
+
+run_case "UNKNOWN merge state fails closed after retries" fail \
+  MOCK_MERGE_STATE="UNKNOWN" \
+  MERGE_GATE_MERGE_STATE_MAX_ATTEMPTS="2" \
+  MOCK_PR_COMMITS=""
 
 echo "All merge-gate tests passed."
