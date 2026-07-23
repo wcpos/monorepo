@@ -11,6 +11,7 @@ export interface FiltersByCollection {
 		featured?: boolean;
 		on_sale?: boolean;
 		stock_status?: string;
+		status?: string;
 	};
 	orders: {
 		status?: string;
@@ -24,7 +25,7 @@ export interface FiltersByCollection {
 		status?: string;
 		dateRange?: DateRangeFilter;
 	};
-	variations: { attributeMatches: VariationMatch[] };
+	variations: { attributeMatches: VariationMatch[]; status?: string };
 	customers: Record<never, never>;
 	'tax-rates': Record<never, never>;
 	logs: { level?: string[] };

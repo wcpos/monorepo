@@ -152,6 +152,7 @@ function productDocument(id = 41, barcode = 'ABC'): EngineDocument {
 	const payload = {
 		id,
 		name: 'Keyboard',
+		status: 'publish',
 		stock_status: 'instock',
 		barcode,
 	};
@@ -173,6 +174,7 @@ function variationDocument(id = 51, parentId = 41, barcode = 'ABC'): EngineDocum
 		id,
 		parent_id: parentId,
 		name: 'Keyboard / Black',
+		status: 'publish',
 		stock_status: 'instock',
 		barcode,
 		attributes: [{ id: 7, name: 'Colour', option: 'Black' }],

@@ -60,6 +60,7 @@ export function VariationsPopover(props: VariationsPopoverProps) {
 			collection="variations"
 			initialPageSize={Number.MAX_SAFE_INTEGER}
 			initialSort={{ field: 'name', direction: 'asc' }}
+			initialFilters={{ status: 'publish' }}
 		>
 			<VariationsPopoverContent {...props} />
 		</QueryStateProvider>

@@ -36,6 +36,7 @@ export const FILTER_TRANSLATORS = {
 		featured: entry('featured', 'featured', 'promoted'),
 		on_sale: entry('on_sale', 'onSale', 'promoted'),
 		stock_status: entry('stock_status', 'stockStatus', 'promoted'),
+		status: entry('status', 'payload.status', 'payload'),
 	},
 	orders: {
 		status: entry('status', 'status', 'promoted'),
@@ -56,6 +57,7 @@ export const FILTER_TRANSLATORS = {
 	},
 	variations: {
 		attributeMatches: entry('attributes', 'attributes', 'promoted', 'all-match'),
+		status: entry('status', 'payload.status', 'payload'),
 	},
 	customers: {},
 	'tax-rates': {},
