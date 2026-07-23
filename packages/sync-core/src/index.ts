@@ -18,7 +18,6 @@ export * from './scopeGuardedOperation';
 export * from './scopeGuardedPull';
 export * from './storeScopeIdentity';
 export * from './storeScopeManager';
-export * from './categoryLoggerObserver';
 export * from './protocol';
 export * from './recordIdentity';
 export * from './telemetry';

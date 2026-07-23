@@ -142,7 +142,7 @@ function endpointCollectionFor(collection: HybridCollection): 'products' | 'tax_
 /** Map the server's per-row collection string to a HybridCollection, or
  * undefined when absent/unknown (the row is then dropped at this boundary —
  * the engine never guesses a row's collection). */
-const SUPPORTED_HYBRID_COLLECTIONS: ReadonlySet<string> = new Set<HybridCollection>([
+export const SUPPORTED_HYBRID_COLLECTIONS: ReadonlySet<string> = new Set<HybridCollection>([
 	'products',
 	'variations',
 	'tax_rates',

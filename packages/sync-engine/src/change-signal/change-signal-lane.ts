@@ -33,7 +33,11 @@ import type {
 } from '@wcpos/sync-core';
 
 import { buildReplicationHandlers } from './change-signal-handlers';
-import { createLiveChangeSignalSource, type EngineSourceFetcher } from './change-signal-source';
+import {
+	createLiveChangeSignalSource,
+	type EngineSourceFetcher,
+	SUPPORTED_HYBRID_COLLECTIONS,
+} from './change-signal-source';
 import { createConfigFingerprintLiveSource } from './config-fingerprint-source';
 import { deserializeChangeSignalState, serializeChangeSignalState } from './change-signal-state';
 
@@ -159,6 +163,8 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		if (deps.manager.activeScope === null) {
 			return { lane: 'change-signal', status: 'skipped', reason: 'no active scope' };
 		}
+		const cycleStartedAtMs = Date.now();
+		let cycleSummary: { pulls: number; deletes: number } | null = null;
 		try {
 			return await deps.manager.runGuarded(async (bound) => {
 				const scopeId = bound.scopeId;
@@ -199,6 +205,10 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				const wrote = await bound.guardWrite(async () => {
 					const outcome = await engine.poll();
 					const actions = planReplicationActions(outcome);
+					cycleSummary = {
+						pulls: actions.targetedPulls.reduce((n, group) => n + group.ids.length, 0),
+						deletes: actions.deletes.reduce((n, group) => n + group.ids.length, 0),
+					};
 					await applyReplicationActions(
 						actions,
 						buildReplicationHandlers({
@@ -225,6 +235,19 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						status: 'skipped',
 						reason: 'scope moved mid-tick (writes dropped)',
 					};
+				}
+				if (wrote !== 'dropped' && cycleSummary !== null) {
+					deps.diagnostics({
+						type: 'signal.cycle',
+						level: 'info',
+						message: `change-signal: checked for updates (${cycleSummary.pulls} changed, ${cycleSummary.deletes} deleted)`,
+						fields: {
+							collectionsChecked: [...SUPPORTED_HYBRID_COLLECTIONS],
+							pulls: cycleSummary.pulls,
+							deletes: cycleSummary.deletes,
+							durationMs: Date.now() - cycleStartedAtMs,
+						},
+					});
 				}
 				lastError = null;
 				return report;
