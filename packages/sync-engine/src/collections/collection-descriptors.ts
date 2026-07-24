@@ -199,6 +199,18 @@ function ackBookkeeping(
 			if (signal?.aborted) return;
 			const doc = (await db.collections[collection].findOne(ack.recordId).exec()) as AckDoc | null;
 			if (!doc || signal?.aborted) return; // gone, or the scope switched — nothing to reconcile
+			let ackDocumentPatch: Record<string, unknown> | null = null;
+			if (documentPatchFromAckDocument && ack.document && ack.mutation.operation !== 'delete') {
+				try {
+					ackDocumentPatch = documentPatchFromAckDocument(ack.document);
+				} catch {
+					// The push contract allows a trimmed ack document (a bare `{ id }`,
+					// no uuid meta) the pull materializer cannot key. Adoption is
+					// opportunistic — fall back to the bookkeeping-only ack rather than
+					// failing an ack for a write the server already applied.
+					ackDocumentPatch = null;
+				}
+			}
 			await doc.incrementalModify((data) => {
 				const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
 				const pending = (
@@ -207,12 +219,7 @@ function ackBookkeeping(
 				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
 				return {
 					...data,
-					...(documentPatchFromAckDocument &&
-					ack.document &&
-					pending.length === 0 &&
-					ack.mutation.operation !== 'delete'
-						? documentPatchFromAckDocument(ack.document)
-						: {}),
+					...(ackDocumentPatch && pending.length === 0 ? ackDocumentPatch : {}),
 					[remoteIdField]:
 						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
 							? ack.remoteId

@@ -538,6 +538,42 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('acks cleanly WITHOUT adoption when the ack document is not materializable', async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_104 });
+		const localPayload = {
+			status: 'pos-open',
+			total: '52.00',
+			line_items: [{ product_id: 123, quantity: 1, total: '52.00' }],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+		};
+		// The write contract allows a trimmed ack document — a bare `{ id }` with no
+		// uuid meta must NOT turn a successful push into a failed (replaying) ack.
+		const fetch = withAckDocument(server, (document) => ({
+			id: (document as { id?: unknown }).id,
+		}));
+		const engine = engineWith({ fetch });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, localPayload);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: localPayload,
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			expect(await orderJson(engine, UUID_A)).toMatchObject({
+				wooOrderId: 900_000_104,
+				payload: localPayload,
+				sync: { revision: server.applied.get(UUID_A)?.revision },
+				local: { dirty: false, pendingMutationIds: [] },
+			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('a conflict surfaces as an event and the mutation STAYS queued', async () => {
 		const server = createFakeWriteServer();
 		server.script(() => ({
