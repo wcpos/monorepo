@@ -101,6 +101,7 @@
 		"@widgetbot/react-embed": "^1.11.3",
 		"barcode-detector": "^3.2.1",
 		"date-fns": "^4.4.0",
+		"expo-intent-launcher": "57.0.1",
 		"html-entities": "2.6.0",
 		"i18next": "^26.3.1",
 		"lodash": "^4.18.1",

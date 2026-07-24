@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import { act, render } from '@testing-library/react';
 
@@ -16,6 +17,7 @@ const mockGet = jest.fn();
 const mockReplace = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
+const mockStartActivityAsync = jest.fn();
 let autoShowReceipt = false;
 
 jest.mock('@wcpos/components/webview', () => ({
@@ -50,6 +52,9 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
+jest.mock('expo-intent-launcher', () => ({ startActivityAsync: mockStartActivityAsync }), {
+	virtual: true,
+});
 
 const makeOrder = () =>
 	({
@@ -211,5 +216,35 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });
 		jest.useRealTimers();
+	});
+
+	it('launches a Square Android intent instead of loading it in the WebView', async () => {
+		const platform = jest.replaceProperty(Platform, 'OS', 'android');
+		render(
+			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+		);
+		const url =
+			'intent:#Intent;action=com.squareup.pos.action.CHARGE;package=com.squareup;' +
+			'S.browser_fallback_url=https%3A%2F%2Fshop.example.com%2Forder-pay%2F42;' +
+			'S.com.squareup.pos.WEB_CALLBACK_URI=https%3A%2F%2Fshop.example.com%2Fcallback;' +
+			'S.com.squareup.pos.CLIENT_ID=sq0idp-client;' +
+			'i.com.squareup.pos.TOTAL_AMOUNT=21600;' +
+			'S.com.squareup.pos.CURRENCY_CODE=USD;' +
+			'l.com.squareup.pos.AUTO_RETURN_TIMEOUT_MS=3200;end';
+
+		expect(webViewProps.originWhitelist).toContain('intent:*');
+		expect(webViewProps.onShouldStartLoadWithRequest({ url })).toBe(false);
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(mockStartActivityAsync).toHaveBeenCalledWith('com.squareup.pos.action.CHARGE', {
+			extra: {
+				'com.squareup.pos.WEB_CALLBACK_URI': 'https://shop.example.com/callback',
+				'com.squareup.pos.CLIENT_ID': 'sq0idp-client',
+				'com.squareup.pos.TOTAL_AMOUNT': 21600,
+				'com.squareup.pos.CURRENCY_CODE': 'USD',
+			},
+		});
+		platform.restore();
 	});
 });
