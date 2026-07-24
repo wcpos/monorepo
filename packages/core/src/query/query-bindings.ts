@@ -590,7 +590,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	});
 	const childDescriptor = useStableDescriptor({
 		collection: 'variations',
-		selector: {},
+		selector: state.filters.status ? { status: state.filters.status } : {},
 		sort: [{ id: 'asc' }],
 		search: translated.search,
 		searchFields: searchFieldsFor(runtime.localDB, 'variations'),
