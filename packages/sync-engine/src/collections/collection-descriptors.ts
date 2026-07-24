@@ -131,6 +131,7 @@ export type WriteAck = {
 	recordId: string;
 	remoteId: unknown;
 	currentRevision: string | null;
+	document?: Record<string, unknown> | null;
 };
 
 /**
@@ -185,7 +186,8 @@ type AckDoc = {
 function ackBookkeeping(
 	collection: CollectionWriteFacet['collection'],
 	remoteIdField: CollectionWriteFacet['remoteIdField'],
-	createAckSource?: 'woo-rest'
+	createAckSource?: 'woo-rest',
+	payloadFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>
 ): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
 	return {
 		reconcile: async (db, ack, signal) => {
@@ -200,6 +202,12 @@ function ackBookkeeping(
 				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
 				return {
 					...data,
+					...(payloadFromAckDocument &&
+					ack.document &&
+					pending.length === 0 &&
+					ack.mutation.operation !== 'delete'
+						? { payload: payloadFromAckDocument(ack.document) }
+						: {}),
 					[remoteIdField]:
 						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
 							? ack.remoteId
@@ -263,6 +271,7 @@ function createWriteFacet(input: {
 	parse: (body: unknown) => WooPayload[];
 	project: (payload: WooPayload) => Record<string, unknown>;
 	createAckSource?: 'woo-rest';
+	payloadFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
 	upsert?: CollectionWriteFacet['upsertServerDocument'];
 }): CollectionWriteFacet {
 	return {
@@ -295,7 +304,12 @@ function createWriteFacet(input: {
 					`write facet ${input.collection} upsert`
 				);
 			}),
-		...ackBookkeeping(input.collection, input.remoteIdField, input.createAckSource),
+		...ackBookkeeping(
+			input.collection,
+			input.remoteIdField,
+			input.createAckSource,
+			input.payloadFromAckDocument
+		),
 	};
 }
 
@@ -337,6 +351,8 @@ const ordersWriteFacet = createWriteFacet({
 	pullPath: '/orders',
 	parse: parseBareArray,
 	project: orderDocument,
+	payloadFromAckDocument: (document) =>
+		orderDocument(document as WooPayload).payload as Record<string, unknown>,
 	upsert: async (db, document) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
 	},

@@ -312,6 +312,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										recordId,
 										remoteId,
 										currentRevision: pushResult.currentRevision,
+										document: pushResult.document ?? null,
 									};
 									await facet.reconcile(database, ack, signal);
 									// BORN-TWICE honest reconcile (gate2 #516 item 1): a create the

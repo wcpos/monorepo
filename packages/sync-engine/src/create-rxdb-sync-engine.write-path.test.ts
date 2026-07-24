@@ -18,6 +18,7 @@ import {
 	type EngineFetcher,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
+import { writeFacetFor } from './collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
 import { memoryEngineStorage, scriptedConnectivity } from './testing';
 
@@ -65,7 +66,14 @@ function engineWith(input: {
 }
 
 /** A resident born-local order the write path can create against. */
-async function insertBornLocalOrder(engine: RxdbSyncEngine, id: string): Promise<void> {
+async function insertBornLocalOrder(
+	engine: RxdbSyncEngine,
+	id: string,
+	payload: Record<string, unknown> = {
+		status: 'pos-open',
+		meta_data: [{ key: '_woocommerce_pos_uuid', value: id }],
+	}
+): Promise<void> {
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
 	await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
@@ -76,7 +84,7 @@ async function insertBornLocalOrder(engine: RxdbSyncEngine, id: string): Promise
 		status: 'pos-open',
 		total: '0.00',
 		customerId: 0,
-		payload: { status: 'pos-open', meta_data: [{ key: '_woocommerce_pos_uuid', value: id }] },
+		payload,
 		sync: { revision: '', partial: false, source: 'skeleton' },
 		local: { dirty: false, pendingMutationIds: [] },
 	});
@@ -164,6 +172,24 @@ function routedFetch(
 		});
 	};
 	return { state, fetch };
+}
+
+function withAckDocument(
+	server: ReturnType<typeof createFakeWriteServer>,
+	mapDocument: (document: Record<string, unknown> | null) => Record<string, unknown> | null
+): (url: string, init?: RequestInit) => Promise<Response> {
+	return async (url, init) => {
+		const response = await server.fetch(url, init as never);
+		if (!url.includes('/push/') || !response.ok) return response;
+		const body = (await response.json()) as {
+			document?: Record<string, unknown> | null;
+			currentRevision?: string | null;
+		};
+		return Response.json(
+			{ ...body, document: mapDocument(body.document ?? null) },
+			{ status: response.status }
+		);
+	};
 }
 
 describe('write() + sync("write-drain") through the public handle', () => {
@@ -360,6 +386,152 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		expect((order?.sync as { revision?: string }).revision).toBeTruthy();
 		expect((order?.local as { dirty?: boolean }).dirty).toBe(false);
 		await engine.dispose();
+	});
+
+	it('merges the authoritative order payload after the final create ack', async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_101 });
+		const localPayload = {
+			status: 'pos-open',
+			total: '50.00',
+			line_items: [{ product_id: 123, quantity: 1, total: '50.00' }],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+		};
+		const fetch = withAckDocument(server, (document) => ({
+			...document,
+			total: '52.00',
+			line_items: [{ product_id: 123, quantity: 1, id: 7001, total: '52.00' }],
+		}));
+		const engine = engineWith({ fetch });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, localPayload);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: localPayload,
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			expect(await orderJson(engine, UUID_A)).toMatchObject({
+				wooOrderId: 900_000_101,
+				payload: {
+					total: '52.00',
+					line_items: [{ product_id: 123, quantity: 1, id: 7001, total: '52.00' }],
+				},
+				sync: { revision: server.applied.get(UUID_A)?.revision },
+				local: { dirty: false, pendingMutationIds: [] },
+			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('does not merge an order ack payload over a queued local successor', async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_102 });
+		const localPayload = {
+			status: 'pos-open',
+			total: '52.00',
+			line_items: [{ product_id: 123, quantity: 1, total: '52.00' }],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+		};
+		const mappedFetch = withAckDocument(server, (document) => ({
+			...document,
+			total: '104.00',
+			line_items: [{ product_id: 123, quantity: 1, id: 7002, total: '104.00' }],
+		}));
+		let releaseAck: (() => void) | undefined;
+		let ackReceived: (() => void) | undefined;
+		const release = new Promise<void>((resolve) => {
+			releaseAck = resolve;
+		});
+		const received = new Promise<void>((resolve) => {
+			ackReceived = resolve;
+		});
+		let firstPush = true;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			const response = await mappedFetch(url, init);
+			if (firstPush && url.includes('/push/')) {
+				firstPush = false;
+				ackReceived?.();
+				await release;
+			}
+			return response;
+		};
+		const engine = engineWith({ fetch });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, localPayload);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: localPayload,
+			});
+			const firstDrain = engine.sync('write-drain');
+			await received;
+			const successor = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: localPayload,
+			});
+			releaseAck?.();
+
+			expect(await firstDrain).toMatchObject({ pushed: 1, rejected: 0 });
+			expect(await orderJson(engine, UUID_A)).toMatchObject({
+				wooOrderId: 900_000_102,
+				payload: localPayload,
+				sync: { revision: server.applied.get(UUID_A)?.revision },
+				local: { dirty: true, pendingMutationIds: [successor.mutationId] },
+			});
+		} finally {
+			releaseAck?.();
+			await engine.dispose();
+		}
+	});
+
+	it('keeps bookkeeping-only ack behavior when the server document is null', async () => {
+		const localPayload = {
+			status: 'pos-open',
+			total: '52.00',
+			line_items: [{ product_id: 123, quantity: 1, total: '52.00' }],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+		};
+		const engine = engineWith({ fetch: async () => Response.json({}) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, localPayload);
+			const facet = writeFacetFor('orders');
+			if (!facet) throw new Error('orders write facet is missing');
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const resident = await scope.database.collections.orders.findOne(UUID_A).exec();
+			await resident?.incrementalModify((data: Record<string, unknown>) => ({
+				...data,
+				local: { dirty: true, pendingMutationIds: ['mutation-null-document'] },
+			}));
+			await facet.reconcile(scope.database, {
+				mutation: {
+					mutationId: 'mutation-null-document',
+					operation: 'create',
+					recordId: UUID_A,
+				},
+				recordId: UUID_A,
+				remoteId: 900_000_103,
+				currentRevision: 'sha256:null-document',
+				document: null,
+			});
+
+			expect(await orderJson(engine, UUID_A)).toMatchObject({
+				wooOrderId: 900_000_103,
+				payload: localPayload,
+				sync: { revision: 'sha256:null-document' },
+				local: { dirty: false, pendingMutationIds: [] },
+			});
+		} finally {
+			await engine.dispose();
+		}
 	});
 
 	it('a conflict surfaces as an event and the mutation STAYS queued', async () => {
