@@ -336,7 +336,10 @@ export function POSProducts({ isColumn = false }) {
 	const { uiSettings } = useUISettings('pos-products');
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const initialSort = getPOSProductSort(uiSettings.sortBy, uiSettings.sortDirection);
-	const initialFilters = showOutOfStock ? undefined : { stock_status: 'instock' as const };
+	const initialFilters = {
+		status: 'publish' as const,
+		...(showOutOfStock ? {} : { stock_status: 'instock' as const }),
+	};
 
 	return (
 		<QueryStateProvider

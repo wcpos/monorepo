@@ -101,8 +101,12 @@ export const useBarcodeSearch = () => {
 				productCollection.find().exec(),
 				variationsCollection.find().exec(),
 			]);
-			const products = engineDocuments(productResult);
-			const variations = engineDocuments(variationResult);
+			const products = engineDocuments(productResult).filter(
+				(document) => document.payload?.status === 'publish'
+			);
+			const variations = engineDocuments(variationResult).filter(
+				(document) => document.payload?.status === 'publish'
+			);
 
 			const select = (predicate: (document: EngineRxDocument) => boolean) => [
 				...products

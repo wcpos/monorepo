@@ -663,6 +663,38 @@ describe('query bindings', () => {
 		);
 	});
 
+	it('excludes non-published variation matches from a published product search', async () => {
+		await engineDB.collections.products.insert(
+			engineProduct({
+				uuid: 'shirt',
+				id: 10,
+				name: 'Shirt',
+				status: 'publish',
+			})
+		);
+		await engineDB.collections.variations.insert(
+			engineVariation({
+				uuid: 'draft-blue-shirt',
+				id: 11,
+				parent_id: 10,
+				name: 'Shirt - Blue',
+				sku: 'blue-sku',
+				status: 'draft',
+			})
+		);
+		const state: QueryStateOf<'products'> = {
+			search: 'blue-sku',
+			filters: { categories: [], tags: [], brands: [], status: 'publish' },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 20,
+		};
+		const { result } = renderHook(() => useRelationalCollectionBinding(state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits.length).toBe(0));
+	});
+
 	it('windows relational products after considering every matching variation', async () => {
 		await engineDB.collections.products.bulkInsert([
 			engineProduct({ uuid: 'zulu-shirt', id: 10, name: 'Zulu Shirt' }),

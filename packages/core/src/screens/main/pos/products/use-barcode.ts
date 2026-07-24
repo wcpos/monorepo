@@ -259,11 +259,26 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						}
 					}
 
-					showAmbiguousResults(candidates.length);
-					return;
+					results = await barcodeSearch(barcodeStr);
+					if (results.length === 0) {
+						showNotFound();
+						return;
+					}
+					if (results.length > 1) {
+						showAmbiguousResults(results.length);
+						return;
+					}
 				}
 
-				const match = resolution.match;
+				const [visibleMatch] = results;
+				const match =
+					resolution.ambiguous.length > 0
+						? {
+								id: visibleMatch.id!,
+								type: isVariationDocument(visibleMatch) ? 'variation' : 'product',
+								parent_id: isVariationDocument(visibleMatch) ? visibleMatch.parent_id : undefined,
+							}
+						: resolution.match;
 				if (match.type === 'variation' && !match.parent_id) {
 					showLookupError(
 						ERROR_CODES.MISSING_RESPONSE_DATA,
@@ -376,6 +391,10 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			}
 			if (!parent) {
 				guardedSetSearch(barcodeStr);
+				return;
+			}
+			if (parent.status !== 'publish') {
+				showNotFound();
 				return;
 			}
 

@@ -152,6 +152,7 @@ function productDocument(id = 41, barcode = 'ABC'): EngineDocument {
 	const payload = {
 		id,
 		name: 'Keyboard',
+		status: 'publish',
 		stock_status: 'instock',
 		barcode,
 	};
@@ -173,6 +174,7 @@ function variationDocument(id = 51, parentId = 41, barcode = 'ABC'): EngineDocum
 		id,
 		parent_id: parentId,
 		name: 'Keyboard / Black',
+		status: 'publish',
 		stock_status: 'instock',
 		barcode,
 		attributes: [{ id: 7, name: 'Colour', option: 'Black' }],
@@ -367,6 +369,24 @@ describe('useBarcode online escalation', () => {
 		expect(parent.id).toBe(41);
 		expect(parent.isInstanceOfRxDocument).toBe(true);
 		expect(metaData).toEqual([{ attr_id: 7, display_key: 'Colour', display_value: 'Black' }]);
+	});
+
+	it('does not add a published variation whose parent is non-published', async () => {
+		const parent = productDocument(41, 'PARENT');
+		parent.payload.status = 'draft';
+		engineProducts.push(parent);
+		engineVariations.push(variationDocument());
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockAddVariation.mock.calls.length).toBe(0);
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				type: 'warning',
+				title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+			})
+		);
 	});
 
 	it('does not add an unsellable managed variation when out-of-stock items are hidden', async () => {
@@ -583,12 +603,80 @@ describe('useBarcode online escalation', () => {
 		);
 	});
 
+	it('adds the only published match after ambiguous candidates are hydrated', async () => {
+		const published = productDocument(1);
+		const draft = productDocument(2);
+		draft.payload.status = 'draft';
+		mockFetcher.mockResolvedValue(
+			onlineResponse({
+				match: { id: 1, type: 'product' },
+				ambiguous: [{ id: 2, type: 'product' }],
+			})
+		);
+		mockEngineRequire.mockImplementation(() => {
+			if (engineProducts.length === 0) engineProducts.push(published, draft);
+			return {
+				ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
+				release: jest.fn(),
+			};
+		});
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockFindEngineProducts).toHaveBeenCalledTimes(3);
+		expect(mockAddProduct).toHaveBeenCalledTimes(1);
+		expect(mockAddProduct.mock.calls[0]?.[0].id).toBe(1);
+		expect(mockSetSearch).not.toHaveBeenCalled();
+	});
+
+	it('reports not found when every hydrated ambiguous candidate is non-published', async () => {
+		const draft = productDocument(1);
+		draft.payload.status = 'draft';
+		const privateProduct = productDocument(2);
+		privateProduct.payload.status = 'private';
+		mockFetcher.mockResolvedValue(
+			onlineResponse({
+				match: { id: 1, type: 'product' },
+				ambiguous: [{ id: 2, type: 'product' }],
+			})
+		);
+		mockEngineRequire.mockImplementation(() => {
+			engineProducts.push(draft, privateProduct);
+			return {
+				ready: Promise.resolve({ action: 'fetched', missingRecordIds: [], reason: 'test' }),
+				release: jest.fn(),
+			};
+		});
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockFindEngineProducts).toHaveBeenCalledTimes(2);
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				type: 'warning',
+				title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+			})
+		);
+	});
+
 	it('hydrates non-resident ambiguous products and variations before opening search', async () => {
 		const hydrationResolvers: (() => void)[] = [];
-		mockEngineRequire.mockImplementation(() => ({
-			ready: new Promise<void>((resolve) => hydrationResolvers.push(resolve)),
-			release: jest.fn(),
-		}));
+		mockEngineRequire.mockImplementation(
+			(requirement: { collection: 'products' | 'variations' }) => {
+				if (requirement.collection === 'products') {
+					engineProducts.push(productDocument(1), productDocument(2));
+				} else {
+					engineVariations.push(variationDocument(3));
+				}
+				return {
+					ready: new Promise<void>((resolve) => hydrationResolvers.push(resolve)),
+					release: jest.fn(),
+				};
+			}
+		);
 		mockFetcher.mockResolvedValue(
 			onlineResponse({
 				match: { id: 1, type: 'product' },
@@ -624,6 +712,8 @@ describe('useBarcode online escalation', () => {
 		for (const resolve of hydrationResolvers) resolve();
 		await act(async () => scanPromise);
 
+		expect(mockFindEngineProducts).toHaveBeenCalledTimes(2);
+		expect(mockFindEngineVariations).toHaveBeenCalledTimes(2);
 		expect(mockSetSearch).toHaveBeenCalledWith('ABC');
 		expect(mockToastShow).toHaveBeenLastCalledWith({
 			id: expect.stringMatching(/^scan:\d+$/),

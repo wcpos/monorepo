@@ -49,6 +49,7 @@ describe('query-state translator', () => {
 			'featured',
 			'on_sale',
 			'stock_status',
+			'status',
 		]);
 	});
 
@@ -75,6 +76,7 @@ describe('query-state translator', () => {
 				featured: true,
 				on_sale: false,
 				stock_status: 'outofstock',
+				status: 'publish',
 			},
 			sort: { field: 'price', direction: 'desc' },
 			limit: 25,
@@ -92,6 +94,7 @@ describe('query-state translator', () => {
 				{ featured: true },
 				{ on_sale: false },
 				{ stock_status: 'outofstock' },
+				{ status: 'publish' },
 			],
 		});
 		expect(products).toMatchObject({ sort: [{ sortable_price: 'desc' }], limit: 25 });
