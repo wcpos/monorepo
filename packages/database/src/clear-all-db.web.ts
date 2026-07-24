@@ -1,4 +1,8 @@
-import { APP_DATABASE_PREFIXES, isKnownAppDatabaseName } from './database-names';
+import {
+	APP_DATABASE_PREFIXES,
+	containsScopeDatabaseName,
+	isKnownAppDatabaseName,
+} from './database-names';
 
 interface ClearDBResult {
 	success: boolean;
@@ -10,17 +14,20 @@ const RXDB_DIRECTORY_PREFIX = 'rxdb-';
 
 const toOpfsSafeName = (value: string) => value.replace(/\//g, '__');
 
-const isKnownAppOpfsEntry = (name: string) =>
+export const isKnownAppIndexedDbDatabase = (name: string) =>
+	isKnownAppDatabaseName(name) || containsScopeDatabaseName(name);
+
+export const isKnownAppOpfsEntry = (name: string) =>
 	APP_DATABASE_PREFIXES.map(toOpfsSafeName).some((prefix) =>
 		name.startsWith(`${RXDB_DIRECTORY_PREFIX}${prefix}`)
-	);
+	) || containsScopeDatabaseName(name);
 
 /**
  * Delete all IndexedDB databases (legacy storage).
  */
 const deleteIndexedDbDatabases = async () => {
 	const databases = await indexedDB.databases();
-	const appDatabases = databases.filter((db) => db.name && isKnownAppDatabaseName(db.name));
+	const appDatabases = databases.filter((db) => db.name && isKnownAppIndexedDbDatabase(db.name));
 	const deletePromises = appDatabases.map(
 		(db) =>
 			new Promise<void>((resolve, reject) => {

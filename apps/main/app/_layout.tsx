@@ -12,6 +12,7 @@ import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
+import { CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY } from '@wcpos/database';
 import { getLogger, setToast } from '@wcpos/utils/logger';
 
 import { RootError } from '../components/root-error';
@@ -21,7 +22,6 @@ import '../polyfills';
 WebBrowser.maybeCompleteAuthSession();
 
 const appLogger = getLogger(['wcpos', 'app', 'startup']);
-const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 
 /**
  * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
