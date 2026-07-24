@@ -8,6 +8,7 @@ import {
 	useObservableSuspense,
 } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
+import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import {
@@ -71,9 +72,14 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	// The legacy webview can only process a payment when the server has supplied a
 	// payment link; without it the modal body shows an error and processing must stay
 	// disabled (a click would otherwise post into a null webview ref and spin forever).
-	const paymentURL = useObservableEagerState(
-		order.links$!.pipe(map((links) => get(links, ['payment', 0, 'href'])))
+	const paymentURL$ = React.useMemo(
+		() =>
+			order.links$
+				? order.links$.pipe(map((links) => get(links, ['payment', 0, 'href'])))
+				: of(get(order, ['links', 'payment', 0, 'href'])),
+		[order]
 	);
+	const paymentURL = useObservableEagerState(paymentURL$);
 	const paymentLinkMissing = mode === 'webview' && !paymentURL;
 	const showStockRejection =
 		error === 'insufficient_stock' &&
@@ -118,6 +124,16 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
+						{paymentLinkMissing && !showStockRejection ? (
+							<VStack
+								space="xs"
+								className="border-destructive bg-destructive/10 rounded-md border p-3"
+							>
+								<Text className="text-destructive">
+									{t('pos_checkout.payment_form_unavailable')}
+								</Text>
+							</VStack>
+						) : null}
 						{mode === 'webview' && !showStockRejection ? (
 							<PaymentWebview
 								order={order}

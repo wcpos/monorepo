@@ -6,8 +6,6 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import { useQueryManager } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -327,11 +325,7 @@ export function PaymentWebview({
 					}}
 					className="h-full flex-1"
 				/>
-			) : (
-				<VStack space="xs" className="border-destructive bg-destructive/10 rounded-md border p-3">
-					<Text className="text-destructive">{t('pos_checkout.payment_form_unavailable')}</Text>
-				</VStack>
-			)}
+			) : null}
 		</ErrorBoundary>
 	);
 }
