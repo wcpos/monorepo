@@ -303,6 +303,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 											currentRevision: pushResult.currentRevision,
 										});
 									}
+									const bornTwiceCreate =
+										mutation.operation === 'create' && pushResult.httpStatus === 200;
 									const ack: WriteAck = {
 										mutation: {
 											mutationId: mutation.mutationId,
@@ -312,7 +314,11 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										recordId,
 										remoteId,
 										currentRevision: pushResult.currentRevision,
-										document: pushResult.document ?? null,
+										// A born-twice ack document is the EXISTING server record and
+										// the pushed payload was DISCARDED — adopting it here would
+										// overwrite the resident's local edit before the follow-up
+										// below re-lands it. Withhold it from the payload adoption.
+										document: bornTwiceCreate ? null : (pushResult.document ?? null),
 									};
 									await facet.reconcile(database, ack, signal);
 									// BORN-TWICE honest reconcile (gate2 #516 item 1): a create the
@@ -321,7 +327,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									// Acking clean would silently lose the edit; re-land it as a
 									// follow-up update (see requeueBornTwiceSnapshot's docblock for
 									// the outcome-code comparison design and the successor layering).
-									if (mutation.operation === 'create' && pushResult.httpStatus === 200) {
+									if (bornTwiceCreate) {
 										await requeueBornTwiceSnapshot({
 											db: database,
 											mutation,

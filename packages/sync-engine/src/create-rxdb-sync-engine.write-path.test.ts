@@ -574,6 +574,58 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('does NOT adopt the born-twice ack document over the local edit it discarded', async () => {
+		const server = createFakeWriteServer();
+		// The EXISTING server record the born-twice guard will match (and return).
+		server.seed(UUID_A, {
+			id: 42,
+			revision: 'sha256:existing-r1',
+			payload: { status: 'processing', total: '10.00' },
+		});
+		const localPayload = {
+			status: 'pos-open',
+			total: '52.00',
+			line_items: [{ product_id: 123, quantity: 1, total: '52.00' }],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+		};
+		const engine = engineWith({ fetch: server.fetch });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, localPayload);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: localPayload,
+			});
+
+			// First drain: the create answers 200 — the pushed payload was DISCARDED
+			// and re-landed as a follow-up update. The resident must keep the local
+			// edit, not adopt the stale existing server document.
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const afterBornTwice = await orderJson(engine, UUID_A);
+			expect(afterBornTwice).toMatchObject({
+				wooOrderId: 42,
+				payload: localPayload,
+				local: { dirty: true },
+			});
+			expect(
+				(afterBornTwice?.local as { pendingMutationIds: string[] }).pendingMutationIds
+			).toHaveLength(1);
+
+			// Second drain: the follow-up update lands the edit; ITS ack adopts.
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			expect(await orderJson(engine, UUID_A)).toMatchObject({
+				payload: { status: 'pos-open', total: '52.00' },
+				total: '52.00',
+				sync: { revision: server.applied.get(UUID_A)?.revision },
+				local: { dirty: false, pendingMutationIds: [] },
+			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('a conflict surfaces as an event and the mutation STAYS queued', async () => {
 		const server = createFakeWriteServer();
 		server.script(() => ({
