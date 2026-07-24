@@ -73,6 +73,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		webViewProps = {};
 		autoShowReceipt = false;
 		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockStartActivityAsync.mockResolvedValue({ resultCode: 0 });
 	});
 
 	it('refreshes the engine order before routing a successful payment to its receipt', async () => {
@@ -232,7 +233,9 @@ describe('PaymentWebview fallback order refresh', () => {
 			'S.com.squareup.pos.CURRENCY_CODE=USD;' +
 			'l.com.squareup.pos.AUTO_RETURN_TIMEOUT_MS=3200;end';
 
-		expect(webViewProps.originWhitelist).toContain('intent:*');
+		expect(webViewProps.originWhitelist).toContain(
+			'intent:#Intent;action=com.squareup.pos.action.CHARGE;package=com.squareup;'
+		);
 		expect(webViewProps.onShouldStartLoadWithRequest({ url })).toBe(false);
 		await act(async () => {
 			await Promise.resolve();
@@ -245,6 +248,85 @@ describe('PaymentWebview fallback order refresh', () => {
 				'com.squareup.pos.CURRENCY_CODE': 'USD',
 			},
 		});
+		platform.restore();
+	});
+
+	it('preserves caller WebView navigation props outside the Square handoff', () => {
+		const onShouldStartLoadWithRequest = jest.fn(() => false);
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				onStockRejection={() => false}
+				originWhitelist={['wcpos-test:*']}
+				onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
+			/>
+		);
+
+		expect(webViewProps.originWhitelist).toContain('wcpos-test:*');
+		expect(
+			webViewProps.onShouldStartLoadWithRequest({ url: 'https://shop.example.com/next' })
+		).toBe(false);
+		expect(onShouldStartLoadWithRequest).toHaveBeenCalledWith({
+			url: 'https://shop.example.com/next',
+		});
+	});
+
+	it('only whitelists the documented Square intent prefix', () => {
+		render(
+			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+		);
+
+		expect(webViewProps.originWhitelist).toContain(
+			'intent:#Intent;action=com.squareup.pos.action.CHARGE;package=com.squareup;'
+		);
+		expect(webViewProps.originWhitelist).not.toContain('intent:*');
+	});
+
+	it('reconciles the order after returning from Square', async () => {
+		jest.useFakeTimers();
+		const platform = jest.replaceProperty(Platform, 'OS', 'android');
+		const setLoading = jest.fn();
+		render(
+			<PaymentWebview order={makeOrder()} setLoading={setLoading} onStockRejection={() => false} />
+		);
+		const url =
+			'intent:#Intent;action=com.squareup.pos.action.CHARGE;package=com.squareup;' +
+			'S.com.squareup.pos.WEB_CALLBACK_URI=https%3A%2F%2Fshop.example.com%2Fcallback;end';
+
+		webViewProps.onLoad({});
+		webViewProps.onShouldStartLoadWithRequest({ url });
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(setLoading).toHaveBeenCalledWith(false);
+		platform.restore();
+		jest.useRealTimers();
+	});
+
+	it('clears loading when Square cannot be opened', async () => {
+		const platform = jest.replaceProperty(Platform, 'OS', 'android');
+		const setLoading = jest.fn();
+		mockStartActivityAsync.mockRejectedValue(new Error('Square is not installed'));
+		render(
+			<PaymentWebview order={makeOrder()} setLoading={setLoading} onStockRejection={() => false} />
+		);
+		const url =
+			'intent:#Intent;action=com.squareup.pos.action.CHARGE;package=com.squareup;' +
+			'S.com.squareup.pos.WEB_CALLBACK_URI=https%3A%2F%2Fshop.example.com%2Fcallback;end';
+
+		webViewProps.onShouldStartLoadWithRequest({ url });
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+
+		expect(setLoading).toHaveBeenCalledWith(false);
 		platform.restore();
 	});
 });

@@ -49,6 +49,8 @@ export function PaymentWebview({
 	order,
 	setLoading,
 	onStockRejection,
+	originWhitelist,
+	onShouldStartLoadWithRequest,
 	...props
 }: PaymentWebviewProps) {
 	const router = useRouter();
@@ -312,24 +314,30 @@ export function PaymentWebview({
 	}, []);
 
 	const handleShouldStartLoad = React.useCallback(
-		(request: { url: string }) => {
-			if (Platform.OS !== 'android') return true;
+		(
+			request: Parameters<
+				NonNullable<React.ComponentProps<typeof WebView>['onShouldStartLoadWithRequest']>
+			>[0]
+		) => {
+			if (Platform.OS !== 'android') return onShouldStartLoadWithRequest?.(request) ?? true;
 			const squareIntent = parseSquarePosIntent(request.url);
-			if (!squareIntent) return true;
+			if (!squareIntent) return onShouldStartLoadWithRequest?.(request) ?? true;
 
 			void import('expo-intent-launcher')
 				.then(({ startActivityAsync }) =>
 					startActivityAsync(squareIntent.action, { extra: squareIntent.extra })
 				)
+				.then(() => onWebViewLoaded({}))
 				.catch((error) => {
 					orderLogger.error('Could not open Square Point of Sale', {
 						showToast: true,
 						context: { error: error instanceof Error ? error.message : String(error) },
 					});
+					setLoading(false);
 				});
 			return false;
 		},
-		[orderLogger]
+		[onShouldStartLoadWithRequest, onWebViewLoaded, orderLogger, setLoading]
 	);
 
 	return (
@@ -338,7 +346,12 @@ export function PaymentWebview({
 				<WebView
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
-					originWhitelist={['http://*', 'https://*', 'intent:*']}
+					originWhitelist={[
+						'http://*',
+						'https://*',
+						...(originWhitelist ?? []),
+						'intent:#Intent;action=com.squareup.pos.action.CHARGE;package=com.squareup;',
+					]}
 					onShouldStartLoadWithRequest={handleShouldStartLoad}
 					onLoad={onWebViewLoaded}
 					onMessage={(event) => {
