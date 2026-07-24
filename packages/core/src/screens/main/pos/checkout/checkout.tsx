@@ -1,12 +1,14 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
+import get from 'lodash/get';
 import {
 	ObservableResource,
 	useObservableEagerState,
 	useObservableSuspense,
 } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
+import { map } from 'rxjs/operators';
 
 import {
 	Modal,
@@ -66,6 +68,13 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	const { loading, mode, error, startCheckout, handleStockRejection } = useCheckoutSession(
 		order as import('@wcpos/database').OrderDocument
 	);
+	// The legacy webview can only process a payment when the server has supplied a
+	// payment link; without it the modal body shows an error and processing must stay
+	// disabled (a click would otherwise post into a null webview ref and spin forever).
+	const paymentURL = useObservableEagerState(
+		order.links$!.pipe(map((links) => get(links, ['payment', 0, 'href'])))
+	);
+	const paymentLinkMissing = mode === 'webview' && !paymentURL;
 	const showStockRejection =
 		error === 'insufficient_stock' &&
 		stockRejection !== null &&
@@ -172,6 +181,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 							disabled={
 								mode === 'pending' ||
 								error === 'payment_gateways_fetch_failed' ||
+								paymentLinkMissing ||
 								(mode === 'contract' && loading)
 							}
 						>
