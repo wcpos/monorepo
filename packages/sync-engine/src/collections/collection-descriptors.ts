@@ -32,8 +32,13 @@
  * transitional fallback for proxies that predate the stamp.
  */
 
-import { assertBulkSuccess } from '@wcpos/sync-core';
-import type { Fetcher, HybridCollection, ReferenceCollection } from '@wcpos/sync-core';
+import { assertBulkSuccess, withOrderColumns } from '@wcpos/sync-core';
+import type {
+	Fetcher,
+	HybridCollection,
+	ReferenceCollection,
+	WooOrderPayload,
+} from '@wcpos/sync-core';
 
 import {
 	materializeGreedyPrunable,
@@ -131,6 +136,7 @@ export type WriteAck = {
 	recordId: string;
 	remoteId: unknown;
 	currentRevision: string | null;
+	document?: Record<string, unknown> | null;
 };
 
 /**
@@ -185,13 +191,26 @@ type AckDoc = {
 function ackBookkeeping(
 	collection: CollectionWriteFacet['collection'],
 	remoteIdField: CollectionWriteFacet['remoteIdField'],
-	createAckSource?: 'woo-rest'
+	createAckSource?: 'woo-rest',
+	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>
 ): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
 	return {
 		reconcile: async (db, ack, signal) => {
 			if (signal?.aborted) return;
 			const doc = (await db.collections[collection].findOne(ack.recordId).exec()) as AckDoc | null;
 			if (!doc || signal?.aborted) return; // gone, or the scope switched — nothing to reconcile
+			let ackDocumentPatch: Record<string, unknown> | null = null;
+			if (documentPatchFromAckDocument && ack.document && ack.mutation.operation !== 'delete') {
+				try {
+					ackDocumentPatch = documentPatchFromAckDocument(ack.document);
+				} catch {
+					// The push contract allows a trimmed ack document (a bare `{ id }`,
+					// no uuid meta) the pull materializer cannot key. Adoption is
+					// opportunistic — fall back to the bookkeeping-only ack rather than
+					// failing an ack for a write the server already applied.
+					ackDocumentPatch = null;
+				}
+			}
 			await doc.incrementalModify((data) => {
 				const local = (data.local ?? {}) as { dirty?: boolean; pendingMutationIds?: string[] };
 				const pending = (
@@ -200,6 +219,7 @@ function ackBookkeeping(
 				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
 				return {
 					...data,
+					...(ackDocumentPatch && pending.length === 0 ? ackDocumentPatch : {}),
 					[remoteIdField]:
 						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
 							? ack.remoteId
@@ -263,6 +283,7 @@ function createWriteFacet(input: {
 	parse: (body: unknown) => WooPayload[];
 	project: (payload: WooPayload) => Record<string, unknown>;
 	createAckSource?: 'woo-rest';
+	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
 	upsert?: CollectionWriteFacet['upsertServerDocument'];
 }): CollectionWriteFacet {
 	return {
@@ -295,7 +316,12 @@ function createWriteFacet(input: {
 					`write facet ${input.collection} upsert`
 				);
 			}),
-		...ackBookkeeping(input.collection, input.remoteIdField, input.createAckSource),
+		...ackBookkeeping(
+			input.collection,
+			input.remoteIdField,
+			input.createAckSource,
+			input.documentPatchFromAckDocument
+		),
 	};
 }
 
@@ -337,6 +363,13 @@ const ordersWriteFacet = createWriteFacet({
 	pullPath: '/orders',
 	parse: parseBareArray,
 	project: orderDocument,
+	// The stored order row promotes filter/sort columns from the payload
+	// (withOrderColumns is the single promotion mapping) — adopt them together
+	// with the payload so order-list filters/sorts see the acked totals too.
+	documentPatchFromAckDocument: (document) =>
+		withOrderColumns({
+			payload: orderDocument(document as WooPayload).payload as WooOrderPayload,
+		}) as unknown as Record<string, unknown>,
 	upsert: async (db, document) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
 	},
