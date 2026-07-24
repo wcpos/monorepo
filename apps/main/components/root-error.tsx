@@ -11,12 +11,12 @@ import {
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { FallbackProps } from 'react-error-boundary';
 
 const appLogger = getLogger(['wcpos', 'app', 'error']);
-const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 
 /**
  * Reload the app - handles web and native platforms

@@ -1,5 +1,6 @@
 import {
 	APP_DATABASE_PREFIXES,
+	containsScopeDatabaseName,
 	getFastStoreDatabaseName,
 	getStoreDatabaseName,
 	getUserDatabaseName,
@@ -11,6 +12,7 @@ import {
 	LEGACY_STORE_PREFIXES,
 	LEGACY_USER_DATABASE_NAMES,
 } from './database-names';
+import { isKnownAppIndexedDbDatabase, isKnownAppOpfsEntry } from './clear-all-db.web';
 
 describe('database name helpers', () => {
 	it('returns the current database names', () => {
@@ -82,5 +84,23 @@ describe('database name helpers', () => {
 			expect.arrayContaining(['wcposusers_', 'store_v6_', 'fast_store_v6_'])
 		);
 		expect(isKnownAppDatabaseName('temporary')).toBe(false);
+	});
+
+	it.each(['pos_v2_abc123', 'rxdb-dexie-pos_v2_abc--0--orders', 'rxdb-pos_v2_abc'])(
+		'finds scope database names in %s',
+		(name) => {
+			expect(containsScopeDatabaseName(name)).toBe(true);
+		}
+	);
+
+	it('keeps known app names distinct from unrelated databases', () => {
+		expect(isKnownAppDatabaseName('wcposusers_v14')).toBe(true);
+		expect(isKnownAppDatabaseName('random-db')).toBe(false);
+		expect(containsScopeDatabaseName('random-db')).toBe(false);
+	});
+
+	it('classifies scope databases for both web storage filters', () => {
+		expect(isKnownAppIndexedDbDatabase('pos_v2_abc123')).toBe(true);
+		expect(isKnownAppOpfsEntry('rxdb-pos_v2_abc')).toBe(true);
 	});
 });

@@ -25,8 +25,8 @@ import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
+import { CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY, clearAllDB } from '@wcpos/database';
 import { Platform } from '@wcpos/utils/platform';
-import { clearAllDB } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
@@ -112,6 +112,12 @@ export function UserMenu() {
 	) as ObservableResource<StoreDocument[], StoreDocument[]>;
 
 	const handleReset = async () => {
+		if (Platform.OS === 'web') {
+			window.localStorage.setItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY, '1');
+			window.location.reload();
+			return;
+		}
+
 		// Clear databases to ensure clean start
 		try {
 			const result = await clearAllDB();

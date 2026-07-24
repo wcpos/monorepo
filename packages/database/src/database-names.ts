@@ -1,5 +1,8 @@
 import { DATABASE_GENERATION } from './database-generation';
 
+// Keep in sync with packages/sync-core/src/storeScopeIdentity.ts.
+export const SCOPE_DATABASE_NAME_ANYWHERE = /pos_v\d+_/;
+
 /**
  * WCPOS 1.9.x used the v4/v5 databases. V6 is the new engine's clean
  * generation for cold resync; bump this generation on every future reset.
@@ -62,3 +65,4 @@ export const isLegacyAppDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, LEGACY_APP_DATABASE_PREFIXES);
 export const isKnownAppDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, APP_DATABASE_PREFIXES);
+export const containsScopeDatabaseName = (name: string) => SCOPE_DATABASE_NAME_ANYWHERE.test(name);

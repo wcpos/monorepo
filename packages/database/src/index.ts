@@ -6,6 +6,7 @@ import './plugins';
 export { createUserDB, createStoreDB, createTemporaryDB, createFastStoreDB } from './create-db';
 export { userCollections, storeCollections, syncCollections } from './collections';
 export { sanitizeWPCredentialsData } from './collections/wp-credentials';
+export const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 export { clearAllDB } from './clear-all-db';
 export type { ClearDBResult } from './clear-all-db';
 export { purgeLegacyDatabases } from './purge-legacy-db';
