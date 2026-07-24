@@ -86,12 +86,28 @@ describe('database name helpers', () => {
 		expect(isKnownAppDatabaseName('temporary')).toBe(false);
 	});
 
-	it.each(['pos_v2_abc123', 'rxdb-dexie-pos_v2_abc--0--orders', 'rxdb-pos_v2_abc'])(
-		'finds scope database names in %s',
-		(name) => {
-			expect(containsScopeDatabaseName(name)).toBe(true);
-		}
-	);
+	// Mirrors scopeDatabaseName() in packages/sync-core/src/storeScopeIdentity.ts:
+	// `pos_v<generation>_<siteHash12>_s<store>_c<cashier>`.
+	const SCOPE_DB = 'pos_v2_0123456789ab_s0_c1';
+
+	it.each([
+		SCOPE_DB,
+		`${SCOPE_DB}_test-namespace`,
+		`rxdb-dexie-${SCOPE_DB}--0--orders`,
+		`rxdb-${SCOPE_DB}`,
+	])('finds scope database names in %s', (name) => {
+		expect(containsScopeDatabaseName(name)).toBe(true);
+	});
+
+	it.each([
+		'pos_v2_abc123', // fragment only — not the full site/store/cashier shape
+		'reports_pos_v2_cache', // unrelated same-origin storage must never match
+		'pos_v2_0123456789ab', // missing store and cashier components
+		'pos_v2_0123456789ab_s0', // missing cashier component
+		'pos_v2_0123456789XY_s0_c1', // site hash must be lowercase hex
+	])('does not treat %s as a scope database name', (name) => {
+		expect(containsScopeDatabaseName(name)).toBe(false);
+	});
 
 	it('keeps known app names distinct from unrelated databases', () => {
 		expect(isKnownAppDatabaseName('wcposusers_v14')).toBe(true);
@@ -100,7 +116,9 @@ describe('database name helpers', () => {
 	});
 
 	it('classifies scope databases for both web storage filters', () => {
-		expect(isKnownAppIndexedDbDatabase('pos_v2_abc123')).toBe(true);
-		expect(isKnownAppOpfsEntry('rxdb-pos_v2_abc')).toBe(true);
+		expect(isKnownAppIndexedDbDatabase(SCOPE_DB)).toBe(true);
+		expect(isKnownAppOpfsEntry(`rxdb-${SCOPE_DB}`)).toBe(true);
+		expect(isKnownAppIndexedDbDatabase('reports_pos_v2_cache')).toBe(false);
+		expect(isKnownAppOpfsEntry('reports_pos_v2_cache')).toBe(false);
 	});
 });
