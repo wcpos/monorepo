@@ -32,8 +32,13 @@
  * transitional fallback for proxies that predate the stamp.
  */
 
-import { assertBulkSuccess } from '@wcpos/sync-core';
-import type { Fetcher, HybridCollection, ReferenceCollection } from '@wcpos/sync-core';
+import { assertBulkSuccess, withOrderColumns } from '@wcpos/sync-core';
+import type {
+	Fetcher,
+	HybridCollection,
+	ReferenceCollection,
+	WooOrderPayload,
+} from '@wcpos/sync-core';
 
 import {
 	materializeGreedyPrunable,
@@ -187,7 +192,7 @@ function ackBookkeeping(
 	collection: CollectionWriteFacet['collection'],
 	remoteIdField: CollectionWriteFacet['remoteIdField'],
 	createAckSource?: 'woo-rest',
-	payloadFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>
+	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>
 ): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
 	return {
 		reconcile: async (db, ack, signal) => {
@@ -202,11 +207,11 @@ function ackBookkeeping(
 				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
 				return {
 					...data,
-					...(payloadFromAckDocument &&
+					...(documentPatchFromAckDocument &&
 					ack.document &&
 					pending.length === 0 &&
 					ack.mutation.operation !== 'delete'
-						? { payload: payloadFromAckDocument(ack.document) }
+						? documentPatchFromAckDocument(ack.document)
 						: {}),
 					[remoteIdField]:
 						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
@@ -271,7 +276,7 @@ function createWriteFacet(input: {
 	parse: (body: unknown) => WooPayload[];
 	project: (payload: WooPayload) => Record<string, unknown>;
 	createAckSource?: 'woo-rest';
-	payloadFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
+	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
 	upsert?: CollectionWriteFacet['upsertServerDocument'];
 }): CollectionWriteFacet {
 	return {
@@ -308,7 +313,7 @@ function createWriteFacet(input: {
 			input.collection,
 			input.remoteIdField,
 			input.createAckSource,
-			input.payloadFromAckDocument
+			input.documentPatchFromAckDocument
 		),
 	};
 }
@@ -351,8 +356,13 @@ const ordersWriteFacet = createWriteFacet({
 	pullPath: '/orders',
 	parse: parseBareArray,
 	project: orderDocument,
-	payloadFromAckDocument: (document) =>
-		orderDocument(document as WooPayload).payload as Record<string, unknown>,
+	// The stored order row promotes filter/sort columns from the payload
+	// (withOrderColumns is the single promotion mapping) — adopt them together
+	// with the payload so order-list filters/sorts see the acked totals too.
+	documentPatchFromAckDocument: (document) =>
+		withOrderColumns({
+			payload: orderDocument(document as WooPayload).payload as WooOrderPayload,
+		}) as unknown as Record<string, unknown>,
 	upsert: async (db, document) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
 	},

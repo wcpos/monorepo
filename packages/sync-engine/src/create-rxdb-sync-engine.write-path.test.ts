@@ -419,6 +419,10 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					total: '52.00',
 					line_items: [{ product_id: 123, quantity: 1, id: 7001, total: '52.00' }],
 				},
+				// The promoted filter/sort columns must be recomputed from the adopted
+				// payload, not left at their pre-ack values (insert seeded total '0.00').
+				status: 'pos-open',
+				total: '52.00',
 				sync: { revision: server.applied.get(UUID_A)?.revision },
 				local: { dirty: false, pendingMutationIds: [] },
 			});
