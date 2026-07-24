@@ -946,5 +946,6 @@
 	"settings.scanner_serial_disconnect": "Disconnect serial scanner",
 	"settings.scanner_hid_disconnect": "Disconnect HID scanner",
 	"settings.scanner_choose_device": "Choose a scanner to connect",
-	"settings.scanner_searching_devices": "Searching for devices…"
+	"settings.scanner_searching_devices": "Searching for devices…",
+	"pos_checkout.payment_form_unavailable": "The payment form can't load — this order has no payment link from the server yet. Close checkout and try again."
 }

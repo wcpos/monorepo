@@ -183,29 +183,16 @@ test.describe('POS Checkout', () => {
 		});
 	});
 
-	test('should complete an order', async ({ posPage: page }) => {
+	test('should disable payment when the server omits the payment link', async ({
+		posPage: page,
+	}) => {
 		await addFirstProductToCart(page);
 
+		const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}');
 		await page.getByTestId('checkout-button').click();
-		await expect(page.getByTestId('process-payment-button')).toBeVisible({
-			timeout: 10_000,
-		});
-
-		await page.getByTestId('process-payment-button').click();
-
-		// After clicking process payment, the button enters loading state (disabled).
-		// Payment is processed via a WebView/iframe — this can be slow or fail in CI.
-		// Verify the button became disabled (payment was initiated).
+		await gatewaysLoaded;
 		await expect(page.getByTestId('process-payment-button')).toBeDisabled({
 			timeout: 10_000,
-		});
-
-		// Wait for the payment to complete: either the receipt appears or we return to POS
-		const receiptPrintButton = page.getByTestId('receipt-print-button');
-		const receiptCloseButton = page.getByTestId('receipt-close-button');
-		const posScreen = page.getByTestId('search-products');
-		await expect(receiptPrintButton.or(receiptCloseButton).or(posScreen)).toBeVisible({
-			timeout: 60_000,
 		});
 	});
 
@@ -260,9 +247,9 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 	});
 
 	await addFirstProductToCart(page);
+	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}');
 	await page.getByTestId('checkout-button').click();
-	await expect(page.getByTestId('process-payment-button')).toBeVisible();
-	await page.getByTestId('process-payment-button').click();
+	await gatewaysLoaded;
 	await expect(page.getByTestId('process-payment-button')).toBeDisabled({ timeout: 10_000 });
 	expect(contractCheckoutRequested).toBe(false);
 });
@@ -291,9 +278,9 @@ test('falls back to the legacy webview when supports_checkout=false', async ({ p
 	});
 
 	await addFirstProductToCart(page);
+	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}');
 	await page.getByTestId('checkout-button').click();
-	await expect(page.getByTestId('process-payment-button')).toBeVisible();
-	await page.getByTestId('process-payment-button').click();
+	await gatewaysLoaded;
 	await expect(page.getByTestId('process-payment-button')).toBeDisabled({
 		timeout: 10_000,
 	});

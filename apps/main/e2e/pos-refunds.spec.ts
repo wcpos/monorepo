@@ -31,24 +31,15 @@ async function addFirstProductToCart(page: Page) {
 	});
 }
 
-async function createCompletedOrder(page: Page) {
+async function createRefundableOrder(page: Page) {
 	await addFirstProductToCart(page);
+	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}');
 	await page.getByTestId('checkout-button').click();
-	await expect(page.getByTestId('process-payment-button')).toBeVisible({
-		timeout: 15_000,
-	});
+	await gatewaysLoaded;
+	await expect(page.getByTestId('process-payment-button')).toBeDisabled();
 
 	const orderUuid = page.url().match(/\/cart\/([^/]+)\/checkout$/)?.[1];
 	expect(orderUuid).toBeTruthy();
-
-	await page.getByTestId('process-payment-button').click();
-
-	const receiptPrintButton = page.getByTestId('receipt-print-button');
-	const receiptCloseButton = page.getByTestId('receipt-close-button');
-	const posScreen = page.getByTestId('search-products');
-	await expect(receiptPrintButton.or(receiptCloseButton).or(posScreen)).toBeVisible({
-		timeout: 60_000,
-	});
 
 	return orderUuid!;
 }
@@ -114,9 +105,9 @@ async function interceptRefundDependencies(page: Page) {
 	});
 }
 
-async function openRefundModalForNewCompletedOrder(page: Page) {
+async function openRefundModalForNewOrder(page: Page) {
 	await interceptRefundDependencies(page);
-	const orderUuid = await createCompletedOrder(page);
+	const orderUuid = await createRefundableOrder(page);
 	await page.goto(`/orders/refund/${orderUuid}`);
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
 		timeout: 30_000,
@@ -157,7 +148,7 @@ test.describe('POS refunds (Pro)', () => {
 			});
 		});
 
-		await openRefundModalForNewCompletedOrder(page);
+		await openRefundModalForNewOrder(page);
 		await expect(page.getByTestId('refund-destination-original_method')).toBeChecked({
 			timeout: 15_000,
 		});
@@ -202,7 +193,7 @@ test.describe('POS refunds (Pro)', () => {
 			});
 		});
 
-		await openRefundModalForNewCompletedOrder(page);
+		await openRefundModalForNewOrder(page);
 		await expect(page.getByTestId('refund-destination-original_method')).toBeChecked({
 			timeout: 15_000,
 		});
