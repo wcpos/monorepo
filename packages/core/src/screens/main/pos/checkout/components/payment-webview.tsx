@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import get from 'lodash/get';
@@ -19,6 +20,7 @@ import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+const SQUARE_POS_ACTION = 'com.squareup.pos.action.CHARGE';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -33,6 +35,19 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  *   behind a spinner forever, which is the very stall this gate exists to stop.
  */
 export type PaymentFrameStatus = 'loading' | 'ready' | 'failed';
+
+function parseSquarePosIntent(url: string) {
+	const fields = url.startsWith('intent:#Intent;') ? url.split(';') : [];
+	if (!fields.includes(`action=${SQUARE_POS_ACTION}`)) return null;
+	const extra: Record<string, string | number> = {};
+	for (const field of fields) {
+		// Skip l. extras: Expo would encode Square's required Android long as an int.
+		const match = /^([Si])\.(com\.squareup\.pos\.[^=]+)=(.*)$/.exec(field);
+		if (!match) continue;
+		extra[match[2]] = match[1] === 'i' ? Number(match[3]) : decodeURIComponent(match[3]);
+	}
+	return { action: SQUARE_POS_ACTION, extra };
+}
 
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: OrderDocument;
@@ -378,12 +393,36 @@ export function PaymentWebview({
 		};
 	}, []);
 
+	const handleShouldStartLoad = React.useCallback(
+		(request: { url: string }) => {
+			if (Platform.OS !== 'android') return true;
+			const squareIntent = parseSquarePosIntent(request.url);
+			if (!squareIntent) return true;
+
+			void import('expo-intent-launcher')
+				.then(({ startActivityAsync }) =>
+					startActivityAsync(squareIntent.action, { extra: squareIntent.extra })
+				)
+				.catch((error) => {
+					orderLogger.error('Could not open Square Point of Sale', {
+						code: ERROR_CODES.PAYMENT_UNEXPECTED,
+						showToast: true,
+						context: { error: error instanceof Error ? error.message : String(error) },
+					});
+				});
+			return false;
+		},
+		[orderLogger]
+	);
+
 	return (
 		<ErrorBoundary>
 			{paymentURL ? (
 				<WebView
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
+					originWhitelist={['http://*', 'https://*', 'intent:*']}
+					onShouldStartLoadWithRequest={handleShouldStartLoad}
 					onLoad={onWebViewLoaded}
 					onLoadStart={onWebViewLoadStart}
 					onError={onWebViewError}
