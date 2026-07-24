@@ -11,12 +11,12 @@ import {
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { FallbackProps } from 'react-error-boundary';
 
 const appLogger = getLogger(['wcpos', 'app', 'error']);
-const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 
 /**
  * Reload the app - handles web and native platforms
@@ -84,9 +84,11 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 		setIsResetting(true);
 
 		if (Platform.OS === 'web') {
-			window.localStorage.setItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY, '1');
-			reloadApp();
-			return;
+			if (scheduleClearLocalDataOnNextLoad()) {
+				reloadApp();
+				return;
+			}
+			appLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear');
 		}
 
 		try {
