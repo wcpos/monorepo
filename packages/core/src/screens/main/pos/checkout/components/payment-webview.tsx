@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import { useRouter } from 'expo-router';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
@@ -20,20 +21,34 @@ import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 const SQUARE_POS_ACTION = 'com.squareup.pos.action.CHARGE';
+const SQUARE_POS_PACKAGE = 'com.squareup';
+const SQUARE_POS_INTENT_PREFIX = `intent:#Intent;action=${SQUARE_POS_ACTION};package=${SQUARE_POS_PACKAGE};`;
+
+type SquarePosIntentLauncher = {
+	startActivityAsync(extra: Record<string, string | number>): Promise<void>;
+};
+
+const squarePosIntentLauncher =
+	requireOptionalNativeModule<SquarePosIntentLauncher>('SquarePosIntentLauncher');
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 function parseSquarePosIntent(url: string) {
 	const fields = url.startsWith('intent:#Intent;') ? url.split(';') : [];
-	if (!fields.includes(`action=${SQUARE_POS_ACTION}`)) return null;
+	if (
+		!fields.includes(`action=${SQUARE_POS_ACTION}`) ||
+		!fields.includes(`package=${SQUARE_POS_PACKAGE}`)
+	) {
+		return null;
+	}
 	const extra: Record<string, string | number> = {};
 	for (const field of fields) {
-		// Skip l. extras: Expo would encode Square's required Android long as an int.
+		// Skip l. extras: this JavaScript record cannot retain Android's long type.
 		const match = /^([Si])\.(com\.squareup\.pos\.[^=]+)=(.*)$/.exec(field);
 		if (!match) continue;
 		extra[match[2]] = match[1] === 'i' ? Number(match[3]) : decodeURIComponent(match[3]);
 	}
-	return { action: SQUARE_POS_ACTION, extra };
+	return extra;
 }
 
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
@@ -320,13 +335,16 @@ export function PaymentWebview({
 			>[0]
 		) => {
 			if (Platform.OS !== 'android') return onShouldStartLoadWithRequest?.(request) ?? true;
-			const squareIntent = parseSquarePosIntent(request.url);
-			if (!squareIntent) return onShouldStartLoadWithRequest?.(request) ?? true;
+			const squareExtra = parseSquarePosIntent(request.url);
+			if (!squareExtra) return onShouldStartLoadWithRequest?.(request) ?? true;
 
-			void import('expo-intent-launcher')
-				.then(({ startActivityAsync }) =>
-					startActivityAsync(squareIntent.action, { extra: squareIntent.extra })
-				)
+			void Promise.resolve()
+				.then(() => {
+					if (!squarePosIntentLauncher) {
+						throw new Error('Square POS intent launcher is unavailable');
+					}
+					return squarePosIntentLauncher.startActivityAsync(squareExtra);
+				})
 				.then(() => onWebViewLoaded({}))
 				.catch((error) => {
 					orderLogger.error('Could not open Square Point of Sale', {
@@ -350,7 +368,7 @@ export function PaymentWebview({
 						'http://*',
 						'https://*',
 						...(originWhitelist ?? []),
-						'intent:#Intent;action=com.squareup.pos.action.CHARGE;package=com.squareup;',
+						SQUARE_POS_INTENT_PREFIX,
 					]}
 					onShouldStartLoadWithRequest={handleShouldStartLoad}
 					onLoad={onWebViewLoaded}

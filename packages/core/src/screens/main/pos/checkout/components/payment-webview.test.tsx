@@ -1,6 +1,9 @@
 /**
  * @jest-environment jsdom
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import * as React from 'react';
 import { Platform } from 'react-native';
 
@@ -17,8 +20,12 @@ const mockGet = jest.fn();
 const mockReplace = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
-const mockStartActivityAsync = jest.fn();
+const mockStartSquarePosActivityAsync = jest.fn();
 let autoShowReceipt = false;
+const squarePosModuleRoot = join(
+	__dirname,
+	'../../../../../../../../apps/main/modules/square-pos-intent-launcher'
+);
 
 jest.mock('@wcpos/components/webview', () => ({
 	WebView: (props: Record<string, unknown>) => {
@@ -52,9 +59,12 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
-jest.mock('expo-intent-launcher', () => ({ startActivityAsync: mockStartActivityAsync }), {
-	virtual: true,
-});
+jest.mock('expo-modules-core', () => ({
+	requireOptionalNativeModule: () => ({
+		startActivityAsync: (extra: Record<string, string | number>) =>
+			mockStartSquarePosActivityAsync(extra),
+	}),
+}));
 
 const makeOrder = () =>
 	({
@@ -73,7 +83,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		webViewProps = {};
 		autoShowReceipt = false;
 		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
-		mockStartActivityAsync.mockResolvedValue({ resultCode: 0 });
+		mockStartSquarePosActivityAsync.mockResolvedValue(undefined);
 	});
 
 	it('refreshes the engine order before routing a successful payment to its receipt', async () => {
@@ -219,7 +229,7 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 	});
 
-	it('launches a Square Android intent instead of loading it in the WebView', async () => {
+	it('launches a package-scoped Square Android intent instead of loading it in the WebView', async () => {
 		const platform = jest.replaceProperty(Platform, 'OS', 'android');
 		render(
 			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
@@ -240,15 +250,62 @@ describe('PaymentWebview fallback order refresh', () => {
 		await act(async () => {
 			await Promise.resolve();
 		});
-		expect(mockStartActivityAsync).toHaveBeenCalledWith('com.squareup.pos.action.CHARGE', {
-			extra: {
-				'com.squareup.pos.WEB_CALLBACK_URI': 'https://shop.example.com/callback',
-				'com.squareup.pos.CLIENT_ID': 'sq0idp-client',
-				'com.squareup.pos.TOTAL_AMOUNT': 21600,
-				'com.squareup.pos.CURRENCY_CODE': 'USD',
-			},
+		expect(mockStartSquarePosActivityAsync).toHaveBeenCalledWith({
+			'com.squareup.pos.WEB_CALLBACK_URI': 'https://shop.example.com/callback',
+			'com.squareup.pos.CLIENT_ID': 'sq0idp-client',
+			'com.squareup.pos.TOTAL_AMOUNT': 21600,
+			'com.squareup.pos.CURRENCY_CODE': 'USD',
 		});
 		platform.restore();
+	});
+
+	it('does not launch an intent targeting a different package', () => {
+		const platform = jest.replaceProperty(Platform, 'OS', 'android');
+		const onShouldStartLoadWithRequest = jest.fn(() => true);
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				onStockRejection={() => false}
+				onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
+			/>
+		);
+		const request = {
+			url:
+				'intent:#Intent;action=com.squareup.pos.action.CHARGE;package=com.example.interceptor;' +
+				'S.com.squareup.pos.CLIENT_ID=sq0idp-client;end',
+		};
+
+		expect(webViewProps.onShouldStartLoadWithRequest(request)).toBe(true);
+		expect(onShouldStartLoadWithRequest).toHaveBeenCalledWith(request);
+		expect(mockStartSquarePosActivityAsync).not.toHaveBeenCalled();
+		platform.restore();
+	});
+
+	it('pins the native launcher to Square before starting the activity for a result', () => {
+		const config = JSON.parse(
+			readFileSync(join(squarePosModuleRoot, 'expo-module.config.json'), 'utf8')
+		) as {
+			android: { modules: string[] };
+		};
+		const source = readFileSync(
+			join(
+				squarePosModuleRoot,
+				'android/src/main/java/expo/modules/squareposintentlauncher/SquarePosIntentLauncherModule.kt'
+			),
+			'utf8'
+		);
+
+		expect(config.android.modules).toContain(
+			'expo.modules.squareposintentlauncher.SquarePosIntentLauncherModule'
+		);
+		expect(source).toContain('private const val SQUARE_POS_PACKAGE = "com.squareup"');
+		expect(source).toMatch(
+			/Intent\(SQUARE_POS_ACTION\)\s*\.setPackage\(SQUARE_POS_PACKAGE\)\s*\.putExtras/
+		);
+		expect(source).toContain(
+			'appContext.throwingActivity.startActivityForResult(intent, REQUEST_CODE)'
+		);
 	});
 
 	it('preserves caller WebView navigation props outside the Square handoff', () => {
@@ -312,7 +369,7 @@ describe('PaymentWebview fallback order refresh', () => {
 	it('clears loading when Square cannot be opened', async () => {
 		const platform = jest.replaceProperty(Platform, 'OS', 'android');
 		const setLoading = jest.fn();
-		mockStartActivityAsync.mockRejectedValue(new Error('Square is not installed'));
+		mockStartSquarePosActivityAsync.mockRejectedValue(new Error('Square is not installed'));
 		render(
 			<PaymentWebview order={makeOrder()} setLoading={setLoading} onStockRejection={() => false} />
 		);
