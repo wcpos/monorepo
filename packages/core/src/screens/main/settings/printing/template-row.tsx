@@ -50,7 +50,10 @@ export function TemplateRow({
 			{!isFirst && <View className="border-border border-t" />}
 			<View testID={`template-row-${templateId}`} className="flex-row items-center gap-3 p-3">
 				<Text className="flex-1 text-sm font-medium">{template.title}</Text>
-				<StatusBadge variant="muted" label={templateTypeLabel(template)} />
+				<StatusBadge
+					variant="muted"
+					label={templateTypeLabel(template, t('settings.template_type_thermal', 'Thermal'))}
+				/>
 				<View testID={`template-row-${templateId}-printer-select`}>
 					<Select
 						value={{ value: currentValue, label: selectedLabel }}
