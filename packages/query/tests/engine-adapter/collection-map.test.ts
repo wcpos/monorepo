@@ -162,6 +162,7 @@ describe('engine adapter collection map', () => {
 				'tax_lines',
 				'shipping_lines',
 				'line_items',
+				'links',
 				'slug',
 				'cashier',
 				'select',

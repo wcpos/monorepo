@@ -5,7 +5,7 @@ import {
 	EngineAdapterReadOnlyError,
 	wrapEngineDocument,
 } from '../../src/engine-adapter/document-proxy';
-import { collectionMap } from '../../src/engine-adapter/collection-map';
+import { collectionMap, resolveLegacyField } from '../../src/engine-adapter/collection-map';
 
 import type {
 	EngineDocument,
@@ -102,6 +102,39 @@ describe('wrapEngineDocument', () => {
 		expect(observer).toHaveBeenCalledTimes(2);
 		expect(observer).toHaveBeenNthCalledWith(1, 'Coffee');
 		expect(observer).toHaveBeenNthCalledWith(2, 'Tea');
+		subscription.unsubscribe();
+	});
+
+	it('exposes mapped order links through snapshot and observable reads', () => {
+		const initialLinks = {
+			payment: [{ href: 'https://example.com/order-pay/123?key=abc' }],
+		};
+		const updatedLinks = {
+			payment: [{ href: 'https://example.com/order-pay/123?key=updated' }],
+		};
+		const source = fakeRxDocument({
+			id: 'order-uuid',
+			payload: { links: initialLinks },
+		});
+		const proxy = wrapEngineDocument('orders', source.document) as {
+			links: unknown;
+			links$: Observable<unknown>;
+		};
+		const observer = jest.fn();
+		const subscription = proxy.links$.subscribe(observer);
+
+		expect(resolveLegacyField('orders', 'links')).toEqual({
+			legacy: 'links',
+			kind: 'payload',
+			enginePath: 'payload.links',
+		});
+		expect(proxy.links).toEqual(initialLinks);
+		source.state.next({
+			id: 'order-uuid',
+			payload: { links: updatedLinks },
+		});
+		expect(observer).toHaveBeenNthCalledWith(1, initialLinks);
+		expect(observer).toHaveBeenNthCalledWith(2, updatedLinks);
 		subscription.unsubscribe();
 	});
 
