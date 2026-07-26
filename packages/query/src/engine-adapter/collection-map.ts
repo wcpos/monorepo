@@ -436,6 +436,7 @@ export const collectionMap = {
 				kind: 'payload',
 				enginePath: 'payload.line_items',
 			},
+			links: { legacy: 'links', kind: 'payload', enginePath: 'payload.links' },
 			slug: { legacy: 'slug', kind: 'payload', enginePath: 'payload.slug' },
 			cashier: {
 				legacy: 'cashier',

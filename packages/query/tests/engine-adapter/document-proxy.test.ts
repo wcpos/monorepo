@@ -105,6 +105,41 @@ describe('wrapEngineDocument', () => {
 		subscription.unsubscribe();
 	});
 
+	it('exposes mapped order links through snapshot and observable reads', () => {
+		const initialLinks = {
+			payment: [{ href: 'https://example.com/order-pay/123?key=abc' }],
+		};
+		const updatedLinks = {
+			payment: [{ href: 'https://example.com/order-pay/123?key=updated' }],
+		};
+		const initialOrder: Record<string, unknown> = {
+			id: 'order-uuid',
+			payload: {},
+		};
+		const updatedOrder: Record<string, unknown> = {
+			id: 'order-uuid',
+			payload: {},
+		};
+		const linksField = (collectionMap.orders.fields as Record<string, FieldMapEntry>).links;
+		if (linksField) {
+			setPath(initialOrder, linksField.enginePath, initialLinks);
+			setPath(updatedOrder, linksField.enginePath, updatedLinks);
+		}
+		const source = fakeRxDocument(initialOrder as EngineDocument);
+		const proxy = wrapEngineDocument('orders', source.document) as {
+			links: unknown;
+			links$: Observable<unknown>;
+		};
+		const observer = jest.fn();
+		const subscription = proxy.links$.subscribe(observer);
+
+		expect(proxy.links).toEqual(initialLinks);
+		source.state.next(updatedOrder as EngineDocument);
+		expect(observer).toHaveBeenNthCalledWith(1, initialLinks);
+		expect(observer).toHaveBeenNthCalledWith(2, updatedLinks);
+		subscription.unsubscribe();
+	});
+
 	it('exposes the root document observable with every revision re-wrapped as a proxy', () => {
 		const source = fakeRxDocument({
 			id: 'product-uuid',
