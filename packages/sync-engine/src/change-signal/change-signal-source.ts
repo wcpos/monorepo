@@ -220,6 +220,11 @@ export function createLiveChangeSignalSource(
 	let sequenceLogEtag: string | null = null;
 	let sequenceLogCursor: number | null = null;
 	let sequenceLogConfigFingerprint: ConfigFingerprintEnvelope | undefined;
+	// True while the previous page was capped (complete=false). Continuation pages
+	// can never legitimately 304 (their `since` is behind head by definition), so
+	// sending If-None-Match there is pure downside: a buggy/intermediary 304 would
+	// map to the empty at-head page and silently drop the remaining rows.
+	let sequenceLogDrainInProgress = false;
 
 	return {
 		// TIER 1 — GET /changes/sequence-log?since=<cursor.sequence>&limit=<limit>.
@@ -230,6 +235,7 @@ export function createLiveChangeSignalSource(
 			if (sequenceLogCursor !== null && sequenceLogCursor !== cursor.sequence) {
 				sequenceLogEtag = null;
 				sequenceLogConfigFingerprint = undefined;
+				sequenceLogDrainInProgress = false;
 			}
 			// UNIFIED stream (`collection=all`): the change-log `sequence` is a single
 			// global AUTO_INCREMENT across every object_type, so ONE cursor drains
@@ -247,19 +253,26 @@ export function createLiveChangeSignalSource(
 					limit: String(limit),
 				},
 				{
-					...(sequenceLogEtag === null ? {} : { headers: { 'If-None-Match': sequenceLogEtag } }),
-					notModified: {
-						changes: [],
-						checkpoint: { since: cursor.sequence, head: cursor.sequence },
-						complete: true,
-						config_fingerprint: sequenceLogConfigFingerprint,
-					},
+					...(sequenceLogEtag === null || sequenceLogDrainInProgress
+						? {}
+						: { headers: { 'If-None-Match': sequenceLogEtag } }),
+					...(sequenceLogDrainInProgress
+						? {}
+						: {
+								notModified: {
+									changes: [],
+									checkpoint: { since: cursor.sequence, head: cursor.sequence },
+									complete: true,
+									config_fingerprint: sequenceLogConfigFingerprint,
+								},
+							}),
 					onAcceptedResponse: (response) => {
 						sequenceLogEtag = response.headers.get('etag');
 					},
 				}
 			);
 			sequenceLogConfigFingerprint = envelope.config_fingerprint;
+			sequenceLogDrainInProgress = envelope.complete === false;
 			// THE boundary mapping: the server tags every unified-stream row with a
 			// `collection` derived from its internal object_type
 			// (class-changes-controller.php collection_for_object_type); this adapter
