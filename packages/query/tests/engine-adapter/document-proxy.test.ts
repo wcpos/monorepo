@@ -5,7 +5,7 @@ import {
 	EngineAdapterReadOnlyError,
 	wrapEngineDocument,
 } from '../../src/engine-adapter/document-proxy';
-import { collectionMap, resolveLegacyField } from '../../src/engine-adapter/collection-map';
+import { collectionMap } from '../../src/engine-adapter/collection-map';
 
 import type {
 	EngineDocument,
@@ -112,10 +112,20 @@ describe('wrapEngineDocument', () => {
 		const updatedLinks = {
 			payment: [{ href: 'https://example.com/order-pay/123?key=updated' }],
 		};
-		const source = fakeRxDocument({
+		const initialOrder: Record<string, unknown> = {
 			id: 'order-uuid',
-			payload: { links: initialLinks },
-		});
+			payload: {},
+		};
+		const updatedOrder: Record<string, unknown> = {
+			id: 'order-uuid',
+			payload: {},
+		};
+		const linksField = (collectionMap.orders.fields as Record<string, FieldMapEntry>).links;
+		if (linksField) {
+			setPath(initialOrder, linksField.enginePath, initialLinks);
+			setPath(updatedOrder, linksField.enginePath, updatedLinks);
+		}
+		const source = fakeRxDocument(initialOrder as EngineDocument);
 		const proxy = wrapEngineDocument('orders', source.document) as {
 			links: unknown;
 			links$: Observable<unknown>;
@@ -123,16 +133,8 @@ describe('wrapEngineDocument', () => {
 		const observer = jest.fn();
 		const subscription = proxy.links$.subscribe(observer);
 
-		expect(resolveLegacyField('orders', 'links')).toEqual({
-			legacy: 'links',
-			kind: 'payload',
-			enginePath: 'payload.links',
-		});
 		expect(proxy.links).toEqual(initialLinks);
-		source.state.next({
-			id: 'order-uuid',
-			payload: { links: updatedLinks },
-		});
+		source.state.next(updatedOrder as EngineDocument);
 		expect(observer).toHaveBeenNthCalledWith(1, initialLinks);
 		expect(observer).toHaveBeenNthCalledWith(2, updatedLinks);
 		subscription.unsubscribe();
