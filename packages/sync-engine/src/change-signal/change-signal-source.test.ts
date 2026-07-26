@@ -168,10 +168,13 @@ describe('createLiveChangeSignalSource — mid-drain continuation pages', () => 
 					});
 				}
 				if (call === 2) {
-					return new Response(pageBody([{ sequence: 15, collection: 'products', id: 1 }], 15, false), {
-						status: 200,
-						headers: { 'content-type': 'application/json', etag: '"20:aa"' },
-					});
+					return new Response(
+						pageBody([{ sequence: 15, collection: 'products', id: 1 }], 15, false),
+						{
+							status: 200,
+							headers: { 'content-type': 'application/json', etag: '"20:aa"' },
+						}
+					);
 				}
 				return new Response(pageBody([], 20, true), {
 					status: 200,
