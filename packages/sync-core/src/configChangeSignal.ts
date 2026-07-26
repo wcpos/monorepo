@@ -153,7 +153,7 @@ export type ConfigChangeSignal = {
 	 * call `commit()` (or discard the poll) before the next poll; the hybrid
 	 * engine guarantees that via its own poll serialization.
 	 */
-	pollDeferred(): Promise<DeferredConfigPoll>;
+	pollDeferred(snapshot?: ConfigFingerprintSnapshot): Promise<DeferredConfigPoll>;
 };
 
 export function createConfigChangeSignal(input: {
@@ -247,8 +247,10 @@ export function createConfigChangeSignal(input: {
 		};
 	}
 
-	async function pollDeferring(): Promise<DeferredConfigPoll> {
-		const snapshot = await source.pollConfigFingerprints();
+	async function pollDeferring(
+		prefetched?: ConfigFingerprintSnapshot
+	): Promise<DeferredConfigPoll> {
+		const snapshot = prefetched ?? (await source.pollConfigFingerprints());
 		const { staleCollections, changed, nextBaseline } = computeOutcome(snapshot);
 		return {
 			// The surfaced baseline is the one that WILL be committed — the host
@@ -280,6 +282,6 @@ export function createConfigChangeSignal(input: {
 
 	return {
 		poll: () => serialize(pollCommitting),
-		pollDeferred: () => serialize(pollDeferring),
+		pollDeferred: (snapshot) => serialize(() => pollDeferring(snapshot)),
 	};
 }

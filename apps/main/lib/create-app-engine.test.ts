@@ -208,6 +208,38 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
+	it('classifies a conditional-GET 304 as a successful transport outcome', async () => {
+		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_010);
+		const response = new Response(null, {
+			status: 304,
+			headers: { etag: '"20:aa"' },
+		});
+		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(response);
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver, recordTransport } =
+			loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const ports = createRxdbSyncEngine.mock.calls[0]?.[0];
+
+		await ports?.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/sequence-log');
+
+		// Response.ok is false for 304, but an idle conditional poll answering
+		// Not Modified every tick must not be counted or logged as a failure.
+		expect(appMetricsObserver).toHaveBeenCalledWith({
+			type: 'transport.request',
+			level: 'info',
+			fields: { durationMs: 10, bytes: 0, status: 304 },
+		});
+		expect(recordTransport).toHaveBeenCalledWith({
+			atMs: 2_010,
+			durationMs: 10,
+			bytes: 0,
+			ok: true,
+			epoch: 0,
+		});
+		now.mockRestore();
+		fetch.mockRestore();
+	});
+
 	it('persists warn/error readiness and lane diagnostics to the health log', () => {
 		const {
 			createAppSyncEngine,

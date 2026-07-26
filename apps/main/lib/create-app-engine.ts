@@ -219,13 +219,18 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			// poison the hourly byte totals — clamp to a finite non-negative count.
 			const bytes =
 				Number.isFinite(contentLengthRaw) && contentLengthRaw >= 0 ? contentLengthRaw : 0;
+			// 304 is the conditional-GET success path (idle sequence-log polls answer
+			// If-None-Match with Not Modified every tick) — Response.ok is false for it,
+			// but logging it as a failure would record ~360 phantom errors/hour per idle
+			// terminal and corrupt the transport health counters.
+			const accepted = response.ok || response.status === 304;
 			appMetricsObserver({
 				type: 'transport.request',
-				level: response.ok ? 'info' : 'warn',
+				level: accepted ? 'info' : 'warn',
 				collection: collectionFromSyncUrl(finalUrl),
 				fields: { durationMs, bytes, status: response.status },
 			});
-			recordTransport({ atMs, durationMs, bytes, ok: response.ok, epoch: epochAtStart });
+			recordTransport({ atMs, durationMs, bytes, ok: accepted, epoch: epochAtStart });
 
 			const serverLoad = response.headers.get('X-Server-Load');
 			if (serverLoad !== null) {
@@ -260,11 +265,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					: await fetcherOptions.refreshAuth();
 			if (retryToken) response = await fetchWithLatestToken();
 		}
+		// 304s are expected idle conditional-GET responses — success-class, not errors.
+		const responseAccepted = response.ok || response.status === 304;
 		if (
 			databaseEpoch === getDatabaseEpoch() &&
-			(!response.ok || (method !== 'GET' && method !== 'HEAD'))
+			(!responseAccepted || (method !== 'GET' && method !== 'HEAD'))
 		) {
-			networkLogger[response.ok ? 'info' : 'error']('Sync request result', {
+			networkLogger[responseAccepted ? 'info' : 'error']('Sync request result', {
 				saveToDb: true,
 				context: { method, endpoint: new URL(url).pathname, status: response.status },
 			});
