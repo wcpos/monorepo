@@ -307,10 +307,20 @@ describe('rebuildBarcodeIndexForConfig — re-derive from already-synced docs', 
 // --- Backward compatibility with the hybrid engine ----------------------------
 
 describe('hybrid engine backward compatibility', () => {
-	function makeHybridSource(): ChangeSignalSource {
+	function makeHybridSource(
+		configFingerprints: ConfigFingerprintSnapshot[] = []
+	): ChangeSignalSource {
+		let poll = 0;
 		return {
 			async pollSequenceLog(input) {
-				return { rows: [], cursor: input.cursor, hasMore: false };
+				const configFingerprint = configFingerprints[Math.min(poll, configFingerprints.length - 1)];
+				poll += 1;
+				return {
+					rows: [],
+					cursor: input.cursor,
+					hasMore: false,
+					...(configFingerprint === undefined ? {} : { configFingerprint }),
+				};
 			},
 			async hashChecksumScan() {
 				return { buckets: [], complete: true, nextAfterId: 0 };
@@ -350,6 +360,80 @@ describe('hybrid engine backward compatibility', () => {
 		expect(second.configChanges).toEqual([
 			{ collection: 'products', from: 'p0', to: 'p1', source: 'config-fingerprint' },
 		]);
+	});
+
+	it('uses an embedded fingerprint without polling the standalone source', async () => {
+		const embedded = [
+			{ fingerprints: { products: 'p0', variations: 'v0', tax_rates: 't0' } },
+			{
+				fingerprints: { products: 'p1', variations: 'v0', tax_rates: 't0' },
+				barcodeFields: { products: ['global_unique_id'], variations: [], tax_rates: [] },
+			},
+		];
+		const { source: configSource, calls } = makeFakeConfigSource({
+			snapshots: [{ fingerprints: { products: 'fallback', variations: 'v0', tax_rates: 't0' } }],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source: makeHybridSource(embedded),
+			configSource,
+		});
+
+		await engine.poll();
+		const changed = await engine.poll();
+
+		expect(calls.pollConfigFingerprints).toBe(0);
+		expect(changed.staleCollections).toEqual(['products']);
+		expect(changed.configChanges).toEqual([
+			{ collection: 'products', from: 'p0', to: 'p1', source: 'config-fingerprint' },
+		]);
+		expect(changed.configBarcodeFields?.products).toEqual(['global_unique_id']);
+	});
+
+	it('falls back to the standalone source when the sequence envelope has no fingerprint', async () => {
+		const { source: configSource, calls } = makeFakeConfigSource({
+			snapshots: [{ fingerprints: { products: 'p1', variations: 'v0', tax_rates: 't0' } }],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source: makeHybridSource(),
+			configSource,
+			configBaseline: { products: 'p0', variations: 'v0', tax_rates: 't0' },
+		});
+
+		const changed = await engine.poll();
+
+		expect(calls.pollConfigFingerprints).toBe(1);
+		expect(changed.staleCollections).toEqual(['products']);
+	});
+
+	it('does not commit an embedded fingerprint baseline when a later sweep fails', async () => {
+		const embedded = {
+			fingerprints: { products: 'p1', variations: 'v0', tax_rates: 't0' },
+		};
+		const source = makeHybridSource([embedded, embedded]);
+		let failSweep = true;
+		source.hashChecksumScan = async () => {
+			if (failSweep) {
+				throw new Error('integrity endpoint down');
+			}
+			return { buckets: [], complete: true, nextAfterId: 0 };
+		};
+		const { source: configSource, calls } = makeFakeConfigSource({
+			snapshots: [{ fingerprints: { products: 'fallback', variations: 'v0', tax_rates: 't0' } }],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			configSource,
+			configBaseline: { products: 'p0', variations: 'v0', tax_rates: 't0' },
+			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0 },
+		});
+
+		await expect(engine.poll()).rejects.toThrow('integrity endpoint down');
+		failSweep = false;
+		const retried = await engine.poll();
+
+		expect(calls.pollConfigFingerprints).toBe(0);
+		expect(retried.staleCollections).toEqual(['products']);
+		expect(retried.configBaseline?.products).toBe('p1');
 	});
 });
 

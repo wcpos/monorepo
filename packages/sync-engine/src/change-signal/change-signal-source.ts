@@ -15,10 +15,15 @@ import type {
 	SequenceLogRow,
 } from '@wcpos/sync-core';
 
+import {
+	type ConfigFingerprintEnvelope,
+	mapConfigFingerprintEnvelope,
+} from './config-fingerprint-source';
+
 /** RAW fetcher contract — the engine binds scope tickets before handing it here. */
 export type EngineSourceFetcher = (
 	url: string,
-	init?: { signal?: AbortSignal }
+	init?: { headers?: HeadersInit; signal?: AbortSignal }
 ) => Promise<Response>;
 
 export type CreateLiveChangeSignalSourceInput = {
@@ -38,7 +43,14 @@ type ChangesEnvelope<Row> = {
 	checkpoint?: Record<string, unknown>;
 	changes: Row[];
 	complete?: boolean;
+	config_fingerprint?: ConfigFingerprintEnvelope;
 	meta?: { duration_ms?: number; supported?: boolean; note?: string };
+};
+
+type GetEnvelopeOptions<Row> = {
+	headers?: HeadersInit;
+	notModified?: ChangesEnvelope<Row>;
+	onAcceptedResponse?: (response: Response) => void;
 };
 
 function buildUrl(syncBaseUrl: string, path: string, params: Record<string, string>): string {
@@ -67,11 +79,19 @@ export class ChangeSignalPoisonError extends Error {
 async function getEnvelope<Row>(
 	input: CreateLiveChangeSignalSourceInput,
 	path: string,
-	params: Record<string, string>
+	params: Record<string, string>,
+	options?: GetEnvelopeOptions<Row>
 ): Promise<ChangesEnvelope<Row>> {
 	const label = path.replace(/^\//, '');
 	const url = buildUrl(input.syncBaseUrl, path, params);
-	const response = await input.fetcher(url);
+	const response = await input.fetcher(
+		url,
+		options?.headers === undefined ? undefined : { headers: options.headers }
+	);
+	if (response.status === 304 && options?.notModified !== undefined) {
+		options.onAcceptedResponse?.(response);
+		return options.notModified;
+	}
 	if (!response.ok) {
 		throw new ChangeSignalPoisonError(
 			`${label} failed: HTTP ${response.status}`,
@@ -114,6 +134,7 @@ async function getEnvelope<Row>(
 			response.status
 		);
 	}
+	options?.onAcceptedResponse?.(response);
 	return parsed as ChangesEnvelope<Row>;
 }
 
@@ -195,12 +216,21 @@ type RawRevisionHashRow = { id: number; revision: string };
 export function createLiveChangeSignalSource(
 	input: CreateLiveChangeSignalSourceInput
 ): ChangeSignalSource {
+	// Per scoped source; any cursor discontinuity clears conditional-request state.
+	let sequenceLogEtag: string | null = null;
+	let sequenceLogCursor: number | null = null;
+	let sequenceLogConfigFingerprint: ConfigFingerprintEnvelope | undefined;
+
 	return {
 		// TIER 1 — GET /changes/sequence-log?since=<cursor.sequence>&limit=<limit>.
 		// NB the wire param is `since` (absint), NOT `after_sequence`; the checkpoint
 		// echoes the new high-water sequence under `checkpoint.since`. `complete`
 		// false means the page was capped — another drain is needed.
 		async pollSequenceLog({ cursor, limit }) {
+			if (sequenceLogCursor !== null && sequenceLogCursor !== cursor.sequence) {
+				sequenceLogEtag = null;
+				sequenceLogConfigFingerprint = undefined;
+			}
 			// UNIFIED stream (`collection=all`): the change-log `sequence` is a single
 			// global AUTO_INCREMENT across every object_type, so ONE cursor drains
 			// products, variations AND tax rates in one request — globally ordered,
@@ -208,11 +238,28 @@ export function createLiveChangeSignalSource(
 			// single-cursor model is correct as-is: there are no separate per-
 			// collection streams to merge. (The per-collection `collection=products|
 			// tax_rates` modes remain for the matrix; the engine uses `all`.)
-			const envelope = await getEnvelope<RawSequenceLogRow>(input, '/changes/sequence-log', {
-				collection: 'all',
-				since: String(cursor.sequence),
-				limit: String(limit),
-			});
+			const envelope = await getEnvelope<RawSequenceLogRow>(
+				input,
+				'/changes/sequence-log',
+				{
+					collection: 'all',
+					since: String(cursor.sequence),
+					limit: String(limit),
+				},
+				{
+					...(sequenceLogEtag === null ? {} : { headers: { 'If-None-Match': sequenceLogEtag } }),
+					notModified: {
+						changes: [],
+						checkpoint: { since: cursor.sequence, head: cursor.sequence },
+						complete: true,
+						config_fingerprint: sequenceLogConfigFingerprint,
+					},
+					onAcceptedResponse: (response) => {
+						sequenceLogEtag = response.headers.get('etag');
+					},
+				}
+			);
+			sequenceLogConfigFingerprint = envelope.config_fingerprint;
 			// THE boundary mapping: the server tags every unified-stream row with a
 			// `collection` derived from its internal object_type
 			// (class-changes-controller.php collection_for_object_type); this adapter
@@ -241,12 +288,17 @@ export function createLiveChangeSignalSource(
 			const echoed = checkpointNumber(envelope, 'since', cursor.sequence);
 			const head = checkpointNumber(envelope, 'head', Number.NaN);
 			const maxSeen = rows.reduce((max, row) => Math.max(max, row.sequence), cursor.sequence);
-			return {
+			const page = {
 				rows,
 				cursor: { sequence: Math.max(echoed, maxSeen) },
 				hasMore: envelope.complete === false,
 				...(Number.isFinite(head) ? { head } : {}),
+				...(sequenceLogConfigFingerprint === undefined
+					? {}
+					: { configFingerprint: mapConfigFingerprintEnvelope(sequenceLogConfigFingerprint) }),
 			};
+			sequenceLogCursor = page.cursor.sequence;
+			return page;
 		},
 
 		// TIER 2 (products) — GET /integrity/scan?bucket_size=&after_id=&limit_buckets=.

@@ -29,8 +29,8 @@
  * import FROM sync-core, never the reverse (ADR direction: engine is upstream).
  *
  * OPTIONAL TIER (ADR 0006) — representation-config fingerprint. A separate,
- * self-contained signal (configChangeSignal.ts) is COMPOSED in only when the
- * host supplies a `configSource`. It catches Scenario 1 (a global setting flips
+ * self-contained signal (configChangeSignal.ts) uses TIER 1 embedded data and
+ * falls back to `configSource` for older servers. It catches Scenario 1 (a global setting flips
  * the served representation of many records with no record change), the gap the
  * three tiers above are structurally blind to. Surfacing `staleCollections` on
  * the SAME poll() outcome means a stale collection flows through the existing
@@ -45,6 +45,7 @@ import {
 	type ConfigChangeSignal,
 	type ConfigFingerprintBaseline,
 	type ConfigFingerprintChange,
+	type ConfigFingerprintSnapshot,
 	type ConfigFingerprintSource,
 	createConfigChangeSignal,
 } from './configChangeSignal';
@@ -195,6 +196,7 @@ export type ChangeSignalSource = {
 		cursor: SequenceCursor;
 		hasMore: boolean;
 		head?: number;
+		configFingerprint?: ConfigFingerprintSnapshot;
 	}>;
 
 	/**
@@ -571,9 +573,11 @@ export function createHybridChangeSignalEngine(input: {
 		changes: HybridChange[];
 		nextCursor: SequenceCursor;
 		rebaseline: boolean;
+		configFingerprint?: ConfigFingerprintSnapshot;
 	}> {
 		const changes: HybridChange[] = [];
 		let nextCursor = startCursor;
+		let configFingerprint: ConfigFingerprintSnapshot | undefined;
 		let pages = 0;
 		for (;;) {
 			if (pages >= policy.maxSequenceLogPages) {
@@ -587,6 +591,7 @@ export function createHybridChangeSignalEngine(input: {
 				limit: policy.sequenceLogLimit,
 			});
 			pages += 1;
+			configFingerprint = page.configFingerprint ?? configFingerprint;
 			if (
 				pages === 1 &&
 				policy.maxReplayBacklog > 0 &&
@@ -594,7 +599,12 @@ export function createHybridChangeSignalEngine(input: {
 				Number.isFinite(page.head) &&
 				page.head - startCursor.sequence > policy.maxReplayBacklog
 			) {
-				return { changes: [], nextCursor: { sequence: page.head }, rebaseline: true };
+				return {
+					changes: [],
+					nextCursor: { sequence: page.head },
+					rebaseline: true,
+					configFingerprint,
+				};
 			}
 			nextCursor = page.cursor;
 			for (const row of page.rows) {
@@ -609,7 +619,7 @@ export function createHybridChangeSignalEngine(input: {
 				break;
 			}
 		}
-		return { changes, nextCursor, rebaseline: false };
+		return { changes, nextCursor, rebaseline: false, configFingerprint };
 	}
 
 	// --- TIER 2: scan both detectors, diff against retained baselines ----------
@@ -794,12 +804,12 @@ export function createHybridChangeSignalEngine(input: {
 	// hybrid outcome surfaces, but DEFER advancing the config baseline to the
 	// poll's success points (see pollOnce). Returns a no-op commit + empty tier
 	// when no config source was supplied, so the no-config path is byte-for-byte
-	// unchanged. Computing here (before TIER 1) preserves source-call order;
+	// unchanged. Embedded TIER 1 data avoids the standalone fetch on new servers;
 	// committing only on success means a later TIER 1 / sweep failure cannot
 	// STRAND a fingerprint move — the next poll re-computes against the
 	// un-advanced baseline and re-reports it (the same redelivery-is-safe /
 	// skipping-is-not invariant the cursor already honours).
-	async function computeConfigTier(): Promise<{
+	async function computeConfigTier(snapshot?: ConfigFingerprintSnapshot): Promise<{
 		tier: {
 			staleCollections?: BarcodeConfigCollection[];
 			configChanges?: ConfigFingerprintChange[];
@@ -811,7 +821,7 @@ export function createHybridChangeSignalEngine(input: {
 		if (configSignal === null) {
 			return { tier: {}, commit: () => {} };
 		}
-		const deferred = await configSignal.pollDeferred();
+		const deferred = await configSignal.pollDeferred(snapshot);
 		return {
 			tier: {
 				staleCollections: deferred.outcome.staleCollections,
@@ -848,17 +858,15 @@ export function createHybridChangeSignalEngine(input: {
 		// (codex review). Nothing here is committed until the whole poll succeeds.
 		const due = sweepDue(currentMs);
 		try {
-			// OPTIONAL TIER (ADR 0006) — compute up front (preserving source-call
-			// order), commit the config baseline only at the success points below,
-			// alongside the cursor. When no config source is composed we DO NOT await:
-			// the null branch is synchronous so the no-config path keeps its exact
-			// microtask timing.
-			const config = configSignal === null ? null : await computeConfigTier();
-			const configTier = config === null ? {} : config.tier;
-
 			// TIER 1 — always. Drained into a local cursor; not committed until the
 			// whole poll succeeds (see drainSequenceLog).
-			const { changes, nextCursor, rebaseline } = await drainSequenceLog(cursor);
+			const { changes, nextCursor, rebaseline, configFingerprint } = await drainSequenceLog(cursor);
+
+			// OPTIONAL TIER (ADR 0006) — embedded snapshot, with the old-server fetch
+			// as fallback. Commit still happens below with the cursor; the no-config
+			// branch stays synchronous (no added await).
+			const config = configSignal === null ? null : await computeConfigTier(configFingerprint);
+			const configTier = config === null ? {} : config.tier;
 
 			if (rebaseline) {
 				cursor = nextCursor;
