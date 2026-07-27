@@ -263,7 +263,10 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				}
 
 				// Send to server - server response becomes source of truth (includes real ID)
-				const serverDoc = await replicationState.remoteCreate(localDoc!.toJSON());
+				const serverDoc = await replicationState.remoteCreate(
+					localDoc!.toJSON(),
+					localDoc!.revision
+				);
 
 				if (serverDoc) {
 					handleSuccess(serverDoc as RxDocument);

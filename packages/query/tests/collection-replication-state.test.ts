@@ -1289,7 +1289,7 @@ describe('CollectionReplicationState', () => {
 				endpoint: 'products',
 			});
 
-			await storeDatabase.collections.products.insert({
+			const optimisticDoc = await storeDatabase.collections.products.insert({
 				uuid: 'optimistic-product',
 				name: 'New Product',
 				date_modified_gmt: '2026-07-27T13:53:37',
@@ -1303,13 +1303,73 @@ describe('CollectionReplicationState', () => {
 				},
 			});
 
-			const result = await replicationState.remoteCreate({
+			const result = await replicationState.remoteCreate(
+				optimisticDoc.toJSON(),
+				optimisticDoc.revision
+			);
+
+			expect(result?.id).toBe(10);
+
+			await replicationState.cancel();
+		});
+
+		it('preserves a newer local revision when a stale create response arrives', async () => {
+			const replicationState = new CollectionReplicationState({
+				collection: storeDatabase.collections.products,
+				syncCollection: syncDatabase.collections.products,
+				httpClient: httpClientMock,
+				endpoint: 'products',
+			});
+
+			const optimisticDoc = await storeDatabase.collections.products.insert({
 				uuid: 'optimistic-product',
 				name: 'New Product',
 				date_modified_gmt: '2026-07-27T13:53:37',
 			});
+			const serverResponse = {
+				data: {
+					uuid: 'optimistic-product',
+					id: 10,
+					name: 'New Product',
+					date_modified_gmt: '2026-07-27T13:53:32',
+				},
+			};
+			let resolveCreate!: (value: typeof serverResponse) => void;
+			const createResponse = new Promise<typeof serverResponse>((resolve) => {
+				resolveCreate = resolve;
+			});
+			let markCreateStarted!: () => void;
+			const createStarted = new Promise<void>((resolve) => {
+				markCreateStarted = resolve;
+			});
+			httpClientMock.post.mockImplementationOnce(() => {
+				markCreateStarted();
+				return createResponse;
+			});
 
-			expect(result?.id).toBe(10);
+			const createPromise = replicationState.remoteCreate(
+				optimisticDoc.toJSON(),
+				optimisticDoc.revision
+			);
+			await createStarted;
+			await optimisticDoc.incrementalPatch({
+				name: 'Locally edited product',
+				date_modified_gmt: '2026-07-27T13:53:42',
+			});
+			resolveCreate(serverResponse);
+
+			const result = await createPromise;
+			const storedDoc = await storeDatabase.collections.products
+				.findOne('optimistic-product')
+				.exec();
+			const syncDoc = await syncDatabase.collections.products
+				.findOne({ selector: { id: 10 } })
+				.exec();
+
+			expect(result?.name).toBe('Locally edited product');
+			expect(storedDoc?.name).toBe('Locally edited product');
+			expect(storedDoc?.id).toBeUndefined();
+			expect(syncDoc).toBeNull();
 
 			await replicationState.cancel();
 		});

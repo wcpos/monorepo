@@ -296,7 +296,7 @@ export class SyncStateManager {
 	 * @NOTE - we need to make sure we are not overwriting a newer date_modified_gmt
 	 * @NOTE - uses a mutex lock to prevent race conditions from concurrent calls
 	 */
-	public async processServerResponse(response: any[], forceOverwrite = false) {
+	public async processServerResponse(response: any[], forceOverwriteRevision?: string) {
 		// Wait for any pending operation to complete
 		const previousLock = this.processLock;
 		let releaseLock: () => void;
@@ -306,7 +306,7 @@ export class SyncStateManager {
 
 		try {
 			await previousLock;
-			return await this._processServerResponseInternal(response, forceOverwrite);
+			return await this._processServerResponseInternal(response, forceOverwriteRevision);
 		} finally {
 			releaseLock!();
 		}
@@ -319,7 +319,7 @@ export class SyncStateManager {
 	 * processes in a single operation. For large batches, chunks the work with yielding
 	 * to prevent UI blocking on slower devices.
 	 */
-	private async _processServerResponseInternal(response: any[], forceOverwrite: boolean) {
+	private async _processServerResponseInternal(response: any[], forceOverwriteRevision?: string) {
 		const primaryPath = this.collection.schema.primaryPath;
 		const responseMap = new Map(response.map((doc: any) => [doc[primaryPath], doc]));
 		const localDocs = await this.collection.findByIds(Array.from(responseMap.keys())).exec();
@@ -333,6 +333,7 @@ export class SyncStateManager {
 
 		for (const [, localDoc] of localDocs) {
 			const remoteDoc = responseMap.get((localDoc as any)[primaryPath]);
+			const forceOverwrite = !(localDoc as any).id && localDoc.revision === forceOverwriteRevision;
 			if (
 				!forceOverwrite &&
 				remoteDoc &&
