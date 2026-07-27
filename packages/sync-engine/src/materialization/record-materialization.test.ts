@@ -69,6 +69,39 @@ describe('record materialization seam', () => {
 		).toMatchObject({ id: uuid, wooOrderId: 7, payload: { status: 'processing' } });
 	});
 
+	it('strips object order meta display fields while preserving typed values and strings', () => {
+		const stored = materializeLocalOnly({
+			id: 7,
+			meta_data,
+			line_items: [
+				{
+					meta_data: [
+						{
+							key: '_woocommerce_pos_data',
+							value: { price: '45' },
+							display_value: { price: '45' },
+						},
+						{
+							key: 'Size',
+							value: 'L',
+							display_key: 'Size',
+							display_value: 'L',
+						},
+					],
+				},
+			],
+		} as never).storedDocument;
+
+		expect(stored.payload.line_items).toEqual([
+			{
+				meta_data: [
+					{ key: '_woocommerce_pos_data', value: { price: '45' } },
+					{ key: 'Size', value: 'L', display_key: 'Size', display_value: 'L' },
+				],
+			},
+		]);
+	});
+
 	it('is the only production module importing revision adoption (drift guard)', () => {
 		const sources = (
 			import.meta as ImportMeta & {

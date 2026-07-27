@@ -22,6 +22,7 @@ import {
 	promotedVariationColumns,
 	type WooVariationPayload,
 } from '../collections/variation-schema';
+import { stripNonStringMetaDisplayFields } from './strip-order-meta-display';
 
 import type {
 	LocalReferenceDocument,
@@ -164,10 +165,14 @@ export function materializeLocalOnly(
 	raw: WooOrderPayload,
 	envelope?: Pick<OrderDocument, 'sync' | 'local'>
 ): Materialized<OrderDocument> {
-	const wooOrderId = requireId(raw, envelope ? 'custom-pull order payload' : 'targeted order');
+	const normalizedRaw = stripNonStringMetaDisplayFields(raw);
+	const wooOrderId = requireId(
+		normalizedRaw,
+		envelope ? 'custom-pull order payload' : 'targeted order'
+	);
 	const adopted = envelope
-		? { payload: raw, revision: envelope.sync.revision }
-		: adoptStampedRevision(raw, () => String(raw.date_modified_gmt ?? ''));
+		? { payload: normalizedRaw, revision: envelope.sync.revision }
+		: adoptStampedRevision(normalizedRaw, () => String(normalizedRaw.date_modified_gmt ?? ''));
 	const manifestRow = digest(adopted.payload, wooOrderId, 'order');
 	const identified = identity(stripDigest(adopted.payload));
 	const sync = envelope?.sync ?? {
@@ -175,7 +180,7 @@ export function materializeLocalOnly(
 		partial: false,
 		source: 'woo-rest' as const,
 		checkpoint: normalizeCheckpoint({
-			updatedAtGmt: String(raw.date_modified_gmt ?? '1970-01-01T00:00:00.000Z'),
+			updatedAtGmt: String(normalizedRaw.date_modified_gmt ?? '1970-01-01T00:00:00.000Z'),
 			orderId: wooOrderId,
 			revision: adopted.revision,
 		}),

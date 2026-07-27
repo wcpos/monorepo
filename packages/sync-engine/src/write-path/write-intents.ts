@@ -72,6 +72,7 @@ import {
 	MUTATION_QUEUE_RXDB_COLLECTION,
 	type SyncCollectionName,
 } from '../collections/engine-collections';
+import { stripNonStringMetaDisplayFields } from '../materialization/strip-order-meta-display';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
 
@@ -138,7 +139,13 @@ export async function enqueueWriteIntent(input: {
 	now: () => string;
 	observe?: SyncObserver;
 }): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }> {
-	const { intent } = input;
+	const intent =
+		input.intent.collection === 'orders' && input.intent.operation !== 'delete'
+			? {
+					...input.intent,
+					payload: stripNonStringMetaDisplayFields(input.intent.payload),
+				}
+			: input.intent;
 	const deps = { mintUuid: input.mintUuid, now: input.now };
 	const collection = collectionOf(input.db, intent.collection);
 	const queue = queueFor(input.db);
