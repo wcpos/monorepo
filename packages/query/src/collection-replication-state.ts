@@ -641,7 +641,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			const parsedData = this.collection.parseRestResponse(response.data);
-			const result = await this.syncStateManager.processServerResponse([parsedData]);
+			const result = await this.syncStateManager.processServerResponse([parsedData], true);
 			if (result?.success.length === 1) {
 				return result.success[0];
 			}

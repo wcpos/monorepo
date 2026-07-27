@@ -296,7 +296,7 @@ export class SyncStateManager {
 	 * @NOTE - we need to make sure we are not overwriting a newer date_modified_gmt
 	 * @NOTE - uses a mutex lock to prevent race conditions from concurrent calls
 	 */
-	public async processServerResponse(response: any[]) {
+	public async processServerResponse(response: any[], forceOverwrite = false) {
 		// Wait for any pending operation to complete
 		const previousLock = this.processLock;
 		let releaseLock: () => void;
@@ -306,7 +306,7 @@ export class SyncStateManager {
 
 		try {
 			await previousLock;
-			return await this._processServerResponseInternal(response);
+			return await this._processServerResponseInternal(response, forceOverwrite);
 		} finally {
 			releaseLock!();
 		}
@@ -319,7 +319,7 @@ export class SyncStateManager {
 	 * processes in a single operation. For large batches, chunks the work with yielding
 	 * to prevent UI blocking on slower devices.
 	 */
-	private async _processServerResponseInternal(response: any[]) {
+	private async _processServerResponseInternal(response: any[], forceOverwrite: boolean) {
 		const primaryPath = this.collection.schema.primaryPath;
 		const responseMap = new Map(response.map((doc: any) => [doc[primaryPath], doc]));
 		const localDocs = await this.collection.findByIds(Array.from(responseMap.keys())).exec();
@@ -334,6 +334,7 @@ export class SyncStateManager {
 		for (const [, localDoc] of localDocs) {
 			const remoteDoc = responseMap.get((localDoc as any)[primaryPath]);
 			if (
+				!forceOverwrite &&
 				remoteDoc &&
 				compareDateModifiedGmt(remoteDoc.date_modified_gmt, (localDoc as any).date_modified_gmt) < 0
 			) {

@@ -1281,6 +1281,39 @@ describe('CollectionReplicationState', () => {
 			await replicationState.cancel();
 		});
 
+		it('accepts a successful create response when the server clock is behind', async () => {
+			const replicationState = new CollectionReplicationState({
+				collection: storeDatabase.collections.products,
+				syncCollection: syncDatabase.collections.products,
+				httpClient: httpClientMock,
+				endpoint: 'products',
+			});
+
+			await storeDatabase.collections.products.insert({
+				uuid: 'optimistic-product',
+				name: 'New Product',
+				date_modified_gmt: '2026-07-27T13:53:37',
+			});
+			httpClientMock.post.mockResolvedValueOnce({
+				data: {
+					uuid: 'optimistic-product',
+					id: 10,
+					name: 'New Product',
+					date_modified_gmt: '2026-07-27T13:53:32',
+				},
+			});
+
+			const result = await replicationState.remoteCreate({
+				uuid: 'optimistic-product',
+				name: 'New Product',
+				date_modified_gmt: '2026-07-27T13:53:37',
+			});
+
+			expect(result?.id).toBe(10);
+
+			await replicationState.cancel();
+		});
+
 		it('handles auth cancel error silently', async () => {
 			const replicationState = new CollectionReplicationState({
 				collection: storeDatabase.collections.products,
