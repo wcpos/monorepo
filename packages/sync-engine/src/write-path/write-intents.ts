@@ -316,15 +316,20 @@ export async function enqueueWriteIntent(input: {
 			// resident stored payload (local truth) ⊕ the prior entry's payload
 			// (covers an enqueue that never wrote locally; a delete tombstone is
 			// not a snapshot, so it never layers) ⊕ the incoming intent's payload.
-			// A delete replacement stays the bare `{id}` tombstone.
+			// A delete replacement stays the bare `{id}` tombstone. The order
+			// display-field strip re-applies AFTER the merge: the resident layer
+			// may predate the strip and still carry object display fields.
+			const mergedPayload = {
+				...(stored?.payload ?? {}),
+				...(prior.operation === 'delete' ? {} : prior.payload),
+				...mutation.payload,
+			};
 			const payload =
 				operation === 'delete'
 					? mutation.payload
-					: {
-							...(stored?.payload ?? {}),
-							...(prior.operation === 'delete' ? {} : prior.payload),
-							...mutation.payload,
-						};
+					: mutation.collectionName === 'orders'
+						? stripNonStringMetaDisplayFields(mergedPayload)
+						: mergedPayload;
 			const replacement = {
 				...mutation,
 				operation,
