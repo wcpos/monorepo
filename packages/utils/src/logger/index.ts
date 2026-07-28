@@ -203,6 +203,10 @@ function persistLog(
 		// and the surviving row would name only the first collection — attributing
 		// evidence to the wrong collection, which is worse than an extra row.
 		context.collection ?? null,
+		context.cursor ?? null,
+		context.cursorFrom ?? null,
+		context.head ?? null,
+		context.backlog ?? null,
 	]);
 	const previous = repeatStateByCollection.get(collection);
 

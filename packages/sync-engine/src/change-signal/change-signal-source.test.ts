@@ -75,6 +75,7 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 		expect(notModified).toEqual({
 			rows: [],
 			cursor: { sequence: 5 },
+			reportedCursor: { sequence: 5 },
 			hasMore: false,
 			head: 5,
 			configFingerprint: {
