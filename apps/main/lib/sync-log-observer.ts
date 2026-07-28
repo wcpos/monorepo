@@ -310,10 +310,41 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 	observe: SyncObserver;
 } {
 	const nowMs = options.nowMs ?? Date.now;
+	// HTTP attempts that SUCCEED are deliberately not durable rows (see the
+	// transport.request entry above). Their existence must still be recoverable
+	// from the durable layer, or a slow cycle becomes unattributable: hourly
+	// host_metrics buckets are too coarse to say which cycle issued the traffic.
+	// So the observer tallies every attempt it sees and flushes the aggregate onto
+	// the next cycle row. These count the requests observed SINCE THE PREVIOUS
+	// CYCLE ROW — not strictly the cycle's own, because the fetcher is shared with
+	// concurrent lanes and carries no cycle context. The field names say so.
+	let httpRequests = 0;
+	let httpMs = 0;
+	let httpMaxMs = 0;
+	let httpErrors = 0;
+
 	const observe: SyncObserver = (event: SyncEvent) => {
 		const fields = (event.fields ?? {}) as Record<string, unknown>;
 		const mapped = CONFORMANCE.get(event.type);
 		const isFailure = event.level === 'warn' || event.level === 'error';
+
+		// Tally BEFORE any gate, so successful attempts — which never persist — still
+		// reach the aggregate.
+		if (event.type === 'transport.request') {
+			httpRequests += 1;
+			const attemptMs = num(fields.durationMs);
+			httpMs += attemptMs;
+			if (attemptMs > httpMaxMs) httpMaxMs = attemptMs;
+			if (fields.status === 0 || num(fields.status) >= 400) httpErrors += 1;
+		}
+
+		// Debug narration never becomes a durable row (spec §1: "Debug never persists
+		// otherwise") — it belongs to the flight recorder. Without this guard a mapped
+		// type that later gains a debug emit would be persisted silently relabelled as
+		// `info`, since the persist contract has no debug level. No mapped type emits
+		// at debug today; this keeps it that way by construction.
+		if (event.level === 'debug') return;
+
 		if (mapped === undefined && !isFailure) return;
 		const conformance =
 			mapped ?? ({ operationType: 'sync.other', outcome: 'failed' } satisfies Conformance);
@@ -356,6 +387,16 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			type: event.type,
 			...(collection !== undefined ? { collection } : {}),
 		};
+		if (event.type === 'signal.cycle' && httpRequests > 0) {
+			context.httpRequestsSinceLastCycle = httpRequests;
+			context.httpMsSinceLastCycle = httpMs;
+			context.httpMaxMsSinceLastCycle = httpMaxMs;
+			if (httpErrors > 0) context.httpErrorsSinceLastCycle = httpErrors;
+			httpRequests = 0;
+			httpMs = 0;
+			httpMaxMs = 0;
+			httpErrors = 0;
+		}
 		if (fields.reason !== undefined) {
 			if (reason === undefined) delete context.reason;
 			else context.reason = reason;

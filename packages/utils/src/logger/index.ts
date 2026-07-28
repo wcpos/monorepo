@@ -10,6 +10,7 @@
 import { logger } from 'react-native-logs';
 
 import { getErrorCodeDocURL } from './constants';
+import { clearRecorder, recorderStats, recordEvent, snapshotRecorder } from './flight-recorder';
 import { redactSensitiveFields } from './redact';
 import { LogRetentionCollection, sweepLogRetention } from './retention';
 
@@ -86,6 +87,7 @@ type PersistedDocument = {
 
 type LoggerCollection = LogRetentionCollection & {
 	insert(row: Record<string, unknown>): Promise<PersistedDocument>;
+	bulkInsert(rows: Record<string, unknown>[]): Promise<unknown>;
 };
 
 type RepeatState = {
@@ -137,6 +139,48 @@ function recordSize(row: Record<string, unknown>): Record<string, unknown> {
 		sizeBytes = serializedBytes(row);
 	}
 	return row;
+}
+
+export async function promoteRecorder(reason: string): Promise<number> {
+	try {
+		const collection = dbCollection as LoggerCollection | null;
+		const recorded = snapshotRecorder();
+		if (!collection || recorded.length === 0) return 0;
+
+		const rows = recorded.map((event) => {
+			sequence += 1;
+			// Mirror persistLog's column extraction so promoted narration answers the
+			// same category/code filters as live rows — otherwise the trail is present
+			// but invisible behind the Logs tab's preset chips.
+			const code = clampColumn(
+				'code',
+				typeof event.context.errorCode === 'string' ? event.context.errorCode : undefined
+			);
+			const category = clampColumn(
+				'category',
+				typeof event.context.category === 'string' ? event.context.category : undefined
+			);
+			return recordSize({
+				timestamp: event.timestamp,
+				level: event.level,
+				message: event.message,
+				context: { ...event.context, _promotedBy: reason },
+				seq: sequence,
+				count: 1,
+				firstSeen: event.timestamp,
+				lastSeen: event.timestamp,
+				...(code && { code }),
+				...(category && { category }),
+			});
+		});
+		// Clear before yielding so another error cannot promote the same narration.
+		clearRecorder();
+		await collection.bulkInsert(rows);
+		return rows.length;
+	} catch (error) {
+		console.error('Failed to promote flight recorder', error);
+		return 0;
+	}
 }
 
 /**
@@ -292,6 +336,46 @@ function getInitialLogLevel(): LogLevel {
 
 let currentLogLevel: LogLevel = getInitialLogLevel();
 
+const VERBOSE_DIAGNOSTICS_KEY = 'wcpos_verbose_diagnostics';
+const DEFAULT_VERBOSE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function getInitialVerboseExpiry(): number {
+	try {
+		if (typeof window !== 'undefined' && window.localStorage) {
+			const expiresAt = Number(window.localStorage.getItem(VERBOSE_DIAGNOSTICS_KEY));
+			if (Number.isFinite(expiresAt) && Date.now() < expiresAt) return expiresAt;
+		}
+	} catch {
+		// Storage may be unavailable even when the browser exposes localStorage.
+	}
+	return 0;
+}
+
+const initialVerboseExpiry = getInitialVerboseExpiry();
+let verboseDiagnosticsEnabled = initialVerboseExpiry > 0;
+let verboseDiagnosticsExpiresAt = initialVerboseExpiry;
+
+export function isVerboseDiagnostics(): boolean {
+	return verboseDiagnosticsEnabled && Date.now() < verboseDiagnosticsExpiresAt;
+}
+
+export function setVerboseDiagnostics(enabled: boolean, ttlMs = DEFAULT_VERBOSE_TTL_MS): void {
+	verboseDiagnosticsEnabled = enabled;
+	verboseDiagnosticsExpiresAt = enabled ? Date.now() + ttlMs : 0;
+
+	try {
+		if (typeof window !== 'undefined' && window.localStorage) {
+			if (enabled) {
+				window.localStorage.setItem(VERBOSE_DIAGNOSTICS_KEY, String(verboseDiagnosticsExpiresAt));
+			} else {
+				window.localStorage.removeItem(VERBOSE_DIAGNOSTICS_KEY);
+			}
+		}
+	} catch {
+		// Verbose diagnostics still works for this session when storage is unavailable.
+	}
+}
+
 /**
  * Safe JSON stringify that handles circular references and large objects
  */
@@ -334,7 +418,10 @@ export const setToast = (toastShowFunction: (config: any) => void) => {
  * Runs log retention every time a collection is bound.
  */
 export const setDatabase = (collection: any) => {
-	if (collection !== dbCollection) databaseEpoch += 1;
+	if (collection !== dbCollection) {
+		databaseEpoch += 1;
+		clearRecorder();
+	}
 	dbCollection = collection;
 
 	if (collection) {
@@ -448,14 +535,30 @@ const mainTransport = (props: any) => {
 		toastShow(toastConfig);
 	}
 
-	// 3. Persist info and above whenever a logs collection is bound.
-	if (levelName !== 'debug' && dbCollection) {
+	// 3. Record debug narration, or persist info and above when a collection is bound.
+	if (levelName === 'debug') {
+		try {
+			// Redaction above is privacy-load-bearing: only redacted context enters the ring.
+			recordEvent({
+				timestamp: Date.now(),
+				level: 'debug',
+				message,
+				context: options.context ?? {},
+			});
+			if (dbCollection && isVerboseDiagnostics()) {
+				persistLog(dbCollection, levelName, message, options.context ?? {});
+			}
+		} catch (error) {
+			console.error('Failed to record debug log entry', error);
+		}
+	} else if (dbCollection) {
 		try {
 			const terminal: LogTerminalFields | undefined =
 				level.text === 'success'
 					? { ...options.terminal, outcome: options.terminal?.outcome ?? 'ok' }
 					: options.terminal;
 			persistLog(dbCollection, levelName, message, options.context || {}, terminal);
+			if (levelName === 'error') void promoteRecorder('error');
 		} catch (error) {
 			console.error('Failed to persist log entry', error);
 		}
@@ -538,6 +641,9 @@ if (typeof window !== 'undefined') {
 		setLevel,
 		getLevel,
 		resetLevel,
+		promoteRecorder,
+		setVerbose: setVerboseDiagnostics,
+		recorderStats,
 		debug: log.debug,
 		info: log.info,
 		warn: log.warn,
@@ -569,15 +675,6 @@ if (typeof window !== 'undefined') {
  */
 function resolveLazy<T>(value: T | (() => T)): T {
 	return typeof value === 'function' ? (value as () => T)() : value;
-}
-
-/**
- * Check if the given log level should be logged based on current level
- */
-function shouldLog(level: LogLevel): boolean {
-	const levelSeverity = LOG_LEVEL_SEVERITY[level] ?? 0;
-	const currentSeverity = LOG_LEVEL_SEVERITY[currentLogLevel];
-	return levelSeverity >= currentSeverity;
 }
 
 /**
@@ -658,15 +755,12 @@ export class CategoryLogger {
 	 * // Eager - always computed
 	 * logger.debug('Cart state', { context: { items: cart.items } });
 	 *
-	 * // Lazy - only computed if debug level is enabled
+	 * // Lazy - deferred until the logger captures it
 	 * logger.debug(() => `Cart state: ${JSON.stringify(cart.getFullState())}`);
 	 * ```
 	 */
 	debug(message: LazyMessage, options?: LoggerOptions): void {
-		// Only resolve lazy message if we're actually going to log
-		if (!shouldLog('debug') && !options?.showToast) {
-			return;
-		}
+		// The recorder needs the rendered trail, so lazy debug messages now always resolve.
 		const resolvedMessage = resolveLazy(message);
 		log.debug(resolvedMessage, this.buildOptions(options));
 	}
@@ -732,4 +826,4 @@ export function getLogger(category: string[]): CategoryLogger {
 	return new CategoryLogger(category);
 }
 
-export { log };
+export { log, recorderStats, snapshotRecorder };

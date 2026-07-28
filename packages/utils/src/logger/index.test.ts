@@ -1,4 +1,12 @@
-import { CategoryLogger, getLogger, setDatabase, setToast } from './index';
+import {
+	CategoryLogger,
+	getLogger,
+	log,
+	setDatabase,
+	setToast,
+	setVerboseDiagnostics,
+} from './index';
+import { recorderStats, snapshotRecorder } from './flight-recorder';
 
 type TestLogRow = Record<string, unknown> & {
 	context: Record<string, unknown>;
@@ -13,7 +21,7 @@ type TestLogDocument = TestLogRow & {
 
 function createLogCollection() {
 	const rows: TestLogDocument[] = [];
-	const insert = jest.fn(async (row: TestLogRow) => {
+	const addRow = (row: TestLogRow) => {
 		const document: TestLogDocument = {
 			...row,
 			primary: `log-${rows.length + 1}`,
@@ -26,7 +34,12 @@ function createLogCollection() {
 		};
 		rows.push(document);
 		return document;
-	});
+	};
+	const insert = jest.fn(async (row: TestLogRow) => addRow(row));
+	const bulkInsert = jest.fn(async (bulkRows: TestLogRow[]) => ({
+		success: bulkRows.map(addRow),
+		error: [],
+	}));
 	const find = jest.fn((query: Record<string, unknown>) => {
 		if (query.selector) return { remove: jest.fn().mockResolvedValue([]) };
 		return { exec: jest.fn().mockResolvedValue(rows) };
@@ -36,6 +49,7 @@ function createLogCollection() {
 		rows,
 		collection: {
 			insert,
+			bulkInsert,
 			find,
 			bulkRemove: jest.fn().mockResolvedValue(undefined),
 		},
@@ -318,16 +332,95 @@ describe('logger/index', () => {
 			expect(context.search).not.toContain('3');
 		});
 
-		it('persists info by default but never persists debug', async () => {
+		it('records debug at info runtime level without persisting it', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);
+			log.setLevel('info');
 
 			getLogger(['sync']).info('Persisted by default');
-			getLogger(['sync']).debug('Never persisted', { saveToDb: true });
+			getLogger(['sync']).debug('Recorded in memory', { saveToDb: true });
 			await flushWrites();
 
 			expect(rows).toHaveLength(1);
 			expect(rows[0]).toMatchObject({ level: 'info', category: 'sync' });
+			expect(snapshotRecorder()).toEqual([
+				expect.objectContaining({
+					level: 'debug',
+					message: 'Recorded in memory',
+					context: { category: 'sync' },
+				}),
+			]);
+			log.setLevel('debug');
+		});
+
+		it('promotes recorded debug rows once, in order, without recursion', async () => {
+			const { collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['sync']).debug('First step');
+			getLogger(['sync']).debug('Second step');
+			getLogger(['sync']).error('Sync failed');
+			await flushWrites();
+
+			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
+			const [promotedRows] = collection.bulkInsert.mock.calls[0];
+			expect(promotedRows).toHaveLength(2);
+			expect(promotedRows.map((row) => row.message)).toEqual(['First step', 'Second step']);
+			expect(promotedRows.map((row) => row.context)).toEqual([
+				expect.objectContaining({ category: 'sync', _promotedBy: 'error' }),
+				expect.objectContaining({ category: 'sync', _promotedBy: 'error' }),
+			]);
+			expect(recorderStats()).toEqual({ events: 0, bytes: 0 });
+
+			getLogger(['sync']).error('A second error');
+			await flushWrites();
+			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
+		});
+
+		it('persists debug in real time while verbose mode is active and keeps it recorded', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			setVerboseDiagnostics(true);
+
+			getLogger(['sync']).debug('Verbose step');
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({ level: 'debug', message: 'Verbose step' });
+			expect(snapshotRecorder()).toEqual([
+				expect.objectContaining({ level: 'debug', message: 'Verbose step' }),
+			]);
+			setVerboseDiagnostics(false);
+		});
+
+		it('stops real-time debug persistence when verbose mode expires', async () => {
+			jest.useFakeTimers().setSystemTime(1_000);
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			setVerboseDiagnostics(true, 10);
+
+			getLogger(['sync']).debug('Before expiry');
+			await flushWrites();
+			jest.advanceTimersByTime(11);
+			getLogger(['sync']).debug('After expiry');
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0].message).toBe('Before expiry');
+			setVerboseDiagnostics(false);
+			jest.useRealTimers();
+		});
+
+		it('clears recorded narration when the database collection changes', () => {
+			const first = createLogCollection();
+			const second = createLogCollection();
+			setDatabase(first.collection);
+			getLogger(['sync']).debug('Old store narration');
+			expect(recorderStats().events).toBe(1);
+
+			setDatabase(second.collection);
+
+			expect(recorderStats()).toEqual({ events: 0, bytes: 0 });
 		});
 
 		it('writes success as info with an ok outcome', async () => {

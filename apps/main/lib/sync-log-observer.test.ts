@@ -266,6 +266,42 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].context).toMatchObject({ status: 503 });
 	});
 
+	// Spec §1: "Debug never persists otherwise" — debug narration is the flight
+	// recorder's job. The persist contract has no debug level, so without this guard
+	// a mapped type that gained a debug emit would be relabelled as info.
+	it('never persists a debug-level event, even for a mapped type', () => {
+		observer.observe(
+			event({ type: 'apply.pull', level: 'debug', collection: 'orders', fields: { applied: 9 } })
+		);
+		observer.observe(event({ type: 'signal.log', level: 'debug', message: 'noise' }));
+
+		expect(rows).toHaveLength(0);
+	});
+
+	// Successful HTTP attempts are not durable rows, so their existence has to stay
+	// recoverable from the cycle record that subsumes them.
+	it('aggregates HTTP attempts onto the next cycle row and then resets', () => {
+		observer.observe(event({ type: 'transport.request', fields: { status: 200, durationMs: 30 } }));
+		observer.observe(event({ type: 'transport.request', fields: { status: 200, durationMs: 90 } }));
+		observer.observe(
+			event({ type: 'transport.request', level: 'warn', fields: { status: 500, durationMs: 10 } })
+		);
+		observer.observe(event({ type: 'signal.cycle', fields: { pulls: 2, deletes: 0 } }));
+
+		const cycle = rows.find((row) => row.context.type === 'signal.cycle');
+		expect(cycle?.context).toMatchObject({
+			httpRequestsSinceLastCycle: 3,
+			httpMsSinceLastCycle: 130,
+			httpMaxMsSinceLastCycle: 90,
+			httpErrorsSinceLastCycle: 1,
+		});
+
+		// The tally resets, so the next cycle does not double-count.
+		rows.length = 0;
+		observer.observe(event({ type: 'signal.cycle', fields: { pulls: 1, deletes: 0 } }));
+		expect(rows[0].context.httpRequestsSinceLastCycle).toBeUndefined();
+	});
+
 	it('persists unmapped failures and drops unmapped info narration', () => {
 		observer.observe(event({ type: 'new.failure', level: 'error', message: 'boom' }));
 		observer.observe(event({ type: 'new.narration', level: 'info' }));
