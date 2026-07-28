@@ -203,6 +203,10 @@ function persistLog(
 		// and the surviving row would name only the first collection — attributing
 		// evidence to the wrong collection, which is worse than an extra row.
 		context.collection ?? null,
+		context.cursor ?? null,
+		context.cursorFrom ?? null,
+		context.head ?? null,
+		context.backlog ?? null,
 	]);
 	// Repeat-collapse folds identical consecutive REPEATS — the same event, record
 	// and reason (spec §7). A record carrying a duration is not a repeat: it is a
