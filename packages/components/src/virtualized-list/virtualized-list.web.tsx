@@ -45,6 +45,7 @@ type VirtualizerInput = PartialKeys<
 
 function useVirtualWrapper(options: VirtualizerInput) {
 	'use no memo';
+	// eslint-disable-next-line react-hooks/incompatible-library -- This wrapper opts TanStack Virtual out of React Compiler memoization.
 	return { ...useVirtualizer(options) };
 }
 

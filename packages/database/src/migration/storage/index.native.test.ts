@@ -98,8 +98,7 @@ describe('native storage migration configuration', () => {
 
 		getNativeOldStorage();
 		const sqliteStorageArgs = mockGetRxStorageSQLite.mock.calls[0]?.[0] as
-			| { sqliteBasics: { open(name: string): Promise<unknown> } }
-			| undefined;
+			{ sqliteBasics: { open(name: string): Promise<unknown> } } | undefined;
 
 		expect(sqliteStorageArgs).toBeDefined();
 		await sqliteStorageArgs!.sqliteBasics.open('wcposusers_v2');

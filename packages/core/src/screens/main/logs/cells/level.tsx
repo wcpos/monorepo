@@ -22,8 +22,7 @@ const variantMap: Record<string, string> = {
 export function Level({ row, table }: CellContext<{ document: LogDocument }, 'level'>) {
 	const log = row.original.document;
 	const query = (table.options.meta as Record<string, unknown> | undefined)?.query as
-		| Query<any>
-		| undefined;
+		Query<any> | undefined;
 
 	const handlePress = React.useCallback(() => {
 		if (query) {
