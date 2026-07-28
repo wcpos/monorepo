@@ -210,6 +210,16 @@ describe('existence maintenance lanes through the public facade', () => {
 		).not.toBeNull();
 		expect(await db.orders.findOne('42424242-4242-4242-8242-424242424242').exec()).not.toBeNull();
 		expect(fetches.filter((url) => url.includes('/orders?'))).toHaveLength(1);
+		expect(
+			fetches
+				.filter((url) => {
+					const parsed = new URL(url);
+					return (
+						parsed.pathname.endsWith('/integrity/bucket') && !parsed.searchParams.has('collection')
+					);
+				})
+				.every((url) => new URL(url).searchParams.get('status') === 'publish')
+		).toBe(true);
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'coverage.existence-reconcile',

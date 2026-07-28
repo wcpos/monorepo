@@ -136,7 +136,8 @@ export async function primeExistenceManifest(
 		.filter((id): id is number => typeof id === 'number' && id > 0);
 
 	const fetchDigests: DigestFetch = async (ids) => {
-		const response = await input.fetcher(`${input.syncBaseUrl}/digests?include=${ids.join(',')}`);
+		const url = `${input.syncBaseUrl}/digests?include=${ids.join(',')}&status=publish`;
+		const response = await input.fetcher(url);
 		if (!response.ok) {
 			throw new Error(`digests prime fetch failed: ${response.status}`);
 		}

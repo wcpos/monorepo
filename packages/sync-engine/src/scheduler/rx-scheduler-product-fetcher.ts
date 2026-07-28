@@ -38,6 +38,7 @@ export type ProductSchedulerRepository = {
 	// Accepts the STORED shape (promoted filter/sort columns attached at the call sites via
 	// withProductColumns) so every stored product is queryable by the indexed columns.
 	upsertMany(documents: StoredProductDocument[]): Promise<void>;
+	removeMany(documents: StoredProductDocument[]): Promise<void>;
 };
 
 export type ProductSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
@@ -149,11 +150,18 @@ async function fetchTargetedProducts(
 			payloads
 		);
 		const documents = payloads.map(productDocumentFromWooPayload);
-		await persistProductDocuments(input, documents);
+		const published = documents.filter((_, index) => payloads[index]?.status === 'publish');
+		const unpublished = documents.filter((_, index) => payloads[index]?.status !== 'publish');
+		if (unpublished.length > 0) {
+			await input.repository.removeMany(
+				unpublished.map(({ storedDocument }) => storedDocument as StoredProductDocument)
+			);
+		}
+		if (published.length > 0) await persistProductDocuments(input, published);
 		fetchedDocumentIds.push(
-			...documents.map(({ storedDocument }) => coverageRecordId(storedDocument as ProductDocument))
+			...published.map(({ storedDocument }) => coverageRecordId(storedDocument as ProductDocument))
 		);
-		documentCount += documents.length;
+		documentCount += published.length;
 		requestCount += 1;
 	}
 
@@ -182,6 +190,7 @@ function productSearchParams(search: string, limit: number): URLSearchParams {
 	query.set('page', '1');
 	query.set('orderby', 'id');
 	query.set('order', 'desc');
+	query.set('status', 'publish');
 	return query;
 }
 
@@ -192,6 +201,7 @@ function productSkuParams(sku: string, limit: number): URLSearchParams {
 	query.set('page', '1');
 	query.set('orderby', 'id');
 	query.set('order', 'desc');
+	query.set('status', 'publish');
 	return query;
 }
 
@@ -223,6 +233,7 @@ async function fetchProductBrowseWindow(
 	query.set('page', '1');
 	query.set('orderby', PRODUCT_BROWSE_WINDOW_ORDERBY);
 	query.set('order', PRODUCT_BROWSE_WINDOW_ORDER);
+	query.set('status', 'publish');
 	const payloads = await fetchProductQuery(input, query, context);
 	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);

@@ -617,7 +617,8 @@ export function createRxdbSyncEngine(
 			collection: 'products' | 'customers' | 'orders'
 		) => {
 			const manifest = db.collections[manifestName] as never;
-			const collectionParam = collection === 'products' ? '' : `&collection=${collection}`;
+			const collectionParam =
+				collection === 'products' ? '&status=publish' : `&collection=${collection}`;
 			const sourceCollections =
 				collection === 'products' ? (['products', 'variations'] as const) : ([collection] as const);
 			const dirtyWooIds = async (): Promise<Set<number>> => {

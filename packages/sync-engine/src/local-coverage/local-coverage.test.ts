@@ -238,6 +238,10 @@ describe('LocalCoverage interface', () => {
 			'1,3',
 			'4',
 		]);
+		expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.get('status'))).toEqual([
+			'publish',
+			'publish',
+		]);
 		expect(
 			[...manifest.documents.values()].map(({ wooId, digest, objectType }) => ({
 				wooId,

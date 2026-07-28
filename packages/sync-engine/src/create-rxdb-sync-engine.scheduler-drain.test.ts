@@ -17,6 +17,7 @@ import {
 } from './create-rxdb-sync-engine';
 import { memoryEngineStorage } from './testing';
 import { seedTargetedCustomerSchedulerTask } from './scheduler/rx-scheduler-customer-task-seeder';
+import { seedTargetedProductSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
 
 setPremiumFlag();
 
@@ -206,6 +207,52 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		if (!scope) throw new Error('no active scope');
 		const product = await scope.database.collections.products.findOne(PRODUCT_UUID_55).exec();
 		expect(product?.toJSON()).toMatchObject({ wooProductId: 77, payload: { name: 'Apron' } });
+		await engine.dispose();
+	});
+
+	it('targeted draft payload removes the resident product through the scheduler apply path', async () => {
+		const server = scriptedProductServer([
+			{
+				id: 77,
+				status: 'draft',
+				date_modified_gmt: '2026-07-10T00:00:01',
+				meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: PRODUCT_UUID_55 }],
+			},
+		]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		await scope.database.collections.products.insert({
+			id: PRODUCT_UUID_55,
+			wooProductId: 77,
+			price: 0,
+			stockStatus: '',
+			type: '',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { id: 77, status: 'publish' },
+			sync: { revision: '2026-07-10T00:00:00', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		} as never);
+		await seedTargetedProductSchedulerTask({
+			productIds: [77],
+			nowMs: 1,
+			getRepository: async () => ({ getDatabase: () => scope.database.collections as never }),
+		});
+
+		await expect(engine.sync('scheduler-drain')).resolves.toMatchObject({ status: 'ran' });
+		expect(await scope.database.collections.products.findOne(PRODUCT_UUID_55).exec()).toBeNull();
+		expect(
+			server.state.urls.some((url) => {
+				const parsed = new URL(url);
+				return parsed.searchParams.get('include') === '77' && !parsed.searchParams.has('status');
+			})
+		).toBe(true);
 		await engine.dispose();
 	});
 
