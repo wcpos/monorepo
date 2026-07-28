@@ -193,7 +193,13 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(appMetricsObserver).toHaveBeenCalledWith({
 			type: 'transport.request',
 			level: 'info',
-			fields: { durationMs: 25, bytes: 42, status: 200 },
+			fields: {
+				durationMs: 25,
+				bytes: 42,
+				status: 200,
+				method: 'GET',
+				path: '/wp-json/wcpos/v2/products',
+			},
 		});
 		expect(recordTransport).toHaveBeenCalledWith({
 			atMs: 1_025,
@@ -227,7 +233,13 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(appMetricsObserver).toHaveBeenCalledWith({
 			type: 'transport.request',
 			level: 'info',
-			fields: { durationMs: 10, bytes: 0, status: 304 },
+			fields: {
+				durationMs: 10,
+				bytes: 0,
+				status: 304,
+				method: 'GET',
+				path: '/wp-json/wcpos/v2/changes/sequence-log',
+			},
 		});
 		expect(recordTransport).toHaveBeenCalledWith({
 			atMs: 2_010,
@@ -272,25 +284,25 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(appMetricsObserver).toHaveBeenCalledTimes(3);
 		expect(networkError).toHaveBeenCalledTimes(2);
 		expect(networkError).toHaveBeenCalledWith('open stalled', {
-			saveToDb: true,
 			context: expect.objectContaining({
 				type: 'engine.ready-stalled',
 				phase: 'create-database',
 				elapsedMs: 15_000,
 			}),
+			terminal: { operationType: 'sync.startup', outcome: 'unknown' },
 		});
 		expect(networkError).toHaveBeenCalledWith('engine.lane.tick', {
-			saveToDb: true,
 			context: expect.objectContaining({
 				type: 'engine.lane.tick',
 				lane: 'change-signal',
 				status: 'error',
 			}),
+			terminal: { operationType: 'sync.lane', outcome: 'failed' },
 		});
 		expect(networkWarn).toHaveBeenCalledTimes(1);
 		expect(networkWarn).toHaveBeenCalledWith('seed failed', {
-			saveToDb: true,
 			context: expect.objectContaining({ type: 'engine.pos-bootstrap-error', scopeId: 'scope-1' }),
+			terminal: { operationType: 'sync.startup', outcome: 'failed' },
 		});
 	});
 
@@ -307,8 +319,8 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(networkError).toHaveBeenCalledWith('HTTP 500', {
-			saveToDb: true,
-			context: expect.objectContaining({ type: 'push.error' }),
+			context: expect.objectContaining({ type: 'push.error', direction: 'push' }),
+			terminal: { operationType: 'sync.record', outcome: 'failed' },
 		});
 	});
 
@@ -333,8 +345,8 @@ describe('createAppSyncEngine scope cache', () => {
 		incomingDiagnostics?.({ type: 'engine.ready-failed', level: 'error', message: 'live failure' });
 		expect(networkError).toHaveBeenCalledTimes(1);
 		expect(networkError).toHaveBeenCalledWith('live failure', {
-			saveToDb: true,
 			context: expect.objectContaining({ type: 'engine.ready-failed' }),
+			terminal: { operationType: 'sync.startup', outcome: 'failed' },
 		});
 	});
 
@@ -361,7 +373,13 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(appMetricsObserver).toHaveBeenCalledWith({
 			type: 'transport.request',
 			level: 'warn',
-			fields: { durationMs: 40, bytes: 0, status: 0 },
+			fields: {
+				durationMs: 40,
+				bytes: 0,
+				status: 0,
+				method: 'GET',
+				path: '/wp-json/wcpos/v2/products',
+			},
 		});
 		expect(recordTransport).toHaveBeenCalledWith({
 			atMs: 2_040,
@@ -371,7 +389,6 @@ describe('createAppSyncEngine scope cache', () => {
 			epoch: 0,
 		});
 		expect(logNetworkError).toHaveBeenCalledWith('Sync request failed', {
-			saveToDb: true,
 			context: expect.objectContaining({
 				method: 'GET',
 				endpoint: '/wp-json/wcpos/v2/products',
@@ -410,7 +427,6 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(networkInfo).toHaveBeenCalledWith('Sync request result', {
-			saveToDb: true,
 			context: expect.objectContaining({
 				method: 'POST',
 				endpoint: '/wp-json/wcpos/v2/push/orders',
@@ -619,7 +635,6 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledTimes(1);
 		expect(networkError).toHaveBeenCalledWith('Sync request result', {
-			saveToDb: true,
 			context: expect.objectContaining({ status: 401 }),
 		});
 		fetch.mockRestore();

@@ -13,12 +13,29 @@ import { getErrorCodeDocURL } from './constants';
 import { redactSensitiveFields } from './redact';
 import { LogRetentionCollection, sweepLogRetention } from './retention';
 
+/**
+ * Schema-v2 terminal-record columns. These are promoted to top-level log row
+ * fields (not nested in `context`) so the Logs UI and exports can filter and
+ * group on them without parsing context.
+ */
+export interface LogTerminalFields {
+	outcome?: 'ok' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	operationId?: string;
+	operationType?: string;
+	requestId?: string;
+	serverRequestId?: string;
+	attempt?: number;
+	durationMs?: number;
+	startedAt?: number;
+}
+
 // Custom options interface
 export interface LoggerOptions {
 	showToast?: boolean;
 	/** @deprecated Logs at info and above now persist automatically. */
 	saveToDb?: boolean;
 	context?: any;
+	terminal?: LogTerminalFields;
 	toast?: {
 		text2?: string; // Secondary message
 		dismissable?: boolean; // Show close button
@@ -127,7 +144,7 @@ function persistLog(
 	level: LogLevel,
 	message: string,
 	context: Record<string, unknown>,
-	outcome?: 'ok'
+	terminal?: LogTerminalFields
 ): void {
 	const now = Date.now();
 	const admittedContext = admitContext({
@@ -136,6 +153,7 @@ function persistLog(
 	});
 	const code = typeof context.errorCode === 'string' ? context.errorCode : undefined;
 	const category = typeof context.category === 'string' ? context.category : undefined;
+	const outcome = terminal?.outcome;
 	const identity = JSON.stringify([
 		level,
 		code ?? null,
@@ -143,6 +161,9 @@ function persistLog(
 		message,
 		context.recordId ?? null,
 		outcome ?? null,
+		// Chained operations are distinct units of work and must not collapse.
+		// Uncorrelated record failures keep null here and still collapse by record/reason.
+		terminal?.operationId ?? null,
 	]);
 	const previous = repeatStateByCollection.get(collection);
 
@@ -175,6 +196,15 @@ function persistLog(
 		...(code && { code }),
 		...(category && { category }),
 		...(outcome && { outcome }),
+		...(terminal?.operationId !== undefined && { operationId: terminal.operationId }),
+		...(terminal?.operationType !== undefined && { operationType: terminal.operationType }),
+		...(terminal?.requestId !== undefined && { requestId: terminal.requestId }),
+		...(terminal?.serverRequestId !== undefined && {
+			serverRequestId: terminal.serverRequestId,
+		}),
+		...(terminal?.attempt !== undefined && { attempt: terminal.attempt }),
+		...(terminal?.durationMs !== undefined && { durationMs: terminal.durationMs }),
+		...(terminal?.startedAt !== undefined && { startedAt: terminal.startedAt }),
 	});
 	const write = Promise.resolve().then(() => collection.insert(row));
 	const state: RepeatState = { identity, count: 1, write };
@@ -376,13 +406,11 @@ const mainTransport = (props: any) => {
 	// 3. Persist info and above whenever a logs collection is bound.
 	if (levelName !== 'debug' && dbCollection) {
 		try {
-			persistLog(
-				dbCollection,
-				levelName,
-				message,
-				options.context || {},
-				level.text === 'success' ? 'ok' : undefined
-			);
+			const terminal: LogTerminalFields | undefined =
+				level.text === 'success'
+					? { ...options.terminal, outcome: options.terminal?.outcome ?? 'ok' }
+					: options.terminal;
+			persistLog(dbCollection, levelName, message, options.context || {}, terminal);
 		} catch (error) {
 			console.error('Failed to persist log entry', error);
 		}

@@ -340,6 +340,65 @@ describe('logger/index', () => {
 			expect(rows[0]).toMatchObject({ level: 'info', outcome: 'ok' });
 		});
 
+		it('promotes defined record fields and lets an explicit success outcome win', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['checkout']).success('Order cancelled', {
+				terminal: {
+					outcome: 'cancelled',
+					operationId: 'operation-1',
+					operationType: 'checkout.submit',
+					requestId: 'request-1',
+					serverRequestId: 'server-request-1',
+					attempt: 2,
+					durationMs: 150,
+					startedAt: 1_000,
+				},
+			});
+			await flushWrites();
+
+			expect(rows[0]).toMatchObject({
+				outcome: 'cancelled',
+				operationId: 'operation-1',
+				operationType: 'checkout.submit',
+				requestId: 'request-1',
+				serverRequestId: 'server-request-1',
+				attempt: 2,
+				durationMs: 150,
+				startedAt: 1_000,
+			});
+		});
+
+		it('skips undefined record fields on inserted rows', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['sync']).info('Cycle complete', {
+				terminal: { outcome: 'ok', operationId: undefined },
+			});
+			await flushWrites();
+
+			expect(rows[0]).not.toHaveProperty('operationId');
+		});
+
+		it('separates operation rows but collapses uncorrelated repeats', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('Cycle complete', { terminal: { operationId: 'operation-1' } });
+			logger.info('Cycle complete', { terminal: { operationId: 'operation-2' } });
+			logger.info('Record failed');
+			logger.info('Record failed');
+			await flushWrites();
+
+			expect(rows).toHaveLength(3);
+			expect(rows[0]).toMatchObject({ operationId: 'operation-1', count: 1 });
+			expect(rows[1]).toMatchObject({ operationId: 'operation-2', count: 1 });
+			expect(rows[2]).toMatchObject({ count: 2 });
+		});
+
 		it('collapses consecutive identical rows while keeping the original timestamp', async () => {
 			jest.useFakeTimers().setSystemTime(1000);
 			const { rows, collection } = createLogCollection();

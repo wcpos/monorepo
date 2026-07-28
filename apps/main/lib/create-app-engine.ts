@@ -197,7 +197,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					type: 'transport.request',
 					level: 'warn',
 					collection: collectionFromSyncUrl(finalUrl),
-					fields: { durationMs, bytes: 0, status: 0 },
+					fields: {
+						durationMs,
+						bytes: 0,
+						status: 0,
+						method,
+						path: new URL(finalUrl).pathname,
+					},
 				});
 				recordTransport({ atMs, durationMs, bytes: 0, ok: false, epoch: epochAtStart });
 				if (
@@ -205,7 +211,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					databaseEpoch === getDatabaseEpoch()
 				) {
 					networkLogger.error('Sync request failed', {
-						saveToDb: true,
 						context: { method, endpoint: new URL(finalUrl).pathname, status: 0 },
 					});
 				}
@@ -228,7 +233,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				type: 'transport.request',
 				level: accepted ? 'info' : 'warn',
 				collection: collectionFromSyncUrl(finalUrl),
-				fields: { durationMs, bytes, status: response.status },
+				fields: {
+					durationMs,
+					bytes,
+					status: response.status,
+					method,
+					path: new URL(finalUrl).pathname,
+				},
 			});
 			recordTransport({ atMs, durationMs, bytes, ok: accepted, epoch: epochAtStart });
 
@@ -272,7 +283,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			(!responseAccepted || (method !== 'GET' && method !== 'HEAD'))
 		) {
 			networkLogger[responseAccepted ? 'info' : 'error']('Sync request result', {
-				saveToDb: true,
 				context: { method, endpoint: new URL(url).pathname, status: response.status },
 			});
 		}
@@ -314,11 +324,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// captured database epoch — the engine is constructed during render, before
 	// the effect that rebinds the logger database runs, so an epoch captured
 	// here could be permanently stale.
-	// Constructed per engine-construction, so its rate-limit windows are always
-	// fresh — no explicit reset needed on supersede.
 	const syncLogObserver = createSyncLogObserver({
-		persist: (level, message, context) => {
-			engineLogger[level](message, { saveToDb: true, context });
+		persist: (level, message, context, terminal) => {
+			engineLogger[level](message, { context, terminal });
 		},
 	});
 
