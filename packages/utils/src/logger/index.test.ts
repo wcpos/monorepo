@@ -590,6 +590,24 @@ describe('logger/index', () => {
 			jest.useRealTimers();
 		});
 
+		it('does not collapse cycle rows when their cursor facts change', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('Cycle complete', {
+				context: { cursor: 5, cursorFrom: 4, head: 6, backlog: 1 },
+			});
+			logger.info('Cycle complete', {
+				context: { cursor: 6, cursorFrom: 5, head: 6, backlog: 0 },
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows[0].context).toMatchObject({ cursor: 5, cursorFrom: 4, head: 6, backlog: 1 });
+			expect(rows[1].context).toMatchObject({ cursor: 6, cursorFrom: 5, head: 6, backlog: 0 });
+		});
+
 		it('starts a new repeat run when the code changes', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);

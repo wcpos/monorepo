@@ -240,7 +240,7 @@ function MetricsPersistenceBridge() {
 	return null;
 }
 
-function SyncStatusPersistenceBridge() {
+export function SyncStatusPersistenceBridge() {
 	const { storeDB } = useAppState() as { storeDB?: StoreDatabase };
 
 	// Bridge the module-level sync status to the active per-store RxDB lifecycle.

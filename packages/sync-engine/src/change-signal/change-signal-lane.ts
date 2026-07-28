@@ -173,6 +173,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		let cursorSummary: {
 			from?: number;
 			to?: number;
+			reported?: number;
 			head?: number;
 			rebaselined: boolean;
 		} | null = null;
@@ -225,6 +226,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					cursorSummary = {
 						from: outcome.previousCursor?.sequence,
 						to: outcome.cursor.sequence,
+						reported: outcome.reportedCursor?.sequence,
 						head: outcome.head,
 						rebaselined: outcome.rebaseline,
 					};
@@ -275,7 +277,15 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 								: {}),
 						},
 					});
-					const { from, to, head } = cursorSummary;
+					const { from, head } = cursorSummary;
+					const committedTo = cursorSummary.to;
+					const to =
+						!cursorSummary.rebaselined &&
+						from !== undefined &&
+						cursorSummary.reported !== undefined &&
+						cursorSummary.reported < from
+							? cursorSummary.reported
+							: committedTo;
 					let reason: 'behind-head' | 'reset' | 'backwards' | null = null;
 					if (cursorSummary.rebaselined) {
 						reason = 'behind-head';
@@ -294,7 +304,10 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						// quantity and gets its own name; reporting it as `backlog` would
 						// have the two rows of one cycle disagree under the same key
 						// (a jump lands AT head, so its backlog is 0 while its skip is large).
-						const backlog = head === undefined ? undefined : Math.max(0, head - to);
+						const backlog =
+							head === undefined || committedTo === undefined
+								? undefined
+								: Math.max(0, head - committedTo);
 						const skipped =
 							reason === 'behind-head' && head !== undefined && from !== undefined
 								? Math.max(0, head - from)

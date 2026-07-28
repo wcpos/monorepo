@@ -44,6 +44,7 @@ function scriptedServer() {
 	const state = {
 		head: 5,
 		rows: [] as SequenceRow[],
+		reportedSince: null as number | null,
 		poisonSequenceLog: false,
 		productPulls: 0,
 		productIncludes: [] as number[][],
@@ -94,7 +95,7 @@ function scriptedServer() {
 			const maxSeen = rows.reduce((max, row) => Math.max(max, row.sequence), since);
 			return json({
 				changes: rows,
-				checkpoint: { since: Math.max(maxSeen, since), head: state.head },
+				checkpoint: { since: state.reportedSince ?? Math.max(maxSeen, since), head: state.head },
 				complete: true,
 			});
 		}
@@ -650,6 +651,50 @@ describe('sync("change-signal") through the public handle', () => {
 		expect(diagnosticsEvents.some((event) => event.type === 'signal.cursor')).toBe(false);
 		await engine.dispose();
 	});
+
+	it.each([
+		{ reportedSince: 3, reason: 'backwards' },
+		{ reportedSince: 0, reason: 'reset' },
+	])(
+		'emits a $reason anomaly for a raw server checkpoint regression without rewinding',
+		async ({ reportedSince, reason }) => {
+			const server = scriptedServer();
+			const diagnosticsEvents: SyncEvent[] = [];
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				fetch: server.fetch,
+				identity: freshIdentity(),
+				diagnostics: (event) => diagnosticsEvents.push(event),
+			});
+			await engine.ready;
+			await engine.sync('change-signal');
+
+			diagnosticsEvents.length = 0;
+			server.state.reportedSince = reportedSince;
+			await engine.sync('change-signal');
+
+			expect(diagnosticsEvents.filter((event) => event.type === 'signal.cursor')).toEqual([
+				expect.objectContaining({
+					level: 'warn',
+					fields: expect.objectContaining({
+						reason,
+						from: 5,
+						to: reportedSince,
+						head: 5,
+					}),
+				}),
+			]);
+			expect(
+				diagnosticsEvents.filter((event) => event.type === 'signal.cycle')[0]!.fields
+			).toMatchObject({
+				cursor: 5,
+				cursorFrom: 5,
+				head: 5,
+				backlog: 0,
+			});
+			await engine.dispose();
+		}
+	);
 
 	it('does not emit signal.cycle when the poll fails', async () => {
 		const server = scriptedServer();

@@ -304,6 +304,7 @@ export function createLiveChangeSignalSource(
 			const page = {
 				rows,
 				cursor: { sequence: Math.max(echoed, maxSeen) },
+				reportedCursor: { sequence: echoed },
 				hasMore: envelope.complete === false,
 				...(Number.isFinite(head) ? { head } : {}),
 				...(sequenceLogConfigFingerprint === undefined
