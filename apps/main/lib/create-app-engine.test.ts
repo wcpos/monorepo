@@ -289,7 +289,10 @@ describe('createAppSyncEngine scope cache', () => {
 				phase: 'create-database',
 				elapsedMs: 15_000,
 			}),
-			terminal: { operationType: 'sync.startup', outcome: 'unknown' },
+			terminal: {
+				operationType: 'sync.startup',
+				outcome: 'unknown',
+			},
 		});
 		expect(networkError).toHaveBeenCalledWith('engine.lane.tick', {
 			context: expect.objectContaining({
@@ -297,12 +300,18 @@ describe('createAppSyncEngine scope cache', () => {
 				lane: 'change-signal',
 				status: 'error',
 			}),
-			terminal: { operationType: 'sync.lane', outcome: 'failed' },
+			terminal: {
+				operationType: 'sync.lane',
+				outcome: 'failed',
+			},
 		});
 		expect(networkWarn).toHaveBeenCalledTimes(1);
 		expect(networkWarn).toHaveBeenCalledWith('seed failed', {
 			context: expect.objectContaining({ type: 'engine.pos-bootstrap-error', scopeId: 'scope-1' }),
-			terminal: { operationType: 'sync.startup', outcome: 'failed' },
+			terminal: {
+				operationType: 'sync.startup',
+				outcome: 'failed',
+			},
 		});
 	});
 
@@ -346,8 +355,35 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(networkError).toHaveBeenCalledTimes(1);
 		expect(networkError).toHaveBeenCalledWith('live failure', {
 			context: expect.objectContaining({ type: 'engine.ready-failed' }),
-			terminal: { operationType: 'sync.startup', outcome: 'failed' },
+			terminal: {
+				operationType: 'sync.startup',
+				outcome: 'failed',
+			},
 		});
+	});
+
+	// A logging sink must NEVER be able to fail the request it is describing. This
+	// call site is on the fetcher's success path, so before the guard an escaping
+	// observer exception propagated out of fetcher() and looked to the caller like
+	// a failed HTTP request — turning a request that actually succeeded into a
+	// failure (and, on the push path, a lost order).
+	it('returns the response even when a telemetry sink throws', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 200 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
+			loadCreateAppEngine();
+		appMetricsObserver.mockImplementation(() => {
+			throw new TypeError('observer exploded');
+		});
+		createAppSyncEngine(BASE_OPTIONS);
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(response?.status).toBe(200);
+		expect(appMetricsObserver).toHaveBeenCalled();
+		fetch.mockRestore();
 	});
 
 	it('records a network error and rethrows it', async () => {
