@@ -309,7 +309,6 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 	observe: SyncObserver;
 } {
 	const nowMs = options.nowMs ?? Date.now;
-	let operationSequence = 0;
 	const observe: SyncObserver = (event: SyncEvent) => {
 		const fields = (event.fields ?? {}) as Record<string, unknown>;
 		const mapped = CONFORMANCE.get(event.type);
@@ -365,13 +364,15 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			const recordId = recordIdOf(fields);
 			if (recordId !== undefined && context.recordId === undefined) context.recordId = recordId;
 		}
-		const suppliedOperationId =
-			typeof fields.operationId === 'string' ? fields.operationId : undefined;
-		const operationId =
-			suppliedOperationId ??
-			(conformance.operationType === 'sync.record'
-				? undefined
-				: `${(event.at ?? nowMs()).toString(36)}-${(++operationSequence).toString(36)}`);
+		// Only a REAL chain id is forwarded. Minting a synthetic one per event would
+		// make every row unique and so disable repeat-collapse for the ten ungated
+		// non-record types (apply.refresh, queue.write.enqueued/coalesce,
+		// engine.guard, …), reintroducing exactly the flooding collapse exists to
+		// prevent — and it would fill a column that spec §2 reserves for chaining
+		// related steps with uniqueness salt, making it unqueryable for WS5.
+		// Distinguishing timed units of work is the logger's job instead (see
+		// persistLog: a record carrying durationMs never collapses).
+		const operationId = typeof fields.operationId === 'string' ? fields.operationId : undefined;
 
 		options.persist(
 			isFailure ? event.level : 'info',

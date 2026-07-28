@@ -438,6 +438,42 @@ describe('logger/index', () => {
 			expect(String(rows[0].operationType)).toHaveLength(48);
 		});
 
+		// A timed unit of work is distinct evidence, not a repeat: two sync cycles
+		// rendering the same message must keep both durations and cursors.
+		it('never collapses records that carry a duration', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('change-signal: checked for updates (2 changed, 0 deleted)', {
+				terminal: { durationMs: 120, operationType: 'sync.cycle' },
+				context: { cursor: 41 },
+			});
+			logger.info('change-signal: checked for updates (2 changed, 0 deleted)', {
+				terminal: { durationMs: 380, operationType: 'sync.cycle' },
+				context: { cursor: 43 },
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows[0]).toMatchObject({ durationMs: 120, count: 1 });
+			expect(rows[1]).toMatchObject({ durationMs: 380, count: 1 });
+		});
+
+		// ...while undurated repeats (a record failing over and over) still fold.
+		it('still collapses identical records that carry no duration', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.error('orders 4711 — rejected by server', { context: { recordId: '4711' } });
+			logger.error('orders 4711 — rejected by server', { context: { recordId: '4711' } });
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({ count: 2 });
+		});
+
 		it('collapses consecutive identical rows while keeping the original timestamp', async () => {
 			jest.useFakeTimers().setSystemTime(1000);
 			const { rows, collection } = createLogCollection();

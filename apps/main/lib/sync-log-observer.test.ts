@@ -101,28 +101,16 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].terminal?.operationId).toBe('cycle-17');
 	});
 
-	it('mints distinct ids for operation rows without identifying uncorrelated record failures', () => {
+	it('does not mint synthetic operation ids for operation rows', () => {
 		for (let index = 0; index < 2; index += 1) {
-			observer.observe(
-				event({
-					type: 'engine.lane.tick',
-					fields: { status: 'ran', pushed: 1 },
-				})
-			);
+			observer.observe(event({ type: 'engine.lane.tick', fields: { status: 'ran', pushed: 1 } }));
 		}
-		observer.observe(
-			event({
-				type: 'push.error',
-				level: 'error',
-				collection: 'orders',
-				fields: { recordId: '4711' },
-			})
-		);
 
-		expect(rows[0].terminal?.operationId).toEqual(expect.any(String));
-		expect(rows[1].terminal?.operationId).toEqual(expect.any(String));
-		expect(rows[0].terminal?.operationId).not.toBe(rows[1].terminal?.operationId);
-		expect(rows[2].terminal?.operationId).toBeUndefined();
+		// A synthetic id per event would make every row unique and disable
+		// repeat-collapse for the ungated non-record types. Distinguishing timed
+		// units of work belongs to the logger (a row with durationMs never folds).
+		expect(rows[0].terminal?.operationId).toBeUndefined();
+		expect(rows[1].terminal?.operationId).toBeUndefined();
 	});
 
 	it('names rejected records and preserves searchable record context', () => {

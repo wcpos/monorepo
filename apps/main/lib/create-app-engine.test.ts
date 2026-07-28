@@ -292,7 +292,6 @@ describe('createAppSyncEngine scope cache', () => {
 			terminal: {
 				operationType: 'sync.startup',
 				outcome: 'unknown',
-				operationId: expect.any(String),
 			},
 		});
 		expect(networkError).toHaveBeenCalledWith('engine.lane.tick', {
@@ -304,7 +303,6 @@ describe('createAppSyncEngine scope cache', () => {
 			terminal: {
 				operationType: 'sync.lane',
 				outcome: 'failed',
-				operationId: expect.any(String),
 			},
 		});
 		expect(networkWarn).toHaveBeenCalledTimes(1);
@@ -313,7 +311,6 @@ describe('createAppSyncEngine scope cache', () => {
 			terminal: {
 				operationType: 'sync.startup',
 				outcome: 'failed',
-				operationId: expect.any(String),
 			},
 		});
 	});
@@ -361,7 +358,6 @@ describe('createAppSyncEngine scope cache', () => {
 			terminal: {
 				operationType: 'sync.startup',
 				outcome: 'failed',
-				operationId: expect.any(String),
 			},
 		});
 	});
