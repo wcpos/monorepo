@@ -433,6 +433,25 @@ describe('logger/index', () => {
 			expect(rows[0]).toMatchObject({ level: 'info', outcome: 'ok' });
 		});
 
+		it('drops a failure code from an ok row (PY02001 regression)', async () => {
+			const consoleError = jest.spyOn(console, 'error').mockImplementation();
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['payment']).success('Payment completed; status check failed', {
+				context: { errorCode: 'CLIENT999' },
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).not.toHaveProperty('code');
+			expect(rows[0].context).not.toHaveProperty('errorCode');
+			expect(consoleError).toHaveBeenCalledWith(
+				'Dropped failure-severity code CLIENT999 from log row with outcome ok'
+			);
+			consoleError.mockRestore();
+		});
+
 		it('promotes defined record fields and lets an explicit success outcome win', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);

@@ -8,6 +8,7 @@
     "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
     "build": "turbo build",
     "build:opfs-worker": "node scripts/build-opfs-worker.mjs",
+    "generate:error-codes": "node scripts/generate-error-codes.mjs",
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "test": "turbo run test --filter='{./packages/*}' --filter='{./apps/main}'",
     "test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
