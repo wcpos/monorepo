@@ -11,10 +11,12 @@ import { logger } from 'react-native-logs';
 
 import { getErrorCodeDocURL } from './constants';
 import { redactSensitiveFields } from './redact';
+import { LogRetentionCollection, sweepLogRetention } from './retention';
 
 // Custom options interface
 export interface LoggerOptions {
 	showToast?: boolean;
+	/** @deprecated Logs at info and above now persist automatically. */
 	saveToDb?: boolean;
 	context?: any;
 	toast?: {
@@ -56,8 +58,26 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 let toastShow: ((config: any) => void) | null = null;
 let dbCollection: any | null = null;
 let databaseEpoch = 0;
-let hasPruned = false;
-const MAX_LOG_ROWS = 5000;
+let sequence = 0;
+let persistedInsertCount = 0;
+const MAX_CONTEXT_BYTES = 16 * 1024;
+const SWEEP_INSERT_INTERVAL = 200;
+
+type PersistedDocument = {
+	incrementalPatch(patch: Record<string, unknown>): Promise<PersistedDocument>;
+};
+
+type LoggerCollection = LogRetentionCollection & {
+	insert(row: Record<string, unknown>): Promise<PersistedDocument>;
+};
+
+type RepeatState = {
+	identity: string;
+	count: number;
+	write: Promise<PersistedDocument>;
+};
+
+const repeatStateByCollection = new WeakMap<object, RepeatState>();
 
 const SEARCH_CONTEXT_KEY =
 	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|endpoint|status|customerId|errorCode|reason|previousQuantity|quantity|previousPrice|price)$/;
@@ -67,6 +87,113 @@ function searchableContext(context: Record<string, any>): string {
 		.filter(([key, value]) => SEARCH_CONTEXT_KEY.test(key) && value != null)
 		.map(([, value]) => value)
 		.join(' ');
+}
+
+function serializedBytes(value: unknown): number {
+	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+function admitContext(context: Record<string, unknown>): Record<string, unknown> {
+	if (serializedBytes(context) <= MAX_CONTEXT_BYTES) return context;
+
+	const admitted: Record<string, unknown> = { _truncated: true };
+	let droppedKeys = 0;
+	for (const [key, value] of Object.entries(context)) {
+		admitted[key] = value;
+		if (serializedBytes(admitted) > MAX_CONTEXT_BYTES) {
+			admitted[key] = '[truncated]';
+			if (serializedBytes(admitted) > MAX_CONTEXT_BYTES) {
+				delete admitted[key];
+				droppedKeys += 1;
+			}
+		}
+	}
+	if (droppedKeys > 0) admitted._droppedKeys = droppedKeys;
+	return admitted;
+}
+
+function recordSize(row: Record<string, unknown>): Record<string, unknown> {
+	row.sizeBytes = 0;
+	let sizeBytes = serializedBytes(row);
+	while (row.sizeBytes !== sizeBytes) {
+		row.sizeBytes = sizeBytes;
+		sizeBytes = serializedBytes(row);
+	}
+	return row;
+}
+
+function persistLog(
+	collection: LoggerCollection,
+	level: LogLevel,
+	message: string,
+	context: Record<string, unknown>,
+	outcome?: 'ok'
+): void {
+	const now = Date.now();
+	const admittedContext = admitContext({
+		...context,
+		search: searchableContext(context),
+	});
+	const code = typeof context.errorCode === 'string' ? context.errorCode : undefined;
+	const category = typeof context.category === 'string' ? context.category : undefined;
+	const identity = JSON.stringify([
+		level,
+		code ?? null,
+		category ?? null,
+		message,
+		context.recordId ?? null,
+		outcome ?? null,
+	]);
+	const previous = repeatStateByCollection.get(collection);
+
+	if (previous?.identity === identity) {
+		previous.count += 1;
+		previous.write = previous.write.then((document) =>
+			document.incrementalPatch({ count: previous.count, lastSeen: now })
+		);
+		// A rejected chain would silently swallow every later identical event —
+		// drop the repeat state so the next occurrence inserts a fresh row.
+		void previous.write.catch((error: unknown) => {
+			console.error(error);
+			if (repeatStateByCollection.get(collection) === previous) {
+				repeatStateByCollection.delete(collection);
+			}
+		});
+		return;
+	}
+
+	sequence += 1;
+	const row = recordSize({
+		timestamp: now,
+		level,
+		message,
+		context: admittedContext,
+		seq: sequence,
+		count: 1,
+		firstSeen: now,
+		lastSeen: now,
+		...(code && { code }),
+		...(category && { category }),
+		...(outcome && { outcome }),
+	});
+	const write = Promise.resolve().then(() => collection.insert(row));
+	const state: RepeatState = { identity, count: 1, write };
+	repeatStateByCollection.set(collection, state);
+	void write.catch(() => {
+		if (repeatStateByCollection.get(collection) === state) {
+			repeatStateByCollection.delete(collection);
+		}
+	});
+	void write
+		.then(() => {
+			persistedInsertCount += 1;
+			if (persistedInsertCount % SWEEP_INSERT_INTERVAL === 0) {
+				void sweepLogRetention(collection).catch((error: unknown) =>
+					console.error('Failed to enforce log retention', error)
+				);
+			}
+		})
+		.catch(console.error);
 }
 
 // Log level severity (lower = more verbose)
@@ -129,46 +256,16 @@ export const setToast = (toastShowFunction: (config: any) => void) => {
 
 /**
  * Set Database collection - call when database is ready.
- * Prunes log entries older than 30 days once on first initialization.
+ * Runs log retention every time a collection is bound.
  */
 export const setDatabase = (collection: any) => {
 	if (collection !== dbCollection) databaseEpoch += 1;
 	dbCollection = collection;
 
-	if (collection && !hasPruned) {
-		hasPruned = true;
-		const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-		collection
-			.find({ selector: { timestamp: { $lt: thirtyDaysAgo } } })
-			.remove()
-			.then((removed: any[]) => {
-				if (removed.length > 0) {
-					console.log(`Pruned ${removed.length} log entries older than 30 days`);
-				}
-			})
-			.catch((error: unknown) => {
-				console.error('Failed to prune old log entries', error);
-			})
-			// Row-cap pass must start only after the age prune settles: its count()
-			// otherwise includes rows the age prune is about to delete, over-pruning
-			// retained recent rows by up to the expired count. Chained on both the
-			// .then and .catch paths so the cap still runs if the age prune fails.
-			.then(() =>
-				collection
-					.count()
-					.exec()
-					.then((total: number) => {
-						const excess = total - MAX_LOG_ROWS;
-						if (excess <= 0) return;
-						return collection
-							.find({ sort: [{ timestamp: 'asc' }], limit: excess })
-							.remove()
-							.then((removed: any[]) =>
-								console.log(`Pruned ${removed.length} log entries over row cap`)
-							);
-					})
-					.catch((error: unknown) => console.error('Failed to enforce log row cap', error))
-			);
+	if (collection) {
+		void sweepLogRetention(collection).catch((error: unknown) => {
+			console.error('Failed to enforce log retention', error);
+		});
 	}
 };
 
@@ -199,7 +296,7 @@ const mainTransport = (props: any) => {
 	}
 
 	// Check if this log level should be shown (based on runtime level)
-	const levelName = level.text as LogLevel;
+	const levelName = (level.text === 'success' ? 'info' : level.text) as LogLevel;
 	const levelSeverity = LOG_LEVEL_SEVERITY[levelName] ?? 0;
 	const currentSeverity = LOG_LEVEL_SEVERITY[currentLogLevel];
 
@@ -276,20 +373,19 @@ const mainTransport = (props: any) => {
 		toastShow(toastConfig);
 	}
 
-	// 3. Save to database if available and requested
-	if (options.saveToDb && dbCollection) {
-		const errorCode = options.context?.errorCode || '';
-		const context = options.context || {};
-
-		dbCollection
-			.insert({
-				timestamp: Date.now(),
-				code: errorCode,
-				level: level.text,
+	// 3. Persist info and above whenever a logs collection is bound.
+	if (levelName !== 'debug' && dbCollection) {
+		try {
+			persistLog(
+				dbCollection,
+				levelName,
 				message,
-				context: { ...context, search: searchableContext(context) },
-			})
-			.catch(console.error);
+				options.context || {},
+				level.text === 'success' ? 'ok' : undefined
+			);
+		} catch (error) {
+			console.error('Failed to persist log entry', error);
+		}
 	}
 };
 
@@ -495,7 +591,7 @@ export class CategoryLogger {
 	 */
 	debug(message: LazyMessage, options?: LoggerOptions): void {
 		// Only resolve lazy message if we're actually going to log
-		if (!shouldLog('debug') && !options?.showToast && !options?.saveToDb) {
+		if (!shouldLog('debug') && !options?.showToast) {
 			return;
 		}
 		const resolvedMessage = resolveLazy(message);

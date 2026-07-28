@@ -571,6 +571,33 @@ const logs: RxCollectionCreator<LogDocumentType> = {
 			oldDoc.level = String(oldDoc.level ?? 'info').slice(0, 16);
 			return oldDoc;
 		}, // v0→v1 only adds indexes; documents are unchanged
+		2: (oldDoc: any) => {
+			const level = String(oldDoc.level ?? 'info');
+			const errorCode = oldDoc.context?.errorCode;
+
+			if (typeof errorCode === 'string') oldDoc.code = errorCode;
+			if (level === 'success') {
+				oldDoc.level = 'info';
+				oldDoc.outcome = 'ok';
+			} else if (level === 'audit') {
+				oldDoc.level = 'info';
+				oldDoc.category = 'db.audit';
+			} else {
+				oldDoc.level = ['debug', 'info', 'warn', 'error'].includes(level) ? level : 'info';
+			}
+
+			oldDoc.count = 1;
+			oldDoc.firstSeen = oldDoc.timestamp;
+			oldDoc.lastSeen = oldDoc.timestamp;
+			if (typeof oldDoc.sizeBytes !== 'number') {
+				try {
+					oldDoc.sizeBytes = new TextEncoder().encode(JSON.stringify(oldDoc)).byteLength;
+				} catch {
+					// leave unset; retention serializes rows without sizeBytes
+				}
+			}
+			return oldDoc;
+		},
 	},
 	options: {
 		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],
