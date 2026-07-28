@@ -6,7 +6,22 @@ const FALLBACK_ROW_BYTES = 512;
 type RetainedLog = {
 	primary: string;
 	sizeBytes?: number;
+	toJSON?: () => unknown;
 };
+
+/**
+ * Rows written before schema v2 (and by producers not yet migrated, e.g. the
+ * audit plugin's full-snapshot rows) carry no sizeBytes — serialize them so
+ * the byte cap cannot be dodged by large legacy rows charged at 512 bytes.
+ */
+function rowBytes(row: RetainedLog): number {
+	if (typeof row.sizeBytes === 'number') return row.sizeBytes;
+	try {
+		return new TextEncoder().encode(JSON.stringify(row.toJSON ? row.toJSON() : row)).byteLength;
+	} catch {
+		return FALLBACK_ROW_BYTES;
+	}
+}
 
 export type LogRetentionCollection = {
 	find(query: Record<string, unknown>): unknown;
@@ -26,16 +41,14 @@ export async function sweepLogRetention(
 		sort: [{ timestamp: 'asc' }],
 	}) as { exec(): Promise<RetainedLog[]> };
 	const remaining = await remainingQuery.exec();
-	let totalBytes = remaining.reduce(
-		(total, row) => total + (row.sizeBytes ?? FALLBACK_ROW_BYTES),
-		0
-	);
+	const sizes = remaining.map(rowBytes);
+	let totalBytes = sizes.reduce((total, bytes) => total + bytes, 0);
 	if (totalBytes <= MAX_LOG_BYTES) return;
 
 	const removeIds: string[] = [];
-	for (const row of remaining) {
-		removeIds.push(row.primary);
-		totalBytes -= row.sizeBytes ?? FALLBACK_ROW_BYTES;
+	for (let i = 0; i < remaining.length; i += 1) {
+		removeIds.push(remaining[i].primary);
+		totalBytes -= sizes[i];
 		if (totalBytes <= MAX_LOG_BYTES) break;
 	}
 	await collection.bulkRemove(removeIds);

@@ -97,10 +97,18 @@ function admitContext(context: Record<string, unknown>): Record<string, unknown>
 	if (serializedBytes(context) <= MAX_CONTEXT_BYTES) return context;
 
 	const admitted: Record<string, unknown> = { _truncated: true };
+	let droppedKeys = 0;
 	for (const [key, value] of Object.entries(context)) {
 		admitted[key] = value;
-		if (serializedBytes(admitted) > MAX_CONTEXT_BYTES) admitted[key] = '[truncated]';
+		if (serializedBytes(admitted) > MAX_CONTEXT_BYTES) {
+			admitted[key] = '[truncated]';
+			if (serializedBytes(admitted) > MAX_CONTEXT_BYTES) {
+				delete admitted[key];
+				droppedKeys += 1;
+			}
+		}
 	}
+	if (droppedKeys > 0) admitted._droppedKeys = droppedKeys;
 	return admitted;
 }
 
@@ -134,6 +142,7 @@ function persistLog(
 		category ?? null,
 		message,
 		context.recordId ?? null,
+		outcome ?? null,
 	]);
 	const previous = repeatStateByCollection.get(collection);
 
@@ -142,7 +151,14 @@ function persistLog(
 		previous.write = previous.write.then((document) =>
 			document.incrementalPatch({ count: previous.count, lastSeen: now })
 		);
-		void previous.write.catch(console.error);
+		// A rejected chain would silently swallow every later identical event —
+		// drop the repeat state so the next occurrence inserts a fresh row.
+		void previous.write.catch((error: unknown) => {
+			console.error(error);
+			if (repeatStateByCollection.get(collection) === previous) {
+				repeatStateByCollection.delete(collection);
+			}
+		});
 		return;
 	}
 
@@ -161,7 +177,13 @@ function persistLog(
 		...(outcome && { outcome }),
 	});
 	const write = Promise.resolve().then(() => collection.insert(row));
-	repeatStateByCollection.set(collection, { identity, count: 1, write });
+	const state: RepeatState = { identity, count: 1, write };
+	repeatStateByCollection.set(collection, state);
+	void write.catch(() => {
+		if (repeatStateByCollection.get(collection) === state) {
+			repeatStateByCollection.delete(collection);
+		}
+	});
 	void write
 		.then(() => {
 			persistedInsertCount += 1;

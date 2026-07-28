@@ -39,3 +39,25 @@ describe('log retention', () => {
 		expect(collection.bulkRemove).toHaveBeenCalledWith(['oldest']);
 	});
 });
+
+describe('rows without sizeBytes (review fix, PR #851)', () => {
+	it('serializes unsized rows instead of charging the 512-byte fallback', async () => {
+		const bigPayload = 'x'.repeat(24 * 1024 * 1024);
+		const rows = [
+			{ primary: 'legacy-1', toJSON: () => ({ context: bigPayload }) },
+			{ primary: 'recent-1', sizeBytes: 2 * 1024 * 1024, toJSON: () => ({}) },
+		];
+		const collection = {
+			find: jest.fn((query: Record<string, unknown>) => {
+				if (query.selector) return { remove: jest.fn().mockResolvedValue([]) };
+				return { exec: jest.fn().mockResolvedValue(rows) };
+			}),
+			bulkRemove: jest.fn().mockResolvedValue(undefined),
+		};
+
+		await sweepLogRetention(collection as any, Date.now());
+
+		// 24 MiB (serialized legacy row) + 2 MiB > 25 MiB cap → oldest row removed.
+		expect(collection.bulkRemove).toHaveBeenCalledWith(['legacy-1']);
+	});
+});

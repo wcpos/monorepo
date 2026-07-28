@@ -71,4 +71,14 @@ describe('logs schema', () => {
 		expect(migrate).toBeDefined();
 		expect(migrate?.({ ...old }, {} as never)).toMatchObject(expected);
 	});
+
+	it('stamps sizeBytes on migrated rows so retention cannot undercount them (PR #851 review)', () => {
+		const migrate = storeCollections.logs.migrationStrategies?.[2];
+		const migrated = migrate?.(
+			{ timestamp: 100, level: 'info', message: 'x'.repeat(2048), context: {} },
+			{} as never
+		);
+		expect(typeof migrated.sizeBytes).toBe('number');
+		expect(migrated.sizeBytes).toBeGreaterThan(2048);
+	});
 });

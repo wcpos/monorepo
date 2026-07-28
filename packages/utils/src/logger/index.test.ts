@@ -410,3 +410,63 @@ describe('logger/index', () => {
 		});
 	});
 });
+
+describe('review fixes (PR #851)', () => {
+	afterEach(() => {
+		jest.useRealTimers();
+		setDatabase(null);
+	});
+
+	it('does not collapse an info row into a success row (outcome is part of identity)', async () => {
+		const { rows, collection } = createLogCollection();
+		setDatabase(collection);
+		const logger = getLogger(['checkout']);
+
+		logger.success('Order saved');
+		await flushWrites();
+		logger.info('Order saved');
+		await flushWrites();
+
+		expect(rows).toHaveLength(2);
+		expect(rows[0]).toMatchObject({ outcome: 'ok', count: 1 });
+		expect(rows[1].outcome).toBeUndefined();
+	});
+
+	it('recovers repeat state after a rejected insert instead of poisoning the chain', async () => {
+		const { rows, collection } = createLogCollection();
+		const workingInsert = collection.insert.getMockImplementation()!;
+		collection.insert.mockRejectedValueOnce(new Error('storage offline'));
+		setDatabase(collection);
+		const logger = getLogger(['sync']);
+
+		logger.error('Push failed', { context: { errorCode: 'API03001', recordId: 'p-1' } });
+		await flushWrites();
+		expect(rows).toHaveLength(0);
+
+		collection.insert.mockImplementation(workingInsert);
+		logger.error('Push failed', { context: { errorCode: 'API03001', recordId: 'p-1' } });
+		await flushWrites();
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ count: 1 });
+	});
+
+	it('drops keys entirely when truncation markers alone would exceed the admission cap', async () => {
+		const { rows, collection } = createLogCollection();
+		setDatabase(collection);
+
+		const context: Record<string, unknown> = {};
+		for (let index = 0; index < 4000; index += 1) {
+			context[`key_${index}_${'x'.repeat(24)}`] = 'y'.repeat(64);
+		}
+		getLogger(['sync']).info('Huge context', { context });
+		await flushWrites();
+
+		expect(rows).toHaveLength(1);
+		const admitted = rows[0].context;
+		expect(admitted._truncated).toBe(true);
+		expect(admitted._droppedKeys as number).toBeGreaterThan(0);
+		const bytes = new TextEncoder().encode(JSON.stringify(admitted)).byteLength;
+		expect(bytes).toBeLessThanOrEqual(16 * 1024 + 1024);
+	});
+});
