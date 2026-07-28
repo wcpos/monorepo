@@ -33,7 +33,7 @@ import {
 } from './rx-scheduler-reference-fetcher';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import { createOrderPendingMutationIds } from '../write-path/order-pull-guard';
-import { withoutLocallyProtected } from '../write-path/local-work-guard';
+import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
 import { withCustomerManifestPopulation } from '../local-coverage/existence-manifest-population';
 import {
 	type ManifestCollection,
@@ -142,6 +142,7 @@ export function isSupportedReferenceSchedulerTask(
 
 type BulkUpsertCollection<T extends { id: string }> = {
 	bulkUpsert(documents: T[]): Promise<unknown>;
+	bulkRemove(ids: string[]): Promise<unknown>;
 	findByIds(ids: string[]): {
 		exec(): Promise<Map<string, { toJSON(): unknown }>>;
 	};
@@ -152,12 +153,25 @@ export function collectionSchedulerRepository<T extends { id: string }>(
 	collection: BulkUpsertCollection<T>
 ): {
 	upsertMany(documents: T[]): Promise<void>;
+	removeMany(documents: T[]): Promise<void>;
 } {
 	return {
 		async upsertMany(documents: T[]): Promise<void> {
 			const applicable = await withoutLocallyProtected(collection, documents);
 			if (applicable.length > 0)
 				assertBulkSuccess(await collection.bulkUpsert(applicable), 'engine-scheduler-drain upsert');
+		},
+		async removeMany(documents: T[]): Promise<void> {
+			const stored = await collection.findByIds(documents.map(({ id }) => id)).exec();
+			const removable = documents.filter((document) => {
+				const current = stored.get(document.id);
+				return current !== undefined && !hasPendingLocalWork(current.toJSON());
+			});
+			if (removable.length > 0)
+				assertBulkSuccess(
+					await collection.bulkRemove(removable.map(({ id }) => id)),
+					'engine-scheduler-drain remove'
+				);
 		},
 	};
 }

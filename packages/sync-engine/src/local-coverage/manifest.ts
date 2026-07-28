@@ -1,4 +1,7 @@
+import { assertBulkSuccess } from '@wcpos/sync-core';
+
 import { chunk } from '../scheduler/chunk';
+import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import {
 	existenceManifestDocument,
 	type ExistenceManifestDocument,
@@ -9,6 +12,12 @@ import { upsertManifestRows } from './rx-existence-manifest-repository';
 type CountFindCollection<TDoc> = {
 	count(): { exec(): Promise<number> };
 	find(): { exec(): Promise<TDoc[]> };
+};
+type PrimeProductDocument = {
+	primary: string;
+	wooProductId?: number | null;
+	payload?: { status?: unknown };
+	local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 };
 type PrimeManifestCollection = {
 	bulkUpsert(docs: ExistenceManifestDocument[]): Promise<unknown>;
@@ -24,7 +33,9 @@ export type ExistenceManifestPrimeDatabase = {
 	existenceManifest: PrimeManifestCollection;
 	existenceManifestCustomers: PrimeManifestCollection;
 	existenceManifestOrders: PrimeManifestCollection;
-	products: CountFindCollection<{ wooProductId?: number | null }>;
+	products: CountFindCollection<PrimeProductDocument> & {
+		bulkRemove(ids: string[]): Promise<unknown>;
+	};
 	variations: CountFindCollection<{ wooId?: number | null }>;
 	customers: CountFindCollection<{ wooCustomerId?: number | null }>;
 	orders: CountFindCollection<{ toJSON(): unknown }>;
@@ -127,8 +138,23 @@ export async function primeExistenceManifest(
 		db.products.find().exec(),
 		db.variations.find().exec(),
 	]);
+	const unpublishedProducts = productDocs.filter(
+		(doc) =>
+			typeof doc.wooProductId === 'number' &&
+			doc.wooProductId > 0 &&
+			doc.payload?.status !== 'publish' &&
+			!hasPendingLocalWork(doc)
+	);
+	if (unpublishedProducts.length > 0) {
+		assertBulkSuccess(
+			await db.products.bulkRemove(unpublishedProducts.map((doc) => doc.primary)),
+			'existence manifest prime product removal'
+		);
+	}
+	const removedProductIds = new Set(unpublishedProducts.map((doc) => doc.primary));
 	const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
 	const productWooIds = productDocs
+		.filter((doc) => !removedProductIds.has(doc.primary))
 		.map((doc) => doc.wooProductId)
 		.filter((id): id is number => typeof id === 'number' && id > 0);
 	const variationWooIds = variationDocs
@@ -136,7 +162,8 @@ export async function primeExistenceManifest(
 		.filter((id): id is number => typeof id === 'number' && id > 0);
 
 	const fetchDigests: DigestFetch = async (ids) => {
-		const response = await input.fetcher(`${input.syncBaseUrl}/digests?include=${ids.join(',')}`);
+		const url = `${input.syncBaseUrl}/digests?include=${ids.join(',')}&status=publish`;
+		const response = await input.fetcher(url);
 		if (!response.ok) {
 			throw new Error(`digests prime fetch failed: ${response.status}`);
 		}

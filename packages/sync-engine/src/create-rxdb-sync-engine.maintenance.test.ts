@@ -218,8 +218,12 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 
 	it('seeds supported collection census requests and exposes fresh, stale, and unknown totals', async () => {
 		let nowMs = 1_000_000;
-		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) =>
-			request.queryKey === 'census:orders' ? 25 : 40
+		const fetchWooQueryTotal = vi.fn(
+			async ({
+				request,
+			}: {
+				request: { queryKey: string; params: Record<string, string | number | boolean> };
+			}) => (request.queryKey === 'census:orders' ? 25 : 40)
 		);
 		const engine = engineWith({
 			queryTotal: { fetchWooQueryTotal },
@@ -246,6 +250,11 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			'census:tags',
 			'census:taxRates',
 		]);
+		expect(
+			fetchWooQueryTotal.mock.calls.find(
+				([input]) => input.request.queryKey === 'census:products'
+			)?.[0].request.params
+		).toEqual({ page: 1, per_page: 1, status: 'publish' });
 		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.total).toBe(25));
 		expect(emissions.at(-1)?.variations).toBeNull();
 		expect(emissions.at(-1)?.orders).toEqual({

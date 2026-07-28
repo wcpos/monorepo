@@ -35,7 +35,10 @@ const posMeta = (n: number) => [{ key: '_woocommerce_pos_uuid', value: uuidFor(n
 
 describe('createProductsSchedulerFetcher', () => {
 	it('keeps the task limit for non-paginated product search requests', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () =>
 			response([
 				{
@@ -57,11 +60,11 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			{
@@ -100,7 +103,10 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('keeps the browse-window limit for its single page request', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () =>
 			response([
@@ -132,10 +138,10 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		// One page over the servable set the existing product paths request, sorted by the POS
-		// default catalog sort (orderby=title&order=asc) — no search, no status, no page walk.
+		// default catalog sort (orderby=title&order=asc) — no search and no page walk.
 		expect(fetcher).toHaveBeenCalledTimes(1);
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=title&order=asc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=title&order=asc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),
@@ -158,7 +164,10 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('records incomplete browse-window coverage when the first page fills the window', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const products = Array.from({ length: 2 }, (_, index) => ({
 			id: index + 1,
@@ -193,7 +202,10 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('populates the Leg-3 manifest from _rxdb_digest and strips it from the stored payload', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const manifestSink = vi.fn(async () => undefined);
 		const fetcher = vi.fn(async () =>
 			response([
@@ -235,7 +247,10 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('merges exact SKU matches into product search task results', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async (url: string) => {
 			if (url.includes('sku=KEY-101')) {
 				return response([
@@ -265,11 +280,11 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=KEY-101&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ id: uuidFor(101), wooProductId: 101 }),
@@ -283,7 +298,10 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('preserves exact SKU matches when search results fill the task limit', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async (url: string) => {
 			if (url.includes('sku=KEY-101')) {
 				return response([
@@ -332,7 +350,10 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('records incomplete product search coverage when the first page is full', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const products = Array.from({ length: 2 }, (_, index) => ({
 			id: index + 1,
@@ -363,7 +384,10 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('passes raw percent signs in product search terms through URLSearchParams', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -380,21 +404,34 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=100%25+cotton&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=100%25+cotton&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
 		);
 	});
 
 	it('fetches targeted product tasks through Woo REST include and records complete coverage', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () =>
 			response([
-				{ id: 321, date_modified_gmt: '2026-05-20T10:10:00', meta_data: posMeta(321) },
-				{ id: 654, date_modified_gmt: '2026-05-20T10:11:00', meta_data: posMeta(654) },
+				{
+					id: 321,
+					status: 'publish',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(321),
+				},
+				{
+					id: 654,
+					status: 'publish',
+					date_modified_gmt: '2026-05-20T10:11:00',
+					meta_data: posMeta(654),
+				},
 			])
 		);
 		const schedulerFetcher = createProductsSchedulerFetcher({
@@ -440,15 +477,80 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
+	it('removes a targeted non-publish product without treating the response as a shortfall', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async () =>
+			response([
+				{
+					id: 321,
+					status: 'draft',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(321),
+				},
+			])
+		);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:ids:321:on-demand',
+				requirementId: 'products.cart-items',
+				queryKey: 'products:ids:321',
+				ids: ['woo-product:321'],
+				wooIds: [321],
+				limit: 1,
+				mode: 'on-demand',
+			})
+		);
+
+		expect(fetcher).toHaveBeenCalledWith(
+			'http://wcpos.local/wp-json/wcpos/v2/products?include=321&per_page=1&orderby=include'
+		);
+		expect(repository.upsertMany).not.toHaveBeenCalled();
+		expect(repository.removeMany).toHaveBeenCalledWith([
+			expect.objectContaining({
+				id: uuidFor(321),
+				wooProductId: 321,
+				payload: expect.objectContaining({ status: 'draft' }),
+			}),
+		]);
+		expect(result).toEqual({
+			taskId: 'products:ids:321:on-demand',
+			documentCount: 0,
+			requestCount: 1,
+			completed: true,
+		});
+	});
+
 	it('reads the numeric server ids from task.wooIds, decoupled from the document-key encoding', async () => {
 		// ids are deliberately opaque (a uuid + garbage): the document keys are never
 		// parsed — wooIds is the only channel for the numeric server ids.
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
 		const fetcher = vi.fn(async () =>
 			response([
-				{ id: 321, date_modified_gmt: '2026-05-20T10:10:00', meta_data: posMeta(321) },
-				{ id: 654, date_modified_gmt: '2026-05-20T10:11:00', meta_data: posMeta(654) },
+				{
+					id: 321,
+					status: 'publish',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(321),
+				},
+				{
+					id: 654,
+					status: 'publish',
+					date_modified_gmt: '2026-05-20T10:11:00',
+					meta_data: posMeta(654),
+				},
 			])
 		);
 		const schedulerFetcher = createProductsSchedulerFetcher({
@@ -479,7 +581,10 @@ describe('createProductsSchedulerFetcher', () => {
 	it('fails a targeted product task that is missing its wooIds channel (contract error, no reverse-parse)', async () => {
 		// The `/^woo-product:(\d+)$/` reverse-parse scaffolding is deleted: a targeted task
 		// without wooIds is a seeder contract violation, surfaced — never silently parsed.
-		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
 		const fetcher = vi.fn(async () => response([]));
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',

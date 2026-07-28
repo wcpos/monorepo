@@ -617,7 +617,8 @@ export function createRxdbSyncEngine(
 			collection: 'products' | 'customers' | 'orders'
 		) => {
 			const manifest = db.collections[manifestName] as never;
-			const collectionParam = collection === 'products' ? '' : `&collection=${collection}`;
+			const collectionParam =
+				collection === 'products' ? '&status=publish' : `&collection=${collection}`;
 			const sourceCollections =
 				collection === 'products' ? (['products', 'variations'] as const) : ([collection] as const);
 			const dirtyWooIds = async (): Promise<Set<number>> => {
@@ -675,13 +676,27 @@ export function createRxdbSyncEngine(
 					descriptor,
 					wooIds,
 					async (documents) => {
-						const manifestRows = documents.flatMap((document) =>
+						let publishable = documents;
+						if (descriptor.collection === 'products') {
+							const unpublishedWooIds: number[] = [];
+							publishable = documents.filter((document) => {
+								if ((document as { payload?: { status?: unknown } }).payload?.status === 'publish')
+									return true;
+								const wooId = (document as { wooProductId?: unknown }).wooProductId;
+								if (typeof wooId === 'number') unpublishedWooIds.push(wooId);
+								return false;
+							});
+							if (unpublishedWooIds.length > 0)
+								await removeTargeted('products', 'wooProductId', unpublishedWooIds);
+						}
+						const manifestRows = publishable.flatMap((document) =>
 							manifestRowOf(document) ? [manifestRowOf(document)!] : []
 						);
-						assertBulkSuccess(
-							await db.collections[descriptor.collection].bulkUpsert(documents as never[]),
-							'create-rxdb-sync-engine upsert'
-						);
+						if (publishable.length > 0)
+							assertBulkSuccess(
+								await db.collections[descriptor.collection].bulkUpsert(publishable as never[]),
+								'create-rxdb-sync-engine upsert'
+							);
 						if (manifestRows.length > 0) await upsertManifestRows(manifest, manifestRows);
 					}
 				);

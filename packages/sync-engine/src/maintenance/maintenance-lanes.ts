@@ -404,7 +404,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							queryKey,
 							method: 'GET',
 							endpoint: collection,
-							params: { page: 1, per_page: 1 },
+							params: {
+								page: 1,
+								per_page: 1,
+								...(collection === 'products' ? { status: 'publish' } : {}),
+							},
 							totalHeader: 'X-WP-Total',
 						},
 					});
