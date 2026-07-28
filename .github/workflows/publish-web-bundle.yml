@@ -66,7 +66,6 @@ jobs:
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
-          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
       - name: 🔨 Build web bundle
         run: pnpm web build
