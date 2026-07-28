@@ -14,7 +14,7 @@ type Conformance = {
 	/** operationType written to the row; groups units of work in the UI. */
 	operationType: string;
 	/** Terminal outcome for this event type. */
-	outcome: 'ok' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	outcome: NonNullable<LogTerminalFields['outcome']>;
 	/** Return false to route this occurrence to the check ring instead of a row
 	 *  (idle work). Omit to always persist. */
 	didWork?: (fields: Record<string, unknown>) => boolean;
@@ -406,6 +406,15 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			const recordId = recordIdOf(fields);
 			if (recordId !== undefined && context.recordId === undefined) context.recordId = recordId;
 		}
+		// Only a REAL chain id is forwarded. Minting a synthetic one per event would
+		// make every row unique and so disable repeat-collapse for the ten ungated
+		// non-record types (apply.refresh, queue.write.enqueued/coalesce,
+		// engine.guard, …), reintroducing exactly the flooding collapse exists to
+		// prevent — and it would fill a column that spec §2 reserves for chaining
+		// related steps with uniqueness salt, making it unqueryable for WS5.
+		// Distinguishing timed units of work is the logger's job instead (see
+		// persistLog: a record carrying durationMs never collapses).
+		const operationId = typeof fields.operationId === 'string' ? fields.operationId : undefined;
 
 		options.persist(
 			isFailure ? event.level : 'info',
@@ -416,6 +425,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			{
 				operationType: conformance.operationType,
 				outcome,
+				...(operationId !== undefined ? { operationId } : {}),
 				...(durationMs !== undefined
 					? { durationMs, startedAt: (event.at ?? nowMs()) - durationMs }
 					: {}),

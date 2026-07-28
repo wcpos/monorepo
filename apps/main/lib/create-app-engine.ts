@@ -167,9 +167,26 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// and vanish from the ledger. Declared before `guardedDiagnostics` in source
 	// order but only ever CALLED from the fetcher, which runs long after this
 	// function returns.
+	//
+	// Telemetry is best-effort and must NEVER throw into the caller. That is a
+	// spec-level invariant, and the engine enforces it for its own fan-out by
+	// isolating every sink in composeObservers. This call site sits outside the
+	// engine and so has to repeat the discipline itself: it is invoked from the
+	// fetcher's SUCCESS path, where an escaping exception would propagate out of
+	// fetcher() and present to the caller as a failed HTTP request — silently
+	// converting a request that actually succeeded into a failure. Each sink is
+	// isolated separately so a broken one cannot starve the other.
 	const emitTransport = (event: SyncEvent): void => {
-		appMetricsObserver(event);
-		guardedDiagnostics(event);
+		try {
+			appMetricsObserver(event);
+		} catch (error) {
+			console.error('Metrics observer threw on a transport event', error);
+		}
+		try {
+			guardedDiagnostics(event);
+		} catch (error) {
+			console.error('Log observer threw on a transport event', error);
+		}
 	};
 
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
@@ -193,6 +210,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					headers.set('Authorization', `Bearer ${token}`);
 				}
 			}
+			const path = new URL(finalUrl).pathname;
 			const startedAtMs = Date.now();
 			// Captured at start: a completion after a store switch (epoch bump) is the
 			// outgoing store's traffic and must not land in the new store's buckets.
@@ -212,7 +230,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 						bytes: 0,
 						status: 0,
 						method,
-						path: new URL(finalUrl).pathname,
+						path,
 					},
 				});
 				recordTransport({ atMs, durationMs, bytes: 0, ok: false, epoch: epochAtStart });
@@ -240,7 +258,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					bytes,
 					status: response.status,
 					method,
-					path: new URL(finalUrl).pathname,
+					path,
 				},
 			});
 			recordTransport({ atMs, durationMs, bytes, ok: accepted, epoch: epochAtStart });
