@@ -23,7 +23,8 @@ describe('createSyncLogObserver', () => {
 	beforeEach(() => {
 		rows = [];
 		observer = createSyncLogObserver({
-			persist: (level, message, context, terminal) => rows.push({ level, message, context, terminal }),
+			persist: (level, message, context, terminal) =>
+				rows.push({ level, message, context, terminal }),
 			nowMs: () => 2_000,
 		});
 	});
@@ -87,6 +88,25 @@ describe('createSyncLogObserver', () => {
 			operationType: 'sync.lane',
 			outcome: 'failed',
 		});
+	});
+
+	it('persists cursor anomalies as unknown warn rows with cursor context', () => {
+		observer.observe(
+			event({
+				type: 'signal.cursor',
+				level: 'warn',
+				message: 'change-signal: cursor reset to zero',
+				fields: { reason: 'reset', from: 5, to: 0 },
+			})
+		);
+
+		expect(rows).toEqual([
+			expect.objectContaining({
+				level: 'warn',
+				context: expect.objectContaining({ reason: 'reset', from: 5, to: 0 }),
+				terminal: { operationType: 'sync.cursor', outcome: 'unknown' },
+			}),
+		]);
 	});
 
 	it('names rejected records and preserves searchable record context', () => {

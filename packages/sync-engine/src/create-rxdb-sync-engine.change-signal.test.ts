@@ -261,6 +261,7 @@ describe('sync("change-signal") through the public handle', () => {
 		const storage = memoryEngineStorage();
 		const checkpoints = memoryStringStore();
 		const identity = freshIdentity();
+		const diagnosticsEvents: SyncEvent[] = [];
 		const engine = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
 		await engine.ready;
 		await engine.sync('change-signal');
@@ -302,7 +303,13 @@ describe('sync("change-signal") through the public handle', () => {
 			customers: server.state.customerPulls,
 		};
 
-		const revived = engineWith({ storage, fetch: server.fetch, identity, checkpoints });
+		const revived = engineWith({
+			storage,
+			fetch: server.fetch,
+			identity,
+			checkpoints,
+			diagnostics: (event) => diagnosticsEvents.push(event),
+		});
 		await revived.ready;
 		expect(await revived.sync('change-signal')).toMatchObject({ status: 'ran', rebaselined: true });
 
@@ -313,6 +320,22 @@ describe('sync("change-signal") through the public handle', () => {
 		expect(JSON.parse((await checkpoints.get(key))!)).toMatchObject({
 			cursor: { sequence: 6_000 },
 		});
+		expect(diagnosticsEvents.filter((event) => event.type === 'signal.cursor')).toEqual([
+			expect.objectContaining({
+				level: 'warn',
+				fields: expect.objectContaining({
+					reason: 'behind-head',
+					from: 0,
+					to: 6_000,
+					head: 6_000,
+					// The jump landed AT head, so nothing is still outstanding — and the
+					// 6000 changes it went past are reported separately as `skipped`.
+					// `backlog` must agree with the signal.cycle row for this same poll.
+					backlog: 0,
+					skipped: 6_000,
+				}),
+			}),
+		]);
 		await revived.dispose();
 	});
 
@@ -584,7 +607,7 @@ describe('sync("change-signal") through the public handle', () => {
 		await engine.dispose();
 	});
 
-	it('emits signal.cycle with pulls: 0 on an idle poll', async () => {
+	it('emits signal.cycle with cursor facts and no anomaly for a normal forward poll', async () => {
 		const server = scriptedServer();
 		const diagnosticsEvents: SyncEvent[] = [];
 		const engine = engineWith({
@@ -600,11 +623,31 @@ describe('sync("change-signal") through the public handle', () => {
 		const cycles = diagnosticsEvents.filter((e) => e.type === 'signal.cycle');
 		expect(cycles).toHaveLength(1);
 		expect(cycles[0]!.level).toBe('info');
-		expect(cycles[0]!.fields).toMatchObject({ pulls: 0, deletes: 0 });
+		expect(cycles[0]!.fields).toMatchObject({
+			pulls: 0,
+			deletes: 0,
+			cursor: 5,
+			cursorFrom: 5,
+			head: 5,
+			backlog: 0,
+		});
 		expect(cycles[0]!.fields?.collectionsChecked).toEqual(
 			expect.arrayContaining(['products', 'variations', 'customers', 'tax_rates'])
 		);
 		expect(typeof cycles[0]!.fields?.durationMs).toBe('number');
+
+		diagnosticsEvents.length = 0;
+		server.state.head = 6;
+		server.state.rows.push({
+			sequence: 6,
+			id: 9,
+			type: 'update',
+			collection: 'products',
+			modified_gmt: '2026-07-10T00:00:01',
+		});
+		await engine.sync('change-signal');
+
+		expect(diagnosticsEvents.some((event) => event.type === 'signal.cursor')).toBe(false);
 		await engine.dispose();
 	});
 
