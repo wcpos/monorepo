@@ -37,6 +37,16 @@ async function addFirstProductToCart(page: Page) {
 	});
 }
 
+// Keep the server-omits-payment-link premise independent of woocommerce-pos#1352's ack shape.
+async function omitPaymentLinkFromPushAcks(page: Page) {
+	await page.route('**/wp-json/wcpos/v2/push/orders{,?*}', async (route) => {
+		const response = await route.fetch();
+		const body = await response.json();
+		delete body?.document?.links?.payment;
+		await route.fulfill({ response, json: body });
+	});
+}
+
 async function isSwitchEnabled(toggle: Locator): Promise<boolean> {
 	return toggle.evaluate((node) => {
 		const element = node as HTMLElement & { checked?: boolean };
@@ -186,6 +196,7 @@ test.describe('POS Checkout', () => {
 	test('should disable payment when the server omits the payment link', async ({
 		posPage: page,
 	}) => {
+		await omitPaymentLinkFromPushAcks(page);
 		await addFirstProductToCart(page);
 
 		const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}');
@@ -246,6 +257,7 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 		});
 	});
 
+	await omitPaymentLinkFromPushAcks(page);
 	await addFirstProductToCart(page);
 	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}');
 	await page.getByTestId('checkout-button').click();
@@ -277,6 +289,7 @@ test('falls back to the legacy webview when supports_checkout=false', async ({ p
 		});
 	});
 
+	await omitPaymentLinkFromPushAcks(page);
 	await addFirstProductToCart(page);
 	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}');
 	await page.getByTestId('checkout-button').click();
