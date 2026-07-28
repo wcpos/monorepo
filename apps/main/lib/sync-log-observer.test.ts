@@ -23,7 +23,8 @@ describe('createSyncLogObserver', () => {
 	beforeEach(() => {
 		rows = [];
 		observer = createSyncLogObserver({
-			persist: (level, message, context, terminal) => rows.push({ level, message, context, terminal }),
+			persist: (level, message, context, terminal) =>
+				rows.push({ level, message, context, terminal }),
 			nowMs: () => 2_000,
 		});
 	});
@@ -87,6 +88,41 @@ describe('createSyncLogObserver', () => {
 			operationType: 'sync.lane',
 			outcome: 'failed',
 		});
+	});
+
+	it('forwards an emitted operation id', () => {
+		observer.observe(
+			event({
+				type: 'signal.cycle',
+				fields: { pulls: 1, deletes: 0, operationId: 'cycle-17' },
+			})
+		);
+
+		expect(rows[0].terminal?.operationId).toBe('cycle-17');
+	});
+
+	it('mints distinct ids for operation rows without identifying uncorrelated record failures', () => {
+		for (let index = 0; index < 2; index += 1) {
+			observer.observe(
+				event({
+					type: 'engine.lane.tick',
+					fields: { status: 'ran', pushed: 1 },
+				})
+			);
+		}
+		observer.observe(
+			event({
+				type: 'push.error',
+				level: 'error',
+				collection: 'orders',
+				fields: { recordId: '4711' },
+			})
+		);
+
+		expect(rows[0].terminal?.operationId).toEqual(expect.any(String));
+		expect(rows[1].terminal?.operationId).toEqual(expect.any(String));
+		expect(rows[0].terminal?.operationId).not.toBe(rows[1].terminal?.operationId);
+		expect(rows[2].terminal?.operationId).toBeUndefined();
 	});
 
 	it('names rejected records and preserves searchable record context', () => {

@@ -14,7 +14,7 @@ type Conformance = {
 	/** operationType written to the row; groups units of work in the UI. */
 	operationType: string;
 	/** Terminal outcome for this event type. */
-	outcome: 'ok' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	outcome: NonNullable<LogTerminalFields['outcome']>;
 	/** Return false to route this occurrence to the check ring instead of a row
 	 *  (idle work). Omit to always persist. */
 	didWork?: (fields: Record<string, unknown>) => boolean;
@@ -309,6 +309,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 	observe: SyncObserver;
 } {
 	const nowMs = options.nowMs ?? Date.now;
+	let operationSequence = 0;
 	const observe: SyncObserver = (event: SyncEvent) => {
 		const fields = (event.fields ?? {}) as Record<string, unknown>;
 		const mapped = CONFORMANCE.get(event.type);
@@ -364,6 +365,13 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			const recordId = recordIdOf(fields);
 			if (recordId !== undefined && context.recordId === undefined) context.recordId = recordId;
 		}
+		const suppliedOperationId =
+			typeof fields.operationId === 'string' ? fields.operationId : undefined;
+		const operationId =
+			suppliedOperationId ??
+			(conformance.operationType === 'sync.record'
+				? undefined
+				: `${(event.at ?? nowMs()).toString(36)}-${(++operationSequence).toString(36)}`);
 
 		options.persist(
 			isFailure ? event.level : 'info',
@@ -374,6 +382,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			{
 				operationType: conformance.operationType,
 				outcome,
+				...(operationId !== undefined ? { operationId } : {}),
 				...(durationMs !== undefined
 					? { durationMs, startedAt: (event.at ?? nowMs()) - durationMs }
 					: {}),

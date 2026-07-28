@@ -289,7 +289,11 @@ describe('createAppSyncEngine scope cache', () => {
 				phase: 'create-database',
 				elapsedMs: 15_000,
 			}),
-			terminal: { operationType: 'sync.startup', outcome: 'unknown' },
+			terminal: {
+				operationType: 'sync.startup',
+				outcome: 'unknown',
+				operationId: expect.any(String),
+			},
 		});
 		expect(networkError).toHaveBeenCalledWith('engine.lane.tick', {
 			context: expect.objectContaining({
@@ -297,12 +301,20 @@ describe('createAppSyncEngine scope cache', () => {
 				lane: 'change-signal',
 				status: 'error',
 			}),
-			terminal: { operationType: 'sync.lane', outcome: 'failed' },
+			terminal: {
+				operationType: 'sync.lane',
+				outcome: 'failed',
+				operationId: expect.any(String),
+			},
 		});
 		expect(networkWarn).toHaveBeenCalledTimes(1);
 		expect(networkWarn).toHaveBeenCalledWith('seed failed', {
 			context: expect.objectContaining({ type: 'engine.pos-bootstrap-error', scopeId: 'scope-1' }),
-			terminal: { operationType: 'sync.startup', outcome: 'failed' },
+			terminal: {
+				operationType: 'sync.startup',
+				outcome: 'failed',
+				operationId: expect.any(String),
+			},
 		});
 	});
 
@@ -346,7 +358,11 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(networkError).toHaveBeenCalledTimes(1);
 		expect(networkError).toHaveBeenCalledWith('live failure', {
 			context: expect.objectContaining({ type: 'engine.ready-failed' }),
-			terminal: { operationType: 'sync.startup', outcome: 'failed' },
+			terminal: {
+				operationType: 'sync.startup',
+				outcome: 'failed',
+				operationId: expect.any(String),
+			},
 		});
 	});
 

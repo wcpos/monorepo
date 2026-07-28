@@ -193,6 +193,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					headers.set('Authorization', `Bearer ${token}`);
 				}
 			}
+			const path = new URL(finalUrl).pathname;
 			const startedAtMs = Date.now();
 			// Captured at start: a completion after a store switch (epoch bump) is the
 			// outgoing store's traffic and must not land in the new store's buckets.
@@ -212,7 +213,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 						bytes: 0,
 						status: 0,
 						method,
-						path: new URL(finalUrl).pathname,
+						path,
 					},
 				});
 				recordTransport({ atMs, durationMs, bytes: 0, ok: false, epoch: epochAtStart });
@@ -240,7 +241,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					bytes,
 					status: response.status,
 					method,
-					path: new URL(finalUrl).pathname,
+					path,
 				},
 			});
 			recordTransport({ atMs, durationMs, bytes, ok: accepted, epoch: epochAtStart });
