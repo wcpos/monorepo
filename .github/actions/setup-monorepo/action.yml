@@ -14,9 +14,6 @@ inputs:
   rxdb-license-key:
     description: RXDB License Key
     required: false
-  uniwind-auth-token:
-    description: Uniwind auth token to authenticate with
-    required: false
   skip-install-scripts:
     description: Skip package lifecycle scripts during pnpm install
     default: "false"
@@ -60,7 +57,6 @@ runs:
 
     - name: 📦 Install dependencies
       env:
-        UNIWIND_AUTH_TOKEN: ${{ inputs.uniwind-auth-token }}
       run: |
         if [ "${{ inputs.skip-install-scripts }}" = "true" ]; then
           pnpm install --no-frozen-lockfile --ignore-scripts

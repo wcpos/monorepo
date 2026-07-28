@@ -28,7 +28,7 @@ overrides:
   "expo": "~57.0.8"
   "@expo/dom-webview": "57.0.1"
   "lightningcss": "1.30.1"
-  "uniwind": "npm:uniwind-pro@1.3.0"
+  "uniwind": "1.10.0"
   "react": "19.2.3"
   "react-dom": "19.2.3"
   "react-native": "0.86.0"
@@ -69,7 +69,7 @@ allowBuilds:
   "rxdb": true
   "rxdb-premium": true
   "secp256k1": true
-  "uniwind-pro": true
+  "uniwind": true
   "unrs-resolver": true
   usb: true
 patchedDependencies:
