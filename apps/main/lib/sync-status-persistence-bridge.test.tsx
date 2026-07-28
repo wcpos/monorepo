@@ -117,7 +117,10 @@ describe('SyncStatusPersistenceBridge', () => {
 
 	it('resets before hydration and ignores a cancelled hydrate after a rapid store switch', async () => {
 		hydrateSyncStatus(status(1));
-		const firstState = stateDocument(status(10));
+		// The outgoing store's saved doc carries a LATER timestamp than the active
+		// store's: the hydrate merge keeps the max, so if the cancelled guard were
+		// removed this stale hydrate would visibly overwrite the active state.
+		const firstState = stateDocument(status(99));
 		const secondState = stateDocument(status(20));
 		const first = deferred<StateDocument>();
 		const second = deferred<StateDocument>();
@@ -139,7 +142,7 @@ describe('SyncStatusPersistenceBridge', () => {
 		await settle();
 	});
 
-	it('coalesces state changes into one persistence write after five seconds', async () => {
+	it('coalesces into one write five seconds after the FIRST change, with the latest snapshot', async () => {
 		const state = stateDocument();
 		mockStoreDB = storeWith(Promise.resolve(state));
 		const view = renderBridge();
@@ -150,12 +153,31 @@ describe('SyncStatusPersistenceBridge', () => {
 		act(() => hydrateSyncStatus(status(20)));
 		expect(state.set).not.toHaveBeenCalled();
 
+		// The window is anchored to the first change: it fires at t0+5s with the
+		// LATEST snapshot (a reschedule-per-update debouncer would not fire here;
+		// a leading-edge throttle would have written status(10)).
 		await act(async () => {
 			jest.advanceTimersByTime(1);
 			await Promise.resolve();
 		});
 		expect(state.set).toHaveBeenCalledTimes(1);
 		expect(state.set.mock.calls[0][1]({})).toEqual(status(20));
+
+		// The late update did NOT reschedule a second window.
+		await act(async () => {
+			jest.advanceTimersByTime(5_000);
+			await Promise.resolve();
+		});
+		expect(state.set).toHaveBeenCalledTimes(1);
+
+		// A change after the window fired starts a fresh window.
+		act(() => hydrateSyncStatus(status(30)));
+		await act(async () => {
+			jest.advanceTimersByTime(5_000);
+			await Promise.resolve();
+		});
+		expect(state.set).toHaveBeenCalledTimes(2);
+		expect(state.set.mock.calls[1][1]({})).toEqual(status(30));
 		act(() => view.unmount());
 		await settle();
 	});
@@ -178,17 +200,29 @@ describe('SyncStatusPersistenceBridge', () => {
 		expect(state.set).toHaveBeenCalledTimes(1);
 	});
 
-	it('skips the teardown flush when the sync-status epoch changed since setup', async () => {
+	it('skips only the teardown flush after an epoch bump — mid-life debounced writes continue', async () => {
 		const state = stateDocument();
 		mockStoreDB = storeWith(Promise.resolve(state));
 		const view = renderBridge();
 		await settle();
 
 		act(() => resetSyncStatus());
+
+		// Mid-life persistence must survive the epoch bump (cashier-swap engine
+		// supersede on the same storeDB): if the epoch check moved into persist()
+		// this debounced write would be suppressed.
+		act(() => hydrateSyncStatus(status(40)));
+		await act(async () => {
+			jest.advanceTimersByTime(5_000);
+			await Promise.resolve();
+		});
+		expect(state.set).toHaveBeenCalledTimes(1);
+		expect(state.set.mock.calls[0][1]({})).toEqual(status(40));
+
+		// ...but the terminal flush is skipped: the epoch no longer matches setup.
 		act(() => view.unmount());
 		await settle();
-
-		expect(state.set).not.toHaveBeenCalled();
+		expect(state.set).toHaveBeenCalledTimes(1);
 	});
 
 	it('flushes the last state snapshot instead of state reset by the incoming bridge', async () => {
