@@ -204,7 +204,15 @@ function persistLog(
 		// evidence to the wrong collection, which is worse than an extra row.
 		context.collection ?? null,
 	]);
-	const previous = repeatStateByCollection.get(collection);
+	// Repeat-collapse folds identical consecutive REPEATS — the same event, record
+	// and reason (spec §7). A record carrying a duration is not a repeat: it is a
+	// distinct timed unit of work whose duration and cursor ARE the evidence, so two
+	// sync cycles that happen to render the same message must stay two rows rather
+	// than folding and discarding the second one's numbers. Everything without a
+	// duration (record failures, state transitions) still collapses normally, which
+	// is what keeps a failing record from flooding the log.
+	const timedUnitOfWork = terminal?.durationMs !== undefined;
+	const previous = timedUnitOfWork ? undefined : repeatStateByCollection.get(collection);
 
 	if (previous?.identity === identity) {
 		previous.count += 1;
@@ -253,7 +261,10 @@ function persistLog(
 	});
 	const write = Promise.resolve().then(() => collection.insert(row));
 	const state: RepeatState = { identity, count: 1, write };
-	repeatStateByCollection.set(collection, state);
+	// A timed unit of work is never a collapse anchor either — the next identical
+	// row must not fold into it.
+	if (timedUnitOfWork) repeatStateByCollection.delete(collection);
+	else repeatStateByCollection.set(collection, state);
 	void write.catch(() => {
 		if (repeatStateByCollection.get(collection) === state) {
 			repeatStateByCollection.delete(collection);
