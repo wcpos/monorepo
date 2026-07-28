@@ -139,6 +139,32 @@ function recordSize(row: Record<string, unknown>): Record<string, unknown> {
 	return row;
 }
 
+/**
+ * Schema-enforced maxLength of every bounded string column in the `logs` v2
+ * schema. RxDB rejects the WHOLE insert when one exceeds its limit, so an
+ * over-long value would cost the entire terminal record rather than just that
+ * field — e.g. a 36-character UUID in the 32-character `operationId`. Clamping
+ * keeps the row (and the identifier's greppable prefix); losing the row is the
+ * one outcome this logger must never produce.
+ */
+const COLUMN_MAX_LENGTH = {
+	code: 24,
+	category: 64,
+	operationId: 32,
+	operationType: 48,
+	requestId: 40,
+	serverRequestId: 40,
+} as const;
+
+function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
+	column: K,
+	value: string | undefined
+): string | undefined {
+	if (value === undefined) return undefined;
+	const max = COLUMN_MAX_LENGTH[column];
+	return value.length > max ? value.slice(0, max) : value;
+}
+
 function persistLog(
 	collection: LoggerCollection,
 	level: LogLevel,
@@ -151,8 +177,14 @@ function persistLog(
 		...context,
 		search: searchableContext(context),
 	});
-	const code = typeof context.errorCode === 'string' ? context.errorCode : undefined;
-	const category = typeof context.category === 'string' ? context.category : undefined;
+	const code = clampColumn(
+		'code',
+		typeof context.errorCode === 'string' ? context.errorCode : undefined
+	);
+	const category = clampColumn(
+		'category',
+		typeof context.category === 'string' ? context.category : undefined
+	);
 	const outcome = terminal?.outcome;
 	const identity = JSON.stringify([
 		level,
@@ -164,6 +196,13 @@ function persistLog(
 		// Chained operations are distinct units of work and must not collapse.
 		// Uncorrelated record failures keep null here and still collapse by record/reason.
 		terminal?.operationId ?? null,
+		// Collection is part of the identity or per-collection events with no
+		// message of their own collapse across collections: one change-signal cycle
+		// emitting apply.refresh for tax_rates and then for another collection
+		// matches on every other component, so the second would fold into the first
+		// and the surviving row would name only the first collection — attributing
+		// evidence to the wrong collection, which is worse than an extra row.
+		context.collection ?? null,
 	]);
 	const previous = repeatStateByCollection.get(collection);
 
@@ -196,11 +235,17 @@ function persistLog(
 		...(code && { code }),
 		...(category && { category }),
 		...(outcome && { outcome }),
-		...(terminal?.operationId !== undefined && { operationId: terminal.operationId }),
-		...(terminal?.operationType !== undefined && { operationType: terminal.operationType }),
-		...(terminal?.requestId !== undefined && { requestId: terminal.requestId }),
+		...(terminal?.operationId !== undefined && {
+			operationId: clampColumn('operationId', terminal.operationId),
+		}),
+		...(terminal?.operationType !== undefined && {
+			operationType: clampColumn('operationType', terminal.operationType),
+		}),
+		...(terminal?.requestId !== undefined && {
+			requestId: clampColumn('requestId', terminal.requestId),
+		}),
 		...(terminal?.serverRequestId !== undefined && {
-			serverRequestId: terminal.serverRequestId,
+			serverRequestId: clampColumn('serverRequestId', terminal.serverRequestId),
 		}),
 		...(terminal?.attempt !== undefined && { attempt: terminal.attempt }),
 		...(terminal?.durationMs !== undefined && { durationMs: terminal.durationMs }),

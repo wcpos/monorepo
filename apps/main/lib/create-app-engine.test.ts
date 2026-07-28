@@ -361,7 +361,7 @@ describe('createAppSyncEngine scope cache', () => {
 			createRxdbSyncEngine,
 			appMetricsObserver,
 			recordTransport,
-			networkError: logNetworkError,
+			networkWarn,
 		} = loadCreateAppEngine();
 		createAppSyncEngine(BASE_OPTIONS);
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
@@ -388,12 +388,17 @@ describe('createAppSyncEngine scope cache', () => {
 			ok: false,
 			epoch: 0,
 		});
-		expect(logNetworkError).toHaveBeenCalledWith('Sync request failed', {
+		// The legacy networkLogger row is gone: the transport event now flows through
+		// the guarded log observer, so the failure lands as a wide terminal row with
+		// an outcome instead of a bare context blob (one writer per semantic event).
+		expect(networkWarn).toHaveBeenCalledWith('transport.request', {
 			context: expect.objectContaining({
+				type: 'transport.request',
 				method: 'GET',
-				endpoint: '/wp-json/wcpos/v2/products',
+				path: '/wp-json/wcpos/v2/products',
 				status: 0,
 			}),
+			terminal: expect.objectContaining({ operationType: 'sync.http', outcome: 'failed' }),
 		});
 		now.mockRestore();
 		fetch.mockRestore();
@@ -414,11 +419,12 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
-	it('persists successful sync mutations without query credentials', async () => {
+	it('does not persist a row for a successful request, and never logs query credentials', async () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValue(new Response(null, { status: 200 }));
-		const { createAppSyncEngine, createRxdbSyncEngine, networkInfo } = loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, networkInfo, appMetricsObserver } =
+			loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, useJwtAsParam: true });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -426,13 +432,23 @@ describe('createAppSyncEngine scope cache', () => {
 			method: 'POST',
 		});
 
-		expect(networkInfo).toHaveBeenCalledWith('Sync request result', {
-			context: expect.objectContaining({
-				method: 'POST',
-				endpoint: '/wp-json/wcpos/v2/push/orders',
-				status: 200,
-			}),
-		});
+		// A succeeded HTTP attempt is deliberately NOT a durable row: the engine
+		// issues them continuously and they would evict the rest of the log inside
+		// the retention cap. Successful record pushes are covered by push.outcome.
+		expect(networkInfo).not.toHaveBeenCalled();
+		// It still reaches the metrics path, and only ever as a bare pathname —
+		// the query string carries the credential.
+		expect(appMetricsObserver).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'transport.request',
+				fields: expect.objectContaining({
+					method: 'POST',
+					path: '/wp-json/wcpos/v2/push/orders',
+					status: 200,
+				}),
+			})
+		);
+		expect(JSON.stringify(appMetricsObserver.mock.calls)).not.toContain('secret');
 		fetch.mockRestore();
 	});
 
@@ -625,7 +641,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const originalUnauthorized = new Response(null, { status: 401 });
 		const refreshAuth = jest.fn().mockResolvedValue(null);
 		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(originalUnauthorized);
-		const { createAppSyncEngine, createRxdbSyncEngine, networkError } = loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, networkWarn } = loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -634,8 +650,10 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(response?.status).toBe(originalUnauthorized.status);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(networkError).toHaveBeenCalledWith('Sync request result', {
-			context: expect.objectContaining({ status: 401 }),
+		// The unauthorized attempt is a failed unit of work and gets a terminal row.
+		expect(networkWarn).toHaveBeenCalledWith('transport.request', {
+			context: expect.objectContaining({ type: 'transport.request', status: 401 }),
+			terminal: expect.objectContaining({ operationType: 'sync.http', outcome: 'failed' }),
 		});
 		fetch.mockRestore();
 	});
