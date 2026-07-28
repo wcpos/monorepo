@@ -196,8 +196,8 @@ describe('LocalCoverage interface', () => {
 				count: () => ({ exec: async () => 4 }),
 				find: () => ({
 					exec: async () => [
-						{ wooProductId: 1 },
-						{ wooProductId: 2 },
+						{ wooProductId: 1, payload: { status: 'publish' } },
+						{ wooProductId: 2, payload: { status: 'publish' } },
 						{ wooProductId: null },
 						{ wooProductId: -1 },
 					],

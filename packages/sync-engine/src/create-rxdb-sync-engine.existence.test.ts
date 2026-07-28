@@ -81,6 +81,7 @@ describe('existence maintenance lanes through the public facade', () => {
 				return json([
 					{
 						id: 40,
+						status: 'publish',
 						_rxdb_digest: 'p40',
 						price: '4',
 						stock_status: 'instock',
@@ -141,7 +142,7 @@ describe('existence maintenance lanes through the public facade', () => {
 			onSale: false,
 			featured: false,
 			stockQuantity: null,
-			payload: { id: 10 },
+			payload: { id: 10, status: 'publish' },
 			...common,
 		});
 		await seed(db.variations as never, {
@@ -267,6 +268,108 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.dispose();
 	});
 
+	it('removes a non-publish product returned by an unfiltered reconciliation pull', async () => {
+		const productId = '77777777-7777-4777-8777-777777777777';
+		const fetcher = vi.fn(async (url: string) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/integrity/bucket')) {
+				return json({
+					ids: parsed.searchParams.has('collection')
+						? []
+						: [{ id: 77, digest: 'draft-77', object_type: 'product' }],
+				});
+			}
+			if (parsed.pathname.endsWith('/products')) {
+				expect(parsed.searchParams.get('include')).toBe('77');
+				expect(parsed.searchParams.has('status')).toBe(false);
+				return json([
+					{
+						id: 77,
+						status: 'draft',
+						_rxdb_digest: 'draft-77',
+						price: '7',
+						stock_status: 'instock',
+						type: 'simple',
+						categories: [],
+						brands: [],
+						on_sale: false,
+						featured: false,
+						stock_quantity: null,
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: productId }],
+					},
+				]);
+			}
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		const e = engine(fetcher);
+		await e.ready;
+		const db = e.active()!.database.collections;
+		await seed(db.products as never, {
+			id: productId,
+			wooProductId: 77,
+			price: 7,
+			stockStatus: 'instock',
+			type: 'simple',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { id: 77, status: 'publish' },
+			sync: { revision: 'old', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		await seed(db.existenceManifest as never, {
+			id: '77',
+			wooId: 77,
+			digest: 'publish-77',
+			objectType: 'product',
+		});
+
+		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
+		expect(await db.products.findOne(productId).exec()).toBeNull();
+		expect(await db.existenceManifest.findOne('77').exec()).toBeNull();
+		await e.dispose();
+	});
+
+	it('prunes unmanifested non-publish residents during prime without dropping local work', async () => {
+		const product = (id: number, status: string, dirty = false) => ({
+			id: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,
+			wooProductId: id,
+			price: id,
+			stockStatus: 'instock',
+			type: 'simple',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { id, status },
+			sync: { revision: 'old', partial: false, source: 'woo-rest' },
+			local: { dirty, pendingMutationIds: dirty ? ['pending'] : [] },
+		});
+		const fetcher = vi.fn(async (url: string) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/digests')) {
+				expect(parsed.searchParams.get('status')).toBe('publish');
+				return json({ digests: [] });
+			}
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		const e = engine(fetcher);
+		await e.ready;
+		const db = e.active()!.database.collections;
+		await seed(db.products as never, product(81, 'draft'));
+		await seed(db.products as never, product(82, 'private'));
+		await seed(db.products as never, product(83, 'draft', true));
+
+		await expect(e.sync('existence-prime')).resolves.toMatchObject({ status: 'ran' });
+		expect(await db.products.findOne(product(81, 'draft').id).exec()).toBeNull();
+		expect(await db.products.findOne(product(82, 'private').id).exec()).toBeNull();
+		expect(await db.products.findOne(product(83, 'draft', true).id).exec()).not.toBeNull();
+		await e.dispose();
+	});
+
 	it('cancels a held reconcile on scope switch without writing through the old scope', async () => {
 		let releaseBucket!: () => void;
 		let heldSignal: AbortSignal | undefined;
@@ -283,6 +386,7 @@ describe('existence maintenance lanes through the public facade', () => {
 				return json([
 					{
 						id: 40,
+						status: 'publish',
 						_rxdb_digest: 'new',
 						meta_data: [
 							{ key: '_woocommerce_pos_uuid', value: '44444444-4444-4444-8444-444444444444' },
@@ -347,7 +451,7 @@ describe('existence maintenance lanes through the public facade', () => {
 			onSale: false,
 			featured: false,
 			stockQuantity: null,
-			payload: { id: 40 },
+			payload: { id: 40, status: 'publish' },
 			sync: { revision: 'r', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
 		});

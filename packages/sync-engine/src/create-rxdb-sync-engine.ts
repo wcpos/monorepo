@@ -676,13 +676,27 @@ export function createRxdbSyncEngine(
 					descriptor,
 					wooIds,
 					async (documents) => {
-						const manifestRows = documents.flatMap((document) =>
+						let publishable = documents;
+						if (descriptor.collection === 'products') {
+							const unpublishedWooIds: number[] = [];
+							publishable = documents.filter((document) => {
+								if ((document as { payload?: { status?: unknown } }).payload?.status === 'publish')
+									return true;
+								const wooId = (document as { wooProductId?: unknown }).wooProductId;
+								if (typeof wooId === 'number') unpublishedWooIds.push(wooId);
+								return false;
+							});
+							if (unpublishedWooIds.length > 0)
+								await removeTargeted('products', 'wooProductId', unpublishedWooIds);
+						}
+						const manifestRows = publishable.flatMap((document) =>
 							manifestRowOf(document) ? [manifestRowOf(document)!] : []
 						);
-						assertBulkSuccess(
-							await db.collections[descriptor.collection].bulkUpsert(documents as never[]),
-							'create-rxdb-sync-engine upsert'
-						);
+						if (publishable.length > 0)
+							assertBulkSuccess(
+								await db.collections[descriptor.collection].bulkUpsert(publishable as never[]),
+								'create-rxdb-sync-engine upsert'
+							);
 						if (manifestRows.length > 0) await upsertManifestRows(manifest, manifestRows);
 					}
 				);
