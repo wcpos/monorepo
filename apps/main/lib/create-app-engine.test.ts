@@ -362,6 +362,30 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 	});
 
+	// A logging sink must NEVER be able to fail the request it is describing. This
+	// call site is on the fetcher's success path, so before the guard an escaping
+	// observer exception propagated out of fetcher() and looked to the caller like
+	// a failed HTTP request — turning a request that actually succeeded into a
+	// failure (and, on the push path, a lost order).
+	it('returns the response even when a telemetry sink throws', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(null, { status: 200 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
+			loadCreateAppEngine();
+		appMetricsObserver.mockImplementation(() => {
+			throw new TypeError('observer exploded');
+		});
+		createAppSyncEngine(BASE_OPTIONS);
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(response?.status).toBe(200);
+		expect(appMetricsObserver).toHaveBeenCalled();
+		fetch.mockRestore();
+	});
+
 	it('records a network error and rethrows it', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_040);
 		const networkError = new Error(
