@@ -1,5 +1,51 @@
 import { CategoryLogger, getLogger, setDatabase, setToast } from './index';
 
+type TestLogRow = Record<string, unknown> & {
+	context: Record<string, unknown>;
+	sizeBytes: number;
+	seq: number;
+};
+
+type TestLogDocument = TestLogRow & {
+	primary: string;
+	incrementalPatch(patch: Record<string, unknown>): Promise<TestLogDocument>;
+};
+
+function createLogCollection() {
+	const rows: TestLogDocument[] = [];
+	const insert = jest.fn(async (row: TestLogRow) => {
+		const document: TestLogDocument = {
+			...row,
+			primary: `log-${rows.length + 1}`,
+			incrementalPatch: jest.fn(
+				async (patch: Record<string, unknown>): Promise<TestLogDocument> => {
+					Object.assign(document, patch);
+					return document;
+				}
+			),
+		};
+		rows.push(document);
+		return document;
+	});
+	const find = jest.fn((query: Record<string, unknown>) => {
+		if (query.selector) return { remove: jest.fn().mockResolvedValue([]) };
+		return { exec: jest.fn().mockResolvedValue(rows) };
+	});
+
+	return {
+		rows,
+		collection: {
+			insert,
+			find,
+			bulkRemove: jest.fn().mockResolvedValue(undefined),
+		},
+	};
+}
+
+async function flushWrites() {
+	for (let index = 0; index < 8; index += 1) await Promise.resolve();
+}
+
 describe('logger/index', () => {
 	describe('getLogger', () => {
 		it('should create a CategoryLogger with the given category', () => {
@@ -161,26 +207,25 @@ describe('logger/index', () => {
 		it('should accept a database collection', () => {
 			const mockCollection = {
 				insert: jest.fn(),
-				find: jest.fn().mockReturnValue({
-					remove: jest.fn().mockResolvedValue([]),
-				}),
-				count: jest.fn().mockReturnValue({
-					exec: jest.fn().mockResolvedValue(0),
-				}),
+				find: jest
+					.fn()
+					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
+				bulkRemove: jest.fn(),
 			};
 			expect(() => setDatabase(mockCollection)).not.toThrow();
 		});
 
-		it('should prune log entries older than 30 days on init', async () => {
-			// Use isolateModules to get a fresh module where hasPruned is false
+		it('should prune log entries older than 30 days on bind', async () => {
 			const mockRemove = jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }]);
-			const mockFind = jest.fn().mockReturnValue({ remove: mockRemove });
+			const mockFind = jest
+				.fn()
+				.mockReturnValueOnce({ remove: mockRemove })
+				.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
 			const mockCollection = {
 				insert: jest.fn(),
 				find: mockFind,
-				count: jest.fn().mockReturnValue({
-					exec: jest.fn().mockResolvedValue(0),
-				}),
+				bulkRemove: jest.fn(),
 			};
 
 			let freshSetDatabase: typeof setDatabase;
@@ -199,81 +244,15 @@ describe('logger/index', () => {
 			expect(mockRemove).toHaveBeenCalled();
 		});
 
-		it('prunes beyond MAX_LOG_ROWS on setDatabase', async () => {
-			const oldLogRemove = jest.fn().mockResolvedValue([]);
-			const excessLogRemove = jest.fn().mockResolvedValue(new Array(600).fill({}));
-			const mockFind = jest
-				.fn()
-				.mockReturnValueOnce({ remove: oldLogRemove })
-				.mockReturnValueOnce({ remove: excessLogRemove });
-			const mockCountExec = jest.fn().mockResolvedValue(5600);
-			const mockCollection = {
-				insert: jest.fn(),
-				find: mockFind,
-				count: jest.fn().mockReturnValue({ exec: mockCountExec }),
-			};
-
-			let freshSetDatabase: typeof setDatabase;
-			jest.isolateModules(() => {
-				freshSetDatabase = require('./index').setDatabase;
-			});
-
-			freshSetDatabase!(mockCollection);
-			// The row-cap pass is now chained after the age prune settles, so more
-			// microtask ticks are needed for the full chain to drain.
-			for (let i = 0; i < 8; i += 1) await Promise.resolve();
-
-			expect(mockCountExec).toHaveBeenCalled();
-			expect(mockFind).toHaveBeenCalledWith({
-				sort: [{ timestamp: 'asc' }],
-				limit: 600,
-			});
-			expect(excessLogRemove).toHaveBeenCalled();
-		});
-
-		it('runs the row-cap count only after the age prune resolves', async () => {
-			let resolveAgeRemove!: (rows: any[]) => void;
-			const ageRemove = jest
-				.fn()
-				.mockReturnValue(new Promise<any[]>((resolve) => (resolveAgeRemove = resolve)));
-			const excessRemove = jest.fn().mockResolvedValue([]);
-			const mockFind = jest
-				.fn()
-				.mockReturnValueOnce({ remove: ageRemove })
-				.mockReturnValueOnce({ remove: excessRemove });
-			const mockCountExec = jest.fn().mockResolvedValue(0);
-			const mockCollection = {
-				insert: jest.fn(),
-				find: mockFind,
-				count: jest.fn().mockReturnValue({ exec: mockCountExec }),
-			};
-
-			let freshSetDatabase: typeof setDatabase;
-			jest.isolateModules(() => {
-				freshSetDatabase = require('./index').setDatabase;
-			});
-
-			freshSetDatabase!(mockCollection);
-			// Age prune is still pending (deferred not resolved): the row-cap count()
-			// must NOT have been reached yet.
-			for (let i = 0; i < 8; i += 1) await Promise.resolve();
-			expect(ageRemove).toHaveBeenCalled();
-			expect(mockCountExec).not.toHaveBeenCalled();
-
-			// Resolving the age prune releases the chained row-cap pass.
-			resolveAgeRemove([]);
-			for (let i = 0; i < 8; i += 1) await Promise.resolve();
-			expect(mockCountExec).toHaveBeenCalled();
-		});
-
 		it('persists searchable operational identifiers without copying arbitrary context', async () => {
 			const insert = jest.fn().mockResolvedValue(undefined);
 			setDatabase({
 				insert,
-				find: jest.fn().mockReturnValue({ remove: jest.fn().mockResolvedValue([]) }),
-				count: jest.fn().mockReturnValue({
-					exec: jest.fn().mockResolvedValue(0),
-				}),
+				find: jest
+					.fn()
+					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
+				bulkRemove: jest.fn(),
 			});
 
 			getLogger(['wcpos', 'pos', 'cart']).info('Cart line item updated', {
@@ -314,10 +293,11 @@ describe('logger/index', () => {
 			const insert = jest.fn().mockResolvedValue(undefined);
 			setDatabase({
 				insert,
-				find: jest.fn().mockReturnValue({ remove: jest.fn().mockResolvedValue([]) }),
-				count: jest.fn().mockReturnValue({
-					exec: jest.fn().mockResolvedValue(0),
-				}),
+				find: jest
+					.fn()
+					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
+				bulkRemove: jest.fn(),
 			});
 
 			getLogger(['wcpos', 'sync']).info('Applied sync changes', {
@@ -336,6 +316,97 @@ describe('logger/index', () => {
 			expect(context.search).toContain('apply.pull');
 			expect(context.search).toContain('change-signal');
 			expect(context.search).not.toContain('3');
+		});
+
+		it('persists info by default but never persists debug', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['sync']).info('Persisted by default');
+			getLogger(['sync']).debug('Never persisted', { saveToDb: true });
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({ level: 'info', category: 'sync' });
+		});
+
+		it('writes success as info with an ok outcome', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['checkout']).success('Order completed');
+			await flushWrites();
+
+			expect(rows[0]).toMatchObject({ level: 'info', outcome: 'ok' });
+		});
+
+		it('collapses consecutive identical rows while keeping the original timestamp', async () => {
+			jest.useFakeTimers().setSystemTime(1000);
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['payment']);
+
+			logger.error('Declined', { context: { errorCode: 'PY01001', recordId: 'order-1' } });
+			await flushWrites();
+			jest.setSystemTime(2000);
+			logger.error('Declined', { context: { errorCode: 'PY01001', recordId: 'order-1' } });
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({
+				timestamp: 1000,
+				firstSeen: 1000,
+				lastSeen: 2000,
+				count: 2,
+				code: 'PY01001',
+			});
+			jest.useRealTimers();
+		});
+
+		it('starts a new repeat run when the code changes', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['payment']);
+
+			logger.error('Declined', { context: { errorCode: 'PY01001' } });
+			logger.error('Declined', { context: { errorCode: 'PY01002' } });
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+		});
+
+		it('truncates oversized context and records the serialized row size', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['client']).info('Large response', {
+				context: { payload: 'x'.repeat(20 * 1024), requestId: 'request-1' },
+			});
+			await flushWrites();
+
+			expect(rows[0].context).toMatchObject({
+				payload: '[truncated]',
+				requestId: 'request-1',
+				_truncated: true,
+			});
+			expect(
+				new TextEncoder().encode(JSON.stringify(rows[0].context)).byteLength
+			).toBeLessThanOrEqual(16 * 1024);
+			const { primary, incrementalPatch, ...persistedRow } = rows[0];
+			expect(rows[0].sizeBytes).toBe(
+				new TextEncoder().encode(JSON.stringify(persistedRow)).byteLength
+			);
+		});
+
+		it('stamps monotonically increasing sequence numbers', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['db']).info('First');
+			getLogger(['db']).warn('Second');
+			await flushWrites();
+
+			expect(rows[1].seq).toBeGreaterThan(rows[0].seq);
 		});
 	});
 });
