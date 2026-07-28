@@ -42,9 +42,20 @@ function sanitizeReason(value: unknown): string | undefined {
 	return sanitized.length > 200 ? `${sanitized.slice(0, 199)}…` : sanitized;
 }
 
+/**
+ * The affected record's id, across both field vocabularies: push/queue events
+ * name it `recordId`, while `apply.escalation` (the pull-side repair signal)
+ * names it `id`. Without this the escalation row would fall back to a generic
+ * message AND lose its repeat-collapse key, so consecutive escalations for
+ * different records would fold into one row.
+ */
+function recordIdOf(fields: Record<string, unknown>): unknown {
+	return fields.recordId ?? fields.id;
+}
+
 function recordMessage(verb: string): Conformance['message'] {
 	return (event, fields) => {
-		const recordId = fields.recordId;
+		const recordId = recordIdOf(fields);
 		if (recordId === undefined || recordId === null) {
 			return sanitizeReason(event.message) ?? event.type;
 		}
@@ -147,13 +158,28 @@ const CONFORMANCE = new Map<string, Conformance>([
 			didWork: (f) => num(f.pruned) + num(f.pulled) + num(f.repulled) > 0,
 		},
 	],
-	['coverage.compacted', { operationType: 'sync.coverage', outcome: 'ok' }],
+	[
+		'coverage.compacted',
+		{
+			// Emitted on every retention pass, including the common no-op one; without
+			// this gate an idle terminal writes a recurring 'ok' row that records no work.
+			operationType: 'sync.coverage',
+			outcome: 'ok',
+			didWork: (f) => num(f.removed) > 0,
+		},
+	],
 	[
 		'transport.request',
 		{
 			operationType: 'sync.http',
 			outcome: 'ok',
-			didWork: (f) => f.status === 0 || num(f.status) >= 400 || num(f.bytes) > 0,
+			// Failures only. A successful data-bearing request is a unit of work, but
+			// the engine issues them continuously (a poll every few seconds, several
+			// requests each), so persisting them would evict every other row well
+			// inside the 25 MiB retention cap and destroy the log's diagnostic value.
+			// Successful-attempt narration belongs in the flight recorder (WS3) and
+			// the metrics rollups, which are built for that volume.
+			didWork: (f) => f.status === 0 || num(f.status) >= 400,
 		},
 	],
 	[
@@ -301,10 +327,24 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 
 		const collection =
 			event.collection !== undefined ? normalizeSyncCollection(event.collection) : undefined;
+		// Outcome derivation. The table's outcome is the SUCCESS-path outcome; a row
+		// may only wear it when the event actually succeeded, or filtering by
+		// outcome hides the incident (the PY02001 lesson, spec §3). Two ways an
+		// entry mapped 'ok' can turn out not to be:
+		//   1. the emitter raised the level — apply.pull/apply.delete/
+		//      apply.rebaseline/apply.barcode-rederive all emit warn for work they
+		//      could not apply;
+		//   2. the counters say so while the level stays info — queue.write.drain
+		//      and the engine.lane.tick summary carry failed/rejected records on an
+		//      otherwise routine drain.
+		// Explicit non-'ok' outcomes (rejected/cancelled/unknown) are deliberate
+		// classifications and are never overridden.
 		let outcome = conformance.outcome;
-		if (event.type === 'engine.lane.tick' && fields.status === 'error') outcome = 'failed';
-		if (event.type === 'transport.request' && event.level !== 'info') outcome = 'failed';
-		if (event.type === 'queue.scheduler.drain' && event.level === 'error') outcome = 'failed';
+		if (outcome === 'ok') {
+			if (isFailure) outcome = 'failed';
+			else if (num(fields.failed) + num(fields.rejected) > 0) outcome = 'failed';
+			else if (fields.status === 'error') outcome = 'failed';
+		}
 
 		const durationMs =
 			typeof fields.durationMs === 'number' && Number.isFinite(fields.durationMs)
@@ -322,6 +362,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		}
 		if (conformance.operationType === 'sync.record') {
 			context.direction = event.type === 'apply.escalation' ? 'pull' : 'push';
+			const recordId = recordIdOf(fields);
+			if (recordId !== undefined && context.recordId === undefined) context.recordId = recordId;
 		}
 
 		options.persist(

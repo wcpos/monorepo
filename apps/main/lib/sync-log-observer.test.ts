@@ -194,6 +194,78 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].message).not.toContain('consumer_key');
 	});
 
+	// Review #854: apply.escalation names the affected record as `id`, not
+	// `recordId`, so the row fell back to a generic message and lost its collapse key.
+	it('names the escalated record from an `id` field and carries it in context', () => {
+		observer.observe(
+			event({
+				type: 'apply.escalation',
+				level: 'warn',
+				collection: 'products',
+				fields: { id: 88, status: 'drifted', detector: 'revision-hash' },
+			})
+		);
+
+		expect(rows[0].message).toBe('products 88 — pull escalation');
+		expect(rows[0].context).toMatchObject({ recordId: 88, direction: 'pull' });
+	});
+
+	// Review #854: a table outcome is the SUCCESS-path outcome. A row may only wear
+	// it when the event actually succeeded, or filtering by outcome hides incidents.
+	it('derives a failed outcome from a raised level', () => {
+		observer.observe(
+			event({ type: 'apply.pull', level: 'warn', collection: 'orders', fields: { applied: 2 } })
+		);
+
+		expect(rows[0].terminal).toMatchObject({ operationType: 'sync.apply', outcome: 'failed' });
+	});
+
+	it('derives a failed outcome from counters even when the level stays info', () => {
+		observer.observe(
+			event({
+				type: 'queue.write.drain',
+				fields: { scanned: 5, pushed: 3, conflicts: 0, failed: 0, rejected: 2 },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'info',
+			terminal: { operationType: 'sync.queue', outcome: 'failed' },
+		});
+	});
+
+	it('keeps a deliberate non-ok classification instead of overriding it to failed', () => {
+		observer.observe(
+			event({
+				type: 'push.rejected',
+				level: 'warn',
+				collection: 'orders',
+				fields: { recordId: '7', status: 400 },
+			})
+		);
+
+		expect(rows[0].terminal).toMatchObject({ outcome: 'rejected' });
+	});
+
+	it('drops a no-op coverage compaction and keeps one that removed rows', () => {
+		observer.observe(event({ type: 'coverage.compacted', fields: { removed: 0 } }));
+		expect(rows).toHaveLength(0);
+
+		observer.observe(event({ type: 'coverage.compacted', fields: { removed: 4 } }));
+		expect(rows).toHaveLength(1);
+	});
+
+	it('persists only failed HTTP attempts, never successful ones', () => {
+		observer.observe(event({ type: 'transport.request', fields: { status: 200, bytes: 9_000 } }));
+		observer.observe(event({ type: 'transport.request', fields: { status: 304, bytes: 0 } }));
+		observer.observe(
+			event({ type: 'transport.request', level: 'warn', fields: { status: 503, bytes: 0 } })
+		);
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0].context).toMatchObject({ status: 503 });
+	});
+
 	it('persists unmapped failures and drops unmapped info narration', () => {
 		observer.observe(event({ type: 'new.failure', level: 'error', message: 'boom' }));
 		observer.observe(event({ type: 'new.narration', level: 'info' }));

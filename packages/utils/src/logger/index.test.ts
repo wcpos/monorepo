@@ -399,6 +399,45 @@ describe('logger/index', () => {
 			expect(rows[2]).toMatchObject({ count: 2 });
 		});
 
+		// Review #854: per-collection events carrying no message of their own matched
+		// on every identity component, so the second collection's row folded into the
+		// first and the survivor named only the first collection.
+		it('does not collapse the same event across different collections', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('apply.refresh', { context: { collection: 'tax_rates' } });
+			logger.info('apply.refresh', { context: { collection: 'products' } });
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows[0].context).toMatchObject({ collection: 'tax_rates' });
+			expect(rows[1].context).toMatchObject({ collection: 'products' });
+		});
+
+		// Review #854: RxDB rejects the WHOLE insert when a bounded column overflows,
+		// so an over-long id would cost the entire terminal record.
+		it('clamps bounded columns instead of losing the row', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('Checkout stage', {
+				terminal: {
+					// a 36-character UUID against a 32-character column
+					operationId: '3f7a1b2c-9d4e-4f60-8a1b-2c9d4e4f6011',
+					operationType: 'x'.repeat(60),
+				},
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0].operationId).toBe('3f7a1b2c-9d4e-4f60-8a1b-2c9d4e4f');
+			expect(String(rows[0].operationId)).toHaveLength(32);
+			expect(String(rows[0].operationType)).toHaveLength(48);
+		});
+
 		it('collapses consecutive identical rows while keeping the original timestamp', async () => {
 			jest.useFakeTimers().setSystemTime(1000);
 			const { rows, collection } = createLogCollection();
