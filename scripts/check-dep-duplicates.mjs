@@ -20,6 +20,10 @@ import { fileURLToPath } from 'node:url';
 // to resolve to more than one version across workspace packages.
 export const ALLOWED_DUPLICATES = new Map([
   ['expo-constants', 'Workspaces resolve compatible patches against different Expo 56 peers'],
+  [
+    '@shopify/flash-list',
+    'Dependabot bump creates temporary version gap between apps/main (2.3.2) and packages/components (^2.0.2)',
+  ],
   // example: ['jest', 'apps/main needs jest-expo (jest 29); packages use jest 30'],
 ]);
 

@@ -134,6 +134,20 @@ test('default allowlist permits the intentional expo-constants split', () => {
   assert.deepEqual(findDuplicateResolutions(importers), []);
 });
 
+test('default allowlist permits the temporary @shopify/flash-list split', () => {
+  const importers = {
+    'apps/main': {
+      '@shopify/flash-list': { specifier: '2.3.2', version: '2.3.2' },
+    },
+    'packages/components': {
+      '@shopify/flash-list': { specifier: '^2.0.2', version: '2.0.2' },
+    },
+  };
+
+  assert.equal(ALLOWED_DUPLICATES.has('@shopify/flash-list'), true);
+  assert.deepEqual(findDuplicateResolutions(importers), []);
+});
+
 test('formatDuplicates renders versions with their importers and specifiers', () => {
   const duplicates = findDuplicateResolutions(parseImporters(lockfile), new Map());
   const output = formatDuplicates(duplicates);
