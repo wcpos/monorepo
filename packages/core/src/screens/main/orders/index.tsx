@@ -30,6 +30,7 @@ import { Total } from '../components/order/total';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
+import { useReferencedCustomerDemand } from '../hooks/use-referenced-customer-demand';
 import { TextCell } from '../components/text-cell';
 import {
 	QueryStateProvider,
@@ -102,6 +103,7 @@ function OrdersScreenContent() {
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	const binding = useCollectionBinding('orders', state);
+	useReferencedCustomerDemand(binding.result$);
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'orders'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(

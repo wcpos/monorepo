@@ -113,6 +113,9 @@ jest.mock('../components/order/payment-method', () => ({ PaymentMethod: () => nu
 jest.mock('../components/order/status', () => ({ Status: () => null }));
 jest.mock('../components/order/total', () => ({ Total: () => null }));
 jest.mock('../components/text-cell', () => ({ TextCell: () => null }));
+jest.mock('../hooks/use-referenced-customer-demand', () => ({
+	useReferencedCustomerDemand: jest.fn(),
+}));
 
 function latestState(): QueryStateOf<'orders'> {
 	const call = mockUseCollectionBinding.mock.calls.at(-1);

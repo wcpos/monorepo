@@ -137,6 +137,47 @@ describe('requirementsForQuery', () => {
 			})
 		).toEqual([]);
 	});
+
+	it('creates no demand for unbounded customer browse', () => {
+		expect(
+			requirementsForQuery({
+				id: 'customers',
+				collectionName: 'customers',
+				selector: {},
+				limit: undefined,
+			})
+		).toEqual([]);
+	});
+
+	it('maps a bounded customer search to exactly one search requirement', () => {
+		expect(
+			requirementsForQuery({
+				id: 'customers',
+				collectionName: 'customers',
+				selector: { search: 'ada' },
+				limit: 25,
+			})
+		).toEqual([
+			{
+				id: 'customers:search',
+				collection: 'customers',
+				kind: 'search',
+				term: 'ada',
+				limit: 25,
+			},
+		]);
+	});
+
+	it('creates no demand for the empty customer id list', () => {
+		expect(
+			requirementsForQuery({
+				id: 'customers',
+				collectionName: 'customers',
+				selector: { id: { $in: [] } },
+				limit: 10,
+			})
+		).toEqual([]);
+	});
 });
 
 describe('declareRequirements / registerActiveBinding / reset refill', () => {
