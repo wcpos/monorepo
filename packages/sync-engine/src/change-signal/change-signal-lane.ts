@@ -170,6 +170,13 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		}
 		const cycleStartedAtMs = Date.now();
 		let cycleSummary: { pulls: number; deletes: number } | null = null;
+		let cursorSummary: {
+			from?: number;
+			to?: number;
+			reported?: number;
+			head?: number;
+			rebaselined: boolean;
+		} | null = null;
 		try {
 			return await deps.manager.runGuarded(async (bound) => {
 				const scopeId = bound.scopeId;
@@ -216,6 +223,13 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						pulls: actions.targetedPulls.reduce((n, group) => n + group.ids.length, 0),
 						deletes: actions.deletes.reduce((n, group) => n + group.ids.length, 0),
 					};
+					cursorSummary = {
+						from: outcome.previousCursor?.sequence,
+						to: outcome.cursor.sequence,
+						reported: outcome.reportedCursor?.sequence,
+						head: outcome.head,
+						rebaselined: outcome.rebaseline,
+					};
 					await applyReplicationActions(
 						actions,
 						buildReplicationHandlers({
@@ -245,7 +259,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				} else if (rebaselined) {
 					report = { ...report, rebaselined: true };
 				}
-				if (wrote !== 'dropped' && cycleSummary !== null) {
+				if (wrote !== 'dropped' && cycleSummary !== null && cursorSummary !== null) {
 					deps.diagnostics({
 						type: 'signal.cycle',
 						level: 'info',
@@ -255,8 +269,71 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							pulls: cycleSummary.pulls,
 							deletes: cycleSummary.deletes,
 							durationMs: Date.now() - cycleStartedAtMs,
+							...(cursorSummary.to !== undefined ? { cursor: cursorSummary.to } : {}),
+							...(cursorSummary.from !== undefined ? { cursorFrom: cursorSummary.from } : {}),
+							...(cursorSummary.head !== undefined ? { head: cursorSummary.head } : {}),
+							...(cursorSummary.head !== undefined && cursorSummary.to !== undefined
+								? { backlog: Math.max(0, cursorSummary.head - cursorSummary.to) }
+								: {}),
 						},
 					});
+					const { from, head } = cursorSummary;
+					const committedTo = cursorSummary.to;
+					const to =
+						!cursorSummary.rebaselined &&
+						from !== undefined &&
+						cursorSummary.reported !== undefined &&
+						cursorSummary.reported < from
+							? cursorSummary.reported
+							: committedTo;
+					let reason: 'behind-head' | 'reset' | 'backwards' | null = null;
+					if (cursorSummary.rebaselined) {
+						reason = 'behind-head';
+					} else if (from !== undefined && to === 0 && from > 0) {
+						// Collection reset starts the next engine at zero, so its
+						// previous cursor is already zero and cannot match this branch.
+						reason = 'reset';
+					} else if (from !== undefined && to !== undefined && to < from) {
+						reason = 'backwards';
+					}
+					if (reason !== null && to !== undefined) {
+						// `backlog` carries ONE meaning everywhere it appears — how far the
+						// cursor still sits behind the server head — so it stays comparable
+						// between this row and the signal.cycle row for the same poll. The
+						// number of changes a behind-head jump skipped OVER is a different
+						// quantity and gets its own name; reporting it as `backlog` would
+						// have the two rows of one cycle disagree under the same key
+						// (a jump lands AT head, so its backlog is 0 while its skip is large).
+						const backlog =
+							head === undefined || committedTo === undefined
+								? undefined
+								: Math.max(0, head - committedTo);
+						const skipped =
+							reason === 'behind-head' && head !== undefined && from !== undefined
+								? Math.max(0, head - from)
+								: undefined;
+						const message =
+							reason === 'behind-head'
+								? skipped === undefined
+									? 'change-signal: cursor jumped to head'
+									: `change-signal: cursor jumped to head (skipped ${skipped} changes)`
+								: reason === 'reset'
+									? 'change-signal: cursor reset to zero'
+									: `change-signal: cursor moved backwards (${from} → ${to})`;
+						deps.diagnostics({
+							type: 'signal.cursor',
+							level: 'warn',
+							message,
+							fields: {
+								reason,
+								from,
+								to,
+								...(head !== undefined ? { head } : {}),
+								...(backlog !== undefined ? { backlog } : {}),
+								...(skipped !== undefined ? { skipped } : {}),
+							},
+						});
+					}
 				}
 				lastError = null;
 				return report;

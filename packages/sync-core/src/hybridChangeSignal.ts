@@ -194,6 +194,8 @@ export type ChangeSignalSource = {
 	pollSequenceLog(input: { cursor: SequenceCursor; limit: number }): Promise<{
 		rows: SequenceLogRow[];
 		cursor: SequenceCursor;
+		/** Raw server checkpoint before a host applies any safety clamp. */
+		reportedCursor?: SequenceCursor;
 		hasMore: boolean;
 		head?: number;
 		configFingerprint?: ConfigFingerprintSnapshot;
@@ -390,6 +392,12 @@ export type HybridPollOutcome = {
 	changes: HybridChange[];
 	/** Whether this poll abandoned a large replay and moved directly to the reported head. */
 	rebaseline: boolean;
+	/** Server-reported head sequence, when the source reported one this poll. */
+	head?: number;
+	/** The committed cursor as it stood BEFORE this poll drained. */
+	previousCursor?: SequenceCursor;
+	/** Raw server checkpoint observed this poll, before any host safety clamp. */
+	reportedCursor?: SequenceCursor;
 	/** The advanced TIER 1 cursor. A sweep-only poll returns it UNCHANGED. */
 	cursor: SequenceCursor;
 	/** Whether the TIER 2 integrity sweep ran this poll. */
@@ -573,10 +581,16 @@ export function createHybridChangeSignalEngine(input: {
 		changes: HybridChange[];
 		nextCursor: SequenceCursor;
 		rebaseline: boolean;
+		/** Server-reported head sequence from the last page that reported one. */
+		head?: number;
+		/** Lowest raw server checkpoint reported while draining. */
+		reportedCursor?: SequenceCursor;
 		configFingerprint?: ConfigFingerprintSnapshot;
 	}> {
 		const changes: HybridChange[] = [];
 		let nextCursor = startCursor;
+		let head: number | undefined;
+		let reportedCursor: SequenceCursor | undefined;
 		let configFingerprint: ConfigFingerprintSnapshot | undefined;
 		let pages = 0;
 		for (;;) {
@@ -591,6 +605,16 @@ export function createHybridChangeSignalEngine(input: {
 				limit: policy.sequenceLogLimit,
 			});
 			pages += 1;
+			if (typeof page.head === 'number' && Number.isFinite(page.head)) {
+				head = page.head;
+			}
+			if (
+				page.reportedCursor !== undefined &&
+				Number.isFinite(page.reportedCursor.sequence) &&
+				(reportedCursor === undefined || page.reportedCursor.sequence < reportedCursor.sequence)
+			) {
+				reportedCursor = page.reportedCursor;
+			}
 			configFingerprint = page.configFingerprint ?? configFingerprint;
 			if (
 				pages === 1 &&
@@ -603,6 +627,8 @@ export function createHybridChangeSignalEngine(input: {
 					changes: [],
 					nextCursor: { sequence: page.head },
 					rebaseline: true,
+					head: page.head,
+					...(reportedCursor !== undefined ? { reportedCursor } : {}),
 					configFingerprint,
 				};
 			}
@@ -619,7 +645,14 @@ export function createHybridChangeSignalEngine(input: {
 				break;
 			}
 		}
-		return { changes, nextCursor, rebaseline: false, configFingerprint };
+		return {
+			changes,
+			nextCursor,
+			rebaseline: false,
+			...(head !== undefined ? { head } : {}),
+			...(reportedCursor !== undefined ? { reportedCursor } : {}),
+			configFingerprint,
+		};
 	}
 
 	// --- TIER 2: scan both detectors, diff against retained baselines ----------
@@ -860,7 +893,9 @@ export function createHybridChangeSignalEngine(input: {
 		try {
 			// TIER 1 — always. Drained into a local cursor; not committed until the
 			// whole poll succeeds (see drainSequenceLog).
-			const { changes, nextCursor, rebaseline, configFingerprint } = await drainSequenceLog(cursor);
+			const previousCursor = cursor;
+			const { changes, nextCursor, rebaseline, head, reportedCursor, configFingerprint } =
+				await drainSequenceLog(cursor);
 
 			// OPTIONAL TIER (ADR 0006) — embedded snapshot, with the old-server fetch
 			// as fallback. Commit still happens below with the cursor; the no-config
@@ -878,6 +913,9 @@ export function createHybridChangeSignalEngine(input: {
 					changes,
 					cursor,
 					rebaseline: true,
+					...(head !== undefined ? { head } : {}),
+					previousCursor,
+					...(reportedCursor !== undefined ? { reportedCursor } : {}),
 					sweepRan: false,
 					sweepIncomplete: false,
 					integrityMismatches: [],
@@ -896,6 +934,9 @@ export function createHybridChangeSignalEngine(input: {
 					changes,
 					cursor,
 					rebaseline: false,
+					...(head !== undefined ? { head } : {}),
+					previousCursor,
+					...(reportedCursor !== undefined ? { reportedCursor } : {}),
 					sweepRan: false,
 					sweepIncomplete: false,
 					integrityMismatches: [],
@@ -922,6 +963,9 @@ export function createHybridChangeSignalEngine(input: {
 				changes,
 				cursor,
 				rebaseline: false,
+				...(head !== undefined ? { head } : {}),
+				previousCursor,
+				...(reportedCursor !== undefined ? { reportedCursor } : {}),
 				sweepRan: true,
 				sweepIncomplete: false,
 				integrityMismatches: mismatches,

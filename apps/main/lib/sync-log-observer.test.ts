@@ -90,6 +90,25 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
+	it('persists cursor anomalies as unknown warn rows with cursor context', () => {
+		observer.observe(
+			event({
+				type: 'signal.cursor',
+				level: 'warn',
+				message: 'change-signal: cursor reset to zero',
+				fields: { reason: 'reset', from: 5, to: 0 },
+			})
+		);
+
+		expect(rows).toEqual([
+			expect.objectContaining({
+				level: 'warn',
+				context: expect.objectContaining({ reason: 'reset', from: 5, to: 0 }),
+				terminal: { operationType: 'sync.cursor', outcome: 'unknown' },
+			}),
+		]);
+	});
+
 	it('forwards an emitted operation id', () => {
 		observer.observe(
 			event({

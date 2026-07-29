@@ -95,6 +95,7 @@ const CONFORMANCE = new Map<string, Conformance>([
 			didWork: (f) => num(f.pulls) + num(f.deletes) > 0,
 		},
 	],
+	['signal.cursor', { operationType: 'sync.cursor', outcome: 'unknown' }],
 	['signal.tick.error', { operationType: 'sync.cycle', outcome: 'failed' }],
 	[
 		'engine.lane.tick',

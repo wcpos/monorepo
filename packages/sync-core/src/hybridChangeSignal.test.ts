@@ -206,6 +206,7 @@ describe('TIER 1 — routine sequence-log poll', () => {
 					],
 					cursor: { sequence: 7 },
 					hasMore: false,
+					head: 12,
 				},
 			],
 		});
@@ -214,6 +215,7 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		const engine = createHybridChangeSignalEngine({
 			source,
 			policy: { sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+			initialCursor: { sequence: 3 },
 			now: () => 0,
 		});
 
@@ -222,7 +224,9 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		expect(outcome.changes).toEqual([
 			{ id: 42, type: 'update', collection: 'products', source: 'sequence-log' },
 		]);
+		expect(outcome.previousCursor).toEqual({ sequence: 3 });
 		expect(outcome.cursor).toEqual({ sequence: 7 });
+		expect(outcome.head).toBe(12);
 		expect(outcome.sweepRan).toBe(false);
 		expect(outcome.integrityMismatches).toEqual([]);
 		expect(outcome.idsToPull).toEqual([]);
@@ -441,6 +445,7 @@ describe('TIER 1 — sequence-log backlog guard', () => {
 		expect(outcome).toMatchObject({
 			changes: [],
 			cursor: { sequence: 100 },
+			head: 100,
 			rebaseline: true,
 			sweepRan: false,
 		});
