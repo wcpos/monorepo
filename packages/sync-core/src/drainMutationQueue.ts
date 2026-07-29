@@ -73,7 +73,7 @@ export type DrainResult = {
 	 * can't poison it, and surfaced here (+ a `push.rejected` event) for the host to log /
 	 * alert / re-queue. Never retried automatically.
 	 */
-	rejected: RecordMutation[];
+	rejected: { mutation: QueuedMutation; status?: number; reason?: string }[];
 };
 
 /** 4xx codes that ARE worth retrying — timeout, conflict/in-progress, too-early, rate-limit. */
@@ -155,7 +155,7 @@ export async function drainMutationQueue(input: {
 			)
 			.map((mutation) => mutation.recordId)
 	);
-	const rejected: RecordMutation[] = [];
+	const rejected: DrainResult['rejected'] = [];
 	let pushed = 0;
 	let failed = 0;
 	let deferred = 0;
@@ -209,7 +209,8 @@ export async function drainMutationQueue(input: {
 	};
 
 	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void> => {
-		rejected.push(mutation);
+		const { status, reason } = error as { status?: number; reason?: string };
+		rejected.push({ mutation, status, reason });
 		emit({
 			type: 'push.rejected',
 			level: 'warn',
@@ -217,7 +218,8 @@ export async function drainMutationQueue(input: {
 			fields: {
 				recordId: mutation.recordId,
 				mutationId: mutation.mutationId,
-				status: (error as { status?: number }).status,
+				status,
+				reason,
 			},
 		});
 		try {

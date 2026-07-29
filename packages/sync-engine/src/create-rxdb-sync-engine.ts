@@ -346,7 +346,14 @@ export type EngineEvent =
 			mutationId: string;
 			currentRevision: string | null;
 	  }
-	| { type: 'write-rejected'; collection: string; recordId: string; mutationId: string };
+	| {
+			type: 'write-rejected';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			status?: number;
+			reason?: string;
+	  };
 
 export type EngineStatus = {
 	disposed: boolean;

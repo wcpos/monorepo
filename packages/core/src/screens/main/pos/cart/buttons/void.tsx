@@ -3,7 +3,8 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { Button } from '@wcpos/components/button';
-import { useQueryManager } from '@wcpos/query';
+import { awaitWriteOutcome, useQueryManager, WriteOutcomeError } from '@wcpos/query';
+import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -84,26 +85,57 @@ export function VoidButton() {
 	 */
 	const handleRemove = React.useCallback(async () => {
 		const orderJson = currentOrder.toMutableJSON();
-		await manager.engine.write({
+		const recordId = currentOrder.uuid!;
+		const showSuccess = (message: string) => {
+			cartLogger.success(message, {
+				showToast: true,
+				saveToDb: true,
+				toast: {
+					dismissable: true,
+					action: {
+						label: t('common.undo'),
+						onClick: () => undoRemove(orderJson),
+					},
+				},
+				context: {
+					orderId: currentOrder.uuid ?? currentOrder.id,
+					orderNumber: currentOrder.number,
+				},
+			});
+		};
+		const receipt = await manager.engine.write({
 			collection: 'orders',
 			operation: 'delete',
-			recordId: currentOrder.uuid!,
+			recordId,
 		});
-		cartLogger.success(t('pos_cart.order_removed'), {
-			showToast: true,
-			saveToDb: true,
-			toast: {
-				dismissable: true,
-				action: {
-					label: t('common.undo'),
-					onClick: () => undoRemove(orderJson),
-				},
-			},
-			context: {
-				orderId: currentOrder.uuid ?? currentOrder.id,
-				orderNumber: currentOrder.number,
-			},
-		});
+
+		if (receipt.annihilated || manager.engine.status().connectivity !== 'online') {
+			showSuccess(t('pos_cart.order_removed'));
+			return;
+		}
+
+		try {
+			await awaitWriteOutcome(manager.engine, receipt.mutationId);
+			showSuccess(t('pos_cart.order_removed'));
+		} catch (error) {
+			if (error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE) {
+				await patchEngineResident({
+					manager,
+					collection: 'orders',
+					recordId,
+					changes: { status: 'pending' },
+				});
+				await manager.engine.write({
+					collection: 'orders',
+					operation: 'update',
+					recordId,
+					payload: { status: 'pending' },
+				});
+				showSuccess(t('pos_cart.order_voided_kept_pending'));
+				return;
+			}
+			showSuccess(t('pos_cart.order_removed'));
+		}
 	}, [currentOrder, manager, t, undoRemove]);
 
 	/**

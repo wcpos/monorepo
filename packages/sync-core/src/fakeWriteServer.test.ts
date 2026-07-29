@@ -236,6 +236,28 @@ describe('createFakeWriteServer (faithful write-contract harness)', () => {
 		});
 	});
 
+	it('scripts a 403 cannot-delete refusal in the WooCommerce REST error shape', async () => {
+		const server = createFakeWriteServer();
+		server.script(() => ({ kind: 'cannot_delete' }));
+
+		const raw = await server.fetch('https://shop.example/wp-json/wcpos/v2/push/orders', {
+			method: 'POST',
+			body: JSON.stringify({
+				mutationId: 'm-delete',
+				operation: 'delete',
+				collection: 'orders',
+				recordId: 'uuid-delete',
+				baseRevision: 'sha256:current',
+			}),
+		});
+
+		expect(raw.status).toBe(403);
+		expect(await raw.json()).toEqual({
+			code: 'woocommerce_rest_cannot_delete',
+			message: 'Sorry, you are not allowed to delete this resource.',
+		});
+	});
+
 	it('scripted identity_ambiguous is classified PERMANENT by the push adapter (dead-letter, not conflict/retry)', async () => {
 		seq = 0;
 		const server = createFakeWriteServer();

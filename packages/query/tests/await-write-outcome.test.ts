@@ -1,6 +1,6 @@
 import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { awaitWriteOutcome } from '../src/await-write-outcome';
+import { awaitWriteOutcome, WriteOutcomeError } from '../src/await-write-outcome';
 
 function createEngine() {
 	let listener: ((event: EngineEvent) => void) | undefined;
@@ -71,6 +71,29 @@ describe('awaitWriteOutcome', () => {
 			await expect(outcome).rejects.toThrow(`${type} for mutation "mutation-1"`);
 		}
 	);
+
+	it('exposes rejection status and reason on a WriteOutcomeError', async () => {
+		const { engine, emit } = createEngine();
+		const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 100 });
+
+		emit({
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			status: 403,
+			reason: 'woocommerce_rest_cannot_delete',
+		});
+
+		const error = await outcome.catch((caught: unknown) => caught);
+		expect(error).toBeInstanceOf(WriteOutcomeError);
+		expect(error).toMatchObject({
+			name: 'WriteOutcomeError',
+			eventType: 'write-rejected',
+			status: 403,
+			reason: 'woocommerce_rest_cannot_delete',
+		});
+	});
 
 	it('ignores terminal events for other mutations and rejects on timeout', async () => {
 		jest.useFakeTimers();
