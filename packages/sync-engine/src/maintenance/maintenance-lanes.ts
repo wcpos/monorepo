@@ -51,9 +51,11 @@ import {
 	censusQueryKey,
 	SUPPORTED_CENSUS_COLLECTIONS,
 } from '../scheduler/census';
+import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
 
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { SeedPersistedSchedulerTasksResult } from '../scheduler/rx-scheduler-task-seeder';
+import type { CensusTotal } from '../scheduler/census';
 import type { RxDatabase } from 'rxdb';
 
 export type MaintenanceLaneName =
@@ -62,6 +64,7 @@ export type MaintenanceLaneName =
 	| 'product-browse-window-seed'
 	| 'reference-seed'
 	| 'query-total-retry'
+	| 'customer-trickle'
 	| 'coverage-compaction'
 	| 'existence-prime'
 	| 'existence-reconcile';
@@ -118,6 +121,10 @@ type MaintenanceLaneDeps = {
 	pullBatchSize?: () => number | undefined;
 	queryTotal?: QueryTotalPort;
 	censusFreshForMs: number;
+	customerTrickleStateFor: (scopeId: string) => CustomerTrickleStateStore;
+	customerCensusTotal: () => Promise<CensusTotal | null>;
+	hasPendingInteractiveWork: () => boolean;
+	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
 };
@@ -135,9 +142,17 @@ export type MaintenanceLanes = {
 	referenceSeed: MaintenanceLane;
 	/** Null when the host provided no query-total port — the lane never arms. */
 	queryTotalRetry: MaintenanceLane | null;
+	customerTrickle: MaintenanceLane;
 	coverageCompaction: MaintenanceLane;
 	existencePrime: MaintenanceLane;
 	existenceReconcile: MaintenanceLane;
+};
+
+type MaintenanceLaneBodyReport = {
+	summary: string | null;
+	level?: 'info' | 'error';
+	status?: 'skipped';
+	reason?: string;
 };
 
 export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLanes {
@@ -151,7 +166,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			scopeId: string,
 			signal: AbortSignal,
 			fetcher: MaintenanceLaneDeps['fetcher']
-		) => Promise<{ summary: string | null; level?: 'info' | 'error' }>
+		) => Promise<MaintenanceLaneBodyReport>
 	): MaintenanceLane {
 		let lastError: string | null = null;
 		return {
@@ -216,10 +231,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							} & Record<string, unknown>;
 							return rawBoundFetch(url, rest as { signal?: AbortSignal });
 						};
+						let bodyReport: MaintenanceLaneBodyReport | undefined;
 						let wrote;
 						try {
 							wrote = await bound.guardWrite(async () => {
-								const { summary, level } = await body(db, bound.scopeId, signal, boundFetch);
+								bodyReport = await body(db, bound.scopeId, signal, boundFetch);
+								const { summary, level } = bodyReport;
 								if (summary !== null) {
 									deps.diagnostics({
 										type: `${name}.tick`,
@@ -238,6 +255,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 								status: 'skipped',
 								reason: 'scope moved mid-tick (writes dropped)',
 							};
+						}
+						if (bodyReport?.status === 'skipped') {
+							return { lane: name, status: 'skipped', reason: bodyReport.reason };
 						}
 						return { lane: name, status: 'ran' };
 					});
@@ -450,6 +470,28 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			})
 		: null;
 
+	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
+		const result = await tickCustomerTrickle({
+			baseUrl: deps.syncBaseUrl,
+			database: db,
+			fetcher,
+			stateStore: deps.customerTrickleStateFor(scopeId),
+			hasPendingWork: deps.hasPendingInteractiveWork,
+			customerCensusTotal: deps.customerCensusTotal,
+			now,
+			...(deps.lastUserActivityMs !== undefined
+				? { lastUserActivityMs: deps.lastUserActivityMs }
+				: {}),
+			signal,
+		});
+		if (result.status !== 'ran') {
+			return { summary: null, status: 'skipped', reason: result.reason };
+		}
+		return {
+			summary: `Customer trickle: page ${result.page}, ${result.rows} customers`,
+		};
+	});
+
 	// Per SCOPE, not per engine: switching A→B→A must not let B's compaction
 	// clock suppress A's (they are different databases).
 	const lastCompactedAtByScope = new Map<string, number>();
@@ -511,6 +553,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		productBrowseWindowSeed,
 		referenceSeed,
 		queryTotalRetry,
+		customerTrickle,
 		coverageCompaction,
 		existencePrime,
 		existenceReconcile,

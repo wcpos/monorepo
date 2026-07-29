@@ -25,15 +25,18 @@ Consumers have exactly two supported doors:
 
 Everything behind those entry points is package-private. Internal paths may not be imported by another package. Moving an internal file must not change either door's exported names.
 
-`sync()` without a lane runs all registered lanes in this stable order:
-change-signal, write-drain, order-window-seed, reference-seed,
+`sync()` without a lane runs the foreground/manual lanes in this stable order:
+change-signal, write-drain, order-window-seed, product-browse-window-seed, reference-seed,
 scheduler-drain, query-total-retry, coverage-compaction, existence-prime,
-existence-reconcile. The two seed lanes deliberately run BEFORE the
+existence-reconcile. The seed lanes deliberately run BEFORE the
 scheduler drain (#516 item 6): they only enqueue persisted tasks, so the
 drain in the same `sync()` call executes the work they just seeded — a
 manual `sync()` never returns `'ran'` with its own seeded work still
 pending. `status()` reports the current `gatedBy` reason, per-scope
 bootstrap failures, and each lane's `lastTick` plus `lastError`.
+`customer-trickle` is also registered, but is idle-only: auto mode first ticks
+it at its five-minute boundary, and no-arg `sync()` deliberately excludes it.
+Tests and diagnostics can tick it explicitly with `sync('customer-trickle')`.
 
 ## SyncEvent telemetry vocabulary
 

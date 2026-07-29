@@ -138,6 +138,7 @@ type RequirementSubscriber = {
 
 export type RequirePlane = {
 	require(requirement: EngineRequirement): RequirementHandle;
+	hasPendingWork(): boolean;
 };
 
 export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
@@ -680,6 +681,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	}
 
 	return {
+		hasPendingWork: () => running || queue.length > 0,
 		require: (requirement) => {
 			const dedupeKey = searchDedupeKey(requirement);
 			let entry = dedupeKey ? activeSearches.get(dedupeKey) : undefined;

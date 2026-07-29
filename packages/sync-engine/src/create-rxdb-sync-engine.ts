@@ -141,9 +141,9 @@ export type { CensusTotal, CensusTotals } from './scheduler/census';
 
 export type EngineLane = 'change-signal' | 'write-drain' | MaintenanceLaneName;
 
-/** One deterministic tick's outcome. A full sync() (no lane) runs all ten
- * registered lanes in dependency order and reports their aggregate worst
- * status and write-drain counters. */
+/** One deterministic tick's outcome. A full sync() (no lane) runs the ten
+ * foreground/manual lanes in dependency order; the idle-only customer trickle
+ * is registered but deliberately excluded. */
 export type SyncReport = {
 	lane: EngineLane | 'all';
 	status: 'ran' | 'skipped' | 'error';
@@ -231,6 +231,8 @@ export type RxdbSyncEnginePorts = {
 	 * when this port is provided (the engine cannot guess the host's total
 	 * endpoint semantics). */
 	queryTotal?: QueryTotalPort;
+	/** Optional activity clock for the idle-only customer trickle lane. */
+	lastUserActivityMs?: () => number;
 	now?: () => number;
 };
 
@@ -247,6 +249,8 @@ export type EngineIntervals = {
 	productBrowseWindowSeedMs: number;
 	/** Reference-lane (F11) re-seed cadence. Default 5min (the web host's). */
 	referenceSeedMs: number;
+	/** Idle customer trickle cadence. Default 5min. */
+	customerTrickleMs: number;
 	/** Query-total retry scan cadence (armed only with ports.queryTotal). Default 30s. */
 	queryTotalRetryScanMs: number;
 	/** Collection census cache freshness window. Default 15min. */
@@ -270,6 +274,7 @@ const DEFAULT_INTERVALS: EngineIntervals = {
 	orderWindowSeedMs: 5 * 60_000,
 	productBrowseWindowSeedMs: 5 * 60_000,
 	referenceSeedMs: 5 * 60_000,
+	customerTrickleMs: 5 * 60_000,
 	queryTotalRetryScanMs: 30_000,
 	censusFreshForMs: 15 * 60_000,
 	coverageCompactionScanMs: 60_000,
@@ -1251,6 +1256,15 @@ export function createRxdbSyncEngine(
 		pullBatchSize: () => pullBatchSize,
 		...(ports.queryTotal !== undefined ? { queryTotal: ports.queryTotal } : {}),
 		censusFreshForMs: intervals.censusFreshForMs,
+		customerTrickleStateFor: (scopeId) => ({
+			get: (key) => readBlob(scopeId, key),
+			set: (key, value) => writeBlob(scopeId, key, value),
+		}),
+		customerCensusTotal: async () => (await readCensusTotals()).customers,
+		hasPendingInteractiveWork: requirePlane.hasPendingWork,
+		...(ports.lastUserActivityMs !== undefined
+			? { lastUserActivityMs: ports.lastUserActivityMs }
+			: {}),
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
@@ -1270,6 +1284,7 @@ export function createRxdbSyncEngine(
 			maintenanceLanes.queryTotalRetry !== null
 				? maintenanceLanes.queryTotalRetry.tick(signal)
 				: { lane: 'query-total-retry', status: 'skipped', reason: 'no queryTotal port provided' },
+		'customer-trickle': (signal) => maintenanceLanes.customerTrickle.tick(signal),
 		'coverage-compaction': (signal) => maintenanceLanes.coverageCompaction.tick(signal),
 		'existence-prime': (signal) => maintenanceLanes.existencePrime.tick(signal),
 		'existence-reconcile': (signal) => maintenanceLanes.existenceReconcile.tick(signal),
@@ -1564,6 +1579,7 @@ export function createRxdbSyncEngine(
 					armLaneInterval('product-browse-window-seed', intervals.productBrowseWindowSeedMs)
 				);
 				maintenanceTimers.push(armLaneInterval('reference-seed', intervals.referenceSeedMs));
+				maintenanceTimers.push(armLaneInterval('customer-trickle', intervals.customerTrickleMs));
 				if (maintenanceLanes.queryTotalRetry !== null) {
 					void runAutomaticTick(() => tickLaneWithEvents('query-total-retry'));
 					maintenanceTimers.push(
@@ -1640,6 +1656,10 @@ export function createRxdbSyncEngine(
 				'query-total-retry': laneStatus(
 					'query-total-retry',
 					maintenanceLanes.queryTotalRetry?.lastError() ?? null
+				),
+				'customer-trickle': laneStatus(
+					'customer-trickle',
+					maintenanceLanes.customerTrickle.lastError()
 				),
 				'coverage-compaction': laneStatus(
 					'coverage-compaction',
@@ -2146,6 +2166,8 @@ export function createRxdbSyncEngine(
 			// (gate2 #516 item 6): the seeds only ENQUEUE persisted tasks, so a
 			// manual sync() must run them first or it returns 'ran' with its own
 			// just-seeded work still pending until some later tick.
+			// customer-trickle is idle-only by design: a manual full sync must
+			// not imply a trickle tick. Its explicit single-lane form remains valid.
 			const ordered: EngineLane[] = [
 				'change-signal',
 				'write-drain',
