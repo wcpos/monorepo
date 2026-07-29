@@ -138,10 +138,10 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		// One page over the servable set the existing product paths request, sorted by the POS
-		// default catalog sort (orderby=title&order=asc) — no search and no page walk.
+		// default catalog sort (orderby=menu_order&order=asc) — no search and no page walk.
 		expect(fetcher).toHaveBeenCalledTimes(1);
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=title&order=asc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=menu_order&order=asc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),

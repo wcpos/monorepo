@@ -199,7 +199,7 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		// One first page by the POS default catalog sort — no search, no page walk.
 		expect(
 			server.state.urls.some((url) =>
-				url.includes('/products?per_page=100&page=1&orderby=title&order=asc')
+				url.includes('/products?per_page=100&page=1&orderby=menu_order&order=asc')
 			)
 		).toBe(true);
 

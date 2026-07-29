@@ -252,6 +252,24 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().sort).toEqual({ field: 'sortable_price', direction: 'desc' });
 	});
 
+	it('defaults to the 1.9 catalog order (menu_order asc) when the persisted sort is invalid (#810)', () => {
+		mockSortBy = 'not-a-sort-field';
+		mockSortDirection = 'desc';
+
+		render(<POSProducts />);
+
+		expect(latestState().sort).toEqual({ field: 'menu_order', direction: 'asc' });
+	});
+
+	it('keeps a user-selected name sort over the catalog-order default (#810)', () => {
+		mockSortBy = 'name';
+		mockSortDirection = 'desc';
+
+		render(<POSProducts />);
+
+		expect(latestState().sort).toEqual({ field: 'name', direction: 'desc' });
+	});
+
 	it('serves grid mode from the same binding and pagination action', () => {
 		mockViewMode = 'grid';
 		render(<POSProducts />);

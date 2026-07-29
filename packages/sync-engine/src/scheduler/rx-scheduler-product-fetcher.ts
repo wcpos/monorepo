@@ -217,7 +217,7 @@ function uniqueProductPayloads(payloads: WooProductPayload[]): WooProductPayload
 /**
  * The products browse-window seed (ADR 0027 §2): ONE bounded first page over the servable
  * set the existing product paths already request, sorted by the POS default catalog sort
- * (orderby=title&order=asc). No filters, no remote pagination — a cold-grid seed, not a
+ * (orderby=menu_order&order=asc, #810). No filters, no remote pagination — a cold-grid seed, not a
  * query engine. Reuses fetchProductQuery + productDocumentFromWooPayload (the shared
  * materialization path) and the shared collection repository, so the #637 pull guard
  * (withoutLocallyProtected) protects a locally-dirty product from the window refresh.

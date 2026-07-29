@@ -1,6 +1,6 @@
 {
   "pos-products": {
-    "sortBy": "name",
+    "sortBy": "menu_order",
     "sortDirection": "asc",
     "width": 60,
     "showOutOfStock": false,

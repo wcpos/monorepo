@@ -7,12 +7,13 @@ import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
  * pagination. It exists so a cold grid shows products without a search; it is a seed,
  * not a query engine.
  *
- * The POS default catalog sort is the `pos-products` UI setting (sortBy 'name' asc),
- * which the product query hook maps to Woo REST `orderby=title&order=asc`. The window
+ * The POS default catalog sort is the `pos-products` UI setting (sortBy 'menu_order'
+ * asc — the merchant's curated catalog order, restored per #810), sent to Woo REST as
+ * `orderby=menu_order&order=asc` (in WC core's products orderby enum). The window
  * reuses the existing product fetch/materialization path — no new server params beyond
  * the `per_page`/`page`/`orderby`/`order` the product search path already requests.
  */
-export const PRODUCT_BROWSE_WINDOW_ORDERBY = 'title';
+export const PRODUCT_BROWSE_WINDOW_ORDERBY = 'menu_order';
 export const PRODUCT_BROWSE_WINDOW_ORDER = 'asc';
 /** One first page, capped at the Woo per-page ceiling — there is no remote pagination. */
 export const PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT = WOO_REST_MAX_PER_PAGE;

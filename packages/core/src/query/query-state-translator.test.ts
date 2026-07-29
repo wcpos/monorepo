@@ -40,6 +40,23 @@ describe('query-state translator', () => {
 			sortEnginePath: 'payload.total_sales',
 		});
 	});
+
+	it.each(['asc', 'desc'] as const)(
+		'adds the Woo id tiebreak to the products menu_order catalog sort (%s, #810)',
+		(direction) => {
+			const state = {
+				search: '',
+				filters: { categories: [], tags: [], brands: [] },
+				sort: { field: 'menu_order', direction },
+				limit: 10,
+			} as unknown as QueryStateOf<'products'>;
+
+			expect(translateQueryState('products', state)).toMatchObject({
+				sort: [{ menu_order: direction }, { id: 'asc' }],
+				sortEnginePath: 'payload.menu_order',
+			});
+		}
+	);
 	it('has an exhaustive entry for every declared collection filter', () => {
 		expect(exhaustiveFilterMap).toBe(FILTER_TRANSLATORS);
 		expect(Object.keys(FILTER_TRANSLATORS.products)).toEqual([

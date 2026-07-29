@@ -115,6 +115,62 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
+	it('orders the catalog sort by menu_order then the Woo id tiebreak (#810)', async () => {
+		const { database, products } = await openProductsDatabase();
+		const withMenuOrder = (document: ReturnType<typeof product>, menuOrder: number) => ({
+			...document,
+			payload: { ...document.payload, menu_order: menuOrder },
+		});
+		await products.bulkInsert([
+			withMenuOrder(product('product-c', 30, 'A', '1.00'), 0),
+			withMenuOrder(product('product-a', 10, 'B', '1.00'), 2),
+			withMenuOrder(product('product-b', 20, 'C', '1.00'), 0),
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'products',
+				selector: {},
+				sort: [{ menu_order: 'asc' }, { id: 'asc' }],
+			})
+		);
+
+		// Equal menu_order (the common all-zero case) resolves by Woo id — not by
+		// name or insertion order.
+		expect(result.hits.map((document) => document.id)).toEqual([
+			'product-b',
+			'product-c',
+			'product-a',
+		]);
+		await database.close();
+	});
+
+	it('falls back to Woo id order when menu_order is missing (1.9 contract, #810)', async () => {
+		const { database, products } = await openProductsDatabase();
+		await products.bulkInsert([
+			product('product-z', 3, 'C', '1.00'),
+			product('product-x', 1, 'A', '1.00'),
+			product('product-y', 2, 'B', '1.00'),
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'products',
+				selector: {},
+				sort: [{ menu_order: 'asc' }, { id: 'asc' }],
+			})
+		);
+
+		expect(result.hits.map((document) => document.id)).toEqual([
+			'product-x',
+			'product-y',
+			'product-z',
+		]);
+		await database.close();
+	});
+
 	it('reacts to engine insert, update, and delete emissions', async () => {
 		const { database, products } = await openProductsDatabase();
 		await products.insert(product('product-a', 1, 'A', '1.00'));

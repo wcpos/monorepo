@@ -221,10 +221,16 @@ export function translateQueryState<C extends CollectionKey>(
 	const sortField = normalizeQuerySortField(collection, state.sort.field)!;
 	const adapterSortField =
 		collection === 'orders' && sortField === 'total' ? sortPaths.orders.total : sortField;
+	const sort: Record<string, 'asc' | 'desc'>[] = [{ [adapterSortField]: state.sort.direction }];
+	if (collection === 'products' && sortField === 'menu_order') {
+		// 1.9 catalog-order contract (#810): equal menu_order values (usually 0) are the
+		// common case, so the Woo id tiebreak is part of the sort, not an implementation detail.
+		sort.push({ id: 'asc' });
+	}
 	return {
 		collectionName: collection === 'tax-rates' ? 'taxes' : collection,
 		selector,
-		sort: [{ [adapterSortField]: state.sort.direction }],
+		sort,
 		sortEnginePath: (sortPaths[collection] as Record<string, string>)[sortField],
 		limit: state.limit,
 		search: state.search.trim(),
