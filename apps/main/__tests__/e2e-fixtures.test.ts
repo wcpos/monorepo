@@ -1,4 +1,12 @@
-import { isRouteTeardownError, waitForAuthEntry, waitForOAuthCallback } from '../e2e/fixtures';
+import {
+	blockScriptRequests,
+	isRouteTeardownError,
+	waitForAuthEntry,
+	waitForOAuthCallback,
+} from '../e2e/fixtures';
+
+// Reset at module scope to avoid jest-expo's winter-runtime "require outside test scope" error.
+jest.resetModules();
 
 describe('isRouteTeardownError', () => {
 	it('recognizes Playwright route callbacks that fail because the page closed', () => {
@@ -11,8 +19,39 @@ describe('isRouteTeardownError', () => {
 		).toBe(true);
 	});
 
+	it('recognizes Playwright responses disposed during route teardown', () => {
+		expect(isRouteTeardownError(new Error('apiResponse.json: Response has been disposed'))).toBe(
+			true
+		);
+	});
+
+	it('recognizes Playwright route callbacks that outlive their test', () => {
+		expect(isRouteTeardownError(new Error('route.fetch: Test ended.'))).toBe(true);
+	});
+
 	it('does not hide unrelated route failures', () => {
 		expect(isRouteTeardownError(new Error('route.fetch: connect ECONNREFUSED'))).toBe(false);
+	});
+});
+
+describe('blockScriptRequests', () => {
+	it('ignores route teardown while aborting an in-flight script request', async () => {
+		const route = {
+			request: jest.fn().mockReturnValue({ resourceType: () => 'script' }),
+			abort: jest.fn().mockRejectedValue(new Error('route.abort: Test ended.')),
+		};
+
+		await expect(blockScriptRequests(route as never)).resolves.toBeUndefined();
+	});
+
+	it('does not hide unrelated failures while blocking scripts', async () => {
+		const error = new Error('route.abort: access denied');
+		const route = {
+			request: jest.fn().mockReturnValue({ resourceType: () => 'script' }),
+			abort: jest.fn().mockRejectedValue(error),
+		};
+
+		await expect(blockScriptRequests(route as never)).rejects.toBe(error);
 	});
 });
 
