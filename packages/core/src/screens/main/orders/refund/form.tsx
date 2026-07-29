@@ -121,9 +121,7 @@ export function RefundOrderForm({ order }: Props) {
 	const taxRates = React.useContext(TaxRatesContext);
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$) as
-		| 'incl'
-		| 'excl'
-		| undefined;
+		'incl' | 'excl' | undefined;
 	const displayTax: 'incl' | 'excl' = taxDisplayCart === 'excl' ? 'excl' : 'incl';
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,

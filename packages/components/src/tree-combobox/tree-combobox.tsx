@@ -113,8 +113,7 @@ function TreeCombobox<T = undefined>({
 		prop: valueProp as ComboboxOption | ComboboxOption[] | undefined,
 		defaultProp: defaultValue as ComboboxOption | ComboboxOption[] | undefined,
 		onChange: onValueChangeProp as
-			| ((v: ComboboxOption | ComboboxOption[] | undefined) => void)
-			| undefined,
+			((v: ComboboxOption | ComboboxOption[] | undefined) => void) | undefined,
 	});
 
 	const isSelected = React.useCallback(

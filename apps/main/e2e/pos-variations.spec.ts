@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+
 import { authenticatedTest as test } from './fixtures';
 
 /**
@@ -162,9 +163,7 @@ test.describe('POS Variations', () => {
 		await expect(popoverButton).toBeVisible();
 	});
 
-	test('should open variation popover when clicking chevron button', async ({
-		posPage: page,
-	}) => {
+	test('should open variation popover when clicking chevron button', async ({ posPage: page }) => {
 		await searchForVariableProduct(page);
 		await openVariationPopover(page);
 	});
@@ -214,9 +213,7 @@ test.describe('POS Variations', () => {
 		await expect(variationPlusButtons.first()).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should add variation to cart via expanded row plus button', async ({
-		posPage: page,
-	}) => {
+	test('should add variation to cart via expanded row plus button', async ({ posPage: page }) => {
 		await searchForVariableProduct(page);
 
 		// Expand the variable product row
@@ -296,9 +293,7 @@ test.describe('POS Variations', () => {
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('should increment quantity when adding same variation twice', async ({
-		posPage: page,
-	}) => {
+	test('should increment quantity when adding same variation twice', async ({ posPage: page }) => {
 		await searchForVariableProduct(page);
 
 		// Expand the variable product row

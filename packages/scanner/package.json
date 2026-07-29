@@ -16,6 +16,6 @@
 		"rxjs": "7.8.2"
 	},
 	"devDependencies": {
-		"vitest": "^4.1.6"
+		"vitest": "^4.1.10"
 	}
 }

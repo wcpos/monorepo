@@ -39,14 +39,7 @@ export type ErrorCode =
 	| 'CLIENT211'
 	| 'CLIENT999';
 export type ErrorDomain =
-	| 'AUTH'
-	| 'SYNC'
-	| 'CHECKOUT'
-	| 'PAYMENT'
-	| 'PRINT'
-	| 'PRODUCT'
-	| 'LICENSE'
-	| 'CLIENT';
+	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
 export type SafeAction =
 	| 'retry'
@@ -58,18 +51,9 @@ export type SafeAction =
 	| 'contact-support';
 export type RetryPolicy = 'automatic' | 'manual' | 'after-change' | 'never';
 export type DataSafety =
-	| 'no-impact'
-	| 'local-only'
-	| 'order-safe'
-	| 'money-moved'
-	| 'outcome-unknown'
-	| 'data-at-risk';
+	'no-impact' | 'local-only' | 'order-safe' | 'money-moved' | 'outcome-unknown' | 'data-at-risk';
 export type Escalation =
-	| 'none'
-	| 'store-admin'
-	| 'site-admin'
-	| 'support-with-export'
-	| 'payment-provider';
+	'none' | 'store-admin' | 'site-admin' | 'support-with-export' | 'payment-provider';
 
 export interface CatalogueEntry {
 	code: ErrorCode;

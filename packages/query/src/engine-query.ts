@@ -87,8 +87,7 @@ function matchingSelectors$(
 
 	const collectionName = engineCollectionNameFor(descriptor.collection);
 	const collection = database.collections[collectionName] as unknown as
-		| SearchableCollection
-		| undefined;
+		SearchableCollection | undefined;
 	if (!collection?.initSearch) return of(withSearchSelector(selector, []));
 
 	return defer(() =>
@@ -156,18 +155,16 @@ export function observeEngineQuery(
 						limit: descriptor.limit,
 					})
 				),
-				map(
-					(result): QueryResult<RxCollection> => ({
-						elapsed: result.elapsed,
-						searchActive: Boolean(descriptor.search?.trim()),
-						count: result.count,
-						hits: result.hits.map((document) => ({
-							id: document.primary,
-							score: 0,
-							document: wrapEngineDocument(descriptor.collection, document),
-						})),
-					})
-				),
+				map((result): QueryResult<RxCollection> => ({
+					elapsed: result.elapsed,
+					searchActive: Boolean(descriptor.search?.trim()),
+					count: result.count,
+					hits: result.hits.map((document) => ({
+						id: document.primary,
+						score: 0,
+						document: wrapEngineDocument(descriptor.collection, document),
+					})),
+				})),
 				catchError((error) => {
 					if (error && SEARCH_INDEX_ERROR in error) {
 						return throwError(() => error[SEARCH_INDEX_ERROR]);

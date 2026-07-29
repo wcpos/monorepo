@@ -178,21 +178,19 @@ describe('seedSchedulerTasksFromQueryDeclarations', () => {
 
 	it('fetches when a complete fresh lane expects records that are not fresh locally', async () => {
 		const coverageRepository = {
-			readSnapshot: vi.fn(
-				async (): Promise<PersistedCoverageDocumentSet> => ({
-					records: [],
-					lanes: [
-						{
-							collection: 'products',
-							queryKey: 'products:search:keyboard',
-							complete: true,
-							expectedRecordIds: ['woo-product:1'],
-							freshUntilMs: 20_000,
-							updatedAtMs: 9_000,
-						},
-					],
-				})
-			),
+			readSnapshot: vi.fn(async (): Promise<PersistedCoverageDocumentSet> => ({
+				records: [],
+				lanes: [
+					{
+						collection: 'products',
+						queryKey: 'products:search:keyboard',
+						complete: true,
+						expectedRecordIds: ['woo-product:1'],
+						freshUntilMs: 20_000,
+						updatedAtMs: 9_000,
+					},
+				],
+			})),
 		};
 		const repo = schedulerRepository();
 

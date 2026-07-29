@@ -27,11 +27,7 @@ export type CoverageCompactionCadenceInput = {
 };
 
 export type CoverageCompactionCadenceAction =
-	| 'run'
-	| 'skip'
-	| 'wait-for-owner'
-	| 'take-over'
-	| 'wait-for-failure-backoff';
+	'run' | 'skip' | 'wait-for-owner' | 'take-over' | 'wait-for-failure-backoff';
 
 export type CoverageCompactionCadenceDecision = {
 	action: CoverageCompactionCadenceAction;

@@ -106,8 +106,7 @@ function fromRecordDocument(
 
 function fromLaneDocument(
 	document:
-		| CoverageLaneDocument
-		| (PersistedCoverageLane & { laneKey: string; schemaVersion?: number })
+		CoverageLaneDocument | (PersistedCoverageLane & { laneKey: string; schemaVersion?: number })
 ): PersistedCoverageLane {
 	const { laneKey: _laneKey, schemaVersion: _schemaVersion, ...lane } = document;
 	if ('collectionName' in lane) {

@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
+
+import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
 
 /**
  * Coupons page (pro-only drawer page).
@@ -53,10 +54,7 @@ test.describe('Coupons Page (Pro)', () => {
 					const countEl = screen.getByTestId('data-table-count');
 					const hasResults = await countEl
 						.isVisible()
-						.then(
-							async (visible) =>
-								visible && /[0-9]/.test((await countEl.textContent()) ?? '')
-						)
+						.then(async (visible) => visible && /[0-9]/.test((await countEl.textContent()) ?? ''))
 						.catch(() => false);
 					const noResults = await screen
 						.getByTestId('no-data-message')

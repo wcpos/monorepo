@@ -29,10 +29,7 @@ export type QueryTotalRequestOwnerStatus =
 	| 'expired-owner';
 
 export type QueryTotalRequestRetryStatus =
-	| 'not-needed'
-	| 'not-applicable'
-	| 'backoff-active'
-	| 'retry-ready';
+	'not-needed' | 'not-applicable' | 'backoff-active' | 'retry-ready';
 
 export type QueryTotalRequestState = {
 	queryKey: string;

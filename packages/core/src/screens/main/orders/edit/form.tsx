@@ -192,8 +192,7 @@ export function EditOrderForm({ order }: Props) {
 		(
 			customerId: number,
 			selectedCustomer:
-				| import('@wcpos/database').CustomerDocument
-				| ReturnType<typeof useGuestCustomer>
+				import('@wcpos/database').CustomerDocument | ReturnType<typeof useGuestCustomer>
 		) => {
 			// customerId can be 0
 			if (customerId === undefined || customerId === null) return;
