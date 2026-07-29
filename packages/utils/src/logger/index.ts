@@ -11,7 +11,8 @@ import { logger } from 'react-native-logs';
 
 import { getErrorCodeDocURL } from './constants';
 import { clearRecorder, recorderStats, recordEvent, snapshotRecorder } from './flight-recorder';
-import { redactSensitiveFields } from './redact';
+import { ERROR_CATALOGUE, ErrorCode } from './generated/error-codes.generated';
+import { redactSensitiveFields, redactSensitiveText } from './redact';
 import { LogRetentionCollection, sweepLogRetention } from './retention';
 
 /**
@@ -217,19 +218,26 @@ function persistLog(
 	terminal?: LogTerminalFields
 ): void {
 	const now = Date.now();
-	const admittedContext = admitContext({
-		...context,
-		search: searchableContext(context),
-	});
-	const code = clampColumn(
+	const outcome = terminal?.outcome;
+	let persistedContext = context;
+	let code = clampColumn(
 		'code',
 		typeof context.errorCode === 'string' ? context.errorCode : undefined
 	);
+	if (outcome === 'ok' && code && ERROR_CATALOGUE[code as ErrorCode]?.severity === 'error') {
+		persistedContext = { ...context };
+		delete persistedContext.errorCode;
+		console.error(`Dropped failure-severity code ${code} from log row with outcome ok`);
+		code = undefined;
+	}
+	const admittedContext = admitContext({
+		...persistedContext,
+		search: searchableContext(persistedContext),
+	});
 	const category = clampColumn(
 		'category',
 		typeof context.category === 'string' ? context.category : undefined
 	);
-	const outcome = terminal?.outcome;
 	const identity = JSON.stringify([
 		level,
 		code ?? null,
@@ -466,6 +474,7 @@ const mainTransport = (props: any) => {
 	} else {
 		message = String(rawMsg || '');
 	}
+	message = redactSensitiveText(message);
 
 	// Redact sensitive fields from context before any output
 	if (options.context) {

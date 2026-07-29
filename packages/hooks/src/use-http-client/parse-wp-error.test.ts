@@ -53,69 +53,71 @@ describe('parse-wp-error', () => {
 	describe('mapToInternalCode', () => {
 		describe('direct mappings', () => {
 			it('should map WordPress REST API errors', () => {
-				expect(mapToInternalCode('rest_forbidden')).toBe('API02005');
-				expect(mapToInternalCode('rest_cannot_view')).toBe('API02004');
-				expect(mapToInternalCode('rest_login_required')).toBe('API02010');
-				expect(mapToInternalCode('rest_no_route')).toBe('API04006');
-				expect(mapToInternalCode('rest_invalid_param')).toBe('API03003');
+				expect(mapToInternalCode('rest_forbidden')).toBe('AUTH201');
+				expect(mapToInternalCode('rest_cannot_view')).toBe('AUTH201');
+				expect(mapToInternalCode('rest_login_required')).toBe('AUTH101');
+				expect(mapToInternalCode('rest_no_route')).toBe('AUTH311');
+				expect(mapToInternalCode('rest_invalid_param')).toBe('SYNC211');
 			});
 
 			it('should map WooCommerce REST API errors', () => {
-				expect(mapToInternalCode('woocommerce_rest_authentication_error')).toBe('API02001');
-				expect(mapToInternalCode('woocommerce_rest_cannot_view')).toBe('API02004');
-				expect(mapToInternalCode('woocommerce_rest_cannot_create')).toBe('API02005');
-				expect(mapToInternalCode('woocommerce_rest_invalid_id')).toBe('API03003');
+				expect(mapToInternalCode('woocommerce_rest_authentication_error')).toBe('AUTH101');
+				expect(mapToInternalCode('woocommerce_rest_cannot_view')).toBe('AUTH201');
+				expect(mapToInternalCode('woocommerce_rest_cannot_create')).toBe('AUTH201');
+				expect(mapToInternalCode('woocommerce_rest_invalid_id')).toBe('SYNC211');
 			});
 
 			it('should map JWT Auth errors', () => {
-				expect(mapToInternalCode('jwt_auth_failed')).toBe('API02001');
-				expect(mapToInternalCode('jwt_auth_invalid_token')).toBe('API02003');
-				expect(mapToInternalCode('jwt_auth_expired_token')).toBe('API02002');
-				expect(mapToInternalCode('jwt_auth_no_auth_header')).toBe('API02010');
+				expect(mapToInternalCode('jwt_auth_failed')).toBe('AUTH101');
+				expect(mapToInternalCode('jwt_auth_invalid_token')).toBe('AUTH101');
+				expect(mapToInternalCode('jwt_auth_expired_token')).toBe('AUTH101');
+				expect(mapToInternalCode('jwt_auth_no_auth_header')).toBe('AUTH101');
 			});
 		});
 
 		describe('HTTP status fallbacks', () => {
 			it('should fallback to HTTP status mapping when no direct mapping', () => {
-				expect(mapToInternalCode('unknown_error', 400)).toBe('API03001');
-				expect(mapToInternalCode('unknown_error', 401)).toBe('API02010');
-				expect(mapToInternalCode('unknown_error', 403)).toBe('API02005');
-				expect(mapToInternalCode('unknown_error', 404)).toBe('API04006');
-				expect(mapToInternalCode('unknown_error', 429)).toBe('API03005');
+				expect(mapToInternalCode('unknown_error', 400)).toBe('SYNC211');
+				expect(mapToInternalCode('unknown_error', 401)).toBe('AUTH101');
+				expect(mapToInternalCode('unknown_error', 403)).toBe('AUTH201');
+				expect(mapToInternalCode('unknown_error', 404)).toBe('AUTH311');
+				expect(mapToInternalCode('unknown_error', 429)).toBe('CLIENT999');
 			});
 
-			it('should map 5xx errors to service unavailable', () => {
-				expect(mapToInternalCode('unknown_error', 500)).toBe('SY02002');
-				expect(mapToInternalCode('unknown_error', 502)).toBe('SY02002');
-				expect(mapToInternalCode('unknown_error', 503)).toBe('SY02002');
-				expect(mapToInternalCode('unknown_error', 504)).toBe('SY02002');
+			it('should map 5xx errors to the store-server code, never a client code', () => {
+				// The store WAS reached and its server failed — that is the site's fault,
+				// not the POS's, and it carries a different safe action.
+				expect(mapToInternalCode('unknown_error', 500)).toBe('SYNC131');
+				expect(mapToInternalCode('unknown_error', 502)).toBe('SYNC131');
+				expect(mapToInternalCode('unknown_error', 503)).toBe('SYNC131');
+				expect(mapToInternalCode('unknown_error', 504)).toBe('SYNC131');
 			});
 
-			it('should return null for unknown codes without HTTP status', () => {
-				expect(mapToInternalCode('unknown_error')).toBeNull();
-				expect(mapToInternalCode('another_unknown')).toBeNull();
+			it('should return the catch-all for unknown codes without HTTP status', () => {
+				expect(mapToInternalCode('unknown_error')).toBe('CLIENT999');
+				expect(mapToInternalCode('another_unknown')).toBe('CLIENT999');
 			});
 
-			it('should return null for unmapped HTTP status', () => {
-				expect(mapToInternalCode('unknown_error', 200)).toBeNull();
-				expect(mapToInternalCode('unknown_error', 302)).toBeNull();
+			it('should return the catch-all for unmapped HTTP status', () => {
+				expect(mapToInternalCode('unknown_error', 200)).toBe('CLIENT999');
+				expect(mapToInternalCode('unknown_error', 302)).toBe('CLIENT999');
 			});
 		});
 
 		describe('edge cases', () => {
 			it('should handle null server code', () => {
 				expect(mapToInternalCode(null)).toBeNull();
-				expect(mapToInternalCode(null, 401)).toBe('API02010');
+				expect(mapToInternalCode(null, 401)).toBe('AUTH101');
 			});
 
 			it('should handle undefined server code', () => {
 				expect(mapToInternalCode(undefined)).toBeNull();
-				expect(mapToInternalCode(undefined, 403)).toBe('API02005');
+				expect(mapToInternalCode(undefined, 403)).toBe('AUTH201');
 			});
 
 			it('should prefer direct mapping over HTTP status', () => {
 				// Even with a 404 status, the direct mapping should be used
-				expect(mapToInternalCode('rest_forbidden', 404)).toBe('API02005');
+				expect(mapToInternalCode('rest_forbidden', 404)).toBe('AUTH201');
 			});
 		});
 	});
@@ -133,10 +135,29 @@ describe('parse-wp-error', () => {
 			const result = parseWpError(error, fallback);
 
 			expect(result.message).toBe('Sorry, you cannot view this resource.');
-			expect(result.code).toBe('API02004');
+			expect(result.code).toBe('AUTH201');
 			expect(result.serverCode).toBe('woocommerce_rest_cannot_view');
 			expect(result.status).toBe(401);
 			expect(result.isWpError).toBe(true);
+			expect(result.triage).toBeUndefined();
+		});
+
+		it('preserves an unmapped server code and marks its catch-all for triage', () => {
+			const result = parseWpError(
+				{
+					code: 'merchant_plugin_unknown_error',
+					message: 'Unexpected response',
+					data: { status: 503 },
+				},
+				fallback
+			);
+
+			expect(result).toMatchObject({
+				code: 'SYNC131',
+				serverCode: 'merchant_plugin_unknown_error',
+				status: 503,
+				triage: true,
+			});
 		});
 
 		it('should handle error with only message', () => {
@@ -250,6 +271,26 @@ describe('parse-wp-error', () => {
 
 		it('should return null for WP error without code', () => {
 			expect(extractWpErrorCode({ message: 'Error without code' })).toBeNull();
+		});
+	});
+
+	describe('server-fault mapping', () => {
+		it('maps a 5xx to the store-server code, not a client code', () => {
+			// Regression: a store 500 previously mapped to CLIENT999 "WCPOS encountered
+			// an unexpected error", blaming the POS for the site's own fault.
+			const parsed = parseWpError(
+				{ message: 'Internal Server Error', data: { status: 500 } },
+				'fallback'
+			);
+
+			expect(parsed.code).toBe('SYNC131');
+			expect(parsed.code).not.toBe('CLIENT999');
+		});
+
+		it('keeps 503 on the store-server code too', () => {
+			expect(parseWpError({ message: 'nope', data: { status: 503 } }, 'fallback').code).toBe(
+				'SYNC131'
+			);
 		});
 	});
 });

@@ -176,12 +176,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// fetcher() and present to the caller as a failed HTTP request — silently
 	// converting a request that actually succeeded into a failure. Each sink is
 	// isolated separately so a broken one cannot starve the other.
-	const emitTransport = (event: SyncEvent): void => {
+	const emitTransport = (event: SyncEvent, durable = true): void => {
 		try {
 			appMetricsObserver(event);
 		} catch (error) {
 			console.error('Metrics observer threw on a transport event', error);
 		}
+		if (!durable) return;
 		try {
 			guardedDiagnostics(event);
 		} catch (error) {
@@ -221,18 +222,21 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			} catch (error) {
 				const atMs = Date.now();
 				const durationMs = atMs - startedAtMs;
-				emitTransport({
-					type: 'transport.request',
-					level: 'warn',
-					collection: collectionFromSyncUrl(finalUrl),
-					fields: {
-						durationMs,
-						bytes: 0,
-						status: 0,
-						method,
-						path,
+				emitTransport(
+					{
+						type: 'transport.request',
+						level: 'warn',
+						collection: collectionFromSyncUrl(finalUrl),
+						fields: {
+							durationMs,
+							bytes: 0,
+							status: 0,
+							method,
+							path,
+						},
 					},
-				});
+					(error as { name?: unknown } | null)?.name !== 'AbortError'
+				);
 				recordTransport({ atMs, durationMs, bytes: 0, ok: false, epoch: epochAtStart });
 				throw error;
 			}

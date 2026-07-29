@@ -286,6 +286,10 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 					// - Let polling retry later
 					throw error;
 				}
+				const axiosError = error as AxiosError;
+				const wpError = axiosError.response?.data
+					? parseWpError(axiosError.response.data, axiosError.message)
+					: undefined;
 				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
 					const method = (reqConfig.method ?? 'GET').toUpperCase();
 					const endpoint = reqConfig.url
@@ -293,14 +297,19 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 						: 'unknown';
 					httpLogger.error('HTTP request failed', {
 						saveToDb: true,
-						context: { method, endpoint, status: (error as AxiosError).response?.status ?? 0 },
+						context: {
+							method,
+							endpoint,
+							status: axiosError.response?.status ?? 0,
+							...(wpError?.code && { errorCode: wpError.code }),
+							...(wpError?.serverCode && { serverCode: wpError.serverCode }),
+							...(wpError?.triage && { triage: true }),
+						},
 					});
 				}
 
 				// Enrich error with WordPress/WooCommerce error details before throwing
-				const axiosError = error as AxiosError;
-				if (axiosError.response?.data) {
-					const wpError = parseWpError(axiosError.response.data, axiosError.message);
+				if (wpError) {
 					(error as any).wpCode = wpError.code; // Internal code (APIxxxxx)
 					(error as any).wpServerCode = wpError.serverCode; // Original server code for debugging
 					(error as any).wpMessage = wpError.message;

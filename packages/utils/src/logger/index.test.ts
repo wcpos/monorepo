@@ -353,6 +353,24 @@ describe('logger/index', () => {
 			log.setLevel('debug');
 		});
 
+		it('redacts credentials before retaining debug narration for promotion', () => {
+			getLogger(['notifications']).debug(
+				'Connecting with Bearer abc.def.ghi to https://user:password@store.test',
+				{
+					context: {
+						metadata: { licenseKey: 'license-key-value-12345' },
+						url: 'https://store.test?authorization=Bearer%20secret-token',
+					},
+				}
+			);
+
+			const serialized = JSON.stringify(snapshotRecorder());
+			expect(serialized).not.toContain('abc.def.ghi');
+			expect(serialized).not.toContain('user:password');
+			expect(serialized).not.toContain('license-key-value-12345');
+			expect(serialized).not.toContain('secret-token');
+		});
+
 		it('promotes recorded debug rows once, in order, without recursion', async () => {
 			const { collection } = createLogCollection();
 			setDatabase(collection);
@@ -431,6 +449,25 @@ describe('logger/index', () => {
 			await flushWrites();
 
 			expect(rows[0]).toMatchObject({ level: 'info', outcome: 'ok' });
+		});
+
+		it('drops a failure code from an ok row (PY02001 regression)', async () => {
+			const consoleError = jest.spyOn(console, 'error').mockImplementation();
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['payment']).success('Payment completed; status check failed', {
+				context: { errorCode: 'CLIENT999' },
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).not.toHaveProperty('code');
+			expect(rows[0].context).not.toHaveProperty('errorCode');
+			expect(consoleError).toHaveBeenCalledWith(
+				'Dropped failure-severity code CLIENT999 from log row with outcome ok'
+			);
+			consoleError.mockRestore();
 		});
 
 		it('promotes defined record fields and lets an explicit success outcome win', async () => {

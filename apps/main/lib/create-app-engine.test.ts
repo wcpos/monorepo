@@ -371,8 +371,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValue(new Response(null, { status: 200 }));
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
-			loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine();
 		appMetricsObserver.mockImplementation(() => {
 			throw new TypeError('observer exploded');
 		});
@@ -443,7 +442,13 @@ describe('createAppSyncEngine scope cache', () => {
 	it('does not persist expected sync aborts as errors', async () => {
 		const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
 		const fetch = jest.spyOn(globalThis, 'fetch').mockRejectedValue(abort);
-		const { createAppSyncEngine, createRxdbSyncEngine, networkError } = loadCreateAppEngine();
+		const {
+			createAppSyncEngine,
+			createRxdbSyncEngine,
+			appMetricsObserver,
+			recordTransport,
+			networkWarn,
+		} = loadCreateAppEngine();
 		createAppSyncEngine(BASE_OPTIONS);
 
 		await expect(
@@ -451,7 +456,15 @@ describe('createAppSyncEngine scope cache', () => {
 				'https://store.example.test/wp-json/wcpos/v2/products'
 			)
 		).rejects.toBe(abort);
-		expect(networkError).not.toHaveBeenCalled();
+		expect(appMetricsObserver).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'warn',
+				fields: expect.objectContaining({ status: 0 }),
+			})
+		);
+		expect(recordTransport).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
+		expect(networkWarn).not.toHaveBeenCalled();
 		fetch.mockRestore();
 	});
 
