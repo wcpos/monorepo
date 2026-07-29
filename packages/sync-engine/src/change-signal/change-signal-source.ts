@@ -16,6 +16,7 @@ import type {
 } from '@wcpos/sync-core';
 
 import {
+	applyBarcodeSelectorsFromSnapshot,
 	type ConfigFingerprintEnvelope,
 	mapConfigFingerprintEnvelope,
 } from './config-fingerprint-source';
@@ -301,15 +302,18 @@ export function createLiveChangeSignalSource(
 			const echoed = checkpointNumber(envelope, 'since', cursor.sequence);
 			const head = checkpointNumber(envelope, 'head', Number.NaN);
 			const maxSeen = rows.reduce((max, row) => Math.max(max, row.sequence), cursor.sequence);
+			const configFingerprint =
+				sequenceLogConfigFingerprint === undefined
+					? undefined
+					: mapConfigFingerprintEnvelope(sequenceLogConfigFingerprint);
+			if (configFingerprint) applyBarcodeSelectorsFromSnapshot(configFingerprint);
 			const page = {
 				rows,
 				cursor: { sequence: Math.max(echoed, maxSeen) },
 				reportedCursor: { sequence: echoed },
 				hasMore: envelope.complete === false,
 				...(Number.isFinite(head) ? { head } : {}),
-				...(sequenceLogConfigFingerprint === undefined
-					? {}
-					: { configFingerprint: mapConfigFingerprintEnvelope(sequenceLogConfigFingerprint) }),
+				...(configFingerprint === undefined ? {} : { configFingerprint }),
 			};
 			sequenceLogCursor = page.cursor.sequence;
 			return page;

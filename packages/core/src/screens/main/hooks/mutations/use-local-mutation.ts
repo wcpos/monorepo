@@ -12,6 +12,7 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
+import { getActiveBarcodeSelectors, mapBarcodeEditToPayload } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -194,9 +195,17 @@ async function applyEngineResidentChanges(
 	changes: Record<string, unknown>
 ): Promise<EngineResident> {
 	return (await resident.incrementalModify((old) => {
-		const payload = cloneDeep((old.payload ?? {}) as Record<string, unknown>);
+		let payload = cloneDeep((old.payload ?? {}) as Record<string, unknown>);
 		for (const [field, value] of Object.entries(syncableChanges(changes))) {
 			set(payload, field, value);
+		}
+		if (
+			(collection === 'products' || collection === 'variations') &&
+			typeof changes.barcode === 'string'
+		) {
+			const barcode = changes.barcode.trim();
+			payload = mapBarcodeEditToPayload(payload, getActiveBarcodeSelectors(collection));
+			payload.barcode = barcode;
 		}
 		return withPromotedFields(collection, { ...old, payload });
 	})) as EngineResident;

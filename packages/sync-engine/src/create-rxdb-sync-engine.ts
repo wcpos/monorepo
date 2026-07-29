@@ -81,6 +81,7 @@ import {
 	createChangeSignalLane,
 	zeroChangeSignalStateBlob,
 } from './change-signal/change-signal-lane';
+import { hydrateActiveBarcodeSelectors } from './change-signal/config-fingerprint-source';
 import {
 	createWriteDrainLane,
 	fetchOrderServerRevision,
@@ -1156,6 +1157,34 @@ export function createRxdbSyncEngine(
 			if (!bootstrappedScopes.has(scopeId)) {
 				const database = databaseByScopeId.get(scopeId);
 				if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
+				setLifecyclePhase('barcode-selector-hydrate');
+				const hydrationAbort = new AbortController();
+				const hydrationTimeout = setTimeout(() => hydrationAbort.abort(), 5_000);
+				try {
+					await Promise.race([
+						hydrateActiveBarcodeSelectors({
+							fetcher,
+							syncBaseUrl: ports.site.syncBaseUrl,
+							signal: hydrationAbort.signal,
+						}),
+						new Promise<never>((_, reject) =>
+							hydrationAbort.signal.addEventListener(
+								'abort',
+								() => reject(new Error('barcode selector hydration timed out')),
+								{ once: true }
+							)
+						),
+					]);
+				} catch (error) {
+					diagnostics({
+						type: 'engine.barcode-selector-hydrate-failed',
+						level: 'debug',
+						message: error instanceof Error ? error.message : String(error),
+						fields: { scopeId },
+					});
+				} finally {
+					clearTimeout(hydrationTimeout);
+				}
 				setLifecyclePhase('pos-bootstrap-seed');
 				try {
 					await seedPosBootstrapLanes({

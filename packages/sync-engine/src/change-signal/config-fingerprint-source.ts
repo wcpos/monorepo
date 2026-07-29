@@ -10,6 +10,7 @@ import type {
 	ConfigFingerprintSnapshot,
 	ConfigFingerprintSource,
 } from '@wcpos/sync-core';
+import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
 
 /** Fetcher contract — same shape the rest of the bench uses. */
 export type ConfigSourceFetcher = (
@@ -76,9 +77,19 @@ export function mapConfigFingerprintEnvelope(
 	return snapshot;
 }
 
+export function applyBarcodeSelectorsFromSnapshot(snapshot: ConfigFingerprintSnapshot): void {
+	for (const collection of ['products', 'variations'] as const) {
+		const selectors = snapshot.barcodeFields?.[collection];
+		// Empty lists are deliberately not applied so old-plugin envelopes preserve stale-but-plausible selectors.
+		if (selectors && selectors.length > 0) {
+			setActiveBarcodeSelectors(collection, selectors);
+		}
+	}
+}
+
 /**
  * Builds the live ConfigFingerprintSource the config-change signal consumes.
- * Pure mapping: no engine logic, no policy, no retries — request + project.
+ * Request, project, and publish active selectors; no retries.
  */
 export function createConfigFingerprintLiveSource(
 	input: CreateConfigFingerprintLiveSourceInput
@@ -91,7 +102,20 @@ export function createConfigFingerprintLiveSource(
 			if (!response.ok) {
 				throw new Error(`changes/config-fingerprint failed: ${response.status}`);
 			}
-			return mapConfigFingerprintEnvelope(JSON.parse(body) as ConfigFingerprintEnvelope);
+			const snapshot = mapConfigFingerprintEnvelope(JSON.parse(body) as ConfigFingerprintEnvelope);
+			applyBarcodeSelectorsFromSnapshot(snapshot);
+			return snapshot;
 		},
 	};
+}
+
+export async function hydrateActiveBarcodeSelectors(
+	input: CreateConfigFingerprintLiveSourceInput & { signal: AbortSignal }
+): Promise<void> {
+	const source = createConfigFingerprintLiveSource({
+		syncBaseUrl: input.syncBaseUrl,
+		fetcher: (url, init) => input.fetcher(url, { ...init, signal: input.signal }),
+	});
+	const snapshot = await source.pollConfigFingerprints();
+	applyBarcodeSelectorsFromSnapshot(snapshot);
 }

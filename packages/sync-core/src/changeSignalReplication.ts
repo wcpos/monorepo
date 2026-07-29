@@ -162,15 +162,13 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 		}
 	}
 
-	// Config tier — split stale collections by whether a re-derivable barcode
-	// field list was reported for them.
+	// Products/variations re-fetch so ingest re-materializes barcode. Empty
+	// old-plugin envelopes leave existing values untouched.
 	const reDeriveBarcode: { collection: BarcodeConfigCollection; activeFields: string[] }[] = [];
 	const reFetchCollections: BarcodeConfigCollection[] = [];
 	for (const collection of outcome.staleCollections ?? []) {
 		const activeFields = outcome.configBarcodeFields?.[collection];
-		if (activeFields !== undefined && activeFields.length > 0) {
-			reDeriveBarcode.push({ collection, activeFields: [...activeFields] });
-		} else {
+		if (collection === 'tax_rates' || (activeFields !== undefined && activeFields.length > 0)) {
 			reFetchCollections.push(collection);
 		}
 	}

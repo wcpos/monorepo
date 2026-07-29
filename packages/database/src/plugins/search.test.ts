@@ -12,6 +12,9 @@ import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 // Real FlexSearch engine, used by the tokenizer-behaviour tests below.
 import { Index } from 'flexsearch';
 
+// eslint-disable-next-line import/no-unresolved -- Jest maps source without a runtime dependency.
+import { deriveBarcodeFromPayload } from '@wcpos/sync-core';
+
 import { getSearchIdentifier, searchPlugin } from './search';
 
 import type { RxCollection } from 'rxdb';
@@ -389,6 +392,18 @@ describe('search plugin', () => {
 			const index = buildIndex('full');
 			expect(index.search('kuor')).toContain(1);
 			expect(index.search('shirt')).toContain(2);
+		});
+
+		it('finds a custom-meta barcode after materialization into the grid search field', () => {
+			const index = new Index({ preset: 'performance', tokenize: 'full' });
+			const barcode = deriveBarcodeFromPayload(
+				{ meta_data: [{ key: '_barcode', value: 'CUSTOM-1' }] },
+				['meta_data:_barcode']
+			);
+			if (!barcode) throw new Error('expected a materialized barcode');
+			index.add(1, barcode);
+
+			expect(index.search('CUSTOM-1')).toContain(1);
 		});
 	});
 

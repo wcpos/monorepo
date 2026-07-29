@@ -3,6 +3,8 @@
  */
 import { renderHook } from '@testing-library/react';
 
+import { deriveBarcodeFromPayload, setActiveBarcodeSelectors } from '@wcpos/sync-core';
+
 import { useBarcodeSearch } from './use-barcode-search';
 
 type Payload = Record<string, unknown>;
@@ -55,9 +57,39 @@ function search(code: string) {
 beforeEach(() => {
 	productDocs = [];
 	variationDocs = [];
+	setActiveBarcodeSelectors('products', ['barcode']);
+	setActiveBarcodeSelectors('variations', ['barcode']);
 });
 
 describe('barcodeSearch product visibility', () => {
+	it.each([
+		['sku', { sku: 'LOCAL-1' }],
+		['global_unique_id', { global_unique_id: 'LOCAL-1' }],
+		['meta_data:_barcode', { meta_data: [{ key: '_barcode', value: 'LOCAL-1' }] }],
+	] as const)('resolves the materialized %s carrier fully offline', async (selector, raw) => {
+		setActiveBarcodeSelectors('products', [selector]);
+		productDocs = [
+			doc('local', {
+				...raw,
+				barcode: deriveBarcodeFromPayload(raw, [selector]),
+			}),
+		];
+
+		expect((await search('LOCAL-1')) as unknown as FakeDoc[]).toMatchObject([{ id: 'local' }]);
+	});
+
+	it('returns no local match when an old envelope reports no active selectors', async () => {
+		setActiveBarcodeSelectors('products', []);
+		productDocs = [
+			doc('old-plugin', {
+				sku: 'ONLINE-ONLY',
+				global_unique_id: 'ONLINE-ONLY',
+			}),
+		];
+
+		expect(await search('ONLINE-ONLY')).toEqual([]);
+	});
+
 	it('does not match a draft product but still matches a published product', async () => {
 		productDocs = [
 			doc('draft', { barcode: 'DRAFT-123', status: 'draft' }),
@@ -107,6 +139,28 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 		// The exact SKU still matches.
 		const exact = (await search('012345678905')) as unknown as FakeDoc[];
 		expect(exact.map((r) => r.id)).toEqual(['sku-only']);
+	});
+
+	it('does not apply UPC equivalence when the active materialized carrier is SKU', async () => {
+		setActiveBarcodeSelectors('products', ['sku']);
+		productDocs = [doc('active-sku', { sku: '012345678905', barcode: '012345678905' })];
+
+		expect(await search('0012345678905')).toEqual([]);
+	});
+
+	it('still applies UPC equivalence to the global-id fallback when SKU is active', async () => {
+		setActiveBarcodeSelectors('products', ['sku']);
+		productDocs = [
+			doc('global-fallback', {
+				sku: 'OTHER',
+				barcode: 'OTHER',
+				global_unique_id: '012345678905',
+			}),
+		];
+
+		expect((await search('0012345678905')) as unknown as FakeDoc[]).toMatchObject([
+			{ id: 'global-fallback' },
+		]);
 	});
 
 	it('does not let an exact SKU preempt a barcode-equivalence match (#740 P1)', async () => {

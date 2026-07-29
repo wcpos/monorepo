@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
+
 import {
 	materializeGreedyPrunable,
 	materializeLocalOnly,
@@ -11,6 +13,41 @@ const uuid = '00000000-0000-4000-8000-000000000007';
 const meta_data = [{ key: '_woocommerce_pos_uuid', value: uuid }];
 
 describe('record materialization seam', () => {
+	it.each([
+		['sku', { sku: '  SKU-7  ' }, 'SKU-7'],
+		['global_unique_id', { global_unique_id: '  GTIN-7  ' }, 'GTIN-7'],
+		[
+			'meta_data:_barcode',
+			{ meta_data: [...meta_data, { key: '_barcode', value: '  CUSTOM-7  ' }] },
+			'CUSTOM-7',
+		],
+	] as const)(
+		'materializes the active %s carrier as payload.barcode',
+		(selector, carrier, barcode) => {
+			setActiveBarcodeSelectors('products', [selector]);
+			const stored = materializeTargeted('products', {
+				id: 7,
+				date_modified_gmt: 'legacy',
+				...carrier,
+				...(selector.startsWith('meta_data:') ? {} : { meta_data }),
+			}).storedDocument;
+
+			expect(stored.payload).toMatchObject({ barcode });
+		}
+	);
+
+	it('does not clobber a previously materialized barcode when no selectors are reported', () => {
+		setActiveBarcodeSelectors('products', []);
+		const stored = materializeTargeted('products', {
+			id: 7,
+			barcode: 'KEEP-ME',
+			date_modified_gmt: 'legacy',
+			meta_data,
+		}).storedDocument;
+
+		expect(stored.payload).toMatchObject({ barcode: 'KEEP-ME' });
+	});
+
 	it('owns stamped revision adoption, legacy fallback, identity, digest routing, and promoted product fields', () => {
 		const stamped = materializeTargeted('products', {
 			id: 7,

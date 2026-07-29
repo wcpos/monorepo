@@ -7,10 +7,32 @@ import {
 	buildBarcodeSymbologyIndex,
 	buildLocalBarcodeIndex,
 	buildResolveBarcodeUrl,
+	deriveBarcodeFromPayload,
 	type ResolveBarcodeResponse,
 	resolveScan,
 	type ScanEvent,
 } from './barcodeResolve';
+
+describe('deriveBarcodeFromPayload', () => {
+	it.each([
+		['sku', { sku: '  SKU-1  ' }, 'SKU-1'],
+		['global_unique_id', { global_unique_id: '  GTIN-1  ' }, 'GTIN-1'],
+		['meta_data:_barcode', { meta_data: [{ key: '_barcode', value: '  CUSTOM-1  ' }] }, 'CUSTOM-1'],
+	] as const)(
+		'derives the active %s carrier with trim-only normalization',
+		(selector, raw, expected) => {
+			expect(deriveBarcodeFromPayload(raw, [selector])).toBe(expected);
+		}
+	);
+
+	it('returns undefined for an empty selector list or unusable carriers', () => {
+		expect(deriveBarcodeFromPayload({ barcode: 'keep-me' }, [])).toBeUndefined();
+		expect(deriveBarcodeFromPayload({ sku: '   ' }, ['sku'])).toBeUndefined();
+		expect(
+			deriveBarcodeFromPayload({ global_unique_id: 123 }, ['global_unique_id'])
+		).toBeUndefined();
+	});
+});
 
 const SYNC_BASE_URL = 'http://wcpos.local/wp-json/wcpos/v2';
 

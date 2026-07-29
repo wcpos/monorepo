@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { RECORD_UUID_META_KEY } from './recordIdentity';
 import { type SyncEvent } from './telemetry';
+import { setActiveBarcodeSelectors } from './barcodeResolve';
 import {
 	pushEndpointResolver,
 	pushRecordMutation,
@@ -34,6 +35,30 @@ const resolveEndpoint = (m: RecordMutation) => ({
 });
 
 describe('pushRecordMutation', () => {
+	it.each([
+		['sku', { sku: 'EDITED' }],
+		['global_unique_id', { global_unique_id: 'EDITED' }],
+		['meta_data:_barcode', { meta_data: [{ key: '_barcode', value: 'EDITED' }] }],
+	] as const)(
+		'maps a barcode edit to %s and never pushes the derived field',
+		async (selector, expected) => {
+			setActiveBarcodeSelectors('products', [selector]);
+			const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
+				jsonResponse(200, { id: 1 })
+			);
+
+			await pushRecordMutation({
+				mutation: mut({ operation: 'update', payload: { barcode: 'EDITED' } }),
+				resolveEndpoint,
+				fetcher,
+			});
+
+			const body = JSON.parse((fetcher.mock.calls[0][1] as RequestInit).body as string);
+			expect(body.payload).toEqual(expected);
+			expect(body.payload).not.toHaveProperty('barcode');
+		}
+	);
+
 	it('creates: posts the payload, returns the server document + a created outcome, emits push.outcome', async () => {
 		const events: SyncEvent[] = [];
 		const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>

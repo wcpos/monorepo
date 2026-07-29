@@ -27,6 +27,7 @@ module.exports = {
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(jsx?|tsx?)$'],
 	verbose: true,
 	moduleNameMapper: {
+		'^@wcpos/sync-core$': '<rootDir>/../sync-core/src/index.ts',
 		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
 	},
 	globals: {

@@ -1,5 +1,7 @@
 /** Engine-private payload -> stored-document boundary, partitioned by descriptor shape. */
 import {
+	deriveBarcodeFromPayload,
+	getActiveBarcodeSelectors,
 	identifyRecord,
 	normalizeCheckpoint,
 	type OrderDocument,
@@ -90,7 +92,13 @@ export function materializeTargeted(
 			: () => String(raw.date_modified_gmt ?? (collection === 'variations' ? wooId : ''));
 	const adopted = adoptStampedRevision(raw, legacy);
 	const manifestRow = digest(adopted.payload, wooId, label);
-	const identified = identity(stripDigest(adopted.payload));
+	const barcode =
+		collection === 'products' || collection === 'variations'
+			? deriveBarcodeFromPayload(raw, getActiveBarcodeSelectors(collection))
+			: undefined;
+	const identified = identity(
+		stripDigest(barcode === undefined ? adopted.payload : { ...adopted.payload, barcode })
+	);
 	const common = {
 		id: identified.id,
 		payload: identified.payload,

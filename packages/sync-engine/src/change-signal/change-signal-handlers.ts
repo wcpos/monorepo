@@ -406,12 +406,12 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 			return true;
 		},
 		reFetchCollection: async (collection) => {
-			if (collection !== 'products') return 0;
-			const synced = await loadSyncedTargetedDocs(ctx, 'products');
+			if (collection !== 'products' && collection !== 'variations') return 0;
+			const synced = await loadSyncedTargetedDocs(ctx, collection);
 			const wooIds = synced
 				.map((doc) => Number((doc.payload as { id?: unknown }).id))
 				.filter((id) => Number.isSafeInteger(id) && id > 0);
-			return effects.targeted.products.pull(wooIds);
+			return effects.targeted[collection].pull(wooIds);
 		},
 		persistState: (state) => ctx.persistState(state),
 		log: ctx.log,

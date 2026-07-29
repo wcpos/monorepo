@@ -151,7 +151,7 @@ describe('planReplicationActions — delete tombstones', () => {
 });
 
 describe('planReplicationActions — config staleness split', () => {
-	it('a stale collection WITH configBarcodeFields routes to reDeriveBarcode', () => {
+	it('a stale collection WITH configBarcodeFields routes to a full re-fetch for re-materialization', () => {
 		const actions = planReplicationActions(
 			baseOutcome({
 				staleCollections: ['products'],
@@ -162,26 +162,24 @@ describe('planReplicationActions — config staleness split', () => {
 				},
 			})
 		);
-		expect(actions.reDeriveBarcode).toEqual([
-			{ collection: 'products', activeFields: ['sku', 'global_unique_id'] },
-		]);
-		expect(actions.reFetchCollections).toEqual([]);
+		expect(actions.reDeriveBarcode).toEqual([]);
+		expect(actions.reFetchCollections).toEqual(['products']);
 	});
 
-	it('a stale collection WITHOUT configBarcodeFields routes to reFetchCollections', () => {
+	it('a stale collection WITHOUT configBarcodeFields is tolerated without clearing local barcodes', () => {
 		const actions = planReplicationActions(baseOutcome({ staleCollections: ['variations'] }));
-		expect(actions.reFetchCollections).toEqual(['variations']);
+		expect(actions.reFetchCollections).toEqual([]);
 		expect(actions.reDeriveBarcode).toEqual([]);
 	});
 
-	it('an empty barcode field list for the stale collection routes to reFetch (not reDerive)', () => {
+	it('an empty barcode field list leaves the collection untouched', () => {
 		const actions = planReplicationActions(
 			baseOutcome({
 				staleCollections: ['products'],
 				configBarcodeFields: { products: [], variations: [], tax_rates: [] },
 			})
 		);
-		expect(actions.reFetchCollections).toEqual(['products']);
+		expect(actions.reFetchCollections).toEqual([]);
 		expect(actions.reDeriveBarcode).toEqual([]);
 	});
 
@@ -192,8 +190,8 @@ describe('planReplicationActions — config staleness split', () => {
 				configBarcodeFields: { products: ['sku'], variations: [], tax_rates: [] },
 			})
 		);
-		expect(actions.reDeriveBarcode).toEqual([{ collection: 'products', activeFields: ['sku'] }]);
-		expect(actions.reFetchCollections).toEqual(['tax_rates']);
+		expect(actions.reDeriveBarcode).toEqual([]);
+		expect(actions.reFetchCollections).toEqual(['products', 'tax_rates']);
 	});
 });
 
