@@ -18,7 +18,12 @@ export const useDefaultCustomer = () => {
 			sort: { field: 'id', direction: 'asc' },
 			limit: 1,
 		},
-		{ wooIds: [defaultCustomerID] }
+		// 0 = guest: purely local, never a server record. Passing wooIds [0]
+		// created a targeted include=0 pull that returned 0/1 records and
+		// failed its apply tick on every boot, jamming the customers cursor
+		// (monorepo#850). An empty id set matches nothing locally, so the
+		// guest fallback below serves, and no fetch is ever declared.
+		{ wooIds: defaultCustomerID > 0 ? [defaultCustomerID] : [] }
 	);
 
 	const defaultCustomer$ = useObservable(
