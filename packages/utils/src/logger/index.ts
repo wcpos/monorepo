@@ -13,12 +13,29 @@ import { getErrorCodeDocURL } from './constants';
 import { redactSensitiveFields } from './redact';
 import { LogRetentionCollection, sweepLogRetention } from './retention';
 
+/**
+ * Schema-v2 terminal-record columns. These are promoted to top-level log row
+ * fields (not nested in `context`) so the Logs UI and exports can filter and
+ * group on them without parsing context.
+ */
+export interface LogTerminalFields {
+	outcome?: 'ok' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	operationId?: string;
+	operationType?: string;
+	requestId?: string;
+	serverRequestId?: string;
+	attempt?: number;
+	durationMs?: number;
+	startedAt?: number;
+}
+
 // Custom options interface
 export interface LoggerOptions {
 	showToast?: boolean;
 	/** @deprecated Logs at info and above now persist automatically. */
 	saveToDb?: boolean;
 	context?: any;
+	terminal?: LogTerminalFields;
 	toast?: {
 		text2?: string; // Secondary message
 		dismissable?: boolean; // Show close button
@@ -122,20 +139,53 @@ function recordSize(row: Record<string, unknown>): Record<string, unknown> {
 	return row;
 }
 
+/**
+ * Schema-enforced maxLength of every bounded string column in the `logs` v2
+ * schema. RxDB rejects the WHOLE insert when one exceeds its limit, so an
+ * over-long value would cost the entire terminal record rather than just that
+ * field — e.g. a 36-character UUID in the 32-character `operationId`. Clamping
+ * keeps the row (and the identifier's greppable prefix); losing the row is the
+ * one outcome this logger must never produce.
+ */
+const COLUMN_MAX_LENGTH = {
+	code: 24,
+	category: 64,
+	operationId: 32,
+	operationType: 48,
+	requestId: 40,
+	serverRequestId: 40,
+} as const;
+
+function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
+	column: K,
+	value: string | undefined
+): string | undefined {
+	if (value === undefined) return undefined;
+	const max = COLUMN_MAX_LENGTH[column];
+	return value.length > max ? value.slice(0, max) : value;
+}
+
 function persistLog(
 	collection: LoggerCollection,
 	level: LogLevel,
 	message: string,
 	context: Record<string, unknown>,
-	outcome?: 'ok'
+	terminal?: LogTerminalFields
 ): void {
 	const now = Date.now();
 	const admittedContext = admitContext({
 		...context,
 		search: searchableContext(context),
 	});
-	const code = typeof context.errorCode === 'string' ? context.errorCode : undefined;
-	const category = typeof context.category === 'string' ? context.category : undefined;
+	const code = clampColumn(
+		'code',
+		typeof context.errorCode === 'string' ? context.errorCode : undefined
+	);
+	const category = clampColumn(
+		'category',
+		typeof context.category === 'string' ? context.category : undefined
+	);
+	const outcome = terminal?.outcome;
 	const identity = JSON.stringify([
 		level,
 		code ?? null,
@@ -143,8 +193,26 @@ function persistLog(
 		message,
 		context.recordId ?? null,
 		outcome ?? null,
+		// Chained operations are distinct units of work and must not collapse.
+		// Uncorrelated record failures keep null here and still collapse by record/reason.
+		terminal?.operationId ?? null,
+		// Collection is part of the identity or per-collection events with no
+		// message of their own collapse across collections: one change-signal cycle
+		// emitting apply.refresh for tax_rates and then for another collection
+		// matches on every other component, so the second would fold into the first
+		// and the surviving row would name only the first collection — attributing
+		// evidence to the wrong collection, which is worse than an extra row.
+		context.collection ?? null,
 	]);
-	const previous = repeatStateByCollection.get(collection);
+	// Repeat-collapse folds identical consecutive REPEATS — the same event, record
+	// and reason (spec §7). A record carrying a duration is not a repeat: it is a
+	// distinct timed unit of work whose duration and cursor ARE the evidence, so two
+	// sync cycles that happen to render the same message must stay two rows rather
+	// than folding and discarding the second one's numbers. Everything without a
+	// duration (record failures, state transitions) still collapses normally, which
+	// is what keeps a failing record from flooding the log.
+	const timedUnitOfWork = terminal?.durationMs !== undefined;
+	const previous = timedUnitOfWork ? undefined : repeatStateByCollection.get(collection);
 
 	if (previous?.identity === identity) {
 		previous.count += 1;
@@ -175,10 +243,28 @@ function persistLog(
 		...(code && { code }),
 		...(category && { category }),
 		...(outcome && { outcome }),
+		...(terminal?.operationId !== undefined && {
+			operationId: clampColumn('operationId', terminal.operationId),
+		}),
+		...(terminal?.operationType !== undefined && {
+			operationType: clampColumn('operationType', terminal.operationType),
+		}),
+		...(terminal?.requestId !== undefined && {
+			requestId: clampColumn('requestId', terminal.requestId),
+		}),
+		...(terminal?.serverRequestId !== undefined && {
+			serverRequestId: clampColumn('serverRequestId', terminal.serverRequestId),
+		}),
+		...(terminal?.attempt !== undefined && { attempt: terminal.attempt }),
+		...(terminal?.durationMs !== undefined && { durationMs: terminal.durationMs }),
+		...(terminal?.startedAt !== undefined && { startedAt: terminal.startedAt }),
 	});
 	const write = Promise.resolve().then(() => collection.insert(row));
 	const state: RepeatState = { identity, count: 1, write };
-	repeatStateByCollection.set(collection, state);
+	// A timed unit of work is never a collapse anchor either — the next identical
+	// row must not fold into it.
+	if (timedUnitOfWork) repeatStateByCollection.delete(collection);
+	else repeatStateByCollection.set(collection, state);
 	void write.catch(() => {
 		if (repeatStateByCollection.get(collection) === state) {
 			repeatStateByCollection.delete(collection);
@@ -376,13 +462,11 @@ const mainTransport = (props: any) => {
 	// 3. Persist info and above whenever a logs collection is bound.
 	if (levelName !== 'debug' && dbCollection) {
 		try {
-			persistLog(
-				dbCollection,
-				levelName,
-				message,
-				options.context || {},
-				level.text === 'success' ? 'ok' : undefined
-			);
+			const terminal: LogTerminalFields | undefined =
+				level.text === 'success'
+					? { ...options.terminal, outcome: options.terminal?.outcome ?? 'ok' }
+					: options.terminal;
+			persistLog(dbCollection, levelName, message, options.context || {}, terminal);
 		} catch (error) {
 			console.error('Failed to persist log entry', error);
 		}

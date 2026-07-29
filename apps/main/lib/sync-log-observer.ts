@@ -1,84 +1,395 @@
 import type { SyncEvent, SyncObserver } from '@wcpos/sync-core';
+import type { LogTerminalFields } from '@wcpos/utils/logger';
 
 import { normalizeSyncCollection } from './sync-status';
 
 export type PersistLogRow = (
 	level: 'info' | 'warn' | 'error',
 	message: string,
-	context: Record<string, unknown>
+	context: Record<string, unknown>,
+	terminal?: LogTerminalFields
 ) => void;
 
-const RATE_LIMIT_WINDOW_MS = 60_000;
+type Conformance = {
+	/** operationType written to the row; groups units of work in the UI. */
+	operationType: string;
+	/** Terminal outcome for this event type. */
+	outcome: NonNullable<LogTerminalFields['outcome']>;
+	/** Return false to route this occurrence to the check ring instead of a row
+	 *  (idle work). Omit to always persist. */
+	didWork?: (fields: Record<string, unknown>) => boolean;
+	/** Plain-language row message. Falls back to event.message ?? event.type. */
+	message?: (event: SyncEvent, fields: Record<string, unknown>) => string;
+};
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 
-/**
- * Info events worth a Logs-screen row, gated on "did work" so idle cycles write
- * nothing. Everything else at info/debug feeds metrics/status only.
- */
-const ACTIVITY_ALLOWLIST: Record<string, (fields: Record<string, unknown>) => boolean> = {
-	'apply.pull': (f) => num(f.applied) > 0,
-	'apply.delete': (f) => num(f.applied) > 0,
-	'apply.refetch': (f) => num(f.refetched) > 0,
-	'queue.write.drain': (f) =>
-		num(f.pushed) + num(f.conflicts) + num(f.failed) + num(f.rejected) > 0,
-	'queue.scheduler.drain': (f) => num(f.succeeded) + num(f.failed) > 0,
-	'coverage.existence-prime': () => true,
-	'coverage.existence-reconcile': () => true,
-	'engine.ready': () => true,
-	'engine.scope-switched': () => true,
-};
+function sanitizeReason(value: unknown): string | undefined {
+	if (typeof value !== 'string') {
+		if (typeof value !== 'number' && typeof value !== 'boolean') return undefined;
+		value = String(value);
+	}
+	const sanitized = value
+		.trim()
+		.replace(/\s+/g, ' ')
+		// Query strings can carry tokens, so any `?`-introduced run is stripped
+		// wholesale rather than only `?key=value` runs. Over-redaction is the safe
+		// error on an export path that must be handable to support by construction;
+		// prose is unaffected in practice because a sentence's `?` is followed by a
+		// space, which ends the match.
+		.replace(/\?[^\s)]+/g, '[redacted]')
+		.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted]');
+	return sanitized.length > 200 ? `${sanitized.slice(0, 199)}…` : sanitized;
+}
 
 /**
- * Persistence policy for engine telemetry: every warn/error, plus allowlisted
- * activity summaries, rate-limited per (type, collection) with suppressed-count
- * folding. Pure event→persist mapping; the caller owns logger wiring and
- * engine-identity guarding.
+ * The affected record's id, across both field vocabularies: push/queue events
+ * name it `recordId`, while `apply.escalation` (the pull-side repair signal)
+ * names it `id`. Without this the escalation row would fall back to a generic
+ * message AND lose its repeat-collapse key, so consecutive escalations for
+ * different records would fold into one row.
+ */
+function recordIdOf(fields: Record<string, unknown>): unknown {
+	return fields.recordId ?? fields.id;
+}
+
+function recordMessage(verb: string): Conformance['message'] {
+	return (event, fields) => {
+		const recordId = recordIdOf(fields);
+		if (recordId === undefined || recordId === null) {
+			return sanitizeReason(event.message) ?? event.type;
+		}
+		const collection =
+			event.collection !== undefined
+				? normalizeSyncCollection(event.collection)
+				: typeof fields.collection === 'string'
+					? normalizeSyncCollection(fields.collection)
+					: 'record';
+		const status =
+			typeof fields.status === 'number' && Number.isFinite(fields.status)
+				? fields.status
+				: undefined;
+		const reason = sanitizeReason(fields.reason);
+		const reasonSuffix =
+			status !== undefined && reason
+				? ` (HTTP ${status}: ${reason})`
+				: status !== undefined
+					? ` (HTTP ${status})`
+					: reason
+						? ` (${reason})`
+						: '';
+		return `${collection} ${String(recordId)} — ${verb}${reasonSuffix}`;
+	};
+}
+
+/**
+ * Observer-side terminal-row policy. A Map makes event types sourced from data
+ * unable to resolve inherited Object.prototype members.
+ */
+const CONFORMANCE = new Map<string, Conformance>([
+	[
+		'signal.cycle',
+		{
+			operationType: 'sync.cycle',
+			outcome: 'ok',
+			didWork: (f) => num(f.pulls) + num(f.deletes) > 0,
+		},
+	],
+	['signal.tick.error', { operationType: 'sync.cycle', outcome: 'failed' }],
+	[
+		'engine.lane.tick',
+		{
+			operationType: 'sync.lane',
+			outcome: 'ok',
+			didWork: (f) =>
+				f.status === 'error' ||
+				num(f.pushed) + num(f.conflicts) + num(f.deferred) + num(f.failed) + num(f.rejected) > 0,
+		},
+	],
+	['engine.ready', { operationType: 'sync.startup', outcome: 'ok' }],
+	['engine.ready-failed', { operationType: 'sync.startup', outcome: 'failed' }],
+	['engine.ready-stalled', { operationType: 'sync.startup', outcome: 'unknown' }],
+	['engine.scope-switched', { operationType: 'sync.scope', outcome: 'ok' }],
+	['engine.collection-reset', { operationType: 'sync.reset', outcome: 'ok' }],
+	['engine.reset-needs-confirmation', { operationType: 'sync.reset', outcome: 'cancelled' }],
+	['engine.disposed', { operationType: 'sync.lifecycle', outcome: 'ok' }],
+	['engine.connectivity-error', { operationType: 'sync.lifecycle', outcome: 'failed' }],
+	['engine.pos-bootstrap-error', { operationType: 'sync.startup', outcome: 'failed' }],
+	['engine.guard', { operationType: 'sync.scope', outcome: 'cancelled' }],
+	[
+		'apply.pull',
+		{ operationType: 'sync.apply', outcome: 'ok', didWork: (f) => num(f.applied) > 0 },
+	],
+	[
+		'apply.delete',
+		{ operationType: 'sync.apply', outcome: 'ok', didWork: (f) => num(f.applied) > 0 },
+	],
+	['apply.rebaseline', { operationType: 'sync.apply', outcome: 'ok' }],
+	[
+		'apply.refetch',
+		{ operationType: 'sync.apply', outcome: 'ok', didWork: (f) => num(f.refetched) > 0 },
+	],
+	['apply.refresh', { operationType: 'sync.apply', outcome: 'ok' }],
+	['apply.barcode-rederive', { operationType: 'sync.apply', outcome: 'ok' }],
+	[
+		'apply.escalation',
+		{
+			operationType: 'sync.record',
+			outcome: 'failed',
+			message: recordMessage('pull escalation'),
+		},
+	],
+	[
+		'coverage.require.outcome',
+		{
+			operationType: 'sync.coverage',
+			outcome: 'ok',
+			didWork: (f) => num(f.documents) > 0 || num(f.requests) > 0,
+		},
+	],
+	['coverage.require.error', { operationType: 'sync.coverage', outcome: 'failed' }],
+	['coverage.existence-prime', { operationType: 'sync.coverage', outcome: 'ok' }],
+	[
+		'coverage.existence-reconcile',
+		{
+			operationType: 'sync.coverage',
+			outcome: 'ok',
+			didWork: (f) => num(f.pruned) + num(f.pulled) + num(f.repulled) > 0,
+		},
+	],
+	[
+		'coverage.compacted',
+		{
+			// Emitted on every retention pass, including the common no-op one; without
+			// this gate an idle terminal writes a recurring 'ok' row that records no work.
+			operationType: 'sync.coverage',
+			outcome: 'ok',
+			didWork: (f) => num(f.removed) > 0,
+		},
+	],
+	[
+		'transport.request',
+		{
+			operationType: 'sync.http',
+			outcome: 'ok',
+			// Failures only. A successful data-bearing request is a unit of work, but
+			// the engine issues them continuously (a poll every few seconds, several
+			// requests each), so persisting them would evict every other row well
+			// inside the 25 MiB retention cap and destroy the log's diagnostic value.
+			// Successful-attempt narration belongs in the flight recorder (WS3) and
+			// the metrics rollups, which are built for that volume.
+			didWork: (f) => f.status === 0 || num(f.status) >= 400,
+		},
+	],
+	[
+		'push.outcome',
+		{
+			operationType: 'sync.record',
+			outcome: 'ok',
+			message: recordMessage('push completed'),
+		},
+	],
+	[
+		'push.error',
+		{
+			operationType: 'sync.record',
+			outcome: 'failed',
+			message: recordMessage('push failed'),
+		},
+	],
+	[
+		'push.aborted',
+		{
+			operationType: 'sync.record',
+			outcome: 'cancelled',
+			message: recordMessage('push aborted'),
+		},
+	],
+	[
+		'push.conflict',
+		{
+			operationType: 'sync.record',
+			outcome: 'failed',
+			message: recordMessage('push conflict'),
+		},
+	],
+	[
+		'push.in_progress',
+		{
+			operationType: 'sync.record',
+			outcome: 'failed',
+			message: recordMessage('push already in progress'),
+		},
+	],
+	[
+		'push.rejected',
+		{
+			operationType: 'sync.record',
+			outcome: 'rejected',
+			message: recordMessage('rejected by server'),
+		},
+	],
+	[
+		'queue.write.needs-revision',
+		{
+			operationType: 'sync.record',
+			outcome: 'rejected',
+			message: recordMessage('needs revision'),
+		},
+	],
+	[
+		'queue.write.conflict-transition',
+		{
+			operationType: 'sync.record',
+			outcome: 'failed',
+			message: recordMessage('conflict transition failed'),
+		},
+	],
+	[
+		'queue.write.reschedule-failed',
+		{
+			operationType: 'sync.record',
+			outcome: 'failed',
+			message: recordMessage('reschedule failed'),
+		},
+	],
+	[
+		'queue.write.resolve',
+		{
+			operationType: 'sync.record',
+			outcome: 'ok',
+			message: recordMessage('conflict resolved'),
+		},
+	],
+	[
+		'queue.write.discard-repull-deferred',
+		{
+			operationType: 'sync.record',
+			outcome: 'unknown',
+			message: recordMessage('repull deferred'),
+		},
+	],
+	[
+		'queue.write.born-twice-requeue',
+		{
+			operationType: 'sync.record',
+			outcome: 'unknown',
+			message: recordMessage('requeued after duplicate create'),
+		},
+	],
+	[
+		'queue.write.drain',
+		{
+			operationType: 'sync.queue',
+			outcome: 'ok',
+			didWork: (f) => num(f.pushed) + num(f.conflicts) + num(f.failed) + num(f.rejected) > 0,
+		},
+	],
+	[
+		'queue.scheduler.drain',
+		{
+			operationType: 'sync.queue',
+			outcome: 'ok',
+			didWork: (f) => num(f.succeeded) + num(f.failed) > 0,
+		},
+	],
+	['queue.write.enqueued', { operationType: 'sync.queue', outcome: 'ok' }],
+	['queue.write.annihilate', { operationType: 'sync.queue', outcome: 'ok' }],
+	['queue.write.coalesce', { operationType: 'sync.queue', outcome: 'ok' }],
+	['queue.write.tick.error', { operationType: 'sync.queue', outcome: 'failed' }],
+	['engine.listener-error', { operationType: 'sync.lifecycle', outcome: 'failed' }],
+]);
+
+/**
+ * Pure event→persist mapping; the caller owns logger wiring and engine-identity
+ * guarding. Idle work and info-level narration are intentionally left for the
+ * later recent-checks ring.
  */
 export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?: () => number }): {
 	observe: SyncObserver;
-	reset: () => void;
 } {
 	const nowMs = options.nowMs ?? Date.now;
-	const windows = new Map<string, { startMs: number; suppressed: number }>();
-
 	const observe: SyncObserver = (event: SyncEvent) => {
 		const fields = (event.fields ?? {}) as Record<string, unknown>;
+		const mapped = CONFORMANCE.get(event.type);
 		const isFailure = event.level === 'warn' || event.level === 'error';
-		const isActivity =
-			event.level === 'info' &&
-			// Own-property guard: bracket access on a plain object resolves inherited
-			// members, so 'constructor'/'toString' etc. would otherwise pass the gate.
-			Object.hasOwn(ACTIVITY_ALLOWLIST, event.type) &&
-			ACTIVITY_ALLOWLIST[event.type](fields);
-		if (!isFailure && !isActivity) return;
+		if (mapped === undefined && !isFailure) return;
+		const conformance =
+			mapped ?? ({ operationType: 'sync.other', outcome: 'failed' } satisfies Conformance);
+		// The did-work gate only ever suppresses IDLE work. A warn/error event is
+		// never idle, so it bypasses the gate entirely: several emitters raise the
+		// level on a signal their counters don't carry — `queue.scheduler.drain`
+		// goes to `error` on completionLost/failureLost/renewalLost while
+		// `succeeded` and `failed` are both 0 — and gating those would silently
+		// drop exactly the lost-work evidence this observer exists to preserve.
+		if (conformance.didWork && !isFailure && !conformance.didWork(fields)) return;
 
-		// Normalize engine camelCase names (e.g. 'taxRates') to the snake_case the
-		// rest of the app keys on, so engine-side and apply-side events for the same
-		// collection share one rate-limit window and persist under one name.
 		const collection =
 			event.collection !== undefined ? normalizeSyncCollection(event.collection) : undefined;
-		const key = `${event.type}|${collection ?? ''}`;
-		const at = nowMs();
-		const window = windows.get(key);
-		if (window !== undefined && at - window.startMs < RATE_LIMIT_WINDOW_MS) {
-			window.suppressed += 1;
-			return;
+		// Outcome derivation. The table's outcome is the SUCCESS-path outcome; a row
+		// may only wear it when the event actually succeeded, or filtering by
+		// outcome hides the incident (the PY02001 lesson, spec §3). Two ways an
+		// entry mapped 'ok' can turn out not to be:
+		//   1. the emitter raised the level — apply.pull/apply.delete/
+		//      apply.rebaseline/apply.barcode-rederive all emit warn for work they
+		//      could not apply;
+		//   2. the counters say so while the level stays info — queue.write.drain
+		//      and the engine.lane.tick summary carry failed/rejected records on an
+		//      otherwise routine drain.
+		// Explicit non-'ok' outcomes (rejected/cancelled/unknown) are deliberate
+		// classifications and are never overridden.
+		let outcome = conformance.outcome;
+		if (outcome === 'ok') {
+			if (isFailure) outcome = 'failed';
+			else if (num(fields.failed) + num(fields.rejected) > 0) outcome = 'failed';
+			else if (fields.status === 'error') outcome = 'failed';
 		}
-		const suppressed = window?.suppressed ?? 0;
-		windows.set(key, { startMs: at, suppressed: 0 });
+
+		const durationMs =
+			typeof fields.durationMs === 'number' && Number.isFinite(fields.durationMs)
+				? fields.durationMs
+				: undefined;
+		const reason = sanitizeReason(fields.reason);
+		const context: Record<string, unknown> = {
+			...fields,
+			type: event.type,
+			...(collection !== undefined ? { collection } : {}),
+		};
+		if (fields.reason !== undefined) {
+			if (reason === undefined) delete context.reason;
+			else context.reason = reason;
+		}
+		if (conformance.operationType === 'sync.record') {
+			context.direction = event.type === 'apply.escalation' ? 'pull' : 'push';
+			const recordId = recordIdOf(fields);
+			if (recordId !== undefined && context.recordId === undefined) context.recordId = recordId;
+		}
+		// Only a REAL chain id is forwarded. Minting a synthetic one per event would
+		// make every row unique and so disable repeat-collapse for the ten ungated
+		// non-record types (apply.refresh, queue.write.enqueued/coalesce,
+		// engine.guard, …), reintroducing exactly the flooding collapse exists to
+		// prevent — and it would fill a column that spec §2 reserves for chaining
+		// related steps with uniqueness salt, making it unqueryable for WS5.
+		// Distinguishing timed units of work is the logger's job instead (see
+		// persistLog: a record carrying durationMs never collapses).
+		const operationId = typeof fields.operationId === 'string' ? fields.operationId : undefined;
 
 		options.persist(
-			isFailure ? (event.level as 'warn' | 'error') : 'info',
-			event.message ?? event.type,
+			isFailure ? event.level : 'info',
+			conformance.message?.(event, { ...fields, ...(reason ? { reason } : {}) }) ??
+				event.message ??
+				event.type,
+			context,
 			{
-				type: event.type,
-				...(collection !== undefined ? { collection } : {}),
-				...fields,
-				...(suppressed > 0 ? { suppressed } : {}),
+				operationType: conformance.operationType,
+				outcome,
+				...(operationId !== undefined ? { operationId } : {}),
+				...(durationMs !== undefined
+					? { durationMs, startedAt: (event.at ?? nowMs()) - durationMs }
+					: {}),
 			}
 		);
 	};
 
-	return { observe, reset: () => windows.clear() };
+	return { observe };
 }

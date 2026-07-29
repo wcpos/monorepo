@@ -19,7 +19,7 @@ import { defaultConfig } from '@wcpos/database/adapters/default';
 import { composeObservers, type SyncEvent } from '@wcpos/sync-core';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { QueryTotalWooRequest, RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
-import { getDatabaseEpoch, getLogger } from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { getEngineConnectivity } from './connectivity';
 import {
@@ -33,7 +33,6 @@ import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
 import { markSyncStatusStale, syncStatusObserver } from './sync-status';
 
-const networkLogger = getLogger(['wcpos', 'network', 'sync']);
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
 
 export interface CreateAppSyncEngineOptions {
@@ -161,10 +160,38 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		useJwtAsParam: options.useJwtAsParam,
 	};
 
+	// Host-side transport events must reach BOTH sinks. The engine's own diagnostics
+	// port is composed of the metrics collector and the guarded log observer, but
+	// this fetcher lives OUTSIDE the engine, so an event sent only to
+	// appMetricsObserver never reaches the log at all — it would land in the charts
+	// and vanish from the ledger. Declared before `guardedDiagnostics` in source
+	// order but only ever CALLED from the fetcher, which runs long after this
+	// function returns.
+	//
+	// Telemetry is best-effort and must NEVER throw into the caller. That is a
+	// spec-level invariant, and the engine enforces it for its own fan-out by
+	// isolating every sink in composeObservers. This call site sits outside the
+	// engine and so has to repeat the discipline itself: it is invoked from the
+	// fetcher's SUCCESS path, where an escaping exception would propagate out of
+	// fetcher() and present to the caller as a failed HTTP request — silently
+	// converting a request that actually succeeded into a failure. Each sink is
+	// isolated separately so a broken one cannot starve the other.
+	const emitTransport = (event: SyncEvent): void => {
+		try {
+			appMetricsObserver(event);
+		} catch (error) {
+			console.error('Metrics observer threw on a transport event', error);
+		}
+		try {
+			guardedDiagnostics(event);
+		} catch (error) {
+			console.error('Log observer threw on a transport event', error);
+		}
+	};
+
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
 		let tokenUsed: string | undefined;
 		const method = (init?.method ?? 'GET').toUpperCase();
-		const databaseEpoch = getDatabaseEpoch();
 		const fetchWithLatestToken = async (): Promise<Response> => {
 			const token = fetcherOptions.credentials.getLatest().access_token;
 			tokenUsed = token;
@@ -183,6 +210,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					headers.set('Authorization', `Bearer ${token}`);
 				}
 			}
+			const path = new URL(finalUrl).pathname;
 			const startedAtMs = Date.now();
 			// Captured at start: a completion after a store switch (epoch bump) is the
 			// outgoing store's traffic and must not land in the new store's buckets.
@@ -193,22 +221,19 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			} catch (error) {
 				const atMs = Date.now();
 				const durationMs = atMs - startedAtMs;
-				appMetricsObserver({
+				emitTransport({
 					type: 'transport.request',
 					level: 'warn',
 					collection: collectionFromSyncUrl(finalUrl),
-					fields: { durationMs, bytes: 0, status: 0 },
+					fields: {
+						durationMs,
+						bytes: 0,
+						status: 0,
+						method,
+						path,
+					},
 				});
 				recordTransport({ atMs, durationMs, bytes: 0, ok: false, epoch: epochAtStart });
-				if (
-					(error as { name?: string })?.name !== 'AbortError' &&
-					databaseEpoch === getDatabaseEpoch()
-				) {
-					networkLogger.error('Sync request failed', {
-						saveToDb: true,
-						context: { method, endpoint: new URL(finalUrl).pathname, status: 0 },
-					});
-				}
 				throw error;
 			}
 
@@ -224,11 +249,17 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			// but logging it as a failure would record ~360 phantom errors/hour per idle
 			// terminal and corrupt the transport health counters.
 			const accepted = response.ok || response.status === 304;
-			appMetricsObserver({
+			emitTransport({
 				type: 'transport.request',
 				level: accepted ? 'info' : 'warn',
 				collection: collectionFromSyncUrl(finalUrl),
-				fields: { durationMs, bytes, status: response.status },
+				fields: {
+					durationMs,
+					bytes,
+					status: response.status,
+					method,
+					path,
+				},
 			});
 			recordTransport({ atMs, durationMs, bytes, ok: accepted, epoch: epochAtStart });
 
@@ -265,18 +296,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					: await fetcherOptions.refreshAuth();
 			if (retryToken) response = await fetchWithLatestToken();
 		}
-		// 304s are expected idle conditional-GET responses — success-class, not errors.
-		const responseAccepted = response.ok || response.status === 304;
-		if (
-			databaseEpoch === getDatabaseEpoch() &&
-			(!responseAccepted || (method !== 'GET' && method !== 'HEAD'))
-		) {
-			networkLogger[responseAccepted ? 'info' : 'error']('Sync request result', {
-				saveToDb: true,
-				context: { method, endpoint: new URL(url).pathname, status: response.status },
-			});
-		}
-
 		return response;
 	};
 
@@ -314,11 +333,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// captured database epoch — the engine is constructed during render, before
 	// the effect that rebinds the logger database runs, so an epoch captured
 	// here could be permanently stale.
-	// Constructed per engine-construction, so its rate-limit windows are always
-	// fresh — no explicit reset needed on supersede.
 	const syncLogObserver = createSyncLogObserver({
-		persist: (level, message, context) => {
-			engineLogger[level](message, { saveToDb: true, context });
+		persist: (level, message, context, terminal) => {
+			engineLogger[level](message, { context, terminal });
 		},
 	});
 

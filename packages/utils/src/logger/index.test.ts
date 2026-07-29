@@ -340,6 +340,140 @@ describe('logger/index', () => {
 			expect(rows[0]).toMatchObject({ level: 'info', outcome: 'ok' });
 		});
 
+		it('promotes defined record fields and lets an explicit success outcome win', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['checkout']).success('Order cancelled', {
+				terminal: {
+					outcome: 'cancelled',
+					operationId: 'operation-1',
+					operationType: 'checkout.submit',
+					requestId: 'request-1',
+					serverRequestId: 'server-request-1',
+					attempt: 2,
+					durationMs: 150,
+					startedAt: 1_000,
+				},
+			});
+			await flushWrites();
+
+			expect(rows[0]).toMatchObject({
+				outcome: 'cancelled',
+				operationId: 'operation-1',
+				operationType: 'checkout.submit',
+				requestId: 'request-1',
+				serverRequestId: 'server-request-1',
+				attempt: 2,
+				durationMs: 150,
+				startedAt: 1_000,
+			});
+		});
+
+		it('skips undefined record fields on inserted rows', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['sync']).info('Cycle complete', {
+				terminal: { outcome: 'ok', operationId: undefined },
+			});
+			await flushWrites();
+
+			expect(rows[0]).not.toHaveProperty('operationId');
+		});
+
+		it('separates operation rows but collapses uncorrelated repeats', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('Cycle complete', { terminal: { operationId: 'operation-1' } });
+			logger.info('Cycle complete', { terminal: { operationId: 'operation-2' } });
+			logger.info('Record failed');
+			logger.info('Record failed');
+			await flushWrites();
+
+			expect(rows).toHaveLength(3);
+			expect(rows[0]).toMatchObject({ operationId: 'operation-1', count: 1 });
+			expect(rows[1]).toMatchObject({ operationId: 'operation-2', count: 1 });
+			expect(rows[2]).toMatchObject({ count: 2 });
+		});
+
+		// Review #854: per-collection events carrying no message of their own matched
+		// on every identity component, so the second collection's row folded into the
+		// first and the survivor named only the first collection.
+		it('does not collapse the same event across different collections', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('apply.refresh', { context: { collection: 'tax_rates' } });
+			logger.info('apply.refresh', { context: { collection: 'products' } });
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows[0].context).toMatchObject({ collection: 'tax_rates' });
+			expect(rows[1].context).toMatchObject({ collection: 'products' });
+		});
+
+		// Review #854: RxDB rejects the WHOLE insert when a bounded column overflows,
+		// so an over-long id would cost the entire terminal record.
+		it('clamps bounded columns instead of losing the row', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('Checkout stage', {
+				terminal: {
+					// a 36-character UUID against a 32-character column
+					operationId: '3f7a1b2c-9d4e-4f60-8a1b-2c9d4e4f6011',
+					operationType: 'x'.repeat(60),
+				},
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0].operationId).toBe('3f7a1b2c-9d4e-4f60-8a1b-2c9d4e4f');
+			expect(String(rows[0].operationId)).toHaveLength(32);
+			expect(String(rows[0].operationType)).toHaveLength(48);
+		});
+
+		// A timed unit of work is distinct evidence, not a repeat: two sync cycles
+		// rendering the same message must keep both durations and cursors.
+		it('never collapses records that carry a duration', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.info('change-signal: checked for updates (2 changed, 0 deleted)', {
+				terminal: { durationMs: 120, operationType: 'sync.cycle' },
+				context: { cursor: 41 },
+			});
+			logger.info('change-signal: checked for updates (2 changed, 0 deleted)', {
+				terminal: { durationMs: 380, operationType: 'sync.cycle' },
+				context: { cursor: 43 },
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(2);
+			expect(rows[0]).toMatchObject({ durationMs: 120, count: 1 });
+			expect(rows[1]).toMatchObject({ durationMs: 380, count: 1 });
+		});
+
+		// ...while undurated repeats (a record failing over and over) still fold.
+		it('still collapses identical records that carry no duration', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			const logger = getLogger(['sync']);
+
+			logger.error('orders 4711 — rejected by server', { context: { recordId: '4711' } });
+			logger.error('orders 4711 — rejected by server', { context: { recordId: '4711' } });
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({ count: 2 });
+		});
+
 		it('collapses consecutive identical rows while keeping the original timestamp', async () => {
 			jest.useFakeTimers().setSystemTime(1000);
 			const { rows, collection } = createLogCollection();
