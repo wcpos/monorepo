@@ -12,7 +12,7 @@ import { logger } from 'react-native-logs';
 import { getErrorCodeDocURL } from './constants';
 import { clearRecorder, recorderStats, recordEvent, snapshotRecorder } from './flight-recorder';
 import { ERROR_CATALOGUE, ErrorCode } from './generated/error-codes.generated';
-import { redactSensitiveFields } from './redact';
+import { redactSensitiveFields, redactSensitiveText } from './redact';
 import { LogRetentionCollection, sweepLogRetention } from './retention';
 
 /**
@@ -474,6 +474,7 @@ const mainTransport = (props: any) => {
 	} else {
 		message = String(rawMsg || '');
 	}
+	message = redactSensitiveText(message);
 
 	// Redact sensitive fields from context before any output
 	if (options.context) {

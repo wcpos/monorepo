@@ -86,6 +86,32 @@ describe('useHttpClient network audit logs', () => {
 		});
 	});
 
+	it('persists mapped and server WordPress error codes on the HTTP failure row', async () => {
+		const failure = Object.assign(new Error('request failed'), {
+			response: {
+				status: 503,
+				data: {
+					code: 'merchant_plugin_unknown_error',
+					message: 'Unexpected response',
+					data: { status: 503 },
+				},
+			},
+		});
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
+
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+			saveToDb: true,
+			context: expect.objectContaining({
+				errorCode: 'SYNC131',
+				serverCode: 'merchant_plugin_unknown_error',
+				triage: true,
+			}),
+		});
+	});
+
 	it('persists status zero for response-less transport failures', async () => {
 		const failure = new Error('network down');
 		(http.request as jest.Mock).mockRejectedValue(failure);

@@ -24,13 +24,30 @@ describe('redactSensitiveFields', () => {
 			writeRow: {
 				document: {
 					access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig',
+					licenseKey: 'license-key-value-12345',
 					username: 'testuser',
 				},
 			},
 		};
 		const result = redactSensitiveFields(input);
 		expect(result.writeRow.document.access_token).toMatch(/^.{6}\.{3}.{5}$/);
+		expect(result.writeRow.document.licenseKey).toBe('licens...12345');
 		expect(result.writeRow.document.username).toBe('testuser');
+	});
+
+	it('should redact credentials embedded in URL and message strings', () => {
+		const input = {
+			url: 'https://user:password@store.test/path?authorization=Bearer%20secret-token',
+			message: 'Connecting with Bearer abc.def.ghi and licenseKey=license-key-value-12345',
+			messages: ['Retrying with Bearer array-secret'],
+		};
+		const serialized = JSON.stringify(redactSensitiveFields(input));
+
+		expect(serialized).not.toContain('user:password');
+		expect(serialized).not.toContain('secret-token');
+		expect(serialized).not.toContain('abc.def.ghi');
+		expect(serialized).not.toContain('license-key-value-12345');
+		expect(serialized).not.toContain('array-secret');
 	});
 
 	it('should handle arrays', () => {

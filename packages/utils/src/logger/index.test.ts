@@ -353,6 +353,24 @@ describe('logger/index', () => {
 			log.setLevel('debug');
 		});
 
+		it('redacts credentials before retaining debug narration for promotion', () => {
+			getLogger(['notifications']).debug(
+				'Connecting with Bearer abc.def.ghi to https://user:password@store.test',
+				{
+					context: {
+						metadata: { licenseKey: 'license-key-value-12345' },
+						url: 'https://store.test?authorization=Bearer%20secret-token',
+					},
+				}
+			);
+
+			const serialized = JSON.stringify(snapshotRecorder());
+			expect(serialized).not.toContain('abc.def.ghi');
+			expect(serialized).not.toContain('user:password');
+			expect(serialized).not.toContain('license-key-value-12345');
+			expect(serialized).not.toContain('secret-token');
+		});
+
 		it('promotes recorded debug rows once, in order, without recursion', async () => {
 			const { collection } = createLogCollection();
 			setDatabase(collection);
