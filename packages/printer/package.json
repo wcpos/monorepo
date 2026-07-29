@@ -29,14 +29,14 @@
 		"@point-of-sale/webbluetooth-receipt-printer": "2.0.0",
 		"@point-of-sale/webusb-receipt-printer": "2.0.0",
 		"@wcpos/receipt-renderer": "workspace:*",
-		"p-queue": "^9.3.0",
+		"p-queue": "^9.3.3",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.2",
 		"jsdom": "^26.1.0",
 		"react-dom": "19.2.7",
-		"vitest": "^4.1.8"
+		"vitest": "^4.1.10"
 	},
 	"peerDependencies": {
 		"expo-print": ">=55.0.0",

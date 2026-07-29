@@ -703,12 +703,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 }
 
 export type SearchSelectCollection =
-	| 'customer'
-	| 'category'
-	| 'brand'
-	| 'tag'
-	| 'cashier'
-	| 'coupon';
+	'customer' | 'category' | 'brand' | 'tag' | 'cashier' | 'coupon';
 
 const SEARCH_SELECT_LIMIT = 50;
 const SEARCH_SELECT_LIMIT_MAX = 100;

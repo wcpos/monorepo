@@ -90,18 +90,16 @@ function localQueryResult$(
 				.count({ selector: matchingSelector })
 				.$.pipe(recoverAsEmpty<number>(collection), startWith(0));
 			return combineLatest([documents$, total$]).pipe(
-				map(
-					([documents, count]): QueryResult<LocalCollection> => ({
-						elapsed: performance.now() - startedAt,
-						searchActive: search.length > 0,
-						count,
-						hits: documents.map((document) => ({
-							id: String(document.primary),
-							score: 0,
-							document,
-						})),
-					})
-				)
+				map(([documents, count]): QueryResult<LocalCollection> => ({
+					elapsed: performance.now() - startedAt,
+					searchActive: search.length > 0,
+					count,
+					hits: documents.map((document) => ({
+						id: String(document.primary),
+						score: 0,
+						document,
+					})),
+				}))
 			);
 		}),
 		shareReplay({ bufferSize: 1, refCount: true })

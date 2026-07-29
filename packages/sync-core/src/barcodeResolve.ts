@@ -236,12 +236,7 @@ export type ResolveBarcodeResponse = {
 // --- resolveScan ----------------------------------------------------------------------
 
 export type ScanEventType =
-	| 'local-hit'
-	| 'searching-online'
-	| 'resolved-online'
-	| 'not-found'
-	| 'ambiguous'
-	| 'error';
+	'local-hit' | 'searching-online' | 'resolved-online' | 'not-found' | 'ambiguous' | 'error';
 
 /** atMs is milliseconds since scan start, read from the injected clock. */
 export type ScanEvent = { type: ScanEventType; atMs: number };

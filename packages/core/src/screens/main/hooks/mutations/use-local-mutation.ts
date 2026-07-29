@@ -23,11 +23,7 @@ import type { RxDocument } from 'rxdb';
 const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 
 type Document =
-	| OrderDocument
-	| ProductDocument
-	| CustomerDocument
-	| ProductVariationDocument
-	| CouponDocument;
+	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
 
 type WriteableCollection = 'orders' | 'products' | 'variations' | 'customers' | 'coupons';
 

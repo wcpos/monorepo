@@ -36,7 +36,11 @@ export function isRouteTeardownError(error: unknown): boolean {
 		return false;
 	}
 
-	return error.message.includes('Target page, context or browser has been closed');
+	return (
+		error.message.includes('Target page, context or browser has been closed') ||
+		error.message.includes('Response has been disposed') ||
+		error.message.includes('Test ended')
+	);
 }
 
 export async function waitForAuthEntry(page: Page): Promise<void> {
@@ -172,12 +176,18 @@ async function hasReachedPos(page: Page, timeout = 0): Promise<boolean> {
 	return false;
 }
 
-async function blockScriptRequests(route: import('@playwright/test').Route) {
-	if (route.request().resourceType() === 'script') {
-		await route.abort();
-		return;
+export async function blockScriptRequests(route: import('@playwright/test').Route) {
+	try {
+		if (route.request().resourceType() === 'script') {
+			await route.abort();
+			return;
+		}
+		await route.fallback();
+	} catch (error) {
+		if (!isRouteTeardownError(error)) {
+			throw error;
+		}
 	}
-	await route.fallback();
 }
 
 /**

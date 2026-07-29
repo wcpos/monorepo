@@ -247,10 +247,7 @@ function ackBookkeeping(
 }
 
 export type CollectionDescriptor =
-	| TargetedDescriptor
-	| GreedyPrunableDescriptor
-	| UpsertRefreshDescriptor
-	| LocalOnlyDescriptor;
+	TargetedDescriptor | GreedyPrunableDescriptor | UpsertRefreshDescriptor | LocalOnlyDescriptor;
 
 function productDocument(rawPayload: WooPayload): Record<string, unknown> {
 	return materializeTargeted('products', rawPayload).storedDocument;

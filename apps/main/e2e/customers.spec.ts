@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
+
+import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
 
 async function openAddCartItemsMenu(page: Page) {
 	const menuButton = page.getByTestId('add-cart-item-menu');
@@ -15,7 +16,9 @@ test.describe('Customers in POS', () => {
 		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
 	});
 
-	test('should open customer address dialog when clicking customer name', async ({ posPage: page }) => {
+	test('should open customer address dialog when clicking customer name', async ({
+		posPage: page,
+	}) => {
 		const customerPill = page.getByTestId('cart-customer-name');
 		await expect(customerPill).toBeVisible({ timeout: 15_000 });
 		await customerPill.click();
@@ -23,7 +26,6 @@ test.describe('Customers in POS', () => {
 		// Should open the Edit Customer Address dialog
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
 	});
-
 });
 
 /**
@@ -134,10 +136,7 @@ test.describe('Customers Page (Pro)', () => {
 					const countEl = screen.getByTestId('data-table-count');
 					const hasResults = await countEl
 						.isVisible()
-						.then(
-							async (visible) =>
-								visible && /[0-9]/.test((await countEl.textContent()) ?? '')
-						)
+						.then(async (visible) => visible && /[0-9]/.test((await countEl.textContent()) ?? ''))
 						.catch(() => false);
 					const noResults = await screen
 						.getByTestId('no-data-message')

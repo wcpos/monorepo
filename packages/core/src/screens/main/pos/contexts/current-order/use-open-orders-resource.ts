@@ -52,8 +52,7 @@ export function useOpenOrdersResource(
 			switchMap((database) => {
 				if (!database) return of([] as EngineRxDocument[]);
 				const collection = database.collections[engineCollectionNameFor('orders')] as unknown as
-					| EngineOrderCollection
-					| undefined;
+					EngineOrderCollection | undefined;
 				if (!collection) return of([] as EngineRxDocument[]);
 				const statusPath = resolveLegacyField('orders', 'status').enginePath;
 				return collection.find({ selector: { [statusPath]: 'pos-open' } }).$;

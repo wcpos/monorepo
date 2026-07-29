@@ -17,8 +17,7 @@ export function SyncConfigBridge() {
 	const { engine } = useQueryManager();
 	const { store } = useAppState();
 	const checkIntervalMs = useObservableEagerState(store.sync_check_interval_ms$) as
-		| number
-		| undefined;
+		number | undefined;
 	const pullBatchSize = useObservableEagerState(store.sync_pull_batch_size$) as number | undefined;
 
 	React.useEffect(() => {

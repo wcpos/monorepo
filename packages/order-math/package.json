@@ -24,6 +24,6 @@
 		"@types/lodash": "^4.17.24",
 		"@wcpos/database": "workspace:*",
 		"jest": "^30.4.2",
-		"ts-jest": "^29.4.11"
+		"ts-jest": "^29.4.12"
 	}
 }

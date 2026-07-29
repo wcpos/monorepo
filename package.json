@@ -45,13 +45,13 @@
     "eslint": "^9.39.4",
     "expo": "~57.0.8",
     "glob": "^13.0.6",
-    "lint-staged": "^16.4.0",
-    "prettier-plugin-tailwindcss": "^0.8.0",
+    "lint-staged": "^17.2.0",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "rxdb": "17.4.0",
     "rxdb-premium": "17.4.0"
   },
   "dependencies": {
-    "turbo": "^2.9.18",
+    "turbo": "^2.10.7",
     "typescript": "^5.9.3"
   }
 }

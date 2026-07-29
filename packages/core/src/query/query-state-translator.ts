@@ -4,13 +4,7 @@ import type { CollectionKey, FiltersOf, QueryStateOf, SortFieldOf } from './quer
 
 type Storage = 'promoted' | 'payload' | 'local';
 type Operator =
-	| 'taxonomy-many'
-	| 'value'
-	| 'metadata'
-	| 'store'
-	| 'date-range'
-	| 'all-match'
-	| 'in';
+	'taxonomy-many' | 'value' | 'metadata' | 'store' | 'date-range' | 'all-match' | 'in';
 type FilterTranslator = {
 	legacyPath: string;
 	enginePath: string;

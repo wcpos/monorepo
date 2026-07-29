@@ -362,8 +362,7 @@ export type RxRecordMutationCollection = {
 export class RxRecordMutationStorage implements RecordMutationStorage {
 	public constructor(
 		private readonly collectionOrResolver:
-			| RxRecordMutationCollection
-			| (() => RxRecordMutationCollection)
+			RxRecordMutationCollection | (() => RxRecordMutationCollection)
 	) {}
 
 	private collection(): RxRecordMutationCollection {

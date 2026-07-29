@@ -65,8 +65,7 @@ export async function runScopeGuardedPull(input: {
 	 * case) so the read happens under this pull's ticket.
 	 */
 	pendingMutationOrderIds?:
-		| ReadonlySet<string | number>
-		| (() => Promise<ReadonlySet<string | number>>);
+		ReadonlySet<string | number> | (() => Promise<ReadonlySet<string | number>>);
 	/**
 	 * Opt into the server delete channel (F6). Without this, pullCustomBatch never requests deletes,
 	 * so the forwarded removeDeletedOrders hook stays unreachable and the checkpoint advances past

@@ -69,10 +69,13 @@ const quote = (value) => {
 		: `'${escaped}'`;
 };
 const union = (name, values) => {
-	const inline = `export type ${name} = ${values.map(quote).join(' | ')};`;
-	return inline.length <= 100
-		? inline
-		: `export type ${name} =\n${values.map((value) => `\t| ${quote(value)}`).join('\n')};`;
+	const joined = values.map(quote).join(' | ');
+	const inline = `export type ${name} = ${joined};`;
+	if (inline.length <= 100) return inline;
+	// Prettier >= 3.9 wraps the whole union onto one indented continuation line
+	// when it fits within printWidth (leading tab counted as tabWidth = 2).
+	if (joined.length + 3 <= 100) return `export type ${name} =\n\t${joined};`;
+	return `export type ${name} =\n${values.map((value) => `\t| ${quote(value)}`).join('\n')};`;
 };
 
 function renderTypescript(registry) {

@@ -198,8 +198,7 @@ export type RxdbSyncEnginePorts = {
 	/** The ONLY required adapter port. A factory receives the full scope
 	 * identity so per-scope storage decisions stay possible. */
 	storage:
-		| RxStorage<unknown, unknown>
-		| ((identity: StoreScopeIdentity) => RxStorage<unknown, unknown>);
+		RxStorage<unknown, unknown> | ((identity: StoreScopeIdentity) => RxStorage<unknown, unknown>);
 	/** Default: globalThis.fetch. Used by change-signal, scheduler, maintenance,
 	 * conflict-resolution, and write-drain transport paths. */
 	fetcher?: EngineFetcher;

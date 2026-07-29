@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
+
+import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
 
 /**
  * Reports page (pro-only).
@@ -18,7 +19,11 @@ test.describe('Reports Page (Pro)', () => {
 		// Reports page should have filter buttons or data content
 		await page.waitForTimeout(3_000);
 		const hasButtons = (await screen.locator('[role="button"]').count()) > 0;
-		const hasTable = await screen.locator('table').first().isVisible().catch(() => false);
+		const hasTable = await screen
+			.locator('table')
+			.first()
+			.isVisible()
+			.catch(() => false);
 		expect(hasButtons || hasTable).toBeTruthy();
 	});
 
@@ -42,7 +47,11 @@ test.describe('Reports Page (Pro)', () => {
 		await page.waitForTimeout(3_000);
 
 		// Reports page should have some content (table, chart, or summary)
-		const hasTable = await screen.locator('table').first().isVisible().catch(() => false);
+		const hasTable = await screen
+			.locator('table')
+			.first()
+			.isVisible()
+			.catch(() => false);
 		const hasButtons = (await screen.locator('[role="button"]').count()) > 0;
 		expect(hasTable || hasButtons).toBeTruthy();
 	});
