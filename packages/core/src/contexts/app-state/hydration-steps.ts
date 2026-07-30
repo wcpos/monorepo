@@ -204,6 +204,19 @@ export const hydrateUserSession = async (
 	return { site, wpCredentials, store, storeDB, fastStoreDB, extraData };
 };
 
+export async function switchUserSessionStore(
+	userDB: UserDatabase,
+	appState: any,
+	storeLocalID: string
+) {
+	const current = await appState.get('current');
+	const newState = { ...current, storeID: storeLocalID };
+	const sessionData = await hydrateUserSession(userDB, newState);
+
+	await appState.set('current', () => newState);
+	return sessionData;
+}
+
 /**
  * Context that accumulates data as hydration steps complete
  */

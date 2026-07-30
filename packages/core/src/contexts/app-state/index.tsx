@@ -4,7 +4,7 @@ import type { StoreDocument } from '@wcpos/database';
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
-import { hydrateUserSession } from './hydration-steps';
+import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
 
 import type { HydrationContext } from './hydration-steps';
 
@@ -95,13 +95,17 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	}, [state.appState, updateAppState]);
 
 	const switchStore = React.useCallback(
-		async (store: StoreDocument) => {
+		async (store: StoreDocument): Promise<void> => {
 			const current = await state.appState.get('current');
-			const newState = { ...current, storeID: store.localID };
-			await state.appState.set('current', () => newState);
+			if (store.localID === current?.storeID) {
+				return;
+			}
 
-			const sessionData = await hydrateUserSession(state.userDB!, newState);
-
+			const sessionData = await switchUserSessionStore(
+				state.userDB!,
+				state.appState,
+				store.localID!
+			);
 			updateAppState(sessionData);
 		},
 		[state.appState, state.userDB, updateAppState]

@@ -67,8 +67,9 @@ export interface CreateAppSyncEngineOptions {
 // engine-owning subtree (a compat-gate toggle, a Stack.Protected guard flip during
 // hydration) runs the construction twice. Caching by scope makes construction
 // idempotent: the same scope returns the identical live engine no matter how many
-// times React re-invokes the factory, and a genuine scope change disposes the prior
-// engine. Reopening a recently-used scope waits for that scope's close to settle.
+// times React re-invokes the factory. Same-site scope changes reuse the live engine;
+// cross-site changes dispose it. Reopening a recently-used scope waits for that
+// scope's close to settle.
 type MutableFetcherOptions = Pick<
 	CreateAppSyncEngineOptions,
 	'credentials' | 'refreshAuth' | 'useJwtAsParam'
@@ -76,6 +77,7 @@ type MutableFetcherOptions = Pick<
 
 type CachedEngine = {
 	key: string;
+	site: string;
 	databaseName: string;
 	engine: RxdbSyncEngine;
 	fetcherOptions: MutableFetcherOptions;
@@ -163,11 +165,37 @@ function disposeCachedEngine(entry: CachedEngine): void {
 
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
 	const cacheKey = scopeCacheKey(options);
+	const siteKey = canonicalSite(options.scope.site);
 	if (cachedEngine && cachedEngine.key === cacheKey) {
 		cachedEngine.fetcherOptions.credentials = options.credentials;
 		cachedEngine.fetcherOptions.refreshAuth = options.refreshAuth;
 		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
 		return cachedEngine.engine;
+	}
+	if (cachedEngine && cachedEngine.site === siteKey) {
+		const entry = cachedEngine;
+		const previousKey = entry.key;
+		const previousDatabaseName = entry.databaseName;
+		const switching = entry.engine.scope.switch(options.scope);
+		entry.key = cacheKey;
+		entry.databaseName = scopeDatabaseName(options.scope);
+		entry.fetcherOptions.credentials = options.credentials;
+		entry.fetcherOptions.refreshAuth = options.refreshAuth;
+		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
+		void switching.catch((error) => {
+			engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
+				context: {
+					errorCode: ERROR_CODES.SCOPE_SWITCH_FAILED,
+					scopeKey: cacheKey,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+			if (cachedEngine === entry && entry.key === cacheKey) {
+				entry.key = previousKey;
+				entry.databaseName = previousDatabaseName;
+			}
+		});
+		return entry.engine;
 	}
 	const supersedesCachedEngine = cachedEngine !== null;
 	// A genuine scope change has a different database name, so its construction can
@@ -406,6 +434,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	engineSelf = engine;
 	cachedEngine = {
 		key: cacheKey,
+		site: siteKey,
 		databaseName: scopeDatabaseName(options.scope),
 		engine,
 		fetcherOptions,
