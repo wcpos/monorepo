@@ -247,7 +247,7 @@ function withoutEchoedBarcode(
 	return rest;
 }
 
-async function patchAndEnqueueEngineResident(input: {
+export async function patchAndEnqueueEngineResident(input: {
 	manager: QueryManager;
 	collection: WriteableCollection;
 	recordId: string;

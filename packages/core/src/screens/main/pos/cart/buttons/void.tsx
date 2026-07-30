@@ -12,11 +12,20 @@ import { useT } from '../../../../../contexts/translations';
 import {
 	findEngineResident,
 	insertEngineResident,
+	patchAndEnqueueEngineResident,
 	patchEngineResident,
 } from '../../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
+
+/**
+ * One bounded second watch after `awaitWriteOutcome`'s helper timeout: a slow
+ * shop or a drain queued behind earlier work can answer after 15s, and a late
+ * `woocommerce_rest_cannot_delete` must still convert the void to a status
+ * change. Beyond this window the offline-class accepted gap applies (#864).
+ */
+const LATE_OUTCOME_TIMEOUT_MS = 120_000;
 
 /**
  *
@@ -86,6 +95,7 @@ export function VoidButton() {
 	const handleRemove = React.useCallback(async () => {
 		const orderJson = currentOrder.toMutableJSON();
 		const recordId = currentOrder.uuid!;
+		let undone = false;
 		const showSuccess = (message: string) => {
 			cartLogger.success(message, {
 				showToast: true,
@@ -94,7 +104,10 @@ export function VoidButton() {
 					dismissable: true,
 					action: {
 						label: t('common.undo'),
-						onClick: () => undoRemove(orderJson),
+						onClick: () => {
+							undone = true;
+							return undoRemove(orderJson);
+						},
 					},
 				},
 				context: {
@@ -103,13 +116,44 @@ export function VoidButton() {
 				},
 			});
 		};
+		// The refused delete leaves the order resident (removal only happens at
+		// delete-ACK), so the fallback is an atomic patch-and-enqueue to status
+		// 'pending' — the shared rollback path unwinds the resident if the
+		// enqueue fails, and the failure surfaces instead of a success toast.
+		const convertToPending = async () => {
+			try {
+				await patchAndEnqueueEngineResident({
+					manager,
+					collection: 'orders',
+					recordId,
+					changes: { status: 'pending' },
+				});
+				showSuccess(t('pos_cart.order_voided_kept_pending'));
+			} catch (err) {
+				cartLogger.error('Failed to void order', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						orderId: recordId,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
+			}
+		};
+		const isCannotDelete = (error: unknown) =>
+			error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE;
+
 		const receipt = await manager.engine.write({
 			collection: 'orders',
 			operation: 'delete',
 			recordId,
 		});
 
-		if (receipt.annihilated || manager.engine.status().connectivity !== 'online') {
+		// Only a truly offline engine skips the outcome watch (the accepted gap):
+		// the write drain still pushes while 'degraded', so a degraded refusal
+		// must convert exactly like an online one.
+		if (receipt.annihilated || manager.engine.status().connectivity === 'offline') {
 			showSuccess(t('pos_cart.order_removed'));
 			return;
 		}
@@ -118,23 +162,27 @@ export function VoidButton() {
 			await awaitWriteOutcome(manager.engine, receipt.mutationId);
 			showSuccess(t('pos_cart.order_removed'));
 		} catch (error) {
-			if (error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE) {
-				await patchEngineResident({
-					manager,
-					collection: 'orders',
-					recordId,
-					changes: { status: 'pending' },
-				});
-				await manager.engine.write({
-					collection: 'orders',
-					operation: 'update',
-					recordId,
-					payload: { status: 'pending' },
-				});
-				showSuccess(t('pos_cart.order_voided_kept_pending'));
+			if (isCannotDelete(error)) {
+				await convertToPending();
 				return;
 			}
+			// A terminal-but-different outcome (conflict, other rejection) is owned
+			// by the engine's conflict/dead-letter surfaces — keep the optimistic
+			// toast and stop watching.
 			showSuccess(t('pos_cart.order_removed'));
+			if (error instanceof WriteOutcomeError) return;
+			// Non-terminal rejection (helper timeout / drain kick failure): the
+			// push may still land. One bounded second watch so a late refusal
+			// still converts — unless the cashier already undid the void.
+			try {
+				await awaitWriteOutcome(manager.engine, receipt.mutationId, {
+					timeoutMs: LATE_OUTCOME_TIMEOUT_MS,
+				});
+			} catch (lateError) {
+				if (isCannotDelete(lateError) && !undone) {
+					await convertToPending();
+				}
+			}
 		}
 	}, [currentOrder, manager, t, undoRemove]);
 

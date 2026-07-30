@@ -7,22 +7,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { VoidButton } from './void';
 
-type MockEngineEvent =
-	| {
-			type: 'write-rejected';
-			collection: string;
-			recordId: string;
-			mutationId: string;
-			status?: number;
-			reason?: string;
-	  }
-	| {
-			type: 'write-acknowledged';
-			collection: string;
-			recordId: string;
-			mutationId: string;
-			currentRevision: string | null;
-	  };
+/** Scripted result for one awaitWriteOutcome call, consumed in order. */
+type ScriptedOutcome = 'acknowledged' | 'rejected' | 'timeout';
 
 const mockCartLogger = {
 	success: jest.fn(),
@@ -30,42 +16,19 @@ const mockCartLogger = {
 };
 const mockRouter = { setParams: jest.fn() };
 const mockPatchEngineResident = jest.fn();
+const mockPatchAndEnqueueEngineResident = jest.fn();
 const mockFindEngineResident = jest.fn();
 const mockInsertEngineResident = jest.fn();
-let mockListener: ((event: MockEngineEvent) => void) | undefined;
-let mockOutcome: 'acknowledged' | 'rejected' = 'acknowledged';
+let mockOutcomes: ScriptedOutcome[] = [];
+let mockConnectivity: 'online' | 'offline' | 'degraded' = 'online';
+let mockAwaitCalls: { mutationId: string; timeoutMs?: number }[] = [];
 
 const mockEngine = {
 	write: jest.fn(async ({ operation }: { operation: string }) => ({
 		mutationId: operation === 'delete' ? 'delete-1' : 'update-1',
 		annihilated: false,
 	})),
-	status: jest.fn(() => ({ connectivity: 'online' })),
-	events: jest.fn((listener: (event: MockEngineEvent) => void) => {
-		mockListener = listener;
-		return jest.fn();
-	}),
-	sync: jest.fn(async () => {
-		mockListener?.(
-			mockOutcome === 'rejected'
-				? {
-						type: 'write-rejected',
-						collection: 'orders',
-						recordId: 'order-1',
-						mutationId: 'delete-1',
-						status: 403,
-						reason: 'woocommerce_rest_cannot_delete',
-					}
-				: {
-						type: 'write-acknowledged',
-						collection: 'orders',
-						recordId: 'order-1',
-						mutationId: 'delete-1',
-						currentRevision: null,
-					}
-		);
-		return { status: 'ran' };
-	}),
+	status: jest.fn(() => ({ connectivity: mockConnectivity })),
 };
 const mockManager = { engine: mockEngine };
 const mockOrderJson = {
@@ -101,27 +64,33 @@ jest.mock('@wcpos/query', () => {
 		status?: number;
 		reason?: string;
 
-		constructor(event: MockEngineEvent) {
-			super(`${event.type} for mutation "${event.mutationId}"`);
+		constructor(reason?: string, status?: number) {
+			super(`write-rejected for mutation "delete-1"`);
 			this.name = 'WriteOutcomeError';
-			this.eventType = event.type as 'write-rejected';
-			this.status = 'status' in event ? event.status : undefined;
-			this.reason = 'reason' in event ? event.reason : undefined;
+			this.eventType = 'write-rejected';
+			this.status = status;
+			this.reason = reason;
 		}
 	}
 
 	return {
 		useQueryManager: () => mockManager,
 		WriteOutcomeError,
-		awaitWriteOutcome: (engine: typeof mockEngine, mutationId: string) =>
-			new Promise((resolve, reject) => {
-				engine.events((event) => {
-					if (event.mutationId !== mutationId) return;
-					if (event.type === 'write-rejected') reject(new WriteOutcomeError(event));
-					else resolve('success');
-				});
-				void engine.sync();
-			}),
+		awaitWriteOutcome: (
+			_engine: typeof mockEngine,
+			mutationId: string,
+			options?: { timeoutMs?: number }
+		) => {
+			mockAwaitCalls.push({ mutationId, timeoutMs: options?.timeoutMs });
+			const next = mockOutcomes.shift() ?? 'acknowledged';
+			if (next === 'rejected') {
+				return Promise.reject(new WriteOutcomeError('woocommerce_rest_cannot_delete', 403));
+			}
+			if (next === 'timeout') {
+				return Promise.reject(new Error(`Timed out waiting for mutation "${mutationId}"`));
+			}
+			return Promise.resolve('success');
+		},
 	};
 });
 
@@ -140,6 +109,7 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
 	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
 	patchEngineResident: (...args: unknown[]) => mockPatchEngineResident(...args),
+	patchAndEnqueueEngineResident: (...args: unknown[]) => mockPatchAndEnqueueEngineResident(...args),
 }));
 
 jest.mock('../../contexts/current-order', () => ({
@@ -149,15 +119,18 @@ jest.mock('../../contexts/current-order', () => ({
 describe('VoidButton', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockOutcome = 'acknowledged';
-		mockListener = undefined;
+		mockOutcomes = [];
+		mockAwaitCalls = [];
+		mockConnectivity = 'online';
 		mockFindEngineResident.mockResolvedValue({});
 		mockPatchEngineResident.mockResolvedValue({
 			get: () => ({ status: 'pos-open' }),
 		});
+		mockPatchAndEnqueueEngineResident.mockResolvedValue(undefined);
 	});
 
 	it('deletes a permitted void without enqueueing an update', async () => {
+		mockOutcomes = ['acknowledged'];
 		render(<VoidButton />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
@@ -172,13 +145,11 @@ describe('VoidButton', () => {
 			operation: 'delete',
 			recordId: 'order-1',
 		});
-		expect(mockEngine.write).not.toHaveBeenCalledWith(
-			expect.objectContaining({ operation: 'update' })
-		);
+		expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
 	});
 
 	it('keeps a refused void pending locally and enqueues the update', async () => {
-		mockOutcome = 'rejected';
+		mockOutcomes = ['rejected'];
 		render(<VoidButton />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
@@ -188,22 +159,117 @@ describe('VoidButton', () => {
 				expect.any(Object)
 			)
 		);
-		expect(mockPatchEngineResident).toHaveBeenCalledWith({
+		expect(mockPatchAndEnqueueEngineResident).toHaveBeenCalledWith({
 			manager: mockManager,
 			collection: 'orders',
 			recordId: 'order-1',
 			changes: { status: 'pending' },
 		});
-		expect(mockEngine.write).toHaveBeenCalledWith({
-			collection: 'orders',
-			operation: 'update',
-			recordId: 'order-1',
-			payload: { status: 'pending' },
+	});
+
+	it('converts a refused void while connectivity is degraded — the drain still pushes', async () => {
+		mockConnectivity = 'degraded';
+		mockOutcomes = ['rejected'];
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_voided_kept_pending',
+				expect.any(Object)
+			)
+		);
+		expect(mockPatchAndEnqueueEngineResident).toHaveBeenCalled();
+	});
+
+	it('skips the outcome watch entirely when offline (accepted gap)', async () => {
+		mockConnectivity = 'offline';
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_removed',
+				expect.any(Object)
+			)
+		);
+		expect(mockAwaitCalls).toHaveLength(0);
+	});
+
+	it('converts on a refusal that arrives after the helper timeout', async () => {
+		mockOutcomes = ['timeout', 'rejected'];
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		// Optimistic toast fires at the timeout, then the late refusal converts.
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_voided_kept_pending',
+				expect.any(Object)
+			)
+		);
+		expect(mockCartLogger.success).toHaveBeenNthCalledWith(
+			1,
+			'pos_cart.order_removed',
+			expect.any(Object)
+		);
+		expect(mockAwaitCalls).toHaveLength(2);
+		expect(mockAwaitCalls[1]?.timeoutMs).toBeGreaterThan(15_000);
+		expect(mockPatchAndEnqueueEngineResident).toHaveBeenCalledWith(
+			expect.objectContaining({ changes: { status: 'pending' } })
+		);
+	});
+
+	it('does not convert on a late refusal after the cashier already undid the void', async () => {
+		let releaseLateWatch: (() => void) | undefined;
+		mockOutcomes = ['timeout'];
+		const lateRejection = new Promise<never>((_resolve, reject) => {
+			releaseLateWatch = () => {
+				const { WriteOutcomeError } = jest.requireMock('@wcpos/query');
+				reject(new WriteOutcomeError('woocommerce_rest_cannot_delete', 403));
+			};
 		});
+		// Second call hangs until the undo has run, then rejects with the refusal.
+		const query = jest.requireMock('@wcpos/query');
+		const original = query.awaitWriteOutcome;
+		query.awaitWriteOutcome = jest
+			.fn()
+			.mockImplementationOnce(original)
+			.mockImplementationOnce(() => lateRejection);
+
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() =>
+			expect(mockCartLogger.success).toHaveBeenCalledWith(
+				'pos_cart.order_removed',
+				expect.any(Object)
+			)
+		);
+		const toastOptions = mockCartLogger.success.mock.calls[0][1];
+		await toastOptions.toast.action.onClick(); // undo
+		releaseLateWatch?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
+		query.awaitWriteOutcome = original;
+	});
+
+	it('surfaces an error toast and no success toast when the fallback enqueue fails', async () => {
+		mockOutcomes = ['rejected'];
+		mockPatchAndEnqueueEngineResident.mockRejectedValue(new Error('enqueue failed'));
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() =>
+			expect(mockCartLogger.error).toHaveBeenCalledWith('Failed to void order', expect.any(Object))
+		);
+		expect(mockCartLogger.success).not.toHaveBeenCalled();
 	});
 
 	it('undo after fallback restores pos-open and enqueues an update', async () => {
-		mockOutcome = 'rejected';
+		mockOutcomes = ['rejected'];
 		render(<VoidButton />);
 		fireEvent.click(screen.getByTestId('void-button'));
 
