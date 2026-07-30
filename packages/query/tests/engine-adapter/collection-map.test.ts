@@ -117,6 +117,7 @@ describe('engine adapter collection map', () => {
 				'name',
 				'sku',
 				'barcode',
+				'menu_order',
 				'price',
 				'regular_price',
 				'sale_price',
