@@ -81,6 +81,9 @@ function scriptedServer() {
 	const fetch = async (url: string): Promise<Response> => {
 		const u = new URL(url);
 		const path = u.pathname;
+		if (path.endsWith('/changes/tick')) {
+			return new Response(null, { status: 404 });
+		}
 		if (path.endsWith('/changes/sequence-log')) {
 			state.sequenceLogFetches += 1;
 			if (state.poisonSequenceLog) {
