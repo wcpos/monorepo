@@ -205,13 +205,13 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 	});
 
 	it('steps idle cadence to 30s, then 60s and holds', async () => {
-		let nowMs = 10 * 60_000;
+		let nowMs = 10 * 60_000 + 1;
 		const captured = captureTimers();
 		const engine = engineWith({
 			mode: 'auto',
 			now: () => nowMs,
 			random: () => 0.5,
-			lastUserActivityMs: () => 0,
+			lastUserActivityMs: () => 1,
 		});
 
 		await engine.ready;
@@ -232,9 +232,25 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		await engine.dispose();
 	});
 
+	it('starts at the active cadence when the activity timestamp is unset', async () => {
+		const nowMs = 10 * 60_000;
+		const captured = captureTimers();
+		const engine = engineWith({
+			mode: 'auto',
+			now: () => nowMs,
+			random: () => 0.5,
+			lastUserActivityMs: () => 0,
+		});
+
+		await engine.ready;
+		await waitForAutomaticIntervals(captured.intervals);
+		expect(changeSignalTimeout(engine, captured.timeouts, nowMs).delay).toBe(10_000);
+		await engine.dispose();
+	});
+
 	it('snaps a decayed timer back and immediately catches up on user activity', async () => {
-		let nowMs = 10 * 60_000;
-		let lastActivityMs = 0;
+		let nowMs = 10 * 60_000 + 1;
+		let lastActivityMs = 1;
 		let activityListener: (() => void) | null = null;
 		const captured = captureTimers();
 		const events: EngineEvent[] = [];

@@ -8,6 +8,7 @@ import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
 import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/scanner';
+import { markUserActivity } from '@wcpos/utils/user-activity';
 
 import { showTooShortFeedback } from './too-short-feedback';
 import { useAttributedWedge } from './use-attributed-wedge';
@@ -171,7 +172,7 @@ export const useBarcodeDetection = (callback = (barcode: string) => {}) => {
 				attributed.scanEvents$,
 				camera.events$,
 				device.events$
-			),
+			).pipe(tap(() => markUserActivity())),
 		[wedgeBarcode$, attributed.scanEvents$, camera.events$, device.events$]
 	);
 

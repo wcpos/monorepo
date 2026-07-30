@@ -562,6 +562,7 @@ export function createRxdbSyncEngine(
 	const laneLastTick = new Map<EngineLane, { atMs: number; status: SyncReport['status'] }>();
 	const laneNextDueAtMs = new Map<EngineLane, number>();
 	const nowMs = ports.now ?? (() => Date.now());
+	const engineStartedAtMs = nowMs();
 	const random = ports.random ?? Math.random;
 	let pullBatchSize: number | undefined;
 
@@ -573,7 +574,7 @@ export function createRxdbSyncEngine(
 	// nothing naming the blocked step. Lifecycle ops serialize (invariant 3), so
 	// one phase slot suffices; the readiness watchdog below reads it while
 	// `ready` is unsettled.
-	let lifecyclePhase = { phase: 'constructed', sinceMs: nowMs() };
+	let lifecyclePhase = { phase: 'constructed', sinceMs: engineStartedAtMs };
 	const setLifecyclePhase = (phase: string): void => {
 		lifecyclePhase = { phase, sinceMs: nowMs() };
 	};
@@ -1574,8 +1575,8 @@ export function createRxdbSyncEngine(
 	const armChangeSignalTimer = (): void => {
 		if (disposed) return;
 		const now = nowMs();
-		const idleForMs =
-			ports.lastUserActivityMs !== undefined ? Math.max(0, now - ports.lastUserActivityMs()) : 0;
+		const lastActivityMs = ports.lastUserActivityMs?.() ?? engineStartedAtMs;
+		const idleForMs = Math.max(0, now - (lastActivityMs > 0 ? lastActivityMs : engineStartedAtMs));
 		changeSignalDecayLevel = nextChangeSignalDecayLevel({
 			idleForMs,
 			currentLevel: changeSignalDecayLevel,
