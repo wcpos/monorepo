@@ -85,13 +85,13 @@ describe('createAppSyncEngine scope cache', () => {
 	it.each([
 		['orders', 'wc/v3/orders'],
 		['products', 'wc/v3/products'],
-		['customers', 'wc/v3/customers'],
+		['customers', 'wcpos/v2/customers'],
 		['taxRates', 'wcpos/v2/taxes'],
 		['categories', 'wc/v3/products/categories'],
 		['brands', 'wc/v3/products/brands'],
 		['tags', 'wc/v3/products/tags'],
 		['coupons', 'wc/v3/coupons'],
-	])('fetches the %s census through the instrumented wc/v3 route', async (collection, route) => {
+	])('fetches the %s census through its configured route', async (collection, route) => {
 		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
 			new Response(null, {
 				status: 200,

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { Stack } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
@@ -23,6 +23,7 @@ import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-s
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
+import { markUserActivity } from '@wcpos/utils/user-activity';
 
 import { SyncConfigBridge } from '../../components/sync-config-bridge';
 import { useNavigationBackground } from '../../components/use-navigation-background';
@@ -47,6 +48,10 @@ import {
 const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
 const metricsLogger = getLogger(['wcpos', 'sync', 'host-metrics']);
 const syncStatusLogger = getLogger(['wcpos', 'sync', 'status']);
+const captureUserActivity = (): false => {
+	markUserActivity();
+	return false;
+};
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -57,6 +62,17 @@ function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
 	const { storeDB, site, wpCredentials, store } = useAppState();
 	const { locale } = useLocale();
+
+	React.useEffect(() => {
+		// React Native Web does not route every keyboard/pointer interaction through responders.
+		if (Platform.OS !== 'web') return;
+		const markActivity = () => markUserActivity();
+		const events = ['keydown', 'pointerdown'] as const;
+		events.forEach((event) => window.addEventListener(event, markActivity));
+		return () => {
+			events.forEach((event) => window.removeEventListener(event, markActivity));
+		};
+	}, []);
 
 	/**
 	 * The http client now has access to online status context
@@ -110,7 +126,10 @@ function AppStack() {
 			<UISettingsProvider>
 				<CompatGate>
 					<DeviceScanProvider>
-						<View className="bg-background flex-1">
+						<View
+							className="bg-background flex-1"
+							onStartShouldSetResponderCapture={captureUserActivity}
+						>
 							<Stack
 								screenOptions={{
 									headerShown: false,

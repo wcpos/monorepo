@@ -62,6 +62,16 @@ function engineDocument$(
 	);
 }
 
+export function engineDocumentByWooId$<TDocument extends object>(
+	manager: ReturnType<typeof useQueryManager>,
+	collectionName: LegacyCollectionName,
+	wooId: number
+): Observable<TDocument | null> {
+	return engineDocument$(manager, collectionName, { type: 'woo-id', value: wooId }).pipe(
+		map((document) => document && wrapEngineDocument<TDocument>(collectionName, document))
+	);
+}
+
 function useEngineDocumentResource<TDocument extends object>(
 	collectionName: LegacyCollectionName,
 	key: DocumentKey

@@ -371,7 +371,12 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 
 		await engine.sync();
 
-		const ticks = Object.values(engine.status().lanes).map((lane) => lane.lastTick?.atMs ?? 0);
+		const laneStatus = engine.status().lanes;
+		const ticks = Object.entries(laneStatus)
+			.filter(([name]) => name !== 'customer-trickle')
+			.map(([, lane]) => lane.lastTick?.atMs ?? 0);
+		expect(Object.keys(laneStatus)).toHaveLength(11);
+		expect(laneStatus['customer-trickle'].lastTick).toBeNull();
 		expect(ticks).toHaveLength(10);
 		expect(ticks.every((tick) => tick > 0)).toBe(true);
 		expect(ticks).toEqual([...ticks].sort((a, b) => a - b));

@@ -55,7 +55,7 @@ function captureIntervals(): CapturedInterval[] {
 }
 
 async function waitForAutomaticIntervals(intervals: CapturedInterval[]): Promise<void> {
-	await vi.waitFor(() => expect(intervals).toHaveLength(9));
+	await vi.waitFor(() => expect(intervals).toHaveLength(10));
 }
 
 afterEach(() => {
@@ -129,6 +129,8 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		await engine.ready;
 		await waitForAutomaticIntervals(captured);
 		expect(engine.status().lanes['change-signal'].nextDueAtMs).toBe(11_000);
+		expect(engine.status().lanes['customer-trickle'].nextDueAtMs).toBe(301_000);
+		expect(engine.status().lanes['customer-trickle'].lastTick).toBeNull();
 		nowMs = 40_000;
 		captured[0]!.callback();
 		expect(engine.status().lanes['change-signal'].nextDueAtMs).toBe(21_000);

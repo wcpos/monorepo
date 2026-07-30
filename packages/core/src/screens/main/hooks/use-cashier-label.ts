@@ -1,9 +1,12 @@
-import { useObservable, useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
+
+import { useQueryManager } from '@wcpos/query';
+
+import { engineDocumentByWooId$ } from './use-engine-document';
 import { parseRemoteId } from '../../../utils/parse-remote-id';
-import { useCollection } from './use-collection';
 import { useCustomerNameFormat } from './use-customer-name-format';
 
 export { parseRemoteId } from '../../../utils/parse-remote-id';
@@ -26,21 +29,15 @@ interface CashierLabel {
  */
 export function useCashierLabel(value: unknown): CashierLabel {
 	const id = parseRemoteId(value);
-	const { collection } = useCollection('customers');
+	const manager = useQueryManager();
 	const { format } = useCustomerNameFormat();
 
-	const cashier$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([cashierID, customerCollection]) => {
-					if (cashierID === undefined) {
-						return of(undefined);
-					}
-
-					return customerCollection.findOne({ selector: { id: cashierID } }).$;
-				})
-			),
-		[id, collection]
+	const cashier$ = React.useMemo(
+		() =>
+			id === undefined
+				? of(undefined)
+				: engineDocumentByWooId$<CustomerDocument>(manager, 'customers', id),
+		[id, manager]
 	);
 	const cashier = useObservableState(cashier$, undefined) as CashierDocument;
 
