@@ -1,4 +1,4 @@
-import { Observable } from 'rxjs';
+import { combineLatest, Observable } from 'rxjs';
 
 import {
 	collectionMap,
@@ -14,8 +14,16 @@ import type { MangoQuerySelector, MangoQuerySortPart, RxDocument } from 'rxdb';
 export type EngineRxDocument = RxDocument<EngineDocument>;
 
 type AdapterCollection = {
-	find(query: { selector: MangoQuerySelector<EngineDocument> }): {
+	find(query: {
+		selector: MangoQuerySelector<EngineDocument>;
+		sort?: MangoQuerySortPart<EngineDocument>[];
+		skip?: number;
+		limit?: number;
+	}): {
 		$: Observable<EngineRxDocument[]>;
+	};
+	count(query: { selector: MangoQuerySelector<EngineDocument> }): {
+		$: Observable<number>;
 	};
 };
 
@@ -99,6 +107,31 @@ function sortDocuments(
 	});
 }
 
+function translateSort(
+	collection: LegacyCollectionName,
+	sort: MangoQuerySortPart<EngineDocument>[]
+): { pushable: boolean; sort: MangoQuerySortPart<EngineDocument>[] } {
+	const translated: MangoQuerySortPart<EngineDocument>[] = [];
+	for (const part of sort) {
+		const [legacyField, direction] = Object.entries(part)[0] ?? [];
+		if (!legacyField) {
+			return { pushable: false, sort: [] };
+		}
+		const mapping = resolveLegacyField(collection, legacyField);
+		if (
+			mapping.compute ||
+			mapping.numeric ||
+			mapping.readEnginePath !== undefined ||
+			(mapping.kind !== 'promoted' && mapping.kind !== 'identifier') ||
+			mapping.enginePath.includes('.')
+		) {
+			return { pushable: false, sort: [] };
+		}
+		translated.push({ [mapping.enginePath]: direction });
+	}
+	return { pushable: true, sort: translated };
+}
+
 /** Execute a legacy-shaped query reactively against an engine RxDB collection. */
 export function executeAdapterQuery({
 	database,
@@ -108,7 +141,8 @@ export function executeAdapterQuery({
 	skip = 0,
 	limit,
 }: ExecuteAdapterQueryOptions): Observable<AdapterQueryResult> {
-	const { prefilter, residual } = translateSelector(collection, selector);
+	const { prefilter, residual, complete } = translateSelector(collection, selector);
+	const engineSort = translateSort(collection, sort);
 	const engineCollectionName = collectionMap[collection].engineCollection;
 	const engineCollection = database.collections[engineCollectionName];
 	if (!engineCollection) {
@@ -120,13 +154,40 @@ export function executeAdapterQuery({
 			subscriber.next({ hits: [], count: 0, elapsed: 0 });
 		});
 	}
+	if (complete && engineSort.pushable) {
+		const query = engineCollection.find({
+			selector: prefilter,
+			sort: engineSort.sort.length > 0 ? engineSort.sort : [{ id: 'asc' }],
+			skip: Math.max(0, skip),
+			...(limit !== undefined ? { limit: Math.max(0, limit) } : {}),
+		});
+		const count = engineCollection.count({ selector: prefilter });
+
+		return new Observable<AdapterQueryResult>((subscriber) => {
+			const startedAt = Date.now();
+			const subscription = combineLatest([query.$, count.$]).subscribe({
+				next: ([documents, total]) => {
+					subscriber.next({
+						hits: documents,
+						count: total,
+						elapsed: Date.now() - startedAt,
+					});
+				},
+				error: (error: unknown) => subscriber.error(error),
+				complete: () => subscriber.complete(),
+			});
+			return () => subscription.unsubscribe();
+		});
+	}
 	const query = engineCollection.find({ selector: prefilter });
 
 	return new Observable<AdapterQueryResult>((subscriber) => {
 		const startedAt = Date.now();
 		const subscription = query.$.subscribe({
 			next: (documents) => {
-				const matching = documents.filter((document) => residual(document as EngineDocument));
+				const matching = complete
+					? documents
+					: documents.filter((document) => residual(document as EngineDocument));
 				const ordered = sortDocuments(collection, matching, sort);
 				const offset = Math.max(0, skip);
 				const hits =

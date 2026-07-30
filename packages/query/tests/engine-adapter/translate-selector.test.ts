@@ -25,8 +25,78 @@ const product = {
 	},
 };
 
+const ordersDefaultSelector = {
+	$and: [
+		{ meta_data: { $elemMatch: { key: '_pos_user', value: '6' } } },
+		{ meta_data: { $elemMatch: { key: '_pos_store', value: '2' } } },
+	],
+};
+
 describe('translateSelector', () => {
-	it('puts only identifiers and promoted fields in the RxDB prefilter', () => {
+	it('fully translates the orders metadata selector', () => {
+		const translated = translateSelector('orders', ordersDefaultSelector);
+
+		expect(translated.prefilter).toEqual({
+			$and: [
+				{ 'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '6' } } },
+				{ 'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '2' } } },
+			],
+		});
+		expect(translated.complete).toBe(true);
+	});
+
+	it('fully translates orders status, metadata, and date ranges', () => {
+		expect(
+			translateSelector('orders', {
+				status: 'completed',
+				...ordersDefaultSelector,
+			}).complete
+		).toBe(true);
+		expect(
+			translateSelector('orders', {
+				date_created_gmt: { $gte: '2026-01-01', $lte: '2026-12-31' },
+			}).complete
+		).toBe(true);
+	});
+
+	it('keeps one-sided comparisons residual for null and missing fields', () => {
+		const translated = translateSelector('coupons', {
+			date_expires_gmt: { $lte: '2026-01-01' },
+		});
+
+		expect(translated.prefilter).toEqual({});
+		expect(translated.complete).toBe(false);
+		expect(translated.residual({ id: 'coupon-1', payload: {} })).toBe(true);
+	});
+
+	it('keeps computed selectors and unsupported pushed operators incomplete', () => {
+		expect(translateSelector('orders', { cashier: '6' }).complete).toBe(false);
+		expect(
+			translateSelector('variations', {
+				attributes: { $allMatch: [{ name: 'Color', option: 'Red' }] },
+			}).complete
+		).toBe(false);
+		expect(
+			translateSelector('orders', {
+				meta_data: { $elemMatch: { value: { $not: { role: 'manager' } } } },
+			})
+		).toMatchObject({ prefilter: {}, complete: false });
+	});
+
+	it('only considers exact taxonomy membership complete', () => {
+		expect(
+			translateSelector('products', {
+				categories: { $elemMatch: { id: 7 } },
+			}).complete
+		).toBe(true);
+		expect(
+			translateSelector('products', {
+				categories: { $elemMatch: { id: 7, name: 'x' } },
+			}).complete
+		).toBe(false);
+	});
+
+	it('puts faithfully mapped fields in the RxDB prefilter', () => {
 		const translated = translateSelector('products', {
 			id: { $in: [10, 11] },
 			stock_status: 'instock',
@@ -37,6 +107,8 @@ describe('translateSelector', () => {
 		expect(translated.prefilter).toEqual({
 			wooProductId: { $in: [10, 11] },
 			stockStatus: 'instock',
+			'payload.name': { $regex: '^Al' },
+			'payload.meta_data': { $elemMatch: { key: 'color', value: 'blue' } },
 		});
 		expect(translated.residual(product)).toBe(true);
 		expect(
@@ -57,6 +129,7 @@ describe('translateSelector', () => {
 		expect(translated.prefilter).toEqual({
 			categoryIds: { $in: [7] },
 			brandIds: { $in: [4] },
+			'payload.tags': { $elemMatch: { id: 9 } },
 		});
 		expect(translated.residual(product)).toBe(true);
 	});
@@ -79,7 +152,12 @@ describe('translateSelector', () => {
 		});
 
 		expect(translated.prefilter).toEqual({
-			$and: [{ status: { $ne: 'cancelled' } }],
+			$and: [
+				{ status: { $ne: 'cancelled' } },
+				{
+					$or: [{ customerId: 7 }, { 'payload.created_via': 'checkout' }],
+				},
+			],
 		});
 		expect(
 			translated.residual({
