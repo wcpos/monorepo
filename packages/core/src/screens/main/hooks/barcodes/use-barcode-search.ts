@@ -127,11 +127,15 @@ export const useBarcodeSearch = () => {
 
 			// Precedence (#740), first non-empty tier wins so a scan never turns
 			// falsely ambiguous:
-			//   1. exact match on a barcode field — the product literally has this barcode;
-			//   2. UPC-A/EAN-13 equivalent on a barcode field — the leading-zero twin;
-			//   3. exact match on any field, incl. SKU — a coincidental SKU string.
+			//   1. exact match on the materialized barcode — the product literally has this barcode;
+			//   2. UPC-A/EAN-13 equivalent on the materialized barcode — the leading-zero twin;
+			//   3. UPC-A/EAN-13 equivalent on the global_unique_id fallback field;
+			//   4. exact match on any field, incl. SKU — a coincidental SKU string.
 			// Barcode semantics rank above a SKU coincidence: an unrelated product whose
-			// SKU equals the scanned digits must not preempt a genuine barcode equivalence.
+			// SKU equals the scanned digits must not preempt a genuine barcode
+			// equivalence — including a global-ID equivalence while SKU is the
+			// active carrier, so every equivalence tier runs before the exact-any
+			// fallback.
 			const symbologyExact = select((document) =>
 				matchesExactSymbology(document, normalizedBarcode)
 			);
@@ -144,10 +148,13 @@ export const useBarcodeSearch = () => {
 			if (symbologyEquivalent.length > 0) {
 				return symbologyEquivalent;
 			}
-			const fallbackExact = select((document) => matchesExactAnyField(document, normalizedBarcode));
-			return fallbackExact.length > 0
-				? fallbackExact
-				: select((document) => matchesEquivalentGlobalId(document, normalizedBarcode));
+			const globalIdEquivalent = select((document) =>
+				matchesEquivalentGlobalId(document, normalizedBarcode)
+			);
+			if (globalIdEquivalent.length > 0) {
+				return globalIdEquivalent;
+			}
+			return select((document) => matchesExactAnyField(document, normalizedBarcode));
 		},
 		[manager]
 	);

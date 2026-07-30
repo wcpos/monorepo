@@ -148,6 +148,21 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 		expect(await search('0012345678905')).toEqual([]);
 	});
 
+	it('ranks a global-id equivalence above a coincidental exact SKU match', async () => {
+		setActiveBarcodeSelectors('products', ['meta_data:_barcode']);
+		productDocs = [
+			// An unrelated product whose SKU is literally the scanned 13-digit string
+			// (its materialized barcode carries a different custom-meta value).
+			doc('sku-coincidence', { sku: '0012345678905', barcode: 'UNRELATED' }),
+			// The genuine article: its global ID is the UPC-A twin of the scan.
+			doc('global-equiv', { sku: 'OTHER', barcode: 'OTHER', global_unique_id: '012345678905' }),
+		];
+
+		expect((await search('0012345678905')) as unknown as FakeDoc[]).toMatchObject([
+			{ id: 'global-equiv' },
+		]);
+	});
+
 	it('still applies UPC equivalence to the global-id fallback when SKU is active', async () => {
 		setActiveBarcodeSelectors('products', ['sku']);
 		productDocs = [
