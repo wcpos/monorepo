@@ -54,7 +54,7 @@ export type SeedTargetedProductSchedulerTaskInput = {
 };
 
 export type SeedProductBrowseWindowSchedulerTaskInput = {
-	/** Window size (first page). Defaults to the descriptor's per-page ceiling. */
+	/** Result-window size. Defaults to the descriptor's per-page ceiling. */
 	limit?: number;
 	priority?: number;
 	completedDedupeForMs?: number;
@@ -65,9 +65,9 @@ export type SeedProductBrowseWindowSchedulerTaskInput = {
 /**
  * Seed the products browse-window task (ADR 0027 §2) — the products mirror of
  * seedOrderFilterSchedulerTask. One WINDOWED task keyed `products:browse-window:limit=<N>`,
- * which the drain routes to fetchProductBrowseWindow (first page by the POS default catalog
- * sort). Low priority (default 500 — below the Tier-0 reference lanes and the orders window);
- * NOT durable (a re-seedable refresh), NOT filter-aware, NO remote pagination.
+ * which the drain routes to fetchProductBrowseWindow (POS default catalog sort). Low priority
+ * (default 500 — below the Tier-0 reference lanes and the orders window); NOT durable
+ * (a re-seedable refresh) and NOT filter-aware.
  */
 export async function seedProductBrowseWindowSchedulerTask(
 	input: SeedProductBrowseWindowSchedulerTaskInput

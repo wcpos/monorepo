@@ -279,7 +279,7 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 		);
 	});
 
-	it('rejects a window past the Woo per-page ceiling before queuing work (no remote pagination)', async () => {
+	it('rejects a result window past the Woo per-page ceiling before queuing work', async () => {
 		await expect(
 			seedProductBrowseWindowSchedulerTask({ getRepository: mocks.getRepository, limit: 101 })
 		).rejects.toThrow('Product browse-window scheduler limit must be a positive integer');

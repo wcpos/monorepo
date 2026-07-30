@@ -7,9 +7,9 @@
  *    signal, so the open/recent window is re-seeded on an interval (windowed
  *    lane, one bounded fetch — never a bulk pull; guardrail G3).
  *  - PRODUCT BROWSE-WINDOW SEED (ADR 0027 §2): so a cold grid shows products
- *    without a search, a bounded first page by the POS default catalog sort is
- *    re-seeded on an interval (windowed lane, one bounded fetch — never a bulk
- *    pull; guardrail G3). Below the reference lanes and the orders window.
+ *    without a search, a bounded result window by the POS default catalog sort
+ *    is re-seeded on an interval (windowed lane, never a bulk pull; guardrail
+ *    G3). Below the reference lanes and the orders window.
  *  - REFERENCE RE-SEED (F11): a completed greedy task is terminal, so a
  *    mid-session category/brand/tag/coupon edit never reaches a running POS
  *    without a periodic re-seed → re-pull → set-difference prune.
@@ -31,6 +31,7 @@ import type { StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 
 import { seedOrderFilterSchedulerTask } from '../scheduler/rx-order-scheduler-task-seeder';
 import { seedProductBrowseWindowSchedulerTask } from '../scheduler/rx-scheduler-product-task-seeder';
+import { PRODUCT_BROWSE_WINDOW_LIMIT } from '../scheduler/product-browse-window-descriptor';
 import { seedReferenceLanes } from '../scheduler/rx-pos-bootstrap-seeder';
 import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
@@ -88,12 +89,12 @@ export type QueryTotalCacheEvent = { type: 'query-total-cache'; entries: QueryTo
 export const ORDER_OPEN_RECENT_STATUS = 'pending,processing,on-hold';
 export const ORDER_OPEN_RECENT_LIMIT = 200;
 export const ORDER_OPEN_RECENT_PRIORITY = 600;
-// The products browse-window seed (ADR 0027 §2): one first page, default 100 (the Woo
-// per-page ceiling — no remote pagination). Priority 500 sits BELOW the Tier-0 reference
+// The products browse-window seed (ADR 0027 §2): a result window of up to 100 products.
+// Priority 500 sits BELOW the Tier-0 reference
 // lanes (1000–920) and the orders open-recent window (600): a cold browse grid is a
 // convenience seed, never a sell-blocker, so it drains after them. 500 (not 599) leaves
 // headroom for any future intermediate seed between it and the orders window.
-export const PRODUCT_BROWSE_WINDOW_LIMIT = 100;
+export { PRODUCT_BROWSE_WINDOW_LIMIT };
 export const PRODUCT_BROWSE_WINDOW_PRIORITY = 500;
 export const REFERENCE_REFRESH_DEDUPE_MS = 4 * 60_000;
 export const COVERAGE_COMPACTION_INTERVAL_MS = 5 * 60 * 1_000;
