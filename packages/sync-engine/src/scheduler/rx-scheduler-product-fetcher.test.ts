@@ -20,10 +20,13 @@ function productTask(overrides: Partial<FetchTask> = {}): FetchTask {
 	};
 }
 
-function response(payload: unknown[]): Response {
+function response(payload: unknown[], totalPages?: number): Response {
 	return new Response(JSON.stringify(payload), {
 		status: 200,
-		headers: { 'content-type': 'application/json' },
+		headers: {
+			'content-type': 'application/json',
+			...(totalPages === undefined ? {} : { 'x-wp-totalpages': String(totalPages) }),
+		},
 	});
 }
 
@@ -137,11 +140,10 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
-		// One page over the servable set the existing product paths request, sorted by the POS
-		// default catalog sort (orderby=title&order=asc) — no search and no page walk.
+		// A short first page exhausts the servable set without a boundary-page walk.
 		expect(fetcher).toHaveBeenCalledTimes(1);
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=title&order=asc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=menu_order&order=asc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),
@@ -163,18 +165,53 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
-	it('records incomplete browse-window coverage when the first page fills the window', async () => {
+	it('applies the id tiebreak before truncating a full remote browse window', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
-		const products = Array.from({ length: 2 }, (_, index) => ({
-			id: index + 1,
+		const pageOneProducts = Array.from({ length: 100 }, (_, index) => ({
+			id: index + 200,
+			menu_order: 0,
 			date_modified_gmt: '2026-05-20T10:10:00',
-			meta_data: posMeta(index + 1),
+			meta_data: posMeta(index + 200),
 		}));
-		const fetcher = vi.fn(async () => response(products));
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			const page = new URL(String(request)).searchParams.get('page');
+			if (page === '1') return response(pageOneProducts, 4);
+			if (page === '2') {
+				return response(
+					Array.from({ length: 100 }, (_, index) => ({
+						id: index + 300,
+						menu_order: 0,
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: posMeta(index + 300),
+					})),
+					4
+				);
+			}
+			if (page === '3') {
+				return response(
+					[
+						{
+							id: 1,
+							menu_order: 0,
+							date_modified_gmt: '2026-05-20T10:10:00',
+							meta_data: posMeta(1),
+						},
+						...Array.from({ length: 99 }, (_, index) => ({
+							id: index + 400,
+							menu_order: 1,
+							date_modified_gmt: '2026-05-20T10:10:00',
+							meta_data: posMeta(index + 400),
+						})),
+					],
+					4
+				);
+			}
+			throw new Error(`Unexpected browse-window page ${page}`);
+		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
@@ -186,19 +223,43 @@ describe('createProductsSchedulerFetcher', () => {
 
 		const result = await schedulerFetcher(
 			productTask({
-				id: 'products:browse-window:limit=2:windowed',
-				queryKey: 'products:browse-window:limit=2',
-				limit: 2,
+				id: 'products:browse-window:limit=100:windowed',
+				queryKey: 'products:browse-window:limit=100',
+				limit: 100,
 			})
 		);
 
+		expect(fetcher).toHaveBeenNthCalledWith(
+			1,
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=menu_order&order=asc&status=publish'
+		);
+		expect(fetcher).toHaveBeenNthCalledWith(
+			2,
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=2&orderby=menu_order&order=asc&status=publish'
+		);
+		expect(fetcher).toHaveBeenNthCalledWith(
+			3,
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=3&orderby=menu_order&order=asc&status=publish'
+		);
+		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
+			{ wooProductId: number }[],
+		][];
+		expect(upsertCalls[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual([
+			1,
+			...Array.from({ length: 99 }, (_, index) => index + 200),
+		]);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({
-				queryKey: 'products:browse-window:limit=2',
-				complete: false,
+				queryKey: 'products:browse-window:limit=100',
+				complete: true,
 			})
 		);
-		expect(result.completed).toBe(false);
+		expect(result).toEqual({
+			taskId: 'products:browse-window:limit=100:windowed',
+			documentCount: 100,
+			requestCount: 3,
+			completed: true,
+		});
 	});
 
 	it('populates the Leg-3 manifest from _rxdb_digest and strips it from the stored payload', async () => {

@@ -17,6 +17,7 @@ import { type Materialized, materializeTargeted } from '../materialization/recor
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
 	parseProductBrowseWindowLimit,
+	PRODUCT_BROWSE_WINDOW_LIMIT,
 	PRODUCT_BROWSE_WINDOW_ORDER,
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
 } from './product-browse-window-descriptor';
@@ -174,13 +175,16 @@ async function fetchProductQuery(
 	input: ProductsSchedulerFetcherInput,
 	query: URLSearchParams,
 	context?: SchedulerFetcherContext
-): Promise<WooProductPayload[]> {
+): Promise<{ payloads: WooProductPayload[]; totalPages: number | null }> {
 	const url = `${input.baseUrl}/products?${query.toString()}`;
 	const response = await httpGet(input, url, context);
 	if (!response.ok) {
 		throw new Error(`Woo REST product search request failed: ${response.status}`);
 	}
-	return JSON.parse(await response.text()) as WooProductPayload[];
+	return {
+		payloads: JSON.parse(await response.text()) as WooProductPayload[],
+		totalPages: Number(response.headers.get('X-WP-TotalPages')) || null,
+	};
 }
 
 function productSearchParams(search: string, limit: number): URLSearchParams {
@@ -215,12 +219,12 @@ function uniqueProductPayloads(payloads: WooProductPayload[]): WooProductPayload
 }
 
 /**
- * The products browse-window seed (ADR 0027 §2): ONE bounded first page over the servable
- * set the existing product paths already request, sorted by the POS default catalog sort
- * (orderby=title&order=asc). No filters, no remote pagination — a cold-grid seed, not a
- * query engine. Reuses fetchProductQuery + productDocumentFromWooPayload (the shared
- * materialization path) and the shared collection repository, so the #637 pull guard
- * (withoutLocallyProtected) protects a locally-dirty product from the window refresh.
+ * The products browse-window seed (ADR 0027 §2): a bounded window over the servable set,
+ * sorted by the POS default catalog sort (menu_order ASC, id ASC, #810). Woo REST cannot
+ * express the id tiebreak alongside menu_order, so the fetcher walks every page that can
+ * still contain the first page's boundary menu_order before sorting and truncating. Reuses
+ * the shared product materialization path and repository, including the #637 locally-dirty
+ * pull guard.
  */
 async function fetchProductBrowseWindow(
 	input: ProductsSchedulerFetcherInput,
@@ -229,26 +233,53 @@ async function fetchProductBrowseWindow(
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
 	const query = new URLSearchParams();
-	query.set('per_page', String(limit));
+	query.set('per_page', String(PRODUCT_BROWSE_WINDOW_LIMIT));
 	query.set('page', '1');
 	query.set('orderby', PRODUCT_BROWSE_WINDOW_ORDERBY);
 	query.set('order', PRODUCT_BROWSE_WINDOW_ORDER);
 	query.set('status', 'publish');
-	const payloads = await fetchProductQuery(input, query, context);
-	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
+	const firstPage = await fetchProductQuery(input, query, context);
+	const payloads = [...firstPage.payloads];
+	const boundaryMenuOrder =
+		firstPage.payloads.length === PRODUCT_BROWSE_WINDOW_LIMIT
+			? Number(firstPage.payloads[firstPage.payloads.length - 1]?.menu_order ?? 0)
+			: null;
+	let pagePayloads = firstPage.payloads;
+	let totalPages = firstPage.totalPages;
+	let requestCount = 1;
+
+	while (
+		boundaryMenuOrder !== null &&
+		pagePayloads.length === PRODUCT_BROWSE_WINDOW_LIMIT &&
+		(totalPages === null || requestCount < totalPages) &&
+		Number(pagePayloads[pagePayloads.length - 1]?.menu_order ?? 0) === boundaryMenuOrder
+	) {
+		query.set('page', String(requestCount + 1));
+		const nextPage = await fetchProductQuery(input, query, context);
+		pagePayloads = nextPage.payloads;
+		totalPages = nextPage.totalPages ?? totalPages;
+		payloads.push(...pagePayloads);
+		requestCount += 1;
+	}
+
+	const documents = payloads
+		.sort(
+			(left, right) =>
+				Number(left.menu_order ?? 0) - Number(right.menu_order ?? 0) ||
+				Number(left.id) - Number(right.id)
+		)
+		.slice(0, limit)
+		.map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
-	// A page below the window ceiling means the servable set is exhausted (complete);
-	// a full page means there is more the seed deliberately does not walk (incomplete).
-	const complete = payloads.length < limit;
 	await recordCoverage(
 		'products',
 		input,
 		task,
 		documents.map(({ storedDocument }) => coverageRecordId(storedDocument as ProductDocument)),
-		complete
+		true
 	);
 
-	return { taskId: task.id, documentCount: documents.length, requestCount: 1, completed: complete };
+	return { taskId: task.id, documentCount: documents.length, requestCount, completed: true };
 }
 
 async function fetchProductSearch(
@@ -260,12 +291,16 @@ async function fetchProductSearch(
 	// Single-shot path (no pagination): capping per-request here would truncate
 	// search results, so the batch dial deliberately does not apply.
 	const limit = taskLimit(task);
-	const searchPayloads = await fetchProductQuery(
+	const { payloads: searchPayloads } = await fetchProductQuery(
 		input,
 		productSearchParams(search, limit),
 		context
 	);
-	const skuPayloads = await fetchProductQuery(input, productSkuParams(search, limit), context);
+	const { payloads: skuPayloads } = await fetchProductQuery(
+		input,
+		productSkuParams(search, limit),
+		context
+	);
 	const payloads = uniqueProductPayloads([...skuPayloads, ...searchPayloads]);
 	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
@@ -294,8 +329,8 @@ export function createProductsSchedulerFetcher(
 		const browseWindowLimit = parseProductBrowseWindowLimit(task.queryKey);
 		if (browseWindowLimit !== null) {
 			// The window limit is a coverage total, not a request size — the batch
-			// dial must not shrink it (the task completes after one fetch, so a
-			// smaller value would permanently shrink the cold product window).
+			// dial must not shrink it, or the cold product window would permanently
+			// shrink even though the boundary group is exhausted before truncation.
 			return fetchProductBrowseWindow(
 				input,
 				task,

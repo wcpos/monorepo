@@ -460,7 +460,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			}
 			const fetchedUrls = fetcher.mock.calls.map(([url]) => url);
 			expect(fetchedUrls).toContainEqual(
-				expect.stringContaining('/products?per_page=100&page=1&orderby=title&order=asc')
+				expect.stringContaining('/products?per_page=100&page=1&orderby=menu_order&order=asc')
 			);
 			expect(fetchedUrls).toContainEqual(expect.stringContaining('/orders?'));
 		} finally {

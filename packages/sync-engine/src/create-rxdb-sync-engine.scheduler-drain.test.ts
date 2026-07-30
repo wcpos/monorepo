@@ -196,10 +196,10 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		const drained = await engine.sync('scheduler-drain');
 		expect(drained.status).toBe('ran');
 		expect(server.state.productPulls).toBeGreaterThan(0);
-		// One first page by the POS default catalog sort — no search, no page walk.
+		// The first page uses the POS default catalog sort and no search.
 		expect(
 			server.state.urls.some((url) =>
-				url.includes('/products?per_page=100&page=1&orderby=title&order=asc')
+				url.includes('/products?per_page=100&page=1&orderby=menu_order&order=asc')
 			)
 		).toBe(true);
 

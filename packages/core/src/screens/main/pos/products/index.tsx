@@ -69,7 +69,8 @@ const POS_PRODUCT_SORT_FIELDS = [
 	'stock_status',
 	'menu_order',
 ] as const satisfies readonly SortFieldsByCollection['products'][];
-const DEFAULT_POS_PRODUCT_SORT = { field: 'name', direction: 'asc' } as const;
+// 1.9 catalog-order default (#810): menu_order asc, id tiebreak added by the translator.
+const DEFAULT_POS_PRODUCT_SORT = { field: 'menu_order', direction: 'asc' } as const;
 
 function isPOSProductSortField(field: unknown): field is SortFieldsByCollection['products'] {
 	return POS_PRODUCT_SORT_FIELDS.some((sortField) => sortField === field);
