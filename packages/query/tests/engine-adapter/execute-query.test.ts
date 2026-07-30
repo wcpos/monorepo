@@ -7,6 +7,7 @@ import { engineSyncCollectionCreators, memoryEngineStorage } from '@wcpos/sync-e
 
 import { executeAdapterQuery } from '../../src/engine-adapter/execute-query';
 import { wrapEngineDocument } from '../../src/engine-adapter/document-proxy';
+import { engineVariation } from '../helpers/engine';
 
 import type { EngineDocument } from '../../src/engine-adapter/collection-map';
 import type { AdapterDatabase, AdapterQueryResult } from '../../src/engine-adapter/execute-query';
@@ -167,6 +168,38 @@ describe('executeAdapterQuery', () => {
 			'product-x',
 			'product-y',
 			'product-z',
+		]);
+		await database.close();
+	});
+
+	it('orders variations numerically by menu_order then Woo id (#871)', async () => {
+		const database = await createRxDatabase({
+			name: `query-engine-adapter-${(sequence += 1)}`,
+			storage: memoryEngineStorage({ validate: false }),
+			multiInstance: false,
+		});
+		const creators = engineSyncCollectionCreators();
+		await database.addCollections({ variations: creators.variations as never });
+		const variations = database.collections.variations as RxCollection<EngineDocument>;
+		await variations.bulkInsert([
+			engineVariation({ uuid: 'variation-a', id: 20, menu_order: 2 }) as EngineDocument,
+			engineVariation({ uuid: 'variation-b', id: 30, menu_order: 10 }) as EngineDocument,
+			engineVariation({ uuid: 'variation-c', id: 3, menu_order: 2 }) as EngineDocument,
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'variations',
+				selector: {},
+				sort: [{ menu_order: 'asc' }, { id: 'asc' }],
+			})
+		);
+
+		expect(result.hits.map((document) => document.id)).toEqual([
+			'variation-c',
+			'variation-a',
+			'variation-b',
 		]);
 		await database.close();
 	});

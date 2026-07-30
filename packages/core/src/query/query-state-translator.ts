@@ -102,6 +102,7 @@ const sortPaths = {
 		id: 'wooId',
 		name: 'payload.name',
 		sku: 'payload.sku',
+		menu_order: 'payload.menu_order',
 		price: 'price',
 		regular_price: 'payload.regular_price',
 		sale_price: 'payload.sale_price',
@@ -216,9 +217,9 @@ export function translateQueryState<C extends CollectionKey>(
 	const adapterSortField =
 		collection === 'orders' && sortField === 'total' ? sortPaths.orders.total : sortField;
 	const sort: Record<string, 'asc' | 'desc'>[] = [{ [adapterSortField]: state.sort.direction }];
-	if (collection === 'products' && sortField === 'menu_order') {
-		// 1.9 catalog-order contract (#810): equal menu_order values (usually 0) are the
-		// common case, so the Woo id tiebreak is part of the sort, not an implementation detail.
+	if ((collection === 'products' || collection === 'variations') && sortField === 'menu_order') {
+		// 1.9 catalog-order contract (#810, variations #871): equal menu_order values (usually 0)
+		// are the common case, so the Woo id tiebreak is part of the sort, not an implementation detail.
 		sort.push({ id: 'asc' });
 	}
 	return {

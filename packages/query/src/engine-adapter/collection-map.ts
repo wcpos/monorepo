@@ -250,6 +250,11 @@ export const collectionMap = {
 				kind: 'payload',
 				enginePath: 'payload.barcode',
 			},
+			menu_order: {
+				legacy: 'menu_order',
+				kind: 'payload',
+				enginePath: 'payload.menu_order',
+			},
 			price: {
 				legacy: 'price',
 				kind: 'promoted',
