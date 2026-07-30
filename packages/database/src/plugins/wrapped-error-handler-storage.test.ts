@@ -8,6 +8,12 @@ import { wrappedErrorHandlerStorage } from './wrapped-error-handler-storage';
 
 import type { RxStorage, RxStorageInstance } from 'rxdb';
 
+const terminalFailureApi = jest.requireActual<typeof import('./wrapped-error-handler-storage')>(
+	'./wrapped-error-handler-storage'
+) as typeof import('./wrapped-error-handler-storage') & {
+	markStorageTerminallyFailed?: (databaseName: string, reason: string) => boolean;
+};
+
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: jest.fn(() => ({
 		warn: jest.fn(),
@@ -515,6 +521,109 @@ describe('wrappedErrorHandlerStorage', () => {
 				expect.stringContaining('plain string error'),
 				expect.any(Object)
 			);
+		});
+	});
+
+	describe('terminal failure latch', () => {
+		function markTerminalFailure(databaseName: string, reason = 'worker stopped responding') {
+			expect(terminalFailureApi.markStorageTerminallyFailed).toEqual(expect.any(Function));
+			return terminalFailureApi.markStorageTerminallyFailed!(databaseName, reason);
+		}
+
+		it('rejects all in-flight writes so a guarded-write drain settles', async () => {
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn(() => new Promise(() => undefined)),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'hung-writes' } as any);
+			const writes = Array.from({ length: 3 }, (_, index) =>
+				wrappedInstance.bulkWrite(
+					[{ document: { id: `doc-${index}` }, previous: undefined }] as any,
+					'test'
+				)
+			);
+
+			expect(markTerminalFailure('hung-writes')).toBe(true);
+
+			await expect(writes[0]).rejects.toMatchObject({
+				name: 'StorageTerminallyFailedError',
+				message: expect.stringContaining('worker stopped responding'),
+			});
+			await expect(Promise.allSettled(writes)).resolves.toHaveLength(3);
+		});
+
+		it('resolves an in-flight close when marked', async () => {
+			const instance = createMockStorageInstance({
+				close: jest.fn(() => new Promise(() => undefined)),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'hung-close' } as any);
+			const close = wrappedInstance.close();
+
+			expect(markTerminalFailure('hung-close')).toBe(true);
+			await expect(close).resolves.toBeUndefined();
+		});
+
+		it('fails post-mark RPCs fast except for close', async () => {
+			const bulkWrite = jest.fn(() => new Promise(() => undefined));
+			const findDocumentsById = jest.fn(() => new Promise(() => undefined));
+			const query = jest.fn(() => new Promise(() => undefined));
+			const close = jest.fn(() => new Promise(() => undefined));
+			const instance = createMockStorageInstance({
+				bulkWrite,
+				findDocumentsById,
+				query,
+				close,
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'post-mark' } as any);
+
+			expect(markTerminalFailure('post-mark')).toBe(true);
+
+			await expect(wrappedInstance.bulkWrite([] as any, 'test')).rejects.toHaveProperty(
+				'name',
+				'StorageTerminallyFailedError'
+			);
+			await expect(wrappedInstance.findDocumentsById([], false)).rejects.toHaveProperty(
+				'name',
+				'StorageTerminallyFailedError'
+			);
+			await expect(wrappedInstance.query({} as any)).rejects.toHaveProperty(
+				'name',
+				'StorageTerminallyFailedError'
+			);
+			await expect(wrappedInstance.close()).resolves.toBeUndefined();
+			expect(bulkWrite).not.toHaveBeenCalled();
+			expect(findDocumentsById).not.toHaveBeenCalled();
+			expect(query).not.toHaveBeenCalled();
+			expect(close).not.toHaveBeenCalled();
+		});
+
+		it('does not affect an instance created for the same database after the mark', async () => {
+			const first = createMockStorageInstance({
+				query: jest.fn().mockResolvedValue({ documents: [] }),
+			});
+			await wrappedErrorHandlerStorage({
+				storage: createMockStorage(first),
+			}).createStorageInstance({ databaseName: 'reopened-db' } as any);
+			expect(markTerminalFailure('reopened-db')).toBe(true);
+
+			const expected = { documents: [{ id: 'successor' }] };
+			const successor = createMockStorageInstance({
+				query: jest.fn().mockResolvedValue(expected),
+			});
+			const successorInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(successor),
+			}).createStorageInstance({ databaseName: 'reopened-db' } as any);
+
+			await expect(successorInstance.query({} as any)).resolves.toBe(expected);
+		});
+
+		it('returns false for an unknown database name', () => {
+			expect(markTerminalFailure('unknown-database')).toBe(false);
 		});
 	});
 });
