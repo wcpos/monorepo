@@ -89,7 +89,14 @@ export type WriteOutcomeEvent =
 			mutationId: string;
 			currentRevision: string | null;
 	  }
-	| { type: 'write-rejected'; collection: string; recordId: string; mutationId: string };
+	| {
+			type: 'write-rejected';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			status?: number;
+			reason?: string;
+	  };
 
 export type WriteDrainReport = {
 	lane: 'write-drain';
@@ -365,7 +372,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								currentRevision: conflict.currentRevision,
 							});
 						}
-						for (const dead of result.rejected) {
+						for (const { mutation: dead, status, reason } of result.rejected) {
 							// Dead-letter cleanup (#507 D): the rejected mutation will never
 							// push, so drop it from the record's pendingMutationIds (+ dirty
 							// when empty) — the pull-apply guard frees the record and the next
@@ -394,6 +401,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								collection: dead.collectionName,
 								recordId: dead.recordId,
 								mutationId: dead.mutationId,
+								status,
+								reason,
 							});
 						}
 						queueDepth = stillPending.size;

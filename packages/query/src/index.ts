@@ -1,7 +1,11 @@
 export { QueryProvider, useQueryManager, type QueryRuntime } from './provider';
 export { useLocalQuery, type LocalQueryOptions } from './use-local-query';
 export { useTemplatesSync } from './templates';
-export { awaitWriteOutcome, type AwaitedWriteOutcome } from './await-write-outcome';
+export {
+	awaitWriteOutcome,
+	WriteOutcomeError,
+	type AwaitedWriteOutcome,
+} from './await-write-outcome';
 export type { QueryResult } from './query-result';
 export {
 	observeEngineDatabases,

@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { type SyncEvent } from './telemetry';
 import { InMemoryRecordMutationStorage, RecordMutationQueue } from './recordMutationQueue';
-import { pushEndpointResolver, pushRecordMutation, type PushResult } from './recordPushAdapter';
+import {
+	pushEndpointResolver,
+	pushRecordMutation,
+	type PushResult,
+	RecordPushError,
+} from './recordPushAdapter';
 import { drainMutationQueue } from './drainMutationQueue';
 import { createFakeWriteServer } from './fakeWriteServer';
 
@@ -87,10 +92,33 @@ describe('drainMutationQueue', () => {
 			},
 			observe: (e) => events.push(e),
 		});
-		expect(result.rejected.map((m) => m.mutationId)).toEqual(['m1']);
+		expect(result.rejected.map(({ mutation }) => mutation.mutationId)).toEqual(['m1']);
 		expect(result.failed).toBe(0);
 		expect(await q.pending()).toEqual([]); // dead-lettered (removed), NOT left to retry forever
 		expect(events.some((e) => e.type === 'push.rejected' && e.fields?.status === 400)).toBe(true);
+	});
+
+	it('dead-letters a cannot-delete refusal with its detail and never pushes it again', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'm-delete', operation: 'delete', recordId: 'rec-A' })
+		);
+		const push = vi.fn(async (mutation: RecordMutation) => {
+			throw new RecordPushError(mutation, 403, 'woocommerce_rest_cannot_delete', true);
+		});
+
+		const result = await drainMutationQueue({ queue: q, push });
+
+		expect(result.rejected).toEqual([
+			{
+				mutation: expect.objectContaining({ mutationId: 'm-delete' }),
+				status: 403,
+				reason: 'woocommerce_rest_cannot_delete',
+			},
+		]);
+		expect((await q.all())[0]).toMatchObject({ mutationId: 'm-delete', status: 'rejected' });
+
+		await drainMutationQueue({ queue: q, push });
+		expect(push).toHaveBeenCalledTimes(1);
 	});
 
 	it('dead-letters a 409 identity_ambiguous (F4a fail-closed) through the real adapter + write fake — not retried, not dropped silently', async () => {
@@ -116,7 +144,7 @@ describe('drainMutationQueue', () => {
 			observe: (e) => events.push(e),
 		});
 
-		expect(result.rejected.map((m) => m.mutationId)).toEqual(['m-amb']); // dead-lettered + surfaced
+		expect(result.rejected.map(({ mutation }) => mutation.mutationId)).toEqual(['m-amb']); // dead-lettered + surfaced
 		expect(result).toMatchObject({ pushed: 0, failed: 0, conflicts: [] }); // NOT a conflict, NOT a retryable failure
 		expect(await q.pending()).toEqual([]); // removed from the queue — can't poison it
 		expect(events.some((e) => e.type === 'push.rejected' && e.fields?.status === 409)).toBe(true);
@@ -249,7 +277,7 @@ describe('drainMutationQueue', () => {
 		});
 
 		expect(push).toHaveBeenCalledTimes(2); // one refresh-restamped retry, then dead-letter — never a loop
-		expect(result.rejected.map((mutation) => mutation.mutationId)).toEqual(['m-428-again']);
+		expect(result.rejected.map(({ mutation }) => mutation.mutationId)).toEqual(['m-428-again']);
 		expect(result.conflicts).toEqual([]);
 		expect((await q.all())[0]).toMatchObject({
 			status: 'rejected',
@@ -313,7 +341,7 @@ describe('drainMutationQueue', () => {
 			refreshRevision: async () => 'sha256:repulled',
 		});
 
-		expect(result.rejected.map((mutation) => mutation.mutationId)).toEqual(['m-refresh-422']);
+		expect(result.rejected.map(({ mutation }) => mutation.mutationId)).toEqual(['m-refresh-422']);
 		expect(result).toMatchObject({ pushed: 0, failed: 0, conflicts: [] });
 		expect(await q.pending()).toEqual([]);
 		expect((await q.all())[0]).toMatchObject({

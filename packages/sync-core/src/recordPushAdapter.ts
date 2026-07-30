@@ -18,6 +18,8 @@ import type { RecordMutation } from './recordMutation';
 
 export type PushOutcome = 'created' | 'updated' | 'deleted' | 'conflict';
 
+export const WOO_REST_CANNOT_DELETE = 'woocommerce_rest_cannot_delete';
+
 export type PushEndpoint = { url: string; method: string };
 
 /** Routes a mutation to its per-collection endpoint + verb. Injected by the host. */
@@ -269,13 +271,19 @@ export async function pushRecordMutation(input: {
 	}
 
 	if (!response.ok) {
+		const body = await safeJson(response);
+		const reason = typeof body?.code === 'string' ? body.code : undefined;
 		emit({
 			type: 'push.error',
 			level: 'error',
 			collection: mutation.collectionName,
-			fields: { ...baseFields, status: response.status },
+			fields: {
+				...baseFields,
+				status: response.status,
+				...(reason !== undefined ? { reason } : {}),
+			},
 		});
-		throw new RecordPushError(mutation, response.status);
+		throw new RecordPushError(mutation, response.status, reason, reason === WOO_REST_CANNOT_DELETE);
 	}
 
 	const outcome = OUTCOME_BY_OP[mutation.operation];

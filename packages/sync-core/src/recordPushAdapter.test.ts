@@ -311,6 +311,30 @@ describe('pushRecordMutation', () => {
 		});
 	});
 
+	it('marks WooCommerce delete refusals permanent and preserves their code', async () => {
+		const events: SyncEvent[] = [];
+		await expect(
+			pushRecordMutation({
+				mutation: mut({ operation: 'delete' }),
+				resolveEndpoint,
+				fetcher: async () =>
+					jsonResponse(403, {
+						code: 'woocommerce_rest_cannot_delete',
+						message: 'Sorry, you are not allowed to delete this resource.',
+					}),
+				observe: (event) => events.push(event),
+			})
+		).rejects.toMatchObject({
+			status: 403,
+			reason: 'woocommerce_rest_cannot_delete',
+			permanent: true,
+		});
+		expect(events[0]).toMatchObject({
+			type: 'push.error',
+			fields: { status: 403, reason: 'woocommerce_rest_cannot_delete' },
+		});
+	});
+
 	it('threads an abort signal into the request init', async () => {
 		const controller = new AbortController();
 		const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse(201, {}));

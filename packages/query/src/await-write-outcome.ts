@@ -2,6 +2,25 @@ import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 export type AwaitedWriteOutcome = 'success' | 'success-local';
 
+export class WriteOutcomeError extends Error {
+	eventType: 'write-rejected' | 'write-conflict';
+	status?: number;
+	reason?: string;
+
+	constructor(
+		eventType: WriteOutcomeError['eventType'],
+		mutationId: string,
+		status?: number,
+		reason?: string
+	) {
+		super(`${eventType} for mutation "${mutationId}"`);
+		this.name = 'WriteOutcomeError';
+		this.eventType = eventType;
+		this.status = status;
+		this.reason = reason;
+	}
+}
+
 const TERMINAL_WRITE_EVENTS = new Set<EngineEvent['type']>([
 	'write-acknowledged',
 	'write-ack-rematerialized',
@@ -51,7 +70,10 @@ export function awaitWriteOutcome(
 					break;
 				case 'write-conflict':
 				case 'write-rejected':
-					finish(() => reject(new Error(`${event.type} for mutation "${mutationId}"`)));
+					finish(() => {
+						const detail = event as { status?: number; reason?: string };
+						reject(new WriteOutcomeError(event.type, mutationId, detail.status, detail.reason));
+					});
 					break;
 			}
 		});

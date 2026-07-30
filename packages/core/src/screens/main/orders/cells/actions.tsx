@@ -23,7 +23,8 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { useQueryManager } from '@wcpos/query';
+import { awaitWriteOutcome, useQueryManager, WriteOutcomeError } from '@wcpos/query';
+import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
@@ -119,12 +120,23 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		await manager.engine.write({
+		const receipt = await manager.engine.write({
 			collection: 'orders',
 			operation: 'delete',
 			recordId: order.uuid!,
 		});
-	}, [manager, order.uuid]);
+		if (!receipt.annihilated) {
+			void awaitWriteOutcome(manager.engine, receipt.mutationId).catch((error) => {
+				if (error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE) {
+					syncLogger.error(t('orders.delete_not_permitted'), {
+						showToast: true,
+						saveToDb: true,
+						context: { orderId: order.uuid },
+					});
+				}
+			});
+		}
+	}, [manager, order.uuid, t]);
 
 	if (readOnly) {
 		return null;

@@ -49,6 +49,7 @@ export type FakeWriteServerFault =
 	| { kind: 'record_locked' }
 	| { kind: 'precondition_required' }
 	| { kind: 'identity_ambiguous' }
+	| { kind: 'cannot_delete' }
 	| { kind: 'parent_required' }
 	| { kind: 'parent_mismatch' };
 
@@ -207,6 +208,14 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 						code: 'woo_rxdb_sync_identity_ambiguous',
 						message: `uuid ${env.recordId} resolves to more than one record; refusing to write to an arbitrary match.`,
 						data: { status: 409 },
+					},
+				};
+			case 'cannot_delete':
+				return {
+					status: 403,
+					body: {
+						code: 'woocommerce_rest_cannot_delete',
+						message: 'Sorry, you are not allowed to delete this resource.',
 					},
 				};
 			case 'parent_required':
