@@ -1,5 +1,6 @@
 import { type MetaDataEntry, readRecordUuid } from './recordIdentity';
 import { type SyncEvent, type SyncObserver } from './telemetry';
+import { getActiveBarcodeSelectors, mapBarcodeEditToPayload } from './barcodeResolve';
 
 import type { RecordMutation } from './recordMutation';
 
@@ -146,7 +147,13 @@ export async function pushRecordMutation(input: {
 		baseRevision: mutation.baseRevision,
 	};
 	if (mutation.operation !== 'delete') {
-		envelope.payload = mutation.payload;
+		envelope.payload =
+			mutation.collectionName === 'products' || mutation.collectionName === 'variations'
+				? mapBarcodeEditToPayload(
+						mutation.payload,
+						getActiveBarcodeSelectors(mutation.collectionName)
+					)
+				: mutation.payload;
 	}
 	// Standard-header MIRROR of the canonical body (ADR 0011): Idempotency-Key = mutationId, and when there's a
 	// base revision (updates/deletes) If-Match = the quoted baseRevision (an RFC 9110 entity-tag). The body stays

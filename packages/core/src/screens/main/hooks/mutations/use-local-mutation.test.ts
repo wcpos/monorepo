@@ -3,6 +3,8 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
+
 import { useLocalMutation } from './use-local-mutation';
 
 const mockUseT = jest.fn();
@@ -18,6 +20,7 @@ jest.mock('@wcpos/query', () => ({
 				database: {
 					collections: {
 						orders: { findOne: () => ({ exec: mockFindOneExec }) },
+						products: { findOne: () => ({ exec: mockFindOneExec }) },
 					},
 				},
 			}),
@@ -44,6 +47,114 @@ describe('useLocalMutation', () => {
 			String(options?.message || '')
 		);
 	});
+
+	it.each([
+		['sku', { sku: 'EDITED' }],
+		['global_unique_id', { global_unique_id: 'EDITED' }],
+		['meta_data:_barcode', { meta_data: [{ key: '_barcode', value: 'EDITED' }] }],
+	] as const)(
+		'keeps a barcode edit and its %s carrier consistent locally',
+		async (selector, carrier) => {
+			setActiveBarcodeSelectors('products', [selector]);
+			const stored: Record<string, unknown> = {
+				id: 'product-uuid',
+				wooProductId: 42,
+				payload: { id: 42 },
+				sync: { revision: 'rev-1' },
+				local: { dirty: false, pendingMutationIds: [] },
+			};
+			mockFindOneExec.mockResolvedValue({
+				incrementalModify: async (
+					modifier: (old: Record<string, unknown>) => Record<string, unknown>
+				) => {
+					Object.assign(stored, modifier(stored));
+					return stored;
+				},
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+			});
+			const document = {
+				uuid: 'product-uuid',
+				id: 42,
+				collection: { name: 'products' },
+				getLatest: () => document,
+			};
+
+			const { result } = renderHook(() => useLocalMutation());
+			await act(() =>
+				result.current.localPatch({
+					document: document as never,
+					data: { barcode: '  EDITED  ' } as never,
+				})
+			);
+
+			expect(stored.payload).toMatchObject({ barcode: 'EDITED', ...carrier });
+		}
+	);
+
+	it.each([
+		['sku', { sku: 'OLD' }, { sku: 'NEW' }, { sku: 'NEW' }],
+		[
+			'global_unique_id',
+			{ global_unique_id: 'OLD' },
+			{ global_unique_id: 'NEW' },
+			{
+				global_unique_id: 'NEW',
+			},
+		],
+		[
+			'meta_data:_barcode',
+			{ meta_data: [{ key: '_barcode', value: 'OLD' }] },
+			{ meta_data: [{ key: '_barcode', value: 'NEW' }] },
+			{ meta_data: [{ key: '_barcode', value: 'NEW' }] },
+		],
+	] as const)(
+		'a direct %s carrier edit wins over the echoed unchanged barcode',
+		async (selector, priorCarrier, carrierEdit, expected) => {
+			setActiveBarcodeSelectors('products', [selector]);
+			const stored: Record<string, unknown> = {
+				id: 'product-uuid',
+				wooProductId: 42,
+				payload: { id: 42, ...priorCarrier, barcode: 'OLD' },
+				sync: { revision: 'rev-1' },
+				local: { dirty: false, pendingMutationIds: [] },
+			};
+			mockFindOneExec.mockResolvedValue({
+				incrementalModify: async (
+					modifier: (old: Record<string, unknown>) => Record<string, unknown>
+				) => {
+					Object.assign(stored, modifier(stored));
+					return stored;
+				},
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+			});
+			const document = {
+				uuid: 'product-uuid',
+				id: 42,
+				collection: { name: 'products' },
+				getLatest: () => document,
+			};
+
+			const { result } = renderHook(() => useLocalMutation());
+			await act(() =>
+				result.current.localPatch({
+					document: document as never,
+					// The full edit form echoes the unchanged derived barcode alongside
+					// the direct carrier change.
+					data: { ...carrierEdit, barcode: 'OLD' } as never,
+				})
+			);
+
+			// The carrier edit survives and the materialized field re-derives from it.
+			expect(stored.payload).toMatchObject({ barcode: 'NEW', ...expected });
+			// The echoed barcode never reaches the mutation queue, so the push
+			// adapter cannot map the stale value back over the carrier.
+			expect(mockWrite).toHaveBeenCalledWith(
+				expect.objectContaining({
+					payload: expect.not.objectContaining({ barcode: expect.anything() }),
+				})
+			);
+		}
+	);
 
 	it('patches a brand-new temporary order locally without requiring an engine resident', async () => {
 		const stored: Record<string, unknown> = {

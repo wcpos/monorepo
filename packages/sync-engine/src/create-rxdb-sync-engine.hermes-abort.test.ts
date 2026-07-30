@@ -67,7 +67,10 @@ function engineWith(
 		{
 			site,
 			storage: memoryEngineStorage(),
-			fetcher: (url, init) => fetch(url, init),
+			fetcher: async (url, init) =>
+				url.endsWith('/changes/config-fingerprint')
+					? Response.json({ fingerprints: {} })
+					: fetch(url, init),
 			mode: 'manual',
 		},
 		freshIdentity()

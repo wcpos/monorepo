@@ -58,13 +58,21 @@ function isTrickleUrl(url: string): boolean {
 }
 
 function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}, storeIdentity = identity()) {
+	const fetcher = overrides.fetcher ?? (async () => json([]));
 	return createRxdbSyncEngine(
 		{
 			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
 			storage: memoryEngineStorage(),
 			mode: 'manual',
-			fetcher: async () => json([]),
 			...overrides,
+			// Scope open issues one barcode-selector hydration request
+			// (/changes/config-fingerprint, #862) before any lane runs. Answer it
+			// here so the per-test fetchers record only the customer traffic they
+			// assert on.
+			fetcher: async (url, init) =>
+				new URL(url).pathname.endsWith('/changes/config-fingerprint')
+					? json({})
+					: fetcher(url, init),
 		},
 		storeIdentity
 	);

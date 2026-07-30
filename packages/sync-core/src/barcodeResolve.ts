@@ -34,6 +34,79 @@ export type BarcodeResolveProfile = (typeof barcodeResolveProfiles)[number];
  * discovery keys (_sku, _global_unique_id, _barcode). */
 export const BARCODE_PAYLOAD_FIELDS = ['sku', 'barcode', 'global_unique_id'] as const;
 
+export type BarcodeMaterializedCollection = 'products' | 'variations';
+
+const activeBarcodeSelectors: Record<BarcodeMaterializedCollection, string[]> = {
+	products: [],
+	variations: [],
+};
+
+export function setActiveBarcodeSelectors(
+	collection: BarcodeMaterializedCollection,
+	selectors: readonly string[]
+): void {
+	activeBarcodeSelectors[collection] = [...selectors];
+}
+
+/**
+ * Clears both collections' selectors. The registry is a process-wide singleton
+ * mirroring the SINGLE active engine (one engine per site per process, ADR
+ * 0018), so the engine resets it at lifecycle boundaries — scope open before
+ * hydration, and dispose — to keep one site's carriers from leaking into the
+ * next site's session when its own hydration fails.
+ */
+export function resetActiveBarcodeSelectors(): void {
+	activeBarcodeSelectors.products = [];
+	activeBarcodeSelectors.variations = [];
+}
+
+export function getActiveBarcodeSelectors(
+	collection: BarcodeMaterializedCollection
+): readonly string[] {
+	return activeBarcodeSelectors[collection];
+}
+
+export function deriveBarcodeFromPayload(
+	rawPayload: Record<string, unknown>,
+	selectors: readonly string[]
+): string | undefined {
+	for (const selector of selectors) {
+		const metadata = Array.isArray(rawPayload.meta_data)
+			? (rawPayload.meta_data as { key?: unknown; value?: unknown }[])
+			: [];
+		const value = selector.startsWith('meta_data:')
+			? metadata.find(({ key }) => key === selector.slice('meta_data:'.length))?.value
+			: rawPayload[selector];
+		if (typeof value !== 'string') continue;
+		const barcode = value.trim();
+		if (barcode !== '') return barcode;
+	}
+	return undefined;
+}
+
+export function mapBarcodeEditToPayload(
+	payload: Record<string, unknown>,
+	selectors: readonly string[]
+): Record<string, unknown> {
+	const mapped = { ...payload };
+	const barcode = typeof mapped.barcode === 'string' ? mapped.barcode.trim() : undefined;
+	delete mapped.barcode;
+	const selector = selectors[0];
+	if (barcode === undefined || selector === undefined) return mapped;
+	if (!selector.startsWith('meta_data:')) {
+		mapped[selector] = barcode;
+		return mapped;
+	}
+	const key = selector.slice('meta_data:'.length);
+	const metadata = Array.isArray(mapped.meta_data) ? [...mapped.meta_data] : [];
+	const index = metadata.findIndex((entry) => entry.key === key);
+	const carrier = { key, value: barcode };
+	if (index === -1) metadata.push(carrier);
+	else metadata[index] = { ...metadata[index], ...carrier };
+	mapped.meta_data = metadata;
+	return mapped;
+}
+
 export type BarcodeIndexEntry = { docId: string };
 
 export type BarcodeIndexResult = {

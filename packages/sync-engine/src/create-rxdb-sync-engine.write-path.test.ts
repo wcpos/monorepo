@@ -51,7 +51,10 @@ function engineWith(input: {
 		{
 			site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
 			storage: input.storage ?? memoryEngineStorage(),
-			fetcher: input.fetch,
+			fetcher: async (url, init) =>
+				url.endsWith('/changes/config-fingerprint')
+					? Response.json({ fingerprints: {} })
+					: input.fetch(url, init),
 			...(input.connectivity ? { connectivity: input.connectivity } : {}),
 			...(input.uuid ? { uuid: input.uuid } : {}),
 			...(input.now ? { now: input.now } : {}),

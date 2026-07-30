@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { getActiveBarcodeSelectors, setActiveBarcodeSelectors } from '@wcpos/sync-core';
+
 import { createLiveChangeSignalSource } from './change-signal-source';
 
 function response(checkpoint: Record<string, unknown>): Response {
@@ -115,6 +117,8 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 	});
 
 	it('surfaces the embedded config fingerprint beside the sequence page', async () => {
+		setActiveBarcodeSelectors('products', ['existing-product']);
+		setActiveBarcodeSelectors('variations', ['existing-variation']);
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async () =>
@@ -142,6 +146,8 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 				barcodeFields: { products: ['sku'], variations: [], tax_rates: [] },
 			},
 		});
+		expect(getActiveBarcodeSelectors('products')).toEqual(['sku']);
+		expect(getActiveBarcodeSelectors('variations')).toEqual(['existing-variation']);
 	});
 });
 

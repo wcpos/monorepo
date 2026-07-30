@@ -34,7 +34,10 @@ function engine(
 			site: { syncBaseUrl: BASE, wpJsonRoot: `${SITE}/wp-json` },
 			storage: memoryEngineStorage(),
 			mode: 'manual',
-			fetcher,
+			fetcher: async (url, init) =>
+				url.endsWith('/changes/config-fingerprint')
+					? Response.json({ fingerprints: {} })
+					: (fetcher?.(url, init) ?? Promise.reject(new Error(`unexpected ${url}`))),
 			...overrides,
 		},
 		identity()

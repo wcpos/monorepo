@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
@@ -290,6 +291,95 @@ async function applyFacetPrune(engine: RxdbSyncEngine, spec: FacetSpec): Promise
 }
 
 describe('write facets beyond orders', () => {
+	it.each(
+		FACETS.filter(({ collection }) => collection === 'products' || collection === 'variations')
+	)('re-fetches every resident $collection document after a barcode config flip', async (spec) => {
+		if (spec.collection === 'customers' || spec.collection === 'coupons') {
+			throw new Error('unreachable');
+		}
+		const truth = {
+			...payload(spec, UUID_A, 'server', spec.remoteId),
+			sku: 'NEW-BARCODE',
+			_rxdb_revision: 'sha256:new-config',
+		};
+		const route = routedServer(spec, () => truth);
+		const subject = engine(route.fetch);
+		await subject.ready;
+		await insert(
+			subject,
+			spec,
+			storedDocument({
+				spec,
+				id: UUID_A,
+				label: 'old',
+				remoteId: spec.remoteId,
+			})
+		);
+		setActiveBarcodeSelectors(spec.collection, ['sku']);
+		const scope = subject.active();
+		if (!scope) throw new Error('no active scope');
+		const handlers = buildReplicationHandlers({
+			database: scope.database,
+			fetch: route.fetch as never,
+			syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
+			persistState: async () => undefined,
+			log: () => undefined,
+		});
+
+		expect(await handlers.reFetchCollection(spec.collection)).toBe(1);
+		expect(await record(subject, spec, UUID_A)).toMatchObject({
+			payload: { barcode: 'NEW-BARCODE' },
+		});
+		await subject.dispose();
+	});
+
+	it.each(
+		FACETS.filter(({ collection }) => collection === 'products' || collection === 'variations')
+	)(
+		'config-flip re-fetch resolves mirrored woo ids and skips pending local work ($collection)',
+		async (spec) => {
+			if (spec.collection === 'customers' || spec.collection === 'coupons') {
+				throw new Error('unreachable');
+			}
+			const truth = {
+				...payload(spec, UUID_A, 'server', spec.remoteId),
+				sku: 'NEW-BARCODE',
+				_rxdb_revision: 'sha256:new-config',
+			};
+			const route = routedServer(spec, () => truth);
+			const subject = engine(route.fetch);
+			await subject.ready;
+			// A trimmed create ack: the assigned id lives ONLY in the mirror field —
+			// the stored payload has no id.
+			await insert(subject, spec, {
+				...storedDocument({ spec, id: UUID_A, label: 'created-locally' }),
+				[spec.remoteIdField]: spec.remoteId,
+			});
+			// A dirty resident must not be re-fetched over its pending edit.
+			await insert(subject, spec, {
+				...storedDocument({ spec, id: UUID_B, label: 'dirty', remoteId: spec.remoteId + 1 }),
+				local: { dirty: true, pendingMutationIds: ['m1'] },
+			});
+			setActiveBarcodeSelectors(spec.collection, ['sku']);
+			const scope = subject.active();
+			if (!scope) throw new Error('no active scope');
+			const handlers = buildReplicationHandlers({
+				database: scope.database,
+				fetch: route.fetch as never,
+				syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
+				persistState: async () => undefined,
+				log: () => undefined,
+			});
+
+			expect(await handlers.reFetchCollection(spec.collection)).toBe(1);
+			expect(route.pulls).toEqual([[spec.remoteId]]);
+			expect(await record(subject, spec, UUID_A)).toMatchObject({
+				payload: { barcode: 'NEW-BARCODE' },
+			});
+			await subject.dispose();
+		}
+	);
+
 	it('keeps non-faceted collections non-writeable and names the explicit writeable set', async () => {
 		const spec = FACETS[0];
 		const route = routedServer(spec, () => null);

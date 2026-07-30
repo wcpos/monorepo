@@ -405,13 +405,30 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 			);
 			return true;
 		},
+		// Resolves each resident's Woo id through the descriptor's mirrored field
+		// with a payload.id fallback, and skips docs with pending local work —
+		// the same resolution rebaselineTargeted uses. A locally created record
+		// carries its assigned id only in the mirror until the next server read,
+		// and a payload.id-only mapping would drop it from the re-fetch.
 		reFetchCollection: async (collection) => {
-			if (collection !== 'products') return 0;
-			const synced = await loadSyncedTargetedDocs(ctx, 'products');
-			const wooIds = synced
-				.map((doc) => Number((doc.payload as { id?: unknown }).id))
-				.filter((id) => Number.isSafeInteger(id) && id > 0);
-			return effects.targeted.products.pull(wooIds);
+			if (collection !== 'products' && collection !== 'variations') return 0;
+			const descriptor = COLLECTION_DESCRIPTORS.find(
+				(candidate): candidate is TargetedDescriptor =>
+					candidate.shape === 'targeted' && candidate.hybrid === collection
+			);
+			if (!descriptor) return 0;
+			const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+			const wooIds = new Set<number>();
+			for (const doc of docs) {
+				const json = doc.toJSON() as Record<string, unknown> & {
+					payload?: Record<string, unknown>;
+				};
+				if (hasPendingLocalWork(json)) continue;
+				const mirrored = json[descriptor.wooIdField];
+				const wooId = typeof mirrored === 'number' ? mirrored : Number(json.payload?.id);
+				if (Number.isSafeInteger(wooId) && wooId > 0) wooIds.add(wooId);
+			}
+			return effects.targeted[collection].pull([...wooIds].sort((left, right) => left - right));
 		},
 		persistState: (state) => ctx.persistState(state),
 		log: ctx.log,

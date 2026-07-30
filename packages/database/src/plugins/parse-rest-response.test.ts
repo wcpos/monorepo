@@ -1,4 +1,34 @@
+// eslint-disable-next-line import/no-unresolved -- Jest maps source without a runtime dependency.
+import { deriveBarcodeFromPayload } from '@wcpos/sync-core';
+
 import { coerceData, getDefaultForType, pruneProperties } from './parse-rest-response';
+
+describe('private barcode metadata', () => {
+	it('derives from the raw payload before the underscore-meta strip removes its carrier', () => {
+		const schema = {
+			type: 'object',
+			properties: {
+				meta_data: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: { key: { type: 'string' }, value: { type: 'string' } },
+					},
+				},
+			},
+		};
+		const raw = {
+			meta_data: [
+				{ key: '_barcode', value: '  CUSTOM-1  ' },
+				{ key: '_woocommerce_pos_uuid', value: 'uuid-1' },
+			],
+		};
+
+		expect(deriveBarcodeFromPayload(raw, ['meta_data:_barcode'])).toBe('CUSTOM-1');
+		pruneProperties(schema, raw);
+		expect(raw.meta_data).not.toContainEqual(expect.objectContaining({ key: '_barcode' }));
+	});
+});
 
 describe('pruneProperties', () => {
 	const schema = {

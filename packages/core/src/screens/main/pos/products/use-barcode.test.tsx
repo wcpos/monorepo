@@ -123,6 +123,8 @@ const mockBarcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogge
 	success: jest.Mock;
 };
 const mockResolveScan = jest.requireMock('@wcpos/sync-core').__resolveScan as jest.Mock;
+const { setActiveBarcodeSelectors } =
+	jest.requireActual<typeof import('@wcpos/sync-core')>('@wcpos/sync-core');
 
 const mockSetSearch = jest.fn();
 const mockClearSearch = jest.fn();
@@ -210,6 +212,8 @@ function renderBarcodeHook() {
 
 describe('useBarcode online escalation', () => {
 	beforeEach(() => {
+		setActiveBarcodeSelectors('products', ['barcode']);
+		setActiveBarcodeSelectors('variations', ['barcode']);
 		mockShowOutOfStock = true;
 		mockSoundEnabled = false;
 		for (const mock of [
@@ -329,6 +333,18 @@ describe('useBarcode online escalation', () => {
 			);
 		}
 	);
+
+	it('falls back to resolve/barcode when an old envelope reports no active selectors', async () => {
+		setActiveBarcodeSelectors('products', []);
+		engineProducts.push(productDocument(41, 'ONLINE-ONLY'));
+		mockFetcher.mockResolvedValue(onlineResponse());
+		renderBarcodeHook();
+
+		await act(async () => scan('ONLINE-ONLY'));
+
+		expect(mockFetcher).toHaveBeenCalledTimes(1);
+		expect(mockAddProduct).not.toHaveBeenCalled();
+	});
 
 	it('degrades an absent active engine scope to an online lookup', async () => {
 		mockEngineActive.mockReturnValue(null);

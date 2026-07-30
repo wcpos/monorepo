@@ -191,7 +191,13 @@ function engineWith(input: {
 		{
 			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
 			storage: input.storage,
-			fetcher: (url, init) => input.fetch(url, init),
+			fetcher: async (url, init) =>
+				url.endsWith('/changes/config-fingerprint')
+					? Response.json({
+							fingerprints: { products: 'fp-1', variations: 'fp-1', tax_rates: 'fp-1' },
+							barcode_fields: { products: ['sku'], variations: ['sku'], tax_rates: [] },
+						})
+					: input.fetch(url, init),
 			...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
 			...(input.connectivity ? { connectivity: input.connectivity } : {}),
 			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),

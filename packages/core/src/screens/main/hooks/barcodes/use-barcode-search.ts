@@ -4,8 +4,8 @@ import { useQueryManager } from '@wcpos/query';
 import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 import {
 	barcodeMatchCandidates,
-	buildBarcodeSymbologyIndex,
 	buildLocalBarcodeIndex,
+	getActiveBarcodeSelectors,
 } from '@wcpos/sync-core';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -38,11 +38,8 @@ function engineDocuments(value: unknown): EngineRxDocument[] {
 
 /** The document carries the scanned code verbatim in a barcode-symbology field. */
 function matchesExactSymbology(document: EngineRxDocument, barcode: string): boolean {
-	const payload = document.payload;
-	if (!payload) {
-		return false;
-	}
-	return buildBarcodeSymbologyIndex([{ id: document.id, payload }]).index.has(barcode);
+	const materialized = document.payload?.barcode;
+	return typeof materialized === 'string' && materialized.trim() === barcode;
 }
 
 /**
@@ -52,13 +49,16 @@ function matchesExactSymbology(document: EngineRxDocument, barcode: string): boo
  * this is strictly the equivalence match.
  */
 function matchesEquivalentSymbology(document: EngineRxDocument, barcode: string): boolean {
-	const payload = document.payload;
-	if (!payload) {
+	const materialized = document.payload?.barcode;
+	const collection = document.collection.name;
+	const skuActive =
+		(collection === 'products' || collection === 'variations') &&
+		getActiveBarcodeSelectors(collection)[0] === 'sku';
+	if (typeof materialized !== 'string' || skuActive) {
 		return false;
 	}
-	const { index } = buildBarcodeSymbologyIndex([{ id: document.id, payload }]);
 	return barcodeMatchCandidates(barcode).some(
-		(candidate) => candidate !== barcode && index.has(candidate)
+		(candidate) => candidate !== barcode && candidate === materialized.trim()
 	);
 }
 
@@ -69,6 +69,11 @@ function matchesExactAnyField(document: EngineRxDocument, barcode: string): bool
 		return false;
 	}
 	return buildLocalBarcodeIndex([{ id: document.id, payload }]).index.has(barcode);
+}
+
+function matchesEquivalentGlobalId(document: EngineRxDocument, barcode: string): boolean {
+	const value = document.payload?.global_unique_id;
+	return typeof value === 'string' && barcodeMatchCandidates(barcode).includes(value.trim());
 }
 
 export const useBarcodeSearch = () => {
@@ -102,10 +107,13 @@ export const useBarcodeSearch = () => {
 				variationsCollection.find().exec(),
 			]);
 			const products = engineDocuments(productResult).filter(
-				(document) => document.payload?.status === 'publish'
+				(document) =>
+					getActiveBarcodeSelectors('products').length > 0 && document.payload?.status === 'publish'
 			);
 			const variations = engineDocuments(variationResult).filter(
-				(document) => document.payload?.status === 'publish'
+				(document) =>
+					getActiveBarcodeSelectors('variations').length > 0 &&
+					document.payload?.status === 'publish'
 			);
 
 			const select = (predicate: (document: EngineRxDocument) => boolean) => [
@@ -119,11 +127,15 @@ export const useBarcodeSearch = () => {
 
 			// Precedence (#740), first non-empty tier wins so a scan never turns
 			// falsely ambiguous:
-			//   1. exact match on a barcode field — the product literally has this barcode;
-			//   2. UPC-A/EAN-13 equivalent on a barcode field — the leading-zero twin;
-			//   3. exact match on any field, incl. SKU — a coincidental SKU string.
+			//   1. exact match on the materialized barcode — the product literally has this barcode;
+			//   2. UPC-A/EAN-13 equivalent on the materialized barcode — the leading-zero twin;
+			//   3. UPC-A/EAN-13 equivalent on the global_unique_id fallback field;
+			//   4. exact match on any field, incl. SKU — a coincidental SKU string.
 			// Barcode semantics rank above a SKU coincidence: an unrelated product whose
-			// SKU equals the scanned digits must not preempt a genuine barcode equivalence.
+			// SKU equals the scanned digits must not preempt a genuine barcode
+			// equivalence — including a global-ID equivalence while SKU is the
+			// active carrier, so every equivalence tier runs before the exact-any
+			// fallback.
 			const symbologyExact = select((document) =>
 				matchesExactSymbology(document, normalizedBarcode)
 			);
@@ -135,6 +147,12 @@ export const useBarcodeSearch = () => {
 			);
 			if (symbologyEquivalent.length > 0) {
 				return symbologyEquivalent;
+			}
+			const globalIdEquivalent = select((document) =>
+				matchesEquivalentGlobalId(document, normalizedBarcode)
+			);
+			if (globalIdEquivalent.length > 0) {
+				return globalIdEquivalent;
 			}
 			return select((document) => matchesExactAnyField(document, normalizedBarcode));
 		},

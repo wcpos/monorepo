@@ -12,6 +12,11 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
+import {
+	deriveBarcodeFromPayload,
+	getActiveBarcodeSelectors,
+	mapBarcodeEditToPayload,
+} from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -194,12 +199,52 @@ async function applyEngineResidentChanges(
 	changes: Record<string, unknown>
 ): Promise<EngineResident> {
 	return (await resident.incrementalModify((old) => {
-		const payload = cloneDeep((old.payload ?? {}) as Record<string, unknown>);
+		const priorPayload = (old.payload ?? {}) as Record<string, unknown>;
+		let payload = cloneDeep(priorPayload);
 		for (const [field, value] of Object.entries(syncableChanges(changes))) {
 			set(payload, field, value);
 		}
+		if (collection === 'products' || collection === 'variations') {
+			const selectors = getActiveBarcodeSelectors(collection);
+			const prior = typeof priorPayload.barcode === 'string' ? priorPayload.barcode.trim() : '';
+			const edited = typeof changes.barcode === 'string' ? changes.barcode.trim() : undefined;
+			if (edited !== undefined && edited !== prior) {
+				// An intentional barcode edit: write the real carrier and keep the
+				// materialized field in step.
+				payload = mapBarcodeEditToPayload(payload, selectors);
+				payload.barcode = edited;
+			} else {
+				// No barcode edit (or the form echoed the unchanged derived value):
+				// a direct carrier edit (sku / global_unique_id / meta entry) wins,
+				// so re-derive the materialized field from the carrier instead of
+				// mapping the stale barcode back over the user's change. Absent or
+				// empty carriers leave the stored value alone (never clobber).
+				const derived = deriveBarcodeFromPayload(payload, selectors);
+				if (derived !== undefined) payload.barcode = derived;
+			}
+		}
 		return withPromotedFields(collection, { ...old, payload });
 	})) as EngineResident;
+}
+
+/**
+ * Full-form saves echo the unchanged derived `barcode` back alongside a direct
+ * carrier edit (sku / global_unique_id / meta entry). Strip the echo before
+ * enqueueing so the push adapter's barcode→carrier mapping cannot replay the
+ * stale value over the user's carrier edit; an INTENTIONAL barcode edit (value
+ * differs from the stored materialized one) passes through untouched.
+ */
+function withoutEchoedBarcode(
+	collection: WriteableCollection,
+	changes: Record<string, unknown>,
+	previousPayload: Record<string, unknown>
+): Record<string, unknown> {
+	if (collection !== 'products' && collection !== 'variations') return changes;
+	if (typeof changes.barcode !== 'string') return changes;
+	const prior = typeof previousPayload.barcode === 'string' ? previousPayload.barcode.trim() : '';
+	if (changes.barcode.trim() !== prior) return changes;
+	const { barcode: _echoed, ...rest } = changes;
+	return rest;
 }
 
 async function patchAndEnqueueEngineResident(input: {
@@ -226,7 +271,11 @@ async function patchAndEnqueueEngineResident(input: {
 				// into the pending create, or queues behind an in-flight create.
 				operation: 'update',
 				recordId: input.recordId,
-				payload: input.changes,
+				payload: withoutEchoedBarcode(
+					input.collection,
+					input.changes,
+					(previousResident.payload ?? {}) as Record<string, unknown>
+				),
 			});
 		} catch (error) {
 			writeError = error;

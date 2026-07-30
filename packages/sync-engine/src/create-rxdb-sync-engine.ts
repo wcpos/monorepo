@@ -52,6 +52,7 @@ import {
 	canonicalSiteKey,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
+	resetActiveBarcodeSelectors,
 	scopeDatabaseName,
 	scopeKeyFor,
 	StoreScopeManager,
@@ -81,6 +82,7 @@ import {
 	createChangeSignalLane,
 	zeroChangeSignalStateBlob,
 } from './change-signal/change-signal-lane';
+import { hydrateActiveBarcodeSelectors } from './change-signal/config-fingerprint-source';
 import {
 	createWriteDrainLane,
 	fetchOrderServerRevision,
@@ -1156,6 +1158,38 @@ export function createRxdbSyncEngine(
 			if (!bootstrappedScopes.has(scopeId)) {
 				const database = databaseByScopeId.get(scopeId);
 				if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
+				setLifecyclePhase('barcode-selector-hydrate');
+				// Reset BEFORE hydrating: a failed hydration must leave the registry
+				// empty (online-fallback scans), never a previous engine's carriers —
+				// the process-wide registry mirrors the single active engine (ADR 0018).
+				resetActiveBarcodeSelectors();
+				const hydrationAbort = new AbortController();
+				const hydrationTimeout = setTimeout(() => hydrationAbort.abort(), 5_000);
+				try {
+					await Promise.race([
+						hydrateActiveBarcodeSelectors({
+							fetcher,
+							syncBaseUrl: ports.site.syncBaseUrl,
+							signal: hydrationAbort.signal,
+						}),
+						new Promise<never>((_, reject) =>
+							hydrationAbort.signal.addEventListener(
+								'abort',
+								() => reject(new Error('barcode selector hydration timed out')),
+								{ once: true }
+							)
+						),
+					]);
+				} catch (error) {
+					diagnostics({
+						type: 'engine.barcode-selector-hydrate-failed',
+						level: 'debug',
+						message: error instanceof Error ? error.message : String(error),
+						fields: { scopeId },
+					});
+				} finally {
+					clearTimeout(hydrationTimeout);
+				}
 				setLifecyclePhase('pos-bootstrap-seed');
 				try {
 					await seedPosBootstrapLanes({
@@ -2299,6 +2333,9 @@ export function createRxdbSyncEngine(
 					await manager.closeScope(scopeId);
 				}
 				emitDb(null);
+				// A later engine (another site) must not inherit this engine's barcode
+				// carriers through the process-wide registry.
+				resetActiveBarcodeSelectors();
 				if (censusExpiryTimer !== null) {
 					clearTimeout(censusExpiryTimer);
 					censusExpiryTimer = null;
