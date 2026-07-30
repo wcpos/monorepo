@@ -92,14 +92,15 @@ describe('prepareSystemPrintHtml', () => {
 		expect(html).toContain('<div>From iframe</div>');
 	});
 
-	it('preserves base and linked stylesheets from iframe-extracted full documents', () => {
+	it('preserves base and inline styles without copying external stylesheet elements', () => {
 		const html = prepareSystemPrintHtml({
-			html: '<html><head><base href="https://example.test/"><link rel="stylesheet" href="/receipt.css"><style>.x{color:red}</style></head><body><div>Styled</div></body></html>',
+			html: '<html><head><base href="https://example.test/"><link rel="stylesheet" href="/receipt.css" onerror="globalThis.pwned=true"><style>.x{color:red}</style></head><body><div>Styled</div></body></html>',
 			paperWidth: 'a4',
 		});
 
 		expect(html).toContain('<base href="https://example.test/">');
-		expect(html).toContain('<link rel="stylesheet" href="/receipt.css">');
+		expect(html).not.toContain('<link');
+		expect(html).not.toContain('onerror');
 		expect(html).toContain('<style>.x{color:red}</style>');
 		expect(html).toContain('<div>Styled</div>');
 	});
@@ -109,12 +110,14 @@ describe('prepareSystemPrintHtml', () => {
 		try {
 			(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
 			const html = prepareSystemPrintHtml({
-				html: '<!doctype html><html><head><base href="https://example.test/"><style>.x{color:red}</style></head><body><div>Native</div></body></html>',
+				html: '<!doctype html><html><head><base href="https://example.test/"><link rel="stylesheet" href="/receipt.css" onload="globalThis.pwned=true"><style>.x{color:red}</style></head><body><div>Native</div></body></html>',
 				paperWidth: '80mm',
 			});
 
 			expect(html).toContain('<base href="https://example.test/">');
 			expect(html).toContain('<style>.x{color:red}</style>');
+			expect(html).not.toContain('<link');
+			expect(html).not.toContain('onload');
 			expect(html).toContain('<div>Native</div>');
 			expect(html).not.toContain('<body><!doctype html>');
 			expect(html).not.toContain('<body><html>');

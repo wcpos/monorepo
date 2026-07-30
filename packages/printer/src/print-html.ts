@@ -68,9 +68,7 @@ function extractPrintableBodyHtml(html: string): string {
 	if (typeof DOMParser === 'undefined') return extractFullDocumentHtmlWithoutDomParser(html);
 
 	const doc = new DOMParser().parseFromString(html, 'text/html');
-	const headPrintAssets = Array.from(
-		doc.head.querySelectorAll('base, style, link[rel~="stylesheet" i]')
-	)
+	const headPrintAssets = Array.from(doc.head.querySelectorAll('base, style'))
 		.map((element) => element.outerHTML)
 		.join('');
 	return `${headPrintAssets}${doc.body.innerHTML}`;
@@ -81,7 +79,7 @@ function extractFullDocumentHtmlWithoutDomParser(html: string): string {
 	const bodyHtml = extractElementInnerHtml(html, 'body') ?? stripLeadingDoctype(html);
 	const headPrintAssets = Array.from(
 		headHtml.matchAll(
-			/<(?:base\b[^>]*>|style\b[\s\S]*?<\/style>|link\b(?=[^>]*\brel=["'][^"']*stylesheet)[^>]*>)/gi
+			/<(?:base\b[^>]*>|style\b[\s\S]*?<\/style>)/gi
 		),
 		(match) => match[0]
 	).join('');
