@@ -617,6 +617,35 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.dispose();
 	});
 
+	it('does not fetch existence buckets after products and variations are reset together', async () => {
+		const bucketFetches: string[] = [];
+		const e = engine(async (url) => {
+			if (new URL(url).pathname.endsWith('/integrity/bucket')) bucketFetches.push(url);
+			return json({ ids: [] });
+		});
+		await e.ready;
+		const db = e.active()!.database.collections;
+		await seed(db.existenceManifest as never, {
+			id: 'product-1',
+			wooId: 1,
+			digest: 'product-1',
+			objectType: 'product',
+		});
+		await seed(db.existenceManifest as never, {
+			id: 'variation-2',
+			wooId: 2,
+			digest: 'variation-2',
+			objectType: 'variation',
+		});
+
+		await e.scope.resetCollection('variations');
+		await e.scope.resetCollection('products');
+		await e.sync('existence-reconcile');
+
+		expect(bucketFetches).toEqual([]);
+		await e.dispose();
+	});
+
 	it('skips both existence lanes offline without fetching', async () => {
 		const connectivity = scriptedConnectivity('offline');
 		const fetcher = vi.fn(async () => json({}));

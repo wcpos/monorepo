@@ -28,11 +28,11 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
  *     `status()` counters.
  *  2. Plain store switching preserves every scope's data, cursors, and
  *     mutation queue (pause/resume — the outgoing database stays open, and
- *     works offline). Only `resetCollection` clears the matching cursors, and
- *     the ENGINE does that clearing itself, atomically with the reset, via
- *     the manager's cursor invalidators. Resetting `'mutations'` with pending
- *     mutations returns 'needs-confirmation' and touches nothing without
- *     `confirmDestroyQueue`.
+ *     works offline). `resetCollection` clears per-collection checkpoint/trickle,
+ *     existence-manifest, and scheduler/coverage state; the shared change-signal
+ *     cursor is deliberately untouched.
+ *     Resetting `'mutations'` with pending mutations returns 'needs-confirmation'
+ *     and touches nothing without `confirmDestroyQueue`.
  *  3. Lifecycle ops serialize (the manager's promise-chain mutex); `dispose()`
  *     is terminal — further lifecycle calls reject.
  *  4. One engine instance owns a scope's write plane; multi-instance hosts
@@ -80,7 +80,6 @@ import { COLLECTION_DESCRIPTORS, writeFacetFor } from './collections/collection-
 import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
-	zeroChangeSignalStateBlob,
 } from './change-signal/change-signal-lane';
 import { hydrateActiveBarcodeSelectors } from './change-signal/config-fingerprint-source';
 import {
@@ -864,14 +863,10 @@ export function createRxdbSyncEngine(
 	const removeCheckpoint = (scopeId: string, collection: SyncCollectionName): Promise<void> =>
 		removeBlob(scopeId, checkpointKeyFor(collection));
 
-	// Invariant 2: the engine itself owns cursor clearing, registered once per
-	// syncable collection, run by the manager INSIDE the serialized reset —
-	// after feeders stop, before the drop. No host wires cursor clears. The
-	// change-signal lane registers its own invalidators below (its unified
-	// cursor spans collections, so ANY hybrid collection's reset prunes the
-	// in-memory engine and clears the persisted blob — a zeroed cursor over
-	// intact data merely re-pulls; a stale cursor over an emptied collection
-	// silently skips records).
+	// Invariant 2: reset clears only per-COLLECTION checkpoint, trickle, manifest,
+	// scheduler-task, and coverage state. The shared change-signal cursor stays:
+	// later signals targeted-fetch wiped records through normal apply arms, while
+	// an empty existence manifest derives zero reconcile buckets instead of bulk-healing.
 	for (const collection of SYNC_COLLECTION_NAMES) {
 		manager.registerCursorInvalidator(collection, (scopeId) =>
 			removeCheckpoint(scopeId, collection)
@@ -901,6 +896,40 @@ export function createRxdbSyncEngine(
 	registerManifestInvalidator('variations', 'existenceManifest', 'variation');
 	registerManifestInvalidator('customers', 'existenceManifestCustomers', 'customer');
 	registerManifestInvalidator('orders', 'existenceManifestOrders', 'order');
+
+	for (const collection of SYNC_COLLECTION_NAMES) {
+		manager.registerCursorInvalidator(collection, async (scopeId) => {
+			const db = databaseByScopeId.get(scopeId);
+			if (!db) return;
+			const schedulerTasks = db.collections.schedulerTaskStates;
+			const taskDocs = await schedulerTasks
+				.find({ selector: { collectionName: collection } })
+				.exec();
+			if (taskDocs.length > 0)
+				assertBulkSuccess(
+					await schedulerTasks.bulkRemove(taskDocs.map((doc) => doc.primary)),
+					'create-rxdb-sync-engine remove'
+				);
+			const coverageRecords = db.collections.coverageRecords;
+			const recordDocs = await coverageRecords
+				.find({ selector: { collectionName: collection } })
+				.exec();
+			if (recordDocs.length > 0)
+				assertBulkSuccess(
+					await coverageRecords.bulkRemove(recordDocs.map((doc) => doc.primary)),
+					'create-rxdb-sync-engine remove'
+				);
+			const coverageLanes = db.collections.coverageLanes;
+			const laneDocs = await coverageLanes
+				.find({ selector: { collectionName: collection } })
+				.exec();
+			if (laneDocs.length > 0)
+				assertBulkSuccess(
+					await coverageLanes.bulkRemove(laneDocs.map((doc) => doc.primary)),
+					'create-rxdb-sync-engine remove'
+				);
+		});
+	}
 
 	const emitEngineEvent = (event: EngineEvent): void => {
 		for (const cb of [...eventSubscribers]) {
@@ -1392,21 +1421,6 @@ export function createRxdbSyncEngine(
 		if (name === 'query-total-retry') publishCensusChanges();
 		return report;
 	};
-
-	// The unified change-signal cursor spans every hybrid collection: resetting
-	// ANY of them prunes the in-memory engine AND clears the persisted blob,
-	// inside the manager's serialized reset (invariant 2). Orders are
-	// local-only — no change-signal cursor to invalidate.
-	for (const descriptor of COLLECTION_DESCRIPTORS) {
-		if (descriptor.shape === 'local-only') continue;
-		manager.registerCursorInvalidator(descriptor.collection, async (scopeId) => {
-			changeSignalLane.prune(scopeId);
-			// Rewind to ZERO, never delete: a deleted blob reads as "brand-new
-			// scope" and primes to head — skipping exactly the historical rows the
-			// just-dropped collection needs to refill.
-			await writeBlob(scopeId, CHANGE_SIGNAL_STATE_KEY, zeroChangeSignalStateBlob());
-		});
-	}
 
 	// The orders scheduler fetcher's custom-pull checkpoint (+ F8 epoch) lives
 	// in the scope's syncCheckpoints collection (slice 5e), NOT the engine kv
