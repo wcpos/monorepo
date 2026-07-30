@@ -276,6 +276,11 @@ function CollectionRowView({
 
 	const isVariations = row.key === 'variations';
 	const sizeText = formatBytes(sizeBytes ?? null);
+	const clearBodyValues = {
+		count: row.local.toLocaleString(),
+		label: label.toLowerCase(),
+		size: sizeText ? `≈ ${sizeText}` : '—',
+	};
 
 	const resetCollection = async () => {
 		setConfirming(false);
@@ -294,12 +299,25 @@ function CollectionRowView({
 				await engine.scope.resetCollection(name, { confirmDestroyQueue: true });
 			}
 			await refill();
+			const successMessage =
+				row.key === 'products'
+					? t('health.database.redownload_done_products', {
+							defaultValue:
+								'{label} cleared — the first products are back; the rest re-download as you use them',
+							label,
+						})
+					: row.key === 'variations' || row.key === 'customers' || row.key === 'orders'
+						? t('health.database.redownload_done_lazy', {
+								defaultValue: '{label} cleared — records re-download as you use them',
+								label,
+							})
+						: t('health.database.redownload_done', {
+								defaultValue: '{label} re-downloaded fresh from your server',
+								label,
+							});
 			Toast.show({
 				type: 'success',
-				text1: t('health.database.redownload_done', {
-					defaultValue: '{label} re-downloaded fresh from your server',
-					label,
-				}),
+				text1: successMessage,
 			});
 		} catch (error) {
 			Toast.show({
@@ -444,18 +462,34 @@ function CollectionRowView({
 							})}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{row.windowed
-								? t('health.database.clear_body_orders', {
+							{row.key === 'products'
+								? t('health.database.clear_body_products', {
 										defaultValue:
-											'The orders held on this device will be removed and re-downloaded fresh from your server. Nothing on the server changes. You can keep selling — recent orders reappear within a moment.',
+											'{count} {label} ({size}) will be removed from this device. Nothing on the server changes. The first products re-download right away; the rest come back as you browse, search and sell.',
+										...clearBodyValues,
 									})
-								: t('health.database.clear_body', {
-										defaultValue:
-											'{count} {label} ({size}) will be removed and re-downloaded fresh from your server. Sales and orders are not affected. You can keep selling — search may be incomplete for a minute.',
-										count: row.local.toLocaleString(),
-										label: label.toLowerCase(),
-										size: sizeText ? `≈ ${sizeText}` : '—',
-									})}
+								: row.key === 'variations'
+									? t('health.database.clear_body_variations', {
+											defaultValue:
+												"{count} {label} ({size}) will be removed from this device. Nothing on the server changes. Variations re-download with their products as they're used.",
+											...clearBodyValues,
+										})
+									: row.key === 'customers'
+										? t('health.database.clear_body_customers', {
+												defaultValue:
+													"{count} {label} ({size}) will be removed from this device. Nothing on the server changes. Customers re-download as they're used — lookups fetch on demand, and the full list refills gradually in the background.",
+												...clearBodyValues,
+											})
+										: row.key === 'orders'
+											? t('health.database.clear_body_orders', {
+													defaultValue:
+														'The orders held on this device will be removed. Nothing on the server changes. Orders re-download as you view them — open and recent orders return in the background.',
+												})
+											: t('health.database.clear_body', {
+													defaultValue:
+														'{count} {label} ({size}) will be removed and re-downloaded fresh from your server. Sales and orders are not affected. You can keep selling — search may be incomplete for a minute.',
+													...clearBodyValues,
+												})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

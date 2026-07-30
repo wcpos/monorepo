@@ -7,10 +7,8 @@
  * Per-scope engine registry (the playground perScopeEngineRegistry semantics,
  * package-internal): one hybrid engine per scope, created lazily on first tick
  * from the persisted state blob (malformed blob → null → cold start, never a
- * crash), pruned on collection reset — the facade registers `prune` +
- * blob-clear as cursor invalidators, so the manager runs them INSIDE the
- * serialized reset and a stale cursor over an emptied replica is
- * unrepresentable (ADR 0018 invariant 2).
+ * crash). Collection resets leave this shared cursor and cached engine intact;
+ * later signals for wiped records use the normal targeted apply arms.
  *
  * Scope safety: each tick runs under `manager.runGuarded`; the engine's
  * long-lived source fetches through a REBINDABLE fetcher that the tick points
@@ -46,18 +44,6 @@ import type { RxDatabase } from 'rxdb';
 /** The engine-owned kv key holding one scope's serialized engine state. */
 export const CHANGE_SIGNAL_STATE_KEY = 'checkpoint:change-signal';
 
-/**
- * The blob a collection RESET writes: cursor REWOUND TO ZERO with empty
- * baselines — NOT deleted. A deleted blob would make the next tick treat the
- * scope as brand new and prime to head, silently skipping the historical
- * sequence-log rows needed to REFILL the just-dropped collection; a zero
- * cursor drains them (the same rewind-to-zero contract the web host's reset
- * wiring keeps).
- */
-export function zeroChangeSignalStateBlob(): string {
-	return serializeChangeSignalState({ cursor: { sequence: 0 }, baselineDigests: new Map() });
-}
-
 export type ChangeSignalReport = {
 	lane: 'change-signal';
 	/** 'ran' = a tick executed to persist; 'skipped' = gated before any work;
@@ -89,7 +75,7 @@ export type ChangeSignalLaneDeps = {
 export type ChangeSignalLane = {
 	/** One deterministic tick (serialized — concurrent calls queue). */
 	tick(signal?: AbortSignal): Promise<ChangeSignalReport>;
-	/** Drop a scope's in-memory engine (cursor invalidator half; blob clearing is the caller's). */
+	/** Explicitly evict one scope's cached engine without changing its persisted state. */
 	prune(scopeId: string): void;
 	lastError(): string | null;
 };
@@ -286,13 +272,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						cursorSummary.reported < from
 							? cursorSummary.reported
 							: committedTo;
-					let reason: 'behind-head' | 'reset' | 'backwards' | null = null;
+					let reason: 'behind-head' | 'backwards' | null = null;
 					if (cursorSummary.rebaselined) {
 						reason = 'behind-head';
-					} else if (from !== undefined && to === 0 && from > 0) {
-						// Collection reset starts the next engine at zero, so its
-						// previous cursor is already zero and cannot match this branch.
-						reason = 'reset';
 					} else if (from !== undefined && to !== undefined && to < from) {
 						reason = 'backwards';
 					}
@@ -317,9 +299,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 								? skipped === undefined
 									? 'change-signal: cursor jumped to head'
 									: `change-signal: cursor jumped to head (skipped ${skipped} changes)`
-								: reason === 'reset'
-									? 'change-signal: cursor reset to zero'
-									: `change-signal: cursor moved backwards (${from} → ${to})`;
+								: `change-signal: cursor moved backwards (${from} → ${to})`;
 						deps.diagnostics({
 							type: 'signal.cursor',
 							level: 'warn',
