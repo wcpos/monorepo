@@ -96,8 +96,12 @@ describe('scope-open barcode selector hydration', () => {
 
 		await expect(engine.ready).resolves.toBeDefined();
 		expect(seedPosBootstrapLanes).toHaveBeenCalledOnce();
-		expect(getActiveBarcodeSelectors('products')).toEqual(['existing-product']);
-		expect(getActiveBarcodeSelectors('variations')).toEqual(['existing-variation']);
+		// A previous engine's carriers (set above) must NOT survive into this
+		// engine's failed hydration — the scope-open reset leaves the registry
+		// empty so scans fall back online instead of using the wrong site's
+		// carriers (#869 review).
+		expect(getActiveBarcodeSelectors('products')).toEqual([]);
+		expect(getActiveBarcodeSelectors('variations')).toEqual([]);
 		expect(diagnostics).toContainEqual(
 			expect.objectContaining({
 				type: 'engine.barcode-selector-hydrate-failed',
@@ -105,5 +109,28 @@ describe('scope-open barcode selector hydration', () => {
 			})
 		);
 		await engine.dispose();
+	});
+
+	it('clears the registry on dispose so a later engine cannot inherit carriers', async () => {
+		const engine = createRxdbSyncEngine(
+			{
+				site: {
+					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+					wpJsonRoot: 'https://example.test/wp-json',
+				},
+				storage: memoryEngineStorage(),
+				mode: 'manual',
+				fetcher: async () => configResponse(),
+			},
+			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
+		);
+		await engine.ready;
+		expect(getActiveBarcodeSelectors('products')).toEqual(['global_unique_id']);
+		expect(getActiveBarcodeSelectors('variations')).toEqual(['meta_data:_barcode']);
+
+		await engine.dispose();
+
+		expect(getActiveBarcodeSelectors('products')).toEqual([]);
+		expect(getActiveBarcodeSelectors('variations')).toEqual([]);
 	});
 });

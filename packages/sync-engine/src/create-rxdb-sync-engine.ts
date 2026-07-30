@@ -52,6 +52,7 @@ import {
 	canonicalSiteKey,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
+	resetActiveBarcodeSelectors,
 	scopeDatabaseName,
 	scopeKeyFor,
 	StoreScopeManager,
@@ -1158,6 +1159,10 @@ export function createRxdbSyncEngine(
 				const database = databaseByScopeId.get(scopeId);
 				if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
 				setLifecyclePhase('barcode-selector-hydrate');
+				// Reset BEFORE hydrating: a failed hydration must leave the registry
+				// empty (online-fallback scans), never a previous engine's carriers —
+				// the process-wide registry mirrors the single active engine (ADR 0018).
+				resetActiveBarcodeSelectors();
 				const hydrationAbort = new AbortController();
 				const hydrationTimeout = setTimeout(() => hydrationAbort.abort(), 5_000);
 				try {
@@ -2328,6 +2333,9 @@ export function createRxdbSyncEngine(
 					await manager.closeScope(scopeId);
 				}
 				emitDb(null);
+				// A later engine (another site) must not inherit this engine's barcode
+				// carriers through the process-wide registry.
+				resetActiveBarcodeSelectors();
 				if (censusExpiryTimer !== null) {
 					clearTimeout(censusExpiryTimer);
 					censusExpiryTimer = null;

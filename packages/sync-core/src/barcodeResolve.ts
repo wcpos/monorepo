@@ -48,6 +48,18 @@ export function setActiveBarcodeSelectors(
 	activeBarcodeSelectors[collection] = [...selectors];
 }
 
+/**
+ * Clears both collections' selectors. The registry is a process-wide singleton
+ * mirroring the SINGLE active engine (one engine per site per process, ADR
+ * 0018), so the engine resets it at lifecycle boundaries — scope open before
+ * hydration, and dispose — to keep one site's carriers from leaking into the
+ * next site's session when its own hydration fails.
+ */
+export function resetActiveBarcodeSelectors(): void {
+	activeBarcodeSelectors.products = [];
+	activeBarcodeSelectors.variations = [];
+}
+
 export function getActiveBarcodeSelectors(
 	collection: BarcodeMaterializedCollection
 ): readonly string[] {
