@@ -50,6 +50,41 @@ function product(
 	};
 }
 
+function order(
+	id: string,
+	wooOrderId: number,
+	dateCreatedGmt: string,
+	cashier = '6',
+	total = '10.00'
+) {
+	return {
+		id,
+		wooOrderId,
+		number: String(wooOrderId),
+		dateCreatedGmt,
+		status: 'completed',
+		total,
+		customerId: 0,
+		payload: {
+			id: wooOrderId,
+			total,
+			meta_data: [
+				{ id: wooOrderId * 2, key: '_pos_user', value: cashier },
+				{ id: wooOrderId * 2 + 1, key: '_pos_store', value: '2' },
+			],
+		},
+		sync: { revision: '1', partial: false, source: 'woo-rest' },
+		local: { dirty: false, pendingMutationIds: [] },
+	};
+}
+
+const ordersDefaultSelector = {
+	$and: [
+		{ meta_data: { $elemMatch: { key: '_pos_user', value: '6' } } },
+		{ meta_data: { $elemMatch: { key: '_pos_store', value: '2' } } },
+	],
+};
+
 async function openProductsDatabase(): Promise<{
 	database: RxDatabase;
 	products: RxCollection<EngineDocument>;
@@ -58,6 +93,7 @@ async function openProductsDatabase(): Promise<{
 		name: `query-engine-adapter-${(sequence += 1)}`,
 		storage: memoryEngineStorage({ validate: false }),
 		multiInstance: false,
+		allowSlowCount: true,
 	});
 	const creators = engineSyncCollectionCreators();
 	await database.addCollections({ products: creators.products as never });
@@ -67,7 +103,140 @@ async function openProductsDatabase(): Promise<{
 	};
 }
 
+async function openOrdersDatabase(): Promise<{
+	database: RxDatabase;
+	orders: RxCollection<EngineDocument>;
+}> {
+	const database = await createRxDatabase({
+		name: `query-engine-adapter-${(sequence += 1)}`,
+		storage: memoryEngineStorage({ validate: false }),
+		multiInstance: false,
+		allowSlowCount: true,
+	});
+	const creators = engineSyncCollectionCreators();
+	await database.addCollections({ orders: creators.orders as never });
+	return {
+		database,
+		orders: database.collections.orders as RxCollection<EngineDocument>,
+	};
+}
+
 describe('executeAdapterQuery', () => {
+	it('pushes a complete orders query, sort, and page into RxDB', async () => {
+		const { database, orders } = await openOrdersDatabase();
+		const originalFind = orders.find.bind(orders);
+		const find = jest
+			.spyOn(orders, 'find')
+			.mockImplementation((query) => originalFind(query as never));
+
+		await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'orders',
+				selector: ordersDefaultSelector,
+				sort: [{ date_created_gmt: 'desc' }],
+				skip: 0,
+				limit: 10,
+			})
+		);
+
+		expect(find).toHaveBeenCalledWith({
+			selector: {
+				$and: [
+					{ 'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '6' } } },
+					{ 'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '2' } } },
+				],
+			},
+			sort: [{ dateCreatedGmt: 'desc' }],
+			skip: 0,
+			limit: 10,
+		});
+		await database.close();
+	});
+
+	it('returns one pushed-down orders page and the total matching count', async () => {
+		const { database, orders } = await openOrdersDatabase();
+		await orders.bulkInsert(
+			Array.from({ length: 15 }, (_, index) =>
+				order(
+					`order-${index}`,
+					index + 1,
+					`2026-07-${String(index + 1).padStart(2, '0')}T00:00:00`,
+					index < 11 ? '6' : '7'
+				)
+			)
+		);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'orders',
+				selector: ordersDefaultSelector,
+				sort: [{ date_created_gmt: 'desc' }],
+				limit: 5,
+			})
+		);
+
+		expect(result.hits.map((document) => document.id)).toEqual([
+			'order-10',
+			'order-9',
+			'order-8',
+			'order-7',
+			'order-6',
+		]);
+		expect(result.hits).toHaveLength(5);
+		expect(result.count).toBe(11);
+		await database.close();
+	});
+
+	it('reacts when a matching order enters the pushed-down page', async () => {
+		const { database, orders } = await openOrdersDatabase();
+		await orders.insert(order('order-1', 1, '2026-07-01T00:00:00'));
+		const results = executeAdapterQuery({
+			database: database as unknown as AdapterDatabase,
+			collection: 'orders',
+			selector: ordersDefaultSelector,
+			sort: [{ date_created_gmt: 'desc' }],
+			limit: 1,
+		});
+		await firstValueFrom(results.pipe(take(1)));
+		const updated = firstValueFrom(
+			results.pipe(
+				filter((result) => result.count === 2 && result.hits[0]?.id === 'order-2'),
+				take(1)
+			)
+		);
+
+		await orders.insert(order('order-2', 2, '2026-07-02T00:00:00'));
+		await expect(updated).resolves.toMatchObject({ count: 2 });
+		await database.close();
+	});
+
+	it('falls back to app-side numeric order pagination when sort cannot be pushed', async () => {
+		const { database, orders } = await openOrdersDatabase();
+		await orders.bulkInsert([
+			order('order-a', 1, '2026-07-01T00:00:00', '6', '2.00'),
+			order('order-b', 2, '2026-07-02T00:00:00', '6', '10.00'),
+			order('order-c', 3, '2026-07-03T00:00:00', '6', '5.00'),
+			order('order-x', 4, '2026-07-04T00:00:00', '7', '100.00'),
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'orders',
+				selector: ordersDefaultSelector,
+				sort: [{ sortable_total: 'desc' }],
+				skip: 1,
+				limit: 2,
+			})
+		);
+
+		expect(result.hits.map((document) => document.id)).toEqual(['order-c', 'order-a']);
+		expect(result.count).toBe(3);
+		await database.close();
+	});
+
 	it('applies promoted prefilter, residual, numeric sort, skip, and limit in order', async () => {
 		const { database, products } = await openProductsDatabase();
 		await products.bulkInsert([
@@ -281,6 +450,9 @@ describe('executeAdapterQuery', () => {
 							subscriber.next([]);
 							return teardown;
 						}),
+					}),
+					count: () => ({
+						$: new Observable<number>((subscriber) => subscriber.next(0)),
 					}),
 				},
 			},

@@ -582,6 +582,9 @@ export function createRxdbSyncEngine(
 		const db = await createRxDatabase({
 			name: scopeDatabaseName(identity),
 			storage,
+			// Adapter counts run payload selectors (for example meta_data $elemMatch) with no index.
+			// Storage executes them worker-side in production, matching the legacy 1.9 configuration.
+			allowSlowCount: true,
 			// Cross-tab change propagation is the HOST's call (ports.multiInstance,
 			// #430): the web app runs multi-tab and passes true; harnesses and
 			// single-window hosts keep the single-instance default.
