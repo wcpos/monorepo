@@ -23,7 +23,14 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 function resolvedHandle() {
-	return { ready: Promise.resolve(), release: jest.fn() };
+	return {
+		ready: Promise.resolve({
+			action: 'fetched',
+			missingRecordIds: [],
+			reason: 'test demand completed',
+		}),
+		release: jest.fn(),
+	};
 }
 
 describe('useReferencedCustomerDemand', () => {
@@ -32,7 +39,7 @@ describe('useReferencedCustomerDemand', () => {
 		requireCustomer.mockImplementation(resolvedHandle);
 	});
 
-	it('declares unique referenced customers once and only declares newly appearing ids', () => {
+	it('declares unique current references and ignores unchanged result sets', async () => {
 		const result$ = new Subject<Result>();
 		const firstHandle = resolvedHandle();
 		const secondHandle = resolvedHandle();
@@ -59,6 +66,9 @@ describe('useReferencedCustomerDemand', () => {
 			collection: 'customers',
 			kind: 'targeted-records',
 			wooIds: [5, 7],
+		});
+		await act(async () => {
+			await firstHandle.ready;
 		});
 		rerender();
 		expect(firstHandle.release).not.toHaveBeenCalled();
@@ -94,7 +104,7 @@ describe('useReferencedCustomerDemand', () => {
 			id: 'orders:referenced-customers:5,7,9',
 			collection: 'customers',
 			kind: 'targeted-records',
-			wooIds: [9],
+			wooIds: [5, 7, 9],
 		});
 		expect(firstHandle.release).toHaveBeenCalledTimes(1);
 
@@ -102,10 +112,10 @@ describe('useReferencedCustomerDemand', () => {
 		expect(secondHandle.release).toHaveBeenCalledTimes(1);
 	});
 
-	it('does not redeclare a rejected id when later results change away and back', async () => {
+	it('retries a rejected id when later results change away and back', async () => {
 		const result$ = new Subject<Result>();
 		const handle = { ready: Promise.reject(new Error('deleted')), release: jest.fn() };
-		requireCustomer.mockReturnValueOnce(handle);
+		requireCustomer.mockReturnValueOnce(handle).mockImplementation(resolvedHandle);
 		renderHook(() => useReferencedCustomerDemand(result$));
 
 		await act(async () => {
@@ -115,7 +125,44 @@ describe('useReferencedCustomerDemand', () => {
 		act(() => result$.next({ hits: [] }));
 		act(() => result$.next({ hits: [{ document: { customer_id: 11 } }] }));
 
-		expect(requireCustomer).toHaveBeenCalledTimes(1);
+		expect(requireCustomer).toHaveBeenCalledTimes(2);
+	});
+
+	it('retries a released id when later results change away and back', async () => {
+		const result$ = new Subject<Result>();
+		let resolveReady!: (outcome: {
+			action: 'released';
+			missingRecordIds: number[];
+			reason: string;
+		}) => void;
+		const ready = new Promise<{
+			action: 'released';
+			missingRecordIds: number[];
+			reason: string;
+		}>((resolve) => {
+			resolveReady = resolve;
+		});
+		const handle = {
+			ready,
+			release: jest.fn(() =>
+				resolveReady({
+					action: 'released',
+					missingRecordIds: [],
+					reason: 'released during demand',
+				})
+			),
+		};
+		requireCustomer.mockReturnValueOnce(handle).mockImplementation(resolvedHandle);
+		renderHook(() => useReferencedCustomerDemand(result$));
+
+		act(() => result$.next({ hits: [{ document: { customer_id: 12 } }] }));
+		act(() => result$.next({ hits: [] }));
+		await act(async () => {
+			await ready;
+		});
+		act(() => result$.next({ hits: [{ document: { customer_id: 12 } }] }));
+
+		expect(requireCustomer).toHaveBeenCalledTimes(2);
 	});
 
 	it('ignores non-positive customer ids and invalid cashier metadata', () => {

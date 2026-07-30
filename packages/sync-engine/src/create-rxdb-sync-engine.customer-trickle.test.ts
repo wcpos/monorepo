@@ -26,10 +26,10 @@ function identity(): StoreScopeIdentity {
 	return { site: SITE, storeId: 7, cashierId: `customer-trickle-${uniqueStore}` };
 }
 
-function json(payload: unknown): Response {
+function json(payload: unknown, headers: Record<string, string> = {}): Response {
 	return new Response(JSON.stringify(payload), {
 		status: 200,
-		headers: { 'content-type': 'application/json' },
+		headers: { 'content-type': 'application/json', ...headers },
 	});
 }
 
@@ -97,6 +97,32 @@ describe('customer-trickle maintenance lane', () => {
 		await engine.sync('customer-trickle');
 		expect(urls).toHaveLength(2);
 		expect(new URL(urls[1]!).searchParams.get('page')).toBe('2');
+		await engine.dispose();
+	});
+
+	it('completes a full final page using the pagination headers', async () => {
+		const urls: string[] = [];
+		const engine = engineWith({
+			fetcher: async (url) => {
+				urls.push(url);
+				const page = Number(new URL(url).searchParams.get('page'));
+				return json(customers((page - 1) * 10 + 1, 10), {
+					'X-WP-Total': '20',
+					'X-WP-TotalPages': '2',
+				});
+			},
+		});
+		await engine.ready;
+
+		await engine.sync('customer-trickle');
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'ran',
+		});
+		await expect(engine.sync('customer-trickle')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'walk-complete',
+		});
+		expect(urls).toHaveLength(2);
 		await engine.dispose();
 	});
 
@@ -219,6 +245,26 @@ describe('customer-trickle maintenance lane', () => {
 		await resumed.sync('customer-trickle');
 		expect(new URL(urls[0]!).searchParams.get('page')).toBe('2');
 		await resumed.dispose();
+	});
+
+	it('rewinds the persisted page when customers are reset', async () => {
+		const checkpoints = memoryStringStore();
+		const urls: string[] = [];
+		const engine = engineWith({
+			checkpoints,
+			fetcher: async (url) => {
+				urls.push(url);
+				return json(customers(1, 10));
+			},
+		});
+		await engine.ready;
+
+		await engine.sync('customer-trickle');
+		await engine.scope.resetCollection('customers');
+		await engine.sync('customer-trickle');
+
+		expect(urls.map((url) => new URL(url).searchParams.get('page'))).toEqual(['1', '1']);
+		await engine.dispose();
 	});
 
 	it('goes dormant after a short page', async () => {

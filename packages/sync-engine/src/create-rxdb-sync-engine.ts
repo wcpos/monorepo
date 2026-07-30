@@ -101,6 +101,7 @@ import {
 	type QueryTotalCacheEvent,
 	type QueryTotalPort,
 } from './maintenance/maintenance-lanes';
+import { CUSTOMER_TRICKLE_STATE_KEY } from './maintenance/customer-trickle';
 import { ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS } from './scheduler/engine-scheduler-drain';
 import {
 	createLocalCoverage,
@@ -868,6 +869,9 @@ export function createRxdbSyncEngine(
 			removeCheckpoint(scopeId, collection)
 		);
 	}
+	manager.registerCursorInvalidator('customers', (scopeId) =>
+		removeBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY)
+	);
 
 	const registerManifestInvalidator = (
 		collection: 'products' | 'variations' | 'customers' | 'orders',

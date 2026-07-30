@@ -13,7 +13,6 @@ type OrdersResult = {
 	hits: { document: { customer_id?: unknown; meta_data?: { key?: string; value?: unknown }[] } }[];
 };
 const logger = getLogger(['wcpos', 'orders', 'referenced-customer-demand']);
-const attemptedIdsByEngine = new WeakMap<object, Set<number>>();
 const isPositiveInteger = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isInteger(value) && value > 0;
 function referencedIds(result: OrdersResult): number[] {
@@ -37,16 +36,12 @@ export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): 
 				switchMap(
 					({ ids, key }) =>
 						new Observable<void>(() => {
-							const attempted = attemptedIdsByEngine.get(engine) ?? new Set<number>();
-							attemptedIdsByEngine.set(engine, attempted);
-							const wooIds = ids.filter((id) => !attempted.has(id));
-							if (wooIds.length === 0) return;
-							wooIds.forEach((id) => attempted.add(id));
+							if (ids.length === 0) return;
 							const requirement = engine.require({
 								id: `orders:referenced-customers:${key}`,
 								collection: 'customers',
 								kind: 'targeted-records',
-								wooIds,
+								wooIds: ids,
 							});
 							void requirement.ready.catch(() => logger.debug('Referenced customer demand failed'));
 							return () => requirement.release();

@@ -10,7 +10,7 @@ import type { RxDatabase } from 'rxdb';
 
 export const CUSTOMER_TRICKLE_BATCH_SIZE = 10;
 export const CUSTOMER_TRICKLE_IDLE_AFTER_MS = 60_000;
-const CUSTOMER_TRICKLE_STATE_KEY = 'customer-trickle:state';
+export const CUSTOMER_TRICKLE_STATE_KEY = 'customer-trickle:state';
 
 export type CustomerTrickleState = { page: number; walkComplete: boolean };
 export type CustomerTrickleStateStore = {
@@ -118,8 +118,11 @@ export async function tickCustomerTrickle(
 		manifestRows
 	);
 
+	const totalPagesHeader = response.headers.get('X-WP-TotalPages');
+	const totalPages = Number(totalPagesHeader);
 	const nextState =
-		payloads.length < CUSTOMER_TRICKLE_BATCH_SIZE
+		payloads.length < CUSTOMER_TRICKLE_BATCH_SIZE ||
+		(totalPagesHeader !== null && Number.isSafeInteger(totalPages) && state.page >= totalPages)
 			? { page: state.page, walkComplete: true }
 			: { page: state.page + 1, walkComplete: false };
 	await deps.stateStore.set(CUSTOMER_TRICKLE_STATE_KEY, JSON.stringify(nextState));
