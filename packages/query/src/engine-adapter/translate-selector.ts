@@ -311,9 +311,17 @@ function containsUnsafePushOperator(condition: unknown): boolean {
 	if (!isRecord(condition)) {
 		return false;
 	}
-	return Object.entries(condition).some(
-		([key, value]) => key === '$allMatch' || key === '$not' || containsUnsafePushOperator(value)
-	);
+	const operators = Object.keys(condition);
+	if (
+		operators.includes('$allMatch') ||
+		operators.includes('$not') ||
+		((operators.includes('$lt') || operators.includes('$lte')) &&
+			!operators.includes('$gt') &&
+			!operators.includes('$gte'))
+	) {
+		return true;
+	}
+	return Object.values(condition).some(containsUnsafePushOperator);
 }
 
 function taxonomyMembership(condition: unknown): number | undefined {

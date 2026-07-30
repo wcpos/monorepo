@@ -59,6 +59,16 @@ describe('translateSelector', () => {
 		).toBe(true);
 	});
 
+	it('keeps one-sided comparisons residual for null and missing fields', () => {
+		const translated = translateSelector('coupons', {
+			date_expires_gmt: { $lte: '2026-01-01' },
+		});
+
+		expect(translated.prefilter).toEqual({});
+		expect(translated.complete).toBe(false);
+		expect(translated.residual({ id: 'coupon-1', payload: {} })).toBe(true);
+	});
+
 	it('keeps computed selectors and unsupported pushed operators incomplete', () => {
 		expect(translateSelector('orders', { cashier: '6' }).complete).toBe(false);
 		expect(

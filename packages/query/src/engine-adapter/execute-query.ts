@@ -157,7 +157,7 @@ export function executeAdapterQuery({
 	if (complete && engineSort.pushable) {
 		const query = engineCollection.find({
 			selector: prefilter,
-			...(engineSort.sort.length > 0 ? { sort: engineSort.sort } : {}),
+			sort: engineSort.sort.length > 0 ? engineSort.sort : [{ id: 'asc' }],
 			skip: Math.max(0, skip),
 			...(limit !== undefined ? { limit: Math.max(0, limit) } : {}),
 		});

@@ -154,6 +154,31 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
+	it('pushes the engine ID order when no sort is supplied', async () => {
+		const { database, products } = await openProductsDatabase();
+		const originalFind = products.find.bind(products);
+		const find = jest
+			.spyOn(products, 'find')
+			.mockImplementation((query) => originalFind(query as never));
+
+		await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'products',
+				selector: {},
+				limit: 10,
+			})
+		);
+
+		expect(find).toHaveBeenCalledWith({
+			selector: {},
+			sort: [{ id: 'asc' }],
+			skip: 0,
+			limit: 10,
+		});
+		await database.close();
+	});
+
 	it('returns one pushed-down orders page and the total matching count', async () => {
 		const { database, orders } = await openOrdersDatabase();
 		await orders.bulkInsert(
