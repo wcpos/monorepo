@@ -58,7 +58,7 @@ export interface SortFieldsByCollection {
 		| DatedSort;
 	coupons:
 		'code' | 'amount' | 'discount_type' | 'status' | 'usage_count' | 'date_expires_gmt' | DatedSort;
-	variations: 'id' | 'name' | 'sku' | PriceSort | StockSort | DatedSort;
+	variations: 'id' | 'name' | 'sku' | 'menu_order' | PriceSort | StockSort | DatedSort;
 	customers: 'id' | 'first_name' | 'last_name' | 'email' | 'role' | 'username' | DatedSort;
 	'tax-rates': 'id' | 'name' | 'country' | 'state' | 'priority' | 'rate' | 'class' | 'order';
 	logs: 'timestamp' | 'level' | 'code';

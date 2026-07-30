@@ -39,7 +39,7 @@ export function VariationRowProvider({ row, setRowExpanded, children }: Variatio
 			<QueryStateProvider
 				collection="variations"
 				initialPageSize={Number.MAX_SAFE_INTEGER}
-				initialSort={{ field: 'name', direction: 'asc' }}
+				initialSort={{ field: 'menu_order', direction: 'asc' }}
 			>
 				{children}
 			</QueryStateProvider>

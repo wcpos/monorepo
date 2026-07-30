@@ -57,6 +57,21 @@ describe('query-state translator', () => {
 			});
 		}
 	);
+
+	it('adds the Woo id tiebreak to the variations menu_order sort (#871)', () => {
+		const state = {
+			search: '',
+			filters: { attributeMatches: [] },
+			sort: { field: 'menu_order', direction: 'asc' },
+			limit: 10,
+		} as unknown as QueryStateOf<'variations'>;
+
+		expect(translateQueryState('variations', state)).toMatchObject({
+			sort: [{ menu_order: 'asc' }, { id: 'asc' }],
+			sortEnginePath: 'payload.menu_order',
+		});
+	});
+
 	it('has an exhaustive entry for every declared collection filter', () => {
 		expect(exhaustiveFilterMap).toBe(FILTER_TRANSLATORS);
 		expect(Object.keys(FILTER_TRANSLATORS.products)).toEqual([
