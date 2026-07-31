@@ -1,3 +1,5 @@
+import { getLogger } from '@wcpos/utils/logger';
+
 import { getVariablePrices } from './get-variable-prices';
 
 describe('getVariablePrices', () => {
@@ -80,6 +82,19 @@ describe('getVariablePrices', () => {
 	it('returns null without error for a null value (no priced variations)', () => {
 		const metaData = [{ key: '_woocommerce_pos_variable_prices', value: null }];
 		expect(getVariablePrices(metaData)).toBeNull();
+	});
+
+	it('logs invalid data when the metadata value is omitted', () => {
+		jest.clearAllMocks();
+		const metaData = [{ key: '_woocommerce_pos_variable_prices' }];
+
+		expect(getVariablePrices(metaData)).toBeNull();
+		expect(getLogger([]).error).toHaveBeenCalledWith(
+			"'_woocommerce_pos_variable_prices' has invalid structure",
+			expect.objectContaining({
+				context: expect.objectContaining({ errorCode: 'DB03002' }),
+			})
+		);
 	});
 
 	it('returns null when no known range key is present', () => {

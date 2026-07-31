@@ -62,7 +62,7 @@ export function getVariablePrices(
 
 	// The server injects `null` when no visible variation carries any price at
 	// all — a legitimate state, not an error.
-	if (metaDataEntry.value == null) {
+	if (metaDataEntry.value === null) {
 		return null;
 	}
 
