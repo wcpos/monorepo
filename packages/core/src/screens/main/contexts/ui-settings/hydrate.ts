@@ -11,7 +11,6 @@ const settingIds: UISettingID[] = [
 	'orders',
 	'customers',
 	'reports-orders',
-	'logs',
 ];
 
 /**

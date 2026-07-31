@@ -1,28 +1,77 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import { navigateToPage, authenticatedTest as test } from './fixtures';
 
-test.describe('Logs Page', () => {
-	test.beforeEach(async ({ posPage: page }) => {
-		await navigateToPage(page, 'health');
-		await page.getByTestId('health-nav-logs').click();
-		const screen = page.getByTestId('screen-logs');
-		await expect(screen.getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
+async function openLogs(page: Page) {
+	await navigateToPage(page, 'health');
+	await page.getByTestId('health-nav-logs').click();
+	const screen = page.getByTestId('screen-logs');
+	await expect(screen.getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
+	return screen;
+}
+
+test.describe('Store health · Logs', () => {
+	test('shows the stat header, preset chips and the flat ledger', async ({ posPage: page }) => {
+		const screen = await openLogs(page);
+
+		await expect(screen.getByTestId('logs-status-line')).toBeVisible();
+		await expect(screen.getByTestId('logs-stat-events')).toBeVisible();
+		await expect(screen.getByTestId('logs-stat-errors')).toBeVisible();
+		await expect(screen.getByTestId('logs-stat-stuck')).toBeVisible();
+		await expect(screen.getByTestId('logs-stat-waiting')).toBeVisible();
+
+		await expect(screen.getByTestId('logs-chip-all')).toBeVisible();
+		await expect(screen.getByTestId('logs-chip-actions')).toBeVisible();
+		await expect(screen.getByTestId('logs-chip-errors')).toBeVisible();
+		await expect(screen.getByTestId('logs-chip-sync')).toBeVisible();
+		await expect(screen.getByTestId('logs-chip-verbose')).toBeVisible();
+
+		// The engine writes startup/cycle rows on boot, so an authenticated
+		// session always has ledger entries.
+		await expect(screen.getByTestId('logs-ledger')).toBeVisible();
+		await expect(screen.locator('[data-testid^="logs-row-"]').first()).toBeVisible({
+			timeout: 30_000,
+		});
 	});
 
-	test('should display logs table with columns', async ({ posPage: page }) => {
-		const screen = page.getByTestId('screen-logs');
-		await expect(screen.getByRole('columnheader').first()).toBeVisible({ timeout: 10_000 });
-		await expect(screen.getByRole('columnheader').nth(1)).toBeVisible();
-		await expect(screen.getByRole('columnheader').nth(2)).toBeVisible();
+	test('expands a ledger row to its inline detail', async ({ posPage: page }) => {
+		const screen = await openLogs(page);
+
+		const expander = screen.locator('[data-testid^="logs-expand-"]').first();
+		await expect(expander).toBeVisible({ timeout: 30_000 });
+		await expander.click();
+		await expect(screen.locator('[data-testid^="logs-detail-"]').first()).toBeVisible();
 	});
 
-	test('should search logs', async ({ posPage: page }) => {
-		const screen = page.getByTestId('screen-logs');
-		const searchInput = screen.getByTestId('search-logs');
-		await searchInput.fill('error');
+	test('filters the ledger via the sync preset chip', async ({ posPage: page }) => {
+		const screen = await openLogs(page);
+		await expect(screen.locator('[data-testid^="logs-row-"]').first()).toBeVisible({
+			timeout: 30_000,
+		});
+
+		await screen.getByTestId('logs-chip-sync').click();
+		// Sync rows exist on any booted session; the ledger must not go empty.
+		await expect(screen.locator('[data-testid^="logs-row-"]').first()).toBeVisible({
+			timeout: 15_000,
+		});
+
+		// Actions is sparse until action coverage (WS5) instruments actors, but
+		// the $exists query must not blow up the ledger.
+		await screen.getByTestId('logs-chip-actions').click();
 		await page.waitForTimeout(1_000);
+		await expect(screen.getByTestId('logs-ledger')).toBeVisible({ timeout: 15_000 });
 
-		await expect(screen.getByRole('columnheader').first()).toBeVisible({ timeout: 15_000 });
+		await screen.getByTestId('logs-chip-all').click();
+		await expect(screen.locator('[data-testid^="logs-row-"]').first()).toBeVisible({
+			timeout: 15_000,
+		});
+	});
+
+	test('searches logs without breaking the ledger', async ({ posPage: page }) => {
+		const screen = await openLogs(page);
+		const searchInput = screen.getByTestId('search-logs');
+		await searchInput.fill('sync');
+		await page.waitForTimeout(1_000);
+		await expect(screen.getByTestId('logs-ledger')).toBeVisible({ timeout: 15_000 });
 	});
 });

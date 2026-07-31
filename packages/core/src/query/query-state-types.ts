@@ -28,7 +28,7 @@ export interface FiltersByCollection {
 	variations: { attributeMatches: VariationMatch[]; status?: string };
 	customers: Record<never, never>;
 	'tax-rates': Record<never, never>;
-	logs: { level?: string[] };
+	logs: { level?: string[]; category_prefix?: string; has_actor?: boolean };
 }
 
 type DatedSort = 'date_created_gmt' | 'date_modified_gmt';

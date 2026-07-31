@@ -13,7 +13,6 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 import { disableVersionCheck, setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { RxDBAuditLogPlugin } from './audit-log';
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
 import { middlewaresPlugin } from './middlewares';
@@ -69,4 +68,5 @@ addRxPlugin(resetCollectionPlugin);
 addRxPlugin(searchPlugin);
 addRxPlugin(middlewaresPlugin);
 addRxPlugin(rxDatabaseRegistryPlugin);
-addRxPlugin(RxDBAuditLogPlugin); // should run last to capture all changes
+// The generic audit plugin retired with the logging overhaul (spec §1 silo
+// fates): action rows + sync records replace it; full snapshots die.

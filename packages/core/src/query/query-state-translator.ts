@@ -4,7 +4,15 @@ import type { CollectionKey, FiltersOf, QueryStateOf, SortFieldOf } from './quer
 
 type Storage = 'promoted' | 'payload' | 'local';
 type Operator =
-	'taxonomy-many' | 'value' | 'metadata' | 'store' | 'date-range' | 'all-match' | 'in';
+	| 'taxonomy-many'
+	| 'value'
+	| 'metadata'
+	| 'store'
+	| 'date-range'
+	| 'all-match'
+	| 'in'
+	| 'prefix-range'
+	| 'exists';
 type FilterTranslator = {
 	legacyPath: string;
 	enginePath: string;
@@ -55,7 +63,11 @@ export const FILTER_TRANSLATORS = {
 	},
 	customers: {},
 	'tax-rates': {},
-	logs: { level: entry('level', 'level', 'local', 'in') },
+	logs: {
+		level: entry('level', 'level', 'local', 'in'),
+		category_prefix: entry('category', 'category', 'local', 'prefix-range'),
+		has_actor: entry('actor', 'actor', 'local', 'exists'),
+	},
 } as const satisfies {
 	[C in CollectionKey]: { [F in keyof FiltersOf<C>]-?: FilterTranslator };
 };
@@ -186,6 +198,15 @@ function compile(
 		}
 		case 'all-match':
 			return { attributes: { $allMatch: value } };
+		case 'prefix-range': {
+			// Lexicographic prefix match usable by a string index: '/' is the code
+			// point after '.', so ['sync', 'sync/') covers 'sync' and every
+			// 'sync.…' category without a table-scanning $regex.
+			const prefix = String(value);
+			return { [entryValue.legacyPath]: { $gte: prefix, $lt: `${prefix}/` } };
+		}
+		case 'exists':
+			return value === true ? { [entryValue.legacyPath]: { $exists: true } } : undefined;
 		default: {
 			const exhaustive: never = entryValue.operator;
 			return exhaustive;
