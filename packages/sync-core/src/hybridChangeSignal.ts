@@ -523,6 +523,9 @@ export function createHybridChangeSignalEngine(input: {
 	 * `configSource`.
 	 */
 	configBaseline?: ConfigFingerprintBaseline;
+	forceConfigStaleCollections?: (
+		snapshot: ConfigFingerprintSnapshot
+	) => readonly BarcodeConfigCollection[];
 }): HybridChangeSignalEngine {
 	const policy: HybridChangeSignalPolicy = { ...DEFAULT_HYBRID_POLICY, ...input.policy };
 	const now = input.now ?? (() => Date.now());
@@ -534,6 +537,7 @@ export function createHybridChangeSignalEngine(input: {
 		? createConfigChangeSignal({
 				source: input.configSource,
 				baseline: input.configBaseline,
+				forceStaleCollections: input.forceConfigStaleCollections,
 				now,
 			})
 		: null;

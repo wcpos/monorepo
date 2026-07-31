@@ -27,28 +27,46 @@ function referencedIds(result: OrdersResult): number[] {
 }
 export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): void {
 	const { engine } = useQueryManager();
+	// useState initializer (not useRef): the set is read inside the pipe's
+	// callbacks, and react-compiler forbids ref reads in render scope.
+	const [attemptedIds] = React.useState(() => new Set<number>());
 	const demand$ = React.useMemo(
 		() =>
 			result$.pipe(
 				map(referencedIds),
 				map((ids) => ({ ids, key: ids.join(',') })),
 				distinctUntilChanged((previous, current) => previous.key === current.key),
+				map(({ ids }) => ids.filter((id) => !attemptedIds.has(id))),
 				switchMap(
-					({ ids, key }) =>
+					(ids) =>
 						new Observable<void>(() => {
+							// An empty (or fully-attempted) set still flows through switchMap so
+							// the previous requirement is released; it just requests nothing new.
 							if (ids.length === 0) return;
 							const requirement = engine.require({
-								id: `orders:referenced-customers:${key}`,
+								id: `orders:referenced-customers:${ids.join(',')}`,
 								collection: 'customers',
 								kind: 'targeted-records',
 								wooIds: ids,
 							});
-							void requirement.ready.catch(() => logger.debug('Referenced customer demand failed'));
+							// Attempted only when the requirement settles successfully.
+							// A 'released' outcome means switchMap superseded this requirement
+							// mid-flight — those ids re-enter the next requirement unmarked, so
+							// growing the visible set never strands an in-flight customer.
+							void requirement.ready
+								.then((outcome: { action?: string }) => {
+									if (outcome?.action !== 'released') {
+										ids.forEach((id) => attemptedIds.add(id));
+									}
+								})
+								.catch(() => {
+									logger.debug('Referenced customer demand failed');
+								});
 							return () => requirement.release();
 						})
 				)
 			),
-		[engine, result$]
+		[engine, result$, attemptedIds]
 	);
 	useSubscription(demand$);
 }

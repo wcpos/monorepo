@@ -242,6 +242,21 @@ describe('audit-log plugin', () => {
 	});
 
 	describe('insert events', () => {
+		it('triggers the retention sweep after 200 audit inserts', async () => {
+			const findSpy = jest.spyOn(logsCollection, 'find');
+			await testCollection.bulkInsert(
+				Array.from({ length: 200 }, (_, index) => ({
+					uuid: `retention-${index}`,
+					name: `Retention Product ${index}`,
+				}))
+			);
+			await waitFor(500);
+
+			expect(findSpy).toHaveBeenCalledWith({
+				selector: { timestamp: { $lt: expect.any(Number) } },
+			});
+		});
+
 		it('should log document inserts', async () => {
 			// Insert a document
 			await testCollection.insert({

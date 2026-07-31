@@ -221,6 +221,43 @@ describe('customer-trickle maintenance lane', () => {
 		await engine.dispose();
 	});
 
+	it('coalesces overlapping ticks without fetching or advancing twice', async () => {
+		const checkpoints = memoryStringStore();
+		const storeIdentity = identity();
+		const fetchStarted = Promise.withResolvers<void>();
+		const releaseFetch = Promise.withResolvers<void>();
+		let fetchCalls = 0;
+		const engine = engineWith(
+			{
+				checkpoints,
+				fetcher: async () => {
+					fetchCalls += 1;
+					fetchStarted.resolve();
+					await releaseFetch.promise;
+					return json(customers(1, 10));
+				},
+			},
+			storeIdentity
+		);
+		await engine.ready;
+
+		const first = engine.sync('customer-trickle');
+		await fetchStarted.promise;
+		const overlapping = engine.sync('customer-trickle');
+		await expect(overlapping).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'in-flight',
+		});
+		releaseFetch.resolve();
+		await expect(first).resolves.toMatchObject({ status: 'ran' });
+
+		expect(fetchCalls).toBe(1);
+		await expect(
+			checkpoints.get(`${scopeKeyFor(storeIdentity)}:${TRICKLE_STATE_KEY}`)
+		).resolves.toBe(JSON.stringify({ page: 2, walkComplete: false }));
+		await engine.dispose();
+	});
+
 	it('resumes from the persisted next page after engine disposal', async () => {
 		const storage = memoryEngineStorage();
 		const checkpoints = memoryStringStore();

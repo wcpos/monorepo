@@ -10,6 +10,7 @@ import {
 	type ProductDocument,
 	productDocumentId,
 	type StoredProductDocument,
+	type SyncObserver,
 	type WooProductPayload,
 } from '@wcpos/sync-core';
 
@@ -48,6 +49,7 @@ export type ProductsSchedulerFetcherInput = {
 	baseUrl: string;
 	repository: ProductSchedulerRepository;
 	fetcher?: Fetcher;
+	diagnostics?: SyncObserver;
 	coverageRepository?: ProductSchedulerCoverageRepository;
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
@@ -59,6 +61,8 @@ export type ProductsSchedulerFetcherInput = {
 	 */
 	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
 };
+
+export const PRODUCT_BROWSE_WINDOW_MAX_PAGES = 20;
 
 /** Store a pulled product batch: extract the Leg-3 manifest rows, strip `_rxdb_digest`, upsert both. */
 async function persistProductDocuments(
@@ -239,7 +243,10 @@ async function fetchProductBrowseWindow(
 	query.set('order', PRODUCT_BROWSE_WINDOW_ORDER);
 	query.set('status', 'publish');
 	const firstPage = await fetchProductQuery(input, query, context);
-	const payloads = [...firstPage.payloads];
+	const comparePayloads = (left: WooProductPayload, right: WooProductPayload) =>
+		Number(left.menu_order ?? 0) - Number(right.menu_order ?? 0) ||
+		Number(left.id) - Number(right.id);
+	let payloads = [...firstPage.payloads].sort(comparePayloads).slice(0, limit);
 	const boundaryMenuOrder =
 		firstPage.payloads.length === PRODUCT_BROWSE_WINDOW_LIMIT
 			? Number(firstPage.payloads[firstPage.payloads.length - 1]?.menu_order ?? 0)
@@ -249,6 +256,7 @@ async function fetchProductBrowseWindow(
 	let requestCount = 1;
 
 	while (
+		requestCount < PRODUCT_BROWSE_WINDOW_MAX_PAGES &&
 		boundaryMenuOrder !== null &&
 		pagePayloads.length === PRODUCT_BROWSE_WINDOW_LIMIT &&
 		(totalPages === null || requestCount < totalPages) &&
@@ -258,8 +266,22 @@ async function fetchProductBrowseWindow(
 		const nextPage = await fetchProductQuery(input, query, context);
 		pagePayloads = nextPage.payloads;
 		totalPages = nextPage.totalPages ?? totalPages;
-		payloads.push(...pagePayloads);
+		payloads = payloads.concat(pagePayloads).sort(comparePayloads).slice(0, limit);
 		requestCount += 1;
+	}
+
+	if (
+		requestCount === PRODUCT_BROWSE_WINDOW_MAX_PAGES &&
+		pagePayloads.length === PRODUCT_BROWSE_WINDOW_LIMIT &&
+		(totalPages === null || requestCount < totalPages) &&
+		Number(pagePayloads[pagePayloads.length - 1]?.menu_order ?? 0) === boundaryMenuOrder
+	) {
+		input.diagnostics?.({
+			type: 'product.browse-window.approximate',
+			level: 'warn',
+			collection: 'products',
+			message: `Product browse window is approximate beyond ${requestCount} scanned pages`,
+		});
 	}
 
 	const documents = payloads

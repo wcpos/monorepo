@@ -463,7 +463,10 @@ export async function requeueBornTwiceSnapshot(input: {
 			const replacement: QueuedMutation = {
 				...last,
 				mutationId: followUpId,
-				payload: { ...mutation.payload, ...last.payload },
+				payload:
+					mutation.collectionName === 'orders'
+						? stripNonStringMetaDisplayFields({ ...mutation.payload, ...last.payload })
+						: { ...mutation.payload, ...last.payload },
 				coalesced: (last.coalesced ?? 0) + 1,
 				status: 'pending',
 			};
@@ -481,10 +484,14 @@ export async function requeueBornTwiceSnapshot(input: {
 			});
 			return { mutationId: followUpId };
 		}
-		const payload = rows.reduce<Record<string, unknown>>(
+		const mergedPayload = rows.reduce<Record<string, unknown>>(
 			(acc, item) => ({ ...acc, ...item.payload }),
 			{ ...mutation.payload }
 		);
+		const payload =
+			mutation.collectionName === 'orders'
+				? stripNonStringMetaDisplayFields(mergedPayload)
+				: mergedPayload;
 		// CONDITIONAL tail append (#516 review P1): the placement decision was made
 		// on the `rows` read above — prove it still holds INSIDE the queue's
 		// serialized turn. A concurrent write() landing between that read and this

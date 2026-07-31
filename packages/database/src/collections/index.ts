@@ -591,8 +591,14 @@ const logs: RxCollectionCreator<LogDocumentType> = {
 			oldDoc.lastSeen = oldDoc.timestamp;
 			if (typeof oldDoc.sizeBytes !== 'number') {
 				try {
-					oldDoc.sizeBytes = new TextEncoder().encode(JSON.stringify(oldDoc)).byteLength;
+					oldDoc.sizeBytes = 0;
+					let sizeBytes = new TextEncoder().encode(JSON.stringify(oldDoc)).byteLength;
+					while (oldDoc.sizeBytes !== sizeBytes) {
+						oldDoc.sizeBytes = sizeBytes;
+						sizeBytes = new TextEncoder().encode(JSON.stringify(oldDoc)).byteLength;
+					}
 				} catch {
+					delete oldDoc.sizeBytes;
 					// leave unset; retention serializes rows without sizeBytes
 				}
 			}

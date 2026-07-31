@@ -2,6 +2,8 @@ import isEqual from 'lodash/isEqual';
 import { RxChangeEvent, RxCollection, RxPlugin } from 'rxdb';
 import { Subscription } from 'rxjs';
 
+import { notifyLogPersistedInsert } from '@wcpos/utils/logger';
+
 /**
  * Audit Log Plugin
  *
@@ -129,6 +131,7 @@ async function logAuditEvent(
 				...(data.changes && { changes: data.changes }),
 			},
 		});
+		notifyLogPersistedInsert(logsCollection);
 	} catch (e) {
 		// Don't let audit logging errors break the main operation
 		console.error('[AuditLog] Failed to write audit log:', e);

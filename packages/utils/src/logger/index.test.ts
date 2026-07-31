@@ -2,6 +2,7 @@ import {
 	CategoryLogger,
 	getLogger,
 	log,
+	promoteRecorder,
 	setDatabase,
 	setToast,
 	setVerboseDiagnostics,
@@ -258,6 +259,19 @@ describe('logger/index', () => {
 			expect(mockRemove).toHaveBeenCalled();
 		});
 
+		it('drops a deferred write when the database binding changes', async () => {
+			const first = createLogCollection();
+			const second = createLogCollection();
+			setDatabase(first.collection);
+
+			getLogger(['db']).info('Bound to the first database');
+			setDatabase(second.collection);
+			await flushWrites();
+
+			expect(first.collection.insert).not.toHaveBeenCalled();
+			expect(second.collection.insert).not.toHaveBeenCalled();
+		});
+
 		it('persists searchable operational identifiers without copying arbitrary context', async () => {
 			const insert = jest.fn().mockResolvedValue(undefined);
 			setDatabase({
@@ -392,6 +406,49 @@ describe('logger/index', () => {
 
 			getLogger(['sync']).error('A second error');
 			await flushWrites();
+			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
+		});
+
+		it('removes only recorder events that bulk promotion inserted', async () => {
+			const { collection } = createLogCollection();
+			collection.bulkInsert.mockImplementation(async (bulkRows) => ({
+				success: [bulkRows[1] as unknown as TestLogDocument],
+				error: [{ status: 500 } as unknown as never],
+			}));
+			setDatabase(collection);
+			getLogger(['sync']).debug('First step');
+			getLogger(['sync']).debug('Second step');
+
+			await expect(promoteRecorder('test')).resolves.toBe(1);
+			expect(snapshotRecorder()).toEqual([expect.objectContaining({ message: 'First step' })]);
+		});
+
+		it('serializes overlapping recorder promotions', async () => {
+			const { collection } = createLogCollection();
+			let releaseInsert!: () => void;
+			const insertBlocked = new Promise<void>((resolve) => {
+				releaseInsert = resolve;
+			});
+			collection.bulkInsert.mockImplementationOnce(async (bulkRows) => {
+				await insertBlocked;
+				return {
+					success: bulkRows as unknown as TestLogDocument[],
+					error: [],
+				};
+			});
+			setDatabase(collection);
+			getLogger(['sync']).debug('First step');
+			getLogger(['sync']).debug('Second step');
+
+			const first = promoteRecorder('first error');
+			await flushWrites();
+			const second = promoteRecorder('second error');
+			await flushWrites();
+			const callsWhileFirstInsertWasBlocked = collection.bulkInsert.mock.calls.length;
+			releaseInsert();
+
+			await expect(Promise.all([first, second])).resolves.toEqual([2, 0]);
+			expect(callsWhileFirstInsertWasBlocked).toBe(1);
 			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
 		});
 

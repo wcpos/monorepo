@@ -39,7 +39,7 @@ export function decodeCustomerTrickleState(raw: string | null): CustomerTrickleS
 
 export type CustomerTrickleTickResult =
 	| { status: 'ran'; rows: number; page: number; walkComplete: boolean }
-	| { status: 'skipped'; reason: 'user-active' | 'interactive-demand' }
+	| { status: 'skipped'; reason: 'user-active' | 'interactive-demand' | 'in-flight' }
 	| { status: 'idle'; reason: 'walk-complete' };
 
 export type CustomerTrickleDeps = {
@@ -54,9 +54,19 @@ export type CustomerTrickleDeps = {
 	signal?: AbortSignal;
 };
 
-export async function tickCustomerTrickle(
-	deps: CustomerTrickleDeps
-): Promise<CustomerTrickleTickResult> {
+const inFlightDatabases = new WeakSet<RxDatabase>();
+
+export function tickCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTrickleTickResult> {
+	if (inFlightDatabases.has(deps.database)) {
+		return Promise.resolve({ status: 'skipped', reason: 'in-flight' });
+	}
+	inFlightDatabases.add(deps.database);
+	return runCustomerTrickle(deps).finally(() => {
+		inFlightDatabases.delete(deps.database);
+	});
+}
+
+async function runCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTrickleTickResult> {
 	if (
 		deps.lastUserActivityMs &&
 		deps.now() - deps.lastUserActivityMs() < CUSTOMER_TRICKLE_IDLE_AFTER_MS

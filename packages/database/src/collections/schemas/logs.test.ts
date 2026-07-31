@@ -80,5 +80,6 @@ describe('logs schema', () => {
 		);
 		expect(typeof migrated.sizeBytes).toBe('number');
 		expect(migrated.sizeBytes).toBeGreaterThan(2048);
+		expect(migrated.sizeBytes).toBe(new TextEncoder().encode(JSON.stringify(migrated)).byteLength);
 	});
 });

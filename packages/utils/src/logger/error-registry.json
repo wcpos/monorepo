@@ -56,6 +56,20 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "SYNC141",
+		"symbol": "STORE_RATE_LIMITED",
+		"domain": "SYNC",
+		"severity": "warn",
+		"safeAction": "retry",
+		"retryPolicy": "automatic",
+		"dataSafety": "local-only",
+		"escalation": "site-admin",
+		"summary": "Your store is limiting requests temporarily, so this action will retry later.",
+		"docsBody": "Wait before retrying. If rate limits continue, ask the site administrator or host to review the store's request limits.",
+		"evidence": "HTTP 429; monorepo#884",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"code": "SYNC201",
 		"symbol": "RECORD_REJECTED",
 		"domain": "SYNC",

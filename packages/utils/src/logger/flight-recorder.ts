@@ -47,9 +47,22 @@ export function snapshotRecorder(): RecordedEvent[] {
 	return [...events];
 }
 
+// Deliberately zero-arg: callers pass clearRecorder straight to afterEach()
+// and similar callback slots, where a declared parameter would change the
+// call contract (Jest arity-sniffs hooks for a done callback).
 export function clearRecorder(): void {
 	events.length = 0;
 	totalBytes = 0;
+}
+
+/** Remove exactly the promoted events, keeping anything recorded since the snapshot. */
+export function removePromotedEvents(recorded: RecordedEvent[]): void {
+	const promoted = new Set(recorded);
+	for (let index = events.length - 1; index >= 0; index -= 1) {
+		if (!promoted.has(events[index])) continue;
+		totalBytes -= events[index].sizeBytes;
+		events.splice(index, 1);
+	}
 }
 
 export function recorderStats(): { events: number; bytes: number } {

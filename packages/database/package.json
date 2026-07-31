@@ -26,6 +26,7 @@
     "expo-file-system": "~57.0.1"
   },
   "dependencies": {
+    "@wcpos/utils": "workspace:*",
     "ajv": "^8.20.0",
     "expo-opfs": "^1.0.9",
     "fast-text-encoding": "^1.0.6",

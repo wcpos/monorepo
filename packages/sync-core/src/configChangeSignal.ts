@@ -173,6 +173,10 @@ export function createConfigChangeSignal(input: {
 	 * an empty baseline ({}) is identical to seeding none.
 	 */
 	baseline?: ConfigFingerprintBaseline;
+	/** Collections whose first/current snapshot must use the normal stale path. */
+	forceStaleCollections?: (
+		snapshot: ConfigFingerprintSnapshot
+	) => readonly BarcodeConfigCollection[];
 	/**
 	 * Injected clock, for parity with the rest of sync-core's pure modules. The
 	 * config signal has no time-based cadence of its own (it runs once per host
@@ -186,6 +190,7 @@ export function createConfigChangeSignal(input: {
 	// path holds that off until the host's whole poll succeeds.
 	const baseline: ConfigFingerprintBaseline = { ...(input.baseline ?? {}) };
 	const { source } = input;
+	const pendingForcedStale = new Set<BarcodeConfigCollection>();
 
 	let pollQueue: Promise<void> = Promise.resolve();
 
@@ -203,11 +208,14 @@ export function createConfigChangeSignal(input: {
 		const staleCollections: BarcodeConfigCollection[] = [];
 		const changed: ConfigFingerprintChange[] = [];
 		const nextBaseline: ConfigFingerprintBaseline = { ...baseline };
+		for (const collection of input.forceStaleCollections?.(snapshot) ?? []) {
+			pendingForcedStale.add(collection);
+		}
 
 		for (const collection of Object.keys(snapshot.fingerprints) as BarcodeConfigCollection[]) {
 			const current = snapshot.fingerprints[collection];
 			const previous = baseline[collection];
-			if (previous === undefined) {
+			if (previous === undefined && !pendingForcedStale.has(collection)) {
 				// PER-COLLECTION cold start: first sighting of this collection's
 				// fingerprint — adopt it as the baseline, raise no stale flag. Only a
 				// collection the baseline already knows about can be a relative
@@ -215,9 +223,11 @@ export function createConfigChangeSignal(input: {
 				nextBaseline[collection] = current;
 				continue;
 			}
-			if (previous !== current) {
+			if (pendingForcedStale.has(collection) || previous !== current) {
 				staleCollections.push(collection);
-				changed.push({ collection, from: previous, to: current, source: 'config-fingerprint' });
+				if (previous !== undefined && previous !== current) {
+					changed.push({ collection, from: previous, to: current, source: 'config-fingerprint' });
+				}
 				// The move is reported once; the (committed) baseline adopts the new
 				// value so a SETTLED config stops re-flagging. Edge-triggered like
 				// sequence-log delivering a change row once — but, crucially, only
@@ -233,6 +243,7 @@ export function createConfigChangeSignal(input: {
 	/** Advance the retained baseline in place (keys are only added/updated). */
 	function commitBaseline(nextBaseline: ConfigFingerprintBaseline): void {
 		Object.assign(baseline, nextBaseline);
+		pendingForcedStale.clear();
 	}
 
 	async function pollCommitting(): Promise<ConfigChangePollOutcome> {

@@ -39,14 +39,14 @@ describe('useReferencedCustomerDemand', () => {
 		requireCustomer.mockImplementation(resolvedHandle);
 	});
 
-	it('declares unique current references and ignores unchanged result sets', async () => {
+	it('submits each referenced customer id only once', async () => {
 		const result$ = new Subject<Result>();
 		const firstHandle = resolvedHandle();
 		const secondHandle = resolvedHandle();
 		requireCustomer.mockReturnValueOnce(firstHandle).mockReturnValueOnce(secondHandle);
 		const { rerender, unmount } = renderHook(() => useReferencedCustomerDemand(result$));
 
-		act(() => {
+		await act(async () => {
 			result$.next({
 				hits: [
 					{ document: { customer_id: 5 } },
@@ -59,6 +59,7 @@ describe('useReferencedCustomerDemand', () => {
 					},
 				],
 			});
+			await firstHandle.ready;
 		});
 
 		expect(requireCustomer).toHaveBeenCalledWith({
@@ -66,9 +67,6 @@ describe('useReferencedCustomerDemand', () => {
 			collection: 'customers',
 			kind: 'targeted-records',
 			wooIds: [5, 7],
-		});
-		await act(async () => {
-			await firstHandle.ready;
 		});
 		rerender();
 		expect(firstHandle.release).not.toHaveBeenCalled();
@@ -101,10 +99,10 @@ describe('useReferencedCustomerDemand', () => {
 			});
 		});
 		expect(requireCustomer).toHaveBeenLastCalledWith({
-			id: 'orders:referenced-customers:5,7,9',
+			id: 'orders:referenced-customers:9',
 			collection: 'customers',
 			kind: 'targeted-records',
-			wooIds: [5, 7, 9],
+			wooIds: [9],
 		});
 		expect(firstHandle.release).toHaveBeenCalledTimes(1);
 
@@ -112,20 +110,27 @@ describe('useReferencedCustomerDemand', () => {
 		expect(secondHandle.release).toHaveBeenCalledTimes(1);
 	});
 
-	it('retries a rejected id when later results change away and back', async () => {
+	it('retries customer ids after a requirement rejects', async () => {
 		const result$ = new Subject<Result>();
-		const handle = { ready: Promise.reject(new Error('deleted')), release: jest.fn() };
-		requireCustomer.mockReturnValueOnce(handle).mockImplementation(resolvedHandle);
+		const rejectedHandle = {
+			ready: Promise.reject(new Error('temporary pull failure')),
+			release: jest.fn(),
+		};
+		requireCustomer.mockReturnValueOnce(rejectedHandle).mockImplementation(resolvedHandle);
 		renderHook(() => useReferencedCustomerDemand(result$));
 
 		await act(async () => {
-			result$.next({ hits: [{ document: { customer_id: 11 } }] });
-			await handle.ready.catch(() => undefined);
+			result$.next({ hits: [{ document: { customer_id: 5 } }] });
+			await rejectedHandle.ready.catch(() => undefined);
 		});
-		act(() => result$.next({ hits: [] }));
-		act(() => result$.next({ hits: [{ document: { customer_id: 11 } }] }));
+		act(() => {
+			result$.next({
+				hits: [{ document: { customer_id: 5 } }, { document: { customer_id: 9 } }],
+			});
+		});
 
 		expect(requireCustomer).toHaveBeenCalledTimes(2);
+		expect(requireCustomer).toHaveBeenLastCalledWith(expect.objectContaining({ wooIds: [5, 9] }));
 	});
 
 	it('retries a released id when later results change away and back', async () => {
