@@ -16,6 +16,7 @@
  */
 
 import { defaultConfig } from '@wcpos/database/adapters/default';
+import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
@@ -148,6 +149,14 @@ function disposeCachedEngine(entry: CachedEngine): void {
 					databaseName,
 					`Engine disposal exceeded ${ENGINE_DISPOSAL_DEADLINE_MS}ms`
 				);
+			}
+			// A close wedged before rxdb's onClosed ran leaves the database name
+			// registered, so releasing the barrier alone would fail the successor's
+			// open with rxdb DB8 ("already open"). Freeing the registration is safe:
+			// every predecessor storage instance was terminally failed above, before
+			// the successor can exist.
+			for (const databaseName of entry.databaseNames) {
+				forceFreeDatabaseRegistration(databaseName);
 			}
 			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
 				context: {
