@@ -308,6 +308,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			coverage,
 			baseUrl: deps.syncBaseUrl,
 			ownerId: deps.ownerId(),
+			diagnostics: deps.diagnostics,
 			...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 			fetcher,
 			signal,

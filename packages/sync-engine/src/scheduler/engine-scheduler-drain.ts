@@ -1,4 +1,5 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
+import type { SyncObserver } from '@wcpos/sync-core';
 /**
  * The engine's persisted scheduler DRAIN composition (slice 5e, #430
  * phase 1): the web host's rxOrderSchedulerTick + syncCollectionRegistry
@@ -212,6 +213,7 @@ export type RunEngineSchedulerDrainInput = {
 	fetcher?: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 	/** Live record cap applied per data pull request. */
 	pullBatchSize?: () => number | undefined;
+	diagnostics?: SyncObserver;
 	signal?: AbortSignal;
 	nowMs?: number;
 	/** Override for an explicitly requested foreground drain. Background drains
@@ -230,7 +232,7 @@ export type RunEngineSchedulerTaskInput = Pick<
 function createEngineSchedulerFetcherRegistry(
 	input: Pick<
 		RunEngineSchedulerDrainInput,
-		'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'pullBatchSize' | 'nowMs'
+		'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'pullBatchSize' | 'diagnostics' | 'nowMs'
 	>
 ) {
 	const db = input.db;
@@ -253,6 +255,7 @@ function createEngineSchedulerFetcherRegistry(
 		coverageRepository,
 		coverageFreshForMs: ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 		nowMs: getNowMs,
+		...(input.diagnostics !== undefined ? { diagnostics: input.diagnostics } : {}),
 		...(input.fetcher !== undefined ? { fetcher: input.fetcher } : {}),
 		...(input.pullBatchSize !== undefined ? { pullBatchSize: input.pullBatchSize } : {}),
 	};

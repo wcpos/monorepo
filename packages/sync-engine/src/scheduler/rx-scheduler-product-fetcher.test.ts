@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ProductDocument } from '@wcpos/sync-core';
 
-import { coverageRecordId, createProductsSchedulerFetcher } from './rx-scheduler-product-fetcher';
+import {
+	coverageRecordId,
+	createProductsSchedulerFetcher,
+	PRODUCT_BROWSE_WINDOW_MAX_PAGES,
+} from './rx-scheduler-product-fetcher';
 
 import type { FetchTask } from './replication-policy';
 
@@ -258,6 +262,66 @@ describe('createProductsSchedulerFetcher', () => {
 			taskId: 'products:browse-window:limit=100:windowed',
 			documentCount: 100,
 			requestCount: 3,
+			completed: true,
+		});
+	});
+
+	it('bounds an all-tied browse window to the best rows from the scanned pages', async () => {
+		const maxPages = PRODUCT_BROWSE_WINDOW_MAX_PAGES;
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const diagnostics = vi.fn();
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			const page = Number(new URL(String(request)).searchParams.get('page'));
+			return response(
+				Array.from({ length: 100 }, (_, index) => {
+					const id = page <= maxPages ? (maxPages - page) * 100 + index + 1 : 10_000 + index;
+					return {
+						id,
+						menu_order: 0,
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: posMeta(id),
+					};
+				}),
+				maxPages + 1
+			);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			diagnostics,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:browse-window:limit=100:windowed',
+				queryKey: 'products:browse-window:limit=100',
+				limit: 100,
+			})
+		);
+
+		expect(fetcher).toHaveBeenCalledTimes(maxPages);
+		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
+			{ wooProductId: number }[],
+		][];
+		expect(upsertCalls[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+			Array.from({ length: 100 }, (_, index) => index + 1)
+		);
+		expect(diagnostics).toHaveBeenCalledOnce();
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'product.browse-window.approximate',
+				level: 'warn',
+				collection: 'products',
+			})
+		);
+		expect(result).toEqual({
+			taskId: 'products:browse-window:limit=100:windowed',
+			documentCount: 100,
+			requestCount: maxPages,
 			completed: true,
 		});
 	});
