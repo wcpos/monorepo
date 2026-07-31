@@ -174,6 +174,9 @@ describe('scope-open barcode selector hydration', () => {
 					}
 					if (path.endsWith('/products')) {
 						productPulls += 1;
+						if (productPulls === 1) {
+							return Response.json({ code: 'temporary_failure' }, { status: 503 });
+						}
 						return Response.json([remoteProduct]);
 					}
 					throw new Error(`unexpected request: ${url}`);
@@ -187,9 +190,11 @@ describe('scope-open barcode selector hydration', () => {
 		const products = engine.active()!.database.collections.products;
 		expect((await products.findOne(uuid).exec())!.toJSON().payload).not.toHaveProperty('barcode');
 
-		await engine.sync('change-signal');
+		expect((await engine.sync('change-signal')).status).toBe('error');
+		expect((await products.findOne(uuid).exec())!.toJSON().payload).not.toHaveProperty('barcode');
+		expect((await engine.sync('change-signal')).status).toBe('ran');
 
-		expect(productPulls).toBe(1);
+		expect(productPulls).toBe(2);
 		expect((await products.findOne(uuid).exec())!.toJSON().payload).toMatchObject({
 			barcode: 'LATE-BARCODE',
 		});

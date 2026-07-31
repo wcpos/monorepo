@@ -409,18 +409,47 @@ describe('logger/index', () => {
 			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
 		});
 
-		it('keeps recorder events when bulk promotion has per-document errors', async () => {
+		it('removes only recorder events that bulk promotion inserted', async () => {
 			const { collection } = createLogCollection();
-			collection.bulkInsert.mockResolvedValue({
-				success: [{} as unknown as TestLogDocument],
+			collection.bulkInsert.mockImplementation(async (bulkRows) => ({
+				success: [bulkRows[1] as unknown as TestLogDocument],
 				error: [{ status: 500 } as unknown as never],
-			});
+			}));
 			setDatabase(collection);
 			getLogger(['sync']).debug('First step');
 			getLogger(['sync']).debug('Second step');
 
 			await expect(promoteRecorder('test')).resolves.toBe(1);
-			expect(snapshotRecorder()).toHaveLength(2);
+			expect(snapshotRecorder()).toEqual([expect.objectContaining({ message: 'First step' })]);
+		});
+
+		it('serializes overlapping recorder promotions', async () => {
+			const { collection } = createLogCollection();
+			let releaseInsert!: () => void;
+			const insertBlocked = new Promise<void>((resolve) => {
+				releaseInsert = resolve;
+			});
+			collection.bulkInsert.mockImplementationOnce(async (bulkRows) => {
+				await insertBlocked;
+				return {
+					success: bulkRows as unknown as TestLogDocument[],
+					error: [],
+				};
+			});
+			setDatabase(collection);
+			getLogger(['sync']).debug('First step');
+			getLogger(['sync']).debug('Second step');
+
+			const first = promoteRecorder('first error');
+			await flushWrites();
+			const second = promoteRecorder('second error');
+			await flushWrites();
+			const callsWhileFirstInsertWasBlocked = collection.bulkInsert.mock.calls.length;
+			releaseInsert();
+
+			await expect(Promise.all([first, second])).resolves.toEqual([2, 0]);
+			expect(callsWhileFirstInsertWasBlocked).toBe(1);
+			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
 		});
 
 		it('persists debug in real time while verbose mode is active and keeps it recorded', async () => {

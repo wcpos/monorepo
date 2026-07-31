@@ -41,10 +41,7 @@ describe('useReferencedCustomerDemand', () => {
 
 	it('submits each referenced customer id only once', async () => {
 		const result$ = new Subject<Result>();
-		const firstHandle = {
-			ready: Promise.reject(new Error('deleted')),
-			release: jest.fn(),
-		};
+		const firstHandle = resolvedHandle();
 		const secondHandle = resolvedHandle();
 		requireCustomer.mockReturnValueOnce(firstHandle).mockReturnValueOnce(secondHandle);
 		const { rerender, unmount } = renderHook(() => useReferencedCustomerDemand(result$));
@@ -62,7 +59,7 @@ describe('useReferencedCustomerDemand', () => {
 					},
 				],
 			});
-			await firstHandle.ready.catch(() => undefined);
+			await firstHandle.ready;
 		});
 
 		expect(requireCustomer).toHaveBeenCalledWith({
@@ -111,6 +108,29 @@ describe('useReferencedCustomerDemand', () => {
 
 		unmount();
 		expect(secondHandle.release).toHaveBeenCalledTimes(1);
+	});
+
+	it('retries customer ids after a requirement rejects', async () => {
+		const result$ = new Subject<Result>();
+		const rejectedHandle = {
+			ready: Promise.reject(new Error('temporary pull failure')),
+			release: jest.fn(),
+		};
+		requireCustomer.mockReturnValueOnce(rejectedHandle).mockImplementation(resolvedHandle);
+		renderHook(() => useReferencedCustomerDemand(result$));
+
+		await act(async () => {
+			result$.next({ hits: [{ document: { customer_id: 5 } }] });
+			await rejectedHandle.ready.catch(() => undefined);
+		});
+		act(() => {
+			result$.next({
+				hits: [{ document: { customer_id: 5 } }, { document: { customer_id: 9 } }],
+			});
+		});
+
+		expect(requireCustomer).toHaveBeenCalledTimes(2);
+		expect(requireCustomer).toHaveBeenLastCalledWith(expect.objectContaining({ wooIds: [5, 9] }));
 	});
 
 	it('retries a released id when later results change away and back', async () => {

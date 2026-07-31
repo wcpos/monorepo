@@ -49,7 +49,7 @@ export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): 
 								kind: 'targeted-records',
 								wooIds: ids,
 							});
-							// Attempted only on a SETTLED cycle (fetched/serve-local/rejected).
+							// Attempted only when the requirement settles successfully.
 							// A 'released' outcome means switchMap superseded this requirement
 							// mid-flight — those ids re-enter the next requirement unmarked, so
 							// growing the visible set never strands an in-flight customer.
@@ -60,7 +60,6 @@ export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): 
 									}
 								})
 								.catch(() => {
-									ids.forEach((id) => attemptedIds.add(id));
 									logger.debug('Referenced customer demand failed');
 								});
 							return () => requirement.release();

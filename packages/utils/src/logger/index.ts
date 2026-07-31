@@ -85,6 +85,7 @@ let dbCollection: any | null = null;
 let databaseEpoch = 0;
 let sequence = 0;
 let persistedInsertCount = 0;
+let recorderPromotionChain: Promise<void> = Promise.resolve();
 const MAX_CONTEXT_BYTES = 16 * 1024;
 const SWEEP_INSERT_INTERVAL = 200;
 
@@ -94,7 +95,9 @@ type PersistedDocument = {
 
 type LoggerCollection = LogRetentionCollection & {
 	insert(row: Record<string, unknown>): Promise<PersistedDocument>;
-	bulkInsert(rows: Record<string, unknown>[]): Promise<{ success: unknown[]; error: unknown[] }>;
+	bulkInsert(
+		rows: Record<string, unknown>[]
+	): Promise<{ success: { seq?: unknown }[]; error: unknown[] }>;
 };
 
 type RepeatState = {
@@ -148,8 +151,9 @@ function recordSize(row: Record<string, unknown>): Record<string, unknown> {
 	return row;
 }
 
-export async function promoteRecorder(reason: string): Promise<number> {
+async function runRecorderPromotion(reason: string, requestedEpoch: number): Promise<number> {
 	try {
+		if (requestedEpoch !== databaseEpoch) return 0;
 		const collection = dbCollection as LoggerCollection | null;
 		const recorded = snapshotRecorder();
 		if (!collection || recorded.length === 0) return 0;
@@ -181,12 +185,23 @@ export async function promoteRecorder(reason: string): Promise<number> {
 			});
 		});
 		const result = await collection.bulkInsert(rows);
-		if (result.error.length === 0) removePromotedEvents(recorded);
+		const insertedSequences = new Set(result.success.map((document) => document.seq));
+		removePromotedEvents(recorded.filter((_, index) => insertedSequences.has(rows[index].seq)));
 		return result.success.length;
 	} catch (error) {
 		console.error('Failed to promote flight recorder', error);
 		return 0;
 	}
+}
+
+export function promoteRecorder(reason: string): Promise<number> {
+	const requestedEpoch = databaseEpoch;
+	const run = recorderPromotionChain.then(() => runRecorderPromotion(reason, requestedEpoch));
+	recorderPromotionChain = run.then(
+		() => undefined,
+		() => undefined
+	);
+	return run;
 }
 
 /**
