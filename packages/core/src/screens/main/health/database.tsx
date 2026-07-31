@@ -601,7 +601,10 @@ export function DatabaseScreen() {
 		deriveEverythingElseBytes(
 			storageBytes,
 			ROW_ORDER.map((key) => sizes[key]),
-			otherScopes?.bytes ?? null
+			// Everything NOT belonging to the active scope leaves the reconciliation:
+			// other stores AND this store's other cashiers — otherwise inactive
+			// cashiers' scopes masquerade as this scope's indexes/logs.
+			otherScopes ? otherScopes.bytes + otherScopes.sameStoreOtherCashierBytes : null
 		)
 	);
 	const otherStoresText =

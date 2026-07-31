@@ -166,11 +166,11 @@ describe('summarizeOtherScopes', () => {
 		bytes,
 	});
 
-	it('sums scope databases belonging to other stores, once per store', () => {
+	it('classifies other stores, other cashiers of the active store, and the active scope', () => {
 		const summary = summarizeOtherScopes(
 			[
-				entry('pos_v6_abcdefabcdef_s578_c12', 100), // active — excluded
-				entry('pos_v6_abcdefabcdef_s578_c99', 40), // same store, other cashier — excluded
+				entry('pos_v6_abcdefabcdef_s578_c12', 100), // active scope — excluded entirely
+				entry('pos_v6_abcdefabcdef_s578_c99', 40), // same store, other cashier — tracked separately
 				entry('pos_v6_abcdefabcdef_s600_c12', 25),
 				entry('pos_v6_abcdefabcdef_s600_c99', 25), // same other store, second cashier
 				entry('pos_v6_feedfeedfeed_s578_c12', 10), // other SITE, same store id — counts
@@ -180,16 +180,19 @@ describe('summarizeOtherScopes', () => {
 		);
 		expect(summary.storeCount).toBe(2);
 		expect(summary.bytes).toBe(60);
+		// Inactive cashier bytes must not be reported as "Everything else" —
+		// they're tracked so the reconciliation can subtract them.
+		expect(summary.sameStoreOtherCashierBytes).toBe(40);
 	});
 
 	it('treats a null active name as "everything is other"', () => {
 		const summary = summarizeOtherScopes([entry('pos_v6_abcdefabcdef_s578_c12', 100)], null);
-		expect(summary).toEqual({ storeCount: 1, bytes: 100 });
+		expect(summary).toEqual({ storeCount: 1, bytes: 100, sameStoreOtherCashierBytes: 0 });
 	});
 
 	it('ignores non-rxdb entries', () => {
 		expect(
 			summarizeOtherScopes([{ name: 'pos_v6_abcdefabcdef_s578_c12', bytes: 5 }], null)
-		).toEqual({ storeCount: 0, bytes: 0 });
+		).toEqual({ storeCount: 0, bytes: 0, sameStoreOtherCashierBytes: 0 });
 	});
 });

@@ -71,6 +71,8 @@ describe('useOtherScopes', () => {
 			resolveReady({ database: { name: 'pos_v6_abcdefabcdef_s578_c12' } });
 		});
 
-		await waitFor(() => expect(result.current).toEqual({ storeCount: 1, bytes: 25 }));
+		await waitFor(() =>
+			expect(result.current).toEqual({ storeCount: 1, bytes: 25, sameStoreOtherCashierBytes: 0 })
+		);
 	});
 });

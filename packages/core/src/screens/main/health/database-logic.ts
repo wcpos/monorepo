@@ -249,12 +249,25 @@ export function deriveEverythingElseBytes(
 const OPFS_RXDB_PREFIX = 'rxdb-';
 const SCOPE_DB_NAME = /pos_v\d+_([a-f0-9]{12})_s([a-z0-9-]+)_c[a-z0-9-]+/;
 
-export type OtherScopesSummary = { storeCount: number; bytes: number };
+export type OtherScopesSummary = {
+	/** Distinct OTHER (site, store) pairs — the footnote's "N other stores". */
+	storeCount: number;
+	/** OPFS bytes held by those other stores' scopes. */
+	bytes: number;
+	/**
+	 * OPFS bytes of the ACTIVE store's scopes for other cashiers. Not part of
+	 * the footnote (they belong to this store), but they must be excluded from
+	 * the "Everything else" reconciliation or they'd masquerade as this
+	 * scope's indexes/logs/bookkeeping.
+	 */
+	sameStoreOtherCashierBytes: number;
+};
 
 /**
- * Sum the OPFS footprint of scope databases that belong to OTHER
- * (site, store) pairs than the active scope. Distinct stores are counted once
- * even when several cashiers hold their own scope databases.
+ * Classify every scope database's OPFS footprint relative to the active
+ * scope: other stores (counted once per store, however many cashiers), the
+ * active store's other cashiers, and the active scope itself (skipped — the
+ * collection rows account for it).
  */
 export function summarizeOtherScopes(
 	entries: { name: string; bytes: number }[],
@@ -264,15 +277,20 @@ export function summarizeOtherScopes(
 	const activeStoreKey = activeMatch ? `${activeMatch[1]}_s${activeMatch[2]}` : null;
 	const stores = new Set<string>();
 	let bytes = 0;
+	let sameStoreOtherCashierBytes = 0;
 	for (const entry of entries) {
 		if (!entry.name.startsWith(OPFS_RXDB_PREFIX)) continue;
 		const dbName = entry.name.slice(OPFS_RXDB_PREFIX.length).replace(/__/g, '/');
 		const match = dbName.match(SCOPE_DB_NAME);
 		if (!match) continue;
+		if (activeDbName !== null && dbName.includes(activeDbName)) continue; // the active scope itself
 		const storeKey = `${match[1]}_s${match[2]}`;
-		if (storeKey === activeStoreKey) continue;
+		if (storeKey === activeStoreKey) {
+			sameStoreOtherCashierBytes += entry.bytes;
+			continue;
+		}
 		stores.add(storeKey);
 		bytes += entry.bytes;
 	}
-	return { storeCount: stores.size, bytes };
+	return { storeCount: stores.size, bytes, sameStoreOtherCashierBytes };
 }
