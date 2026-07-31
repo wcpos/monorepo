@@ -607,8 +607,6 @@ export function DatabaseScreen() {
 			otherScopes ? otherScopes.bytes + otherScopes.sameStoreOtherCashierBytes : null
 		)
 	);
-	const otherStoresText =
-		otherScopes && otherScopes.storeCount > 0 ? formatBytes(otherScopes.bytes) : null;
 	const readyToSell = isReadyToSell({
 		connectivity: status.connectivity,
 		gatedBy: status.gatedBy,
@@ -811,22 +809,6 @@ export function DatabaseScreen() {
 					</HStack>
 				</HStack>
 
-				{otherStoresText ? (
-					<Text testID="db-other-stores" className="text-muted-foreground text-xs">
-						{otherScopes?.storeCount === 1
-							? t('health.database.other_stores_one', {
-									defaultValue:
-										'This device also stores 1 other store (≈ {size}) — it has its own Store health.',
-									size: otherStoresText,
-								})
-							: t('health.database.other_stores_many', {
-									defaultValue:
-										'This device also stores {n} other stores (≈ {size}) — each has its own Store health.',
-									n: otherScopes?.storeCount ?? 0,
-									size: otherStoresText,
-								})}
-					</Text>
-				) : null}
 				<View className="h-4" />
 			</VStack>
 		</ScrollView>

@@ -110,7 +110,13 @@ jest.mock('./components', () => ({
 	StatHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('./use-collection-sizes', () => ({ useCollectionSizes: () => ({}) }));
-jest.mock('./use-other-scopes', () => ({ useOtherScopes: () => null }));
+jest.mock('./use-other-scopes', () => ({
+	useOtherScopes: () => ({
+		storeCount: 2,
+		bytes: 41_000_000,
+		sameStoreOtherCashierBytes: 5_000_000,
+	}),
+}));
 jest.mock('./use-relative-time', () => ({
 	useNowMs: () => 500,
 	useRelativeTime: () => () => 'now',
@@ -122,5 +128,11 @@ describe('DatabaseScreen coverage', () => {
 
 		expect(mockTooltip).toHaveBeenCalled();
 		expect(mockTooltip.mock.calls.every(([props]) => props.showOnNative === true)).toBe(true);
+	});
+
+	it('does not disclose metadata for other store scopes', () => {
+		const { queryByText } = render(<DatabaseScreen />);
+
+		expect(queryByText(/This device also stores/)).toBeNull();
 	});
 });
