@@ -43,7 +43,9 @@ interface VariableProductTileProps {
 }
 
 interface VariablePriceRangeProps {
-	prices: { min: string; max: string };
+	// Optional: the server omits a sub-range when no visible variation carries
+	// that field (see get-variable-prices.ts).
+	prices?: { min: string; max: string };
 	taxStatus: 'taxable' | 'shipping' | 'none';
 	taxClass: string;
 	taxDisplay: 'text' | 'none';
@@ -57,6 +59,9 @@ function VariablePriceRange({
 	taxDisplay,
 	strikethrough,
 }: VariablePriceRangeProps) {
+	if (!prices) {
+		return null;
+	}
 	if (prices.min === prices.max) {
 		return (
 			<PriceWithTax
