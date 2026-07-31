@@ -81,6 +81,11 @@ import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
 } from './change-signal/change-signal-lane';
+import {
+	type ChangeSignalDecayLevel,
+	changeSignalDelayMs,
+	nextChangeSignalDecayLevel,
+} from './change-signal/tick-cadence';
 import { hydrateActiveBarcodeSelectors } from './change-signal/config-fingerprint-source';
 import {
 	createWriteDrainLane,
@@ -210,6 +215,8 @@ export type RxdbSyncEnginePorts = {
 	connectivity?: () => EngineConnectivity;
 	/** Default: Web Crypto. Native hosts inject their UUID v4 generator. */
 	uuid?: () => string;
+	/** Default: Math.random. Injectable jitter source for deterministic tests. */
+	random?: () => number;
 	/** THE telemetry port (ADR 0020): structured SyncEvents, observed and never
 	 * awaited; a throwing observer is swallowed. */
 	diagnostics?: SyncObserver;
@@ -234,6 +241,8 @@ export type RxdbSyncEnginePorts = {
 	queryTotal?: QueryTotalPort;
 	/** Optional activity clock for the idle-only customer trickle lane. */
 	lastUserActivityMs?: () => number;
+	/** Optional user-interaction subscription for idle-decay snap-back. */
+	onUserActivity?: (listener: () => void) => () => void;
 	now?: () => number;
 };
 
@@ -552,6 +561,8 @@ export function createRxdbSyncEngine(
 	const laneLastTick = new Map<EngineLane, { atMs: number; status: SyncReport['status'] }>();
 	const laneNextDueAtMs = new Map<EngineLane, number>();
 	const nowMs = ports.now ?? (() => Date.now());
+	const engineStartedAtMs = nowMs();
+	const random = ports.random ?? Math.random;
 	let pullBatchSize: number | undefined;
 
 	// The initial open is the one lifecycle op with no caller obliged to observe
@@ -562,7 +573,7 @@ export function createRxdbSyncEngine(
 	// nothing naming the blocked step. Lifecycle ops serialize (invariant 3), so
 	// one phase slot suffices; the readiness watchdog below reads it while
 	// `ready` is unsettled.
-	let lifecyclePhase = { phase: 'constructed', sinceMs: nowMs() };
+	let lifecyclePhase = { phase: 'constructed', sinceMs: engineStartedAtMs };
 	const setLifecyclePhase = (phase: string): void => {
 		lifecyclePhase = { phase, sinceMs: nowMs() };
 	};
@@ -1508,8 +1519,10 @@ export function createRxdbSyncEngine(
 
 	// mode:'auto' arms the poll AFTER the initial scope opened; a tick that
 	// finds the engine gated (offline / mid-lifecycle) reports skipped and the
-	// next interval retries — periodic errors land on diagnostics, never throw.
-	let changeSignalTimer: ReturnType<typeof setInterval> | null = null;
+	// next timer retries — periodic errors land on diagnostics, never throw.
+	let changeSignalTimer: ReturnType<typeof setTimeout> | null = null;
+	let changeSignalDecayLevel: ChangeSignalDecayLevel = 0;
+	let unsubscribeUserActivity: (() => void) | null = null;
 	let writeDrainTimer: ReturnType<typeof setInterval> | null = null;
 	const maintenanceTimers: ReturnType<typeof setInterval>[] = [];
 	let lastAutomaticConnectivity: EngineConnectivity | undefined;
@@ -1582,6 +1595,28 @@ export function createRxdbSyncEngine(
 			},
 		});
 	};
+	const armChangeSignalTimer = (): void => {
+		if (disposed) return;
+		const now = nowMs();
+		const lastActivityMs = ports.lastUserActivityMs?.() ?? engineStartedAtMs;
+		const idleForMs = Math.max(0, now - (lastActivityMs > 0 ? lastActivityMs : engineStartedAtMs));
+		changeSignalDecayLevel = nextChangeSignalDecayLevel({
+			idleForMs,
+			currentLevel: changeSignalDecayLevel,
+		});
+		const delay = changeSignalDelayMs({
+			tierMs: intervals.changeSignalPollMs,
+			level: changeSignalDecayLevel,
+			random,
+		});
+		laneNextDueAtMs.set('change-signal', now + delay);
+		scheduleStatusChange();
+		changeSignalTimer = setTimeout(() => {
+			// Re-arm before work so a slow tick cannot lengthen the polling cadence.
+			armChangeSignalTimer();
+			void runAutomaticTick(() => tickLaneWithEvents('change-signal'));
+		}, delay);
+	};
 	const armLaneInterval = (
 		lane: EngineLane,
 		intervalMs: number
@@ -1621,8 +1656,9 @@ export function createRxdbSyncEngine(
 			scheduleStatusChange();
 			return;
 		}
-		clearInterval(changeSignalTimer);
-		changeSignalTimer = armLaneInterval('change-signal', nextPollMs);
+		clearTimeout(changeSignalTimer);
+		changeSignalDecayLevel = 0;
+		armChangeSignalTimer();
 		scheduleStatusChange();
 	};
 	if (mode === 'auto') {
@@ -1638,7 +1674,16 @@ export function createRxdbSyncEngine(
 				// dispose() may have run during the awaited seeds above — arming now
 				// would repopulate laneNextDueAtMs on a disposed engine.
 				if (disposed) return;
-				changeSignalTimer = armLaneInterval('change-signal', intervals.changeSignalPollMs);
+				armChangeSignalTimer();
+				if (ports.onUserActivity !== undefined) {
+					unsubscribeUserActivity = ports.onUserActivity(() => {
+						if (disposed || changeSignalTimer === null || changeSignalDecayLevel === 0) return;
+						changeSignalDecayLevel = 0;
+						clearTimeout(changeSignalTimer);
+						armChangeSignalTimer();
+						void runAutomaticTick(() => tickLaneWithEvents('change-signal'));
+					});
+				}
 				writeDrainTimer = armLaneInterval('write-drain', intervals.writeDrainPollMs);
 				maintenanceTimers.push(armLaneInterval('scheduler-drain', intervals.schedulerDrainMs));
 				maintenanceTimers.push(armLaneInterval('order-window-seed', intervals.orderWindowSeedMs));
@@ -2338,9 +2383,11 @@ export function createRxdbSyncEngine(
 			// pending switch opened.
 			disposed = true;
 			if (changeSignalTimer !== null) {
-				clearInterval(changeSignalTimer);
+				clearTimeout(changeSignalTimer);
 				changeSignalTimer = null;
 			}
+			unsubscribeUserActivity?.();
+			unsubscribeUserActivity = null;
 			if (writeDrainTimer !== null) {
 				clearInterval(writeDrainTimer);
 				writeDrainTimer = null;

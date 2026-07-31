@@ -48,6 +48,11 @@ type ChangesEnvelope<Row> = {
 	meta?: { duration_ms?: number; supported?: boolean; note?: string };
 };
 
+type TickEnvelope = {
+	checkpoint?: Record<string, unknown>;
+	config_fingerprint?: ConfigFingerprintEnvelope;
+};
+
 type GetEnvelopeOptions<Row> = {
 	headers?: HeadersInit;
 	notModified?: ChangesEnvelope<Row>;
@@ -221,6 +226,8 @@ export function createLiveChangeSignalSource(
 	let sequenceLogEtag: string | null = null;
 	let sequenceLogCursor: number | null = null;
 	let sequenceLogConfigFingerprint: ConfigFingerprintEnvelope | undefined;
+	let tickSupport: 'unknown' | 'supported' | 'unsupported' = 'unknown';
+	let tickEtag: string | null = null;
 	// True while the previous page was capped (complete=false). Continuation pages
 	// can never legitimately 304 (their `since` is behind head by definition), so
 	// sending If-None-Match there is pure downside: a buggy/intermediary 304 would
@@ -235,8 +242,76 @@ export function createLiveChangeSignalSource(
 		async pollSequenceLog({ cursor, limit }) {
 			if (sequenceLogCursor !== null && sequenceLogCursor !== cursor.sequence) {
 				sequenceLogEtag = null;
+				tickEtag = null;
 				sequenceLogConfigFingerprint = undefined;
 				sequenceLogDrainInProgress = false;
+			}
+			let envelope: ChangesEnvelope<RawSequenceLogRow> | undefined;
+			if (!sequenceLogDrainInProgress && tickSupport !== 'unsupported') {
+				const path = '/changes/tick';
+				const validator = tickEtag;
+				const response = await input.fetcher(
+					buildUrl(input.syncBaseUrl, path, {}),
+					validator === null ? undefined : { headers: { 'If-None-Match': validator } }
+				);
+				if (response.status === 404) {
+					tickSupport = 'unsupported';
+				} else if (response.status === 304 && validator !== null) {
+					tickSupport = 'supported';
+					envelope = {
+						changes: [],
+						checkpoint: { since: cursor.sequence, head: cursor.sequence },
+						complete: true,
+						config_fingerprint: sequenceLogConfigFingerprint,
+					};
+				} else {
+					if (!response.ok) {
+						throw new ChangeSignalPoisonError(
+							`changes/tick failed: HTTP ${response.status}`,
+							path,
+							response.status
+						);
+					}
+					const contentType = response.headers.get('content-type') ?? '';
+					if (contentType !== '' && !contentType.toLowerCase().includes('application/json')) {
+						throw new ChangeSignalPoisonError(
+							`changes/tick: non-JSON response (content-type: ${contentType})`,
+							path,
+							response.status
+						);
+					}
+					const body = await response.text();
+					let parsed: unknown;
+					try {
+						parsed = JSON.parse(body);
+					} catch {
+						throw new ChangeSignalPoisonError(
+							'changes/tick: response body is not valid JSON',
+							path,
+							response.status
+						);
+					}
+					const tick =
+						typeof parsed === 'object' && parsed !== null ? (parsed as TickEnvelope) : {};
+					const head = checkpointNumber(tick as ChangesEnvelope<unknown>, 'head', Number.NaN);
+					if (!Number.isFinite(head)) {
+						tickSupport = 'unsupported';
+					} else {
+						tickSupport = 'supported';
+						tickEtag = response.headers.get('etag');
+						if (tick.config_fingerprint !== undefined) {
+							sequenceLogConfigFingerprint = tick.config_fingerprint;
+						}
+						if (head <= cursor.sequence) {
+							envelope = {
+								changes: [],
+								checkpoint: { since: cursor.sequence, head },
+								complete: true,
+								config_fingerprint: sequenceLogConfigFingerprint,
+							};
+						}
+					}
+				}
 			}
 			// UNIFIED stream (`collection=all`): the change-log `sequence` is a single
 			// global AUTO_INCREMENT across every object_type, so ONE cursor drains
@@ -245,7 +320,9 @@ export function createLiveChangeSignalSource(
 			// single-cursor model is correct as-is: there are no separate per-
 			// collection streams to merge. (The per-collection `collection=products|
 			// tax_rates` modes remain for the matrix; the engine uses `all`.)
-			const envelope = await getEnvelope<RawSequenceLogRow>(
+			const sequenceLogValidator =
+				sequenceLogDrainInProgress || tickSupport === 'supported' ? null : sequenceLogEtag;
+			envelope ??= await getEnvelope<RawSequenceLogRow>(
 				input,
 				'/changes/sequence-log',
 				{
@@ -254,10 +331,10 @@ export function createLiveChangeSignalSource(
 					limit: String(limit),
 				},
 				{
-					...(sequenceLogEtag === null || sequenceLogDrainInProgress
-						? {}
-						: { headers: { 'If-None-Match': sequenceLogEtag } }),
-					...(sequenceLogDrainInProgress
+					...(sequenceLogValidator !== null
+						? { headers: { 'If-None-Match': sequenceLogValidator } }
+						: {}),
+					...(sequenceLogValidator === null
 						? {}
 						: {
 								notModified: {
@@ -272,7 +349,9 @@ export function createLiveChangeSignalSource(
 					},
 				}
 			);
-			sequenceLogConfigFingerprint = envelope.config_fingerprint;
+			if (envelope.config_fingerprint !== undefined || tickSupport !== 'supported') {
+				sequenceLogConfigFingerprint = envelope.config_fingerprint;
+			}
 			sequenceLogDrainInProgress = envelope.complete === false;
 			// THE boundary mapping: the server tags every unified-stream row with a
 			// `collection` derived from its internal object_type

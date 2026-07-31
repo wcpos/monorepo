@@ -82,6 +82,9 @@ function scriptedServer() {
 	const fetch = async (url: string): Promise<Response> => {
 		const u = new URL(url);
 		const path = u.pathname;
+		if (path.endsWith('/changes/tick')) {
+			return new Response(null, { status: 404 });
+		}
 		if (path.endsWith('/changes/sequence-log')) {
 			state.sequenceLogFetches += 1;
 			if (state.poisonSequenceLog) {
@@ -479,15 +482,23 @@ describe('sync("change-signal") through the public handle', () => {
 		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
 		server.state.head = 9_000;
 
-		const intervals: { callback: () => void; delay: number }[] = [];
-		vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+		// The change-signal cadence is a self-rescheduling setTimeout chain
+		// (jittered — pinned to exactly 10s here via random: 0.5); capture with
+		// pass-through so this test's own real timers keep working.
+		const timeouts: { callback: () => void; delay: number }[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
 			callback: () => void,
 			delay: number
 		) => {
-			intervals.push({ callback, delay });
-			return intervals.length as unknown as ReturnType<typeof setInterval>;
-		}) as typeof setInterval);
-		vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => undefined);
+			timeouts.push({ callback, delay });
+			return realSetTimeout(callback, delay);
+		}) as typeof setTimeout);
+		const fireChangeSignalTimeout = () => {
+			const timer = [...timeouts].reverse().find(({ delay }) => delay === 10_000);
+			if (!timer) throw new Error('change-signal timeout not armed');
+			timer.callback();
+		};
 
 		const engine = createRxdbSyncEngine(
 			{
@@ -496,6 +507,7 @@ describe('sync("change-signal") through the public handle', () => {
 				fetcher: (url) => server.fetch(url),
 				checkpoints,
 				mode: 'auto',
+				random: () => 0.5,
 			},
 			identity
 		);
@@ -503,12 +515,12 @@ describe('sync("change-signal") through the public handle', () => {
 			const events: EngineEvent[] = [];
 			engine.events((event) => events.push(event));
 			await engine.ready;
-			await vi.waitFor(() => expect(intervals.some(({ delay }) => delay === 10_000)).toBe(true));
+			await vi.waitFor(() => expect(timeouts.some(({ delay }) => delay === 10_000)).toBe(true));
 			events.length = 0;
 
-			// Fire the change-signal interval: the tick rebaselines (cursor 0 →
+			// Fire the change-signal timer: the tick rebaselines (cursor 0 →
 			// 9,000) and the follow-up chain must run the existence/seed lanes now.
-			intervals.find(({ delay }) => delay === 10_000)!.callback();
+			fireChangeSignalTimeout();
 			await vi.waitFor(() => {
 				for (const lane of [
 					'existence-prime',
@@ -524,7 +536,7 @@ describe('sync("change-signal") through the public handle', () => {
 
 			// Negative control: a routine (non-rebaseline) tick kicks nothing.
 			events.length = 0;
-			intervals.find(({ delay }) => delay === 10_000)!.callback();
+			fireChangeSignalTimeout();
 			await vi.waitFor(() =>
 				expect(
 					events.filter((event) => event.type === 'lane-finish' && event.lane === 'change-signal')
