@@ -2,6 +2,7 @@ import {
 	CategoryLogger,
 	getLogger,
 	log,
+	promoteRecorder,
 	setDatabase,
 	setToast,
 	setVerboseDiagnostics,
@@ -258,6 +259,19 @@ describe('logger/index', () => {
 			expect(mockRemove).toHaveBeenCalled();
 		});
 
+		it('drops a deferred write when the database binding changes', async () => {
+			const first = createLogCollection();
+			const second = createLogCollection();
+			setDatabase(first.collection);
+
+			getLogger(['db']).info('Bound to the first database');
+			setDatabase(second.collection);
+			await flushWrites();
+
+			expect(first.collection.insert).not.toHaveBeenCalled();
+			expect(second.collection.insert).not.toHaveBeenCalled();
+		});
+
 		it('persists searchable operational identifiers without copying arbitrary context', async () => {
 			const insert = jest.fn().mockResolvedValue(undefined);
 			setDatabase({
@@ -393,6 +407,20 @@ describe('logger/index', () => {
 			getLogger(['sync']).error('A second error');
 			await flushWrites();
 			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
+		});
+
+		it('keeps recorder events when bulk promotion has per-document errors', async () => {
+			const { collection } = createLogCollection();
+			collection.bulkInsert.mockResolvedValue({
+				success: [{}],
+				error: [{ status: 500 }],
+			});
+			setDatabase(collection);
+			getLogger(['sync']).debug('First step');
+			getLogger(['sync']).debug('Second step');
+
+			await expect(promoteRecorder('test')).resolves.toBe(1);
+			expect(snapshotRecorder()).toHaveLength(2);
 		});
 
 		it('persists debug in real time while verbose mode is active and keeps it recorded', async () => {

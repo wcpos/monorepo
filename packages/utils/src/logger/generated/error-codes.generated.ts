@@ -5,6 +5,7 @@ export type ErrorCode =
 	| 'SYNC111'
 	| 'SYNC121'
 	| 'SYNC131'
+	| 'SYNC141'
 	| 'SYNC201'
 	| 'SYNC211'
 	| 'SYNC301'
@@ -132,6 +133,21 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence:
 			'private mining SY02002+500; woocommerce-pos#572 (critical error on this website); woocommerce-pos#571 (PHP fatal, disk full)',
+	},
+	SYNC141: {
+		code: 'SYNC141',
+		symbol: 'STORE_RATE_LIMITED',
+		domain: 'SYNC',
+		severity: 'warn',
+		safeAction: 'retry',
+		retryPolicy: 'automatic',
+		dataSafety: 'local-only',
+		escalation: 'site-admin',
+		summary: 'Your store is limiting requests temporarily, so this action will retry later.',
+		docsBody:
+			"Wait before retrying. If rate limits continue, ask the site administrator or host to review the store's request limits.",
+		introducedIn: '1.10.0',
+		evidence: 'HTTP 429; monorepo#884',
 	},
 	SYNC201: {
 		code: 'SYNC201',
@@ -624,6 +640,7 @@ export const ERROR_CODES = {
 	LOCAL_DB_CORRUPTED: 'SYNC111',
 	SYNC_UNREACHABLE: 'SYNC121',
 	STORE_SERVER_ERROR: 'SYNC131',
+	STORE_RATE_LIMITED: 'SYNC141',
 	RECORD_REJECTED: 'SYNC201',
 	RECORD_INVALID_FIELD: 'SYNC211',
 	SYNC_BEHIND_HEAD: 'SYNC301',

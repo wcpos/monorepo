@@ -10,7 +10,13 @@
 import { logger } from 'react-native-logs';
 
 import { getErrorCodeDocURL } from './constants';
-import { clearRecorder, recorderStats, recordEvent, snapshotRecorder } from './flight-recorder';
+import {
+	clearRecorder,
+	recorderStats,
+	recordEvent,
+	removePromotedEvents,
+	snapshotRecorder,
+} from './flight-recorder';
 import { ERROR_CATALOGUE, ErrorCode } from './generated/error-codes.generated';
 import { redactSensitiveFields, redactSensitiveText } from './redact';
 import { LogRetentionCollection, sweepLogRetention } from './retention';
@@ -88,13 +94,13 @@ type PersistedDocument = {
 
 type LoggerCollection = LogRetentionCollection & {
 	insert(row: Record<string, unknown>): Promise<PersistedDocument>;
-	bulkInsert(rows: Record<string, unknown>[]): Promise<unknown>;
+	bulkInsert(rows: Record<string, unknown>[]): Promise<{ success: unknown[]; error: unknown[] }>;
 };
 
 type RepeatState = {
 	identity: string;
 	count: number;
-	write: Promise<PersistedDocument>;
+	write: Promise<PersistedDocument | undefined>;
 };
 
 const repeatStateByCollection = new WeakMap<object, RepeatState>();
@@ -174,10 +180,9 @@ export async function promoteRecorder(reason: string): Promise<number> {
 				...(category && { category }),
 			});
 		});
-		// Clear before yielding so another error cannot promote the same narration.
-		clearRecorder();
-		await collection.bulkInsert(rows);
-		return rows.length;
+		const result = await collection.bulkInsert(rows);
+		if (result.error.length === 0) removePromotedEvents(recorded);
+		return result.success.length;
 	} catch (error) {
 		console.error('Failed to promote flight recorder', error);
 		return 0;
@@ -273,7 +278,7 @@ function persistLog(
 	if (previous?.identity === identity) {
 		previous.count += 1;
 		previous.write = previous.write.then((document) =>
-			document.incrementalPatch({ count: previous.count, lastSeen: now })
+			document?.incrementalPatch({ count: previous.count, lastSeen: now })
 		);
 		// A rejected chain would silently swallow every later identical event —
 		// drop the repeat state so the next occurrence inserts a fresh row.
@@ -315,7 +320,11 @@ function persistLog(
 		...(terminal?.durationMs !== undefined && { durationMs: terminal.durationMs }),
 		...(terminal?.startedAt !== undefined && { startedAt: terminal.startedAt }),
 	});
-	const write = Promise.resolve().then(() => collection.insert(row));
+	const writeEpoch = databaseEpoch;
+	const write = Promise.resolve().then(() => {
+		if (writeEpoch !== databaseEpoch || collection !== dbCollection) return undefined;
+		return collection.insert(row);
+	});
 	const state: RepeatState = { identity, count: 1, write };
 	// A timed unit of work is never a collapse anchor either — the next identical
 	// row must not fold into it.
@@ -327,15 +336,25 @@ function persistLog(
 		}
 	});
 	void write
-		.then(() => {
-			persistedInsertCount += 1;
-			if (persistedInsertCount % SWEEP_INSERT_INTERVAL === 0) {
-				void sweepLogRetention(collection).catch((error: unknown) =>
-					console.error('Failed to enforce log retention', error)
-				);
+		.then((document) => {
+			if (!document) {
+				if (repeatStateByCollection.get(collection) === state) {
+					repeatStateByCollection.delete(collection);
+				}
+				return;
 			}
+			notifyLogPersistedInsert(collection);
 		})
 		.catch(console.error);
+}
+
+export function notifyLogPersistedInsert(collection: LogRetentionCollection): void {
+	persistedInsertCount += 1;
+	if (persistedInsertCount % SWEEP_INSERT_INTERVAL === 0) {
+		void sweepLogRetention(collection).catch((error: unknown) =>
+			console.error('Failed to enforce log retention', error)
+		);
+	}
 }
 
 // Log level severity (lower = more verbose)

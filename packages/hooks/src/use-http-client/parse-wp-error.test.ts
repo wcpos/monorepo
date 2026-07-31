@@ -81,7 +81,7 @@ describe('parse-wp-error', () => {
 				expect(mapToInternalCode('unknown_error', 401)).toBe('AUTH101');
 				expect(mapToInternalCode('unknown_error', 403)).toBe('AUTH201');
 				expect(mapToInternalCode('unknown_error', 404)).toBe('AUTH311');
-				expect(mapToInternalCode('unknown_error', 429)).toBe('CLIENT999');
+				expect(mapToInternalCode('unknown_error', 429)).toBe('SYNC141');
 			});
 
 			it('should map 5xx errors to the store-server code, never a client code', () => {
@@ -158,6 +158,19 @@ describe('parse-wp-error', () => {
 				status: 503,
 				triage: true,
 			});
+		});
+
+		it('replaces an unsafe server code before exposing it to consumers', () => {
+			const result = parseWpError(
+				{
+					code: 'bad code<script>',
+					message: 'Unexpected response',
+					data: { status: 400 },
+				},
+				fallback
+			);
+
+			expect(result.serverCode).toBe('invalid_server_code');
 		});
 
 		it('should handle error with only message', () => {

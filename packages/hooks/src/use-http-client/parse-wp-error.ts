@@ -122,6 +122,8 @@ export const mapToInternalCode = (
 				return ERROR_CODES.INSUFFICIENT_ROLE;
 			case 404:
 				return ERROR_CODES.REST_ROUTE_MISSING;
+			case 429:
+				return ERROR_CODES.STORE_RATE_LIMITED;
 			default:
 				// A 5xx means the store WAS reached and its server failed. Attributing
 				// that to the client ("WCPOS encountered an unexpected error") is the
@@ -193,7 +195,11 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 	}
 
 	// Extract server code and status
-	const serverCode = data.code || null;
+	const rawServerCode = typeof data.code === 'string' ? data.code : null;
+	const serverCode =
+		rawServerCode === null || /^[A-Za-z0-9_.:\-]{1,64}$/.test(rawServerCode)
+			? rawServerCode
+			: 'invalid_server_code';
 	const status = data.data?.status || null;
 
 	// Map to internal code for user-facing display
