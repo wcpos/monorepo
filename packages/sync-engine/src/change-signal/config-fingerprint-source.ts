@@ -15,7 +15,7 @@ import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
 /** Fetcher contract — same shape the rest of the bench uses. */
 export type ConfigSourceFetcher = (
 	url: string,
-	init?: { signal?: AbortSignal }
+	init?: { headers?: HeadersInit; signal?: AbortSignal }
 ) => Promise<Response>;
 
 export type CreateConfigFingerprintLiveSourceInput = {
@@ -94,17 +94,29 @@ export function applyBarcodeSelectorsFromSnapshot(snapshot: ConfigFingerprintSna
 export function createConfigFingerprintLiveSource(
 	input: CreateConfigFingerprintLiveSourceInput
 ): ConfigFingerprintSource {
+	let etag: string | null = null;
+	let cachedSnapshot: ConfigFingerprintSnapshot | null = null;
+
 	return {
 		async pollConfigFingerprints() {
 			const url = `${input.syncBaseUrl}/changes/config-fingerprint`;
-			const response = await input.fetcher(url);
-			const body = await response.text();
+			const validator = etag;
+			const response = await input.fetcher(
+				url,
+				validator === null ? undefined : { headers: { 'If-None-Match': validator } }
+			);
+			if (response.status === 304 && validator !== null && cachedSnapshot !== null) {
+				applyBarcodeSelectorsFromSnapshot(cachedSnapshot);
+				return cachedSnapshot;
+			}
 			if (!response.ok) {
 				throw new Error(`changes/config-fingerprint failed: ${response.status}`);
 			}
-			const snapshot = mapConfigFingerprintEnvelope(JSON.parse(body) as ConfigFingerprintEnvelope);
-			applyBarcodeSelectorsFromSnapshot(snapshot);
-			return snapshot;
+			const body = await response.text();
+			cachedSnapshot = mapConfigFingerprintEnvelope(JSON.parse(body) as ConfigFingerprintEnvelope);
+			etag = response.headers.get('etag');
+			applyBarcodeSelectorsFromSnapshot(cachedSnapshot);
+			return cachedSnapshot;
 		},
 	};
 }

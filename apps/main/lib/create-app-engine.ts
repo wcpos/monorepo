@@ -22,7 +22,7 @@ import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { QueryTotalWooRequest, RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
-import { lastUserActivityMs } from '@wcpos/utils/user-activity';
+import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
 import { getEngineConnectivity } from './connectivity';
 import {
@@ -397,6 +397,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			queryTotal: { fetchWooQueryTotal },
 			connectivity: getEngineConnectivity,
 			lastUserActivityMs,
+			onUserActivity,
 			diagnostics: composeObservers(appMetricsObserver, guardedDiagnostics),
 			multiInstance: options.multiInstance ?? false,
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),

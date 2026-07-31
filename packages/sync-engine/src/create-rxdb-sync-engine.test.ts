@@ -215,6 +215,65 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 		await engine.dispose();
 	});
 
+	it('resetCollection clears scheduler and coverage bookkeeping for only the reset collection', async () => {
+		const engine = engineWith();
+		const scope = await engine.ready;
+		const collections = scope.database.collections;
+		const task = (collectionName: 'products' | 'customers') => ({
+			stateKey: `task-${collectionName}`,
+			taskId: `task-${collectionName}`,
+			requirementId: `requirement-${collectionName}`,
+			collectionName,
+			queryKey: `query-${collectionName}`,
+			limit: 100,
+			priority: 500,
+			mode: 'windowed',
+			status: 'completed',
+			ownerId: null,
+			claimedUntilMs: null,
+			attempt: 1,
+			retryAfterMs: null,
+			updatedAtMs: 1,
+			schemaVersion: 4,
+		});
+		for (const collectionName of ['products', 'customers'] as const) {
+			await collections.schedulerTaskStates.insert(task(collectionName));
+			await collections.coverageRecords.insert({
+				coverageKey: `coverage-${collectionName}`,
+				collectionName,
+				id: '1',
+				coveredQueryKeys: [`query-${collectionName}`],
+				freshUntilMs: 10_000,
+				updatedAtMs: 1,
+				schemaVersion: 2,
+			});
+			await collections.coverageLanes.insert({
+				laneKey: `lane-${collectionName}`,
+				collectionName,
+				queryKey: `query-${collectionName}`,
+				complete: true,
+				expectedRecordIds: ['1'],
+				freshUntilMs: 10_000,
+				updatedAtMs: 1,
+				schemaVersion: 2,
+			});
+		}
+
+		await engine.scope.resetCollection('products');
+
+		for (const collection of [
+			collections.schedulerTaskStates,
+			collections.coverageRecords,
+			collections.coverageLanes,
+		]) {
+			const docs = await collection
+				.find({ selector: { collectionName: { $in: ['products', 'customers'] } } })
+				.exec();
+			expect(docs.map((doc) => doc.toJSON().collectionName)).toEqual(['customers']);
+		}
+		await engine.dispose();
+	});
+
 	it("resetCollection('orders') rewinds the syncCheckpoints custom-pull checkpoint — the persisted drain's cursor store (#430 phase 2)", async () => {
 		const { a } = freshIdentities();
 		const engine = engineWith(undefined, a);

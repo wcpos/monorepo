@@ -210,6 +210,54 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		await engine.dispose();
 	});
 
+	it('product reset re-arms the completed browse-window seed as one bounded page', async () => {
+		const server = scriptedProductServer([]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+
+		await engine.sync('product-browse-window-seed');
+		await engine.sync('scheduler-drain');
+		await engine.scope.resetCollection('products');
+		await engine.sync('product-browse-window-seed');
+		await engine.sync('scheduler-drain');
+
+		const productUrls = server.state.urls.filter((url) =>
+			new URL(url).pathname.endsWith('/products')
+		);
+		expect(productUrls).toHaveLength(2);
+		for (const url of productUrls) {
+			const parsed = new URL(url);
+			expect(parsed.searchParams.get('per_page')).toBe('100');
+			expect(parsed.searchParams.get('page')).toBe('1');
+			expect(parsed.searchParams.has('include')).toBe(false);
+		}
+		await engine.dispose();
+	});
+
+	it('orders reset creates no eager order fetch demand', async () => {
+		const orderUrls: string[] = [];
+		const engine = engineWith(async (url) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/orders')) orderUrls.push(url);
+			if (parsed.pathname.endsWith('/changes/sequence-log')) {
+				return Response.json({
+					changes: [],
+					checkpoint: { since: 0, head: 0 },
+					complete: true,
+				});
+			}
+			return Response.json([]);
+		});
+		await engine.ready;
+
+		await engine.scope.resetCollection('orders');
+		await engine.sync('change-signal');
+		await engine.sync('scheduler-drain');
+
+		expect(orderUrls).toEqual([]);
+		await engine.dispose();
+	});
+
 	it('targeted draft payload removes the resident product through the scheduler apply path', async () => {
 		const server = scriptedProductServer([
 			{

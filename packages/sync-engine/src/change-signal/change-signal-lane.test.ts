@@ -37,7 +37,7 @@ function stubDatabase(): ScopeDatabase {
 }
 
 describe('change-signal cursor observability', () => {
-	it('emits reset when a poll rewinds a non-zero cursor to zero', async () => {
+	it('emits backwards when a poll reports zero behind a non-zero cursor', async () => {
 		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
 		await manager.switchTo('scope-a');
 		const events: SyncEvent[] = [];
@@ -70,7 +70,7 @@ describe('change-signal cursor observability', () => {
 		expect(events.filter((event) => event.type === 'signal.cursor')).toEqual([
 			expect.objectContaining({
 				level: 'warn',
-				fields: expect.objectContaining({ reason: 'reset', from: 5, to: 0 }),
+				fields: expect.objectContaining({ reason: 'backwards', from: 5, to: 0 }),
 			}),
 		]);
 	});

@@ -304,47 +304,91 @@ function matchesLegacySelector(
 	});
 }
 
+function containsUnsafePushOperator(condition: unknown): boolean {
+	if (Array.isArray(condition)) {
+		return condition.some(containsUnsafePushOperator);
+	}
+	if (!isRecord(condition)) {
+		return false;
+	}
+	const operators = Object.keys(condition);
+	if (
+		operators.includes('$allMatch') ||
+		operators.includes('$not') ||
+		((operators.includes('$lt') || operators.includes('$lte')) &&
+			!operators.includes('$gt') &&
+			!operators.includes('$gte'))
+	) {
+		return true;
+	}
+	return Object.values(condition).some(containsUnsafePushOperator);
+}
+
 function taxonomyMembership(condition: unknown): number | undefined {
-	if (!isRecord(condition) || !isRecord(condition.$elemMatch)) {
+	if (
+		!isRecord(condition) ||
+		Object.keys(condition).length !== 1 ||
+		!isRecord(condition.$elemMatch) ||
+		Object.keys(condition.$elemMatch).length !== 1
+	) {
 		return undefined;
 	}
 	const idCondition = condition.$elemMatch.id;
-	const value = isRecord(idCondition) && '$eq' in idCondition ? idCondition.$eq : idCondition;
+	const value =
+		isRecord(idCondition) && Object.keys(idCondition).length === 1 && '$eq' in idCondition
+			? idCondition.$eq
+			: idCondition;
 	return typeof value === 'number' ? value : undefined;
 }
+
+type PrefilterBuild = {
+	prefilter?: Record<string, unknown>;
+	complete: boolean;
+};
 
 function buildPrefilter(
 	collection: LegacyCollectionName,
 	selector: LegacyMangoSelector
-): Record<string, unknown> | undefined {
+): PrefilterBuild {
 	const result: Record<string, unknown> = {};
+	let complete = true;
 
 	for (const [field, condition] of Object.entries(selector)) {
 		if (field === '$and') {
 			if (!Array.isArray(condition)) {
+				complete = false;
 				continue;
 			}
-			const branches = condition
-				.map((branch) => (isRecord(branch) ? buildPrefilter(collection, branch) : undefined))
+			const translated = condition.map((branch) =>
+				isRecord(branch) ? buildPrefilter(collection, branch) : { complete: false }
+			);
+			const branches = translated
+				.map((branch) => branch.prefilter)
 				.filter((branch): branch is Record<string, unknown> => branch !== undefined);
 			if (branches.length > 0) {
 				result.$and = branches;
 			}
+			complete = complete && translated.every((branch) => branch.complete);
 			continue;
 		}
 		if (field === '$or') {
 			if (!Array.isArray(condition)) {
+				complete = false;
 				continue;
 			}
-			const branches = condition.map((branch) =>
-				isRecord(branch) ? buildPrefilter(collection, branch) : undefined
+			const translated = condition.map((branch) =>
+				isRecord(branch) ? buildPrefilter(collection, branch) : { complete: false }
 			);
-			if (branches.length > 0 && branches.every((branch) => branch !== undefined)) {
-				result.$or = branches;
+			const pushed =
+				translated.length > 0 && translated.every((branch) => branch.prefilter !== undefined);
+			if (pushed) {
+				result.$or = translated.map((branch) => branch.prefilter);
 			}
+			complete = complete && pushed && translated.every((branch) => branch.complete);
 			continue;
 		}
 		if (field.startsWith('$')) {
+			complete = false;
 			continue;
 		}
 
@@ -354,22 +398,44 @@ function buildPrefilter(
 				result[field === 'categories' ? 'categoryIds' : 'brandIds'] = {
 					$in: [membership],
 				};
+			} else {
+				complete = false;
 			}
 			continue;
 		}
 
 		const mapping = resolveLegacyField(collection, field);
+		const faithful = !containsUnsafePushOperator(condition);
 		if (
-			(mapping.kind === 'promoted' || mapping.kind === 'identifier') &&
-			(mapping.readEnginePath === undefined ||
-				(collection === 'variations' && field === 'attributes')) &&
-			!(isRecord(condition) && ('$all' in condition || '$allMatch' in condition))
+			mapping.kind === 'payload' &&
+			!mapping.compute &&
+			mapping.readEnginePath === undefined &&
+			faithful
 		) {
 			result[mapping.enginePath] = condition;
+		} else if (
+			(mapping.kind === 'promoted' || mapping.kind === 'identifier') &&
+			mapping.readEnginePath === undefined &&
+			faithful
+		) {
+			result[mapping.enginePath] = condition;
+		} else if (
+			collection === 'variations' &&
+			field === 'attributes' &&
+			faithful &&
+			!(isRecord(condition) && '$all' in condition)
+		) {
+			result[mapping.enginePath] = condition;
+			complete = false;
+		} else {
+			complete = false;
 		}
 	}
 
-	return Object.keys(result).length > 0 ? result : undefined;
+	return {
+		prefilter: Object.keys(result).length > 0 ? result : undefined,
+		complete,
+	};
 }
 
 export function translateSelector(
@@ -378,12 +444,14 @@ export function translateSelector(
 ): {
 	prefilter: MangoQuerySelector<EngineDocument>;
 	residual: (engineDocument: EngineDocument) => boolean;
+	complete: boolean;
 } {
 	validateSelector(legacyMangoSelector);
-	const prefilter = buildPrefilter(collection, legacyMangoSelector) ?? {};
+	const translated = buildPrefilter(collection, legacyMangoSelector);
 	return {
-		prefilter: prefilter as MangoQuerySelector<EngineDocument>,
+		prefilter: (translated.prefilter ?? {}) as MangoQuerySelector<EngineDocument>,
 		residual: (engineDocument) =>
 			matchesLegacySelector(collection, engineDocument, legacyMangoSelector),
+		complete: translated.complete,
 	};
 }

@@ -4,11 +4,10 @@ import { createEngineDatabase, createFakeEngine } from './helpers/engine';
 import type { RxDatabase } from 'rxdb';
 
 /**
- * The refill half of the reset funnel must SEED every cleared collection's
- * re-download path explicitly. Catalog collections refill via the rewound
- * change-signal cursor, but the seeds below are what make the refill immediate
- * (and for orders — which the change signal does not cover at all — the seed
- * is the only refill short of waiting for the 5-minute window lane).
+ * The refill half of the reset funnel re-arms each collection's normal filling
+ * policy: greedy references and the product browse window seed immediately;
+ * customers resume on-demand + idle trickle, and orders wait for view demand
+ * or their periodic window lane.
  */
 describe('prepareCollectionResetRefill seeding', () => {
 	let database: RxDatabase;
@@ -28,21 +27,23 @@ describe('prepareCollectionResetRefill seeding', () => {
 		return engine.syncCalls;
 	}
 
-	it('seeds the order window when orders were reset', async () => {
+	it('creates no eager demand when orders were reset', async () => {
 		const syncCalls = await refillSyncCalls(['orders']);
-		expect(syncCalls).toContain('order-window-seed');
-		expect(syncCalls[syncCalls.length - 1]).toBe('scheduler-drain');
+		expect(syncCalls).toEqual(['scheduler-drain']);
 	});
 
 	it('seeds the product browse window when products were reset', async () => {
 		const syncCalls = await refillSyncCalls(['variations', 'products']);
-		expect(syncCalls).toContain('product-browse-window-seed');
-		expect(syncCalls).not.toContain('order-window-seed');
+		expect(syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
 	});
 
 	it('seeds references when a reference collection was reset', async () => {
 		const syncCalls = await refillSyncCalls(['products/categories']);
-		expect(syncCalls).toContain('reference-seed');
-		expect(syncCalls).not.toContain('order-window-seed');
+		expect(syncCalls).toEqual(['reference-seed', 'scheduler-drain']);
+	});
+
+	it('creates no eager lane demand when customers were reset', async () => {
+		const syncCalls = await refillSyncCalls(['customers']);
+		expect(syncCalls).toEqual(['scheduler-drain']);
 	});
 });

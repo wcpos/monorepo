@@ -4,8 +4,8 @@
  * The ticket's done-criterion: a fresh signal detected → applied → cursor
  * advanced; plus persistence (a NEW engine over the same storage resumes past
  * the applied sequence), the poison guard (an HTML body can never advance the
- * cursor), the offline gate, and reset-owns-cursor (resetting products prunes
- * the engine and re-primes).
+ * cursor), the offline gate, and reset-keeps-cursor (resetting products leaves
+ * the shared change-signal cursor untouched).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -51,6 +51,7 @@ function scriptedServer() {
 		variationPulls: 0,
 		customerPulls: 0,
 		sequenceLogFetches: 0,
+		sequenceLogSince: [] as number[],
 		headFetches: 0,
 		products: new Map<number, Record<string, unknown>>([
 			[
@@ -81,6 +82,9 @@ function scriptedServer() {
 	const fetch = async (url: string): Promise<Response> => {
 		const u = new URL(url);
 		const path = u.pathname;
+		if (path.endsWith('/changes/tick')) {
+			return new Response(null, { status: 404 });
+		}
 		if (path.endsWith('/changes/sequence-log')) {
 			state.sequenceLogFetches += 1;
 			if (state.poisonSequenceLog) {
@@ -90,6 +94,7 @@ function scriptedServer() {
 				});
 			}
 			const since = Number(u.searchParams.get('since') ?? '0');
+			state.sequenceLogSince.push(since);
 			if (since === 0 && u.searchParams.get('limit') === '1') state.headFetches += 1;
 			const rows = state.rows.filter((row) => row.sequence > since);
 			const maxSeen = rows.reduce((max, row) => Math.max(max, row.sequence), since);
@@ -477,15 +482,23 @@ describe('sync("change-signal") through the public handle', () => {
 		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
 		server.state.head = 9_000;
 
-		const intervals: { callback: () => void; delay: number }[] = [];
-		vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+		// The change-signal cadence is a self-rescheduling setTimeout chain
+		// (jittered — pinned to exactly 10s here via random: 0.5); capture with
+		// pass-through so this test's own real timers keep working.
+		const timeouts: { callback: () => void; delay: number }[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
 			callback: () => void,
 			delay: number
 		) => {
-			intervals.push({ callback, delay });
-			return intervals.length as unknown as ReturnType<typeof setInterval>;
-		}) as typeof setInterval);
-		vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => undefined);
+			timeouts.push({ callback, delay });
+			return realSetTimeout(callback, delay);
+		}) as typeof setTimeout);
+		const fireChangeSignalTimeout = () => {
+			const timer = [...timeouts].reverse().find(({ delay }) => delay === 10_000);
+			if (!timer) throw new Error('change-signal timeout not armed');
+			timer.callback();
+		};
 
 		const engine = createRxdbSyncEngine(
 			{
@@ -494,6 +507,7 @@ describe('sync("change-signal") through the public handle', () => {
 				fetcher: (url) => server.fetch(url),
 				checkpoints,
 				mode: 'auto',
+				random: () => 0.5,
 			},
 			identity
 		);
@@ -501,12 +515,12 @@ describe('sync("change-signal") through the public handle', () => {
 			const events: EngineEvent[] = [];
 			engine.events((event) => events.push(event));
 			await engine.ready;
-			await vi.waitFor(() => expect(intervals.some(({ delay }) => delay === 10_000)).toBe(true));
+			await vi.waitFor(() => expect(timeouts.some(({ delay }) => delay === 10_000)).toBe(true));
 			events.length = 0;
 
-			// Fire the change-signal interval: the tick rebaselines (cursor 0 →
+			// Fire the change-signal timer: the tick rebaselines (cursor 0 →
 			// 9,000) and the follow-up chain must run the existence/seed lanes now.
-			intervals.find(({ delay }) => delay === 10_000)!.callback();
+			fireChangeSignalTimeout();
 			await vi.waitFor(() => {
 				for (const lane of [
 					'existence-prime',
@@ -522,7 +536,7 @@ describe('sync("change-signal") through the public handle', () => {
 
 			// Negative control: a routine (non-rebaseline) tick kicks nothing.
 			events.length = 0;
-			intervals.find(({ delay }) => delay === 10_000)!.callback();
+			fireChangeSignalTimeout();
 			await vi.waitFor(() =>
 				expect(
 					events.filter((event) => event.type === 'lane-finish' && event.lane === 'change-signal')
@@ -660,7 +674,7 @@ describe('sync("change-signal") through the public handle', () => {
 
 	it.each([
 		{ reportedSince: 3, reason: 'backwards' },
-		{ reportedSince: 0, reason: 'reset' },
+		{ reportedSince: 0, reason: 'backwards' },
 	])(
 		'emits a $reason anomaly for a raw server checkpoint regression without rewinding',
 		async ({ reportedSince, reason }) => {
@@ -811,15 +825,58 @@ describe('sync("change-signal") through the public handle', () => {
 		}
 	});
 
-	it('resetting a hybrid collection rewinds the cursor to ZERO — the emptied collection refills, never re-primes', async () => {
+	it('resetting a hybrid collection preserves the shared cursor and the next poll continues from it', async () => {
 		const server = scriptedServer();
 		const identity = freshIdentity();
-		const engine = engineWith({ storage: memoryEngineStorage(), fetch: server.fetch, identity });
+		const checkpoints = memoryStringStore();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity,
+			checkpoints,
+		});
 		await engine.ready;
 		await engine.sync('change-signal');
 		expect(server.state.headFetches).toBe(1);
 
-		// A historical signal exists (sequence 6 ≤ head): apply it, then reset.
+		// Apply sequence 6, then capture the exact persisted shared state.
+		server.state.head = 6;
+		server.state.rows.push({
+			sequence: 6,
+			id: 9,
+			type: 'update',
+			collection: 'products',
+			modified_gmt: '2026-07-10T00:00:01',
+		});
+		await engine.sync('change-signal');
+		expect(await productCount(engine)).toBe(1);
+		const key = `${scopeKeyFor(identity)}:checkpoint:change-signal`;
+		const beforeReset = await checkpoints.get(key);
+		expect(JSON.parse(beforeReset!)).toMatchObject({ cursor: { sequence: 6 } });
+
+		const outcome = await engine.scope.resetCollection('products');
+		expect(outcome).toBe('reset');
+		expect(await productCount(engine)).toBe(0);
+		expect(await checkpoints.get(key)).toBe(beforeReset);
+
+		server.state.sequenceLogSince = [];
+		await engine.sync('change-signal');
+		expect(server.state.sequenceLogSince).toEqual([6]);
+		expect(server.state.headFetches).toBe(1);
+		expect(await productCount(engine)).toBe(0);
+		expect(scopeKeyFor(identity)).toBe(engine.active()?.scopeId);
+		await engine.dispose();
+	});
+
+	it('a later change signal targeted-fetches a wiped record back after reset', async () => {
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		await engine.ready;
+		await engine.sync('change-signal');
 		server.state.head = 6;
 		server.state.rows.push({
 			sequence: 6,
@@ -831,17 +888,21 @@ describe('sync("change-signal") through the public handle', () => {
 		await engine.sync('change-signal');
 		expect(await productCount(engine)).toBe(1);
 
-		const outcome = await engine.scope.resetCollection('products');
-		expect(outcome).toBe('reset');
+		await engine.scope.resetCollection('products');
 		expect(await productCount(engine)).toBe(0);
 
-		// The invalidator rewound the blob to sequence 0 (NOT deleted): the next
-		// tick drains the historical log and REFILLS the dropped collection —
-		// priming to head here would silently skip exactly these rows.
+		server.state.head = 7;
+		server.state.rows.push({
+			sequence: 7,
+			id: 9,
+			type: 'update',
+			collection: 'products',
+			modified_gmt: '2026-07-10T00:00:02',
+		});
 		await engine.sync('change-signal');
-		expect(server.state.headFetches).toBe(1); // no re-prime
-		expect(await productCount(engine)).toBe(1); // refilled from sequence 0
-		expect(scopeKeyFor(identity)).toBe(engine.active()?.scopeId);
+
+		expect(server.state.productIncludes.at(-1)).toEqual([9]);
+		expect(await productCount(engine)).toBe(1);
 		await engine.dispose();
 	});
 

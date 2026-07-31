@@ -42,8 +42,20 @@ type CapturedInterval = {
 	handle: ReturnType<typeof setInterval>;
 };
 
-function captureIntervals(): CapturedInterval[] {
+type CapturedTimeout = {
+	callback: () => void;
+	delay: number;
+	handle: ReturnType<typeof setTimeout>;
+};
+
+function captureTimers(): {
+	intervals: CapturedInterval[];
+	timeouts: CapturedTimeout[];
+	clearedTimeouts: Set<Parameters<typeof clearTimeout>[0]>;
+} {
 	const intervals: CapturedInterval[] = [];
+	const timeouts: CapturedTimeout[] = [];
+	const clearedTimeouts = new Set<Parameters<typeof clearTimeout>[0]>();
 	let nextHandle = 1;
 	vi.spyOn(globalThis, 'setInterval').mockImplementation(((callback: () => void, delay: number) => {
 		const handle = nextHandle++ as unknown as ReturnType<typeof setInterval>;
@@ -51,11 +63,34 @@ function captureIntervals(): CapturedInterval[] {
 		return handle;
 	}) as typeof setInterval);
 	vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => undefined);
-	return intervals;
+	const realSetTimeout = globalThis.setTimeout;
+	const realClearTimeout = globalThis.clearTimeout;
+	vi.spyOn(globalThis, 'setTimeout').mockImplementation(((callback: () => void, delay: number) => {
+		const handle = realSetTimeout(callback, delay);
+		timeouts.push({ callback, delay, handle });
+		return handle;
+	}) as typeof setTimeout);
+	vi.spyOn(globalThis, 'clearTimeout').mockImplementation((handle) => {
+		clearedTimeouts.add(handle);
+		realClearTimeout(handle);
+	});
+	return { intervals, timeouts, clearedTimeouts };
 }
 
 async function waitForAutomaticIntervals(intervals: CapturedInterval[]): Promise<void> {
-	await vi.waitFor(() => expect(intervals).toHaveLength(10));
+	await vi.waitFor(() => expect(intervals).toHaveLength(9));
+}
+
+function changeSignalTimeout(
+	engine: ReturnType<typeof engineWith>,
+	timeouts: CapturedTimeout[],
+	nowMs: number
+): CapturedTimeout {
+	const delay = engine.status().lanes['change-signal'].nextDueAtMs! - nowMs;
+	for (let index = timeouts.length - 1; index >= 0; index -= 1) {
+		if (timeouts[index]!.delay === delay) return timeouts[index]!;
+	}
+	throw new Error(`change-signal timeout with delay ${delay} not found`);
 }
 
 afterEach(() => {
@@ -120,20 +155,21 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 
 	it('arms and advances each automatic lane nextDueAtMs on fixed interval boundaries', async () => {
 		let nowMs = 1_000;
-		const captured = captureIntervals();
+		const captured = captureTimers();
 		const engine = engineWith({
 			mode: 'auto',
 			now: () => nowMs,
+			random: () => 0.5,
 		});
 
 		await engine.ready;
-		await waitForAutomaticIntervals(captured);
+		await waitForAutomaticIntervals(captured.intervals);
 		expect(engine.status().lanes['change-signal'].nextDueAtMs).toBe(11_000);
 		expect(engine.status().lanes['customer-trickle'].nextDueAtMs).toBe(301_000);
 		expect(engine.status().lanes['customer-trickle'].lastTick).toBeNull();
 		nowMs = 40_000;
-		captured[0]!.callback();
-		expect(engine.status().lanes['change-signal'].nextDueAtMs).toBe(21_000);
+		changeSignalTimeout(engine, captured.timeouts, 1_000).callback();
+		expect(engine.status().lanes['change-signal'].nextDueAtMs).toBe(50_000);
 		await engine.dispose();
 
 		const manual = engineWith({ mode: 'manual' });
@@ -144,25 +180,159 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 
 	it('re-arms only the live change-signal timer, clamps its cadence, and is idempotent', async () => {
 		let nowMs = 5_000;
-		const captured = captureIntervals();
-		const engine = engineWith({ mode: 'auto', now: () => nowMs });
+		const captured = captureTimers();
+		const engine = engineWith({ mode: 'auto', now: () => nowMs, random: () => 0.5 });
 
 		await engine.ready;
-		await waitForAutomaticIntervals(captured);
-		const initialChangeTimer = captured[0]!;
+		await waitForAutomaticIntervals(captured.intervals);
+		const initialChangeTimer = changeSignalTimeout(engine, captured.timeouts, nowMs);
 		nowMs = 8_000;
 		engine.reconfigure({ changeSignalPollMs: 1 });
-		expect(clearInterval).toHaveBeenCalledExactlyOnceWith(initialChangeTimer.handle);
-		expect(captured.at(-1)?.delay).toBe(5_000);
+		expect(captured.clearedTimeouts).toContain(initialChangeTimer.handle);
+		const clampedFastTimer = changeSignalTimeout(engine, captured.timeouts, nowMs);
+		expect(clampedFastTimer.delay).toBe(5_000);
 		expect(engine.status().lanes['change-signal'].nextDueAtMs).toBe(13_000);
 		engine.reconfigure({ changeSignalPollMs: 1 });
-		expect(clearInterval).toHaveBeenCalledTimes(1);
+		expect(changeSignalTimeout(engine, captured.timeouts, nowMs).handle).toBe(
+			clampedFastTimer.handle
+		);
 		nowMs = 9_000;
 		engine.reconfigure({ changeSignalPollMs: 500_000 });
-		expect(clearInterval).toHaveBeenCalledTimes(2);
-		expect(captured.at(-1)?.delay).toBe(300_000);
+		expect(captured.clearedTimeouts).toContain(clampedFastTimer.handle);
+		expect(changeSignalTimeout(engine, captured.timeouts, nowMs).delay).toBe(300_000);
 		expect(engine.status().lanes['change-signal'].nextDueAtMs).toBe(309_000);
 		await engine.dispose();
+	});
+
+	it('steps idle cadence to 30s, then 60s and holds', async () => {
+		let nowMs = 10 * 60_000 + 1;
+		const captured = captureTimers();
+		const engine = engineWith({
+			mode: 'auto',
+			now: () => nowMs,
+			random: () => 0.5,
+			lastUserActivityMs: () => 1,
+		});
+
+		await engine.ready;
+		await waitForAutomaticIntervals(captured.intervals);
+		let timer = changeSignalTimeout(engine, captured.timeouts, nowMs);
+		expect(timer.delay).toBe(30_000);
+
+		nowMs += timer.delay;
+		clearTimeout(timer.handle);
+		timer.callback();
+		timer = changeSignalTimeout(engine, captured.timeouts, nowMs);
+		expect(timer.delay).toBe(60_000);
+
+		nowMs += timer.delay;
+		clearTimeout(timer.handle);
+		timer.callback();
+		expect(changeSignalTimeout(engine, captured.timeouts, nowMs).delay).toBe(60_000);
+		await engine.dispose();
+	});
+
+	it('starts at the active cadence when the activity timestamp is unset', async () => {
+		const nowMs = 10 * 60_000;
+		const captured = captureTimers();
+		const engine = engineWith({
+			mode: 'auto',
+			now: () => nowMs,
+			random: () => 0.5,
+			lastUserActivityMs: () => 0,
+		});
+
+		await engine.ready;
+		await waitForAutomaticIntervals(captured.intervals);
+		expect(changeSignalTimeout(engine, captured.timeouts, nowMs).delay).toBe(10_000);
+		await engine.dispose();
+	});
+
+	it('snaps a decayed timer back and immediately catches up on user activity', async () => {
+		let nowMs = 10 * 60_000 + 1;
+		let lastActivityMs = 1;
+		let activityListener: (() => void) | null = null;
+		const captured = captureTimers();
+		const events: EngineEvent[] = [];
+		const engine = engineWith({
+			mode: 'auto',
+			now: () => nowMs,
+			random: () => 0.5,
+			lastUserActivityMs: () => lastActivityMs,
+			onUserActivity: (listener) => {
+				activityListener = listener;
+				return () => undefined;
+			},
+		});
+		engine.events((event) => events.push(event));
+
+		await engine.ready;
+		await waitForAutomaticIntervals(captured.intervals);
+		expect(changeSignalTimeout(engine, captured.timeouts, nowMs).delay).toBe(30_000);
+		events.length = 0;
+		lastActivityMs = nowMs;
+		activityListener!();
+
+		expect(changeSignalTimeout(engine, captured.timeouts, nowMs).delay).toBe(10_000);
+		await vi.waitFor(() =>
+			expect(
+				events.filter((event) => event.type === 'lane-finish' && event.lane === 'change-signal')
+			).toHaveLength(1)
+		);
+		expect(
+			events.filter((event) => event.type === 'lane-start' && event.lane === 'change-signal')
+		).toHaveLength(1);
+		await engine.dispose();
+	});
+
+	it('does not tick for activity while change-signal cadence is active', async () => {
+		let activityListener: (() => void) | null = null;
+		const captured = captureTimers();
+		const events: EngineEvent[] = [];
+		const engine = engineWith({
+			mode: 'auto',
+			random: () => 0.5,
+			lastUserActivityMs: () => Date.now(),
+			onUserActivity: (listener) => {
+				activityListener = listener;
+				return () => undefined;
+			},
+		});
+		engine.events((event) => events.push(event));
+
+		await engine.ready;
+		await waitForAutomaticIntervals(captured.intervals);
+		events.length = 0;
+		activityListener!();
+		await Promise.resolve();
+		expect(
+			events.filter(
+				(event) =>
+					(event.type === 'lane-start' || event.type === 'lane-finish') &&
+					event.lane === 'change-signal'
+			)
+		).toHaveLength(0);
+		await engine.dispose();
+	});
+
+	it('unsubscribes activity on dispose and ignores a captured listener afterward', async () => {
+		let activityListener: (() => void) | null = null;
+		const unsubscribe = vi.fn();
+		const captured = captureTimers();
+		const engine = engineWith({
+			mode: 'auto',
+			onUserActivity: (listener) => {
+				activityListener = listener;
+				return unsubscribe;
+			},
+		});
+
+		await engine.ready;
+		await waitForAutomaticIntervals(captured.intervals);
+		await engine.dispose();
+
+		expect(unsubscribe).toHaveBeenCalledTimes(1);
+		expect(() => activityListener!()).not.toThrow();
 	});
 
 	it.each([
@@ -200,11 +370,14 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 
 describe('RxdbSyncEngine reconnect re-tick', () => {
 	it('runs exactly one five-lane sweep for one offline-to-online automatic transition', async () => {
-		const captured = captureIntervals();
+		const nowMs = 1_000;
+		const captured = captureTimers();
 		const connectivity = scriptedConnectivity('offline');
 		const diagnostics = vi.fn();
 		const engine = engineWith({
 			mode: 'auto',
+			now: () => nowMs,
+			random: () => 0.5,
 			connectivity: connectivity.signal,
 			diagnostics,
 		});
@@ -214,11 +387,11 @@ describe('RxdbSyncEngine reconnect re-tick', () => {
 		engine.statusChanges((status) => statuses.push(status));
 
 		await engine.ready;
-		await waitForAutomaticIntervals(captured);
+		await waitForAutomaticIntervals(captured.intervals);
 		events.length = 0;
 		connectivity.set('online');
-		captured[0]!.callback();
-		captured.find(({ delay }) => delay === 60_000)!.callback();
+		changeSignalTimeout(engine, captured.timeouts, nowMs).callback();
+		captured.intervals.find(({ delay }) => delay === 60_000)!.callback();
 		// The sweep sequences seeds before drains (mirroring startup), so the
 		// drain lanes land a few microtask turns after the trigger.
 		await vi.waitFor(() => {
