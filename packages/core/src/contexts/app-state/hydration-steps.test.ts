@@ -32,7 +32,12 @@ jest.mock('./initial-props', () => ({
 }));
 
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
-import { hydrateUserSession, hydrationSteps, testAuthorizationMethod } from './hydration-steps';
+import {
+	hydrateUserSession,
+	hydrationSteps,
+	switchUserSessionStore,
+	testAuthorizationMethod,
+} from './hydration-steps';
 
 const documentLookup = (document: unknown) => ({
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => document) })),
@@ -73,6 +78,155 @@ describe('hydrateUserSession', () => {
 				{ siteID: 'site-1', wpCredentialsID: 'cred-1', storeID: 'store-1' }
 			)
 		).rejects.toThrow('Failed to create fast store database');
+	});
+});
+
+describe('switchUserSessionStore', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		createFastStoreDBMock.mockResolvedValue({ name: 'fast-store-db' });
+	});
+
+	it('does not persist the new store when hydration fails', async () => {
+		const error = new Error('store database failed');
+		createStoreDBMock.mockRejectedValue(error);
+		const appState = {
+			get: jest.fn(async () => ({
+				siteID: 'site-1',
+				wpCredentialsID: 'cred-1',
+				storeID: 'store-1',
+			})),
+			set: jest.fn(),
+		};
+
+		await expect(
+			switchUserSessionStore(
+				{
+					sites: documentLookup({ uuid: 'site-1' }),
+					wp_credentials: documentLookup({ uuid: 'cred-1' }),
+					stores: documentLookup({ localID: 'store-2' }),
+				} as any,
+				appState,
+				'store-2'
+			)
+		).rejects.toBe(error);
+
+		expect(appState.set).not.toHaveBeenCalled();
+	});
+
+	it('persists only after hydration resolves and returns the hydrated session', async () => {
+		let resolveStoreDB: (storeDB: { addState: jest.Mock }) => void = () => undefined;
+		const storeDBPromise = new Promise<{ addState: jest.Mock }>((resolve) => {
+			resolveStoreDB = resolve;
+		});
+		createStoreDBMock.mockReturnValue(storeDBPromise);
+		const current = {
+			siteID: 'site-1',
+			wpCredentialsID: 'cred-1',
+			storeID: 'store-1',
+		};
+		const appState = {
+			get: jest.fn(async () => current),
+			set: jest.fn(async (_key: string, _updater: () => typeof current) => undefined),
+		};
+		const site = { uuid: 'site-1' };
+		const wpCredentials = { uuid: 'cred-1' };
+		const store = { localID: 'store-2' };
+
+		const switching = switchUserSessionStore(
+			{
+				sites: documentLookup(site),
+				wp_credentials: documentLookup(wpCredentials),
+				stores: documentLookup(store),
+			} as any,
+			appState,
+			'store-2'
+		);
+		for (let turn = 0; turn < 5; turn += 1) {
+			await Promise.resolve();
+		}
+		expect(createStoreDBMock).toHaveBeenCalledWith('store-2');
+		expect(appState.set).not.toHaveBeenCalled();
+
+		const extraData = { id: 'state' };
+		const storeDB = { addState: jest.fn(async () => extraData) };
+		resolveStoreDB(storeDB);
+
+		await expect(switching).resolves.toEqual({
+			site,
+			wpCredentials,
+			store,
+			storeDB,
+			fastStoreDB: { name: 'fast-store-db' },
+			extraData,
+		});
+		expect(appState.set).toHaveBeenCalledWith('current', expect.any(Function));
+		expect(appState.set.mock.calls[0][1]()).toEqual({ ...current, storeID: 'store-2' });
+	});
+
+	it('aborts before persisting when the engine scope switch rejects', async () => {
+		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
+		const error = new Error('engine refused the scope');
+		const appState = {
+			get: jest.fn(async () => ({
+				siteID: 'site-1',
+				wpCredentialsID: 'cred-1',
+				storeID: 'store-1',
+			})),
+			set: jest.fn(),
+		};
+		const switchEngineScope = jest.fn(async () => {
+			throw error;
+		});
+
+		await expect(
+			switchUserSessionStore(
+				{
+					sites: documentLookup({ uuid: 'site-1' }),
+					wp_credentials: documentLookup({ uuid: 'cred-1' }),
+					stores: documentLookup({ localID: 'store-2' }),
+				} as any,
+				appState,
+				'store-2',
+				{ switchEngineScope }
+			)
+		).rejects.toBe(error);
+
+		expect(switchEngineScope).toHaveBeenCalledTimes(1);
+		expect(appState.set).not.toHaveBeenCalled();
+	});
+
+	it('switches the engine scope with the hydrated session, before persisting', async () => {
+		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
+		const order: string[] = [];
+		const appState = {
+			get: jest.fn(async () => ({
+				siteID: 'site-1',
+				wpCredentialsID: 'cred-1',
+				storeID: 'store-1',
+			})),
+			set: jest.fn(async () => {
+				order.push('persist');
+			}),
+		};
+		const store = { localID: 'store-2' };
+		const switchEngineScope = jest.fn(async (session: { store?: unknown }) => {
+			order.push('engine');
+			expect(session.store).toBe(store);
+		});
+
+		await switchUserSessionStore(
+			{
+				sites: documentLookup({ uuid: 'site-1' }),
+				wp_credentials: documentLookup({ uuid: 'cred-1' }),
+				stores: documentLookup(store),
+			} as any,
+			appState,
+			'store-2',
+			{ switchEngineScope }
+		);
+
+		expect(order).toEqual(['engine', 'persist']);
 	});
 });
 

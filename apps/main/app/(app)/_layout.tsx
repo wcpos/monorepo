@@ -7,6 +7,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { useAppState } from '@wcpos/core/contexts/app-state';
+import { registerEngineScopeSwitcher } from '@wcpos/core/contexts/app-state/engine-scope-port';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
@@ -28,7 +29,7 @@ import { markUserActivity } from '@wcpos/utils/user-activity';
 import { SyncConfigBridge } from '../../components/sync-config-bridge';
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
-import { createAppSyncEngine } from '../../lib/create-app-engine';
+import { createAppSyncEngine, switchAppEngineScope } from '../../lib/create-app-engine';
 import {
 	getMetricsBuckets,
 	hydrateMetricsBuckets,
@@ -97,6 +98,14 @@ function AppStack() {
 	// Construction is idempotent per scope (createAppSyncEngine caches by scope at
 	// module level), so even if this memo re-runs — or the whole subtree remounts —
 	// the same live engine is returned and its RxDatabase is never opened twice.
+	// The store-switch flow awaits the engine's scope transition through this
+	// port BEFORE committing the session (see switchAppEngineScope). Registered
+	// here because AppStack owns the engine's lifecycle.
+	React.useEffect(() => {
+		registerEngineScopeSwitcher(switchAppEngineScope);
+		return () => registerEngineScopeSwitcher(null);
+	}, []);
+
 	const engine = React.useMemo(
 		() =>
 			createAppSyncEngine({

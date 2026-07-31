@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Linking } from 'react-native';
+import { Linking, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import {
@@ -23,8 +23,11 @@ import {
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Loader } from '@wcpos/components/loader';
+import { Portal } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { clearAllDB, scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { Platform } from '@wcpos/utils/platform';
 import { getLogger } from '@wcpos/utils/logger';
@@ -41,7 +44,7 @@ type WPCredentialsDocument = import('@wcpos/database').WPCredentialsDocument;
 
 interface StoreSubMenuProps {
 	storesResource: ObservableResource<StoreDocument[]>;
-	switchStore: (store: StoreDocument) => void;
+	switchStore: (store: StoreDocument) => Promise<void>;
 	currentStoreID: string;
 }
 
@@ -98,6 +101,7 @@ export function UserMenu() {
 	const { screenSize } = useTheme();
 	const stores = useObservableEagerState(wpCredentials?.stores$);
 	const t = useT();
+	const [isSwitching, setIsSwitching] = React.useState(false);
 
 	/**
 	 *
@@ -130,6 +134,32 @@ export function UserMenu() {
 
 		// Reload the app to reinitialize everything
 		window.location.reload();
+	};
+
+	const handleSwitchStore = async (nextStore: StoreDocument): Promise<void> => {
+		setIsSwitching(true);
+		try {
+			await switchStore(nextStore);
+			// The router owns the URL: passing the server store id as a param writes
+			// `/?store=<id>` on web (so a refresh boots into the new store) without
+			// clobbering Expo Router's own history state the way a manual
+			// history.replaceState would. Boot-time `?store=` handling consumes and
+			// removes the param as before.
+			if (Platform.isWeb) {
+				router.replace({ pathname: '/', params: { store: String(nextStore.id) } });
+			} else {
+				router.replace('/');
+			}
+		} catch (error) {
+			Toast.show({
+				type: 'error',
+				title: t('common.store_switch_failed'),
+				description: error instanceof Error ? error.message : String(error),
+			});
+			uiLogger.error('Store switch failed', { context: { error } });
+		} finally {
+			setIsSwitching(false);
+		}
 	};
 
 	return (
@@ -178,7 +208,7 @@ export function UserMenu() {
 							<DropdownMenuSubContent>
 								<StoreSubMenu
 									storesResource={storesResource}
-									switchStore={switchStore}
+									switchStore={handleSwitchStore}
 									currentStoreID={store.localID}
 								/>
 							</DropdownMenuSubContent>
@@ -204,6 +234,17 @@ export function UserMenu() {
 					<Text>{t('common.logout')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
+			{isSwitching ? (
+				<Portal name="store-switch-overlay">
+					<View
+						testID="store-switch-overlay"
+						className="bg-background/80 absolute inset-0 z-50 items-center justify-center gap-3"
+					>
+						<Loader size="xl" />
+						<Text>{t('common.switching_store')}</Text>
+					</View>
+				</Portal>
+			) : null}
 		</DropdownMenu>
 	);
 }
