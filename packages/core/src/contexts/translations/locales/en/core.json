@@ -27,6 +27,7 @@
 	"auth.select_a_store": "Select a Store",
 	"auth.server_does_not_support_any_authorization": "Server does not support any authorization method",
 	"auth.session_expired_for": "Session expired for {name}",
+	"auth.session_renewed_automatically": "Session renewed automatically",
 	"auth.sign_in_with_wordpress": "Sign in with WordPress",
 	"auth.site_connected_successfully": "Site connected successfully!",
 	"auth.site_does_not_seem_to_be": "Site does not seem to be a WordPress site",

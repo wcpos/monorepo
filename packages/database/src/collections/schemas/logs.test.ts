@@ -2,13 +2,24 @@ import { storeCollections } from '../index';
 import { logsLiteral } from './logs';
 
 describe('logs schema', () => {
-	it('is version 2 with the category+timestamp index', () => {
-		expect(logsLiteral.version).toBe(2);
+	it('is version 3 with the category+timestamp index', () => {
+		expect(logsLiteral.version).toBe(3);
 		expect(logsLiteral.indexes).toEqual([
 			['timestamp'],
 			['level', 'timestamp'],
 			['category', 'timestamp'],
 		]);
+	});
+
+	it('admits the recovered outcome (issue #899: transient failures that healed)', () => {
+		expect(logsLiteral.properties.outcome.enum).toContain('recovered');
+	});
+
+	it('migrates v2 rows to v3 unchanged (enum widening only)', () => {
+		const migrate = storeCollections.logs.migrationStrategies?.[3];
+		expect(migrate).toBeDefined();
+		const row = { timestamp: 500, level: 'warn', outcome: 'failed', context: {} };
+		expect(migrate?.({ ...row }, {} as never)).toEqual(row);
 	});
 
 	it('constrains indexed fields as RxDB requires', () => {

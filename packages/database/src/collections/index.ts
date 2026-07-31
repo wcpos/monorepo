@@ -604,6 +604,8 @@ const logs: RxCollectionCreator<LogDocumentType> = {
 			}
 			return oldDoc;
 		},
+		// v2→v3 only widens the `outcome` enum (adds 'recovered'); documents are unchanged.
+		3: (oldDoc: any) => oldDoc,
 	},
 	options: {
 		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],

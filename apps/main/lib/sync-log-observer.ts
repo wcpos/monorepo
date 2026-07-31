@@ -4,7 +4,7 @@ import type { LogTerminalFields } from '@wcpos/utils/logger';
 import { normalizeSyncCollection } from './sync-status';
 
 export type PersistLogRow = (
-	level: 'info' | 'warn' | 'error',
+	level: 'debug' | 'info' | 'warn' | 'error',
 	message: string,
 	context: Record<string, unknown>,
 	terminal?: LogTerminalFields
@@ -20,7 +20,24 @@ type Conformance = {
 	didWork?: (fields: Record<string, unknown>) => boolean;
 	/** Plain-language row message. Falls back to event.message ?? event.type. */
 	message?: (event: SyncEvent, fields: Record<string, unknown>) => string;
+	/**
+	 * Debug-level occurrences of this type are forensic evidence (a transient
+	 * failure the arc later settled, #899): persist them AT debug, which the
+	 * logger routes to the flight recorder and — under verbose diagnostics —
+	 * to a durable row. Types without this flag keep the hard debug drop below.
+	 */
+	forensic?: boolean;
 };
+
+/** The outcome vocabulary an emitter may stamp explicitly via `fields.outcome`. */
+const EXPLICIT_OUTCOMES = new Set<NonNullable<LogTerminalFields['outcome']>>([
+	'ok',
+	'recovered',
+	'failed',
+	'rejected',
+	'cancelled',
+	'unknown',
+]);
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 
@@ -178,8 +195,13 @@ const CONFORMANCE = new Map<string, Conformance>([
 			// requests each), so persisting them would evict every other row well
 			// inside the 25 MiB retention cap and destroy the log's diagnostic value.
 			// Successful-attempt narration belongs in the flight recorder (WS3) and
-			// the metrics rollups, which are built for that volume.
-			didWork: (f) => f.status === 0 || num(f.status) >= 400,
+			// the metrics rollups, which are built for that volume. An attempt that is
+			// part of a refresh arc (carries an operationId, #899) is chain evidence,
+			// not idle traffic — rare (once per JWT TTL), and without it the recovered
+			// chain would be missing its successful ending under verbose.
+			didWork: (f) =>
+				f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
+			forensic: true,
 		},
 	],
 	[
@@ -339,11 +361,13 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		}
 
 		// Debug narration never becomes a durable row (spec §1: "Debug never persists
-		// otherwise") — it belongs to the flight recorder. Without this guard a mapped
-		// type that later gains a debug emit would be persisted silently relabelled as
-		// `info`, since the persist contract has no debug level. No mapped type emits
-		// at debug today; this keeps it that way by construction.
-		if (event.level === 'debug') return;
+		// otherwise") — it belongs to the flight recorder. The one exception is a
+		// mapped type marked `forensic` (#899): those debug occurrences ARE forwarded,
+		// at debug — the logger routes them to the recorder ring and only persists
+		// them under verbose diagnostics. Everything else keeps the hard drop, so a
+		// mapped type that later gains a debug emit is never silently relabelled as
+		// `info`.
+		if (event.level === 'debug' && mapped?.forensic !== true) return;
 
 		if (mapped === undefined && !isFailure) return;
 		const conformance =
@@ -369,9 +393,17 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		//      and the engine.lane.tick summary carry failed/rejected records on an
 		//      otherwise routine drain.
 		// Explicit non-'ok' outcomes (rejected/cancelled/unknown) are deliberate
-		// classifications and are never overridden.
-		let outcome = conformance.outcome;
-		if (outcome === 'ok') {
+		// classifications and are never overridden. An emitter that saw the WHOLE
+		// arc settle may also stamp the outcome itself via `fields.outcome` (#899:
+		// the fetcher marks an absorbed 401 `recovered` only after the retry
+		// succeeded) — that first-hand classification wins over table derivation.
+		const explicitOutcome =
+			typeof fields.outcome === 'string' &&
+			EXPLICIT_OUTCOMES.has(fields.outcome as NonNullable<LogTerminalFields['outcome']>)
+				? (fields.outcome as NonNullable<LogTerminalFields['outcome']>)
+				: undefined;
+		let outcome = explicitOutcome ?? conformance.outcome;
+		if (explicitOutcome === undefined && outcome === 'ok') {
 			if (isFailure) outcome = 'failed';
 			else if (num(fields.failed) + num(fields.rejected) > 0) outcome = 'failed';
 			else if (fields.status === 'error') outcome = 'failed';
@@ -387,6 +419,9 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			type: event.type,
 			...(collection !== undefined ? { collection } : {}),
 		};
+		// The explicit outcome is promoted to the terminal column; a copy in context
+		// would just shadow it with a second, unfilterable source of truth.
+		if (explicitOutcome !== undefined) delete context.outcome;
 		if (event.type === 'signal.cycle' && httpRequests > 0) {
 			context.httpRequestsSinceLastCycle = httpRequests;
 			context.httpMsSinceLastCycle = httpMs;
@@ -417,7 +452,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		const operationId = typeof fields.operationId === 'string' ? fields.operationId : undefined;
 
 		options.persist(
-			isFailure ? event.level : 'info',
+			isFailure ? event.level : event.level === 'debug' ? 'debug' : 'info',
 			conformance.message?.(event, { ...fields, ...(reason ? { reason } : {}) }) ??
 				event.message ??
 				event.type,

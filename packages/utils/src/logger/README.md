@@ -636,6 +636,12 @@ const internalCode = mapToInternalCode('jwt_auth_expired_token', 401);
 
 ## When to Use What
 
+> **Level rubric** (reviewed for every new producer — see [LEVELS.md](./LEVELS.md)):
+> `error` = needs user action · `warn` = will need attention if it persists ·
+> `info` = lifecycle · `debug` = forensic. A row's level reflects how the
+> **operation ended**, not the loudest moment inside it — transient failures the
+> system healed are `debug` with `outcome: 'recovered'`.
+
 ### log.debug() - Developer Only
 - Hidden in production (`__DEV__` only)
 - Request/response details

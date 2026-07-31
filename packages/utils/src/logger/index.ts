@@ -27,7 +27,7 @@ import { LogRetentionCollection, sweepLogRetention } from './retention';
  * group on them without parsing context.
  */
 export interface LogTerminalFields {
-	outcome?: 'ok' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	outcome?: 'ok' | 'recovered' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
 	operationId?: string;
 	operationType?: string;
 	requestId?: string;
@@ -604,7 +604,11 @@ const mainTransport = (props: any) => {
 				context: options.context ?? {},
 			});
 			if (dbCollection && isVerboseDiagnostics()) {
-				persistLog(dbCollection, levelName, message, options.context ?? {});
+				// Forward terminal fields too: a forensic debug row (e.g. a recovered 401
+				// attempt, #899) is only chainable to its refresh/success rows through
+				// outcome + operationId, and dropping them here would break the chain
+				// exactly where verbose diagnostics is meant to expose it.
+				persistLog(dbCollection, levelName, message, options.context ?? {}, options.terminal);
 			}
 		} catch (error) {
 			console.error('Failed to record debug log entry', error);
@@ -624,11 +628,15 @@ const mainTransport = (props: any) => {
 };
 
 /**
- * Log Level Guidelines:
- * - DEBUG: Internal flow details, retries, skipped items (developer only, hidden in production)
- * - INFO:  Meaningful state changes worth tracking - successful syncs, logins, connections
- * - WARN:  Potential issues that don't block functionality
- * - ERROR: Failures that need attention
+ * Log Level Guidelines (full rubric: ./LEVELS.md):
+ * - DEBUG: Forensic detail — internal flow, retries, transient failures that later
+ *          RECOVERED (stamp `outcome: 'recovered'`); developer only, hidden in production
+ * - INFO:  Lifecycle — meaningful state changes worth tracking (syncs, logins, "Session renewed")
+ * - WARN:  Will need attention if it persists
+ * - ERROR: Needs user action
+ *
+ * A level reflects how the OPERATION ended, not the loudest moment inside it —
+ * the layer that sees the whole arc decides the level once the arc settles (#899).
  *
  * In development: all logs (debug, info, warn, error)
  * In production: info, warn, error (debug is filtered for performance)

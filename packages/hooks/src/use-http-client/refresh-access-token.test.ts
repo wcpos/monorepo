@@ -3,12 +3,19 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { refreshAccessToken } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
 
-jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({
+jest.mock('@wcpos/utils/logger', () => {
+	const loggerCalls = {
 		debug: jest.fn(),
+		info: jest.fn(),
 		warn: jest.fn(),
-	}),
-}));
+		error: jest.fn(),
+	};
+	return { getLogger: () => loggerCalls, __loggerCalls: loggerCalls };
+});
+
+const { __loggerCalls: loggerCalls } = jest.requireMock('@wcpos/utils/logger') as {
+	__loggerCalls: Record<'debug' | 'info' | 'warn' | 'error', jest.Mock>;
+};
 
 function createDeferred<T>() {
 	let resolve!: (value: T) => void;
@@ -171,5 +178,108 @@ describe('refreshAccessToken', () => {
 		]);
 		expect(post).toHaveBeenCalledTimes(1);
 		expect(wpUser.incrementalPatch).toHaveBeenCalledTimes(1);
+	});
+
+	// #899: the level of an auth event reflects the settled outcome. A successful
+	// refresh is the healthy ending of the TTL cycle — one positive lifecycle
+	// breadcrumb, chained to the driving request's arc.
+	describe('settled-outcome logging (#899)', () => {
+		beforeEach(() => {
+			loggerCalls.info.mockClear();
+			loggerCalls.warn.mockClear();
+			loggerCalls.error.mockClear();
+		});
+
+		it('emits one localized "Session renewed" info row carrying the driving arc id', async () => {
+			const post = jest.fn().mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: 9999 },
+				status: 200,
+			});
+			const { config } = makeConfig(post);
+
+			await refreshAccessToken({
+				...config,
+				sessionRenewedMessage: 'Sitzung automatisch erneuert',
+				operationId: 'auth-arc-1',
+			});
+
+			expect(loggerCalls.info).toHaveBeenCalledTimes(1);
+			expect(loggerCalls.info).toHaveBeenCalledWith(
+				'Sitzung automatisch erneuert',
+				expect.objectContaining({
+					terminal: expect.objectContaining({
+						outcome: 'ok',
+						operationType: 'auth.refresh',
+						operationId: 'auth-arc-1',
+					}),
+				})
+			);
+		});
+
+		it('falls back to the English copy when no translator is threaded through', async () => {
+			const post = jest.fn().mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: 9999 },
+				status: 200,
+			});
+			const { config } = makeConfig(post);
+
+			await refreshAccessToken(config);
+
+			expect(loggerCalls.info).toHaveBeenCalledWith(
+				'Session renewed automatically',
+				expect.anything()
+			);
+		});
+
+		it('emits the breadcrumb once per refresh CYCLE, not per coalesced caller', async () => {
+			const response = createDeferred<{
+				data: { access_token: string; expires_at: number };
+				status: number;
+			}>();
+			const post = jest.fn(() => response.promise);
+			const { config } = makeConfig(post);
+
+			const first = refreshAccessToken({ ...config, operationId: 'auth-arc-driver' });
+			const second = refreshAccessToken({ ...config, operationId: 'auth-arc-peer' });
+			response.resolve({
+				data: { access_token: 'shared-token', expires_at: 9999 },
+				status: 200,
+			});
+			await Promise.all([first, second]);
+
+			expect(loggerCalls.info).toHaveBeenCalledTimes(1);
+			expect(loggerCalls.info).toHaveBeenCalledWith(
+				'Session renewed automatically',
+				expect.objectContaining({
+					terminal: expect.objectContaining({ operationId: 'auth-arc-driver' }),
+				})
+			);
+		});
+
+		it('logs a terminally rejected refresh token at error (user action required)', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('401 Unauthorized'));
+			const { config } = makeConfig(post);
+
+			await refreshAccessToken(config);
+
+			expect(loggerCalls.error).toHaveBeenCalledWith(
+				'Unable to refresh session',
+				expect.objectContaining({
+					terminal: expect.objectContaining({ outcome: 'failed' }),
+				})
+			);
+			expect(loggerCalls.warn).not.toHaveBeenCalled();
+			expect(loggerCalls.info).not.toHaveBeenCalled();
+		});
+
+		it('keeps a transient refresh failure at warn (attention only if it persists)', async () => {
+			const post = jest.fn().mockRejectedValue(new Error('HTTP 503: Service Unavailable'));
+			const { config } = makeConfig(post);
+
+			await refreshAccessToken(config);
+
+			expect(loggerCalls.warn).toHaveBeenCalledWith('Unable to refresh session', expect.anything());
+			expect(loggerCalls.error).not.toHaveBeenCalled();
+		});
 	});
 });

@@ -102,6 +102,7 @@ export const createTokenRefreshHandler = ({
 	site,
 	wpUser,
 	getHttpClient,
+	sessionRenewedMessage,
 }: TokenRefreshConfig): HttpErrorHandler => {
 	return {
 		name: 'token-refresh',
@@ -134,7 +135,12 @@ export const createTokenRefreshHandler = ({
 				},
 			});
 
-			const freshToken = await refreshAccessToken({ site, wpUser, getHttpClient });
+			const freshToken = await refreshAccessToken({
+				site,
+				wpUser,
+				getHttpClient,
+				sessionRenewedMessage,
+			});
 			if (!freshToken) {
 				// refreshAccessToken latches authFailed only for a terminally rejected refresh
 				// token — flag the error for the OAuth fallback in that case. A transient failure
@@ -166,17 +172,22 @@ export const createTokenRefreshHandler = ({
 			} catch (retryError: unknown) {
 				const retryStatus = getResponseStatus(retryError);
 				if (retryStatus === 401) {
-					tokenLogger.warn('Request still unauthorized after token refresh - please log in again', {
-						showToast: true,
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
-							userId: wpUser.id,
-							siteUrl: site.url,
-							originalUrl: originalConfig.url,
-							retryStatus,
-						},
-					});
+					// Settled failure (#899 rubric): the refresh ran and the 401 persisted,
+					// so the user must re-authenticate — that is user action, i.e. error.
+					tokenLogger.error(
+						'Request still unauthorized after token refresh - please log in again',
+						{
+							showToast: true,
+							saveToDb: true,
+							context: {
+								errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
+								userId: wpUser.id,
+								siteUrl: site.url,
+								originalUrl: originalConfig.url,
+								retryStatus,
+							},
+						}
+					);
 
 					requestStateManager.setAuthFailed(true);
 					const refreshError = error as RefreshTokenError;

@@ -891,28 +891,179 @@ describe('createAppSyncEngine scope cache', () => {
 
 		expect(response?.status).toBe(200);
 		expect(refreshAuth).toHaveBeenCalledTimes(1);
+		// The arc id minted for the absorbed 401 is handed to the refresh layer so
+		// its "Session renewed" breadcrumb chains to these rows (#899).
+		expect(refreshAuth).toHaveBeenCalledWith({ operationId: expect.any(String) });
 		expect(fetch).toHaveBeenCalledTimes(2);
 		expect(networkError).not.toHaveBeenCalled();
+		// #899: the level reflects the SETTLED outcome. A 401 the refresh absorbed
+		// is forensic (debug + outcome 'recovered'), not a warn — and both attempts
+		// share the arc's operationId.
+		const arcCalls = refreshAuth.mock.calls as unknown as { operationId?: string }[][];
+		const arcId = arcCalls[0]?.[0]?.operationId;
 		expect(appMetricsObserver).toHaveBeenNthCalledWith(
 			1,
 			expect.objectContaining({
 				type: 'transport.request',
-				level: 'warn',
-				fields: expect.objectContaining({ status: 401 }),
+				level: 'debug',
+				fields: expect.objectContaining({
+					status: 401,
+					outcome: 'recovered',
+					operationId: arcId,
+				}),
 			})
 		);
 		expect(appMetricsObserver).toHaveBeenNthCalledWith(
 			2,
 			expect.objectContaining({
 				type: 'transport.request',
-				level: 'info',
-				fields: expect.objectContaining({ status: 200 }),
+				level: 'debug',
+				fields: expect.objectContaining({ status: 200, operationId: arcId }),
 			})
 		);
 		const firstHeaders = fetch.mock.calls[0]?.[1]?.headers as Headers;
 		const retryHeaders = fetch.mock.calls[1]?.[1]?.headers as Headers;
 		expect(firstHeaders.get('Authorization')).toBe('Bearer expired-token');
 		expect(retryHeaders.get('Authorization')).toBe('Bearer refreshed-token');
+		fetch.mockRestore();
+	});
+
+	it('settles a 401 that persists after refresh as an error row (#899 exhaustion)', async () => {
+		let accessToken = 'expired-token';
+		const credentials = { getLatest: jest.fn(() => ({ access_token: accessToken })) };
+		const refreshAuth = jest.fn(async () => {
+			accessToken = 'refreshed-token';
+			return accessToken;
+		});
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
+			loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(response?.status).toBe(401);
+		expect(refreshAuth).toHaveBeenCalledTimes(1);
+		expect(appMetricsObserver).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'debug',
+				fields: expect.objectContaining({ status: 401, outcome: 'failed' }),
+			})
+		);
+		expect(appMetricsObserver).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'error',
+				fields: expect.objectContaining({ status: 401 }),
+			})
+		);
+		fetch.mockRestore();
+	});
+
+	it('settles a 401 whose refresh yields no token as a warn row, not an error', async () => {
+		const credentials = { getLatest: jest.fn(() => ({ access_token: 'expired-token' })) };
+		const refreshAuth = jest.fn().mockResolvedValue(null);
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
+			loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		// The refresh layer logs its own verdict (error when terminal); the request
+		// row records the failure without double-escalating.
+		expect(response?.status).toBe(401);
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(appMetricsObserver).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'warn',
+				fields: expect.objectContaining({
+					status: 401,
+					outcome: 'failed',
+					operationId: expect.any(String),
+				}),
+			})
+		);
+		fetch.mockRestore();
+	});
+
+	it('classifies a 403 as error without ever refreshing (row-14 rule + #899 rubric)', async () => {
+		const credentials = { getLatest: jest.fn(() => ({ access_token: 'token' })) };
+		const refreshAuth = jest.fn();
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 403 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
+			loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(response?.status).toBe(403);
+		expect(refreshAuth).not.toHaveBeenCalled();
+		expect(appMetricsObserver).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'error',
+				fields: expect.objectContaining({ status: 403 }),
+			})
+		);
+		fetch.mockRestore();
+	});
+
+	it('classifies the tick-probe 404 as a recovered debug row (designed fallback)', async () => {
+		const credentials = { getLatest: jest.fn(() => ({ access_token: 'token' })) };
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 404 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
+			loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, credentials });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+
+		expect(appMetricsObserver).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'debug',
+				fields: expect.objectContaining({ status: 404, outcome: 'recovered' }),
+			})
+		);
+		fetch.mockRestore();
+	});
+
+	it('keeps a non-tick 404 at warn', async () => {
+		const credentials = { getLatest: jest.fn(() => ({ access_token: 'token' })) };
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 404 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
+			loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, credentials });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		expect(appMetricsObserver).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'transport.request',
+				level: 'warn',
+				fields: expect.objectContaining({ status: 404 }),
+			})
+		);
 		fetch.mockRestore();
 	});
 

@@ -7,6 +7,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { useAppState } from '@wcpos/core/contexts/app-state';
+import { useT } from '@wcpos/core/contexts/translations';
 import { registerEngineScopeSwitcher } from '@wcpos/core/contexts/app-state/engine-scope-port';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
@@ -63,6 +64,7 @@ function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
 	const { storeDB, site, wpCredentials, store } = useAppState();
 	const { locale } = useLocale();
+	const t = useT();
 
 	React.useEffect(() => {
 		// React Native Web does not route every keyboard/pointer interaction through responders.
@@ -112,7 +114,7 @@ function AppStack() {
 				wpApiUrl,
 				credentials: wpCredentials,
 				useJwtAsParam,
-				refreshAuth: () =>
+				refreshAuth: (context) =>
 					refreshAccessToken({
 						site: {
 							wcpos_api_url: wcposApiUrl,
@@ -123,10 +125,14 @@ function AppStack() {
 						},
 						wpUser: wpCredentials,
 						getHttpClient: createRefreshHttpClient,
+						sessionRenewedMessage: t('auth.session_renewed_automatically', {
+							defaultValue: 'Session renewed automatically',
+						}),
+						operationId: context?.operationId,
 					}),
 				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },
 			}),
-		[wpApiUrl, wcposApiUrl, storeID, cashierID, useJwtAsParam, wpCredentials]
+		[wpApiUrl, wcposApiUrl, storeID, cashierID, useJwtAsParam, wpCredentials, t]
 	);
 
 	return (

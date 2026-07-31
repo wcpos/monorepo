@@ -30,6 +30,18 @@ export interface RefreshAccessTokenConfig {
 	};
 	wpUser: WPCredentialsDocument;
 	getHttpClient: () => RefreshHttpClient;
+	/**
+	 * Localized copy for the one-per-cycle "Session renewed automatically" info
+	 * row (#899). Callers with i18n access pass
+	 * `t('auth.session_renewed_automatically')`; the English default keeps the
+	 * breadcrumb when no translator is threaded through.
+	 */
+	sessionRenewedMessage?: string;
+	/**
+	 * The arc id of the request whose 401 drove this refresh, so the renewed
+	 * breadcrumb chains to the absorbed attempt and its successful retry (#899).
+	 */
+	operationId?: string;
 }
 
 interface TokenRefreshResponse {
@@ -55,6 +67,8 @@ export async function refreshAccessToken({
 	site,
 	wpUser,
 	getHttpClient,
+	sessionRenewedMessage,
+	operationId,
 }: RefreshAccessTokenConfig): Promise<string | null> {
 	// A terminal auth failure stays latched until re-authentication clears it. The engine's
 	// scheduler lanes have no authFailed preflight of their own (that guard lives in the app's
@@ -108,6 +122,20 @@ export async function refreshAccessToken({
 
 				const { access_token, expires_at } = responseData;
 				await wpUser.incrementalPatch({ access_token, expires_at });
+				// One lifecycle breadcrumb per refresh CYCLE (#899): this closure runs
+				// only in the caller that actually drove the single-flight refresh
+				// (startTokenRefresh coalesces the rest), so concurrent 401s across the
+				// sync engine and the http client still produce exactly one info row.
+				// The absorbed 401 attempts themselves are debug rows with
+				// outcome 'recovered'; this is the positive ending the merchant reads.
+				tokenLogger.info(sessionRenewedMessage ?? 'Session renewed automatically', {
+					context: { userId: wpUser.id, siteUrl: site.url },
+					terminal: {
+						outcome: 'ok',
+						operationType: 'auth.refresh',
+						...(operationId !== undefined ? { operationId } : {}),
+					},
+				});
 				return access_token;
 			} finally {
 				resumeQueue();
@@ -122,7 +150,10 @@ export async function refreshAccessToken({
 		// failures — 5xx, a thrown network error, a malformed 2xx body — must stay retryable, or
 		// a momentary blip would log the cashier out mid-session.
 		const terminal = isTerminalRefreshFailure(error);
-		tokenLogger.warn('Unable to refresh session', {
+		// Level reflects the settled outcome (#899 rubric): a terminally rejected
+		// refresh token means the user must re-authenticate → error; a transient
+		// blip (5xx/network) will need attention only if it persists → warn.
+		tokenLogger[terminal ? 'error' : 'warn']('Unable to refresh session', {
 			saveToDb: terminal,
 			context: {
 				errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
@@ -130,6 +161,11 @@ export async function refreshAccessToken({
 				terminal,
 				userId: wpUser.id,
 				siteUrl: site.url,
+			},
+			terminal: {
+				outcome: 'failed',
+				operationType: 'auth.refresh',
+				...(operationId !== undefined ? { operationId } : {}),
 			},
 		});
 		if (terminal) {
