@@ -12,13 +12,6 @@ import type { Observable } from 'rxjs';
 
 /** Re-derive the day boundary once a minute. */
 const REFRESH_MS = 60_000;
-/**
- * Upper bound on scanned record-outcome rows. The selector narrows to
- * `sync.record` rows, which repeat-collapse to one row per (record, reason) —
- * 500 collapsed outcome rows is far beyond any real backlog, so the limit is
- * a runaway guard, not a coverage window.
- */
-const STUCK_SCAN_LIMIT = 500;
 
 export type LogStats = {
 	eventsToday: number;
@@ -30,11 +23,9 @@ const EMPTY_STATS: LogStats = { eventsToday: 0, errorsToday: 0, stuck: [] };
 
 type LogsCollectionLike = {
 	count(query: { selector: Record<string, unknown> }): { $: Observable<number> };
-	find(query: {
-		selector: Record<string, unknown>;
-		sort: Record<string, 'asc' | 'desc'>[];
-		limit: number;
-	}): { $: Observable<{ toJSON(): LogRow }[]> };
+	find(query: { selector: Record<string, unknown>; sort: Record<string, 'asc' | 'desc'>[] }): {
+		$: Observable<{ toJSON(): LogRow }[]>;
+	};
 };
 
 /**
@@ -70,7 +61,6 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 						operationType: { $eq: 'sync.record' },
 					},
 					sort: [{ timestamp: 'desc' }],
-					limit: STUCK_SCAN_LIMIT,
 				})
 				.$.pipe(map((docs) => deriveStuckRecords(docs.map((doc) => doc.toJSON()))));
 			return combineLatest([events$, errors$, stuck$]).pipe(
@@ -87,7 +77,7 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 
 /**
  * Live counts for the Logs stat header. Counts use the `[level, timestamp]`
- * index; the stuck-records derivation scans recent sync-domain rows via the
+ * index; the stuck-records derivation scans retained sync-domain rows via the
  * `[category, timestamp]` index and rules per record (spec §4).
  */
 export function useLogStats(): LogStats {
