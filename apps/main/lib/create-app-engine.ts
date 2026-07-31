@@ -16,10 +16,12 @@
  */
 
 import { defaultConfig } from '@wcpos/database/adapters/default';
-import { composeObservers, type SyncEvent } from '@wcpos/sync-core';
+import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { QueryTotalWooRequest, RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
 import { getEngineConnectivity } from './connectivity';
@@ -35,6 +37,8 @@ import { deriveSyncSite } from './sync-site';
 import { markSyncStatusStale, syncStatusObserver } from './sync-status';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
+// Below the successor's 15s readiness-watchdog first report; orders of magnitude above a healthy close.
+const ENGINE_DISPOSAL_DEADLINE_MS = 10_000;
 
 export interface CreateAppSyncEngineOptions {
 	/** The site's wp-json root (`site.wp_api_url`). */
@@ -72,6 +76,7 @@ type MutableFetcherOptions = Pick<
 
 type CachedEngine = {
 	key: string;
+	databaseName: string;
 	engine: RxdbSyncEngine;
 	fetcherOptions: MutableFetcherOptions;
 };
@@ -126,10 +131,31 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	} catch {
 		disposal = Promise.resolve();
 	}
-	const settledDisposal = disposal.catch(() => undefined);
-	pendingDisposals.set(entry.key, settledDisposal);
-	void settledDisposal.then(() => {
-		if (pendingDisposals.get(entry.key) === settledDisposal) {
+	const settled = disposal.catch(() => undefined);
+	const bounded = new Promise<void>((resolve) => {
+		const timer = setTimeout(() => {
+			markStorageTerminallyFailed(
+				entry.databaseName,
+				`Engine disposal exceeded ${ENGINE_DISPOSAL_DEADLINE_MS}ms`
+			);
+			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
+				context: {
+					errorCode: ERROR_CODES.DISPOSAL_TIMEOUT,
+					scopeKey: entry.key,
+					databaseName: entry.databaseName,
+				},
+			});
+			resolve();
+		}, ENGINE_DISPOSAL_DEADLINE_MS);
+		void settled.then(() => {
+			// A late deadline could mark storage instances already opened by the successor.
+			clearTimeout(timer);
+			resolve();
+		});
+	});
+	pendingDisposals.set(entry.key, bounded);
+	void bounded.then(() => {
+		if (pendingDisposals.get(entry.key) === bounded) {
 			pendingDisposals.delete(entry.key);
 		}
 	});
@@ -379,6 +405,11 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		options.scope
 	);
 	engineSelf = engine;
-	cachedEngine = { key: cacheKey, engine, fetcherOptions };
+	cachedEngine = {
+		key: cacheKey,
+		databaseName: scopeDatabaseName(options.scope),
+		engine,
+		fetcherOptions,
+	};
 	return engine;
 }

@@ -1,3 +1,5 @@
+import { scopeDatabaseName } from '@wcpos/sync-core';
+
 import type { CreateAppSyncEngineOptions } from './create-app-engine';
 
 const BASE_OPTIONS = {
@@ -27,6 +29,7 @@ function loadCreateAppEngine(
 	const networkInfo = jest.fn();
 	const networkWarn = jest.fn();
 	const networkError = jest.fn();
+	const markStorageTerminallyFailed = jest.fn(() => true);
 	const getDatabaseEpoch = jest.fn(() => 0);
 	const createRxdbSyncEngine = jest.fn(
 		(
@@ -51,6 +54,9 @@ function loadCreateAppEngine(
 	);
 
 	jest.doMock('@wcpos/sync-engine', () => ({ createRxdbSyncEngine }));
+	jest.doMock('@wcpos/database/plugins/wrapped-error-handler-storage', () => ({
+		markStorageTerminallyFailed,
+	}));
 	jest.doMock('@wcpos/database/adapters/default', () => ({
 		defaultConfig: { storage: { name: 'test-storage' } },
 	}));
@@ -77,6 +83,7 @@ function loadCreateAppEngine(
 		networkInfo,
 		networkWarn,
 		networkError,
+		markStorageTerminallyFailed,
 		getDatabaseEpoch,
 	};
 }
@@ -793,5 +800,91 @@ describe('createAppSyncEngine scope cache', () => {
 		await open;
 
 		expect(barrierSettled).toBe(true);
+	});
+
+	it('force-releases a hung disposal barrier at the deadline', async () => {
+		jest.useFakeTimers();
+		try {
+			const engines = [
+				createEngineDouble(() => new Promise(() => undefined)),
+				createEngineDouble(),
+				createEngineDouble(),
+			];
+			const {
+				createAppSyncEngine,
+				createRxdbSyncEngine,
+				markStorageTerminallyFailed,
+				networkError,
+			} = loadCreateAppEngine(() => {
+				const engine = engines.shift();
+				if (!engine) throw new Error('missing engine double');
+				return engine;
+			});
+			createAppSyncEngine(BASE_OPTIONS);
+
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+			});
+			createAppSyncEngine(BASE_OPTIONS);
+			const databaseOpenBarrier = createRxdbSyncEngine.mock.calls[2]?.[0].databaseOpenBarrier;
+			let barrierSettled = false;
+			const open = databaseOpenBarrier?.then(() => {
+				barrierSettled = true;
+			});
+			for (let turn = 0; turn < 5; turn += 1) {
+				await Promise.resolve();
+			}
+
+			jest.advanceTimersByTime(10_000);
+			for (let turn = 0; turn < 5; turn += 1) {
+				await Promise.resolve();
+			}
+
+			expect(barrierSettled).toBe(true);
+			await open;
+			expect(markStorageTerminallyFailed).toHaveBeenCalledTimes(1);
+			expect(markStorageTerminallyFailed).toHaveBeenCalledWith(
+				scopeDatabaseName(BASE_OPTIONS.scope),
+				expect.any(String)
+			);
+			expect(networkError).toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('does not trip the disposal deadline after a fast disposal', async () => {
+		jest.useFakeTimers();
+		try {
+			let resolveDisposal: () => void = () => undefined;
+			const disposal = new Promise<void>((resolve) => {
+				resolveDisposal = resolve;
+			});
+			const engines = [createEngineDouble(() => disposal), createEngineDouble()];
+			const { createAppSyncEngine, markStorageTerminallyFailed, networkError } =
+				loadCreateAppEngine(() => {
+					const engine = engines.shift();
+					if (!engine) throw new Error('missing engine double');
+					return engine;
+				});
+			createAppSyncEngine(BASE_OPTIONS);
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+			});
+
+			expect(jest.getTimerCount()).toBe(1);
+			resolveDisposal();
+			for (let turn = 0; turn < 5; turn += 1) {
+				await Promise.resolve();
+			}
+			jest.runAllTimers();
+
+			expect(markStorageTerminallyFailed).not.toHaveBeenCalled();
+			expect(networkError).not.toHaveBeenCalled();
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 });

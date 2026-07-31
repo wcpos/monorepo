@@ -4,6 +4,27 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { RxStorage, RxStorageInstance, RxStorageInstanceCreationParams } from 'rxdb';
 
 const storageLogger = getLogger(['wcpos', 'db', 'storage']);
+type StorageRpcMethod =
+	| 'bulkWrite'
+	| 'findDocumentsById'
+	| 'query'
+	| 'count'
+	| 'getAttachmentData'
+	| 'getChangedDocumentsSince'
+	| 'cleanup'
+	| 'remove'
+	| 'close';
+type InFlightCall = {
+	methodName: StorageRpcMethod;
+	kill: () => void;
+};
+type InstanceLatchState = {
+	databaseName: string;
+	failureReason: string | null;
+	inFlight: Set<InFlightCall>;
+};
+const instancesByDatabaseName = new Map<string, Set<InstanceLatchState>>();
+
 const TARGETED_RECOVERY =
 	/targeted recovery failed for (.+): (missing-primary-row|missing-index-row|no-valid-document|index-mismatch|recovered-document-too-large)/;
 function getTargetedRecovery(message: string): RegExpMatchArray | null {
@@ -91,6 +112,8 @@ function handleStorageError(
 
 	// Worker communication failures
 	if (message.includes('could not requestRemote')) {
+		// requestRemote throws this only when the worker answers with an error envelope, so it is
+		// still alive. A dead worker stays silent; the host disposal deadline marks that storage dead.
 		storageLogger.error(`Storage worker error in ${methodName}`, {
 			saveToDb: true,
 			context: {
@@ -116,12 +139,95 @@ function handleStorageError(
 	return false;
 }
 
+function terminalFailureError(databaseName: string, reason: string): Error {
+	const error = new Error(`Storage terminally failed for database "${databaseName}": ${reason}`);
+	error.name = 'StorageTerminallyFailedError';
+	return error;
+}
+
+async function raceStorageCall<T>(
+	state: InstanceLatchState,
+	methodName: StorageRpcMethod,
+	call: () => Promise<T>
+): Promise<T> {
+	if (state.failureReason !== null) {
+		if (methodName === 'close') return undefined as T;
+		throw terminalFailureError(state.databaseName, state.failureReason);
+	}
+
+	let callState: InFlightCall;
+	const killed = new Promise<T>((resolve, reject) => {
+		callState = {
+			methodName,
+			kill: () => {
+				// RxDatabase releases USED_DATABASE_NAMES only from onClosed, which runs
+				// only when close() completes. Once storage is declared dead, close must
+				// resolve — never reject or hang — or the database name stays occupied
+				// forever and a successor reopening the same scope hits rxdb error DB8.
+				if (methodName === 'close') {
+					resolve(undefined as T);
+				} else {
+					reject(terminalFailureError(state.databaseName, state.failureReason!));
+				}
+			},
+		};
+	});
+	state.inFlight.add(callState!);
+	let underlying: Promise<T>;
+	try {
+		underlying = call();
+	} catch (error) {
+		state.inFlight.delete(callState!);
+		void killed.catch(() => undefined);
+		throw error;
+	}
+	void underlying.catch(() => undefined);
+	void underlying.then(
+		() => state.inFlight.delete(callState),
+		() => state.inFlight.delete(callState)
+	);
+	return Promise.race([underlying, killed]);
+}
+
+function unregisterInstance(state: InstanceLatchState): void {
+	const instances = instancesByDatabaseName.get(state.databaseName);
+	if (!instances) return;
+	instances.delete(state);
+	if (instances.size === 0) instancesByDatabaseName.delete(state.databaseName);
+}
+
+export function markStorageTerminallyFailed(databaseName: string, reason: string): boolean {
+	const instances = instancesByDatabaseName.get(databaseName);
+	if (!instances) return false;
+	let marked = false;
+	for (const state of instances) {
+		if (state.failureReason !== null) continue;
+		state.failureReason = reason;
+		marked = true;
+		for (const call of state.inFlight) {
+			call.kill();
+		}
+	}
+	if (marked) {
+		storageLogger.error(`Storage terminally failed for database "${databaseName}": ${reason}`, {
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.STORAGE_ERROR,
+				databaseName,
+				reason,
+			},
+		});
+	}
+	return marked;
+}
+
 /**
  * Wraps an RxStorageInstance to catch errors, log them through the logger,
  * and provide graceful fallbacks where safe to do so.
  */
 function wrapStorageInstance<RxDocType>(
-	instance: RxStorageInstance<RxDocType, any, any, any>
+	instance: RxStorageInstance<RxDocType, any, any, any>,
+	databaseName: string
 ): RxStorageInstance<RxDocType, any, any, any> {
 	const originalFindDocumentsById = instance.findDocumentsById.bind(instance);
 	const originalBulkWrite = instance.bulkWrite.bind(instance);
@@ -170,6 +276,40 @@ function wrapStorageInstance<RxDocType>(
 		}
 	};
 
+	const state: InstanceLatchState = {
+		databaseName,
+		failureReason: null,
+		inFlight: new Set(),
+	};
+	const instances = instancesByDatabaseName.get(databaseName) ?? new Set();
+	instances.add(state);
+	instancesByDatabaseName.set(databaseName, instances);
+
+	const bulkWrite = instance.bulkWrite.bind(instance);
+	instance.bulkWrite = (...args) => raceStorageCall(state, 'bulkWrite', () => bulkWrite(...args));
+	const findDocumentsById = instance.findDocumentsById.bind(instance);
+	instance.findDocumentsById = (...args) =>
+		raceStorageCall(state, 'findDocumentsById', () => findDocumentsById(...args));
+	const query = instance.query.bind(instance);
+	instance.query = (...args) => raceStorageCall(state, 'query', () => query(...args));
+	const count = instance.count.bind(instance);
+	instance.count = (...args) => raceStorageCall(state, 'count', () => count(...args));
+	const getAttachmentData = instance.getAttachmentData.bind(instance);
+	instance.getAttachmentData = (...args) =>
+		raceStorageCall(state, 'getAttachmentData', () => getAttachmentData(...args));
+	if (instance.getChangedDocumentsSince) {
+		const getChangedDocumentsSince = instance.getChangedDocumentsSince.bind(instance);
+		instance.getChangedDocumentsSince = (...args) =>
+			raceStorageCall(state, 'getChangedDocumentsSince', () => getChangedDocumentsSince(...args));
+	}
+	const cleanup = instance.cleanup.bind(instance);
+	instance.cleanup = (...args) => raceStorageCall(state, 'cleanup', () => cleanup(...args));
+	const remove = instance.remove.bind(instance);
+	instance.remove = (...args) => raceStorageCall(state, 'remove', () => remove(...args));
+	const close = instance.close.bind(instance);
+	instance.close = (...args) =>
+		raceStorageCall(state, 'close', () => close(...args)).finally(() => unregisterInstance(state));
+
 	return instance;
 }
 
@@ -188,7 +328,7 @@ export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 			params: RxStorageInstanceCreationParams<RxDocType, InstanceCreationOptions>
 		) {
 			const instance = await storage.createStorageInstance(params);
-			return wrapStorageInstance(instance);
+			return wrapStorageInstance(instance, params.databaseName);
 		},
 	};
 }
