@@ -23,7 +23,7 @@ const FIX_ROUTES: Record<string, (uuid: string) => string> = {
 
 /**
  * Best-effort display name for the stuck record, read from the local doc
- * (products: name; orders: number; customers: name/username). Falls back to
+ * (products: name; orders: number; customers: first/last name or username). Falls back to
  * `collection/id` — the record always stays identifiable.
  */
 function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
@@ -48,15 +48,23 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 					{ findOne(id: string): { exec(): Promise<Record<string, unknown> | null> } } | undefined;
 				const doc = await collection?.findOne(stuck.recordId).exec();
 				if (cancelled || !doc) return;
-				const source = doc as { name?: unknown; number?: unknown; username?: unknown };
+				const source = doc as { number?: unknown; payload?: Record<string, unknown> };
+				const payload = source.payload ?? {};
+				const customerName = [payload.first_name, payload.last_name]
+					.filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+					.map((part) => part.trim())
+					.join(' ');
+				const number = source.number ?? payload.number;
 				const name =
-					typeof source.name === 'string' && source.name.length > 0
-						? source.name
-						: typeof source.number === 'string' || typeof source.number === 'number'
-							? `#${source.number}`
-							: typeof source.username === 'string'
-								? source.username
-								: null;
+					typeof payload.name === 'string' && payload.name.length > 0
+						? payload.name
+						: typeof number === 'string' || typeof number === 'number'
+							? `#${number}`
+							: customerName.length > 0
+								? customerName
+								: typeof payload.username === 'string'
+									? payload.username
+									: null;
 				if (name) setResolved({ key: stuck.key, label: name });
 			} catch {
 				// Doc unavailable — the collection/id fallback still identifies it.
@@ -120,16 +128,18 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 							</ButtonText>
 						</Button>
 					) : null}
-					<Button
-						variant="ghost"
-						size="sm"
-						testID="db-attention-retry"
-						onPress={() => void engine.sync()}
-					>
-						<ButtonText className="text-sm">
-							{t('health.database.attention_retry', { defaultValue: 'Retry' })}
-						</ButtonText>
-					</Button>
+					{first.retryable ? (
+						<Button
+							variant="ghost"
+							size="sm"
+							testID="db-attention-retry"
+							onPress={() => void engine.sync()}
+						>
+							<ButtonText className="text-sm">
+								{t('health.database.attention_retry', { defaultValue: 'Retry' })}
+							</ButtonText>
+						</Button>
+					) : null}
 					<Button
 						variant="ghost"
 						size="sm"

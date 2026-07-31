@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 import { combineLatest, of, timer } from 'rxjs';
-import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { catchError, map, switchMap } from 'rxjs/operators';
 
 import { useQueryManager } from '@wcpos/query';
 
@@ -10,10 +10,14 @@ import { deriveStuckRecords, type LogRow, startOfLocalDay, type StuckRecord } fr
 
 import type { Observable } from 'rxjs';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-/** Re-derive the day boundary (and the stuck 24 h window) once a minute. */
+/** Re-derive the day boundary once a minute. */
 const REFRESH_MS = 60_000;
-/** sync.record rows are sparse; 500 recent sync rows is a generous window. */
+/**
+ * Upper bound on scanned record-outcome rows. The selector narrows to
+ * `sync.record` rows, which repeat-collapse to one row per (record, reason) —
+ * 500 collapsed outcome rows is far beyond any real backlog, so the limit is
+ * a runaway guard, not a coverage window.
+ */
 const STUCK_SCAN_LIMIT = 500;
 
 export type LogStats = {
@@ -38,10 +42,12 @@ type LogsCollectionLike = {
  * time (rx callbacks), never during render.
  */
 function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStats> {
+	// Rebuild the inner queries on every tick (not just day-boundary changes):
+	// re-subscribing is how a tick that hit the catchError below gets retried
+	// within a minute instead of staying zeroed until midnight.
 	return timer(0, REFRESH_MS).pipe(
-		map(() => startOfLocalDay(Date.now())),
-		distinctUntilChanged(),
-		switchMap((dayStart) => {
+		switchMap(() => {
+			const dayStart = startOfLocalDay(Date.now());
 			const events$ = logsCollection.count({
 				selector: {
 					timestamp: { $gte: dayStart },
@@ -51,23 +57,31 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 			const errors$ = logsCollection.count({
 				selector: { level: { $eq: 'error' }, timestamp: { $gte: dayStart } },
 			}).$;
+			// No time window: a stuck record stays stuck until a decisive `ok` row —
+			// repeat-collapse keeps the ORIGINAL `timestamp` (only `lastSeen` moves),
+			// and a permanently rejected record may never write again, so any cutoff
+			// on `timestamp` silently un-sticks real failures. Retention (30 days)
+			// is the honest horizon. The `[category, timestamp]` index bounds the
+			// scan to the sync domain; `operationType` narrows it to outcome rows.
 			const stuck$ = logsCollection
 				.find({
 					selector: {
 						category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' },
-						timestamp: { $gte: Date.now() - DAY_MS },
+						operationType: { $eq: 'sync.record' },
 					},
 					sort: [{ timestamp: 'desc' }],
 					limit: STUCK_SCAN_LIMIT,
 				})
 				.$.pipe(map((docs) => deriveStuckRecords(docs.map((doc) => doc.toJSON()))));
 			return combineLatest([events$, errors$, stuck$]).pipe(
-				map(([eventsToday, errorsToday, stuck]): LogStats => ({ eventsToday, errorsToday, stuck }))
+				map(([eventsToday, errorsToday, stuck]): LogStats => ({ eventsToday, errorsToday, stuck })),
+				// Storage trouble must not take the whole Logs tab down — the ledger
+				// has its own recovery; the header quietly reads zero for this tick
+				// and the outer timer retries on the next one (an outer catchError
+				// would complete the stream permanently).
+				catchError(() => of(EMPTY_STATS))
 			);
-		}),
-		// Storage trouble must not take the whole Logs tab down — the ledger has
-		// its own recovery; the header quietly reads zero.
-		catchError(() => of(EMPTY_STATS))
+		})
 	);
 }
 

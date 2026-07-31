@@ -237,7 +237,7 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 		case 'partial':
 		case 'windowed':
 			return (
-				<Tooltip>
+				<Tooltip showOnNative>
 					<TooltipTrigger asChild>
 						<Pressable accessibilityLabel={coverage.tooltip} className="items-end py-1">
 							<CoverageBar percent={coverage.percent} />
@@ -601,7 +601,10 @@ export function DatabaseScreen() {
 		deriveEverythingElseBytes(
 			storageBytes,
 			ROW_ORDER.map((key) => sizes[key]),
-			otherScopes?.bytes ?? null
+			// Everything NOT belonging to the active scope leaves the reconciliation:
+			// other stores AND this store's other cashiers — otherwise inactive
+			// cashiers' scopes masquerade as this scope's indexes/logs.
+			otherScopes ? otherScopes.bytes + otherScopes.sameStoreOtherCashierBytes : null
 		)
 	);
 	const otherStoresText =
@@ -655,8 +658,8 @@ export function DatabaseScreen() {
 						/>
 					) : null}
 					<Stat
-						value={mutations.pending}
-						tone={mutations.pending > 0 ? 'bad' : 'good'}
+						value={mutations.pendingOrders}
+						tone={mutations.pendingOrders > 0 ? 'bad' : 'good'}
 						label={t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
 						testID="db-stat-waiting"
 					/>

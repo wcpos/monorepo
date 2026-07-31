@@ -21,21 +21,27 @@ const DOT_CLASS: Record<LevelKind, string> = {
 };
 
 /**
- * Colored dot + localized label. The label may be omitted where space is
- * tight (phone rows) — there the row's expanded detail carries the meaning,
- * so the dot never has to stand alone.
+ * Colored dot + localized label. The visible label may be omitted where space
+ * is tight (phone rows), but the meaning must never ride on color alone —
+ * pass `accessibilityLabel` there so assistive tech still reads the kind.
  */
 export function LevelIndicator({
 	kind,
 	label,
+	accessibilityLabel,
 	testID,
 }: {
 	kind: LevelKind;
 	label?: string;
+	accessibilityLabel?: string;
 	testID?: string;
 }) {
 	return (
-		<HStack testID={testID} className="items-center gap-1.5">
+		<HStack
+			testID={testID}
+			accessibilityLabel={label ?? accessibilityLabel}
+			className="items-center gap-1.5"
+		>
 			<View className={cn('h-1.5 w-1.5 rounded-full', DOT_CLASS[kind])} />
 			{label ? <Text className="text-muted-foreground text-xs">{label}</Text> : null}
 		</HStack>

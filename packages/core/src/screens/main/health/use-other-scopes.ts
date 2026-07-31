@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useQueryManager } from '@wcpos/query';
 
+import { useEngineStatus } from '../hooks/use-engine-monitor';
 import { type OtherScopesSummary, summarizeOtherScopes } from './database-logic';
 
 /** Structural OPFS types — lib.dom's are incomplete for async iteration. */
@@ -32,6 +33,10 @@ async function measureDirectory(handle: OpfsDirectoryHandle): Promise<number> {
  */
 export function useOtherScopes(): OtherScopesSummary | null {
 	const { engine } = useQueryManager();
+	// One engine hosts multiple scopes: a same-site store switch changes
+	// `activeScopeId` without changing the engine's identity, so the probe
+	// must key on the scope, not just the engine.
+	const { activeScopeId } = useEngineStatus();
 	const [summary, setSummary] = React.useState<OtherScopesSummary | null>(null);
 
 	// Effect (last resort per project.mdc): OPFS enumeration is a one-shot
@@ -45,12 +50,12 @@ export function useOtherScopes(): OtherScopesSummary | null {
 		if (!storage) return;
 		let cancelled = false;
 		void (async () => {
-			let activeDbName: string | null = null;
+			let activeDbName: string;
 			try {
-				const scope = engine.active() as { database?: { name?: string } } | null;
-				activeDbName = scope?.database?.name ?? null;
+				const scope = engine.active() ?? (await engine.ready);
+				activeDbName = scope.database.name;
 			} catch {
-				activeDbName = null;
+				return;
 			}
 			try {
 				const root = await (
@@ -69,7 +74,7 @@ export function useOtherScopes(): OtherScopesSummary | null {
 		return () => {
 			cancelled = true;
 		};
-	}, [engine]);
+	}, [engine, activeScopeId]);
 
 	return summary;
 }

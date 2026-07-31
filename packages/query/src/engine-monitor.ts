@@ -21,11 +21,16 @@ const SYNC_COLLECTION_NAMES = [
 
 type SyncCollectionName = (typeof SYNC_COLLECTION_NAMES)[number];
 export type EngineCollectionCounts = Record<string, number>;
-export type EngineMutationCounts = { pending: number; conflicts: number };
+export type EngineMutationCounts = {
+	pending: number;
+	/** Pending mutations on the orders collection only — the "sales waiting to send" number. */
+	pendingOrders: number;
+	conflicts: number;
+};
 
 type CountCollection = { count(): { $: Observable<number> } };
 type MutationCollection = {
-	find(query: { selector: { status: { $in: string[] } } }): {
+	find(query: { selector: { status: { $in: string[] }; collectionName?: { $eq: string } } }): {
 		$: Observable<readonly unknown[]>;
 	};
 };
@@ -74,17 +79,24 @@ export function observeEngineMutationCounts(
 	const subscription = observeEngineDatabases(engine)
 		.pipe(
 			switchMap((database) => {
-				if (!database) return of({ pending: 0, conflicts: 0 });
+				if (!database) return of({ pending: 0, pendingOrders: 0, conflicts: 0 });
 				const mutations = database.collections.recordMutations as unknown as MutationCollection;
-				const pending$ = mutations.find({
-					selector: { status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] } },
+				const pendingSelector = {
+					status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] },
+				};
+				const pending$ = mutations.find({ selector: pendingSelector }).$;
+				// The queue carries every collection's writes; "sales waiting" must
+				// count only orders or a queued product edit reads as an unsent sale.
+				const pendingOrders$ = mutations.find({
+					selector: { ...pendingSelector, collectionName: { $eq: 'orders' } },
 				}).$;
 				const conflicts$ = mutations.find({
 					selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },
 				}).$;
-				return combineLatest([pending$, conflicts$]).pipe(
-					map(([pending, conflicts]) => ({
+				return combineLatest([pending$, pendingOrders$, conflicts$]).pipe(
+					map(([pending, pendingOrders, conflicts]) => ({
 						pending: pending.length,
+						pendingOrders: pendingOrders.length,
 						conflicts: conflicts.length,
 					}))
 				);
