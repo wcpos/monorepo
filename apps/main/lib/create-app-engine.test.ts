@@ -45,6 +45,7 @@ function loadCreateAppEngine(
 	const networkWarn = jest.fn();
 	const networkError = jest.fn();
 	const markStorageTerminallyFailed = jest.fn(() => true);
+	const forceFreeDatabaseRegistration = jest.fn(() => true);
 	const getDatabaseEpoch = jest.fn(() => 0);
 	const createRxdbSyncEngine = jest.fn(
 		(
@@ -71,6 +72,9 @@ function loadCreateAppEngine(
 	jest.doMock('@wcpos/sync-engine', () => ({ createRxdbSyncEngine }));
 	jest.doMock('@wcpos/database/plugins/wrapped-error-handler-storage', () => ({
 		markStorageTerminallyFailed,
+	}));
+	jest.doMock('@wcpos/database/plugins/rx-database-registry', () => ({
+		forceFreeDatabaseRegistration,
 	}));
 	jest.doMock('@wcpos/database/adapters/default', () => ({
 		defaultConfig: { storage: { name: 'test-storage' } },
@@ -100,6 +104,7 @@ function loadCreateAppEngine(
 		networkWarn,
 		networkError,
 		markStorageTerminallyFailed,
+		forceFreeDatabaseRegistration,
 		getDatabaseEpoch,
 	};
 }
@@ -611,8 +616,9 @@ describe('createAppSyncEngine scope cache', () => {
 	it('awaited scope switch rejection leaves the cache identity untouched', async () => {
 		const error = new Error('scope refused');
 		const first = createEngineDouble(undefined, () => Promise.reject(error));
-		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } =
-			loadCreateAppEngine(() => first);
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first
+		);
 		createAppSyncEngine(BASE_OPTIONS);
 
 		await expect(
@@ -647,9 +653,8 @@ describe('createAppSyncEngine scope cache', () => {
 		try {
 			const first = createEngineDouble(() => new Promise(() => undefined));
 			const engines = [first, createEngineDouble()];
-			const { createAppSyncEngine, markStorageTerminallyFailed } = loadCreateAppEngine(
-				() => engines.shift() ?? first
-			);
+			const { createAppSyncEngine, markStorageTerminallyFailed, forceFreeDatabaseRegistration } =
+				loadCreateAppEngine(() => engines.shift() ?? first);
 			createAppSyncEngine(BASE_OPTIONS);
 			const secondScope = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
 			createAppSyncEngine({ ...BASE_OPTIONS, scope: secondScope });
@@ -665,6 +670,65 @@ describe('createAppSyncEngine scope cache', () => {
 					scopeDatabaseName(secondScope),
 				])
 			);
+			const freed = forceFreeDatabaseRegistration.mock.calls.map((call) => call[0]);
+			expect(freed).toEqual(
+				expect.arrayContaining([
+					scopeDatabaseName(BASE_OPTIONS.scope),
+					scopeDatabaseName(secondScope),
+				])
+			);
+			const firstMarkedName = marked[0];
+			const firstFreedIndex = forceFreeDatabaseRegistration.mock.calls.findIndex(
+				([databaseName]) => databaseName === firstMarkedName
+			);
+			expect(markStorageTerminallyFailed.mock.invocationCallOrder[0]).toBeLessThan(
+				forceFreeDatabaseRegistration.mock.invocationCallOrder[firstFreedIndex]
+			);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('marks the target database of a still-inflight awaited switch on disposal timeout', async () => {
+		jest.useFakeTimers();
+		try {
+			// The awaited switch never settles — the wedge under repair is the
+			// switch itself, so its target database name must already be retained
+			// when a racing cross-site disposal hits the deadline.
+			const first = createEngineDouble(
+				() => new Promise(() => undefined),
+				() => new Promise(() => undefined)
+			);
+			const engines = [first, createEngineDouble()];
+			const {
+				createAppSyncEngine,
+				switchAppEngineScope,
+				markStorageTerminallyFailed,
+				forceFreeDatabaseRegistration,
+			} = loadCreateAppEngine(() => engines.shift() ?? first);
+			createAppSyncEngine(BASE_OPTIONS);
+			const targetScope = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+			void switchAppEngineScope({
+				site: { wp_api_url: BASE_OPTIONS.scope.site },
+				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+				store: { id: 'store-2' },
+			});
+			await Promise.resolve();
+			expect(first.scope.switch).toHaveBeenCalledTimes(1);
+
+			createAppSyncEngine(OTHER_SITE_OPTIONS);
+			jest.advanceTimersByTime(10_000);
+
+			const marked = markStorageTerminallyFailed.mock.calls.map((call) => call[0]);
+			const freed = forceFreeDatabaseRegistration.mock.calls.map((call) => call[0]);
+			for (const names of [marked, freed]) {
+				expect(names).toEqual(
+					expect.arrayContaining([
+						scopeDatabaseName(BASE_OPTIONS.scope),
+						scopeDatabaseName(targetScope),
+					])
+				);
+			}
 		} finally {
 			jest.useRealTimers();
 		}
@@ -999,6 +1063,7 @@ describe('createAppSyncEngine scope cache', () => {
 				createAppSyncEngine,
 				createRxdbSyncEngine,
 				markStorageTerminallyFailed,
+				forceFreeDatabaseRegistration,
 				networkError,
 			} = loadCreateAppEngine(() => {
 				const engine = engines.shift();
@@ -1011,6 +1076,11 @@ describe('createAppSyncEngine scope cache', () => {
 			createAppSyncEngine(BASE_OPTIONS);
 			const databaseOpenBarrier = createRxdbSyncEngine.mock.calls[2]?.[0].databaseOpenBarrier;
 			let barrierSettled = false;
+			let barrierSettledWhenFreed: boolean | null = null;
+			forceFreeDatabaseRegistration.mockImplementation(() => {
+				barrierSettledWhenFreed = barrierSettled;
+				return true;
+			});
 			const open = databaseOpenBarrier?.then(() => {
 				barrierSettled = true;
 			});
@@ -1030,6 +1100,15 @@ describe('createAppSyncEngine scope cache', () => {
 				scopeDatabaseName(BASE_OPTIONS.scope),
 				expect.any(String)
 			);
+			expect(forceFreeDatabaseRegistration).toHaveBeenCalledWith(
+				scopeDatabaseName(BASE_OPTIONS.scope)
+			);
+			expect(markStorageTerminallyFailed.mock.invocationCallOrder[0]).toBeLessThan(
+				forceFreeDatabaseRegistration.mock.invocationCallOrder[0]
+			);
+			// The successor may only be released AFTER the registration is freed —
+			// a barrier that settles first would race the successor's open into DB8.
+			expect(barrierSettledWhenFreed).toBe(false);
 			expect(networkError).toHaveBeenCalled();
 		} finally {
 			jest.useRealTimers();
@@ -1044,12 +1123,16 @@ describe('createAppSyncEngine scope cache', () => {
 				resolveDisposal = resolve;
 			});
 			const engines = [createEngineDouble(() => disposal), createEngineDouble()];
-			const { createAppSyncEngine, markStorageTerminallyFailed, networkError } =
-				loadCreateAppEngine(() => {
-					const engine = engines.shift();
-					if (!engine) throw new Error('missing engine double');
-					return engine;
-				});
+			const {
+				createAppSyncEngine,
+				markStorageTerminallyFailed,
+				forceFreeDatabaseRegistration,
+				networkError,
+			} = loadCreateAppEngine(() => {
+				const engine = engines.shift();
+				if (!engine) throw new Error('missing engine double');
+				return engine;
+			});
 			createAppSyncEngine(BASE_OPTIONS);
 			createAppSyncEngine(OTHER_SITE_OPTIONS);
 
@@ -1061,6 +1144,7 @@ describe('createAppSyncEngine scope cache', () => {
 			jest.runAllTimers();
 
 			expect(markStorageTerminallyFailed).not.toHaveBeenCalled();
+			expect(forceFreeDatabaseRegistration).not.toHaveBeenCalled();
 			expect(networkError).not.toHaveBeenCalled();
 		} finally {
 			jest.useRealTimers();

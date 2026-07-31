@@ -16,6 +16,7 @@
  */
 
 import { defaultConfig } from '@wcpos/database/adapters/default';
+import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
@@ -149,6 +150,14 @@ function disposeCachedEngine(entry: CachedEngine): void {
 					`Engine disposal exceeded ${ENGINE_DISPOSAL_DEADLINE_MS}ms`
 				);
 			}
+			// A close wedged before rxdb's onClosed ran leaves the database name
+			// registered, so releasing the barrier alone would fail the successor's
+			// open with rxdb DB8 ("already open"). Freeing the registration is safe:
+			// every predecessor storage instance was terminally failed above, before
+			// the successor can exist.
+			for (const databaseName of entry.databaseNames) {
+				forceFreeDatabaseRegistration(databaseName);
+			}
 			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
 				context: {
 					errorCode: ERROR_CODES.DISPOSAL_TIMEOUT,
@@ -201,11 +210,24 @@ export async function switchAppEngineScope(session: {
 	const targetKey = scopeCacheKey(scope);
 	if (entry.key === targetKey) return;
 
+	// Record the target scope database BEFORE awaiting, matching the render
+	// path's superset semantics: a cross-site disposal racing this switch must
+	// terminally fail the database the switch may be opening, and a name
+	// recorded only on success escapes the deadline's mark/free loops exactly
+	// when the switch itself is what wedged. Marking a database the engine
+	// never opened is a no-op, so the early add is safe on rejection too.
+	// Record the target scope database BEFORE awaiting, matching the render
+	// path's superset semantics: a cross-site disposal racing this switch must
+	// terminally fail the database the switch may be opening, and a name
+	// recorded only on success escapes the deadline's mark/free loops exactly
+	// when the switch itself is what wedged. Marking a database the engine
+	// never opened is a no-op, so the early add is safe on rejection too.
+	entry.databaseNames.add(scopeDatabaseName(scope));
+
 	await entry.engine.scope.switch(scope);
 
 	entry.key = targetKey;
 	entry.databaseName = scopeDatabaseName(scope);
-	entry.databaseNames.add(entry.databaseName);
 }
 
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {

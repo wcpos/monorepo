@@ -20,6 +20,7 @@ import { middlewaresPlugin } from './middlewares';
 import { parseRestResponsePlugin } from './parse-rest-response';
 import { populatePlugin } from './populate';
 import { resetCollectionPlugin } from './reset-collection';
+import { rxDatabaseRegistryPlugin } from './rx-database-registry';
 import { searchPlugin } from './search';
 
 /**
@@ -67,4 +68,5 @@ addRxPlugin(parseRestResponsePlugin);
 addRxPlugin(resetCollectionPlugin);
 addRxPlugin(searchPlugin);
 addRxPlugin(middlewaresPlugin);
+addRxPlugin(rxDatabaseRegistryPlugin);
 addRxPlugin(RxDBAuditLogPlugin); // should run last to capture all changes
