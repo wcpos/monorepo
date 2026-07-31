@@ -1,4 +1,4 @@
-import { mergeStoresWithResponse } from './merge-stores';
+import { getServerOwnedStorePatch, mergeStoresWithResponse } from './merge-stores';
 
 // Mock expo-crypto
 jest.mock('expo-crypto', () => ({
@@ -479,5 +479,35 @@ describe('mergeStoresWithResponse', () => {
 		const patchCall = wpUser.incrementalPatch.mock.calls[0][0];
 		expect(patchCall.stores).toContain(goodLocalID);
 		expect(patchCall.stores).not.toContain(badLocalID);
+	});
+});
+
+describe('getServerOwnedStorePatch', () => {
+	it('compares plain toJSON data, never RxDocument property proxies', () => {
+		// Object-valued fields read directly off an RxDocument are Proxies
+		// (rxdb getDocumentProperty). On Electron, lodash isEqual hands such a
+		// Proxy to the contextBridge-wrapped Buffer.isBuffer, whose arguments
+		// must survive structured clone — Proxies don't, so the comparison
+		// throws "An object could not be cloned". Direct field access is
+		// poisoned here to prove only toJSON() data is ever compared.
+		const plainData = {
+			id: 1,
+			tax_address: { country: 'GB', state: '', postcode: '', city: '' },
+			calc_taxes: 'no',
+		};
+		const rxDocumentLike = new Proxy({} as Record<string, unknown>, {
+			get(_target, prop) {
+				if (prop === 'toJSON') return () => plainData;
+				throw new Error(`direct access to ${String(prop)} — must use toJSON()`);
+			},
+		});
+
+		const patch = getServerOwnedStorePatch(rxDocumentLike, {
+			id: 1,
+			tax_address: { country: 'GB', state: '', postcode: '', city: '' },
+			calc_taxes: 'yes',
+		});
+
+		expect(patch).toEqual({ calc_taxes: 'yes' });
 	});
 });

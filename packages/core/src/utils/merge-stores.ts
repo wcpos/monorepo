@@ -109,6 +109,16 @@ export function getServerOwnedStorePatch(
 	incomingStore: ServerStorePayload,
 	fields: readonly string[] = AUTO_SYNCED_STORE_FIELDS
 ): Record<string, unknown> {
+	// Callers pass RxDocuments here. Accessing an object-valued field on an
+	// RxDocument returns a Proxy (rxdb getDocumentProperty), and lodash isEqual
+	// feeds that Proxy to Buffer.isBuffer — which on Electron is a contextBridge
+	// function whose arguments must survive structured clone. Proxies don't, so
+	// the comparison throws "An object could not be cloned". Compare plain doc
+	// data instead.
+	const currentData: Record<string, unknown> =
+		typeof (currentStore as { toJSON?: () => Record<string, unknown> }).toJSON === 'function'
+			? (currentStore as { toJSON: () => Record<string, unknown> }).toJSON()
+			: currentStore;
 	const normalizedStore = normalizeStorePayload(incomingStore);
 	const providedFields = new Set(Object.keys(incomingStore));
 
@@ -129,7 +139,7 @@ export function getServerOwnedStorePatch(
 			continue;
 		}
 		const incomingValue = normalizedStore[field];
-		if (incomingValue !== undefined && !isEqual(currentStore[field], incomingValue)) {
+		if (incomingValue !== undefined && !isEqual(currentData[field], incomingValue)) {
 			patch[field] = incomingValue;
 		}
 	}
