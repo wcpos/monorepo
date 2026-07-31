@@ -689,6 +689,51 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
+	it('marks the target database of a still-inflight awaited switch on disposal timeout', async () => {
+		jest.useFakeTimers();
+		try {
+			// The awaited switch never settles — the wedge under repair is the
+			// switch itself, so its target database name must already be retained
+			// when a racing cross-site disposal hits the deadline.
+			const first = createEngineDouble(
+				() => new Promise(() => undefined),
+				() => new Promise(() => undefined)
+			);
+			const engines = [first, createEngineDouble()];
+			const {
+				createAppSyncEngine,
+				switchAppEngineScope,
+				markStorageTerminallyFailed,
+				forceFreeDatabaseRegistration,
+			} = loadCreateAppEngine(() => engines.shift() ?? first);
+			createAppSyncEngine(BASE_OPTIONS);
+			const targetScope = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+			void switchAppEngineScope({
+				site: { wp_api_url: BASE_OPTIONS.scope.site },
+				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+				store: { id: 'store-2' },
+			});
+			await Promise.resolve();
+			expect(first.scope.switch).toHaveBeenCalledTimes(1);
+
+			createAppSyncEngine(OTHER_SITE_OPTIONS);
+			jest.advanceTimersByTime(10_000);
+
+			const marked = markStorageTerminallyFailed.mock.calls.map((call) => call[0]);
+			const freed = forceFreeDatabaseRegistration.mock.calls.map((call) => call[0]);
+			for (const names of [marked, freed]) {
+				expect(names).toEqual(
+					expect.arrayContaining([
+						scopeDatabaseName(BASE_OPTIONS.scope),
+						scopeDatabaseName(targetScope),
+					])
+				);
+			}
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
 	it('restores the fetcher auth options when a render-path switch rejects', async () => {
 		const first = createEngineDouble(undefined, () => Promise.reject(new Error('scope refused')));
 		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() => first);
