@@ -237,7 +237,7 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 		case 'partial':
 		case 'windowed':
 			return (
-				<Tooltip>
+				<Tooltip showOnNative>
 					<TooltipTrigger asChild>
 						<Pressable accessibilityLabel={coverage.tooltip} className="items-end py-1">
 							<CoverageBar percent={coverage.percent} />

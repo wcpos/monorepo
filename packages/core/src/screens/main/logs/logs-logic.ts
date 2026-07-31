@@ -136,7 +136,16 @@ export type StuckRecord = {
 	reason: string;
 	lastSeen: number;
 	attempts: number;
+	eventType: string | null;
+	direction: 'push' | 'pull' | null;
+	retryable: boolean;
 };
+
+const RETRYABLE_STUCK_EVENTS = new Set([
+	'push.error',
+	'push.in_progress',
+	'queue.write.reschedule-failed',
+]);
 
 /**
  * Derived stuck-records view (spec §4): per (collection, record), the LATEST
@@ -155,6 +164,9 @@ export function deriveStuckRecords(rows: LogRow[]): StuckRecord[] {
 		const key = `${collection}:${String(recordId)}`;
 		if (decided.has(key)) continue;
 		if (row.outcome === 'failed' || row.outcome === 'rejected') {
+			const eventType = typeof context.type === 'string' ? context.type : null;
+			const direction =
+				context.direction === 'push' || context.direction === 'pull' ? context.direction : null;
 			const reason =
 				typeof context.reason === 'string' && context.reason.length > 0
 					? context.reason
@@ -166,6 +178,10 @@ export function deriveStuckRecords(rows: LogRow[]): StuckRecord[] {
 				reason,
 				lastSeen: row.lastSeen ?? row.timestamp,
 				attempts: row.count ?? 1,
+				eventType,
+				direction,
+				retryable:
+					direction === 'push' && eventType !== null && RETRYABLE_STUCK_EVENTS.has(eventType),
 			});
 		} else if (row.outcome === 'ok') {
 			decided.set(key, null);

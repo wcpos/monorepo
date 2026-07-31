@@ -45,12 +45,12 @@ export function useOtherScopes(): OtherScopesSummary | null {
 		if (!storage) return;
 		let cancelled = false;
 		void (async () => {
-			let activeDbName: string | null = null;
+			let activeDbName: string;
 			try {
-				const scope = engine.active() as { database?: { name?: string } } | null;
-				activeDbName = scope?.database?.name ?? null;
+				const scope = engine.active() ?? (await engine.ready);
+				activeDbName = scope.database.name;
 			} catch {
-				activeDbName = null;
+				return;
 			}
 			try {
 				const root = await (
