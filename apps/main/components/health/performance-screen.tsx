@@ -122,13 +122,15 @@ export function PerformanceScreen() {
 	const requestsPerDay = Math.round((86_400_000 / checkIntervalMs) * 10) / 10;
 	const uptimeCells = deriveUptimeCells(snapshot.buckets, snapshot.nowMs);
 
-	// The cadence actually in effect right now, from the engine's own schedule
-	// (idle decay can slow it past the configured dial) — honest where the
-	// configured math line is aspirational.
+	// The armed next-due boundary is the only honest schedule signal the facade
+	// exposes: `nextDueAtMs − lastTick.atMs` under-reports the cadence (the
+	// timer arms BEFORE a tick, lastTick lands after it finishes, and a manual
+	// sync moves lastTick without rearming) — so show the countdown to the
+	// next check instead of claiming a rate. Rides the 10 s snapshot clock.
 	const changeLane = status.lanes['change-signal'];
-	const actualCadence =
-		changeLane?.lastTick && changeLane.nextDueAtMs !== undefined
-			? formatCadence(changeLane.nextDueAtMs - changeLane.lastTick.atMs)
+	const nextCheck =
+		changeLane?.nextDueAtMs !== undefined
+			? formatCadence(changeLane.nextDueAtMs - snapshot.nowMs)
 			: null;
 
 	const applyPreset = (name: PresetName) => {
@@ -284,12 +286,10 @@ export function PerformanceScreen() {
 
 						<HStack className="flex-wrap items-center justify-between gap-2">
 							<Text className="text-muted-foreground text-sm" testID="settings-math-line">
-								{actualCadence !== null
-									? `${t('health.performance.right_now', 'Right now: checking every {every}', {
+								{nextCheck !== null
+									? `${t('health.performance.right_now', 'Right now: next check in ~{every}', {
 											every:
-												actualCadence.unit === 's'
-													? `${actualCadence.value} s`
-													: `${actualCadence.value} min`,
+												nextCheck.unit === 's' ? `${nextCheck.value} s` : `${nextCheck.value} min`,
 										})} · ${t(
 											'health.performance.math_line',
 											'At these settings: ~{perDay} requests per day',

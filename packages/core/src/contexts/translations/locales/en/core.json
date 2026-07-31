@@ -1027,5 +1027,5 @@
 	"health.performance.uptime_running_tip": "{hour} — {n} requests, all ok",
 	"health.performance.uptime_errors_tip": "{hour} — {n} requests · {e} failed",
 	"health.performance.uptime_closed_tip": "{hour} — app closed",
-	"health.performance.right_now": "Right now: checking every {every}"
+	"health.performance.right_now": "Right now: next check in ~{every}"
 }

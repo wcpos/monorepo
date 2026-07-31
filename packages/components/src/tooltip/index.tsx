@@ -16,14 +16,16 @@ const TooltipContext = React.createContext<{ showOnNative: boolean }>({ showOnNa
  * On native, tooltips are disabled by default (just passes through children).
  * Set `showOnNative` to true to enable press-to-show tooltip behavior.
  */
-function Tooltip({ children, showOnNative = false }: TooltipProps) {
+function Tooltip({ children, showOnNative = false, className }: TooltipProps) {
 	if (!showOnNative) {
+		// Children pass through with no wrapper view — className has nothing to
+		// land on and layout flows to the trigger directly.
 		return <TooltipContext.Provider value={{ showOnNative }}>{children}</TooltipContext.Provider>;
 	}
 
 	return (
 		<TooltipContext.Provider value={{ showOnNative }}>
-			<TooltipPrimitive.Root>{children}</TooltipPrimitive.Root>
+			<TooltipPrimitive.Root className={className}>{children}</TooltipPrimitive.Root>
 		</TooltipContext.Provider>
 	);
 }

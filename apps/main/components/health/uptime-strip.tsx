@@ -38,9 +38,10 @@ function CellView({ cell, tooltip }: { cell: UptimeCell; tooltip: string }) {
 
 	// The Root's wrapper view carries the flex sizing (a plain flex-1 on the
 	// trigger dies inside the primitive's wrapper); cell bodies fill the width
-	// by cross-axis stretch.
+	// by cross-axis stretch. showOnNative: the hourly numbers must be reachable
+	// by press on iOS/Android, not just by assistive tech.
 	return (
-		<Tooltip className="min-w-1.5 flex-1">
+		<Tooltip showOnNative className="min-w-1.5 flex-1">
 			<TooltipTrigger asChild>
 				<View accessibilityLabel={tooltip} className="min-w-1.5 flex-1">
 					{body}
