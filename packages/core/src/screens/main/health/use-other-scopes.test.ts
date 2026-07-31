@@ -8,6 +8,8 @@ import { useOtherScopes } from './use-other-scopes';
 const mockEngine = {
 	active: jest.fn(),
 	ready: Promise.resolve({ database: { name: '' } }),
+	status: jest.fn(() => ({ activeScopeId: 'scope-1' })),
+	statusChanges: jest.fn(() => () => undefined),
 };
 
 jest.mock('@wcpos/query', () => ({ useQueryManager: () => ({ engine: mockEngine }) }));
