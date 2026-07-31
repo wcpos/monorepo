@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { Platform, ScrollView, Share, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -61,10 +61,12 @@ function StatusLine() {
 
 	const lane = status.lanes['change-signal'];
 	const lastTick = lane?.lastTick ?? null;
-	const cadence =
-		lastTick && lane?.nextDueAtMs !== undefined
-			? formatCadence(lane.nextDueAtMs - lastTick.atMs)
-			: null;
+	// The armed next-due boundary is the only honest schedule signal the facade
+	// exposes: `nextDueAtMs − lastTick.atMs` under-reports the cadence (the
+	// timer arms BEFORE a tick runs, lastTick lands after it finishes), so this
+	// line shows the countdown to the next check instead of claiming a rate.
+	const nextCheck =
+		lane?.nextDueAtMs !== undefined ? formatCadence(lane.nextDueAtMs - nowMs) : null;
 
 	const watching =
 		lastTick === null
@@ -78,13 +80,13 @@ function StatusLine() {
 						ago: relative(lastTick.atMs, nowMs),
 					});
 	const cadenceText =
-		cadence === null
+		nextCheck === null
 			? null
-			: cadence.unit === 's'
-				? t('health.logs.every_seconds', { defaultValue: 'checking every {n} s', n: cadence.value })
-				: t('health.logs.every_minutes', {
-						defaultValue: 'checking every {n} min',
-						n: cadence.value,
+			: nextCheck.unit === 's'
+				? t('health.logs.next_check_s', { defaultValue: 'next check ~{n} s', n: nextCheck.value })
+				: t('health.logs.next_check_min', {
+						defaultValue: 'next check ~{n} min',
+						n: nextCheck.value,
 					});
 
 	return (
@@ -141,12 +143,32 @@ function LogsScreenContent() {
 	);
 
 	const toggleVerbose = React.useCallback(() => {
-		const next = !verbose;
-		setVerbose(next);
-		applyFilters(preset, next);
-	}, [applyFilters, preset, setVerbose, verbose]);
+		setVerbose(!verbose);
+	}, [setVerbose, verbose]);
 
-	const canCopy = typeof navigator !== 'undefined' && !!navigator.clipboard;
+	// Effect (last resort per project.mdc): `verbose` can flip OUTSIDE any
+	// event handler — the logger's 24 h TTL expires while the screen is mounted
+	// (surfaced by the hook's poll) — and the ledger's level filter must follow
+	// or debug rows keep showing after persistence stopped. Handles the manual
+	// toggle too, so the filter logic lives in exactly one place.
+	// Ref updated in its own effect — the compiler forbids ref writes in render.
+	const presetRef = React.useRef(preset);
+	React.useEffect(() => {
+		presetRef.current = preset;
+	});
+	const isFirstVerboseRun = React.useRef(true);
+	React.useEffect(() => {
+		if (isFirstVerboseRun.current) {
+			isFirstVerboseRun.current = false;
+			return;
+		}
+		applyFilters(presetRef.current, verbose);
+	}, [applyFilters, verbose]);
+
+	// Web/Electron copy to clipboard; native delivers via the share sheet (the
+	// spec §7 delivery channel for mobile — RN has no browser Clipboard API).
+	const canShare = Platform.OS !== 'web';
+	const canCopy = !canShare && typeof navigator !== 'undefined' && !!navigator.clipboard;
 	// NOTE — deferred: "Export diagnostics…" (ZIP bundle) ships with the export
 	// workstream (spec §7). No button until it exists — no dead buttons.
 	const handleCopy = React.useCallback(async () => {
@@ -167,12 +189,17 @@ function LogsScreenContent() {
 				connectivity: status.connectivity,
 				eventsToday: stats.eventsToday,
 				errorsToday: stats.errorsToday,
-				salesWaiting: mutations.pending,
+				salesWaiting: mutations.pendingOrders,
 				stuckRecords: stats.stuck,
 				verboseDiagnostics: verbose,
 				lastCheck: lane?.lastTick ?? null,
 				recentErrors: docs.map((doc) => doc.toJSON()),
 			});
+			if (canShare) {
+				// The share sheet is its own confirmation UI — no toast on this path.
+				await Share.share({ message: text });
+				return;
+			}
 			await navigator.clipboard.writeText(text);
 			Toast.show({
 				type: 'success',
@@ -184,7 +211,7 @@ function LogsScreenContent() {
 				text1: t('health.logs.debug_copy_failed', { defaultValue: "Couldn't copy debug info" }),
 			});
 		}
-	}, [appVersion, logsCollection, mutations.pending, stats, status, t, verbose]);
+	}, [appVersion, canShare, logsCollection, mutations.pendingOrders, stats, status, t, verbose]);
 
 	return (
 		<ScrollView className="flex-1">
@@ -194,7 +221,7 @@ function LogsScreenContent() {
 				<StatHeader
 					testID="logs-stats"
 					actions={
-						canCopy ? (
+						canCopy || canShare ? (
 							<Button
 								variant="outline"
 								size="sm"
@@ -202,7 +229,9 @@ function LogsScreenContent() {
 								onPress={() => void handleCopy()}
 							>
 								<ButtonText>
-									{t('health.logs.copy_debug', { defaultValue: 'Copy debug info' })}
+									{canShare
+										? t('health.logs.share_debug', { defaultValue: 'Share debug info' })
+										: t('health.logs.copy_debug', { defaultValue: 'Copy debug info' })}
 								</ButtonText>
 							</Button>
 						) : null
@@ -225,12 +254,15 @@ function LogsScreenContent() {
 						value={stats.stuck.length}
 						tone={stats.stuck.length > 0 ? 'bad' : 'good'}
 						label={t('health.logs.stuck_records', { defaultValue: 'stuck records' })}
-						onPress={() => applyPreset('errors')}
+						// Sync preset, not Errors: stuck rows are sync-domain terminal rows
+						// that can persist at WARN level — the error-only filter would hide
+						// the very rows this number counts.
+						onPress={() => applyPreset('sync')}
 						testID="logs-stat-stuck"
 					/>
 					<Stat
-						value={mutations.pending}
-						tone={mutations.pending > 0 ? 'bad' : 'good'}
+						value={mutations.pendingOrders}
+						tone={mutations.pendingOrders > 0 ? 'bad' : 'good'}
 						label={t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
 						testID="logs-stat-waiting"
 					/>

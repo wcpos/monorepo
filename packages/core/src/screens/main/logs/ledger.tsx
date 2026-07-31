@@ -187,7 +187,8 @@ function LedgerRow({
 			>
 				<HStack className="items-center gap-2">
 					<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
-					<LevelIndicator kind={kind} />
+					{/* Dot-only for space, but the kind still reads to assistive tech. */}
+					<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
 					<View className="flex-1" />
 					<CodeCell row={row} kind={kind} onPress={onToggle} />
 				</HStack>
