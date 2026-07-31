@@ -606,10 +606,12 @@ export function DatabaseScreen() {
 					<VStack className="min-w-[40%] gap-0 md:min-w-0">
 						<Text
 							className={
-								mutations.pending > 0 ? 'text-warning font-semibold' : 'text-success font-semibold'
+								mutations.pendingOrders > 0
+									? 'text-warning font-semibold'
+									: 'text-success font-semibold'
 							}
 						>
-							{mutations.pending}
+							{mutations.pendingOrders}
 						</Text>
 						<Text className="text-muted-foreground text-xs">
 							{t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
