@@ -5,11 +5,14 @@ import {
 	censusRefreshDue,
 	censusWindowProgress,
 	deriveCollectionRow,
+	deriveEverythingElseBytes,
 	deriveRows,
 	estimateCollectionBytes,
 	formatBytes,
 	isReadyToSell,
 	relativeTimeParts,
+	stuckCountsByRow,
+	summarizeOtherScopes,
 	totalLocalRecords,
 } from './database-logic';
 
@@ -129,5 +132,64 @@ describe('database page logic', () => {
 		expect(relativeTimeParts(0, 2 * 60 * 60_000)).toEqual({ unit: 'hours', value: 2 });
 		// clock skew never yields negative ages
 		expect(relativeTimeParts(10_000, 5_000)).toEqual({ unit: 'seconds', value: 0 });
+	});
+});
+
+describe('stuckCountsByRow', () => {
+	it('maps telemetry names to row keys and counts per collection', () => {
+		expect(
+			stuckCountsByRow([
+				{ collection: 'products' },
+				{ collection: 'products' },
+				{ collection: 'tax_rates' },
+				{ collection: 'mystery' },
+			])
+		).toEqual({ products: 2, taxRates: 1 });
+	});
+});
+
+describe('deriveEverythingElseBytes', () => {
+	it('reconciles the storage estimate against known rows and other stores', () => {
+		expect(deriveEverythingElseBytes(100, [10, null, 20, undefined], 30)).toBe(40);
+	});
+
+	it('floors at zero and requires an estimate', () => {
+		expect(deriveEverythingElseBytes(10, [50], null)).toBe(0);
+		expect(deriveEverythingElseBytes(null, [50], 10)).toBeNull();
+	});
+});
+
+describe('summarizeOtherScopes', () => {
+	const active = 'pos_v6_abcdefabcdef_s578_c12';
+	const entry = (db: string, bytes: number) => ({
+		name: `rxdb-${db.replace(/\//g, '__')}`,
+		bytes,
+	});
+
+	it('sums scope databases belonging to other stores, once per store', () => {
+		const summary = summarizeOtherScopes(
+			[
+				entry('pos_v6_abcdefabcdef_s578_c12', 100), // active — excluded
+				entry('pos_v6_abcdefabcdef_s578_c99', 40), // same store, other cashier — excluded
+				entry('pos_v6_abcdefabcdef_s600_c12', 25),
+				entry('pos_v6_abcdefabcdef_s600_c99', 25), // same other store, second cashier
+				entry('pos_v6_feedfeedfeed_s578_c12', 10), // other SITE, same store id — counts
+				entry('userdb_v6', 999), // not a scope db — ignored
+			],
+			active
+		);
+		expect(summary.storeCount).toBe(2);
+		expect(summary.bytes).toBe(60);
+	});
+
+	it('treats a null active name as "everything is other"', () => {
+		const summary = summarizeOtherScopes([entry('pos_v6_abcdefabcdef_s578_c12', 100)], null);
+		expect(summary).toEqual({ storeCount: 1, bytes: 100 });
+	});
+
+	it('ignores non-rxdb entries', () => {
+		expect(
+			summarizeOtherScopes([{ name: 'pos_v6_abcdefabcdef_s578_c12', bytes: 5 }], null)
+		).toEqual({ storeCount: 0, bytes: 0 });
 	});
 });

@@ -1002,5 +1002,19 @@
 	"health.logs.action_continue": "You can keep working — nothing to do.",
 	"health.logs.action_repair_local": "Repair from Store health → Database.",
 	"health.logs.action_reconfigure": "Review the related settings.",
-	"health.logs.action_contact_support": "Contact support and include this code."
+	"health.logs.action_contact_support": "Contact support and include this code.",
+	"health.database.window_tooltip": "{p}% — open + recent orders ready",
+	"health.database.all_tooltip": "All records on this device",
+	"health.database.percent_tooltip": "{p}% on this device",
+	"health.database.n_stuck": "{n} stuck",
+	"health.database.attention_one": "1 record needs attention",
+	"health.database.attention_many": "{n} records need attention",
+	"health.database.attention_reason": "\"{name}\" can't upload — {reason}",
+	"health.database.attention_fix": "Fix record",
+	"health.database.attention_retry": "Retry",
+	"health.database.attention_view_log": "View log ›",
+	"health.database.everything_else": "Everything else",
+	"health.database.everything_else_sub": "Search indexes, logs and sync bookkeeping",
+	"health.database.other_stores_one": "This device also stores 1 other store (≈ {size}) — it has its own Store health.",
+	"health.database.other_stores_many": "This device also stores {n} other stores (≈ {size}) — each has its own Store health."
 }
