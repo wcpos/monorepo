@@ -27,14 +27,16 @@ function referencedIds(result: OrdersResult): number[] {
 }
 export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): void {
 	const { engine } = useQueryManager();
-	const attemptedIds = React.useRef(new Set<number>());
+	// useState initializer (not useRef): the set is read inside the pipe's
+	// callbacks, and react-compiler forbids ref reads in render scope.
+	const [attemptedIds] = React.useState(() => new Set<number>());
 	const demand$ = React.useMemo(
 		() =>
 			result$.pipe(
 				map(referencedIds),
 				map((ids) => ({ ids, key: ids.join(',') })),
 				distinctUntilChanged((previous, current) => previous.key === current.key),
-				map(({ ids }) => ids.filter((id) => !attemptedIds.current.has(id))),
+				map(({ ids }) => ids.filter((id) => !attemptedIds.has(id))),
 				switchMap(
 					(ids) =>
 						new Observable<void>(() => {
@@ -54,18 +56,18 @@ export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): 
 							void requirement.ready
 								.then((outcome: { action?: string }) => {
 									if (outcome?.action !== 'released') {
-										ids.forEach((id) => attemptedIds.current.add(id));
+										ids.forEach((id) => attemptedIds.add(id));
 									}
 								})
 								.catch(() => {
-									ids.forEach((id) => attemptedIds.current.add(id));
+									ids.forEach((id) => attemptedIds.add(id));
 									logger.debug('Referenced customer demand failed');
 								});
 							return () => requirement.release();
 						})
 				)
 			),
-		[engine, result$]
+		[engine, result$, attemptedIds]
 	);
 	useSubscription(demand$);
 }

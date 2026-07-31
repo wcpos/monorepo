@@ -412,8 +412,8 @@ describe('logger/index', () => {
 		it('keeps recorder events when bulk promotion has per-document errors', async () => {
 			const { collection } = createLogCollection();
 			collection.bulkInsert.mockResolvedValue({
-				success: [{}],
-				error: [{ status: 500 }],
+				success: [{} as unknown as TestLogDocument],
+				error: [{ status: 500 } as unknown as never],
 			});
 			setDatabase(collection);
 			getLogger(['sync']).debug('First step');

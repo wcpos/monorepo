@@ -56,9 +56,7 @@ export type CustomerTrickleDeps = {
 
 const inFlightDatabases = new WeakSet<RxDatabase>();
 
-export function tickCustomerTrickle(
-	deps: CustomerTrickleDeps
-): Promise<CustomerTrickleTickResult> {
+export function tickCustomerTrickle(deps: CustomerTrickleDeps): Promise<CustomerTrickleTickResult> {
 	if (inFlightDatabases.has(deps.database)) {
 		return Promise.resolve({ status: 'skipped', reason: 'in-flight' });
 	}
