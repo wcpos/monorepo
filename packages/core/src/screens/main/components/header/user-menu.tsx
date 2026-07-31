@@ -33,7 +33,6 @@ import { Platform } from '@wcpos/utils/platform';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
-import { withStoreParam } from '../../../../contexts/app-state/store-url-param';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { useImageAttachment } from '../../hooks/use-image-attachment';
@@ -141,14 +140,16 @@ export function UserMenu() {
 		setIsSwitching(true);
 		try {
 			await switchStore(nextStore);
-			if (Platform.isWeb && typeof window !== 'undefined') {
-				window.history.replaceState(
-					{},
-					'',
-					window.location.pathname + withStoreParam(window.location.search, nextStore.id!)
-				);
+			// The router owns the URL: passing the server store id as a param writes
+			// `/?store=<id>` on web (so a refresh boots into the new store) without
+			// clobbering Expo Router's own history state the way a manual
+			// history.replaceState would. Boot-time `?store=` handling consumes and
+			// removes the param as before.
+			if (Platform.isWeb) {
+				router.replace({ pathname: '/', params: { store: String(nextStore.id) } });
+			} else {
+				router.replace('/');
 			}
-			router.replace('/');
 		} catch (error) {
 			Toast.show({
 				type: 'error',

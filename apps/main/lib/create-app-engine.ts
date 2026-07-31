@@ -79,6 +79,10 @@ type CachedEngine = {
 	key: string;
 	site: string;
 	databaseName: string;
+	/** Every scope database this engine opened (same-site switches retain the
+	 * prior scope's database) — a timed-out disposal must terminally fail ALL
+	 * of them, not just the last active one. */
+	databaseNames: Set<string>;
 	engine: RxdbSyncEngine;
 	fetcherOptions: MutableFetcherOptions;
 };
@@ -115,11 +119,11 @@ function canonicalScopeComponent(value: number | string): string {
 	return typeof value === 'number' ? String(value) : value.trim().toLowerCase();
 }
 
-function scopeCacheKey(options: CreateAppSyncEngineOptions): string {
+function scopeCacheKey(scope: StoreScopeIdentity): string {
 	return JSON.stringify([
-		canonicalSite(options.scope.site),
-		canonicalScopeComponent(options.scope.storeId),
-		canonicalScopeComponent(options.scope.cashierId),
+		canonicalSite(scope.site),
+		canonicalScopeComponent(scope.storeId),
+		canonicalScopeComponent(scope.cashierId),
 	]);
 }
 
@@ -136,15 +140,20 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	const settled = disposal.catch(() => undefined);
 	const bounded = new Promise<void>((resolve) => {
 		const timer = setTimeout(() => {
-			markStorageTerminallyFailed(
-				entry.databaseName,
-				`Engine disposal exceeded ${ENGINE_DISPOSAL_DEADLINE_MS}ms`
-			);
+			// The engine retains every scope database it opened across same-site
+			// switches; a wedged close can be in flight on ANY of them, so all must
+			// be terminally failed before the barrier releases successors.
+			for (const databaseName of entry.databaseNames) {
+				markStorageTerminallyFailed(
+					databaseName,
+					`Engine disposal exceeded ${ENGINE_DISPOSAL_DEADLINE_MS}ms`
+				);
+			}
 			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
 				context: {
 					errorCode: ERROR_CODES.DISPOSAL_TIMEOUT,
 					scopeKey: entry.key,
-					databaseName: entry.databaseName,
+					databaseNames: [...entry.databaseNames],
 				},
 			});
 			resolve();
@@ -163,8 +172,44 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	});
 }
 
+/**
+ * Awaited scope transition for the store-switch flow (issue #876). Called by
+ * the app-state layer (via the core engine-scope port) AFTER the new store's
+ * session hydrated and BEFORE the session is committed: a rejection here
+ * aborts the switch with durable state untouched. Cache identity is committed
+ * only on success, so there is nothing to revert and the fetcher auth options
+ * are never swapped early (renders refresh those on every cache hit).
+ *
+ * Cross-site sessions and sessions without a full scope identity resolve as
+ * no-ops — engine creation/disposal for those is owned by the render path in
+ * createAppSyncEngine. Relies on the AppStack invariant that the engine's
+ * scope.site IS the site's wp_api_url.
+ */
+export async function switchAppEngineScope(session: {
+	site?: { wp_api_url?: string } | null;
+	wpCredentials?: { id?: number | string } | null;
+	store?: { id?: number | string } | null;
+}): Promise<void> {
+	const entry = cachedEngine;
+	if (!entry) return;
+	const site = session.site?.wp_api_url;
+	const storeId = session.store?.id;
+	const cashierId = session.wpCredentials?.id;
+	if (!site || storeId == null || cashierId == null) return;
+	if (canonicalSite(site) !== entry.site) return;
+	const scope: StoreScopeIdentity = { site, storeId, cashierId };
+	const targetKey = scopeCacheKey(scope);
+	if (entry.key === targetKey) return;
+
+	await entry.engine.scope.switch(scope);
+
+	entry.key = targetKey;
+	entry.databaseName = scopeDatabaseName(scope);
+	entry.databaseNames.add(entry.databaseName);
+}
+
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
-	const cacheKey = scopeCacheKey(options);
+	const cacheKey = scopeCacheKey(options.scope);
 	const siteKey = canonicalSite(options.scope.site);
 	if (cachedEngine && cachedEngine.key === cacheKey) {
 		cachedEngine.fetcherOptions.credentials = options.credentials;
@@ -173,12 +218,20 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		return cachedEngine.engine;
 	}
 	if (cachedEngine && cachedEngine.site === siteKey) {
+		// Same-site scope change arriving via render (e.g. a cashier swap without
+		// the store-switch flow). The awaited path is switchAppEngineScope below;
+		// render cannot await, so this branch fires the transition detached and
+		// reverts the cache identity — INCLUDING the fetcher auth options, which
+		// must not keep authenticating as the new identity when the engine never
+		// left the old scope — if it rejects.
 		const entry = cachedEngine;
 		const previousKey = entry.key;
 		const previousDatabaseName = entry.databaseName;
+		const previousFetcherOptions: MutableFetcherOptions = { ...entry.fetcherOptions };
 		const switching = entry.engine.scope.switch(options.scope);
 		entry.key = cacheKey;
 		entry.databaseName = scopeDatabaseName(options.scope);
+		entry.databaseNames.add(entry.databaseName);
 		entry.fetcherOptions.credentials = options.credentials;
 		entry.fetcherOptions.refreshAuth = options.refreshAuth;
 		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
@@ -193,6 +246,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			if (cachedEngine === entry && entry.key === cacheKey) {
 				entry.key = previousKey;
 				entry.databaseName = previousDatabaseName;
+				entry.fetcherOptions.credentials = previousFetcherOptions.credentials;
+				entry.fetcherOptions.refreshAuth = previousFetcherOptions.refreshAuth;
+				entry.fetcherOptions.useJwtAsParam = previousFetcherOptions.useJwtAsParam;
 			}
 		});
 		return entry.engine;
@@ -436,6 +492,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		key: cacheKey,
 		site: siteKey,
 		databaseName: scopeDatabaseName(options.scope),
+		databaseNames: new Set([scopeDatabaseName(options.scope)]),
 		engine,
 		fetcherOptions,
 	};

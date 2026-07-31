@@ -4,6 +4,7 @@ import type { StoreDocument } from '@wcpos/database';
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
+import { getEngineScopeSwitcher } from './engine-scope-port';
 import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
 
 import type { HydrationContext } from './hydration-steps';
@@ -104,7 +105,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			const sessionData = await switchUserSessionStore(
 				state.userDB!,
 				state.appState,
-				store.localID!
+				store.localID!,
+				{ switchEngineScope: getEngineScopeSwitcher() ?? undefined }
 			);
 			updateAppState(sessionData);
 		},

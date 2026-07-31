@@ -207,11 +207,20 @@ export const hydrateUserSession = async (
 export async function switchUserSessionStore(
 	userDB: UserDatabase,
 	appState: any,
-	storeLocalID: string
+	storeLocalID: string,
+	opts?: {
+		switchEngineScope?: (
+			sessionData: Awaited<ReturnType<typeof hydrateUserSession>>
+		) => Promise<void>;
+	}
 ) {
 	const current = await appState.get('current');
 	const newState = { ...current, storeID: storeLocalID };
 	const sessionData = await hydrateUserSession(userDB, newState);
+
+	// The engine must reach the new scope BEFORE the session is committed — a
+	// failed engine transition aborts the switch with durable state untouched.
+	await opts?.switchEngineScope?.(sessionData);
 
 	await appState.set('current', () => newState);
 	return sessionData;
