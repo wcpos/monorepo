@@ -45,7 +45,11 @@ export function useCollectionCounts(): EngineCollectionCounts {
 
 export function useMutationCounts(): EngineMutationCounts {
 	const { engine } = useQueryManager();
-	const [counts, setCounts] = React.useState<EngineMutationCounts>({ pending: 0, conflicts: 0 });
+	const [counts, setCounts] = React.useState<EngineMutationCounts>({
+		pending: 0,
+		pendingOrders: 0,
+		conflicts: 0,
+	});
 
 	React.useEffect(() => {
 		// RxDB mutation selectors are external subscriptions and must follow the active engine lifecycle.

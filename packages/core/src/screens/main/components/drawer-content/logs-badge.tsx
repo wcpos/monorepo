@@ -19,6 +19,7 @@ export const LOGS_READ_STATE_KEY = 'logs_read_v1';
 const LAST_VIEWED_PATH = 'lastViewedAt';
 
 type LogsReadState = {
+	get(path: string): number | undefined;
 	get$(path: string): Observable<number | undefined>;
 	set(path: string, modifier: () => number): Promise<unknown>;
 };
@@ -42,7 +43,18 @@ export function useUnreadErrorCount() {
 		| undefined;
 
 	const statePromise = React.useMemo(
-		() => (storeDB?.addState ? storeDB.addState(LOGS_READ_STATE_KEY) : null),
+		() =>
+			storeDB?.addState
+				? storeDB.addState(LOGS_READ_STATE_KEY).then(async (state) => {
+						// First run on an existing install: logs are retained for up to
+						// 30 days, so a missing watermark must mean "read up to now",
+						// not epoch — otherwise upgrading floods the badge with history.
+						if (typeof state.get(LAST_VIEWED_PATH) !== 'number') {
+							await state.set(LAST_VIEWED_PATH, () => Date.now()).catch(() => undefined);
+						}
+						return state;
+					})
+				: null,
 		[storeDB]
 	);
 

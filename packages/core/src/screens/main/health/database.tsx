@@ -655,8 +655,8 @@ export function DatabaseScreen() {
 						/>
 					) : null}
 					<Stat
-						value={mutations.pending}
-						tone={mutations.pending > 0 ? 'bad' : 'good'}
+						value={mutations.pendingOrders}
+						tone={mutations.pendingOrders > 0 ? 'bad' : 'good'}
 						label={t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
 						testID="db-stat-waiting"
 					/>
