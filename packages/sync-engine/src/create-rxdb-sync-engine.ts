@@ -557,6 +557,9 @@ export function createRxdbSyncEngine(
 	let disposed = false;
 	let announcedScopeId: string | null = null;
 	const bootstrappedScopes = new Set<string>();
+	// Process-local by design: a restart re-runs selector hydration before
+	// bootstrap, recreating this fact if hydration fails again.
+	const selectorHydrationMissedScopes = new Set<string>();
 	const bootstrapFailures = new Map<string, string>();
 	const laneLastTick = new Map<EngineLane, { atMs: number; status: SyncReport['status'] }>();
 	const laneNextDueAtMs = new Map<EngineLane, number>();
@@ -1252,6 +1255,7 @@ export function createRxdbSyncEngine(
 						),
 					]);
 				} catch (error) {
+					selectorHydrationMissedScopes.add(scopeId);
 					diagnostics({
 						type: 'engine.barcode-selector-hydrate-failed',
 						level: 'debug',
@@ -1311,6 +1315,14 @@ export function createRxdbSyncEngine(
 		},
 		diagnostics,
 		pullBatchSize: () => pullBatchSize,
+		forceConfigStaleCollections: (scopeId, snapshot) => {
+			if (!selectorHydrationMissedScopes.has(scopeId)) return [];
+			const stale = (['products', 'variations'] as const).filter(
+				(collection) => (snapshot.barcodeFields?.[collection]?.length ?? 0) > 0
+			);
+			if (stale.length > 0) selectorHydrationMissedScopes.delete(scopeId);
+			return stale;
+		},
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const writeDrainLane = createWriteDrainLane({

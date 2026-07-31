@@ -8,7 +8,11 @@ import {
 } from '@wcpos/sync-core';
 
 import { createRxdbSyncEngine } from './create-rxdb-sync-engine';
+import { materializeTargeted } from './materialization/record-materialization';
 import { memoryEngineStorage } from './testing';
+
+import type { RxDatabase } from 'rxdb';
+import type { SeedPosBootstrapLanesInput } from './scheduler/rx-pos-bootstrap-seeder';
 
 const seedPosBootstrapLanes = vi.hoisted(() => vi.fn());
 
@@ -107,6 +111,90 @@ describe('scope-open barcode selector hydration', () => {
 				type: 'engine.barcode-selector-hydrate-failed',
 				level: 'debug',
 			})
+		);
+		await engine.dispose();
+	});
+
+	it('re-materializes records when selectors arrive after failed bootstrap hydration', async () => {
+		const uuid = '11111111-1111-4111-8111-111111111111';
+		const remoteProduct = {
+			id: 9,
+			global_unique_id: 'LATE-BARCODE',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: uuid }],
+			date_modified_gmt: '2026-07-30T00:00:00',
+			price: '5.00',
+			stock_status: 'instock',
+			type: 'simple',
+			categories: [],
+			brands: [],
+			on_sale: false,
+			featured: false,
+			stock_quantity: null,
+		};
+		seedPosBootstrapLanes.mockImplementationOnce(async (input: SeedPosBootstrapLanesInput) => {
+			const repository = await input.getRepository();
+			const product = materializeTargeted('products', remoteProduct).storedDocument;
+			const database = repository.getDatabase() as unknown as RxDatabase;
+			await database.collections.products.bulkUpsert([product]);
+			return { inserted: 1, deduped: 0 };
+		});
+		let configRequests = 0;
+		let productPulls = 0;
+		const diagnostics: SyncEvent[] = [];
+		const engine = createRxdbSyncEngine(
+			{
+				site: {
+					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+					wpJsonRoot: 'https://example.test/wp-json',
+				},
+				storage: memoryEngineStorage(),
+				mode: 'manual',
+				fetcher: async (url) => {
+					const path = new URL(url).pathname;
+					if (path.endsWith('/changes/config-fingerprint')) {
+						configRequests += 1;
+						if (configRequests === 1) throw new Error('config unavailable');
+						return configResponse();
+					}
+					if (path.endsWith('/changes/tick')) {
+						return new Response(null, { status: 404 });
+					}
+					if (path.endsWith('/changes/sequence-log')) {
+						return Response.json({
+							changes: [],
+							checkpoint: { since: 0, head: 0 },
+							complete: true,
+						});
+					}
+					if (path.endsWith('/integrity/scan')) {
+						return Response.json({ changes: [], checkpoint: { after_id: 0 }, complete: true });
+					}
+					if (path.endsWith('/changes/range-checksum')) {
+						return Response.json({ changes: [], complete: true });
+					}
+					if (path.endsWith('/products')) {
+						productPulls += 1;
+						return Response.json([remoteProduct]);
+					}
+					throw new Error(`unexpected request: ${url}`);
+				},
+				diagnostics: (event) => diagnostics.push(event),
+			},
+			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
+		);
+
+		await engine.ready;
+		const products = engine.active()!.database.collections.products;
+		expect((await products.findOne(uuid).exec())!.toJSON().payload).not.toHaveProperty('barcode');
+
+		await engine.sync('change-signal');
+
+		expect(productPulls).toBe(1);
+		expect((await products.findOne(uuid).exec())!.toJSON().payload).toMatchObject({
+			barcode: 'LATE-BARCODE',
+		});
+		expect(diagnostics).toContainEqual(
+			expect.objectContaining({ type: 'apply.refetch', collection: 'products' })
 		);
 		await engine.dispose();
 	});

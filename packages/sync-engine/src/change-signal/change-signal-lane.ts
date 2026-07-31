@@ -24,6 +24,8 @@ import {
 	planReplicationActions,
 } from '@wcpos/sync-core';
 import type {
+	BarcodeConfigCollection,
+	ConfigFingerprintSnapshot,
 	Fetcher,
 	HybridChangeSignalEngine,
 	StoreScopeManager,
@@ -70,6 +72,10 @@ export type ChangeSignalLaneDeps = {
 	diagnostics: SyncObserver;
 	pullBatchSize?: () => number | undefined;
 	now?: () => number;
+	forceConfigStaleCollections?: (
+		scopeId: string,
+		snapshot: ConfigFingerprintSnapshot
+	) => readonly BarcodeConfigCollection[];
 };
 
 export type ChangeSignalLane = {
@@ -136,6 +142,12 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				: {}),
 			...(restored?.configBaseline !== undefined
 				? { configBaseline: restored.configBaseline }
+				: {}),
+			...(deps.forceConfigStaleCollections
+				? {
+						forceConfigStaleCollections: (snapshot: ConfigFingerprintSnapshot) =>
+							deps.forceConfigStaleCollections!(scopeId, snapshot),
+					}
 				: {}),
 			...(deps.now !== undefined ? { now: deps.now } : {}),
 		});
