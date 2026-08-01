@@ -50,10 +50,10 @@ import {
 	deriveRows,
 	formatBytes,
 	isReadyToSell,
-	relativeTimeParts,
 	totalLocalRecords,
 } from './database-logic';
 import { useCollectionSizes } from './use-collection-sizes';
+import { useNowMs, useRelativeTime } from './use-relative-time';
 
 const ROW_ORDER: CollectionKey[] = [
 	'products',
@@ -112,36 +112,6 @@ function useStorageEstimate(): number | null {
 		};
 	}, []);
 	return bytes;
-}
-
-/** A ticking "now" so relative freshness copy stays current while the page is open. */
-function useNowMs(intervalMs: number): number {
-	const [nowMs, setNowMs] = React.useState(() => Date.now());
-	// Effect (last resort per project.mdc): wall-clock time has no reactive seam.
-	React.useEffect(() => {
-		const timer = setInterval(() => setNowMs(Date.now()), intervalMs);
-		return () => clearInterval(timer);
-	}, [intervalMs]);
-	return nowMs;
-}
-
-function useRelativeTime(): (fromMs: number, toMs: number) => string {
-	const t = useT();
-	return React.useCallback(
-		(fromMs: number, toMs: number) => {
-			const { unit, value } = relativeTimeParts(fromMs, toMs);
-			if (unit === 'seconds') {
-				return value < 5
-					? t('health.database.just_now', { defaultValue: 'just now' })
-					: t('health.database.n_seconds', { defaultValue: '{n} seconds', n: value });
-			}
-			if (unit === 'minutes') {
-				return t('health.database.n_minutes', { defaultValue: '{n} min', n: value });
-			}
-			return t('health.database.n_hours', { defaultValue: '{n} h', n: value });
-		},
-		[t]
-	);
 }
 
 function PercentBar({ percent, className }: { percent: number; className?: string }) {
@@ -636,10 +606,12 @@ export function DatabaseScreen() {
 					<VStack className="min-w-[40%] gap-0 md:min-w-0">
 						<Text
 							className={
-								mutations.pending > 0 ? 'text-warning font-semibold' : 'text-success font-semibold'
+								mutations.pendingOrders > 0
+									? 'text-warning font-semibold'
+									: 'text-success font-semibold'
 							}
 						>
-							{mutations.pending}
+							{mutations.pendingOrders}
 						</Text>
 						<Text className="text-muted-foreground text-xs">
 							{t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}

@@ -56,14 +56,22 @@ function countDatabase(offset: number) {
 	};
 }
 
-function mutationDatabase(pending: number, conflicts: number) {
+function mutationDatabase(pending: number, conflicts: number, pendingOrders = pending) {
 	const pending$ = new BehaviorSubject(Array.from({ length: pending }, () => ({})));
+	const pendingOrders$ = new BehaviorSubject(Array.from({ length: pendingOrders }, () => ({})));
 	const conflicts$ = new BehaviorSubject(Array.from({ length: conflicts }, () => ({})));
-	const find = jest.fn((query: { selector: { status: { $in: string[] } } }) => ({
-		$: query.selector.status.$in.includes('rejected') ? conflicts$ : pending$,
-	}));
+	const find = jest.fn(
+		(query: { selector: { status: { $in: string[] }; collectionName?: { $eq: string } } }) => ({
+			$: query.selector.status.$in.includes('rejected')
+				? conflicts$
+				: query.selector.collectionName !== undefined
+					? pendingOrders$
+					: pending$,
+		})
+	);
 	return {
 		pending$,
+		pendingOrders$,
 		conflicts$,
 		find,
 		database: { collections: { recordMutations: { find } } },
@@ -125,29 +133,48 @@ describe('engine monitor observers', () => {
 		const first = mutationDatabase(2, 1);
 		const second = mutationDatabase(4, 3);
 		const { engine, swap } = swappableEngine(first.database);
-		const emissions: { pending: number; conflicts: number }[] = [];
+		const emissions: { pending: number; pendingOrders: number; conflicts: number }[] = [];
 		const unsubscribe = observeEngineMutationCounts(engine, (counts) => emissions.push(counts));
 
 		expect(first.find).toHaveBeenCalledWith({
 			selector: { status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] } },
 		});
 		expect(first.find).toHaveBeenCalledWith({
+			selector: {
+				status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] },
+				collectionName: { $eq: 'orders' },
+			},
+		});
+		expect(first.find).toHaveBeenCalledWith({
 			selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },
 		});
-		expect(emissions.at(-1)).toEqual({ pending: 2, conflicts: 1 });
+		expect(emissions.at(-1)).toEqual({ pending: 2, pendingOrders: 2, conflicts: 1 });
 
 		first.pending$.next([{}, {}, {}]);
-		expect(emissions.at(-1)).toEqual({ pending: 3, conflicts: 1 });
+		expect(emissions.at(-1)).toEqual({ pending: 3, pendingOrders: 2, conflicts: 1 });
 		swap(second.database);
-		expect(emissions.at(-1)).toEqual({ pending: 4, conflicts: 3 });
+		expect(emissions.at(-1)).toEqual({ pending: 4, pendingOrders: 4, conflicts: 3 });
 		const afterSwap = emissions.length;
 		first.conflicts$.next([]);
 		expect(emissions).toHaveLength(afterSwap);
 		second.conflicts$.next([{}]);
-		expect(emissions.at(-1)).toEqual({ pending: 4, conflicts: 1 });
+		expect(emissions.at(-1)).toEqual({ pending: 4, pendingOrders: 4, conflicts: 1 });
 
 		unsubscribe();
 		second.pending$.next([]);
-		expect(emissions.at(-1)).toEqual({ pending: 4, conflicts: 1 });
+		expect(emissions.at(-1)).toEqual({ pending: 4, pendingOrders: 4, conflicts: 1 });
+	});
+
+	it('counts only order mutations as sales waiting to send', () => {
+		// A queued product edit must not read as an unsent sale.
+		const database = mutationDatabase(3, 0, 1);
+		const { engine } = swappableEngine(database.database);
+		const emissions: { pending: number; pendingOrders: number }[] = [];
+		const unsubscribe = observeEngineMutationCounts(engine, (counts) => emissions.push(counts));
+
+		expect(emissions.at(-1)).toMatchObject({ pending: 3, pendingOrders: 1 });
+		database.pendingOrders$.next([]);
+		expect(emissions.at(-1)).toMatchObject({ pending: 3, pendingOrders: 0 });
+		unsubscribe();
 	});
 });

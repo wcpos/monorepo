@@ -251,3 +251,45 @@ describe('query-state translator', () => {
 		]);
 	});
 });
+
+describe('logs preset filters', () => {
+	const base = {
+		search: '',
+		sort: { field: 'timestamp', direction: 'desc' },
+		limit: 20,
+	} as const;
+
+	it('translates the sync preset to an index-friendly category prefix range', () => {
+		const translated = translateQueryState('logs', {
+			...base,
+			filters: { level: ['info', 'warn', 'error'], category_prefix: 'wcpos.sync' },
+		} satisfies QueryStateOf<'logs'>);
+
+		expect(translated.selector).toEqual({
+			$and: [
+				{ level: { $in: ['info', 'warn', 'error'] } },
+				{ category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' } },
+			],
+		});
+	});
+
+	it('translates the actions preset to an actor-existence predicate', () => {
+		const translated = translateQueryState('logs', {
+			...base,
+			filters: { level: ['info', 'warn', 'error'], has_actor: true },
+		} satisfies QueryStateOf<'logs'>);
+
+		expect(translated.selector).toEqual({
+			$and: [{ level: { $in: ['info', 'warn', 'error'] } }, { actor: { $exists: true } }],
+		});
+	});
+
+	it('drops a false has_actor filter entirely', () => {
+		const translated = translateQueryState('logs', {
+			...base,
+			filters: { level: ['error'], has_actor: false },
+		} satisfies QueryStateOf<'logs'>);
+
+		expect(translated.selector).toEqual({ $and: [{ level: { $in: ['error'] } }] });
+	});
+});

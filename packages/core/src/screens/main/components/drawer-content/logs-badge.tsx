@@ -2,52 +2,108 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
-import { from } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { from, of } from 'rxjs';
+import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { Badge } from '@wcpos/components/badge';
 import { recoverLogsCollectionStorage, useQueryManager } from '@wcpos/query';
 
+import type { Observable } from 'rxjs';
+
 /**
- * Hook that tracks the count of error-level logs since a given timestamp.
- * When the user opens the Store health area, call markAsRead() to reset.
+ * Durable read-state for the unread-error badge (#843: read-state must
+ * survive restart). One number on an RxDB state doc — the timestamp of the
+ * last time the Logs tab was viewed.
+ */
+export const LOGS_READ_STATE_KEY = 'logs_read_v1';
+const LAST_VIEWED_PATH = 'lastViewedAt';
+
+type LogsReadState = {
+	get(path: string): number | undefined;
+	get$(path: string): Observable<number | undefined>;
+	set(path: string, modifier: () => number): Promise<unknown>;
+};
+
+type StoreDBLike = {
+	addState(key: string): Promise<LogsReadState>;
+	collections?: Record<string, unknown>;
+};
+
+/**
+ * Count of error-level logs newer than the persisted last-viewed watermark.
+ * markAsRead() advances the watermark (the logs route calls it on focus).
  */
 export function useUnreadErrorCount() {
 	const manager = useQueryManager();
-	const logsCollection = (manager.localDB as any).collections?.logs;
-	const [lastViewedTimestamp, setLastViewedTimestamp] = React.useState(() => Date.now());
+	const storeDB = manager.localDB as unknown as StoreDBLike;
+	const logsCollection = storeDB?.collections?.logs as
+		| {
+				count(query: { selector: Record<string, unknown> }): { $: Observable<number> };
+		  }
+		| undefined;
+
+	const statePromise = React.useMemo(
+		() =>
+			storeDB?.addState
+				? storeDB.addState(LOGS_READ_STATE_KEY).then(async (state) => {
+						// First run on an existing install: logs are retained for up to
+						// 30 days, so a missing watermark must mean "read up to now",
+						// not epoch — otherwise upgrading floods the badge with history.
+						if (typeof state.get(LAST_VIEWED_PATH) !== 'number') {
+							await state.set(LAST_VIEWED_PATH, () => Date.now()).catch(() => undefined);
+						}
+						return state;
+					})
+				: null,
+		[storeDB]
+	);
 
 	const count = useObservableState(
-		React.useMemo(
-			() =>
-				logsCollection
-					?.count({
-						selector: {
-							level: { $eq: 'error' },
-							timestamp: { $gt: lastViewedTimestamp },
-						},
-					})
-					.$.pipe(
-						catchError((error: unknown) =>
-							from(recoverLogsCollectionStorage(logsCollection, error)).pipe(
-								map((recovered) => {
-									if (!recovered) {
-										throw error;
-									}
-
-									return 0;
-								})
+		React.useMemo(() => {
+			if (!statePromise || !logsCollection) return of(0);
+			return from(statePromise).pipe(
+				switchMap((state) => state.get$(LAST_VIEWED_PATH)),
+				map((value) => (typeof value === 'number' ? value : 0)),
+				distinctUntilChanged(),
+				switchMap((lastViewedAt) =>
+					logsCollection
+						.count({
+							selector: {
+								level: { $eq: 'error' },
+								timestamp: { $gt: lastViewedAt },
+							},
+						})
+						.$.pipe(
+							catchError((error: unknown) =>
+								from(
+									recoverLogsCollectionStorage(
+										logsCollection as Parameters<typeof recoverLogsCollectionStorage>[0],
+										error
+									)
+								).pipe(
+									map((recovered) => {
+										if (!recovered) {
+											throw error;
+										}
+										return 0;
+									})
+								)
 							)
 						)
-					) ?? null,
-			[logsCollection, lastViewedTimestamp]
-		),
+				),
+				// The badge is decoration — storage trouble must not crash the drawer.
+				catchError(() => of(0))
+			);
+		}, [logsCollection, statePromise]),
 		0
 	);
 
 	const markAsRead = React.useCallback(() => {
-		setLastViewedTimestamp(Date.now());
-	}, []);
+		if (!statePromise) return;
+		void statePromise
+			.then((state) => state.set(LAST_VIEWED_PATH, () => Date.now()))
+			.catch(() => undefined);
+	}, [statePromise]);
 
 	return { count, markAsRead };
 }

@@ -31,7 +31,6 @@ export interface UISettingsContextValue {
 		orders: ObservableResource<UISettingState<'orders'>>;
 		coupons: ObservableResource<UISettingState<'coupons'>>;
 		customers: ObservableResource<UISettingState<'customers'>>;
-		logs: ObservableResource<UISettingState<'logs'>>;
 		'reports-orders': ObservableResource<UISettingState<'reports-orders'>>;
 	};
 	getLabel: (id: string, key: string) => string;
@@ -117,7 +116,6 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 			orders: createUIResource('orders'),
 			coupons: createUIResource('coupons'),
 			customers: createUIResource('customers'),
-			logs: createUIResource('logs'),
 			'reports-orders': createUIResource('reports-orders'),
 		}),
 		[createUIResource]

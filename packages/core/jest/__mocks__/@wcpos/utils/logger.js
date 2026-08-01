@@ -1,3 +1,4 @@
+/* global jest */
 /**
  * Mock for @wcpos/utils/logger
  *
@@ -60,3 +61,16 @@ module.exports.getLogger = getLogger;
 module.exports.CategoryLogger = CategoryLogger;
 module.exports.setToast = jest.fn();
 module.exports.setDatabase = jest.fn();
+module.exports.log = mockLogger;
+
+// Verbose-diagnostics flag (stateful so toggle round-trips in component tests)
+let mockVerboseDiagnostics = false;
+module.exports.isVerboseDiagnostics = jest.fn(() => mockVerboseDiagnostics);
+module.exports.setVerboseDiagnostics = jest.fn((enabled) => {
+	mockVerboseDiagnostics = !!enabled;
+});
+
+// Flight recorder surface
+module.exports.recorderStats = jest.fn(() => ({ events: 0, bytes: 0 }));
+module.exports.snapshotRecorder = jest.fn(() => []);
+module.exports.promoteRecorder = jest.fn();

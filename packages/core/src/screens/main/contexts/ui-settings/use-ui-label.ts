@@ -143,14 +143,6 @@ export const useUILabel = () => {
 					payment_method: t('common.payment_method'),
 					total: t('common.total'),
 				},
-				logs: {
-					showSyncStatus: t('logs.show_sync_status'),
-					timestamp: t('common.time'),
-					level: t('common.level'),
-					message: t('common.message'),
-					context: t('common.context'),
-					code: t('common.code'),
-				},
 			};
 
 			return get(labels, [id, key], t('common.label_not_found', { item: key }));
