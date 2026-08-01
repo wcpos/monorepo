@@ -120,7 +120,7 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 					name="xmark"
 					size="sm"
 					onPress={onClose}
-					iconClassName="text-white"
+					className="text-white"
 					testID="camera-scanner-close"
 				/>
 			</View>

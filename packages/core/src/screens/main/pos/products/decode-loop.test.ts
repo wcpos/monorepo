@@ -39,9 +39,11 @@ describe('startDecodeLoop', () => {
 		await advanceOneTick();
 		await advanceOneTick();
 
-		// Empty detect results are not delivered — only real hits.
+		// Every successful detect is delivered so callers can clear decoder errors,
+		// even when the recovered frame contains no barcode.
 		expect(results).toEqual([
 			[{ rawValue: '4006381333931', format: 'ean_13' }],
+			[],
 			[{ rawValue: '12345670', format: 'ean_8' }],
 		]);
 		stop();

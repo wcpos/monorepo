@@ -54,7 +54,7 @@ export function startDecodeLoop<Frame>(options: DecodeLoopOptions<Frame>): () =>
 					options.releaseFrame?.(frame);
 				}
 				consecutive = 0;
-				if (barcodes.length > 0 && !stopped) {
+				if (!stopped) {
 					options.onResult(barcodes);
 				}
 			}

@@ -57,9 +57,13 @@ export function ScannerViewfinder({ onScan, onStatusChange }: ScannerViewfinderP
 
 	const onScanRef = React.useRef(onScan);
 	const onStatusChangeRef = React.useRef(onStatusChange);
+	// Keep scan callbacks current without restarting the mount-only camera effect
+	// whenever its parent renders a new function.
 	React.useEffect(() => {
 		onScanRef.current = onScan;
 	}, [onScan]);
+	// Status updates use the same ref pattern so one effect owns the stream and
+	// decoder lifecycle while still calling the latest parent callback.
 	React.useEffect(() => {
 		onStatusChangeRef.current = onStatusChange;
 	}, [onStatusChange]);
@@ -113,6 +117,9 @@ export function ScannerViewfinder({ onScan, onStatusChange }: ScannerViewfinderP
 			} catch {
 				// Autoplay rejection is benign here: the element is muted and
 				// playback starts as soon as frames arrive.
+			}
+			if (cancelled) {
+				return;
 			}
 
 			const settings = stream.getVideoTracks()[0]?.getSettings?.();

@@ -29,9 +29,15 @@ jest.mock('@wcpos/components/button', () => ({
 	ButtonText: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/icon-button', () => ({
-	IconButton: ({ onPress, testID }: { onPress?: () => void; testID?: string }) => (
-		<button data-testid={testID} onClick={onPress} />
-	),
+	IconButton: ({
+		onPress,
+		testID,
+		className,
+	}: {
+		onPress?: () => void;
+		testID?: string;
+		className?: string;
+	}) => <button data-testid={testID} data-class-name={className} onClick={onPress} />,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -89,7 +95,9 @@ describe('CameraScannerPanel', () => {
 		const onClose = jest.fn();
 		render(<CameraScannerPanel onClose={onClose} />);
 
-		fireEvent.click(screen.getByTestId('camera-scanner-close'));
+		const closeButton = screen.getByTestId('camera-scanner-close');
+		expect(closeButton.getAttribute('data-class-name')).toBe('text-white');
+		fireEvent.click(closeButton);
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
