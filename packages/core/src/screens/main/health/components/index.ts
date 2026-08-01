@@ -5,5 +5,6 @@ export { CoverageBar } from './coverage-bar';
 export { HairlineHeaderCell, HairlineHeaderRow, HairlineRow } from './hairline';
 export { KVGrid, type KVEntry } from './kv-grid';
 export { LevelIndicator, type LevelKind } from './level-indicator';
+export { Pill, type PillTone } from './pill';
 export { RepeatChip } from './repeat-chip';
 export { Stat, StatHeader, type StatTone } from './stat';

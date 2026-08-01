@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import {
 	AlertDialog,
@@ -31,10 +31,13 @@ import { Icon } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 import { prepareCollectionResetRefill, useQueryManager } from '@wcpos/query';
 
+import { AttentionPanel } from './attention-panel';
 import { useT } from '../../../contexts/translations';
+import { useLogStats } from '../logs/use-log-stats';
 import { useCensusTotals } from '../hooks/use-census-totals';
 import {
 	useCollectionCounts,
@@ -42,17 +45,29 @@ import {
 	useMutationCounts,
 } from '../hooks/use-engine-monitor';
 import {
+	Callout,
+	CoverageBar,
+	HairlineHeaderCell,
+	HairlineHeaderRow,
+	Pill,
+	Stat,
+	StatHeader,
+} from './components';
+import {
 	censusFreshnessWindow,
 	censusRefreshDue,
 	censusWindowProgress,
 	type CollectionKey,
 	type CollectionRow,
+	deriveEverythingElseBytes,
 	deriveRows,
 	formatBytes,
 	isReadyToSell,
+	stuckCountsByRow,
 	totalLocalRecords,
 } from './database-logic';
 import { useCollectionSizes } from './use-collection-sizes';
+import { useOtherScopes } from './use-other-scopes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 
 const ROW_ORDER: CollectionKey[] = [
@@ -114,23 +129,11 @@ function useStorageEstimate(): number | null {
 	return bytes;
 }
 
-function PercentBar({ percent, className }: { percent: number; className?: string }) {
-	return (
-		<View className={`bg-muted h-1 w-16 overflow-hidden rounded-full ${className ?? ''}`}>
-			<View
-				className={percent >= 100 ? 'bg-success h-1 rounded-full' : 'bg-primary h-1 rounded-full'}
-				style={{ width: `${percent}%` }}
-			/>
-		</View>
-	);
-}
-
 type RowPhase = 'idle' | 'clearing';
 
 type RowCoverage =
-	| { kind: 'clearing'; label: string }
-	| { kind: 'partial'; label: string; percent: number }
-	| { kind: 'complete' | 'windowed' | 'checking' | 'empty' | 'none'; label: string };
+	| { kind: 'clearing' | 'checking' | 'empty' | 'none'; label: string }
+	| { kind: 'complete' | 'partial' | 'windowed'; percent: number; tooltip: string };
 
 type RowStory = { serverText: string; coverage: RowCoverage };
 
@@ -178,11 +181,17 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 		};
 	}
 	if (row.windowed) {
+		const percent =
+			row.serverTotal > 0 ? Math.min(100, Math.round((row.local / row.serverTotal) * 100)) : 0;
 		return {
 			serverText: row.serverTotal.toLocaleString(),
 			coverage: {
 				kind: 'windowed',
-				label: t('health.database.window_ready', { defaultValue: 'open + recent ready' }),
+				percent,
+				tooltip: t('health.database.window_tooltip', {
+					defaultValue: '{p}% — open + recent orders ready',
+					p: percent,
+				}),
 			},
 		};
 	}
@@ -191,7 +200,10 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			serverText: row.serverTotal.toLocaleString(),
 			coverage: {
 				kind: 'complete',
-				label: t('health.database.all_local', { defaultValue: '✓ all' }),
+				percent: 100,
+				tooltip: t('health.database.all_tooltip', {
+					defaultValue: 'All records on this device',
+				}),
 			},
 		};
 	}
@@ -199,12 +211,19 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 		serverText: row.serverTotal.toLocaleString(),
 		coverage: {
 			kind: 'partial',
-			label: `${row.percentLocal ?? 0}%`,
 			percent: row.percentLocal ?? 0,
+			tooltip: t('health.database.percent_tooltip', {
+				defaultValue: '{p}% on this device',
+				p: row.percentLocal ?? 0,
+			}),
 		},
 	};
 }
 
+/**
+ * Bars-only coverage (spec §9): green full / blue partial; the words live in
+ * a tooltip, and the Orders policy stays a subline on its row.
+ */
 function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 	switch (coverage.kind) {
 		case 'clearing':
@@ -214,16 +233,21 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 					<Text className="text-muted-foreground text-xs">{coverage.label}</Text>
 				</HStack>
 			);
-		case 'partial':
-			return (
-				<HStack className="items-center justify-end gap-2">
-					<Text className="text-muted-foreground text-xs tabular-nums">{coverage.label}</Text>
-					<PercentBar percent={coverage.percent} />
-				</HStack>
-			);
 		case 'complete':
+		case 'partial':
 		case 'windowed':
-			return <Text className="text-success text-right text-xs">{coverage.label}</Text>;
+			return (
+				<Tooltip showOnNative>
+					<TooltipTrigger asChild>
+						<Pressable accessibilityLabel={coverage.tooltip} className="items-end py-1">
+							<CoverageBar percent={coverage.percent} />
+						</Pressable>
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text className="text-xs">{coverage.tooltip}</Text>
+					</TooltipContent>
+				</Tooltip>
+			);
 		default:
 			return <Text className="text-muted-foreground text-right text-xs">{coverage.label}</Text>;
 	}
@@ -233,10 +257,12 @@ function CollectionRowView({
 	row,
 	label,
 	sizeBytes,
+	stuckCount = 0,
 }: {
 	row: CollectionRow;
 	label: string;
 	sizeBytes: number | null | undefined;
+	stuckCount?: number;
 }) {
 	const t = useT();
 	const { engine } = useQueryManager();
@@ -346,9 +372,16 @@ function CollectionRowView({
 				className="border-border hidden items-center gap-3 border-b py-2 md:flex"
 			>
 				<View className={isVariations ? 'flex-1 pl-4' : 'flex-1'}>
-					<Text className={isVariations ? undefined : 'font-medium'}>
-						{isVariations ? `↳ ${label}` : label}
-					</Text>
+					<HStack className="items-center gap-2">
+						<Text className={isVariations ? undefined : 'font-medium'}>
+							{isVariations ? `↳ ${label}` : label}
+						</Text>
+						{stuckCount > 0 ? (
+							<Pill testID={`db-stuck-${row.key}`}>
+								{t('health.database.n_stuck', { defaultValue: '{n} stuck', n: stuckCount })}
+							</Pill>
+						) : null}
+					</HStack>
 					{isVariations ? (
 						<Text className="text-muted-foreground text-xs">
 							{t('health.database.variations_policy', {
@@ -384,9 +417,16 @@ function CollectionRowView({
 				className="border-border items-center gap-2 border-b py-2 md:hidden"
 			>
 				<View className="min-w-0 flex-1">
-					<Text className={isVariations ? 'pl-4' : 'font-medium'}>
-						{isVariations ? `↳ ${label}` : label}
-					</Text>
+					<HStack className="items-center gap-2">
+						<Text className={isVariations ? 'pl-4' : 'font-medium'}>
+							{isVariations ? `↳ ${label}` : label}
+						</Text>
+						{stuckCount > 0 ? (
+							<Pill testID={`db-stuck-sm-${row.key}`}>
+								{t('health.database.n_stuck', { defaultValue: '{n} stuck', n: stuckCount })}
+							</Pill>
+						) : null}
+					</HStack>
 					<Text
 						className={`text-muted-foreground text-xs tabular-nums ${isVariations ? 'pl-4' : ''}`}
 					>
@@ -415,8 +455,8 @@ function CollectionRowView({
 					<Text className="text-muted-foreground text-sm tabular-nums">
 						{sizeText ? `≈ ${sizeText}` : '—'}
 					</Text>
-					{story.coverage.kind === 'partial' ? (
-						<PercentBar percent={story.coverage.percent} className="mt-1 w-11" />
+					{story.coverage.kind === 'partial' || story.coverage.kind === 'windowed' ? (
+						<CoverageBar percent={story.coverage.percent} className="mt-1 w-11" />
 					) : null}
 				</View>
 				{menu}
@@ -550,9 +590,23 @@ export function DatabaseScreen() {
 	const nowMs = useNowMs(1_000);
 	const relative = useRelativeTime();
 
+	const stats = useLogStats();
+	const otherScopes = useOtherScopes();
+
 	const rows = deriveRows(ROW_ORDER, counts, census);
 	const totalRecords = totalLocalRecords(counts);
 	const storageText = formatBytes(storageBytes);
+	const stuckByRow = stuckCountsByRow(stats.stuck);
+	const everythingElseText = formatBytes(
+		deriveEverythingElseBytes(
+			storageBytes,
+			ROW_ORDER.map((key) => sizes[key]),
+			// Everything NOT belonging to the active scope leaves the reconciliation:
+			// other stores AND this store's other cashiers — otherwise inactive
+			// cashiers' scopes masquerade as this scope's indexes/logs.
+			otherScopes ? otherScopes.bytes + otherScopes.sameStoreOtherCashierBytes : null
+		)
+	);
 	const readyToSell = isReadyToSell({
 		connectivity: status.connectivity,
 		gatedBy: status.gatedBy,
@@ -575,52 +629,44 @@ export function DatabaseScreen() {
 					)}
 				</Text>
 
-				{/* Summary strip */}
-				<HStack className="border-border flex-wrap gap-x-6 gap-y-3 border-b pb-3">
-					<VStack className="min-w-[40%] gap-0 md:min-w-0">
-						<Text
-							className={readyToSell ? 'text-success font-semibold' : 'text-warning font-semibold'}
-						>
-							{readyToSell
+				{/* Summary strip — shared Store health stat header */}
+				<StatHeader testID="db-stats">
+					<Stat
+						value={
+							readyToSell
 								? t('health.database.ready', { defaultValue: '✓ Ready to sell' })
-								: t('health.database.preparing', { defaultValue: 'Preparing…' })}
-						</Text>
-						<Text className="text-muted-foreground text-xs">
-							{t('health.database.ready_sub', { defaultValue: 'catalog & open orders local' })}
-						</Text>
-					</VStack>
-					<VStack className="min-w-[40%] gap-0 md:min-w-0">
-						<Text className="font-semibold tabular-nums">{totalRecords.toLocaleString()}</Text>
-						<Text className="text-muted-foreground text-xs">
-							{t('health.database.records_on_device', { defaultValue: 'records on this device' })}
-						</Text>
-					</VStack>
+								: t('health.database.preparing', { defaultValue: 'Preparing…' })
+						}
+						tone={readyToSell ? 'good' : 'default'}
+						label={t('health.database.ready_sub', { defaultValue: 'catalog & open orders local' })}
+						testID="db-stat-ready"
+					/>
+					<Stat
+						value={totalRecords}
+						label={t('health.database.records_on_device', {
+							defaultValue: 'records on this device',
+						})}
+						testID="db-stat-records"
+					/>
 					{storageText ? (
-						<VStack className="min-w-[40%] gap-0 md:min-w-0">
-							<Text className="font-semibold tabular-nums">{storageText}</Text>
-							<Text className="text-muted-foreground text-xs">
-								{t('health.database.storage_used', { defaultValue: 'storage used' })}
-							</Text>
-						</VStack>
+						<Stat
+							value={storageText}
+							label={t('health.database.storage_used', { defaultValue: 'storage used' })}
+							testID="db-stat-storage"
+						/>
 					) : null}
-					<VStack className="min-w-[40%] gap-0 md:min-w-0">
-						<Text
-							className={
-								mutations.pendingOrders > 0
-									? 'text-warning font-semibold'
-									: 'text-success font-semibold'
-							}
-						>
-							{mutations.pendingOrders}
-						</Text>
-						<Text className="text-muted-foreground text-xs">
-							{t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
-						</Text>
-					</VStack>
-				</HStack>
+					<Stat
+						value={mutations.pendingOrders}
+						tone={mutations.pendingOrders > 0 ? 'bad' : 'good'}
+						label={t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
+						testID="db-stat-waiting"
+					/>
+				</StatHeader>
+
+				<AttentionPanel stuck={stats.stuck} />
 
 				{status.connectivity === 'offline' ? (
-					<View className="border-warning/40 bg-warning/10 rounded-md border p-2">
+					<Callout tone="warning">
 						<Text className="text-warning text-sm">
 							{readyToSell
 								? t('health.database.offline', {
@@ -632,44 +678,66 @@ export function DatabaseScreen() {
 											"You're offline and still setting up — this till can't sell until its catalog finishes downloading.",
 									})}
 						</Text>
-					</View>
+					</Callout>
 				) : null}
 
 				{/* Per-collection rows (table header md+ only; rows render both layouts) */}
 				<VStack className="gap-0">
-					<HStack className="border-border hidden items-center gap-3 border-b pb-1 md:flex">
-						<Text className="text-muted-foreground flex-1 text-xs uppercase">
+					<HairlineHeaderRow className="hidden md:flex">
+						<HairlineHeaderCell className="flex-1">
 							{t('health.database.col_collection', { defaultValue: 'Collection' })}
-						</Text>
-						<Text className="text-muted-foreground w-20 text-right text-xs uppercase">
+						</HairlineHeaderCell>
+						<HairlineHeaderCell className="w-20 text-right">
 							{t('health.database.col_on_device', { defaultValue: 'On device' })}
-						</Text>
-						<Text className="text-muted-foreground w-24 text-right text-xs uppercase">
+						</HairlineHeaderCell>
+						<HairlineHeaderCell className="w-24 text-right">
 							{t('health.database.col_on_server', { defaultValue: 'On server' })}
-						</Text>
-						<Text className="text-muted-foreground w-32 text-right text-xs uppercase">
+						</HairlineHeaderCell>
+						<HairlineHeaderCell className="w-32 text-right">
 							{t('health.database.col_coverage', { defaultValue: 'Coverage' })}
-						</Text>
-						<Text className="text-muted-foreground w-20 text-right text-xs uppercase">
+						</HairlineHeaderCell>
+						<HairlineHeaderCell className="w-20 text-right">
 							{t('health.database.col_size', { defaultValue: 'Size' })}
-						</Text>
+						</HairlineHeaderCell>
 						<View className="w-9" />
-					</HStack>
+					</HairlineHeaderRow>
 					{rows.map((row) => (
 						<CollectionRowView
 							key={row.key}
 							row={row}
 							sizeBytes={sizes[row.key]}
+							stuckCount={stuckByRow[row.key] ?? 0}
 							label={t(ROW_LABEL_KEYS[row.key].key, {
 								defaultValue: ROW_LABEL_KEYS[row.key].fallback,
 							})}
 						/>
 					))}
+					{everythingElseText ? (
+						<HStack
+							testID="db-row-everything-else"
+							className="border-border items-center gap-3 border-b py-2"
+						>
+							<View className="min-w-0 flex-1">
+								<Text className="text-muted-foreground">
+									{t('health.database.everything_else', { defaultValue: 'Everything else' })}
+								</Text>
+								<Text className="text-muted-foreground/80 text-xs">
+									{t('health.database.everything_else_sub', {
+										defaultValue: 'Search indexes, logs and sync bookkeeping',
+									})}
+								</Text>
+							</View>
+							<Text className="text-muted-foreground text-right text-sm tabular-nums">
+								{`≈ ${everythingElseText}`}
+							</Text>
+							<View className="w-9" />
+						</HStack>
+					) : null}
 				</VStack>
 
 				{/* Conflicts */}
 				{mutations.conflicts > 0 ? (
-					<View className="border-destructive/40 bg-destructive/10 rounded-md border p-2">
+					<Callout tone="destructive">
 						<Text className="text-destructive text-sm">
 							{t('health.database.conflicts', {
 								defaultValue:
@@ -677,7 +745,7 @@ export function DatabaseScreen() {
 								n: mutations.conflicts,
 							})}
 						</Text>
-					</View>
+					</Callout>
 				) : null}
 
 				{/* Freshness station */}
@@ -740,6 +808,7 @@ export function DatabaseScreen() {
 						</Button>
 					</HStack>
 				</HStack>
+
 				<View className="h-4" />
 			</VStack>
 		</ScrollView>

@@ -192,6 +192,26 @@ describe('deriveStuckRecords', () => {
 		expect(stuck.map((s) => s.recordId)).toEqual(['2', '1']);
 		expect(stuck[0].attempts).toBeGreaterThan(1);
 	});
+
+	it.each([
+		['push.error', 'push', true],
+		['push.in_progress', 'push', true],
+		['queue.write.reschedule-failed', 'push', true],
+		['push.conflict', 'push', false],
+		['push.rejected', 'push', false],
+		['apply.escalation', 'pull', false],
+	] as const)('retains %s state and marks its retryability', (eventType, direction, retryable) => {
+		const [stuck] = deriveStuckRecords([
+			recordRow('record', 300, 'failed', {
+				recordId: 812,
+				collection: 'products',
+				type: eventType,
+				direction,
+			}),
+		]);
+
+		expect(stuck).toMatchObject({ eventType, direction, retryable });
+	});
 });
 
 describe('rowDetailData', () => {
@@ -240,6 +260,9 @@ describe('buildDebugInfo', () => {
 					reason: 'invalid tax class',
 					lastSeen: 0,
 					attempts: 3,
+					eventType: 'push.error',
+					direction: 'push',
+					retryable: true,
 				},
 			],
 			verboseDiagnostics: false,
