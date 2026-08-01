@@ -160,6 +160,7 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 
 		const rows = recorded.map((event) => {
 			sequence += 1;
+			const terminal = event.terminal;
 			// Mirror persistLog's column extraction so promoted narration answers the
 			// same category/code filters as live rows — otherwise the trail is present
 			// but invisible behind the Logs tab's preset chips.
@@ -182,6 +183,22 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 				lastSeen: event.timestamp,
 				...(code && { code }),
 				...(category && { category }),
+				...(terminal?.outcome && { outcome: terminal.outcome }),
+				...(terminal?.operationId !== undefined && {
+					operationId: clampColumn('operationId', terminal.operationId),
+				}),
+				...(terminal?.operationType !== undefined && {
+					operationType: clampColumn('operationType', terminal.operationType),
+				}),
+				...(terminal?.requestId !== undefined && {
+					requestId: clampColumn('requestId', terminal.requestId),
+				}),
+				...(terminal?.serverRequestId !== undefined && {
+					serverRequestId: clampColumn('serverRequestId', terminal.serverRequestId),
+				}),
+				...(terminal?.attempt !== undefined && { attempt: terminal.attempt }),
+				...(terminal?.durationMs !== undefined && { durationMs: terminal.durationMs }),
+				...(terminal?.startedAt !== undefined && { startedAt: terminal.startedAt }),
 			});
 		});
 		const result = await collection.bulkInsert(rows);
@@ -602,6 +619,7 @@ const mainTransport = (props: any) => {
 				level: 'debug',
 				message,
 				context: options.context ?? {},
+				terminal: options.terminal,
 			});
 			if (dbCollection && isVerboseDiagnostics()) {
 				// Forward terminal fields too: a forensic debug row (e.g. a recovered 401

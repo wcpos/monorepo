@@ -1,8 +1,11 @@
+import type { LogTerminalFields } from './index';
+
 export type RecordedEvent = {
 	timestamp: number;
 	level: 'debug';
 	message: string;
 	context: Record<string, unknown>;
+	terminal?: LogTerminalFields;
 	/** Serialized size charged to the ring's byte budget. */
 	sizeBytes: number;
 };

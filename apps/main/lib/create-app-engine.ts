@@ -439,6 +439,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 						type: 'transport.request',
 						level,
 						collection: collectionFromSyncUrl(finalUrl),
+						at: atMs,
 						fields: {
 							durationMs,
 							bytes,
@@ -501,7 +502,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			// No fresh token. The refresh layer logs its own verdict ('Unable to
 			// refresh session' — error when the refresh token is terminally rejected),
 			// so this row records the request-level failure without double-escalating.
-			first.emit('warn', { outcome: 'failed', operationId });
+			// Leave it uncorrelated so repeated post-rejection 401s can collapse.
+			first.emit('warn', { outcome: 'failed' });
 			return first.response;
 		}
 

@@ -221,6 +221,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(appMetricsObserver).toHaveBeenCalledWith({
 			type: 'transport.request',
 			level: 'info',
+			at: 1_025,
 			fields: {
 				durationMs: 25,
 				bytes: 42,
@@ -261,6 +262,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(appMetricsObserver).toHaveBeenCalledWith({
 			type: 'transport.request',
 			level: 'info',
+			at: 2_010,
 			fields: {
 				durationMs: 10,
 				bytes: 0,
@@ -939,8 +941,7 @@ describe('createAppSyncEngine scope cache', () => {
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValueOnce(new Response(null, { status: 401 }))
 			.mockResolvedValueOnce(new Response(null, { status: 401 }));
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
-			loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -972,30 +973,66 @@ describe('createAppSyncEngine scope cache', () => {
 		const refreshAuth = jest.fn().mockResolvedValue(null);
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
-			.mockResolvedValueOnce(new Response(null, { status: 401 }));
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
-			loadCreateAppEngine();
+			.mockResolvedValue(new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
 		const response = await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
 
 		// The refresh layer logs its own verdict (error when terminal); the request
 		// row records the failure without double-escalating.
 		expect(response?.status).toBe(401);
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(appMetricsObserver).toHaveBeenCalledWith(
-			expect.objectContaining({
-				type: 'transport.request',
-				level: 'warn',
-				fields: expect.objectContaining({
-					status: 401,
-					outcome: 'failed',
-					operationId: expect.any(String),
-				}),
-			})
-		);
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(appMetricsObserver).toHaveBeenCalledTimes(2);
+		for (const [event] of appMetricsObserver.mock.calls) {
+			expect(event).toEqual(
+				expect.objectContaining({
+					type: 'transport.request',
+					level: 'warn',
+					fields: expect.objectContaining({ status: 401, outcome: 'failed' }),
+				})
+			);
+			expect(event.fields).not.toHaveProperty('operationId');
+		}
 		fetch.mockRestore();
+	});
+
+	it('keeps the completion timestamp on a 401 attempt whose event is deferred', async () => {
+		jest.useFakeTimers().setSystemTime(1_000);
+		let accessToken = 'expired-token';
+		const credentials = { getLatest: jest.fn(() => ({ access_token: accessToken })) };
+		const refreshAuth = jest.fn(async () => {
+			jest.setSystemTime(5_000);
+			accessToken = 'refreshed-token';
+			return accessToken;
+		});
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+		try {
+			const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
+				loadCreateAppEngine();
+			createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
+			const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+			await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+			expect(appMetricsObserver).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({
+					type: 'transport.request',
+					at: 1_000,
+					fields: expect.objectContaining({ status: 401 }),
+				})
+			);
+		} finally {
+			fetch.mockRestore();
+			jest.useRealTimers();
+		}
 	});
 
 	it('classifies a 403 as error without ever refreshing (row-14 rule + #899 rubric)', async () => {
@@ -1004,8 +1041,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValueOnce(new Response(null, { status: 403 }));
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
-			loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials, refreshAuth });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -1028,8 +1064,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValueOnce(new Response(null, { status: 404 }));
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
-			loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
@@ -1050,8 +1085,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValueOnce(new Response(null, { status: 404 }));
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } =
-			loadCreateAppEngine();
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine();
 		createAppSyncEngine({ ...BASE_OPTIONS, credentials });
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
