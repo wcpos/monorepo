@@ -292,13 +292,65 @@ describe('createSyncLogObserver', () => {
 	// Spec §1: "Debug never persists otherwise" — debug narration is the flight
 	// recorder's job. The persist contract has no debug level, so without this guard
 	// a mapped type that gained a debug emit would be relabelled as info.
-	it('never persists a debug-level event, even for a mapped type', () => {
+	it('never persists a debug-level event for a non-forensic type', () => {
 		observer.observe(
 			event({ type: 'apply.pull', level: 'debug', collection: 'orders', fields: { applied: 9 } })
 		);
 		observer.observe(event({ type: 'signal.log', level: 'debug', message: 'noise' }));
 
 		expect(rows).toHaveLength(0);
+	});
+
+	// #899: a 401 the refresh layer absorbed settles as a forensic debug row with
+	// outcome 'recovered', chained by the arc's operationId — and the successful
+	// retry (also debug, carrying the arc id) is chain evidence, not idle traffic.
+	it('persists forensic debug transport rows at debug with the emitter-settled outcome', () => {
+		observer.observe(
+			event({
+				type: 'transport.request',
+				level: 'debug',
+				fields: { status: 401, outcome: 'recovered', operationId: 'auth-arc-1', durationMs: 12 },
+			})
+		);
+		observer.observe(
+			event({
+				type: 'transport.request',
+				level: 'debug',
+				fields: { status: 200, operationId: 'auth-arc-1', durationMs: 30 },
+			})
+		);
+
+		expect(rows).toHaveLength(2);
+		expect(rows[0].level).toBe('debug');
+		expect(rows[0].terminal).toMatchObject({
+			operationType: 'sync.http',
+			outcome: 'recovered',
+			operationId: 'auth-arc-1',
+		});
+		// The explicit outcome is promoted to the terminal column, not duplicated in context.
+		expect(rows[0].context.outcome).toBeUndefined();
+		expect(rows[1].level).toBe('debug');
+		expect(rows[1].terminal).toMatchObject({ outcome: 'ok', operationId: 'auth-arc-1' });
+	});
+
+	it('drops a debug success attempt with no arc id (idle traffic stays metrics-only)', () => {
+		observer.observe(
+			event({ type: 'transport.request', level: 'debug', fields: { status: 200, bytes: 10 } })
+		);
+
+		expect(rows).toHaveLength(0);
+	});
+
+	it('lets an emitter-settled outcome win over level derivation on a warn row', () => {
+		observer.observe(
+			event({
+				type: 'transport.request',
+				level: 'warn',
+				fields: { status: 401, outcome: 'failed', operationId: 'auth-arc-2' },
+			})
+		);
+
+		expect(rows[0].terminal).toMatchObject({ outcome: 'failed', operationId: 'auth-arc-2' });
 	});
 
 	// Successful HTTP attempts are not durable rows, so their existence has to stay

@@ -10,6 +10,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../contexts/app-state';
+import { useT } from '../../../../contexts/translations';
 import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
 
@@ -60,6 +61,7 @@ function extractValidJSON(responseString: string) {
 export const useRestHttpClient = (endpoint = '') => {
 	const { site, wpCredentials, store, logout } = useAppState();
 	const { status: onlineStatus } = useOnlineStatus();
+	const t = useT();
 
 	/**
 	 * NOTE: We intentionally do NOT use useObservableEagerState for the JWT token.
@@ -104,8 +106,11 @@ export const useRestHttpClient = (endpoint = '') => {
 				site,
 				wpUser: wpCredentials,
 				getHttpClient,
+				sessionRenewedMessage: t('auth.session_renewed_automatically', {
+					defaultValue: 'Session renewed automatically',
+				}),
 			}),
-		[site, wpCredentials, getHttpClient]
+		[site, wpCredentials, getHttpClient, t]
 	);
 
 	/**

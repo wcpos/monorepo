@@ -53,8 +53,12 @@ export interface CreateAppSyncEngineOptions {
 	credentials: { getLatest: () => { access_token?: string } };
 	/** When the site authenticates via a query param instead of a header. */
 	useJwtAsParam?: boolean;
-	/** Refresh an expired access token after an unauthorized response. */
-	refreshAuth?: () => Promise<string | null>;
+	/**
+	 * Refresh an expired access token after an unauthorized response. The driving
+	 * request's arc id is passed so the refresh layer's "Session renewed
+	 * automatically" breadcrumb chains to the absorbed 401 attempt (#899).
+	 */
+	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 	/** The initial store/cashier scope. */
 	scope: StoreScopeIdentity;
 	/** Multi-tab hosts (web) pass true for cross-tab change propagation. */
@@ -323,10 +327,33 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		}
 	};
 
+	// One logical request = one arc. When a 401 enters the refresh path, the arc's
+	// rows — the absorbed attempt, the refresh layer's "Session renewed
+	// automatically" breadcrumb, and the retry — share this id so the ledger can
+	// chain attempt → refresh → success (#899). Minted per ARC only: a synthetic id
+	// on every row would defeat repeat-collapse (see the observer's operationId note).
+	const mintOperationId = (): string =>
+		`auth-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+	type SettledAttempt = {
+		response: Response;
+		/** Emit this attempt's transport row with the level the SETTLED arc decided. */
+		emit: (level: SyncEvent['level'], extraFields?: Record<string, unknown>) => void;
+	};
+
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
 		let tokenUsed: string | undefined;
 		const method = (init?.method ?? 'GET').toUpperCase();
-		const fetchWithLatestToken = async (): Promise<Response> => {
+		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
+		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
+		const isTickProbe = requestPath?.endsWith('/changes/tick') ?? false;
+
+		// Performs one attempt. Metrics (recordTransport, server load) are recorded
+		// immediately, but the LOG emit is returned to the caller instead of fired
+		// here: a log level is a promise about how the operation ended, and inside a
+		// refresh arc the ending is not known yet (#899). The network-failure path
+		// still emits inline — a thrown fetch has no arc to wait for.
+		const performAttempt = async (arcFields?: Record<string, unknown>): Promise<SettledAttempt> => {
 			const token = fetcherOptions.credentials.getLatest().access_token;
 			tokenUsed = token;
 			const headers = new Headers(init?.headers ?? {});
@@ -366,6 +393,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 							status: 0,
 							method,
 							path,
+							...arcFields,
 						},
 					},
 					(error as { name?: unknown } | null)?.name !== 'AbortError'
@@ -386,18 +414,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			// but logging it as a failure would record ~360 phantom errors/hour per idle
 			// terminal and corrupt the transport health counters.
 			const accepted = response.ok || response.status === 304;
-			emitTransport({
-				type: 'transport.request',
-				level: accepted ? 'info' : 'warn',
-				collection: collectionFromSyncUrl(finalUrl),
-				fields: {
-					durationMs,
-					bytes,
-					status: response.status,
-					method,
-					path,
-				},
-			});
 			recordTransport({ atMs, durationMs, bytes, ok: accepted, epoch: epochAtStart });
 
 			const serverLoad = response.headers.get('X-Server-Load');
@@ -416,24 +432,111 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				}
 			}
 
-			return response;
+			return {
+				response,
+				emit: (level, extraFields) =>
+					emitTransport({
+						type: 'transport.request',
+						level,
+						collection: collectionFromSyncUrl(finalUrl),
+						at: atMs,
+						fields: {
+							durationMs,
+							bytes,
+							status: response.status,
+							method,
+							path,
+							...arcFields,
+							...extraFields,
+						},
+					}),
+			};
 		};
 
-		let response = await fetchWithLatestToken();
-		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
-		const isRefreshRequest = requestPath?.endsWith('/auth/refresh') ?? false;
-		if (response.status === 401 && fetcherOptions.refreshAuth && !isRefreshRequest) {
+		// The settled classification for an attempt whose arc ends with it (#899
+		// rubric — the level reflects how the operation ended):
+		//  - 2xx/304 → info (successes are metrics-only; the observer drops them).
+		//  - tick-probe 404 → debug + outcome 'recovered': the hybrid change signal
+		//    latches tick-unsupported and falls back to sequence-log polling BY
+		//    CONSTRUCTION (its TIER 1 poll is unconditional), so this is a designed
+		//    self-healing downgrade, not a fault worth a warn in the merchant's log.
+		//  - 403 → error: a permission error, never refreshed (the 1.9 row-14 rule);
+		//    it needs attention, not a refresh loop.
+		//  - anything else !ok → warn (will need attention if it persists).
+		const emitSettled = (attempt: SettledAttempt, extraFields?: Record<string, unknown>): void => {
+			const status = attempt.response.status;
+			if (attempt.response.ok || status === 304) attempt.emit('info', extraFields);
+			else if (status === 404 && isTickProbe)
+				attempt.emit('debug', { outcome: 'recovered', ...extraFields });
+			else if (status === 403) attempt.emit('error', extraFields);
+			else attempt.emit('warn', extraFields);
+		};
+
+		const first = await performAttempt();
+		if (first.response.status !== 401 || !fetcherOptions.refreshAuth || isRefreshRequest) {
+			emitSettled(first);
+			return first.response;
+		}
+
+		// The 401 entered the refresh arc — hold the attempt's row until the arc
+		// settles. Stamping warn here, before the single-flight refresh and retry
+		// have run, is exactly what surfaced the healthy TTL cycle as a fault (#899).
+		const operationId = mintOperationId();
+		let retryToken: string | null;
+		try {
 			// A concurrent request may have already refreshed the JWT while this one was in
 			// flight. If the current token differs from the one this request used, retry with it
 			// before starting another refresh — avoids redundant refreshes on staggered 401s.
 			const currentToken = fetcherOptions.credentials.getLatest().access_token;
-			const retryToken =
+			retryToken =
 				currentToken && currentToken !== tokenUsed
 					? currentToken
-					: await fetcherOptions.refreshAuth();
-			if (retryToken) response = await fetchWithLatestToken();
+					: await fetcherOptions.refreshAuth({ operationId });
+		} catch (error) {
+			// The refresh itself failed hard — settle the attempt as a failure and let
+			// the refresh error propagate exactly as before.
+			first.emit('warn', { outcome: 'failed', operationId });
+			throw error;
 		}
-		return response;
+		if (!retryToken) {
+			// No fresh token. The refresh layer logs its own verdict ('Unable to
+			// refresh session' — error when the refresh token is terminally rejected),
+			// so this row records the request-level failure without double-escalating.
+			// Leave it uncorrelated so repeated post-rejection 401s can collapse.
+			first.emit('warn', { outcome: 'failed' });
+			return first.response;
+		}
+
+		let retry: SettledAttempt;
+		try {
+			retry = await performAttempt({ operationId });
+		} catch (error) {
+			// The retry never settled (the network fell over mid-arc). Its thrown path
+			// already emitted a status-0 warn row carrying the arc id; the absorbed 401
+			// stays forensic.
+			first.emit('debug', { outcome: 'failed', operationId });
+			throw error;
+		}
+		const retryStatus = retry.response.status;
+		if (retry.response.ok || retryStatus === 304) {
+			// The healthy cycle: the 401 was just a stale token. Both attempts become
+			// forensic debug rows (visible under verbose diagnostics, chained by the
+			// arc id); the user-facing narrative is the single 'Session renewed
+			// automatically' info row the refresh layer writes.
+			first.emit('debug', { outcome: 'recovered', operationId });
+			retry.emit('debug', { operationId });
+		} else if (retryStatus === 401) {
+			// Still unauthorized after a refresh — bounded-refresh exhaustion; NOW
+			// something is actually wrong and the user will need to re-authenticate.
+			first.emit('debug', { outcome: 'failed', operationId });
+			retry.emit('error', { operationId });
+		} else {
+			// The 401 was cured but the retry hit a different failure — classify that
+			// failure on its own terms, keeping the arc id for the chain.
+			first.emit('debug', { outcome: 'recovered', operationId });
+			emitSettled(retry, { operationId });
+		}
+		return retry.response;
 	};
 
 	const fetchWooQueryTotal = async (input: {

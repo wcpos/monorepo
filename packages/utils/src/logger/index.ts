@@ -27,7 +27,7 @@ import { LogRetentionCollection, sweepLogRetention } from './retention';
  * group on them without parsing context.
  */
 export interface LogTerminalFields {
-	outcome?: 'ok' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	outcome?: 'ok' | 'recovered' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
 	operationId?: string;
 	operationType?: string;
 	requestId?: string;
@@ -160,6 +160,7 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 
 		const rows = recorded.map((event) => {
 			sequence += 1;
+			const terminal = event.terminal;
 			// Mirror persistLog's column extraction so promoted narration answers the
 			// same category/code filters as live rows — otherwise the trail is present
 			// but invisible behind the Logs tab's preset chips.
@@ -182,6 +183,22 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 				lastSeen: event.timestamp,
 				...(code && { code }),
 				...(category && { category }),
+				...(terminal?.outcome && { outcome: terminal.outcome }),
+				...(terminal?.operationId !== undefined && {
+					operationId: clampColumn('operationId', terminal.operationId),
+				}),
+				...(terminal?.operationType !== undefined && {
+					operationType: clampColumn('operationType', terminal.operationType),
+				}),
+				...(terminal?.requestId !== undefined && {
+					requestId: clampColumn('requestId', terminal.requestId),
+				}),
+				...(terminal?.serverRequestId !== undefined && {
+					serverRequestId: clampColumn('serverRequestId', terminal.serverRequestId),
+				}),
+				...(terminal?.attempt !== undefined && { attempt: terminal.attempt }),
+				...(terminal?.durationMs !== undefined && { durationMs: terminal.durationMs }),
+				...(terminal?.startedAt !== undefined && { startedAt: terminal.startedAt }),
 			});
 		});
 		const result = await collection.bulkInsert(rows);
@@ -602,9 +619,14 @@ const mainTransport = (props: any) => {
 				level: 'debug',
 				message,
 				context: options.context ?? {},
+				terminal: options.terminal,
 			});
 			if (dbCollection && isVerboseDiagnostics()) {
-				persistLog(dbCollection, levelName, message, options.context ?? {});
+				// Forward terminal fields too: a forensic debug row (e.g. a recovered 401
+				// attempt, #899) is only chainable to its refresh/success rows through
+				// outcome + operationId, and dropping them here would break the chain
+				// exactly where verbose diagnostics is meant to expose it.
+				persistLog(dbCollection, levelName, message, options.context ?? {}, options.terminal);
 			}
 		} catch (error) {
 			console.error('Failed to record debug log entry', error);
@@ -624,11 +646,15 @@ const mainTransport = (props: any) => {
 };
 
 /**
- * Log Level Guidelines:
- * - DEBUG: Internal flow details, retries, skipped items (developer only, hidden in production)
- * - INFO:  Meaningful state changes worth tracking - successful syncs, logins, connections
- * - WARN:  Potential issues that don't block functionality
- * - ERROR: Failures that need attention
+ * Log Level Guidelines (full rubric: ./LEVELS.md):
+ * - DEBUG: Forensic detail — internal flow, retries, transient failures that later
+ *          RECOVERED (stamp `outcome: 'recovered'`); developer only, hidden in production
+ * - INFO:  Lifecycle — meaningful state changes worth tracking (syncs, logins, "Session renewed")
+ * - WARN:  Will need attention if it persists
+ * - ERROR: Needs user action
+ *
+ * A level reflects how the OPERATION ended, not the loudest moment inside it —
+ * the layer that sees the whole arc decides the level once the arc settles (#899).
  *
  * In development: all logs (debug, info, warn, error)
  * In production: info, warn, error (debug is filtered for performance)

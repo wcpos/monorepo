@@ -1,6 +1,6 @@
 export const logsLiteral = {
 	title: 'Log schema',
-	version: 2,
+	version: 3,
 	description: 'Logs events for debugging and user record',
 	type: 'object',
 	primaryKey: 'logId',
@@ -28,7 +28,7 @@ export const logsLiteral = {
 		},
 		outcome: {
 			type: 'string',
-			enum: ['ok', 'failed', 'rejected', 'cancelled', 'unknown'],
+			enum: ['ok', 'recovered', 'failed', 'rejected', 'cancelled', 'unknown'],
 		},
 		level: {
 			type: 'string',

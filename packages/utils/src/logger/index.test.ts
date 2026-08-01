@@ -468,6 +468,48 @@ describe('logger/index', () => {
 			setVerboseDiagnostics(false);
 		});
 
+		it('keeps terminal fields on verbose-persisted debug rows (#899 recovered chain)', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+			setVerboseDiagnostics(true);
+
+			getLogger(['sync']).debug('transport.request', {
+				context: { status: 401 },
+				terminal: { outcome: 'recovered', operationId: 'auth-arc-1' },
+			});
+			await flushWrites();
+
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({
+				level: 'debug',
+				outcome: 'recovered',
+				operationId: 'auth-arc-1',
+			});
+			setVerboseDiagnostics(false);
+		});
+
+		it('keeps terminal fields when recorded debug rows are promoted', async () => {
+			const { collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['sync']).debug('transport.request', {
+				context: { status: 401 },
+				terminal: {
+					outcome: 'recovered',
+					operationType: 'sync.http',
+					operationId: 'auth-arc-1',
+				},
+			});
+
+			await expect(promoteRecorder('error')).resolves.toBe(1);
+			const [rows] = collection.bulkInsert.mock.calls[0];
+			expect(rows[0]).toMatchObject({
+				outcome: 'recovered',
+				operationType: 'sync.http',
+				operationId: 'auth-arc-1',
+			});
+		});
+
 		it('stops real-time debug persistence when verbose mode expires', async () => {
 			jest.useFakeTimers().setSystemTime(1_000);
 			const { rows, collection } = createLogCollection();
