@@ -23,6 +23,16 @@ export function presetFor(checkIntervalMs: number, pullBatchSize: number): Prese
 export function summarizeLast24h(buckets: MetricsBucket[], nowMs: number) {
 	const cutoff = nowMs - 24 * 60 * 60 * 1000;
 	const recent = buckets.filter((bucket) => bucket.hourStartMs >= cutoff);
+	// Trend points, plotted by the "Your server, over time" charts. A server-load
+	// sample can open an hour's bucket before any request lands in it, so a
+	// zero-request bucket is bookkeeping rather than an hour the POS spent
+	// asking — plotting it would draw a dip the till never had.
+	const requestPoints = recent
+		.filter((bucket) => bucket.requests > 0)
+		.map((bucket) => ({ x: bucket.hourStartMs, y: bucket.requests }));
+	const loadPoints = recent
+		.filter((bucket) => bucket.loadMax !== undefined)
+		.map((bucket) => ({ x: bucket.hourStartMs, y: bucket.loadMax as number }));
 	const requests = recent.reduce((sum, bucket) => sum + bucket.requests, 0);
 	const bytes = recent.reduce((sum, bucket) => sum + bucket.bytes, 0);
 	const durationTotal = recent.reduce((sum, bucket) => sum + bucket.durationTotalMs, 0);
@@ -31,6 +41,8 @@ export function summarizeLast24h(buckets: MetricsBucket[], nowMs: number) {
 	const serverSeconds = Math.round(durationTotal / 1000);
 	return {
 		recent,
+		requestPoints,
+		loadPoints,
 		requests,
 		megabytes: bytes / 1_048_576,
 		typicalMs: durationCount > 0 ? Math.round(durationTotal / durationCount) : null,

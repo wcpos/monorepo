@@ -1,18 +1,20 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useCSSVariable } from 'uniwind';
 import { CartesianChart, Line } from 'victory-native';
 
-import { HStack } from '@wcpos/components/hstack';
-import { Text } from '@wcpos/components/text';
+import { TrendFrame, type TrendPoint } from './trend-frame';
 
-export type TrendPoint = { x: number; y: number };
+export type { TrendPoint };
 
 /**
  * A quiet sparkline for the Store health trends — one hue, no axes, no grid;
  * the caption row carries the label and the latest value (colour is meaning:
  * accent = the POS's own activity, neutral ink = the server's context).
+ *
+ * The frame is always drawn: TrendFrame decides whether there is a trend to
+ * put in it, so a fresh till sees the chart's footprint and a quiet "not
+ * enough data yet" line instead of a collapsed caption row.
  */
 export function TrendLineChart({
 	points,
@@ -28,35 +30,14 @@ export function TrendLineChart({
 	const accent = useCSSVariable('--color-primary');
 	const neutral = useCSSVariable('--color-muted-foreground');
 	const color = tone === 'accent' ? accent : neutral;
-	const latest = points.at(-1);
-
-	if (points.length < 2) {
-		// A single sample isn't a trend — the caption row alone tells the truth.
-		return (
-			<HStack testID={testID} className="items-baseline justify-between">
-				<Text className="text-muted-foreground text-xs">{label}</Text>
-				<Text className="text-muted-foreground text-xs">
-					{latest ? latest.y.toLocaleString() : '—'}
-				</Text>
-			</HStack>
-		);
-	}
 
 	return (
-		<View testID={testID} className="gap-1">
-			<View className="h-12">
-				<CartesianChart data={points} xKey="x" yKeys={['y']} domainPadding={{ top: 4, bottom: 4 }}>
-					{({ points: chartPoints }) => (
-						<Line points={chartPoints.y} color={String(color)} strokeWidth={2} curveType="linear" />
-					)}
-				</CartesianChart>
-			</View>
-			<HStack className="items-baseline justify-between">
-				<Text className="text-muted-foreground text-xs">{label}</Text>
-				<Text className="text-muted-foreground text-xs">
-					{latest ? latest.y.toLocaleString() : '—'}
-				</Text>
-			</HStack>
-		</View>
+		<TrendFrame points={points} label={label} testID={testID}>
+			<CartesianChart data={points} xKey="x" yKeys={['y']} domainPadding={{ top: 4, bottom: 4 }}>
+				{({ points: chartPoints }) => (
+					<Line points={chartPoints.y} color={String(color)} strokeWidth={2} curveType="linear" />
+				)}
+			</CartesianChart>
+		</TrendFrame>
 	);
 }
