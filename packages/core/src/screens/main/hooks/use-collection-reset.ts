@@ -49,14 +49,6 @@ export const useCollectionReset = (key: CollectionKey) => {
 			const engineName = ENGINE_COLLECTIONS[collectionName];
 			if (!engineName) throw new Error(`Collection "${collectionName}" cannot be engine-reset`);
 			const outcome = await runtime.engine.scope.resetCollection(engineName);
-			if (outcome === 'reset') {
-				const resetSubject = (
-					runtime.localDB as unknown as {
-						reset$?: { next(value: unknown): void };
-					}
-				).reset$;
-				resetSubject?.next({ name: collectionName });
-			}
 			return { collectionName, outcome };
 		},
 		[runtime]
