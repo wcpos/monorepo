@@ -40,3 +40,31 @@ describe('performance page logic', () => {
 		expect(summary.serverMinutes).toBeNull();
 	});
 });
+
+describe('deriveUptimeCells', () => {
+	const { deriveUptimeCells } = loadLogic();
+	const HOUR = 60 * 60 * 1000;
+	const now = 30 * HOUR + 123; // mid-hour, hour 30
+
+	const bucket = (hourIndex: number, requests: number, errors = 0) => ({
+		hourStartMs: hourIndex * HOUR,
+		requests,
+		bytes: 0,
+		durationTotalMs: 0,
+		durationCount: 0,
+		errors,
+	});
+
+	it('emits one cell per trailing hour, newest last', () => {
+		const cells = deriveUptimeCells([bucket(30, 12)], now, 24);
+		expect(cells).toHaveLength(24);
+		expect(cells.at(-1)).toMatchObject({ hourStartMs: 30 * HOUR, state: 'running' });
+		expect(cells[0].hourStartMs).toBe(7 * HOUR);
+	});
+
+	it('classifies hours: requests → running, errors → errors, nothing → closed', () => {
+		const cells = deriveUptimeCells([bucket(29, 100), bucket(30, 50, 3)], now, 3);
+		expect(cells.map((cell) => cell.state)).toEqual(['closed', 'running', 'errors']);
+		expect(cells[2]).toMatchObject({ requests: 50, errors: 3 });
+	});
+});

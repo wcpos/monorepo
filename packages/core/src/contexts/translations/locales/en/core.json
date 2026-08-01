@@ -1017,5 +1017,15 @@
 	"health.database.everything_else": "Everything else",
 	"health.database.everything_else_sub": "Search indexes, logs and sync bookkeeping",
 	"health.database.other_stores_one": "This device also stores 1 other store (≈ {size}) — it has its own Store health.",
-	"health.database.other_stores_many": "This device also stores {n} other stores (≈ {size}) — each has its own Store health."
+	"health.database.other_stores_many": "This device also stores {n} other stores (≈ {size}) — each has its own Store health.",
+	"health.performance.uptime_title": "Engine uptime",
+	"health.performance.uptime_sub": "Each cell is one hour of this till's sync activity. An empty cell means the app was closed.",
+	"health.performance.uptime_now": "now ▸",
+	"health.performance.uptime_running": "running",
+	"health.performance.uptime_errors": "⚠ errors that hour",
+	"health.performance.uptime_closed": "app closed",
+	"health.performance.uptime_running_tip": "{hour} — {n} requests, all ok",
+	"health.performance.uptime_errors_tip": "{hour} — {n} requests · {e} failed",
+	"health.performance.uptime_closed_tip": "{hour} — app closed",
+	"health.performance.right_now": "Right now: next check in ~{every}"
 }

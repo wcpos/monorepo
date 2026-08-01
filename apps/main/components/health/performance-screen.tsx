@@ -4,7 +4,6 @@ import { Linking, ScrollView, View } from 'react-native';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
 import { Label } from '@wcpos/components/label';
 import { RadioGroup, RadioGroupItem } from '@wcpos/components/radio-group';
@@ -13,12 +12,21 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { useT } from '@wcpos/core/contexts/translations';
+import { Section } from '@wcpos/core/screens/main/health/components';
+import { formatCadence } from '@wcpos/core/screens/main/logs/logs-logic';
 import { useLocalMutation } from '@wcpos/core/screens/main/hooks/mutations/use-local-mutation';
 import { useEngineStatus } from '@wcpos/core/screens/main/hooks/use-engine-monitor';
 
 import { getMetricsBuckets } from '../../lib/metrics';
-import { presetFor, type PresetName, PRESETS, summarizeLast24h } from './performance-logic';
+import {
+	deriveUptimeCells,
+	presetFor,
+	type PresetName,
+	PRESETS,
+	summarizeLast24h,
+} from './performance-logic';
 import { TrendLine } from './trend-line';
+import { UptimeStrip } from './uptime-strip';
 
 const HOW_WE_MEASURE_URL =
 	'https://github.com/wcpos/woo-rxdb-replication-lab/blob/main/docs/experiments/2026-06-29-pull-cost-at-scale.md';
@@ -112,6 +120,18 @@ export function PerformanceScreen() {
 
 	const preset = presetFor(checkIntervalMs, pullBatchSize);
 	const requestsPerDay = Math.round((86_400_000 / checkIntervalMs) * 10) / 10;
+	const uptimeCells = deriveUptimeCells(snapshot.buckets, snapshot.nowMs);
+
+	// The armed next-due boundary is the only honest schedule signal the facade
+	// exposes: `nextDueAtMs − lastTick.atMs` under-reports the cadence (the
+	// timer arms BEFORE a tick, lastTick lands after it finishes, and a manual
+	// sync moves lastTick without rearming) — so show the countdown to the
+	// next check instead of claiming a rate. Rides the 10 s snapshot clock.
+	const changeLane = status.lanes['change-signal'];
+	const nextCheck =
+		changeLane?.nextDueAtMs !== undefined
+			? formatCadence(changeLane.nextDueAtMs - snapshot.nowMs)
+			: null;
 
 	const applyPreset = (name: PresetName) => {
 		// Cancel any pending debounced draft so a stale slider write doesn't
@@ -158,22 +178,29 @@ export function PerformanceScreen() {
 					</Text>
 				</HStack>
 
+				{/* Engine uptime — the sync engine's own hourly footprint */}
+				<Section
+					first
+					testID="uptime-section"
+					title={t('health.performance.uptime_title', 'Engine uptime')}
+					sub={t(
+						'health.performance.uptime_sub',
+						"Each cell is one hour of this till's sync activity. An empty cell means the app was closed."
+					)}
+				>
+					<UptimeStrip cells={uptimeCells} />
+				</Section>
+
 				{/* Sync controls — the #559 contract */}
-				<Card>
-					<CardHeader className="pb-2">
-						<HStack className="items-center justify-between">
-							<CardTitle>{t('health.performance.sync', 'Sync')}</CardTitle>
-							{preset === 'custom' ? (
-								<Text
-									testID="preset-custom-chip"
-									className="border-border text-muted-foreground rounded-full border px-2 py-0.5 text-xs"
-								>
-									{t('health.performance.custom', 'Custom')}
-								</Text>
-							) : null}
-						</HStack>
-					</CardHeader>
-					<CardContent className="gap-4">
+				<Section
+					testID="sync-section"
+					title={
+						preset === 'custom'
+							? `${t('health.performance.sync', 'Sync')} · ${t('health.performance.custom', 'Custom')}`
+							: t('health.performance.sync', 'Sync')
+					}
+				>
+					<VStack className="gap-4">
 						<RadioGroup
 							value={preset === 'custom' ? '' : preset}
 							onValueChange={(value) => applyPreset(value as PresetName)}
@@ -259,35 +286,38 @@ export function PerformanceScreen() {
 
 						<HStack className="flex-wrap items-center justify-between gap-2">
 							<Text className="text-muted-foreground text-sm" testID="settings-math-line">
-								{t(
-									'health.performance.math_line',
-									'At these settings: ~{perDay} requests per day',
-									{
-										perDay: Math.round(requestsPerDay).toLocaleString(),
-									}
-								)}
+								{nextCheck !== null
+									? `${t('health.performance.right_now', 'Right now: next check in ~{every}', {
+											every:
+												nextCheck.unit === 's' ? `${nextCheck.value} s` : `${nextCheck.value} min`,
+										})} · ${t(
+											'health.performance.math_line',
+											'At these settings: ~{perDay} requests per day',
+											{ perDay: Math.round(requestsPerDay).toLocaleString() }
+										)}`
+									: t(
+											'health.performance.math_line',
+											'At these settings: ~{perDay} requests per day',
+											{ perDay: Math.round(requestsPerDay).toLocaleString() }
+										)}
 							</Text>
 							<Button variant="outline" size="sm" onPress={() => void applyPreset('balanced')}>
 								<ButtonText>{t('health.performance.reset', 'Reset to Balanced')}</ButtonText>
 							</Button>
 						</HStack>
-					</CardContent>
-				</Card>
+					</VStack>
+				</Section>
 
 				{/* Your server, over time — two aligned trends */}
-				<Card>
-					<CardHeader className="pb-2">
-						<CardTitle>
-							{t('health.performance.server_over_time', 'Your server, over time')}
-						</CardTitle>
-						<Text className="text-muted-foreground text-xs">
-							{t(
-								'health.performance.server_over_time_note',
-								'Server load is everything running on it — not just the POS.'
-							)}
-						</Text>
-					</CardHeader>
-					<CardContent className="gap-3">
+				<Section
+					testID="server-over-time-section"
+					title={t('health.performance.server_over_time', 'Your server, over time')}
+					sub={t(
+						'health.performance.server_over_time_note',
+						'Server load is everything running on it — not just the POS.'
+					)}
+				>
+					<VStack className="gap-3">
 						{hasLoadSamples ? (
 							<TrendLine
 								testID="server-load-trend"
@@ -325,8 +355,8 @@ export function PerformanceScreen() {
 								)}
 							</Text>
 						) : null}
-					</CardContent>
-				</Card>
+					</VStack>
+				</Section>
 
 				{/* One evidence sentence */}
 				<Text className="text-muted-foreground text-sm">

@@ -9,8 +9,12 @@ import { TextClassContext } from '../text';
 
 import type { TooltipContentProps, TooltipProps } from './types';
 
-function Tooltip({ children, delayDuration }: TooltipProps) {
-	return <TooltipPrimitive.Root delayDuration={delayDuration}>{children}</TooltipPrimitive.Root>;
+function Tooltip({ children, delayDuration, className }: TooltipProps) {
+	return (
+		<TooltipPrimitive.Root delayDuration={delayDuration} className={className}>
+			{children}
+		</TooltipPrimitive.Root>
+	);
 }
 
 function TooltipContent({ className, sideOffset = 4, portalHost, ...props }: TooltipContentProps) {

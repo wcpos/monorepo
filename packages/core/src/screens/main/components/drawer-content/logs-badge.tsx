@@ -50,7 +50,7 @@ export function useUnreadErrorCount() {
 						// 30 days, so a missing watermark must mean "read up to now",
 						// not epoch — otherwise upgrading floods the badge with history.
 						if (typeof state.get(LAST_VIEWED_PATH) !== 'number') {
-							await state.set(LAST_VIEWED_PATH, () => Date.now()).catch(() => undefined);
+							await state.set(LAST_VIEWED_PATH, () => Date.now());
 						}
 						return state;
 					})

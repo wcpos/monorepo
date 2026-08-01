@@ -38,3 +38,45 @@ export function summarizeLast24h(buckets: MetricsBucket[], nowMs: number) {
 		serverMinutes: serverSeconds >= 60 ? Math.round(serverSeconds / 60) : null,
 	};
 }
+
+const HOUR_MS_LOCAL = 60 * 60 * 1000;
+
+export type UptimeCellState = 'running' | 'errors' | 'closed';
+export type UptimeCell = {
+	hourStartMs: number;
+	state: UptimeCellState;
+	requests: number;
+	errors: number;
+};
+
+/**
+ * Uptime strip cells for the trailing window, newest last. Buckets exist only
+ * when the engine made requests, and an open engine checks continuously — so
+ * a missing hour reads "app closed".
+ * NOTE — deferred: "slowed" (cadence adaptation) and "stalled while open"
+ * need the adaptation-transition rows / hourly heartbeat rollups (spec §4,
+ * engine #846) that aren't produced yet; until then errors-in-hour is the
+ * only amber signal and red is never shown.
+ */
+export function deriveUptimeCells(
+	buckets: MetricsBucket[],
+	nowMs: number,
+	hours = 24
+): UptimeCell[] {
+	const byHour = new Map(buckets.map((bucket) => [bucket.hourStartMs, bucket]));
+	const currentHourStart = Math.floor(nowMs / HOUR_MS_LOCAL) * HOUR_MS_LOCAL;
+	const cells: UptimeCell[] = [];
+	for (let i = hours - 1; i >= 0; i -= 1) {
+		const hourStartMs = currentHourStart - i * HOUR_MS_LOCAL;
+		const bucket = byHour.get(hourStartMs);
+		const requests = bucket?.requests ?? 0;
+		const errors = bucket?.errors ?? 0;
+		cells.push({
+			hourStartMs,
+			state: requests === 0 ? 'closed' : errors > 0 ? 'errors' : 'running',
+			requests,
+			errors,
+		});
+	}
+	return cells;
+}
