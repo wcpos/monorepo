@@ -20,7 +20,8 @@ import { StockQuantity } from './cells/stock-quantity';
 import { VariableActions } from './cells/variable-actions';
 import { ProductVariationActions } from './cells/variation-actions';
 import { ProductVariationName } from './cells/variation-name';
-import { CameraScannerDialog } from './camera-scanner-dialog';
+import { CameraScanButton } from './camera-scan-button';
+import { CameraScannerPanel } from './camera-scanner-panel';
 import { EngineOutageBanner } from './engine-outage-banner';
 import { ProductGrid } from './grid';
 import { UISettingsForm } from './ui-settings-form';
@@ -197,6 +198,7 @@ function POSProductsContent({
 	const sortBy = useObservableEagerState(uiSettings.sortBy$);
 	const sortDirection = useObservableEagerState(uiSettings.sortDirection$);
 	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
+	const [scannerOpen, setScannerOpen] = React.useState(false);
 	const t = useT();
 
 	/**
@@ -285,8 +287,11 @@ function POSProductsContent({
 										testID="search-products"
 									/>
 								</ErrorBoundary>
+								<CameraScanButton
+									open={scannerOpen}
+									onToggle={() => setScannerOpen((open) => !open)}
+								/>
 								<ViewModeToggle />
-								<CameraScannerDialog />
 								<UISettingsDialog title={t('common.product_settings')}>
 									<UISettingsForm />
 								</UISettingsDialog>
@@ -294,6 +299,11 @@ function POSProductsContent({
 							<ErrorBoundary>
 								<FilterBar />
 							</ErrorBoundary>
+							{scannerOpen ? (
+								<ErrorBoundary>
+									<CameraScannerPanel onClose={() => setScannerOpen(false)} />
+								</ErrorBoundary>
+							) : null}
 							<ErrorBoundary>
 								<EngineOutageBanner />
 							</ErrorBoundary>

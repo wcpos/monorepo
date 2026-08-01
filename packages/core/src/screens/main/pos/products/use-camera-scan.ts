@@ -4,7 +4,6 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { createScanSession, type ScanSession } from '@wcpos/scanner';
 
-import { ensureBarcodeDecoder } from './camera-decode-setup';
 import { useAppState } from '../../../../contexts/app-state';
 import { useCameraScanBus } from '../../hooks/barcodes/camera-scan-context';
 
@@ -71,9 +70,5 @@ export const useCameraScan = () => {
 		sessionRef.current?.reset();
 	}, []);
 
-	const prepareDecoder = React.useCallback(() => {
-		ensureBarcodeDecoder();
-	}, []);
-
-	return { onScan, reset, prepareDecoder };
+	return { onScan, reset };
 };
