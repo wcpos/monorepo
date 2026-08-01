@@ -5,11 +5,17 @@ const uiLogger = getLogger(['wcpos', 'ui', 'product']);
 
 type VariableRange = { min: string; max: string };
 
+// The server omits a sub-range when no visible variation carries that field —
+// e.g. `sale_price` is absent when nothing is on sale (Sync/Variable_Prices.php:
+// "Each sub-range is omitted when that field has no values"). Only present keys
+// are validated.
 export type VariablePrices = {
-	price: VariableRange;
-	regular_price: VariableRange;
-	sale_price: VariableRange;
+	price?: VariableRange;
+	regular_price?: VariableRange;
+	sale_price?: VariableRange;
 };
+
+const RANGE_KEYS = ['price', 'regular_price', 'sale_price'] as const;
 
 function isVariableRange(value: unknown): value is VariableRange {
 	return (
@@ -23,9 +29,8 @@ function isVariableRange(value: unknown): value is VariableRange {
 function isVariablePrices(value: unknown): value is VariablePrices {
 	if (typeof value !== 'object' || value === null) return false;
 	const v = value as Record<string, unknown>;
-	return (
-		isVariableRange(v.price) && isVariableRange(v.regular_price) && isVariableRange(v.sale_price)
-	);
+	const present = RANGE_KEYS.filter((k) => v[k] !== undefined);
+	return present.length > 0 && present.every((k) => isVariableRange(v[k]));
 }
 
 /**
@@ -55,8 +60,14 @@ export function getVariablePrices(
 		return null;
 	}
 
+	// The server injects `null` when no visible variation carries any price at
+	// all — a legitimate state, not an error.
+	if (metaDataEntry.value === null) {
+		return null;
+	}
+
 	try {
-		const value = metaDataEntry.value ?? '';
+		const value = metaDataEntry.value;
 		let parsed = value;
 		if (typeof value === 'string') {
 			parsed = JSON.parse(value);

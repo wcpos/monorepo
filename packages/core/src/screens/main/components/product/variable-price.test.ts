@@ -1,3 +1,5 @@
+import { getLogger } from '@wcpos/utils/logger';
+
 import { getVariablePrices } from './get-variable-prices';
 
 describe('getVariablePrices', () => {
@@ -58,19 +60,59 @@ describe('getVariablePrices', () => {
 		expect(result).toBeNull();
 	});
 
-	it('returns null when parsed JSON is missing required price range keys', () => {
+	it('accepts omitted sub-ranges — the server drops a range with no values', () => {
+		// e.g. sale_price is absent when no visible variation is on sale
+		// (Sync/Variable_Prices.php on next).
 		const metaData = [
 			{
 				key: '_woocommerce_pos_variable_prices',
-				value: JSON.stringify({
-					price: { min: '10', max: '20' },
-					// regular_price intentionally missing
-					sale_price: { min: '', max: '' },
-				}),
+				value: {
+					price: { min: '15', max: '20' },
+					regular_price: { min: '15', max: '20' },
+				},
 			},
 		];
 		const result = getVariablePrices(metaData);
-		expect(result).toBeNull();
+		expect(result).toEqual({
+			price: { min: '15', max: '20' },
+			regular_price: { min: '15', max: '20' },
+		});
+	});
+
+	it('returns null without error for a null value (no priced variations)', () => {
+		const metaData = [{ key: '_woocommerce_pos_variable_prices', value: null }];
+		expect(getVariablePrices(metaData)).toBeNull();
+	});
+
+	it('logs invalid data when the metadata value is omitted', () => {
+		jest.clearAllMocks();
+		const metaData = [{ key: '_woocommerce_pos_variable_prices' }];
+
+		expect(getVariablePrices(metaData)).toBeNull();
+		expect(getLogger([]).error).toHaveBeenCalledWith(
+			"'_woocommerce_pos_variable_prices' has invalid structure",
+			expect.objectContaining({
+				context: expect.objectContaining({ errorCode: 'DB03002' }),
+			})
+		);
+	});
+
+	it('returns null when no known range key is present', () => {
+		const metaData = [{ key: '_woocommerce_pos_variable_prices', value: {} }];
+		expect(getVariablePrices(metaData)).toBeNull();
+	});
+
+	it('returns null when a present range key has an invalid shape', () => {
+		const metaData = [
+			{
+				key: '_woocommerce_pos_variable_prices',
+				value: {
+					price: { min: '10', max: '20' },
+					sale_price: { min: 5 },
+				},
+			},
+		];
+		expect(getVariablePrices(metaData)).toBeNull();
 	});
 
 	it('returns null when parsed JSON has wrong types for min/max', () => {
