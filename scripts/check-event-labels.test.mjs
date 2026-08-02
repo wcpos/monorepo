@@ -43,9 +43,9 @@ describe('maskLiterals', () => {
 		const source = "const a = { type: 'x.y' }; // type: 'z.w'\n";
 		const masked = maskLiterals(source);
 
-		assert.equal(masked.length, source.length);
-		assert.equal(masked.indexOf('type:'), source.indexOf('type:'));
-		assert.equal(masked, "const a = { type: '   ' };".padEnd(source.length - 1) + '\n');
+		assert.strictEqual(masked.length, source.length);
+		assert.strictEqual(masked.indexOf('type:'), source.indexOf('type:'));
+		assert.strictEqual(masked, "const a = { type: '   ' };".padEnd(source.length - 1) + '\n');
 	});
 
 	for (const [shape, source] of [
@@ -56,7 +56,7 @@ describe('maskLiterals', () => {
 		['an apostrophe inside a comment', "// don't read this ' as a string\nconst a = { b: 1 };"],
 	]) {
 		it(`leaves brackets balanced around ${shape}`, () => {
-			assert.equal(balance(maskLiterals(source)), 0);
+			assert.strictEqual(balance(maskLiterals(source)), 0);
 		});
 	}
 });
@@ -75,7 +75,7 @@ describe('collectEmittedEventTypes', () => {
 		// the second pass — which needs the `apply` namespace to be known already.
 		const emitted = await collectEmittedEventTypes([directory], ['apply.refresh']);
 
-		assert.deepEqual(
+		assert.deepStrictEqual(
 			[...emitted.keys()].sort(),
 			['apply.pull', 'push.aborted', 'push.error', 'signal.cycle']
 		);
@@ -86,7 +86,7 @@ describe('collectEmittedEventTypes', () => {
 			'fake.test.ts': "emit({ type: 'totally.made-up' });",
 		});
 
-		assert.equal((await collectEmittedEventTypes([directory])).size, 0);
+		assert.strictEqual((await collectEmittedEventTypes([directory])).size, 0);
 	});
 
 	it('rejects a computed event type, which no registry could enumerate', async () => {
@@ -123,7 +123,7 @@ describe('collectEmittedEventTypes', () => {
 			`,
 		});
 
-		assert.deepEqual(
+		assert.deepStrictEqual(
 			[...(await collectEmittedEventTypes([directory])).keys()].sort(),
 			['push.aborted', 'push.conflict', 'push.error', 'push.outcome', 'signal.cycle']
 		);
@@ -142,7 +142,7 @@ describe('collectEmittedEventTypes', () => {
 			`,
 		});
 
-		assert.equal((await collectEmittedEventTypes([directory])).size, 0);
+		assert.strictEqual((await collectEmittedEventTypes([directory])).size, 0);
 	});
 
 	it('does not read a `type:` written inside a comment, string or regex', async () => {
@@ -155,7 +155,7 @@ describe('collectEmittedEventTypes', () => {
 			].join('\n'),
 		});
 
-		assert.deepEqual([...(await collectEmittedEventTypes([directory])).keys()], ['signal.cycle']);
+		assert.deepStrictEqual([...(await collectEmittedEventTypes([directory])).keys()], ['signal.cycle']);
 	});
 });
 
@@ -171,8 +171,8 @@ describe('diffAgainstRegistry', () => {
 			{ type: 'signal.retired', label: 'Retired' },
 		]);
 
-		assert.deepEqual(missing, ['signal.brand-new']);
-		assert.deepEqual(unused, ['signal.retired']);
+		assert.deepStrictEqual(missing, ['signal.brand-new']);
+		assert.deepStrictEqual(unused, ['signal.retired']);
 	});
 
 	// A `type` with no label is not coverage — the row renders blank. Counting it
@@ -190,7 +190,7 @@ describe('diffAgainstRegistry', () => {
 			{ type: 'signal.quiet', label: '   ' },
 		]);
 
-		assert.deepEqual(missing, ['signal.absent', 'signal.quiet']);
+		assert.deepStrictEqual(missing, ['signal.absent', 'signal.quiet']);
 	});
 });
 
