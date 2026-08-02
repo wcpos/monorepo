@@ -19,8 +19,11 @@ const novuContextValue = {
 	isConfigured: true,
 };
 
+/** Rows the mocked RxDB query emits - set per test */
+let notificationDocs: Record<string, unknown>[] = [];
+
 const notificationsCollection = {
-	find: jest.fn(() => ({ $: of([]), exec: jest.fn(async () => []) })),
+	find: jest.fn(() => ({ $: of(notificationDocs), exec: jest.fn(async () => []) })),
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
 	upsert: jest.fn(async () => undefined),
 };
@@ -68,6 +71,7 @@ function Consumer({ label }: { label: string }) {
 describe('NovuNotificationsProvider', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		notificationDocs = [];
 		novuContextValue.subscriberId = SUBSCRIBER_ID;
 		// The provider rebuilds this object on every render - a fresh identity each time
 		novuContextValue.subscriberMetadata = { domain: 'example.com', storeId: 1 };
@@ -164,6 +168,30 @@ describe('NovuNotificationsProvider', () => {
 
 		await waitFor(() => expect(mockedGetNovuClient).not.toHaveBeenCalled());
 		expect(mockedSyncSubscriber).not.toHaveBeenCalled();
+	});
+
+	it('clears notifications when the subscriber goes away (logout)', async () => {
+		notificationDocs = [
+			{ id: '1', title: 'Welcome', body: '', status: 'unread', seen: false, createdAt: 1 },
+		];
+
+		function App() {
+			return (
+				<NovuNotificationsProvider>
+					<Consumer label="bell" />
+				</NovuNotificationsProvider>
+			);
+		}
+
+		const { rerender, getByTestId } = render(<App />);
+		await waitFor(() => expect(getByTestId('bell').textContent).toBe('1'));
+
+		// Logout - the shared provider stays mounted, only the subscriber goes away
+		novuContextValue.subscriberId = null;
+		novuContextValue.subscriberMetadata = null;
+		rerender(<App />);
+
+		await waitFor(() => expect(getByTestId('bell').textContent).toBe('0'));
 	});
 
 	it('throws when used outside the provider', () => {

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { EMPTY, type Observable } from 'rxjs';
+import { type Observable, of } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import type { NotificationCollection, NotificationDocument } from '@wcpos/database';
@@ -58,6 +58,18 @@ export interface UseNovuNotificationsResult {
 const NovuNotificationsContext = React.createContext<UseNovuNotificationsResult | undefined>(
 	undefined
 );
+
+const EMPTY_NOTIFICATIONS: Notification[] = [];
+
+/**
+ * Stand-in stream for "no subscriber".
+ *
+ * It has to *emit* `[]` rather than be `EMPTY`: this provider outlives logout, so a stream that
+ * never emits would leave the previous session's notifications on screen (the hook's initial
+ * value only applies on first mount). Module scope keeps the identity stable so swapping to it
+ * is the only thing that triggers a resubscribe.
+ */
+const EMPTY_NOTIFICATIONS$ = of(EMPTY_NOTIFICATIONS);
 
 interface NovuNotificationsProviderProps {
 	children: React.ReactNode;
@@ -130,8 +142,8 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 	}, [notificationsCollection, subscriberId]);
 
 	const notifications: Notification[] = useObservableState(
-		(notifications$ ?? EMPTY) as Observable<Notification[]>,
-		[]
+		(notifications$ ?? EMPTY_NOTIFICATIONS$) as Observable<Notification[]>,
+		EMPTY_NOTIFICATIONS
 	);
 
 	// Calculate counts from local data

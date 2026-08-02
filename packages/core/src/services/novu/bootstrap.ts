@@ -84,6 +84,18 @@ let activeUnsubscribe: (() => void) | null = null;
 /** Payload key of the last metadata successfully handed to the server */
 let syncedMetadataKey: string | null = null;
 /**
+ * Whether the running session's socket readiness check has settled.
+ *
+ * Until it has, metadata syncs are left to the readiness continuation so the subscriber write
+ * (and any welcome notification it triggers) happens with the WebSocket up.
+ */
+let readinessSettled = false;
+/**
+ * Tail of the metadata sync queue - syncs run one at a time so an older payload can never be
+ * applied on top of a newer one.
+ */
+let metadataSyncChain: Promise<void> = Promise.resolve();
+/**
  * Bumped on every teardown/restart so async continuations belonging to a previous session
  * cannot write to the state of the current one.
  */
@@ -104,12 +116,28 @@ function metadataKey(subscriberId: string, metadata: NovuSubscriberMetadata): st
 }
 
 /**
+ * Queue a subscriber metadata sync behind any sync already in flight.
+ *
+ * Writes are serialized because two *different* payloads both pass the changed-key guard, and
+ * if the older request were applied last the server would be left with stale metadata.
+ */
+function syncMetadataIfChanged(gen: number): Promise<void> {
+	const run = metadataSyncChain.then(() => performMetadataSync(gen));
+	// The chain itself must never reject, or every later sync would be skipped
+	metadataSyncChain = run.catch(() => undefined);
+	return run;
+}
+
+/**
  * Sync subscriber metadata to the server, but only when the payload actually changed.
+ *
+ * The payload is read when this actually runs (not when it was queued), so a sync that waited
+ * behind an earlier one always sends the latest metadata and collapses any intermediate values.
  *
  * WHAT gets sent is unchanged from the previous per-consumer implementation - this only
  * removes the duplicate requests.
  */
-async function syncMetadataIfChanged(gen: number): Promise<void> {
+async function performMetadataSync(gen: number): Promise<void> {
 	if (gen !== generation) return;
 
 	const subscriberId = activeSubscriberId;
@@ -185,9 +213,27 @@ export function startNovuBootstrap({
 }: StartNovuBootstrapParams): void {
 	if (activeSubscriberId === subscriberId) {
 		// Same session - adopt the latest metadata/collection without re-bootstrapping
+		const collectionReplaced =
+			activeCollection !== null && activeCollection !== notificationsCollection;
+
 		activeMetadata = subscriberMetadata;
 		activeCollection = notificationsCollection;
-		void syncMetadataIfChanged(generation);
+
+		if (readinessSettled) {
+			void syncMetadataIfChanged(generation);
+		}
+		// else: the readiness continuation hasn't run yet - it reads `activeMetadata` when it
+		// does, so syncing here would only claim the dedupe key early and send the subscriber
+		// write before the WebSocket is up, losing any welcome notification it triggers.
+
+		if (collectionReplaced) {
+			// The RxDB collection was reset and recreated (e.g. Clear & Sync). The replacement is
+			// empty, so re-hydrate it instead of leaving history and badge counts blank until the
+			// next WebSocket event or manual refresh.
+			novuLogger.info('Novu: Notifications collection replaced, re-hydrating');
+			void loadInitialNotifications(generation);
+		}
+
 		return;
 	}
 
@@ -198,6 +244,7 @@ export function startNovuBootstrap({
 	activeSubscriberId = subscriberId;
 	activeMetadata = subscriberMetadata;
 	activeCollection = notificationsCollection;
+	readinessSettled = false;
 
 	novuLogger.info('Novu: Setting up client and WebSocket listeners', {
 		context: { subscriberId },
@@ -237,26 +284,33 @@ export function startNovuBootstrap({
 
 	// Sync subscriber to server AFTER the WebSocket is connected so welcome notifications
 	// triggered by the sync can be received in real time.
-	waitForNovuReady(5000)
-		.then((connected) => {
+	void (async () => {
+		let connected = false;
+
+		try {
+			connected = await waitForNovuReady(5000);
 			if (gen !== generation) return;
 
-			if (connected) {
-				patchStatus({ isConnected: true });
-			} else {
-				patchStatus({ isConnected: false });
+			if (!connected) {
 				novuLogger.warn('Novu: Socket connection timeout, syncing anyway');
 			}
-
-			return syncMetadataIfChanged(gen);
-		})
-		.catch((error) => {
+		} catch (error) {
 			if (gen !== generation) return;
-			patchStatus({ isConnected: false });
 			novuLogger.error('Novu: Socket readiness check failed', {
 				context: { error: error instanceof Error ? error.message : String(error) },
 			});
-		});
+		}
+
+		if (gen !== generation) return;
+
+		patchStatus({ isConnected: connected });
+
+		// Repeat starts may sync inline from here on - the socket is either up or given up on
+		readinessSettled = true;
+
+		// Syncs the latest metadata, including anything adopted while this was pending
+		await syncMetadataIfChanged(gen);
+	})();
 
 	void loadInitialNotifications(gen);
 }
@@ -285,6 +339,7 @@ export function stopNovuBootstrap(): void {
 	activeMetadata = null;
 	activeCollection = null;
 	syncedMetadataKey = null;
+	readinessSettled = false;
 
 	statusSubject.next(IDLE_STATUS);
 }

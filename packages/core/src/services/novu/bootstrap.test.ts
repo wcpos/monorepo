@@ -8,6 +8,7 @@ import {
 	subscribeToNovuEvents,
 	waitForNovuReady,
 } from './client';
+import { syncNotificationsToRxDB } from './notification-sync';
 import { syncSubscriberToServer } from './subscriber';
 
 import type { NovuSubscriberMetadata } from './subscriber';
@@ -38,6 +39,9 @@ const mockedWaitForReady = waitForNovuReady as jest.MockedFunction<typeof waitFo
 const mockedDisconnect = disconnectNovuClient as jest.MockedFunction<typeof disconnectNovuClient>;
 const mockedSyncSubscriber = syncSubscriberToServer as jest.MockedFunction<
 	typeof syncSubscriberToServer
+>;
+const mockedSyncToRxDB = syncNotificationsToRxDB as jest.MockedFunction<
+	typeof syncNotificationsToRxDB
 >;
 
 /** Metadata is rebuilt on every provider render - a fresh object with identical content */
@@ -148,6 +152,109 @@ describe('novu bootstrap', () => {
 		expect(mockedSyncSubscriber).toHaveBeenCalledTimes(2);
 		expect(mockedGetNovuClient).toHaveBeenCalledTimes(1);
 		expect(mockedFetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('re-hydrates when the notifications collection is replaced', async () => {
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata(),
+			notificationsCollection: collection,
+		});
+		await flush();
+
+		expect(mockedFetch).toHaveBeenCalledTimes(1);
+
+		// Clear & Sync drops the RxDB collection and hands back an empty replacement
+		const replacement = {} as NotificationCollection;
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata(),
+			notificationsCollection: replacement,
+		});
+		await flush();
+
+		// Re-fetched into the replacement, but still the same session
+		expect(mockedFetch).toHaveBeenCalledTimes(2);
+		expect(mockedSyncToRxDB).toHaveBeenLastCalledWith(replacement, SUBSCRIBER_ID, []);
+		expect(mockedGetNovuClient).toHaveBeenCalledTimes(1);
+		expect(mockedSubscribe).toHaveBeenCalledTimes(1);
+		expect(unsubscribeSpy).not.toHaveBeenCalled();
+	});
+
+	it('defers a repeat metadata sync until the socket readiness check resolves', async () => {
+		let resolveReady: (value: boolean) => void = () => undefined;
+		mockedWaitForReady.mockReturnValueOnce(
+			new Promise<boolean>((resolve) => {
+				resolveReady = resolve;
+			})
+		);
+
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata(),
+			notificationsCollection: collection,
+		});
+		// The effect runs again (StrictMode / new metadata) before the socket is up
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata({ licenseStatus: 'active' }),
+			notificationsCollection: collection,
+		});
+		await flush();
+
+		// Nothing sent yet - a welcome notification triggered now would be missed
+		expect(mockedSyncSubscriber).not.toHaveBeenCalled();
+
+		resolveReady(true);
+		await flush();
+
+		// One write, carrying the metadata adopted while the readiness check was pending
+		expect(mockedSyncSubscriber).toHaveBeenCalledTimes(1);
+		expect(mockedSyncSubscriber).toHaveBeenCalledWith(
+			SUBSCRIBER_ID,
+			makeMetadata({ licenseStatus: 'active' })
+		);
+	});
+
+	it('serializes metadata writes so a stale payload cannot land last', async () => {
+		const pending: ((result: { success: boolean }) => void)[] = [];
+		mockedSyncSubscriber.mockImplementation(
+			() =>
+				new Promise<{ success: boolean }>((resolve) => {
+					pending.push(resolve);
+				})
+		);
+
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata(),
+			notificationsCollection: collection,
+		});
+		await flush();
+
+		expect(mockedSyncSubscriber).toHaveBeenCalledTimes(1);
+
+		// Metadata changes while the first write is still open
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata({ licenseStatus: 'active' }),
+			notificationsCollection: collection,
+		});
+		await flush();
+
+		expect(mockedSyncSubscriber).toHaveBeenCalledTimes(1);
+
+		pending[0]({ success: true });
+		await flush();
+
+		expect(mockedSyncSubscriber).toHaveBeenCalledTimes(2);
+		expect(mockedSyncSubscriber).toHaveBeenLastCalledWith(
+			SUBSCRIBER_ID,
+			makeMetadata({ licenseStatus: 'active' })
+		);
+
+		pending[1]?.({ success: true });
+		await flush();
 	});
 
 	it('retries the metadata sync after a failure', async () => {
