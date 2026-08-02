@@ -22,6 +22,7 @@ import {
 	type LevelKind,
 	RepeatChip,
 } from '../health/components';
+import { useEventTitle } from './event-title';
 import {
 	chainMarkedIds,
 	displayCategory,
@@ -132,6 +133,7 @@ function LedgerRow({
 	onToggle,
 	timeText,
 	levelLabel,
+	title,
 }: {
 	row: LogRow;
 	chained: boolean;
@@ -139,6 +141,7 @@ function LedgerRow({
 	onToggle: () => void;
 	timeText: string;
 	levelLabel: string;
+	title: string;
 }) {
 	const kind = displayKind(row);
 
@@ -158,7 +161,7 @@ function LedgerRow({
 					<LevelIndicator kind={kind} label={levelLabel} />
 				</View>
 				<View className="min-w-0 flex-1">
-					<Text>{row.message ?? ''}</Text>
+					<Text>{title}</Text>
 					<Subline row={row} />
 				</View>
 				<View className="w-24 items-end">
@@ -192,11 +195,11 @@ function LedgerRow({
 					<View className="flex-1" />
 					<CodeCell row={row} kind={kind} onPress={onToggle} />
 				</HStack>
-				<Text className="text-sm">{row.message ?? ''}</Text>
+				<Text className="text-sm">{title}</Text>
 				<Subline row={row} />
 			</Pressable>
 
-			{expanded ? <RowDetail row={row} kind={kind} /> : null}
+			{expanded ? <RowDetail row={row} kind={kind} title={title} /> : null}
 		</View>
 	);
 }
@@ -219,6 +222,7 @@ export function Ledger({
 	const result = useObservableSuspense(resource);
 	const total = useObservableState(total$, 0);
 	const levelLabel = useLevelLabel();
+	const eventTitle = useEventTitle();
 	const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
 
 	const rows = React.useMemo(
@@ -271,6 +275,7 @@ export function Ledger({
 						onToggle={() => toggle(row.logId)}
 						timeText={timeTextFor(row.timestamp)}
 						levelLabel={levelLabel(displayKind(row))}
+						title={eventTitle(row)}
 					/>
 				))
 			)}
