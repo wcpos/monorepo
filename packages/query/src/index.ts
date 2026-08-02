@@ -24,6 +24,7 @@ export {
 	prepareCollectionResetRefill,
 	registerActiveBinding,
 	requirementsForQuery,
+	type RequirementSortPart,
 } from './requirement-bridge';
 export {
 	isRecoverableLogsStorageError,

@@ -17,10 +17,10 @@ import {
 import { type Materialized, materializeTargeted } from '../materialization/record-materialization';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
-	parseProductBrowseWindowLimit,
-	PRODUCT_BROWSE_WINDOW_LIMIT,
+	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_ORDER,
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
+	type ProductBrowseWindowDescriptor,
 } from './product-browse-window-descriptor';
 import {
 	assertReturnedRequestedIds,
@@ -62,7 +62,13 @@ export type ProductsSchedulerFetcherInput = {
 	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
 };
 
-export const PRODUCT_BROWSE_WINDOW_MAX_PAGES = 20;
+/**
+ * Extra PAGES the browse-window walk may scan past a filled window to resolve the
+ * menu_order/id tiebreak (see fetchProductBrowseWindow). Denominated in pages, not
+ * records, so a gentler Performance dial also scans fewer records — an unresolved
+ * boundary reports `product.browse-window.approximate` rather than paging forever.
+ */
+export const PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES = 19;
 
 /** Store a pulled product batch: extract the Leg-3 manifest rows, strip `_rxdb_digest`, upsert both. */
 async function persistProductDocuments(
@@ -191,26 +197,55 @@ async function fetchProductQuery(
 	};
 }
 
-function productSearchParams(search: string, limit: number): URLSearchParams {
+function productSearchParams(search: string, perPage: number, page: number): URLSearchParams {
 	const query = new URLSearchParams();
 	query.set('search', search);
-	query.set('per_page', String(limit));
-	query.set('page', '1');
+	query.set('per_page', String(perPage));
+	query.set('page', String(page));
 	query.set('orderby', 'id');
 	query.set('order', 'desc');
 	query.set('status', 'publish');
 	return query;
 }
 
-function productSkuParams(sku: string, limit: number): URLSearchParams {
+function productSkuParams(sku: string, perPage: number, page: number): URLSearchParams {
 	const query = new URLSearchParams();
 	query.set('sku', sku);
-	query.set('per_page', String(limit));
-	query.set('page', '1');
+	query.set('per_page', String(perPage));
+	query.set('page', String(page));
 	query.set('orderby', 'id');
 	query.set('order', 'desc');
 	query.set('status', 'publish');
 	return query;
+}
+
+/**
+ * Walk one search leg to `limit` records in `perPage` pages (#908): the dial governs the
+ * WIRE page size, the leg's limit governs how many records the leg wants. Stops on a short
+ * page. `exhausted` is true when the server ran out before the limit did — the caller needs
+ * that to decide whether the search coverage is complete.
+ */
+async function fetchProductSearchLeg(
+	input: ProductsSchedulerFetcherInput,
+	params: (perPage: number, page: number) => URLSearchParams,
+	limit: number,
+	perPage: number,
+	context?: SchedulerFetcherContext
+): Promise<{ payloads: WooProductPayload[]; requestCount: number; exhausted: boolean }> {
+	const payloads: WooProductPayload[] = [];
+	let requestCount = 0;
+	let exhausted = false;
+	while (payloads.length < limit) {
+		const pageSize = Math.min(perPage, limit - payloads.length);
+		const page = await fetchProductQuery(input, params(pageSize, requestCount + 1), context);
+		requestCount += 1;
+		payloads.push(...page.payloads);
+		if (page.payloads.length < pageSize) {
+			exhausted = true;
+			break;
+		}
+	}
+	return { payloads: payloads.slice(0, limit), requestCount, exhausted };
 }
 
 function uniqueProductPayloads(payloads: WooProductPayload[]): WooProductPayload[] {
@@ -222,60 +257,92 @@ function uniqueProductPayloads(payloads: WooProductPayload[]): WooProductPayload
 	return [...byId.values()];
 }
 
+const compareMenuOrderPayloads = (left: WooProductPayload, right: WooProductPayload) =>
+	Number(left.menu_order ?? 0) - Number(right.menu_order ?? 0) ||
+	Number(left.id) - Number(right.id);
+
 /**
  * The products browse-window seed (ADR 0027 §2): a bounded window over the servable set,
- * sorted by the POS default catalog sort (menu_order ASC, id ASC, #810). Woo REST cannot
- * express the id tiebreak alongside menu_order, so the fetcher walks every page that can
- * still contain the first page's boundary menu_order before sorting and truncating. Reuses
- * the shared product materialization path and repository, including the #637 locally-dirty
- * pull guard.
+ * sorted by the window descriptor's sort — the POS default catalog sort (menu_order ASC,
+ * id ASC, #810) unless the grid asked for another Woo-expressible column (#909).
+ *
+ * TWO INDEPENDENT SIZES (#908). `descriptor.limit` is the WINDOW — how many rows the grid
+ * seeds. `pageSize` is the WIRE page — `per_page` on each request, governed by the
+ * Performance dial. The window is walked in ceil(limit / pageSize) pages, so a 100-row
+ * window at pullBatchSize=25 costs four polite requests instead of one heavy one. No
+ * request ever asks for more than the dial allows.
+ *
+ * BOUNDARY WALK (default sort only). Woo REST cannot express the UI's `id ASC` tiebreak
+ * alongside `menu_order`, and menu_order=0 is the common case, so after the window is
+ * filled the fetcher keeps walking while the last page it saw still ends on the window's
+ * boundary menu_order — those extra pages can contain lower ids that belong inside the
+ * window. The budget is {@link PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES} extra PAGES, so a
+ * gentler dial also scans fewer records; exhausting it reports an approximate window.
+ * Non-default sorts need no walk: the server's own order is authoritative for them, and a
+ * tie at the boundary makes either candidate equally correct.
+ *
+ * Reuses the shared product materialization path and repository, including the #637
+ * locally-dirty pull guard.
  */
 async function fetchProductBrowseWindow(
 	input: ProductsSchedulerFetcherInput,
 	task: FetchTask,
-	limit: number,
+	descriptor: ProductBrowseWindowDescriptor,
+	pageSize: number,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
+	const { limit } = descriptor;
+	const isDefaultSort =
+		descriptor.orderby === PRODUCT_BROWSE_WINDOW_ORDERBY &&
+		descriptor.order === PRODUCT_BROWSE_WINDOW_ORDER;
 	const query = new URLSearchParams();
-	query.set('per_page', String(PRODUCT_BROWSE_WINDOW_LIMIT));
-	query.set('page', '1');
-	query.set('orderby', PRODUCT_BROWSE_WINDOW_ORDERBY);
-	query.set('order', PRODUCT_BROWSE_WINDOW_ORDER);
+	query.set('per_page', String(pageSize));
+	query.set('orderby', descriptor.orderby);
+	query.set('order', descriptor.order);
 	query.set('status', 'publish');
-	const firstPage = await fetchProductQuery(input, query, context);
-	const comparePayloads = (left: WooProductPayload, right: WooProductPayload) =>
-		Number(left.menu_order ?? 0) - Number(right.menu_order ?? 0) ||
-		Number(left.id) - Number(right.id);
-	let payloads = [...firstPage.payloads].sort(comparePayloads).slice(0, limit);
-	const boundaryMenuOrder =
-		firstPage.payloads.length === PRODUCT_BROWSE_WINDOW_LIMIT
-			? Number(firstPage.payloads[firstPage.payloads.length - 1]?.menu_order ?? 0)
-			: null;
-	let pagePayloads = firstPage.payloads;
-	let totalPages = firstPage.totalPages;
-	let requestCount = 1;
 
-	while (
-		requestCount < PRODUCT_BROWSE_WINDOW_MAX_PAGES &&
+	const windowPages = Math.ceil(limit / pageSize);
+	let payloads: WooProductPayload[] = [];
+	let pagePayloads: WooProductPayload[] = [];
+	let totalPages: number | null = null;
+	let requestCount = 0;
+
+	// Phase 1 — fill the window: ceil(limit / pageSize) pages at the dial's page size.
+	while (requestCount < windowPages) {
+		query.set('page', String(requestCount + 1));
+		const page = await fetchProductQuery(input, query, context);
+		requestCount += 1;
+		pagePayloads = page.payloads;
+		totalPages = page.totalPages ?? totalPages;
+		payloads = payloads.concat(pagePayloads);
+		if (pagePayloads.length < pageSize) break; // server exhausted before the window filled
+	}
+	if (isDefaultSort) payloads = payloads.sort(compareMenuOrderPayloads);
+	payloads = payloads.slice(0, limit);
+
+	// Phase 2 — resolve the id tiebreak at the window's boundary (default sort only).
+	const boundaryMenuOrder =
+		isDefaultSort && payloads.length === limit && pagePayloads.length === pageSize
+			? Number(payloads[payloads.length - 1]?.menu_order ?? 0)
+			: null;
+	const stillOnBoundary = (): boolean =>
 		boundaryMenuOrder !== null &&
-		pagePayloads.length === PRODUCT_BROWSE_WINDOW_LIMIT &&
+		pagePayloads.length === pageSize &&
 		(totalPages === null || requestCount < totalPages) &&
-		Number(pagePayloads[pagePayloads.length - 1]?.menu_order ?? 0) === boundaryMenuOrder
-	) {
+		Number(pagePayloads[pagePayloads.length - 1]?.menu_order ?? 0) === boundaryMenuOrder;
+
+	let tiebreakPages = 0;
+	while (tiebreakPages < PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES && stillOnBoundary()) {
 		query.set('page', String(requestCount + 1));
 		const nextPage = await fetchProductQuery(input, query, context);
+		requestCount += 1;
+		tiebreakPages += 1;
 		pagePayloads = nextPage.payloads;
 		totalPages = nextPage.totalPages ?? totalPages;
-		payloads = payloads.concat(pagePayloads).sort(comparePayloads).slice(0, limit);
-		requestCount += 1;
+		payloads = payloads.concat(pagePayloads).sort(compareMenuOrderPayloads).slice(0, limit);
 	}
 
-	if (
-		requestCount === PRODUCT_BROWSE_WINDOW_MAX_PAGES &&
-		pagePayloads.length === PRODUCT_BROWSE_WINDOW_LIMIT &&
-		(totalPages === null || requestCount < totalPages) &&
-		Number(pagePayloads[pagePayloads.length - 1]?.menu_order ?? 0) === boundaryMenuOrder
-	) {
+	if (tiebreakPages === PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES && stillOnBoundary()) {
 		input.diagnostics?.({
 			type: 'product.browse-window.approximate',
 			level: 'warn',
@@ -284,14 +351,7 @@ async function fetchProductBrowseWindow(
 		});
 	}
 
-	const documents = payloads
-		.sort(
-			(left, right) =>
-				Number(left.menu_order ?? 0) - Number(right.menu_order ?? 0) ||
-				Number(left.id) - Number(right.id)
-		)
-		.slice(0, limit)
-		.map(productDocumentFromWooPayload);
+	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
 	await recordCoverage(
 		'products',
@@ -310,23 +370,31 @@ async function fetchProductSearch(
 	search: string,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
-	// Single-shot path (no pagination): capping per-request here would truncate
-	// search results, so the batch dial deliberately does not apply.
+	// The dial governs the WIRE page, not the result set (#908): each leg still wants
+	// `limit` records, it just walks them in dial-sized pages instead of asking for the
+	// whole set in one heavy request. Capping per_page WITHOUT paginating would truncate
+	// search results, which is why this used to opt out of the dial entirely.
 	const limit = taskLimit(task);
-	const { payloads: searchPayloads } = await fetchProductQuery(
+	const pageSize = taskLimit(task, input.pullBatchSize);
+	const searchLeg = await fetchProductSearchLeg(
 		input,
-		productSearchParams(search, limit),
+		(perPage, page) => productSearchParams(search, perPage, page),
+		limit,
+		pageSize,
 		context
 	);
-	const { payloads: skuPayloads } = await fetchProductQuery(
+	const skuLeg = await fetchProductSearchLeg(
 		input,
-		productSkuParams(search, limit),
+		(perPage, page) => productSkuParams(search, perPage, page),
+		limit,
+		pageSize,
 		context
 	);
-	const payloads = uniqueProductPayloads([...skuPayloads, ...searchPayloads]);
+	const payloads = uniqueProductPayloads([...skuLeg.payloads, ...searchLeg.payloads]);
 	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
-	const complete = searchPayloads.length < limit && skuPayloads.length < limit;
+	// Complete only when BOTH legs ran out of server-side results before the limit did.
+	const complete = searchLeg.exhausted && skuLeg.exhausted;
 	await recordCoverage(
 		'products',
 		input,
@@ -335,7 +403,12 @@ async function fetchProductSearch(
 		complete
 	);
 
-	return { taskId: task.id, documentCount: documents.length, requestCount: 2, completed: complete };
+	return {
+		taskId: task.id,
+		documentCount: documents.length,
+		requestCount: searchLeg.requestCount + skuLeg.requestCount,
+		completed: complete,
+	};
 }
 
 export function createProductsSchedulerFetcher(
@@ -348,17 +421,18 @@ export function createProductsSchedulerFetcher(
 			return fetchTargetedProducts(input, task, context);
 		}
 
-		const browseWindowLimit = parseProductBrowseWindowLimit(task.queryKey);
-		if (browseWindowLimit !== null) {
-			// The window limit is a coverage total, not a request size — the batch
-			// dial must not shrink it, or the cold product window would permanently
-			// shrink even though the boundary group is exhausted before truncation.
-			return fetchProductBrowseWindow(
-				input,
-				task,
-				Math.min(browseWindowLimit, taskLimit(task)),
-				context
+		const browseWindow = parseProductBrowseWindowDescriptor(task.queryKey);
+		if (browseWindow !== null) {
+			// The window limit is a coverage total, not a request size — the batch dial
+			// must not shrink it, or the cold product window would permanently shrink even
+			// though the boundary group is exhausted before truncation. The dial governs
+			// the WIRE page instead (#908), so the window is walked in dial-sized pages.
+			const limit = Math.min(browseWindow.limit, task.limit);
+			const pageSize = Math.min(
+				pullRequestLimit({ ...task, limit }, input.pullBatchSize),
+				WOO_REST_MAX_PER_PAGE
 			);
+			return fetchProductBrowseWindow(input, task, { ...browseWindow, limit }, pageSize, context);
 		}
 
 		const search = productSearchTerm(task);

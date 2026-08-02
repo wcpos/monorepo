@@ -8,11 +8,42 @@ const HOUR_MS = 60 * 60 * 1000;
 describe('performance page logic', () => {
 	it('matches presets exactly and reports custom otherwise', () => {
 		const { presetFor } = loadLogic();
-		expect(presetFor(60_000, 25)).toBe('eco');
-		expect(presetFor(10_000, 50)).toBe('balanced');
-		expect(presetFor(5_000, 100)).toBe('realtime');
+		expect(presetFor(300_000, 25)).toBe('eco');
+		expect(presetFor(60_000, 50)).toBe('balanced');
+		expect(presetFor(10_000, 75)).toBe('realtime');
 		expect(presetFor(10_000, 25)).toBe('custom');
 		expect(presetFor(45_000, 50)).toBe('custom');
+		// The retired pre-#908 Balanced is now a Custom setting, not a preset.
+		expect(presetFor(10_000, 50)).toBe('custom');
+	});
+
+	// #908 — the presets price TWO independent budget lines, and the shipped default is
+	// Balanced. These assertions are the guard rail for re-tuning the numbers.
+	it('moves both budget lines across the tiers and never ships a max-weight page', () => {
+		const { PRESETS, DEFAULT_CHECK_INTERVAL_MS, DEFAULT_PULL_BATCH_SIZE } = loadLogic();
+		const tiers = [PRESETS.eco, PRESETS.balanced, PRESETS.realtime];
+		// Checks get strictly more frequent…
+		expect(tiers.map((tier) => tier.checkIntervalMs)).toEqual(
+			[...tiers.map((tier) => tier.checkIntervalMs)].sort((a, b) => b - a)
+		);
+		// …and pages get strictly heavier. Neither line is a free rider.
+		expect(tiers.map((tier) => tier.pullBatchSize)).toEqual(
+			[...tiers.map((tier) => tier.pullBatchSize)].sort((a, b) => a - b)
+		);
+		expect(new Set(tiers.map((tier) => tier.checkIntervalMs)).size).toBe(3);
+		expect(new Set(tiers.map((tier) => tier.pullBatchSize)).size).toBe(3);
+		// The 100-record page stays reachable only through Custom.
+		expect(Math.max(...tiers.map((tier) => tier.pullBatchSize))).toBeLessThan(100);
+		// Balanced is the shipped default — Paul's 60 s / 50 anchor.
+		expect(DEFAULT_CHECK_INTERVAL_MS).toBe(60_000);
+		expect(DEFAULT_PULL_BATCH_SIZE).toBe(50);
+	});
+
+	it('derives each preset description from the preset table', () => {
+		const { presetBudget } = loadLogic();
+		expect(presetBudget('eco')).toEqual({ intervalSeconds: 300, records: 25 });
+		expect(presetBudget('balanced')).toEqual({ intervalSeconds: 60, records: 50 });
+		expect(presetBudget('realtime')).toEqual({ intervalSeconds: 10, records: 75 });
 	});
 
 	it('summarizes only the last 24 hours of buckets', () => {

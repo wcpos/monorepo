@@ -9,7 +9,9 @@
  *  - PRODUCT BROWSE-WINDOW SEED (ADR 0027 §2): so a cold grid shows products
  *    without a search, a bounded result window by the POS default catalog sort
  *    is re-seeded on an interval (windowed lane, never a bulk pull; guardrail
- *    G3). Below the reference lanes and the orders window.
+ *    G3). Below the reference lanes and the orders window. The window is a ROW
+ *    COUNT; the wire page size is the Performance dial (#908), so the seed is
+ *    several polite requests, not one 100-record one.
  *  - REFERENCE RE-SEED (F11): a completed greedy task is terminal, so a
  *    mid-session category/brand/tag/coupon edit never reaches a running POS
  *    without a periodic re-seed → re-pull → set-difference prune.
@@ -92,8 +94,11 @@ export type QueryTotalCacheEvent = { type: 'query-total-cache'; entries: QueryTo
 export const ORDER_OPEN_RECENT_STATUS = 'pending,processing,on-hold';
 export const ORDER_OPEN_RECENT_LIMIT = 200;
 export const ORDER_OPEN_RECENT_PRIORITY = 600;
-// The products browse-window seed (ADR 0027 §2): a result window of up to 100 products.
-// Priority 500 sits BELOW the Tier-0 reference
+// The products browse-window seed (ADR 0027 §2): a result window of 100 products in the
+// POS default catalog sort. This lane seeds only the DEFAULT window — the grid's own
+// limit/sort windows (#909) are declared by the require plane, not re-seeded on a timer.
+// The window is a row count, not a request size: the fetcher walks it in Performance-dial
+// pages (#908). Priority 500 sits BELOW the Tier-0 reference
 // lanes (1000–920) and the orders open-recent window (600): a cold browse grid is a
 // convenience seed, never a sell-blocker, so it drains after them. 500 (not 599) leaves
 // headroom for any future intermediate seed between it and the orders window.

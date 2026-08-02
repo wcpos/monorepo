@@ -19,8 +19,10 @@
  *    either way `ready` resolves `{ action: 'released' }`.
  *
  * Query-shaped requirements over TARGETED collections without ids are caller
- * misuse here (exception): resolving them honestly needs the persisted
- * coverage/scheduler tier this slice defers.
+ * misuse here (exception), EXCEPT the two bounded windows that own a persisted
+ * scheduler descriptor: the orders browser window and the products browse window
+ * (ADR 0027 §2). Both seed a durable windowed task and drain it; anything else
+ * query-shaped still needs coverage machinery this slice defers.
  */
 
 /**
@@ -46,6 +48,8 @@ import {
 	seedTargetedOrderSchedulerTask,
 } from './scheduler/rx-order-scheduler-task-seeder';
 import { parseOrderBrowserSchedulerDescriptor } from './scheduler/order-browser-scheduler-descriptor';
+import { parseProductBrowseWindowDescriptor } from './scheduler/product-browse-window-descriptor';
+import { seedProductBrowseWindowSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
 import {
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	runEngineSchedulerDrain,
@@ -319,6 +323,73 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					action: 'fetched',
 					missingRecordIds: [],
 					reason: `drained order query ${decision.descriptor.queryKey}`,
+					documents: drainResult.totalDocuments,
+					requests: drainResult.totalRequests,
+				};
+			}
+
+			if (item.requirement.collection === 'products' && item.requirement.kind === 'query') {
+				// The products BROWSE WINDOW (ADR 0027 §2, #909). Same durable shape as the
+				// orders query above: seed the windowed task, drain it. This is what makes the
+				// grid's own limit and sort reach the wire — before it existed, an empty-selector
+				// products browse declared no demand at all, so infinite scroll past the cold
+				// 100-row seed fetched nothing and a sort change re-sorted the wrong local slice.
+				const browseWindow = parseProductBrowseWindowDescriptor(item.requirement.queryKey ?? '');
+				if (!browseWindow) {
+					throw new Error(
+						`require: unsupported product query (${item.requirement.queryKey ?? 'missing queryKey'})`
+					);
+				}
+				let drainResult = emptyDrainResult();
+				let skippedActive = false;
+				const applied = await bound.guardWrite(async () => {
+					const seedResult = await seedProductBrowseWindowSchedulerTask({
+						limit: browseWindow.limit,
+						orderby: browseWindow.orderby,
+						order: browseWindow.order,
+						priority: item.priority,
+						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
+						getRepository: async () => ({ getDatabase: () => database as never }),
+					});
+					if (seedResult.skippedActive > 0) {
+						skippedActive = true;
+						return;
+					}
+					drainResult = await runEngineSchedulerDrain({
+						db: database as unknown as SchedulerDrainDatabase,
+						coverage,
+						baseUrl: deps.syncBaseUrl,
+						ownerId: 'require-plane',
+						fetcher: boundFetch as never,
+						diagnostics: deps.diagnostics,
+						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+						signal: item.abortController.signal,
+						onProgress: progressObserver(item.requirement),
+					});
+				});
+				if (applied === 'dropped')
+					throw new Error('require: scope moved mid-query (writes dropped)');
+				if (skippedActive)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'product browse window already in progress',
+					};
+				if (drainResult.failed > 0)
+					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
+				const lost = drainLostOutcomeCount(drainResult);
+				if (lost > 0)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'claim lost to another owner',
+						documents: drainResult.totalDocuments,
+						requests: drainResult.totalRequests,
+					};
+				return {
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: `drained product browse window ${item.requirement.queryKey}`,
 					documents: drainResult.totalDocuments,
 					requests: drainResult.totalRequests,
 				};

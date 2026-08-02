@@ -127,7 +127,9 @@ describe('requirementsForQuery', () => {
 		});
 	});
 
-	it('creates no demand for unbounded browse of non-order collections', () => {
+	it('creates no demand for a FILTERED products browse', () => {
+		// Filters still ride local residents only (ADR 0027) — only the UNFILTERED
+		// browse gets a window.
 		expect(
 			requirementsForQuery({
 				id: 'q',
@@ -136,6 +138,71 @@ describe('requirementsForQuery', () => {
 				limit: 10,
 			})
 		).toEqual([]);
+	});
+
+	// #909 — the browse window carries the grid's own limit …
+	it('maps an unfiltered products browse to a browse-window descriptor', () => {
+		expect(
+			requirementsForQuery({
+				id: 'q',
+				collectionName: 'products',
+				selector: {},
+				limit: 10,
+			})
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey: 'products:browse-window:limit=100',
+			},
+		]);
+	});
+
+	it('grows the window key as the grid scrolls, quantized to the window step', () => {
+		const keyFor = (limit: number) =>
+			requirementsForQuery({ id: 'q', collectionName: 'products', selector: {}, limit })[0]
+				?.queryKey;
+		// A 10-row scroll tick must NOT mint a new coverage lane every time…
+		expect(keyFor(10)).toBe('products:browse-window:limit=100');
+		expect(keyFor(90)).toBe('products:browse-window:limit=100');
+		// …but crossing the window edge must, or scrolling fetches nothing (the #909 bug).
+		expect(keyFor(110)).toBe('products:browse-window:limit=200');
+		expect(keyFor(210)).toBe('products:browse-window:limit=300');
+		// Browse is a seed, not a query engine: the window is capped.
+		expect(keyFor(99_999)).toBe('products:browse-window:limit=1000');
+	});
+
+	// … and the grid's own sort (Paul's ruling: sort-aware seed).
+	it('carries a Woo-expressible sort into the browse-window key', () => {
+		const keyFor = (sort: Record<string, 'asc' | 'desc'>[]) =>
+			requirementsForQuery({
+				id: 'q',
+				collectionName: 'products',
+				selector: {},
+				limit: 100,
+				sort,
+			})[0]?.queryKey;
+		expect(keyFor([{ sortable_price: 'desc' }])).toBe(
+			'products:browse-window:limit=100:orderby=price:order=desc'
+		);
+		expect(keyFor([{ name: 'asc' }])).toBe(
+			'products:browse-window:limit=100:orderby=title:order=asc'
+		);
+		expect(keyFor([{ date_modified_gmt: 'desc' }])).toBe(
+			'products:browse-window:limit=100:orderby=modified:order=desc'
+		);
+		expect(keyFor([{ total_sales: 'desc' }])).toBe(
+			'products:browse-window:limit=100:orderby=popularity:order=desc'
+		);
+		// The POS catalog default keeps the bare key — one identity for the cold seed.
+		expect(keyFor([{ menu_order: 'asc' }, { id: 'asc' }])).toBe(
+			'products:browse-window:limit=100'
+		);
+		// Sorts Woo REST cannot express fall back to the default window rather than
+		// pretending a server-sorted slice exists.
+		expect(keyFor([{ sku: 'asc' }])).toBe('products:browse-window:limit=100');
+		expect(keyFor([{ stock_quantity: 'desc' }])).toBe('products:browse-window:limit=100');
 	});
 
 	it('creates no demand for unbounded customer browse', () => {

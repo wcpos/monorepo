@@ -164,6 +164,14 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.barcode_scanning_sound_enabled = false;
 			return oldDoc;
 		},
+		13(oldDoc: StoreDocumentType) {
+			// #908 preset re-tune: Balanced moves 10 s → 60 s (10 s was over-ambitious
+			// for the average server). Only tills still sitting on the RETIRED Balanced
+			// default are moved; any other value is a deliberate choice — preset or
+			// slider — and is left exactly as the merchant set it.
+			if (oldDoc.sync_check_interval_ms === 10_000) oldDoc.sync_check_interval_ms = 60_000;
+			return oldDoc;
+		},
 	},
 };
 
