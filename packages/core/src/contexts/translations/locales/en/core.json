@@ -1074,7 +1074,7 @@
 	"health.logs.event.queue_write_coalesce": "Merged repeated edits into one update",
 	"health.logs.event.queue_write_conflict_transition": "Could not settle a clashing change",
 	"health.logs.event.queue_write_discard_repull_deferred": "Postponed refreshing a record from your store",
-	"health.logs.event.queue_write_drain": "Sent queued changes to your store",
+	"health.logs.event.queue_write_drain": "Processed queued changes for your store",
 	"health.logs.event.queue_write_enqueued": "Queued a change to send to your store",
 	"health.logs.event.queue_write_needs_revision": "A change needs fixing before it can be sent",
 	"health.logs.event.queue_write_reschedule_failed": "Could not schedule another try for a change",

@@ -193,7 +193,7 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			});
 		case 'queue.write.drain':
 			return t('health.logs.event.queue_write_drain', {
-				defaultValue: 'Sent queued changes to your store',
+				defaultValue: 'Processed queued changes for your store',
 			});
 		case 'queue.write.enqueued':
 			return t('health.logs.event.queue_write_enqueued', {

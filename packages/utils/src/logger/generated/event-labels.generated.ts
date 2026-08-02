@@ -396,7 +396,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		type: 'queue.write.drain',
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_drain',
-		label: 'Sent queued changes to your store',
+		label: 'Processed queued changes for your store',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.enqueued': {

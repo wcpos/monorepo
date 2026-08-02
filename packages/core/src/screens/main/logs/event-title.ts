@@ -12,6 +12,10 @@ import { eventTypeOf, type LogRow } from './logs-logic';
  * months ago. Anything else — a non-engine row, or an event type from a newer
  * build than this UI — falls back to the persisted message, then to the raw
  * code, so nothing renders blank.
+ *
+ * The message fallback tests for text, not for presence: the sync observer
+ * preserves `message: ''` rather than substituting, so `??` would hand the
+ * ledger an empty title on exactly the rows the raw-code fallback exists for.
  */
 export function useEventTitle(): (row: LogRow) => string {
 	const t = useT();
@@ -21,7 +25,8 @@ export function useEventTitle(): (row: LogRow) => string {
 			if (type !== undefined && isSyncEventType(type)) {
 				return translateEventTitle((key, options) => t(key, options), type);
 			}
-			return row.message ?? type ?? '';
+			if (typeof row.message === 'string' && row.message.trim() !== '') return row.message;
+			return type ?? '';
 		},
 		[t]
 	);

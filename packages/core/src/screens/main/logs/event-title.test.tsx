@@ -69,6 +69,17 @@ describe('useEventTitle', () => {
 		expect(titleFor(row({ context: { type: 'checkout.settled' } }))).toBe('checkout.settled');
 	});
 
+	// The observer persists `message: ''` rather than substituting, so an empty
+	// message is a real row shape — and `??` would let it render as a blank title.
+	it('falls through an empty message to the raw code', () => {
+		expect(titleFor(row({ message: '', context: { type: 'checkout.settled' } }))).toBe(
+			'checkout.settled'
+		);
+		expect(titleFor(row({ message: '   ', context: { type: 'checkout.settled' } }))).toBe(
+			'checkout.settled'
+		);
+	});
+
 	it('leaves rows that carry no event type on their own message', () => {
 		expect(titleFor(row({ message: 'Signed in', context: { actor: 'cashier' } }))).toBe(
 			'Signed in'
