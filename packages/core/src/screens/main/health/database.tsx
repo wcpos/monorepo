@@ -37,6 +37,7 @@ import { prepareCollectionResetRefill, useQueryManager } from '@wcpos/query';
 
 import { AttentionPanel } from './attention-panel';
 import { useT } from '../../../contexts/translations';
+import { formatSkewMagnitude } from '../logs/logs-logic';
 import { useLogStats } from '../logs/use-log-stats';
 import { useCensusTotals } from '../hooks/use-census-totals';
 import {
@@ -664,6 +665,27 @@ export function DatabaseScreen() {
 				</StatHeader>
 
 				<AttentionPanel stuck={stats.stuck} />
+
+				{stats.clockSkew ? (
+					<Callout tone="warning" testID="db-clock-skew">
+						<Text className="text-warning text-sm">
+							{`${
+								stats.clockSkew.skewSeconds > 0
+									? t('health.database.clock_skew_ahead', {
+											defaultValue: "Your server's clock is about {amount} ahead of this device.",
+											amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
+										})
+									: t('health.database.clock_skew_behind', {
+											defaultValue: "Your server's clock is about {amount} behind this device.",
+											amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
+										})
+							} ${t('health.database.clock_skew_hint', {
+								defaultValue:
+									"Check the server's date, time and timezone settings — order times, receipts and reports may be wrong until the clocks agree.",
+							})}`}
+						</Text>
+					</Callout>
+				) : null}
 
 				{status.connectivity === 'offline' ? (
 					<Callout tone="warning">
