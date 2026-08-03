@@ -26,6 +26,17 @@ export type LogRow = {
 	context?: Record<string, unknown> | null;
 };
 
+/**
+ * The stable engine event code the sync observer stamps on every row it writes
+ * (`context.type`). It is the row's identity for support, export and the label
+ * registry — the merchant-facing title is derived from it at render time and is
+ * never persisted (#912).
+ */
+export function eventTypeOf(row: Pick<LogRow, 'context'>): string | undefined {
+	const type = row.context?.type;
+	return typeof type === 'string' && type.length > 0 ? type : undefined;
+}
+
 /** Every category the logger writes is `wcpos.<domain>…` — the prefix carries no signal on screen. */
 export function displayCategory(category: string | undefined): string {
 	if (!category) return '';
@@ -286,10 +297,14 @@ export function buildDebugInfo(input: DebugInfoInput): string {
 		lines.push('  none');
 	}
 	for (const row of input.recentErrors) {
+		// The raw event type rides the export even though the UI titles rows from
+		// its translation: support greps these lines by code, and the translated
+		// title is whatever language the till happened to be in.
 		const parts = [
 			new Date(row.timestamp).toISOString(),
 			row.code ?? '-',
 			displayCategory(row.category) || '-',
+			eventTypeOf(row) ?? '-',
 			row.message ?? '',
 		];
 		const suffix = (row.count ?? 1) > 1 ? ` (×${row.count})` : '';

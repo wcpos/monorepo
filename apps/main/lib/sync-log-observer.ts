@@ -18,7 +18,16 @@ type Conformance = {
 	/** Return false to route this occurrence to the check ring instead of a row
 	 *  (idle work). Omit to always persist. */
 	didWork?: (fields: Record<string, unknown>) => boolean;
-	/** Plain-language row message. Falls back to event.message ?? event.type. */
+	/**
+	 * The row's persisted message. NOT the on-screen title: the Logs UI titles
+	 * every row by translating `context.type` through the event-label registry at
+	 * render time, because a string baked in here is stuck in the language the
+	 * till ran when the row was written (#912). What this text is still for:
+	 * support/export narration, the detail line under a quiet row, and the
+	 * repeat-collapse discriminator — a record message carrying the id and reason
+	 * is what keeps two different failing records in two rows.
+	 * Falls back to event.message ?? event.type.
+	 */
 	message?: (event: SyncEvent, fields: Record<string, unknown>) => string;
 	/**
 	 * Debug-level occurrences of this type are forensic evidence (a transient
@@ -199,8 +208,7 @@ const CONFORMANCE = new Map<string, Conformance>([
 			// part of a refresh arc (carries an operationId, #899) is chain evidence,
 			// not idle traffic — rare (once per JWT TTL), and without it the recovered
 			// chain would be missing its successful ending under verbose.
-			didWork: (f) =>
-				f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
+			didWork: (f) => f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
 			forensic: true,
 		},
 	],

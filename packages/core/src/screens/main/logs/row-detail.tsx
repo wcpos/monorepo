@@ -22,7 +22,7 @@ import {
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { Callout, type KVEntry, KVGrid, type LevelKind } from '../health/components';
-import { type LogRow, rowDetailData } from './logs-logic';
+import { eventTypeOf, type LogRow, rowDetailData } from './logs-logic';
 
 export function catalogueFor(code: string | undefined): CatalogueEntry | null {
 	if (!code) return null;
@@ -119,8 +119,13 @@ function HelpDialog({ code, entry }: { code: string; entry: CatalogueEntry }) {
  * Inline expandable detail under a ledger row. Problems get the callout
  * treatment (plain-language reason, data-safety line, safe next step, help,
  * correlation KV); quiet rows get the correlation KV and raw context.
+ *
+ * `title` is the row's rendered (translated) title, passed in so the detail can
+ * show the raw engine event code — the greppable identity support asks for —
+ * next to it, and skip repeating the persisted message when it says the same
+ * thing (#912).
  */
-export function RowDetail({ row, kind }: { row: LogRow; kind: LevelKind }) {
+export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; title?: string }) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const entry = catalogueFor(row.code);
@@ -132,8 +137,15 @@ export function RowDetail({ row, kind }: { row: LogRow; kind: LevelKind }) {
 	const context = row.context ?? {};
 	const reason =
 		typeof context.reason === 'string' && context.reason.length > 0 ? context.reason : null;
+	const eventType = eventTypeOf(row);
 
 	const entries: KVEntry[] = [];
+	if (eventType) {
+		entries.push({
+			label: t('health.logs.kv_event'),
+			value: eventType,
+		});
+	}
 	if (detail.operation) {
 		entries.push({
 			label: t('health.logs.kv_operation'),
@@ -164,11 +176,16 @@ export function RowDetail({ row, kind }: { row: LogRow; kind: LevelKind }) {
 
 	if (!isProblem) {
 		const hasContext = Object.keys(context).length > 0;
+		// The persisted message is the emitter's own narration. It is not the
+		// title any more (that is translated from the event code), so show it
+		// here when it adds something the title does not already say.
+		const narration = row.message && row.message !== title ? row.message : null;
 		return (
 			<VStack testID={`logs-detail-${row.logId}`} className="gap-2 py-2 pl-4">
+				{narration ? <Text className="text-muted-foreground text-xs">{narration}</Text> : null}
 				{entries.length > 0 ? <KVGrid entries={entries} /> : null}
 				{hasContext ? <Tree value={context} collapsed /> : null}
-				{entries.length === 0 && !hasContext ? (
+				{entries.length === 0 && !hasContext && !narration ? (
 					<Text className="text-muted-foreground text-xs">{t('health.logs.no_detail')}</Text>
 				) : null}
 			</VStack>
@@ -180,7 +197,7 @@ export function RowDetail({ row, kind }: { row: LogRow; kind: LevelKind }) {
 	// must not be put in the server's mouth.
 	const isServerReason =
 		reason !== null && (detail.serverCode !== undefined || context.direction === 'push');
-	const title = isServerReason
+	const explanation = isServerReason
 		? t('health.logs.server_said', { reason })
 		: (entry?.summary ?? reason ?? row.message ?? '');
 
@@ -189,7 +206,7 @@ export function RowDetail({ row, kind }: { row: LogRow; kind: LevelKind }) {
 			<Callout tone={kind === 'error' ? 'destructive' : 'warning'}>
 				<View className="flex-col gap-x-8 gap-y-2 md:flex-row">
 					<VStack className="flex-1 gap-1">
-						<Text className="font-medium">{title}</Text>
+						<Text className="font-medium">{explanation}</Text>
 						{dataSafety ? (
 							<Text className="text-muted-foreground text-sm">{dataSafety}</Text>
 						) : null}
