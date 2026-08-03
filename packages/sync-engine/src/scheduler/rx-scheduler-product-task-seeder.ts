@@ -16,9 +16,13 @@
 
 import {
 	PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT,
+	PRODUCT_BROWSE_WINDOW_MAX_LIMIT,
+	PRODUCT_BROWSE_WINDOW_ORDER,
+	PRODUCT_BROWSE_WINDOW_ORDERBY,
+	type ProductBrowseWindowOrder,
+	type ProductBrowseWindowOrderby,
 	productBrowseWindowQueryKey,
 } from './product-browse-window-descriptor';
-import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
@@ -54,8 +58,11 @@ export type SeedTargetedProductSchedulerTaskInput = {
 };
 
 export type SeedProductBrowseWindowSchedulerTaskInput = {
-	/** Result-window size. Defaults to the descriptor's per-page ceiling. */
+	/** Result-window size (rows the grid seeds, NOT a per-request size). Defaults to 100. */
 	limit?: number;
+	/** Wire sort for the window. Defaults to the POS catalog sort (menu_order asc). */
+	orderby?: ProductBrowseWindowOrderby;
+	order?: ProductBrowseWindowOrder;
 	priority?: number;
 	completedDedupeForMs?: number;
 	nowMs?: number;
@@ -64,21 +71,30 @@ export type SeedProductBrowseWindowSchedulerTaskInput = {
 
 /**
  * Seed the products browse-window task (ADR 0027 §2) — the products mirror of
- * seedOrderFilterSchedulerTask. One WINDOWED task keyed `products:browse-window:limit=<N>`,
- * which the drain routes to fetchProductBrowseWindow (POS default catalog sort). Low priority
- * (default 500 — below the Tier-0 reference lanes and the orders window); NOT durable
- * (a re-seedable refresh) and NOT filter-aware.
+ * seedOrderFilterSchedulerTask. One WINDOWED task keyed `products:browse-window:limit=<N>`
+ * (plus `:orderby=…:order=…` for a non-default sort, #909), which the drain routes to
+ * fetchProductBrowseWindow. Low priority (default 500 — below the Tier-0 reference lanes
+ * and the orders window); NOT durable (a re-seedable refresh) and NOT filter-aware.
+ *
+ * The limit is a WINDOW, capped at PRODUCT_BROWSE_WINDOW_MAX_LIMIT — it may exceed a single
+ * Woo page, because the fetcher walks the window in Performance-dial-sized pages (#908).
  */
 export async function seedProductBrowseWindowSchedulerTask(
 	input: SeedProductBrowseWindowSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	const limit = input.limit ?? PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT;
-	if (!Number.isSafeInteger(limit) || limit <= 0 || limit > WOO_REST_MAX_PER_PAGE) {
+	if (!Number.isSafeInteger(limit) || limit <= 0 || limit > PRODUCT_BROWSE_WINDOW_MAX_LIMIT) {
 		throw new Error(
-			`Product browse-window scheduler limit must be a positive integer within the Woo per-page ceiling (${WOO_REST_MAX_PER_PAGE})`
+			`Product browse-window scheduler limit must be a positive integer within the window ceiling (${PRODUCT_BROWSE_WINDOW_MAX_LIMIT})`
 		);
 	}
-	const queryKey = productBrowseWindowQueryKey(limit);
+	const orderby = input.orderby ?? PRODUCT_BROWSE_WINDOW_ORDERBY;
+	const order = input.order ?? PRODUCT_BROWSE_WINDOW_ORDER;
+	const queryKey = productBrowseWindowQueryKey(limit, { orderby, order });
+	const requirementId =
+		queryKey === productBrowseWindowQueryKey(limit)
+			? `products.browse-window.limit.${limit}`
+			: `products.browse-window.limit.${limit}.${orderby}.${order}`;
 	const repository = await input.getRepository();
 	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
 	const nowMs = input.nowMs ?? Date.now();
@@ -88,7 +104,7 @@ export async function seedProductBrowseWindowSchedulerTask(
 		tasks: [
 			{
 				id: `${queryKey}:windowed`,
-				requirementId: `products.browse-window.limit.${limit}`,
+				requirementId,
 				collection: 'products',
 				queryKey,
 				limit,

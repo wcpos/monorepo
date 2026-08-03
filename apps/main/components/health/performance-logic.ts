@@ -1,12 +1,47 @@
 import type { MetricsBucket } from '../../lib/metrics';
 
-/** The #559 presets — macros over the two dials. */
+/**
+ * The #559 presets — macros over the two dials.
+ *
+ * TWO INDEPENDENT BUDGET LINES (#908). `checkIntervalMs` prices HOW OFTEN we ask;
+ * `pullBatchSize` prices HOW HEAVY each request is. The old table moved the interval
+ * aggressively (60s → 10s → 5s) while treating page weight as a free rider — but page
+ * weight is what actually hurts shared hosting: a 100-record products page takes seconds
+ * even on a fast server, and the check interval only multiplies that cost.
+ *
+ * So each tier now moves BOTH lines, and notably no preset ships the 100-record maximum:
+ * the top of the slider stays reachable only through Custom, for merchants who know their
+ * server can take it.
+ *
+ *   Eco       5 min · 25   —   288 checks/day, lightest possible page
+ *   Balanced   60 s · 50   — 1,440 checks/day (Paul's anchor: 10s was over-ambitious
+ *                            for the average server)
+ *   Realtime   10 s · 75   — 8,640 checks/day, fast but still not max-weight pages
+ *
+ * These numbers are deliberately in one table so they are easy to re-tune.
+ */
 export const PRESETS = {
-	eco: { checkIntervalMs: 60_000, pullBatchSize: 25 },
-	balanced: { checkIntervalMs: 10_000, pullBatchSize: 50 },
-	realtime: { checkIntervalMs: 5_000, pullBatchSize: 100 },
+	eco: { checkIntervalMs: 300_000, pullBatchSize: 25 },
+	balanced: { checkIntervalMs: 60_000, pullBatchSize: 50 },
+	realtime: { checkIntervalMs: 10_000, pullBatchSize: 75 },
 } as const;
 export type PresetName = keyof typeof PRESETS;
+
+/** The shipped default — what a fresh till gets, and what "Reset" restores. */
+export const DEFAULT_PRESET: PresetName = 'balanced';
+export const DEFAULT_CHECK_INTERVAL_MS = PRESETS[DEFAULT_PRESET].checkIntervalMs;
+export const DEFAULT_PULL_BATCH_SIZE = PRESETS[DEFAULT_PRESET].pullBatchSize;
+
+/**
+ * Both budget lines, in the preset's own numbers — derived rather than written out in
+ * copy so the description can never drift from the table when the numbers are re-tuned.
+ */
+export function presetBudget(name: PresetName): { intervalSeconds: number; records: number } {
+	return {
+		intervalSeconds: Math.round(PRESETS[name].checkIntervalMs / 1000),
+		records: PRESETS[name].pullBatchSize,
+	};
+}
 
 export function presetFor(checkIntervalMs: number, pullBatchSize: number): PresetName | 'custom' {
 	for (const [name, values] of Object.entries(PRESETS) as [

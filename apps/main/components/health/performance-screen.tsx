@@ -19,7 +19,10 @@ import { useEngineStatus } from '@wcpos/core/screens/main/hooks/use-engine-monit
 
 import { getMetricsBuckets } from '../../lib/metrics';
 import {
+	DEFAULT_CHECK_INTERVAL_MS,
+	DEFAULT_PULL_BATCH_SIZE,
 	deriveUptimeCells,
+	presetBudget,
 	presetFor,
 	type PresetName,
 	PRESETS,
@@ -45,9 +48,11 @@ export function PerformanceScreen() {
 	const status = useEngineStatus();
 
 	const storedCheckIntervalMs =
-		(useObservableEagerState(store.sync_check_interval_ms$) as number | undefined) ?? 10_000;
+		(useObservableEagerState(store.sync_check_interval_ms$) as number | undefined) ??
+		DEFAULT_CHECK_INTERVAL_MS;
 	const storedPullBatchSize =
-		(useObservableEagerState(store.sync_pull_batch_size$) as number | undefined) ?? 50;
+		(useObservableEagerState(store.sync_pull_batch_size$) as number | undefined) ??
+		DEFAULT_PULL_BATCH_SIZE;
 
 	// The buckets are plain module state — re-read on a slow tick so the page
 	// stays current without a reactive seam the metrics module doesn't have.
@@ -137,6 +142,21 @@ export function PerformanceScreen() {
 			? formatCadence(changeLane.nextDueAtMs - snapshot.nowMs)
 			: null;
 
+	// Both budget lines, straight off the preset table (#908) — the description can never
+	// drift from the numbers the radio actually applies.
+	const describePreset = (name: PresetName) => {
+		const { intervalSeconds, records } = presetBudget(name);
+		const every =
+			intervalSeconds >= 60
+				? t('health.performance.every_min', {
+						m: Math.round(intervalSeconds / 60),
+					})
+				: t('health.performance.every_s', { s: intervalSeconds });
+		return `${every} · ${t('health.performance.n_records_per_request', {
+			n: records,
+		})}`;
+	};
+
 	const applyPreset = (name: PresetName) => {
 		// Cancel any pending debounced draft so a stale slider write doesn't
 		// overwrite the freshly-applied preset (greptile P1).
@@ -202,17 +222,13 @@ export function PerformanceScreen() {
 							<HStack className="flex-wrap gap-4">
 								{(
 									[
-										['eco', t('health.performance.eco'), t('health.performance.eco_desc')],
+										['eco', t('health.performance.eco'), describePreset('eco')],
 										[
 											'balanced',
 											t('health.performance.balanced'),
-											t('health.performance.balanced_desc'),
+											`${describePreset('balanced')} · ${t('health.performance.default')}`,
 										],
-										[
-											'realtime',
-											t('health.performance.realtime'),
-											t('health.performance.realtime_desc'),
-										],
+										['realtime', t('health.performance.realtime'), describePreset('realtime')],
 									] as const
 								).map(([value, label, description]) => (
 									<HStack key={value} className="items-center gap-2">

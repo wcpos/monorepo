@@ -279,14 +279,54 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 		);
 	});
 
-	it('rejects a result window past the Woo per-page ceiling before queuing work', async () => {
+	it('rejects a result window past the window ceiling before queuing work', async () => {
+		// A window may exceed one Woo page now (#909) — the fetcher walks it in dial-sized
+		// pages (#908) — but it is still bounded: browse is a seed, not a query engine.
 		await expect(
-			seedProductBrowseWindowSchedulerTask({ getRepository: mocks.getRepository, limit: 101 })
+			seedProductBrowseWindowSchedulerTask({ getRepository: mocks.getRepository, limit: 1001 })
 		).rejects.toThrow('Product browse-window scheduler limit must be a positive integer');
 		await expect(
 			seedProductBrowseWindowSchedulerTask({ getRepository: mocks.getRepository, limit: 0 })
 		).rejects.toThrow('Product browse-window scheduler limit must be a positive integer');
 		expect(mocks.getRepository).not.toHaveBeenCalled();
 		expect(mocks.seedPersistedSchedulerTasks).not.toHaveBeenCalled();
+	});
+
+	it('keys a non-default sort into the task id, queryKey and requirementId', async () => {
+		mocks.getRepository.mockResolvedValue({ getDatabase: vi.fn(() => ({ name: 'mock-db' })) });
+		mocks.RxSchedulerTaskStateRepository.mockImplementation(
+			function RxSchedulerTaskStateRepositoryMock() {
+				return { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
+			}
+		);
+		mocks.seedPersistedSchedulerTasks.mockResolvedValue({
+			inserted: 1,
+			requeued: 0,
+			skippedActive: 0,
+			skippedCompleted: 0,
+			skippedRunnable: 0,
+			claimLost: 0,
+		});
+
+		await seedProductBrowseWindowSchedulerTask({
+			getRepository: mocks.getRepository,
+			limit: 200,
+			orderby: 'price',
+			order: 'desc',
+		});
+
+		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith(
+			expect.objectContaining({
+				tasks: [
+					expect.objectContaining({
+						id: 'products:browse-window:limit=200:orderby=price:order=desc:windowed',
+						requirementId: 'products.browse-window.limit.200.price.desc',
+						queryKey: 'products:browse-window:limit=200:orderby=price:order=desc',
+						limit: 200,
+						mode: 'windowed',
+					}),
+				],
+			})
+		);
 	});
 });

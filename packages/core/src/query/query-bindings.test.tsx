@@ -275,10 +275,12 @@ describe('query bindings', () => {
 			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
 		).resolves.toBe('local');
 
+		// #909: the browse-window coverage key follows the DESCRIPTOR — this grid sorts by
+		// name, so it reports against the title-sorted window, not a hardcoded limit=100.
 		await engineDB.collections.coverageLanes.insert({
-			laneKey: 'products::products:browse-window:limit=100',
+			laneKey: 'products::products:browse-window:limit=100:orderby=title:order=asc',
 			collectionName: 'products',
-			queryKey: 'products:browse-window:limit=100',
+			queryKey: 'products:browse-window:limit=100:orderby=title:order=asc',
 			complete: true,
 			expectedRecordIds: ['p1', 'p2', 'p3'],
 			freshUntilMs: Date.now() + 60_000,
