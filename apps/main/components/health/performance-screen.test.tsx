@@ -1,0 +1,167 @@
+import * as React from 'react';
+
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { PerformanceScreen } from './performance-screen';
+
+import type { MetricsBucket } from '../../lib/metrics';
+
+// Reset at module scope to avoid jest-expo's winter-runtime "require outside test scope" error.
+jest.resetModules();
+
+const HOUR_MS = 60 * 60 * 1000;
+const NOW = 100 * HOUR_MS;
+
+let mockBuckets: MetricsBucket[] = [];
+
+/** Records what each trend was asked to draw, without loading Skia/Victory. */
+const mockTrendProps: { testID: string; points: { x: number; y: number }[] }[] = [];
+
+jest.mock('../../lib/metrics', () => ({
+	getMetricsBuckets: () => mockBuckets,
+}));
+jest.mock('./trend-line', () => ({
+	TrendLine: (props: { testID: string; points: { x: number; y: number }[] }) => {
+		mockTrendProps.push({ testID: props.testID, points: props.points });
+		return null;
+	},
+}));
+jest.mock('./uptime-strip', () => ({ UptimeStrip: () => null }));
+jest.mock('observable-hooks', () => ({ useObservableEagerState: () => undefined }));
+jest.mock('@wcpos/core/contexts/app-state', () => ({
+	useAppState: () => ({ store: {} }),
+}));
+jest.mock('@wcpos/core/contexts/translations', () => ({
+	useT: () => (_key: string, fallback: string) => fallback,
+}));
+jest.mock('@wcpos/core/screens/main/hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: jest.fn() }),
+}));
+jest.mock('@wcpos/core/screens/main/hooks/use-engine-monitor', () => ({
+	useEngineStatus: () => ({
+		connectivity: 'online',
+		gatedBy: null,
+		bootstrapFailed: {},
+		lanes: {},
+	}),
+}));
+jest.mock('@wcpos/core/screens/main/logs/logs-logic', () => ({
+	formatCadence: () => null,
+}));
+jest.mock('@wcpos/core/screens/main/health/components', () => {
+	const { View } = jest.requireActual('react-native');
+	return {
+		Section: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+			<View testID={testID}>{children}</View>
+		),
+	};
+});
+jest.mock('@wcpos/components/button', () => {
+	const { Text, View } = jest.requireActual('react-native');
+	return {
+		Button: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+		ButtonText: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
+	};
+});
+jest.mock('@wcpos/components/hstack', () => {
+	const { View } = jest.requireActual('react-native');
+	return { HStack: View };
+});
+jest.mock('@wcpos/components/label', () => {
+	const { Text } = jest.requireActual('react-native');
+	return { Label: Text };
+});
+jest.mock('@wcpos/components/radio-group', () => {
+	const { View } = jest.requireActual('react-native');
+	return { RadioGroup: View, RadioGroupItem: View };
+});
+jest.mock('@wcpos/components/slider', () => {
+	const { View } = jest.requireActual('react-native');
+	return { Slider: View };
+});
+jest.mock('@wcpos/components/text', () => {
+	const { Text } = jest.requireActual('react-native');
+	return { Text };
+});
+jest.mock('@wcpos/components/vstack', () => {
+	const { View } = jest.requireActual('react-native');
+	return { VStack: View };
+});
+
+const bucket = (hoursAgo: number, requests: number, load?: number): MetricsBucket => ({
+	hourStartMs: NOW - hoursAgo * HOUR_MS,
+	requests,
+	bytes: 0,
+	durationTotalMs: 0,
+	durationCount: 0,
+	errors: 0,
+	...(load === undefined ? {} : { loadLast: load, loadMax: load }),
+});
+
+let rendered: ReactTestRenderer | null = null;
+
+function renderScreen(buckets: MetricsBucket[]): ReactTestRenderer {
+	mockBuckets = buckets;
+	mockTrendProps.length = 0;
+	act(() => {
+		rendered = create(<PerformanceScreen />);
+	});
+	return rendered as unknown as ReactTestRenderer;
+}
+
+const trend = (testID: string) => mockTrendProps.find((entry) => entry.testID === testID);
+const loadUnavailableShown = (renderer: ReactTestRenderer) =>
+	renderer.root.findAllByProps({ testID: 'server-load-unavailable' }).length > 0;
+
+describe('PerformanceScreen · server over time', () => {
+	beforeEach(() => {
+		// The screen re-reads the metrics on a 10 s interval; keep it off the
+		// real clock so nothing fires after the environment is torn down.
+		jest.useFakeTimers();
+		jest.spyOn(Date, 'now').mockReturnValue(NOW);
+	});
+	afterEach(() => {
+		if (rendered) {
+			const renderer = rendered;
+			act(() => renderer.unmount());
+			rendered = null;
+		}
+		jest.restoreAllMocks();
+		jest.useRealTimers();
+	});
+
+	it('mounts both trend frames on a brand-new till', () => {
+		// The #910 regression: the POS requests trend rendered nothing at all
+		// until the till had made a request, so the section looked broken minutes
+		// after setup. Neither chart may claim anything about an unasked server.
+		const renderer = renderScreen([]);
+		expect(trend('pos-requests-trend')?.points).toEqual([]);
+		expect(trend('server-load-trend')?.points).toEqual([]);
+		expect(loadUnavailableShown(renderer)).toBe(false);
+	});
+
+	it('says the server does not report load once it has been asked and stayed silent', () => {
+		// Distinct from "not enough data yet": a plain sentence, no chart frame.
+		const renderer = renderScreen([bucket(2, 10), bucket(1, 20)]);
+		expect(loadUnavailableShown(renderer)).toBe(true);
+		expect(trend('server-load-trend')).toBeUndefined();
+		expect(trend('pos-requests-trend')?.points).toHaveLength(2);
+	});
+
+	it('shows the load trend frame from the very first load sample', () => {
+		const renderer = renderScreen([bucket(1, 20, 1.5)]);
+		expect(trend('server-load-trend')?.points).toEqual([{ x: NOW - HOUR_MS, y: 1.5 }]);
+		// One sample is not "load unavailable" — the frame says "not enough yet".
+		expect(loadUnavailableShown(renderer)).toBe(false);
+	});
+
+	it('plots both trends once there is history', () => {
+		const renderer = renderScreen([bucket(2, 10, 0.5), bucket(1, 20, 1.5)]);
+		expect(trend('server-load-trend')?.points).toHaveLength(2);
+		expect(trend('pos-requests-trend')?.points).toEqual([
+			{ x: NOW - 2 * HOUR_MS, y: 10 },
+			{ x: NOW - HOUR_MS, y: 20 },
+		]);
+		expect(loadUnavailableShown(renderer)).toBe(false);
+	});
+});

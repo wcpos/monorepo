@@ -66,7 +66,11 @@ export function PerformanceScreen() {
 
 	const summary = summarizeLast24h(snapshot.buckets, snapshot.nowMs);
 	const hasHistory = summary.requests > 0;
-	const hasLoadSamples = summary.recent.some((bucket) => bucket.loadMax !== undefined);
+	const hasLoadSamples = summary.loadPoints.length > 0;
+	// Only a server we have actually talked to can be said to not report its
+	// load — before the first request there is nothing to conclude, and telling
+	// a merchant their server is deficient minutes after setup would be a guess.
+	const loadUnavailable = hasHistory && !hasLoadSamples;
 	// Health is the engine's CURRENT state — gating, bootstrap failures, lane
 	// errors — not the 24h transport tally (one recovered blip shouldn't scold
 	// for a day, and a parse failure isn't a transport error).
@@ -318,34 +322,33 @@ export function PerformanceScreen() {
 					)}
 				>
 					<VStack className="gap-3">
-						{hasLoadSamples ? (
-							<TrendLine
-								testID="server-load-trend"
-								label={t('health.performance.server_load', 'server load')}
-								points={summary.recent
-									.filter((bucket) => bucket.loadMax !== undefined)
-									.map((bucket) => ({ x: bucket.hourStartMs, y: bucket.loadMax as number }))}
-								tone="neutral"
-							/>
-						) : (
+						{/* Three states, kept distinct. Asked and never told = a missing
+						    metric, so say so. Told once = a trend still filling in, and the
+						    frame says so. Not yet asked = we know nothing about this server
+						    yet, so claim nothing — the frame covers that too. */}
+						{loadUnavailable ? (
 							<Text className="text-muted-foreground text-sm" testID="server-load-unavailable">
 								{t(
 									'health.performance.load_unavailable',
 									"Your server doesn't report its load. Everything else on this page still works."
 								)}
 							</Text>
-						)}
-						{hasHistory ? (
+						) : (
 							<TrendLine
-								testID="pos-requests-trend"
-								label={t('health.performance.pos_requests', 'POS requests · same period')}
-								points={summary.recent.map((bucket) => ({
-									x: bucket.hourStartMs,
-									y: bucket.requests,
-								}))}
-								tone="accent"
+								testID="server-load-trend"
+								label={t('health.performance.server_load', 'server load')}
+								points={summary.loadPoints}
+								tone="neutral"
 							/>
-						) : null}
+						)}
+						{/* Always mounted — the frame holds the page's shape from the first
+						    render and says "not enough data yet" until it can draw. */}
+						<TrendLine
+							testID="pos-requests-trend"
+							label={t('health.performance.pos_requests', 'POS requests · same period')}
+							points={summary.requestPoints}
+							tone="accent"
+						/>
 						{hasHistory && summary.serverMinutes !== null ? (
 							<Text className="text-muted-foreground text-sm">
 								{t(
