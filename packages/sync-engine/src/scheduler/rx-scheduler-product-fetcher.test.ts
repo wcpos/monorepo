@@ -111,6 +111,63 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
+	it('keeps a constant per_page across search pages when the limit is not dial-divisible', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		// 30+ matches on the search leg; the sku leg is empty. Woo's offset is
+		// (page-1)*per_page, so shrinking the final page to the 5 remaining rows
+		// would re-read rows 11-15 and drop the true tail (greptile/codex P1).
+		const wooProduct = (id: number) => ({
+			id,
+			name: `Widget ${id}`,
+			date_modified_gmt: '2026-05-20T10:10:00',
+			meta_data: posMeta(id),
+		});
+		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=')) return response([]);
+			const params = new URL(url).searchParams;
+			const perPage = Number(params.get('per_page'));
+			const page = Number(params.get('page'));
+			const first = 1000 - (page - 1) * perPage;
+			return response(Array.from({ length: perPage }, (_, i) => wooProduct(first - i)));
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 10,
+		});
+
+		const result = await schedulerFetcher(productTask());
+
+		// limit=25 at dial=10: three FULL pages (per_page=10 on every request,
+		// including the last), trimmed to 25 locally — never a shrunk page 3.
+		const searchCalls = fetcher.mock.calls
+			.map(([url]) => url)
+			.filter((url: string) => url.includes('search='));
+		expect(searchCalls).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish',
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=2&orderby=id&order=desc&status=publish',
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=3&orderby=id&order=desc&status=publish',
+		]);
+		// The tail is the true tail (ids 1000-976), not a re-read of page 2's rows.
+		const upserted = repository.upsertMany.mock.calls[0][0];
+		expect(upserted).toHaveLength(25);
+		expect(upserted.map((doc: { wooProductId: number }) => doc.wooProductId)).toEqual(
+			Array.from({ length: 25 }, (_, i) => 1000 - i)
+		);
+		// The leg filled its limit with no short page — the server may hold more
+		// matches, so the search coverage is honestly incomplete.
+		expect(result).toEqual({
+			taskId: 'products:search:keyboard:windowed',
+			documentCount: 25,
+			requestCount: 4,
+			completed: false,
+		});
+	});
+
 	it('requests the browse window at the dial page size, not the window size', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),

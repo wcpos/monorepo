@@ -235,8 +235,12 @@ async function fetchProductSearchLeg(
 	const payloads: WooProductPayload[] = [];
 	let requestCount = 0;
 	let exhausted = false;
+	// Page size is fixed for the whole walk: Woo's offset is (page-1)*per_page, so
+	// shrinking the final page would re-read earlier rows and drop the true tail.
+	// A limit below the dial still costs only one small page (single-page walks
+	// have no offset to corrupt); anything above walks at the dial and trims locally.
+	const pageSize = Math.min(perPage, limit);
 	while (payloads.length < limit) {
-		const pageSize = Math.min(perPage, limit - payloads.length);
 		const page = await fetchProductQuery(input, params(pageSize, requestCount + 1), context);
 		requestCount += 1;
 		payloads.push(...page.payloads);
