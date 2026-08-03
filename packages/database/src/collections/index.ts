@@ -167,9 +167,12 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 		13(oldDoc: StoreDocumentType) {
 			// #908 preset re-tune: Balanced moves 10 s → 60 s (10 s was over-ambitious
 			// for the average server). Only tills still sitting on the RETIRED Balanced
-			// default are moved; any other value is a deliberate choice — preset or
-			// slider — and is left exactly as the merchant set it.
-			if (oldDoc.sync_check_interval_ms === 10_000) oldDoc.sync_check_interval_ms = 60_000;
+			// default are moved — and that default is the 10 s / 50-records TUPLE
+			// migration 10 wrote. A till at 10 s with a customized batch size has had
+			// its dials touched deliberately; leave it exactly as the merchant set it.
+			if (oldDoc.sync_check_interval_ms === 10_000 && oldDoc.sync_pull_batch_size === 50) {
+				oldDoc.sync_check_interval_ms = 60_000;
+			}
 			return oldDoc;
 		},
 	},
