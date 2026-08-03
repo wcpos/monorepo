@@ -565,6 +565,107 @@ describe('useAddItemToOrder', () => {
 		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
 	});
 
+	it('merges a repeat scan that lands while the order is still being created', async () => {
+		order.isNew = true;
+		mockInsertEngineResident.mockImplementation(
+			async ({ payload }: { payload: Record<string, unknown> }) => ({
+				payload,
+				toMutableJSON: () => ({ payload }),
+			})
+		);
+		mockWrapEngineDocument.mockImplementation((_collection, resident: { payload: object }) => {
+			const savedOrder = { ...resident.payload, getLatest: () => savedOrder };
+			return savedOrder;
+		});
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+		mockLocalPatch.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+			changes: data,
+			document: order,
+		}));
+
+		const { result: firstHook } = renderHook(() => useAddItemToOrder());
+		const { result: secondHook } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await Promise.all([
+				firstHook.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					price: 5,
+					meta_data: [],
+				} as never),
+				secondHook.current.addItemToOrder('line_items', {
+					product_id: 1,
+					quantity: 1,
+					price: 5,
+					meta_data: [],
+				} as never),
+			]);
+		});
+
+		// The second scan queues behind the create and lands on the order the first
+		// one just made — no resident lookup involved. Its caller still held the
+		// temporary order, so the merge has to happen here too.
+		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		const patched = mockLocalPatch.mock.calls[0][0].data.line_items;
+		expect(patched).toHaveLength(1);
+		expect(patched[0]).toMatchObject({ product_id: 1, quantity: 2, total: '10' });
+	});
+
+	it('merges a repeat scan into an orphaned skeleton while retrying its create', async () => {
+		order.isNew = true;
+		const skeletonLine = {
+			product_id: 1,
+			quantity: 1,
+			price: 5,
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }],
+		};
+		const skeletonPayload = { uuid: 'order-uuid', line_items: [skeletonLine] };
+		const skeleton = {
+			local: { dirty: false, pendingMutationIds: [] },
+			sync: { revision: '', source: 'skeleton' },
+			payload: skeletonPayload,
+			toMutableJSON: () => ({ payload: skeletonPayload }),
+			remove: jest.fn().mockResolvedValue(undefined),
+		};
+		mockFindEngineResident.mockResolvedValue(skeleton);
+		mockPatchEngineResident.mockImplementation(
+			async ({ changes }: { changes: Record<string, unknown> }) => {
+				const payload = { ...skeletonPayload, ...changes };
+				return { payload, toMutableJSON: () => ({ payload }) };
+			}
+		);
+		mockWrapEngineDocument.mockImplementation((_collection, resident: { payload: object }) => {
+			const savedOrder = { ...resident.payload, getLatest: () => savedOrder };
+			return savedOrder;
+		});
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-2' });
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', {
+				product_id: 1,
+				quantity: 1,
+				price: 5,
+				meta_data: [],
+			} as never);
+		});
+
+		// The retried create carries ONE line at quantity 2 — the skeleton's own
+		// line, not a duplicate of it.
+		const retried = mockPatchEngineResident.mock.calls[0][0].changes.line_items;
+		expect(retried).toHaveLength(1);
+		expect(retried[0]).toMatchObject({ product_id: 1, quantity: 2, total: '10' });
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				operation: 'create',
+				payload: expect.objectContaining({
+					line_items: [expect.objectContaining({ quantity: 2 })],
+				}),
+			})
+		);
+	});
+
 	it('checks stock inside the append chain so overlapping adds see the latest cart', async () => {
 		mockStockGuardEnabled = true;
 		mockCheckCartStock.mockImplementation(
