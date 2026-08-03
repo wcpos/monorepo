@@ -97,7 +97,8 @@ export async function syncNotificationToRxDB(
 	collection: NotificationCollection,
 	subscriberId: string,
 	notification: NovuNotification,
-	isNewNotification = false
+	isNewNotification = false,
+	preserveLocalState = false
 ): Promise<void> {
 	const notificationId = notification.id;
 	if (!notificationId) {
@@ -121,17 +122,35 @@ export async function syncNotificationToRxDB(
 			: Date.now();
 		const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
 
-		await collection.upsert({
+		const nextNotification = {
 			id: String(notificationId),
 			subscriberId,
 			title: notification.subject || '',
 			body: notification.body || '',
-			status: notification.isRead ? 'read' : 'unread',
+			status: notification.isRead ? ('read' as const) : ('unread' as const),
 			seen: notification.isSeen ?? false,
 			createdAt: safeCreatedAt,
 			workflowId,
 			channel: notification.channelType || 'in_app',
-		});
+		};
+
+		if (preserveLocalState) {
+			const existing = await collection.findOne(nextNotification.id).exec();
+			if (existing) {
+				await existing.incrementalModify((current) => ({
+					...current,
+					...nextNotification,
+					status: current.status === 'unread' ? nextNotification.status : current.status,
+					seen: current.seen || nextNotification.seen,
+				}));
+			} else {
+				// A concurrent WebSocket insert wins any primary-key conflict instead of being
+				// overwritten by this older snapshot.
+				await collection.insert(nextNotification);
+			}
+		} else {
+			await collection.upsert(nextNotification);
+		}
 		novuLogger.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
 	} catch (error) {
 		novuLogger.error('Novu: Failed to sync notification to RxDB', {
@@ -153,7 +172,7 @@ export async function syncNotificationsToRxDB(
 	// Pass isNewNotification=false to avoid showing toasts for old notifications
 	await Promise.all(
 		notifications.map((notification) =>
-			syncNotificationToRxDB(collection, subscriberId, notification, false)
+			syncNotificationToRxDB(collection, subscriberId, notification, false, true)
 		)
 	);
 }
