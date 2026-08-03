@@ -101,18 +101,52 @@ describe('chainMarkedIds', () => {
 describe('deriveClockSkew', () => {
 	const NOW = 1_000_000_000;
 
-	it('returns the most recently seen skew warning, judged on lastSeen', () => {
+	it('returns the most recently measured skew warning', () => {
 		const rows = [
 			row({ logId: 'a', timestamp: NOW - 5_000, context: { skewSeconds: 120 } }),
-			// Collapsed repeat: older timestamp but the freshest lastSeen — it wins.
+			row({ logId: 'b', timestamp: NOW - 50_000, context: { skewSeconds: -300 } }),
+		];
+		expect(deriveClockSkew(rows, NOW)).toEqual({
+			skewSeconds: 120,
+			observedAt: NOW - 5_000,
+			lastSeen: NOW - 5_000,
+		});
+	});
+
+	it('never lets a collapsed repeat lend its fresh lastSeen to a stale skew value', () => {
+		// Repeat-collapse moves only count/lastSeen — the context still carries the
+		// FIRST check's value, so a later check that found the opposite sign must
+		// not be reported through this row's refreshed lastSeen.
+		const rows = [
 			row({
-				logId: 'b',
-				timestamp: NOW - 50_000,
+				logId: 'a',
+				timestamp: NOW - 5_000,
 				lastSeen: NOW - 1_000,
-				context: { skewSeconds: -300 },
+				count: 2,
+				context: { skewSeconds: 300 },
+			}),
+			row({ logId: 'b', timestamp: NOW - 2_000, context: { skewSeconds: -300 } }),
+		];
+		// The standalone row measured later, so its value is the one shown.
+		expect(deriveClockSkew(rows, NOW)).toEqual({
+			skewSeconds: -300,
+			observedAt: NOW - 2_000,
+			lastSeen: NOW - 2_000,
+		});
+	});
+
+	it('ages a collapsed row out 24 hours after its value was measured, not after its last sighting', () => {
+		const dayMs = 24 * 60 * 60 * 1000;
+		const rows = [
+			row({
+				logId: 'a',
+				timestamp: NOW - dayMs - 1,
+				lastSeen: NOW - 1_000,
+				count: 5,
+				context: { skewSeconds: 300 },
 			}),
 		];
-		expect(deriveClockSkew(rows, NOW)).toEqual({ skewSeconds: -300, lastSeen: NOW - 1_000 });
+		expect(deriveClockSkew(rows, NOW)).toBeNull();
 	});
 
 	it('ignores warn rows without a numeric skewSeconds', () => {
@@ -133,7 +167,37 @@ describe('deriveClockSkew', () => {
 		];
 		expect(deriveClockSkew(fresh, NOW)).toEqual({
 			skewSeconds: 90,
+			observedAt: NOW - dayMs + 1_000,
 			lastSeen: NOW - dayMs + 1_000,
+		});
+	});
+
+	it('drops future-dated rows left behind by a backward clock correction', () => {
+		const dayMs = 24 * 60 * 60 * 1000;
+		// Written while the device was two days fast; the clock has since been fixed.
+		const rows = [row({ logId: 'a', timestamp: NOW + 2 * dayMs, context: { skewSeconds: 300 } })];
+		expect(deriveClockSkew(rows, NOW)).toBeNull();
+	});
+
+	it('never lets a future-dated row mask a current warning', () => {
+		const dayMs = 24 * 60 * 60 * 1000;
+		const rows = [
+			row({ logId: 'a', timestamp: NOW + 2 * dayMs, context: { skewSeconds: 300 } }),
+			row({ logId: 'b', timestamp: NOW - 1_000, context: { skewSeconds: -120 } }),
+		];
+		expect(deriveClockSkew(rows, NOW)).toEqual({
+			skewSeconds: -120,
+			observedAt: NOW - 1_000,
+			lastSeen: NOW - 1_000,
+		});
+	});
+
+	it('tolerates a row a few seconds ahead of now', () => {
+		const rows = [row({ logId: 'a', timestamp: NOW + 5_000, context: { skewSeconds: 300 } })];
+		expect(deriveClockSkew(rows, NOW)).toEqual({
+			skewSeconds: 300,
+			observedAt: NOW + 5_000,
+			lastSeen: NOW + 5_000,
 		});
 	});
 
