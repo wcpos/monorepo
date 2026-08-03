@@ -297,6 +297,10 @@ export class SyncStateManager {
 	 * @NOTE - uses a mutex lock to prevent race conditions from concurrent calls
 	 */
 	public async processServerResponse(response: any[]) {
+		return this.withProcessLock(() => this._processServerResponseInternal(response));
+	}
+
+	private async withProcessLock<T>(fn: () => Promise<T>) {
 		// Wait for any pending operation to complete
 		const previousLock = this.processLock;
 		let releaseLock: () => void;
@@ -306,10 +310,44 @@ export class SyncStateManager {
 
 		try {
 			await previousLock;
-			return await this._processServerResponseInternal(response);
+			return await fn();
 		} finally {
 			releaseLock!();
 		}
+	}
+
+	public async processCreateResponse(doc: any, optimisticRevision?: string) {
+		return this.withProcessLock(async () => {
+			const primaryPath = this.collection.schema.primaryPath;
+			const localDoc = await this.collection.findOne(doc[primaryPath]).exec();
+
+			if (!localDoc) {
+				return this._doBulkInsert([doc]);
+			}
+
+			if (!localDoc.id && optimisticRevision && localDoc.revision === optimisticRevision) {
+				const dateCompare = compareDateModifiedGmt(
+					doc.date_modified_gmt,
+					localDoc.date_modified_gmt
+				);
+				if (dateCompare < 0) {
+					syncLogger.warn('Server clock appears to be behind the device clock', {
+						saveToDb: true,
+						showToast: false,
+						context: {
+							collection: this.collection.name,
+							skewSeconds: Math.ceil(-dateCompare / 1000),
+							serverDate: doc.date_modified_gmt,
+							localDate: localDoc.date_modified_gmt,
+						},
+					});
+				}
+
+				return this._doBulkUpsert([doc]);
+			}
+
+			return this._processServerResponseInternal([doc]);
+		});
 	}
 
 	/**

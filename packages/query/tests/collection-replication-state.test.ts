@@ -1252,6 +1252,97 @@ describe('CollectionReplicationState', () => {
 	});
 
 	describe('remoteCreate()', () => {
+		it('accepts a successful create response when the server clock is behind', async () => {
+			const collection = storeDatabase.collections.products;
+			const replicationState = new CollectionReplicationState({
+				collection,
+				syncCollection: syncDatabase.collections.products,
+				httpClient: httpClientMock,
+				endpoint: 'products',
+			});
+			const optimisticDoc = await collection.insert({
+				name: 'New Product',
+				date_modified_gmt: '2026-08-03T12:00:05',
+			});
+
+			httpClientMock.post.mockResolvedValueOnce({
+				data: {
+					uuid: optimisticDoc.uuid,
+					id: 10,
+					name: 'New Product',
+					date_modified_gmt: '2026-08-03T12:00:00',
+				},
+			});
+
+			const result = await replicationState.remoteCreate(
+				optimisticDoc.toJSON(),
+				optimisticDoc.revision
+			);
+			const storedDoc = await collection.findOne(optimisticDoc.uuid).exec();
+
+			expect(result?.id).toBe(10);
+			expect(storedDoc?.id).toBe(10);
+			expect(mockLogger.warn).toHaveBeenCalledWith(
+				'Server clock appears to be behind the device clock',
+				{
+					saveToDb: true,
+					showToast: false,
+					context: {
+						collection: 'products',
+						skewSeconds: 5,
+						serverDate: '2026-08-03T12:00:00',
+						localDate: '2026-08-03T12:00:05',
+					},
+				}
+			);
+
+			await replicationState.cancel();
+		});
+
+		it('preserves a mid-flight local edit when the create response is stale', async () => {
+			const collection = storeDatabase.collections.products;
+			const replicationState = new CollectionReplicationState({
+				collection,
+				syncCollection: syncDatabase.collections.products,
+				httpClient: httpClientMock,
+				endpoint: 'products',
+			});
+			const optimisticDoc = await collection.insert({
+				name: 'Original name',
+				date_modified_gmt: '2026-08-03T12:00:05',
+			});
+			const originalRevision = optimisticDoc.revision;
+			let resolvePost!: (value: unknown) => void;
+			httpClientMock.post.mockImplementationOnce(
+				() => new Promise((resolve) => (resolvePost = resolve))
+			);
+
+			const createPromise = replicationState.remoteCreate(
+				optimisticDoc.toJSON(),
+				originalRevision
+			);
+			await optimisticDoc.incrementalPatch({
+				name: 'Edited name',
+				date_modified_gmt: '2026-08-03T12:00:10',
+			});
+			resolvePost({
+				data: {
+					uuid: optimisticDoc.uuid,
+					id: 10,
+					name: 'Original name',
+					date_modified_gmt: '2026-08-03T12:00:00',
+				},
+			});
+
+			const result = await createPromise;
+			const storedDoc = await collection.findOne(optimisticDoc.uuid).exec();
+
+			expect(storedDoc?.name).toBe('Edited name');
+			expect(result).toBeDefined();
+
+			await replicationState.cancel();
+		});
+
 		it('returns parsed data on success', async () => {
 			const replicationState = new CollectionReplicationState({
 				collection: storeDatabase.collections.products,

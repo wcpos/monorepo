@@ -632,7 +632,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 	};
 
-	remoteCreate = async (data: any) => {
+	remoteCreate = async (data: any, optimisticRevision?: string) => {
 		try {
 			const response = await this.dataFetcher.remoteCreate(data, this.signal);
 
@@ -641,9 +641,18 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			const parsedData = this.collection.parseRestResponse(response.data);
-			const result = await this.syncStateManager.processServerResponse([parsedData]);
+			const result = await this.syncStateManager.processCreateResponse(
+				parsedData,
+				optimisticRevision
+			);
 			if (result?.success.length === 1) {
 				return result.success[0];
+			}
+
+			const primaryPath = this.collection.schema.primaryPath;
+			const localDoc = await this.collection.findOne(parsedData[primaryPath] as string).exec();
+			if (localDoc) {
+				return localDoc;
 			}
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
