@@ -10,6 +10,7 @@ import { useAddItemToOrder } from './use-add-item-to-order';
 const mockLocalPatch = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockInsertEngineResident = jest.fn();
+const mockFindEngineResident = jest.fn();
 const mockWrite = jest.fn();
 const mockCheckCartStock = jest.fn();
 const mockWrapEngineDocument = jest.fn();
@@ -54,6 +55,7 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	documentRecordId: (document: { uuid?: string }) => document.uuid ?? null,
+	findEngineResident: (...args: unknown[]) => mockFindEngineResident(...args),
 	insertEngineResident: (...args: unknown[]) => mockInsertEngineResident(...args),
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
@@ -69,6 +71,7 @@ describe('useAddItemToOrder', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockStockGuardEnabled = false;
+		mockFindEngineResident.mockResolvedValue(null);
 		mockWrapEngineDocument.mockImplementation((_collection, resident) => resident);
 		mockCheckCartStock.mockResolvedValue({
 			allowed: true,
@@ -197,6 +200,48 @@ describe('useAddItemToOrder', () => {
 		expect(mockCheckCartStock.mock.calls.map(([args]) => args.lineItems.length)).toEqual([0, 1]);
 		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
 		expect(mockWrite).toHaveBeenCalledTimes(1);
+	});
+
+	it('reuses an existing engine order when the current order is a stale temporary order', async () => {
+		order.isNew = true;
+		const resident = {
+			payload: { uuid: 'order-uuid', line_items: [{ product_id: 1 }] },
+			toMutableJSON: () => ({
+				payload: { uuid: 'order-uuid', line_items: [{ product_id: 1 }] },
+			}),
+		};
+		const savedOrder = {
+			...resident.payload,
+			getLatest: () => savedOrder,
+		};
+		mockInsertEngineResident.mockResolvedValue(resident);
+		mockWrapEngineDocument.mockReturnValue(savedOrder);
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+		mockLocalPatch.mockResolvedValue({ document: savedOrder });
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', {
+				product_id: 1,
+				meta_data: [],
+			} as never);
+		});
+		mockFindEngineResident.mockResolvedValue(resident);
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', {
+				product_id: 2,
+				meta_data: [],
+			} as never);
+		});
+
+		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockWrite).toHaveBeenCalledTimes(1);
+		expect(mockWrite).toHaveBeenCalledWith(expect.objectContaining({ operation: 'create' }));
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: savedOrder,
+			data: { line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })] },
+		});
 	});
 
 	it('checks stock inside the append chain so overlapping adds see the latest cart', async () => {

@@ -10,6 +10,7 @@ import { enqueueOrderMutation } from './order-mutation-queue';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import {
 	documentRecordId,
+	findEngineResident,
 	insertEngineResident,
 	useLocalMutation,
 } from '../../hooks/mutations/use-local-mutation';
@@ -94,8 +95,19 @@ export const useAddItemToOrder = () => {
 			const recordId = documentRecordId(order);
 			if (!recordId) throw new Error('Order is missing its uuid');
 			return enqueueOrderMutation(recordId, async (context) => {
-				const latest = context.order?.getLatest() ?? order.getLatest();
-				const isNew = Boolean((latest as unknown as { isNew?: boolean }).isNew);
+				let latest = context.order?.getLatest() ?? order.getLatest();
+				let isNew = Boolean((latest as unknown as { isNew?: boolean }).isNew);
+				if (isNew && !context.order) {
+					const resident = await findEngineResident(manager, 'orders', recordId);
+					if (resident) {
+						latest = wrapEngineDocument(
+							'orders',
+							resident as never
+						) as unknown as import('@wcpos/database').OrderDocument;
+						context.order = latest;
+						isNew = false;
+					}
+				}
 				let stockWarningName: string | null = null;
 				if (type === 'line_items' && stockGuardEnabled && (data as LineItem).product_id !== 0) {
 					const lineItem = data as LineItem;
@@ -133,6 +145,7 @@ export const useAddItemToOrder = () => {
 			checkCartStock,
 			currentOrder,
 			localPatch,
+			manager,
 			saveNewOrder,
 			showBackorderWarning,
 			stockGuardEnabled,
