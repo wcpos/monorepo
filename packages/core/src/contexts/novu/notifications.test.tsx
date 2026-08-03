@@ -4,7 +4,7 @@
 import * as React from 'react';
 
 import { act, render, waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { type Observable, of, Subject } from 'rxjs';
 
 import { NovuNotificationsProvider, useNovuNotifications } from './notifications';
 import { stopNovuBootstrap } from '../../services/novu/bootstrap';
@@ -21,9 +21,17 @@ const novuContextValue = {
 
 /** Rows the mocked RxDB query emits - set per test */
 let notificationDocs: Record<string, unknown>[] = [];
+/**
+ * Replaces the mocked RxDB query stream when a test needs to control *when* it emits.
+ * The default `of(notificationDocs)` emits synchronously, which real RxDB never does.
+ */
+let notificationQuery$: Observable<Record<string, unknown>[]> | null = null;
 
 const notificationsCollection = {
-	find: jest.fn(() => ({ $: of(notificationDocs), exec: jest.fn(async () => []) })),
+	find: jest.fn(() => ({
+		$: notificationQuery$ ?? of(notificationDocs),
+		exec: jest.fn(async () => []),
+	})),
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
 	upsert: jest.fn(async () => undefined),
 };
@@ -72,6 +80,7 @@ describe('NovuNotificationsProvider', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		notificationDocs = [];
+		notificationQuery$ = null;
 		novuContextValue.subscriberId = SUBSCRIBER_ID;
 		// The provider rebuilds this object on every render - a fresh identity each time
 		novuContextValue.subscriberMetadata = { domain: 'example.com', storeId: 1 };
@@ -192,6 +201,43 @@ describe('NovuNotificationsProvider', () => {
 		rerender(<App />);
 
 		await waitFor(() => expect(getByTestId('bell').textContent).toBe('0'));
+	});
+
+	it('clears notifications when switching stores, before the new query emits', async () => {
+		notificationDocs = [
+			{ id: '1', title: 'Store A', body: '', status: 'unread', seen: false, createdAt: 1 },
+		];
+
+		function App() {
+			return (
+				<NovuNotificationsProvider>
+					<Consumer label="bell" />
+				</NovuNotificationsProvider>
+			);
+		}
+
+		const { rerender, getByTestId } = render(<App />);
+		await waitFor(() => expect(getByTestId('bell').textContent).toBe('1'));
+
+		// A store switch moves `subscriberId` straight from one value to another - it never
+		// passes through `null`, so the logout path above doesn't cover it. RxDB resolves the
+		// replacement query asynchronously, modelled here by a subject we emit on by hand.
+		const storeBQuery = new Subject<Record<string, unknown>[]>();
+		notificationQuery$ = storeBQuery.asObservable();
+		novuContextValue.subscriberId = 'example.com:2:uuid:web';
+		novuContextValue.subscriberMetadata = { domain: 'example.com', storeId: 2 };
+		rerender(<App />);
+
+		// Store A's count must be gone even though store B's query hasn't resolved yet
+		await waitFor(() => expect(getByTestId('bell').textContent).toBe('0'));
+
+		act(() => {
+			storeBQuery.next([
+				{ id: '2', title: 'Store B', body: '', status: 'unread', seen: false, createdAt: 2 },
+			]);
+		});
+
+		await waitFor(() => expect(getByTestId('bell').textContent).toBe('1'));
 	});
 
 	it('throws when used outside the provider', () => {

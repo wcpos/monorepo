@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 import { type Observable, of } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { map, startWith } from 'rxjs/operators';
 
 import type { NotificationCollection, NotificationDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
@@ -68,6 +68,10 @@ const EMPTY_NOTIFICATIONS: Notification[] = [];
  * never emits would leave the previous session's notifications on screen (the hook's initial
  * value only applies on first mount). Module scope keeps the identity stable so swapping to it
  * is the only thing that triggers a resubscribe.
+ *
+ * This covers logout (`subscriberId` -> `null`). A store switch changes `subscriberId` from one
+ * value straight to another and never swaps in this stream, so the real query clears itself with
+ * `startWith(EMPTY_NOTIFICATIONS)` below.
  */
 const EMPTY_NOTIFICATIONS$ = of(EMPTY_NOTIFICATIONS);
 
@@ -137,7 +141,12 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 						createdAt: doc.createdAt || 0,
 						workflowId: doc.workflowId ?? undefined,
 					}))
-				)
+				),
+				// The RxDB query emits asynchronously, so without this the previous session's
+				// notifications and badge counts stay on screen until the new query resolves.
+				// This observable is only rebuilt when the subscriber or collection changes -
+				// i.e. when the old list is already invalid - so there is nothing to preserve.
+				startWith(EMPTY_NOTIFICATIONS)
 			);
 	}, [notificationsCollection, subscriberId]);
 
