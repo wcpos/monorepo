@@ -18,7 +18,7 @@ export function PrinterToggleGroup({ form }: { form: UseFormReturn<PrinterFormVa
 				render={({ field }) => (
 					<FormSwitch
 						testID="add-printer-autocut-toggle"
-						label={t('settings.auto_cut_paper', 'Auto-cut paper')}
+						label={t('settings.auto_cut_paper')}
 						{...field}
 					/>
 				)}
@@ -29,7 +29,7 @@ export function PrinterToggleGroup({ form }: { form: UseFormReturn<PrinterFormVa
 				render={({ field }) => (
 					<FormSwitch
 						testID="add-printer-autodrawer-toggle"
-						label={t('settings.auto_open_cash_drawer', 'Auto-open cash drawer')}
+						label={t('settings.auto_open_cash_drawer')}
 						{...field}
 					/>
 				)}
@@ -40,7 +40,7 @@ export function PrinterToggleGroup({ form }: { form: UseFormReturn<PrinterFormVa
 				render={({ field }) => (
 					<FormSwitch
 						testID="add-printer-default-toggle"
-						label={t('settings.set_as_default_printer', 'Set as default')}
+						label={t('settings.set_as_default_printer')}
 						{...field}
 					/>
 				)}

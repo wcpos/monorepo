@@ -20,13 +20,9 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 
 	return (
 		<VStack className="gap-2">
-			<Text className="text-sm font-medium">
-				{t('settings.bluetooth_printer', 'Bluetooth Printer')}
-			</Text>
+			<Text className="text-sm font-medium">{t('settings.bluetooth_printer')}</Text>
 			{devices.length === 0 && (
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.no_devices_found', 'No devices found yet.')}
-				</Text>
+				<Text className="text-muted-foreground text-xs">{t('settings.no_devices_found')}</Text>
 			)}
 			{devices.map((device) => {
 				const selected = device.address === selectedAddress;
@@ -67,7 +63,7 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 				onPress={startScan}
 				loading={scanning}
 			>
-				<Text>{t('settings.scan_for_printers', 'Scan for printers')}</Text>
+				<Text>{t('settings.scan_for_printers')}</Text>
 			</Button>
 		</VStack>
 	);

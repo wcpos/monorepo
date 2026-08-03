@@ -22,15 +22,15 @@ export function PaperWidthSelect({ value, ...props }: SelectSingleRootProps) {
 			// 80mm printers are commonly configured as either 42 or 48 columns, so expose both.
 			{
 				value: '42',
-				label: t('settings.printer_width_80mm_standard', '80mm standard (42 chars)'),
+				label: t('settings.printer_width_80mm_standard'),
 			},
 			{
 				value: '48',
-				label: t('settings.printer_width_80mm_wide', '80mm wide (48 chars)'),
+				label: t('settings.printer_width_80mm_wide'),
 			},
 			{
 				value: '32',
-				label: t('settings.printer_width_58mm', '58mm (32 chars)'),
+				label: t('settings.printer_width_58mm'),
 			},
 		],
 		[t]
@@ -41,9 +41,7 @@ export function PaperWidthSelect({ value, ...props }: SelectSingleRootProps) {
 	return (
 		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
 			<SelectTrigger>
-				<SelectValue
-					placeholder={t('settings.select_printer_text_width', 'Select printer text width')}
-				/>
+				<SelectValue placeholder={t('settings.select_printer_text_width')} />
 			</SelectTrigger>
 			<SelectContent matchWidth>
 				<SelectGroup>

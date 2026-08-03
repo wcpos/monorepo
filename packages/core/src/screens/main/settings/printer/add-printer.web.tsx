@@ -134,10 +134,7 @@ export function PrinterDialog({
 		<View className="bg-muted flex-row items-start gap-2 rounded-md p-3">
 			<Icon name="circleInfo" size="sm" className="text-muted-foreground mt-0.5" />
 			<Text className="text-muted-foreground flex-1 text-sm">
-				{t(
-					'settings.web_printer_limitation',
-					'Web browsers can print directly to Epson and Star Micronics printers over network, USB, or Bluetooth when the browser supports it.'
-				)}
+				{t('settings.web_printer_limitation')}
 			</Text>
 		</View>
 	);
@@ -152,7 +149,7 @@ export function PrinterDialog({
 						size="sm"
 						onPress={connectUsbDevice}
 					>
-						<Text>{t('settings.connect_usb_printer', 'Connect USB printer')}</Text>
+						<Text>{t('settings.connect_usb_printer')}</Text>
 					</Button>
 				)}
 				{connectionType === 'bluetooth' && connectBluetoothDevice && (
@@ -162,7 +159,7 @@ export function PrinterDialog({
 						size="sm"
 						onPress={connectBluetoothDevice}
 					>
-						<Text>{t('settings.connect_bt_printer', 'Connect Bluetooth printer')}</Text>
+						<Text>{t('settings.connect_bt_printer')}</Text>
 					</Button>
 				)}
 			</HStack>

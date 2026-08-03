@@ -210,7 +210,12 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 
 jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (_key: string, fallback: string) => fallback,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../jest/translate')>(
+				'../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 jest.mock('../../hooks/use-cloud-enqueue', () => ({

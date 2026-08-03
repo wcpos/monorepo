@@ -34,29 +34,17 @@ function useDataSafetyText(dataSafety: CatalogueEntry['dataSafety'] | undefined)
 	const t = useT();
 	switch (dataSafety) {
 		case 'no-impact':
-			return t('health.logs.safety_no_impact', {
-				defaultValue: 'No sales or data are affected.',
-			});
+			return t('health.logs.safety_no_impact');
 		case 'local-only':
-			return t('health.logs.safety_local_only', {
-				defaultValue: 'Your work is saved on this device and nothing is lost.',
-			});
+			return t('health.logs.safety_local_only');
 		case 'order-safe':
-			return t('health.logs.safety_order_safe', {
-				defaultValue: 'The order is safe — sale records are not affected.',
-			});
+			return t('health.logs.safety_order_safe');
 		case 'money-moved':
-			return t('health.logs.safety_money_moved', {
-				defaultValue: 'Payment has been taken — check the order before retrying.',
-			});
+			return t('health.logs.safety_money_moved');
 		case 'outcome-unknown':
-			return t('health.logs.safety_outcome_unknown', {
-				defaultValue: "The final result couldn't be confirmed — verify before retrying.",
-			});
+			return t('health.logs.safety_outcome_unknown');
 		case 'data-at-risk':
-			return t('health.logs.safety_data_at_risk', {
-				defaultValue: 'Data on this device may be affected — export diagnostics before repairing.',
-			});
+			return t('health.logs.safety_data_at_risk');
 		default:
 			return null;
 	}
@@ -66,31 +54,19 @@ function useSafeActionText(safeAction: CatalogueEntry['safeAction'] | undefined)
 	const t = useT();
 	switch (safeAction) {
 		case 'retry':
-			return t('health.logs.action_retry', { defaultValue: 'It is safe to try again.' });
+			return t('health.logs.action_retry');
 		case 'retry-after-edit':
-			return t('health.logs.action_retry_after_edit', {
-				defaultValue: 'Fix the issue above, then retry.',
-			});
+			return t('health.logs.action_retry_after_edit');
 		case 'verify-first':
-			return t('health.logs.action_verify_first', {
-				defaultValue: 'Verify what happened before you retry.',
-			});
+			return t('health.logs.action_verify_first');
 		case 'continue':
-			return t('health.logs.action_continue', {
-				defaultValue: 'You can keep working — nothing to do.',
-			});
+			return t('health.logs.action_continue');
 		case 'repair-local':
-			return t('health.logs.action_repair_local', {
-				defaultValue: 'Repair from Store health → Database.',
-			});
+			return t('health.logs.action_repair_local');
 		case 'reconfigure':
-			return t('health.logs.action_reconfigure', {
-				defaultValue: 'Review the related settings.',
-			});
+			return t('health.logs.action_reconfigure');
 		case 'contact-support':
-			return t('health.logs.action_contact_support', {
-				defaultValue: 'Contact support and include this code.',
-			});
+			return t('health.logs.action_contact_support');
 		default:
 			return null;
 	}
@@ -109,7 +85,7 @@ function HelpDialog({ code, entry }: { code: string; entry: CatalogueEntry }) {
 			<DialogTrigger asChild>
 				<Button variant="ghost" size="sm" testID={`logs-help-${code}`} className="self-start px-0">
 					<Text className="text-muted-foreground text-xs font-semibold">
-						{t('health.logs.help_code', { defaultValue: 'Help — {code} ›', code })}
+						{t('health.logs.help_code', { code })}
 					</Text>
 				</Button>
 			</DialogTrigger>
@@ -160,25 +136,25 @@ export function RowDetail({ row, kind }: { row: LogRow; kind: LevelKind }) {
 	const entries: KVEntry[] = [];
 	if (detail.operation) {
 		entries.push({
-			label: t('health.logs.kv_operation', { defaultValue: 'Operation' }),
+			label: t('health.logs.kv_operation'),
 			value: detail.operation,
 		});
 	}
 	if (detail.request) {
 		entries.push({
-			label: t('health.logs.kv_request', { defaultValue: 'Request' }),
+			label: t('health.logs.kv_request'),
 			value: detail.request,
 		});
 	}
 	if (detail.serverCode) {
 		entries.push({
-			label: t('health.logs.kv_server_code', { defaultValue: 'Server code' }),
+			label: t('health.logs.kv_server_code'),
 			value: detail.serverCode,
 		});
 	}
 	if (detail.attempts) {
 		entries.push({
-			label: t('health.logs.kv_attempts', { defaultValue: 'Attempts' }),
+			label: t('health.logs.kv_attempts'),
 			value: `${detail.attempts.count} · ${formatDate(new Date(detail.attempts.firstSeen), 'p')} → ${formatDate(
 				new Date(detail.attempts.lastSeen),
 				'p'
@@ -193,9 +169,7 @@ export function RowDetail({ row, kind }: { row: LogRow; kind: LevelKind }) {
 				{entries.length > 0 ? <KVGrid entries={entries} /> : null}
 				{hasContext ? <Tree value={context} collapsed /> : null}
 				{entries.length === 0 && !hasContext ? (
-					<Text className="text-muted-foreground text-xs">
-						{t('health.logs.no_detail', { defaultValue: 'No further detail for this entry.' })}
-					</Text>
+					<Text className="text-muted-foreground text-xs">{t('health.logs.no_detail')}</Text>
 				) : null}
 			</VStack>
 		);
@@ -207,7 +181,7 @@ export function RowDetail({ row, kind }: { row: LogRow; kind: LevelKind }) {
 	const isServerReason =
 		reason !== null && (detail.serverCode !== undefined || context.direction === 'push');
 	const title = isServerReason
-		? t('health.logs.server_said', { defaultValue: 'The server said: {reason}', reason })
+		? t('health.logs.server_said', { reason })
 		: (entry?.summary ?? reason ?? row.message ?? '');
 
 	return (

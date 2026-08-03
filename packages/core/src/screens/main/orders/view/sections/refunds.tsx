@@ -47,7 +47,7 @@ function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymb
 					</Text>
 					{refund.refunded_by ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('orders.refunded_by', { defaultValue: 'By' })} {refund.refunded_by}
+							{t('orders.refunded_by')} {refund.refunded_by}
 						</Text>
 					) : null}
 				</View>
@@ -65,10 +65,10 @@ function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymb
 				<View className="px-3 py-2">
 					<View className="border-border/40 flex-row items-baseline gap-2 border-b pb-1">
 						<Text className="text-muted-foreground flex-1 text-[10px] font-semibold tracking-wide uppercase">
-							{t('common.product', { defaultValue: 'Item' })}
+							{t('common.product')}
 						</Text>
 						<Text className="text-muted-foreground w-8 text-right text-[10px] font-semibold tracking-wide uppercase">
-							{t('common.quantity', { defaultValue: 'Qty' })}
+							{t('common.quantity')}
 						</Text>
 						<Text className="text-muted-foreground w-14 text-right text-[10px] font-semibold tracking-wide uppercase">
 							{t('common.tax')}
@@ -112,7 +112,7 @@ function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymb
 export function RefundsSkeleton() {
 	const t = useT();
 	return (
-		<Section title={t('orders.refunds', { defaultValue: 'Refunds' })}>
+		<Section title={t('orders.refunds')}>
 			<View className="gap-2">
 				<View className="bg-muted h-4 w-1/3 rounded" />
 				<View className="bg-muted h-4 w-2/3 rounded" />
@@ -133,15 +133,13 @@ export function RefundsFallback({
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol });
 	return (
-		<Section title={t('orders.refunds', { defaultValue: 'Refunds' })}>
+		<Section title={t('orders.refunds')}>
 			<View className="gap-3">
-				<Text className="text-destructive text-sm">
-					{t('orders.refunds_load_failed', { defaultValue: 'Could not load refund details.' })}
-				</Text>
+				<Text className="text-destructive text-sm">{t('orders.refunds_load_failed')}</Text>
 				{refunds?.length ? (
 					<View className="gap-2">
 						<Text className="text-muted-foreground text-xs">
-							{t('orders.local_refund_summary', { defaultValue: 'Local refund summary:' })}
+							{t('orders.local_refund_summary')}
 						</Text>
 						{refunds.map((refund, index) => (
 							<View key={`${refund.id || index}`} className="border-border rounded-md border p-3">
@@ -149,8 +147,7 @@ export function RefundsFallback({
 									{t('orders.refund')} #{refund.id || '—'}
 								</Text>
 								<Text className="text-muted-foreground text-xs">
-									{refund.reason ||
-										t('orders.no_reason_provided', { defaultValue: 'No reason provided' })}
+									{refund.reason || t('orders.no_reason_provided')}
 								</Text>
 								<Text className="text-destructive text-sm font-semibold tabular-nums">
 									{format(-Math.abs(toNumber(refund.total)))}
@@ -160,13 +157,11 @@ export function RefundsFallback({
 					</View>
 				) : (
 					<Text className="text-muted-foreground text-sm">
-						{t('orders.no_local_refund_summary', {
-							defaultValue: 'No local refund summaries are available.',
-						})}
+						{t('orders.no_local_refund_summary')}
 					</Text>
 				)}
 				<Button variant="outline" size="sm" onPress={onRetry} className="self-start">
-					<ButtonText>{t('common.retry', { defaultValue: 'Retry' })}</ButtonText>
+					<ButtonText>{t('common.retry')}</ButtonText>
 				</Button>
 			</View>
 		</Section>
@@ -190,7 +185,7 @@ function RefundsDetail({
 
 	return (
 		<Section
-			title={t('orders.refunds', { defaultValue: 'Refunds' })}
+			title={t('orders.refunds')}
 			right={
 				<Text className="text-muted-foreground text-xs tabular-nums">
 					{t('orders.refund_count', { count: refunds.length })} · {format(-total)}

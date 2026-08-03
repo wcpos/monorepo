@@ -72,7 +72,7 @@ export const useAddCoupon = () => {
 				if (!coupon) {
 					return {
 						success: false,
-						error: t('pos_cart.coupon_not_found', { defaultValue: 'Coupon not found.' }),
+						error: t('pos_cart.coupon_not_found'),
 					};
 				}
 
@@ -176,9 +176,7 @@ export const useAddCoupon = () => {
 				) {
 					return {
 						success: false,
-						error: t('pos_cart.cart_changed', {
-							defaultValue: 'Cart changed during coupon application. Please try again.',
-						}),
+						error: t('pos_cart.cart_changed'),
 					};
 				}
 
@@ -203,9 +201,7 @@ export const useAddCoupon = () => {
 				) {
 					return {
 						success: false,
-						error: t('pos_cart.cart_changed', {
-							defaultValue: 'Cart changed during coupon application. Please try again.',
-						}),
+						error: t('pos_cart.cart_changed'),
 					};
 				}
 
@@ -220,16 +216,14 @@ export const useAddCoupon = () => {
 				if (!patchResult) {
 					return {
 						success: false,
-						error: t('pos_cart.coupon_apply_failed', {
-							defaultValue: 'Failed to apply coupon. Please try again.',
-						}),
+						error: t('pos_cart.coupon_apply_failed'),
 					};
 				}
 
 				const appliedCouponLine = result.couponLines.find(
 					(cl: any) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
 				);
-				orderLogger.info(t('pos_cart.coupon_applied', { defaultValue: 'Coupon applied' }), {
+				orderLogger.info(t('pos_cart.coupon_applied'), {
 					saveToDb: true,
 					context: {
 						couponCode: couponData.code,

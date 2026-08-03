@@ -48,15 +48,13 @@ export function InputSources() {
 			setLabel('');
 			Toast.show({
 				type: 'success',
-				title: t('settings.scanner_registered', {
-					defaultValue: 'Scanner registered',
-				}),
+				title: t('settings.scanner_registered'),
 				duration: 2500,
 			});
 		} catch (error) {
 			Toast.show({
 				type: 'error',
-				title: t('common.error', { defaultValue: 'Error' }),
+				title: t('common.error'),
 				description: error instanceof Error ? error.message : String(error),
 			});
 		}
@@ -68,7 +66,7 @@ export function InputSources() {
 		} catch (error) {
 			Toast.show({
 				type: 'error',
-				title: t('common.error', { defaultValue: 'Error' }),
+				title: t('common.error'),
 				description: error instanceof Error ? error.message : String(error),
 			});
 		}
@@ -77,13 +75,8 @@ export function InputSources() {
 	return (
 		<SettingsSection
 			testID="barcode-input-sources"
-			title={t('settings.barcode_input_sources', {
-				defaultValue: 'Registered scanners',
-			})}
-			description={t('settings.barcode_input_sources_description', {
-				defaultValue:
-					'A registered scanner is recognised by its device identity — every scan from it is captured directly, with no typing-speed guesswork.',
-			})}
+			title={t('settings.barcode_input_sources')}
+			description={t('settings.barcode_input_sources_description')}
 		>
 			<VStack space="sm" className="pt-1">
 				{serial.available || hid.available ? (
@@ -97,12 +90,8 @@ export function InputSources() {
 							>
 								<ButtonText>
 									{serial.connected
-										? t('settings.scanner_serial_disconnect', {
-												defaultValue: 'Disconnect serial scanner',
-											})
-										: t('settings.scanner_connect_serial', {
-												defaultValue: 'Connect serial scanner',
-											})}
+										? t('settings.scanner_serial_disconnect')
+										: t('settings.scanner_connect_serial')}
 								</ButtonText>
 							</Button>
 						) : null}
@@ -115,12 +104,8 @@ export function InputSources() {
 							>
 								<ButtonText>
 									{hid.connected
-										? t('settings.scanner_hid_disconnect', {
-												defaultValue: 'Disconnect HID scanner',
-											})
-										: t('settings.scanner_connect_hid', {
-												defaultValue: 'Connect HID scanner',
-											})}
+										? t('settings.scanner_hid_disconnect')
+										: t('settings.scanner_connect_hid')}
 								</ButtonText>
 							</Button>
 						) : null}
@@ -148,7 +133,7 @@ export function InputSources() {
 							testID="scanner-profile-delete"
 							onPress={() => handleRemove(profile)}
 						>
-							<ButtonText>{t('settings.scanner_remove', { defaultValue: 'Remove' })}</ButtonText>
+							<ButtonText>{t('settings.scanner_remove')}</ButtonText>
 						</Button>
 					</HStack>
 				))}
@@ -158,7 +143,6 @@ export function InputSources() {
 						<Text className="text-sm">
 							{t('settings.scanner_detected', {
 								deviceName: registration.candidate.deviceName,
-								defaultValue: 'Detected "{deviceName}" — name it and save',
 							})}
 						</Text>
 						<Input
@@ -169,9 +153,7 @@ export function InputSources() {
 						/>
 						<HStack space="sm">
 							<Button size="sm" onPress={handleSave} testID="scanner-save-button">
-								<ButtonText>
-									{t('settings.scanner_save', { defaultValue: 'Save scanner' })}
-								</ButtonText>
+								<ButtonText>{t('settings.scanner_save')}</ButtonText>
 							</Button>
 							<Button variant="outline" size="sm" onPress={registration.discard}>
 								<ButtonText>{t('common.cancel')}</ButtonText>
@@ -181,11 +163,7 @@ export function InputSources() {
 				) : registration.capturing ? (
 					<View className="border-info/40 bg-info/10 rounded-md border p-2">
 						<HStack>
-							<Text className="flex-1 text-sm">
-								{t('settings.scanner_capture_prompt', {
-									defaultValue: 'Scan any barcode now with the scanner you want to register…',
-								})}
-							</Text>
+							<Text className="flex-1 text-sm">{t('settings.scanner_capture_prompt')}</Text>
 							<Button variant="outline" size="sm" onPress={registration.stop}>
 								<ButtonText>{t('common.cancel')}</ButtonText>
 							</Button>
@@ -194,11 +172,7 @@ export function InputSources() {
 				) : registration.available ? (
 					<View className="items-start">
 						<Button size="sm" onPress={registration.start} testID="register-scanner-button">
-							<ButtonText>
-								{t('settings.scanner_register', {
-									defaultValue: 'Register scanner',
-								})}
-							</ButtonText>
+							<ButtonText>{t('settings.scanner_register')}</ButtonText>
 						</Button>
 					</View>
 				) : null}

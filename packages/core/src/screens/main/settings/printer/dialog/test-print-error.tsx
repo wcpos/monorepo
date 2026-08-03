@@ -52,7 +52,7 @@ export function TestPrintError({ error }: TestPrintErrorProps) {
 		try {
 			await navigator.clipboard.writeText(buildSupportDetails(error));
 			Toast.show({
-				title: t('settings.support_details_copied', 'Support details copied'),
+				title: t('settings.support_details_copied'),
 				type: 'success',
 			});
 		} catch {
@@ -74,23 +74,21 @@ export function TestPrintError({ error }: TestPrintErrorProps) {
 			{d ? (
 				<>
 					<Text className="text-destructive text-sm font-medium">
-						{t('settings.test_print_failed_title', 'Could not connect to the printer.')}
+						{t('settings.test_print_failed_title')}
 					</Text>
 					<VStack className="gap-0.5">
-						<Text className="text-xs font-medium">{t('settings.we_tried', 'We tried:')}</Text>
+						<Text className="text-xs font-medium">{t('settings.we_tried')}</Text>
 						<Text className="text-xs">{d.attemptLabel}</Text>
 						<Text testID="add-printer-test-error-url" className="text-xs">
 							{d.url}
 						</Text>
 					</VStack>
 					<VStack className="gap-0.5">
-						<Text className="text-xs font-medium">
-							{t('settings.likely_reason', 'Likely reason:')}
-						</Text>
+						<Text className="text-xs font-medium">{t('settings.likely_reason')}</Text>
 						<Text className="text-xs">{d.likelyReason}</Text>
 					</VStack>
 					<VStack className="gap-0.5">
-						<Text className="text-xs font-medium">{t('settings.try_next', 'Try:')}</Text>
+						<Text className="text-xs font-medium">{t('settings.try_next')}</Text>
 						{d.suggestions.map((suggestion, index) => (
 							<Text key={suggestion} className="text-xs">
 								{index + 1}. {suggestion}
@@ -100,7 +98,7 @@ export function TestPrintError({ error }: TestPrintErrorProps) {
 					<Collapsible>
 						<CollapsibleTrigger testID="add-printer-support-details-toggle">
 							<Text className="text-muted-foreground text-xs font-medium">
-								{t('settings.support_details', 'Support details')}
+								{t('settings.support_details')}
 							</Text>
 						</CollapsibleTrigger>
 						<CollapsibleContent>
@@ -118,7 +116,7 @@ export function TestPrintError({ error }: TestPrintErrorProps) {
 										size="sm"
 										onPress={handleCopy}
 									>
-										<Text>{t('settings.copy_support_details', 'Copy details')}</Text>
+										<Text>{t('settings.copy_support_details')}</Text>
 									</Button>
 								)}
 							</VStack>

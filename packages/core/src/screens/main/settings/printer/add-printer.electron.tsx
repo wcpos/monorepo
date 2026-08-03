@@ -170,7 +170,7 @@ export function PrinterDialog({
 	const vendorOptions: VendorOption[] = [
 		{ value: 'epson', label: 'Epson' },
 		{ value: 'star', label: 'Star Micronics' },
-		{ value: 'generic', label: t('settings.printer_vendor_generic', 'Generic') },
+		{ value: 'generic', label: t('settings.printer_vendor_generic') },
 	];
 
 	let connectionSection: React.ReactNode;
@@ -190,13 +190,10 @@ export function PrinterDialog({
 						onScan={connectUsbDevice}
 						scanning={isUsbScanning}
 						targetKind="winspool"
-						heading={t('settings.installed_printers', 'Installed printers')}
-						hint={t(
-							'settings.installed_printers_hint',
-							'Printers paired in Windows (including Bluetooth printers) appear here as installed printers.'
-						)}
-						emptyText={t('settings.installed_printers_none', 'No installed printers found.')}
-						loadingText={t('settings.installed_printers_loading', 'Loading installed printers…')}
+						heading={t('settings.installed_printers')}
+						hint={t('settings.installed_printers_hint')}
+						emptyText={t('settings.installed_printers_none')}
+						loadingText={t('settings.installed_printers_loading')}
 						testIdPrefix="add-printer-installed-device"
 					/>
 				) : connectSerialDevice ? (
@@ -206,13 +203,10 @@ export function PrinterDialog({
 						onScan={connectSerialDevice}
 						scanning={isSerialScanning}
 						targetKind="serial"
-						heading={t('settings.paired_printers', 'Paired Bluetooth printers')}
-						hint={t(
-							'settings.paired_printers_hint',
-							'Bluetooth Classic printers paired in your system settings appear here.'
-						)}
-						emptyText={t('settings.paired_printers_none', 'No paired printers found.')}
-						loadingText={t('settings.paired_printers_loading', 'Loading paired printers…')}
+						heading={t('settings.paired_printers')}
+						hint={t('settings.paired_printers_hint')}
+						emptyText={t('settings.paired_printers_none')}
+						loadingText={t('settings.paired_printers_loading')}
 						testIdPrefix="add-printer-paired-device"
 					/>
 				) : null}
@@ -228,9 +222,7 @@ export function PrinterDialog({
 							disabled={!!isBluetoothScanning}
 						>
 							<Text>
-								{isBluetoothScanning
-									? t('settings.scanning', 'Scanning…')
-									: t('settings.scan_for_printers', 'Scan for printers')}
+								{isBluetoothScanning ? t('settings.scanning') : t('settings.scan_for_printers')}
 							</Text>
 						</Button>
 						{isBluetoothScanning && cancelBluetoothScan && (
@@ -240,20 +232,17 @@ export function PrinterDialog({
 								size="sm"
 								onPress={cancelBluetoothScan}
 							>
-								<Text>{t('common.cancel', 'Cancel')}</Text>
+								<Text>{t('common.cancel')}</Text>
 							</Button>
 						)}
 					</HStack>
 				)}
 				<Text testID="add-printer-bt-scan-hint" className="text-muted-foreground text-xs">
-					{t(
-						'settings.bt_scan_hint',
-						'Finds nearby Bluetooth LE printers (e.g. Epson TM-P or Star L series). Bluetooth Classic printers pair in your system settings instead.'
-					)}
+					{t('settings.bt_scan_hint')}
 				</Text>
 				{isBluetoothScanning && (
 					<Text testID="add-printer-bt-searching" className="text-muted-foreground text-xs">
-						{t('settings.bt_searching', 'Searching for Bluetooth printers…')}
+						{t('settings.bt_searching')}
 					</Text>
 				)}
 				<ElectronBtPicker

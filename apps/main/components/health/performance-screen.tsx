@@ -158,27 +158,20 @@ export function PerformanceScreen() {
 				<HStack className="flex-wrap items-baseline gap-2">
 					<Text className={healthy ? 'text-success font-semibold' : 'text-warning font-semibold'}>
 						{healthy
-							? t('health.performance.status_normal', '✓ Normal')
-							: t('health.performance.status_attention', '⚠ Needs attention')}
+							? t('health.performance.status_normal')
+							: t('health.performance.status_attention')}
 					</Text>
 					<Text className="text-muted-foreground text-sm" testID="performance-summary">
 						{hasHistory
-							? t(
-									'health.performance.summary',
-									'— last 24 h: {requests} requests · {mb} MB{typical}',
-									{
-										requests: summary.requests.toLocaleString(),
-										mb: summary.megabytes.toFixed(1),
-										typical:
-											summary.typicalMs !== null
-												? ` · ${t('health.performance.typical_response', 'typical response {ms} ms', { ms: summary.typicalMs })}`
-												: '',
-									}
-								)
-							: t(
-									'health.performance.no_history',
-									'— no history yet. These numbers fill in as this till runs; the controls below work now.'
-								)}
+							? t('health.performance.summary', {
+									requests: summary.requests.toLocaleString(),
+									mb: summary.megabytes.toFixed(1),
+									typical:
+										summary.typicalMs !== null
+											? ` · ${t('health.performance.typical_response', { ms: summary.typicalMs })}`
+											: '',
+								})
+							: t('health.performance.no_history')}
 					</Text>
 				</HStack>
 
@@ -186,11 +179,8 @@ export function PerformanceScreen() {
 				<Section
 					first
 					testID="uptime-section"
-					title={t('health.performance.uptime_title', 'Engine uptime')}
-					sub={t(
-						'health.performance.uptime_sub',
-						"Each cell is one hour of this till's sync activity. An empty cell means the app was closed."
-					)}
+					title={t('health.performance.uptime_title')}
+					sub={t('health.performance.uptime_sub')}
 				>
 					<UptimeStrip cells={uptimeCells} />
 				</Section>
@@ -200,8 +190,8 @@ export function PerformanceScreen() {
 					testID="sync-section"
 					title={
 						preset === 'custom'
-							? `${t('health.performance.sync', 'Sync')} · ${t('health.performance.custom', 'Custom')}`
-							: t('health.performance.sync', 'Sync')
+							? `${t('health.performance.sync')} · ${t('health.performance.custom')}`
+							: t('health.performance.sync')
 					}
 				>
 					<VStack className="gap-4">
@@ -212,20 +202,16 @@ export function PerformanceScreen() {
 							<HStack className="flex-wrap gap-4">
 								{(
 									[
-										[
-											'eco',
-											t('health.performance.eco', 'Eco'),
-											t('health.performance.eco_desc', 'checks every 60 s · gentlest'),
-										],
+										['eco', t('health.performance.eco'), t('health.performance.eco_desc')],
 										[
 											'balanced',
-											t('health.performance.balanced', 'Balanced'),
-											t('health.performance.balanced_desc', 'checks every 10 s · default'),
+											t('health.performance.balanced'),
+											t('health.performance.balanced_desc'),
 										],
 										[
 											'realtime',
-											t('health.performance.realtime', 'Realtime'),
-											t('health.performance.realtime_desc', 'checks every 5 s · freshest'),
+											t('health.performance.realtime'),
+											t('health.performance.realtime_desc'),
 										],
 									] as const
 								).map(([value, label, description]) => (
@@ -242,11 +228,9 @@ export function PerformanceScreen() {
 
 						<VStack className="gap-1">
 							<HStack className="items-baseline justify-between">
-								<Text className="font-medium">
-									{t('health.performance.check_frequency', 'Check for changes')}
-								</Text>
+								<Text className="font-medium">{t('health.performance.check_frequency')}</Text>
 								<Text className="text-primary font-semibold">
-									{t('health.performance.every_s', 'every {s} s', {
+									{t('health.performance.every_s', {
 										s: Math.round(checkIntervalMs / 1000),
 									})}
 								</Text>
@@ -267,11 +251,9 @@ export function PerformanceScreen() {
 
 						<VStack className="gap-1">
 							<HStack className="items-baseline justify-between">
-								<Text className="font-medium">
-									{t('health.performance.records_per_request', 'Records per request')}
-								</Text>
+								<Text className="font-medium">{t('health.performance.records_per_request')}</Text>
 								<Text className="text-primary font-semibold">
-									{t('health.performance.up_to_n', 'up to {n}', { n: pullBatchSize })}
+									{t('health.performance.up_to_n', { n: pullBatchSize })}
 								</Text>
 								<Text className="text-muted-foreground text-xs">10 – 100</Text>
 							</HStack>
@@ -291,22 +273,18 @@ export function PerformanceScreen() {
 						<HStack className="flex-wrap items-center justify-between gap-2">
 							<Text className="text-muted-foreground text-sm" testID="settings-math-line">
 								{nextCheck !== null
-									? `${t('health.performance.right_now', 'Right now: next check in ~{every}', {
+									? `${t('health.performance.right_now', {
 											every:
 												nextCheck.unit === 's' ? `${nextCheck.value} s` : `${nextCheck.value} min`,
-										})} · ${t(
-											'health.performance.math_line',
-											'At these settings: ~{perDay} requests per day',
-											{ perDay: Math.round(requestsPerDay).toLocaleString() }
-										)}`
-									: t(
-											'health.performance.math_line',
-											'At these settings: ~{perDay} requests per day',
-											{ perDay: Math.round(requestsPerDay).toLocaleString() }
-										)}
+										})} · ${t('health.performance.math_line', {
+											perDay: Math.round(requestsPerDay).toLocaleString(),
+										})}`
+									: t('health.performance.math_line', {
+											perDay: Math.round(requestsPerDay).toLocaleString(),
+										})}
 							</Text>
 							<Button variant="outline" size="sm" onPress={() => void applyPreset('balanced')}>
-								<ButtonText>{t('health.performance.reset', 'Reset to Balanced')}</ButtonText>
+								<ButtonText>{t('health.performance.reset')}</ButtonText>
 							</Button>
 						</HStack>
 					</VStack>
@@ -315,11 +293,8 @@ export function PerformanceScreen() {
 				{/* Your server, over time — two aligned trends */}
 				<Section
 					testID="server-over-time-section"
-					title={t('health.performance.server_over_time', 'Your server, over time')}
-					sub={t(
-						'health.performance.server_over_time_note',
-						'Server load is everything running on it — not just the POS.'
-					)}
+					title={t('health.performance.server_over_time')}
+					sub={t('health.performance.server_over_time_note')}
 				>
 					<VStack className="gap-3">
 						{/* Three states, kept distinct. Asked and never told = a missing
@@ -328,15 +303,12 @@ export function PerformanceScreen() {
 						    yet, so claim nothing — the frame covers that too. */}
 						{loadUnavailable ? (
 							<Text className="text-muted-foreground text-sm" testID="server-load-unavailable">
-								{t(
-									'health.performance.load_unavailable',
-									"Your server doesn't report its load. Everything else on this page still works."
-								)}
+								{t('health.performance.load_unavailable')}
 							</Text>
 						) : (
 							<TrendLine
 								testID="server-load-trend"
-								label={t('health.performance.server_load', 'server load')}
+								label={t('health.performance.server_load')}
 								points={summary.loadPoints}
 								tone="neutral"
 							/>
@@ -345,17 +317,13 @@ export function PerformanceScreen() {
 						    render and says "not enough data yet" until it can draw. */}
 						<TrendLine
 							testID="pos-requests-trend"
-							label={t('health.performance.pos_requests', 'POS requests · same period')}
+							label={t('health.performance.pos_requests')}
 							points={summary.requestPoints}
 							tone="accent"
 						/>
 						{hasHistory && summary.serverMinutes !== null ? (
 							<Text className="text-muted-foreground text-sm">
-								{t(
-									'health.performance.total_cost',
-									'Total cost to your server in the last 24 hours: {minutes} minutes of server time.',
-									{ minutes: summary.serverMinutes }
-								)}
+								{t('health.performance.total_cost', { minutes: summary.serverMinutes })}
 							</Text>
 						) : null}
 					</VStack>
@@ -363,30 +331,23 @@ export function PerformanceScreen() {
 
 				{/* One evidence sentence */}
 				<Text className="text-muted-foreground text-sm">
-					{t(
-						'health.performance.evidence',
-						'Tested on live stores: a 50,000-product store is ready to sell in 3.2 s, and a caught-up check is 216 bytes —'
-					)}{' '}
+					{t('health.performance.evidence')}{' '}
 					<Text
 						className="text-primary text-sm"
 						role="link"
 						onPress={() => void Linking.openURL(HOW_WE_MEASURE_URL)}
 					>
-						{t('health.performance.how_we_measure', 'how we measure ›')}
+						{t('health.performance.how_we_measure')}
 					</Text>
 				</Text>
 
 				{/* Diagnostics readout (#559) */}
 				<Text className="text-muted-foreground font-mono text-xs" testID="effective-settings">
-					{t(
-						'health.performance.effective',
-						'checking every {s} s · up to {n} records/request · preset: {preset}',
-						{
-							s: Math.round(checkIntervalMs / 1000),
-							n: pullBatchSize,
-							preset: preset === 'custom' ? t('health.performance.custom', 'Custom') : preset,
-						}
-					)}
+					{t('health.performance.effective', {
+						s: Math.round(checkIntervalMs / 1000),
+						n: pullBatchSize,
+						preset: preset === 'custom' ? t('health.performance.custom') : preset,
+					})}
 				</Text>
 				<View className="h-4" />
 			</VStack>

@@ -61,9 +61,12 @@ jest.mock('./use-camera-scan', () => ({
 jest.mock('../../hooks/barcodes/camera-scan-context', () => ({
 	useCameraScanBus: () => ({ events$: cameraEvents$, emit: jest.fn() }),
 }));
-jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
-}));
+jest.mock('../../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../../jest/translate')>(
+		'../../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 
 beforeEach(() => {
 	jest.clearAllMocks();

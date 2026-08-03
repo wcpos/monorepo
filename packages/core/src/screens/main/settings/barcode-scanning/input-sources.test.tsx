@@ -55,7 +55,12 @@ jest.mock('../../hooks/barcodes/use-scanner-registration', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (_key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? _key,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../jest/translate')>(
+				'../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 describe('InputSources write failures', () => {

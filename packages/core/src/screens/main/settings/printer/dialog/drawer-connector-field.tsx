@@ -23,7 +23,7 @@ export function DrawerConnectorField({ form }: { form: UseFormReturn<PrinterForm
 				render={({ field: { value, onChange, ...rest } }) => (
 					<FormSelect
 						customComponent={DrawerConnectorSelect}
-						label={t('settings.drawer_connector', 'Cash drawer connector')}
+						label={t('settings.drawer_connector')}
 						value={value}
 						onChange={onChange}
 						{...rest}

@@ -94,7 +94,7 @@ export function PrinterDialog({
 			{ value: 'star', label: 'Star Micronics' },
 		];
 		if (connectionType === 'network') {
-			base.push({ value: 'generic', label: t('settings.printer_vendor_generic', 'Generic') });
+			base.push({ value: 'generic', label: t('settings.printer_vendor_generic') });
 		}
 		return base;
 	}, [connectionType, t]);

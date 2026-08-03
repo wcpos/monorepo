@@ -76,14 +76,12 @@ jest.mock('@wcpos/query', () => ({
 	useQueryManager: () => ({ engine: { active: jest.fn(), scope: {}, sync: jest.fn() } }),
 }));
 jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
-jest.mock('../../../contexts/translations', () => ({
-	useT: () => (key: string, values?: string | Record<string, unknown>) =>
-		typeof values === 'string'
-			? values
-			: typeof values?.defaultValue === 'string'
-				? values.defaultValue
-				: key,
-}));
+jest.mock('../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
+		'../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 jest.mock('../logs/use-log-stats', () => ({ useLogStats: () => ({ stuck: [] }) }));
 jest.mock('../hooks/use-census-totals', () => ({
 	useCensusTotals: () => ({

@@ -19,7 +19,12 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../jest/translate')>(
+				'../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({

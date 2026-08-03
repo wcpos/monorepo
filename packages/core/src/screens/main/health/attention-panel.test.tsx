@@ -27,15 +27,12 @@ const mockEngine = {
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@wcpos/query', () => ({ useQueryManager: () => ({ engine: mockEngine }) }));
-jest.mock('../../../contexts/translations', () => ({
-	useT: () => (_key: string, values?: Record<string, unknown>) => {
-		let text = typeof values?.defaultValue === 'string' ? values.defaultValue : _key;
-		for (const [name, value] of Object.entries(values ?? {})) {
-			text = text.replace(`{${name}}`, String(value));
-		}
-		return text;
-	},
-}));
+jest.mock('../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
+		'../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,

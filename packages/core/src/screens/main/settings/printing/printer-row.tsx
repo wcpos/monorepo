@@ -45,9 +45,8 @@ export function PrinterRow({
 
 	let connectionLabel: string;
 	if (profile.connectionType === 'system') {
-		connectionLabel = `${t('settings.connection_print_dialog', 'Print Dialog')} · ${t(
-			'settings.connection_built_in',
-			'built-in'
+		connectionLabel = `${t('settings.connection_print_dialog')} · ${t(
+			'settings.connection_built_in'
 		)}`;
 	} else if (profile.connectionType === 'cloud') {
 		const provider =
@@ -57,8 +56,8 @@ export function PrinterRow({
 					? 'Epson Server Direct Print'
 					: profile.cloudProvider === 'printnode'
 						? 'PrintNode'
-						: t('settings.cloud_printer', 'Cloud printer');
-		connectionLabel = `${provider} · ${t('settings.managed_by_wcpos', 'managed by WCPOS')}`;
+						: t('settings.cloud_printer');
+		connectionLabel = `${provider} · ${t('settings.managed_by_wcpos')}`;
 	} else {
 		const host = profile.address || '?';
 		const base = profile.port ? `${host}:${profile.port}` : host;
@@ -89,9 +88,7 @@ export function PrinterRow({
 				<Text className="text-muted-foreground text-xs">{connectionLabel}</Text>
 			</VStack>
 			<HStack className="items-center gap-2">
-				{profile.isDefault && (
-					<StatusBadge variant="default" label={t('common.default', 'Default')} />
-				)}
+				{profile.isDefault && <StatusBadge variant="default" label={t('common.default')} />}
 				<Button
 					variant="outline"
 					size="sm"
@@ -99,7 +96,7 @@ export function PrinterRow({
 					onPress={() => onTest(profile)}
 					testID={`printer-row-${profile.id}-test`}
 				>
-					<Text>{t('settings.test_print', 'Test')}</Text>
+					<Text>{t('settings.test_print')}</Text>
 				</Button>
 				{!profile.isBuiltIn && (
 					<Button
@@ -109,7 +106,7 @@ export function PrinterRow({
 						onPress={() => onEdit(profile)}
 						testID={`printer-row-${profile.id}-edit`}
 					>
-						<Text>{t('common.edit', 'Edit')}</Text>
+						<Text>{t('common.edit')}</Text>
 					</Button>
 				)}
 				{showMenu && (
@@ -124,7 +121,7 @@ export function PrinterRow({
 									testID={`printer-row-${profile.id}-set-default`}
 								>
 									<Icon name="star" />
-									<Text>{t('settings.set_default', 'Set Default')}</Text>
+									<Text>{t('settings.set_default')}</Text>
 								</DropdownMenuItem>
 							)}
 							{canDelete && (
@@ -137,7 +134,7 @@ export function PrinterRow({
 										name="trash"
 										className="fill-destructive web:group-focus:fill-accent-foreground"
 									/>
-									<Text>{t('common.delete', 'Delete')}</Text>
+									<Text>{t('common.delete')}</Text>
 								</DropdownMenuItem>
 							)}
 						</DropdownMenuContent>

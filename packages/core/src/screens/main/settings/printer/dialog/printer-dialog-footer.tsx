@@ -44,9 +44,7 @@ export function PrinterDialogFooter({
 					className="mr-auto"
 					onPress={onSaveAnyway}
 				>
-					<Text className="text-muted-foreground text-sm">
-						{t('settings.save_anyway', 'Save without testing')}
-					</Text>
+					<Text className="text-muted-foreground text-sm">{t('settings.save_anyway')}</Text>
 				</Button>
 			)}
 			{showOpenDrawer && (
@@ -56,7 +54,7 @@ export function PrinterDialogFooter({
 					onPress={onOpenDrawer}
 					loading={drawerLoading}
 				>
-					<Text>{t('settings.open_drawer', 'Open drawer')}</Text>
+					<Text>{t('settings.open_drawer')}</Text>
 				</Button>
 			)}
 			<Button
@@ -65,10 +63,10 @@ export function PrinterDialogFooter({
 				onPress={onTestPrint}
 				loading={testLoading}
 			>
-				<Text>{t('settings.test_print', 'Test Print')}</Text>
+				<Text>{t('settings.test_print')}</Text>
 			</Button>
 			<Button testID="add-printer-save-button" onPress={onSave} loading={saveLoading}>
-				<Text>{t('common.save', 'Save')}</Text>
+				<Text>{t('common.save')}</Text>
 			</Button>
 		</HStack>
 	);

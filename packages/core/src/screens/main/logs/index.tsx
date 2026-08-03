@@ -70,22 +70,18 @@ function StatusLine() {
 
 	const watching =
 		lastTick === null
-			? t('health.database.first_check_pending', { defaultValue: 'First check pending…' })
+			? t('health.database.first_check_pending')
 			: lastTick.status === 'error'
-				? t('health.database.last_check_error', {
-						defaultValue: "Last check didn't complete — retrying",
-					})
+				? t('health.database.last_check_error')
 				: t('health.logs.watching', {
-						defaultValue: 'Watching for changes — last check {ago}',
 						ago: relative(lastTick.atMs, nowMs),
 					});
 	const cadenceText =
 		nextCheck === null
 			? null
 			: nextCheck.unit === 's'
-				? t('health.logs.next_check_s', { defaultValue: 'next check ~{n} s', n: nextCheck.value })
+				? t('health.logs.next_check_s', { n: nextCheck.value })
 				: t('health.logs.next_check_min', {
-						defaultValue: 'next check ~{n} min',
 						n: nextCheck.value,
 					});
 
@@ -203,12 +199,12 @@ function LogsScreenContent() {
 			await navigator.clipboard.writeText(text);
 			Toast.show({
 				type: 'success',
-				text1: t('health.logs.debug_copied', { defaultValue: 'Debug info copied' }),
+				text1: t('health.logs.debug_copied'),
 			});
 		} catch {
 			Toast.show({
 				type: 'error',
-				text1: t('health.logs.debug_copy_failed', { defaultValue: "Couldn't copy debug info" }),
+				text1: t('health.logs.debug_copy_failed'),
 			});
 		}
 	}, [appVersion, canShare, logsCollection, mutations.pendingOrders, stats, status, t, verbose]);
@@ -229,9 +225,7 @@ function LogsScreenContent() {
 								onPress={() => void handleCopy()}
 							>
 								<ButtonText>
-									{canShare
-										? t('health.logs.share_debug', { defaultValue: 'Share debug info' })
-										: t('health.logs.copy_debug', { defaultValue: 'Copy debug info' })}
+									{canShare ? t('health.logs.share_debug') : t('health.logs.copy_debug')}
 								</ButtonText>
 							</Button>
 						) : null
@@ -239,21 +233,21 @@ function LogsScreenContent() {
 				>
 					<Stat
 						value={stats.eventsToday}
-						label={t('health.logs.events_today', { defaultValue: 'events today' })}
+						label={t('health.logs.events_today')}
 						onPress={() => applyPreset('all')}
 						testID="logs-stat-events"
 					/>
 					<Stat
 						value={stats.errorsToday}
 						tone={stats.errorsToday > 0 ? 'bad' : 'default'}
-						label={t('health.logs.errors_today', { defaultValue: 'errors today' })}
+						label={t('health.logs.errors_today')}
 						onPress={() => applyPreset('errors')}
 						testID="logs-stat-errors"
 					/>
 					<Stat
 						value={stats.stuck.length}
 						tone={stats.stuck.length > 0 ? 'bad' : 'good'}
-						label={t('health.logs.stuck_records', { defaultValue: 'stuck records' })}
+						label={t('health.logs.stuck_records')}
 						// Sync preset, not Errors: stuck rows are sync-domain terminal rows
 						// that can persist at WARN level — the error-only filter would hide
 						// the very rows this number counts.
@@ -263,7 +257,7 @@ function LogsScreenContent() {
 					<Stat
 						value={mutations.pendingOrders}
 						tone={mutations.pendingOrders > 0 ? 'bad' : 'good'}
-						label={t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
+						label={t('health.database.waiting_to_send')}
 						testID="logs-stat-waiting"
 					/>
 				</StatHeader>
@@ -276,30 +270,28 @@ function LogsScreenContent() {
 
 				<HStack className="flex-wrap items-center gap-2">
 					<Chip on={preset === 'all'} onPress={() => applyPreset('all')} testID="logs-chip-all">
-						{t('health.logs.preset_all', { defaultValue: 'All' })}
+						{t('health.logs.preset_all')}
 					</Chip>
 					<Chip
 						on={preset === 'actions'}
 						onPress={() => applyPreset('actions')}
 						testID="logs-chip-actions"
 					>
-						{t('health.logs.preset_actions', { defaultValue: 'Actions' })}
+						{t('health.logs.preset_actions')}
 					</Chip>
 					<Chip
 						on={preset === 'errors'}
 						onPress={() => applyPreset('errors')}
 						testID="logs-chip-errors"
 					>
-						{t('health.logs.preset_errors', { defaultValue: 'Errors' })}
+						{t('health.logs.preset_errors')}
 					</Chip>
 					<Chip on={preset === 'sync'} onPress={() => applyPreset('sync')} testID="logs-chip-sync">
-						{t('health.logs.preset_sync', { defaultValue: 'Sync' })}
+						{t('health.logs.preset_sync')}
 					</Chip>
 					<View className="flex-1" />
 					<Chip on={verbose} onPress={toggleVerbose} testID="logs-chip-verbose">
-						{verbose
-							? t('health.logs.verbose_on', { defaultValue: 'Verbose diagnostics: on' })
-							: t('health.logs.verbose_off', { defaultValue: 'Verbose diagnostics: off' })}
+						{verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
 					</Chip>
 				</HStack>
 

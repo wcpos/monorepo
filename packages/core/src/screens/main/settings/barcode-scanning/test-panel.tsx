@@ -70,9 +70,7 @@ function TimingChart({
 					})}
 					{analysis.gaps.length === 0 ? (
 						<Text className="text-muted-foreground text-sm">
-							{t('settings.barcode_test_chart_empty', {
-								defaultValue: 'Scan into this page to see keystroke timing',
-							})}
+							{t('settings.barcode_test_chart_empty')}
 						</Text>
 					) : null}
 				</View>
@@ -80,7 +78,6 @@ function TimingChart({
 			<Text className="text-muted-foreground text-xs">
 				{t('settings.barcode_test_chart_threshold', {
 					threshold,
-					defaultValue: 'Dashed line = your {threshold}ms threshold — amber bars exceed it',
 				})}
 			</Text>
 		</VStack>
@@ -167,13 +164,7 @@ export function TestPanel() {
 					aria-disabled={isWeb}
 					onKeyPress={isWeb ? undefined : handleNativeKeyPress}
 					autoFocus={!isWeb}
-					placeholder={
-						isWeb
-							? undefined
-							: t('settings.barcode_test_capture_placeholder', {
-									defaultValue: 'Tap here, then scan',
-								})
-					}
+					placeholder={isWeb ? undefined : t('settings.barcode_test_capture_placeholder')}
 					testID="barcode-test-keys"
 				/>
 			</VStack>
@@ -204,9 +195,7 @@ export function TestPanel() {
 
 			<Pressable onPress={() => Linking.openURL(DOCS_URL)}>
 				<Text className="text-muted-foreground text-sm">
-					{t('settings.barcode_test_docs_link', {
-						defaultValue: 'Setup guides and common problems → WCPOS docs',
-					})}
+					{t('settings.barcode_test_docs_link')}
 				</Text>
 			</Pressable>
 		</VStack>
@@ -231,7 +220,6 @@ function Verdict({
 	if (analysis.detectedAsScan) {
 		headline = t('settings.barcode_test_detected_scan', {
 			code: analysis.code,
-			defaultValue: 'Detected as a scan → {code}',
 		});
 		boxClass = 'border-success/40 bg-success/10';
 		textClass = 'text-success';
@@ -239,14 +227,12 @@ function Verdict({
 		headline = t('settings.barcode_test_near_miss', {
 			avg,
 			threshold: settings.threshold,
-			defaultValue: 'Treated as typing — average gap {avg}ms is above your {threshold}ms threshold',
 		});
 		boxClass = 'border-warning/40 bg-warning/10';
 		textClass = 'text-warning';
 	} else {
 		headline = t('settings.barcode_test_typing', {
 			avg,
-			defaultValue: 'Treated as typing (average gap {avg}ms) — correctly ignored',
 		});
 		boxClass = 'border-border bg-muted/50';
 		textClass = 'text-foreground';
@@ -261,7 +247,6 @@ function Verdict({
 						{t('settings.barcode_test_scan_detail', {
 							avg,
 							threshold: settings.threshold,
-							defaultValue: 'Average keystroke gap {avg}ms, under the {threshold}ms threshold',
 						})}
 					</Text>
 				) : null}
@@ -271,7 +256,7 @@ function Verdict({
 				<HStack key={suggestion.kind} className="border-info/40 bg-info/10 rounded-md border p-2">
 					<Text className="flex-1 text-sm">{suggestionText(t, suggestion, avg)}</Text>
 					<Button size="sm" onPress={() => onApply(suggestion)}>
-						<ButtonText>{t('settings.barcode_test_apply', { defaultValue: 'Apply' })}</ButtonText>
+						<ButtonText>{t('settings.barcode_test_apply')}</ButtonText>
 					</Button>
 				</HStack>
 			))}
@@ -279,19 +264,14 @@ function Verdict({
 			{analysis.shiftMangled ? (
 				<View className="border-destructive/40 bg-destructive/10 rounded-md border p-2">
 					<Text className="text-destructive text-sm">
-						{t('settings.barcode_test_shift_mangled', {
-							defaultValue:
-								'Scanner is sending Shift as separate keys — reconfigure it to a US-keyboard / no-modifier mode',
-						})}
+						{t('settings.barcode_test_shift_mangled')}
 					</Text>
 				</View>
 			) : null}
 
 			{analysis.trailingEnter ? (
 				<Text className="text-muted-foreground text-xs">
-					{t('settings.barcode_test_trailing_enter', {
-						defaultValue: 'Trailing Enter detected and ignored — no suffix needed',
-					})}
+					{t('settings.barcode_test_trailing_enter')}
 				</Text>
 			) : null}
 		</VStack>
@@ -307,18 +287,15 @@ function suggestionText(
 		return t('settings.barcode_test_suggest_threshold', {
 			value: suggestion.value,
 			avg,
-			defaultValue: 'Raise threshold to {value}ms — your scanner averages {avg}ms',
 		});
 	}
 	if (suggestion.kind === 'lower-min-chars') {
 		return t('settings.barcode_test_suggest_min_chars', {
 			value: suggestion.value,
-			defaultValue: 'Lower minimum length to {value} — this code is {value} characters',
 		});
 	}
 	return t('settings.barcode_test_suggest_prefix', {
 		value: suggestion.value,
-		defaultValue: 'Strip leading "{value}" — set it as your prefix',
 	});
 }
 
@@ -327,15 +304,13 @@ function History({ history }: { history: TraceAnalysis[] }) {
 
 	return (
 		<VStack space="xs" testID="barcode-test-history">
-			<Text className="text-sm font-medium">
-				{t('settings.barcode_test_recent', { defaultValue: 'Recent attempts' })}
-			</Text>
+			<Text className="text-sm font-medium">{t('settings.barcode_test_recent')}</Text>
 			{history.map((entry, index) => {
 				const result = entry.detectedAsScan
 					? entry.tooShort
-						? t('settings.barcode_test_result_too_short', { defaultValue: 'too short' })
-						: t('settings.barcode_test_result_scan', { defaultValue: 'scan' })
-					: t('settings.barcode_test_result_typing', { defaultValue: 'typing' });
+						? t('settings.barcode_test_result_too_short')
+						: t('settings.barcode_test_result_scan')
+					: t('settings.barcode_test_result_typing');
 				const chipClass = entry.detectedAsScan
 					? entry.tooShort
 						? 'bg-warning/10 text-warning'

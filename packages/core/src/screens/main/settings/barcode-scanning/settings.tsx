@@ -141,12 +141,7 @@ export function BarcodeSettings() {
 					control={form.control}
 					name="barcode_scanning_sound_enabled"
 					render={({ field }) => (
-						<SettingsRow
-							inline
-							label={t('settings.barcode_scan_sound', {
-								defaultValue: 'Play a sound on scan',
-							})}
-						>
+						<SettingsRow inline label={t('settings.barcode_scan_sound')}>
 							<FormSwitch {...field} />
 						</SettingsRow>
 					)}

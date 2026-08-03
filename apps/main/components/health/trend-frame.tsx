@@ -49,10 +49,7 @@ export function TrendFrame({
 				) : (
 					<View className="flex-1 items-center justify-center">
 						<Text testID={`${testID}-waiting`} className="text-muted-foreground text-xs">
-							{t(
-								'health.performance.trend_not_enough_data',
-								'Not enough data yet — this trend fills in as the till runs'
-							)}
+							{t('health.performance.trend_not_enough_data')}
 						</Text>
 					</View>
 				)}

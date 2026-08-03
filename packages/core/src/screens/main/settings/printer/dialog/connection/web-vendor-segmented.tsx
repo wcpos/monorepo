@@ -28,7 +28,7 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 
 	return (
 		<VStack className="gap-1">
-			<Text className="text-sm font-medium">{t('settings.printer_vendor', 'Vendor')}</Text>
+			<Text className="text-sm font-medium">{t('settings.printer_vendor')}</Text>
 			<Tabs
 				value={normalizeVendor(vendor) ?? ''}
 				onValueChange={(next) => {

@@ -18,7 +18,7 @@ export default function HealthLayout() {
 		<NavigationAreaLayout
 			items={items}
 			indexHref="/health"
-			areaLabel={t('common.store_health', 'Store health')}
+			areaLabel={t('common.store_health')}
 			testID="health-navigation"
 		>
 			<Slot />

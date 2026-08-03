@@ -48,9 +48,7 @@ export function PrinterDialogLayout({
 			<DialogContent size="2xl">
 				<DialogHeader>
 					<DialogTitle>
-						{isEditing
-							? t('settings.edit_printer', 'Edit Printer')
-							: t('settings.add_printer', 'Add Printer')}
+						{isEditing ? t('settings.edit_printer') : t('settings.add_printer')}
 					</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
@@ -64,8 +62,8 @@ export function PrinterDialogLayout({
 								render={({ field }) => (
 									<FormInput
 										testID="add-printer-name-input"
-										label={t('settings.printer_name', 'Printer Name')}
-										placeholder={t('settings.printer_name_placeholder', 'e.g. Receipt Printer')}
+										label={t('settings.printer_name')}
+										placeholder={t('settings.printer_name_placeholder')}
 										{...field}
 									/>
 								)}

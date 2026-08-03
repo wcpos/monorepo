@@ -7,7 +7,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { UsbPrintersSection } from './usb-printers-section';
 
 jest.mock('../../../../../../contexts/translations', () => ({
-	useT: () => (key: string, fallback: string) => fallback,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../../../jest/translate')>(
+				'../../../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 jest.mock('@wcpos/components/text', () => ({

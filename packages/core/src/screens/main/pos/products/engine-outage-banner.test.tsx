@@ -30,9 +30,12 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnlineStatus }),
 }));
 
-jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (_key: string, options?: { defaultValue?: string }) => options?.defaultValue,
-}));
+jest.mock('../../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../../jest/translate')>(
+		'../../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 
 describe('EngineOutageBanner', () => {
 	beforeEach(() => {

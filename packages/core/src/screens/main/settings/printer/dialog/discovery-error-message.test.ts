@@ -1,7 +1,8 @@
 import { formatDiscoveryError } from './discovery-error-message';
 import { isWindowsPlatform } from './connection/is-windows';
+import { createTestT } from '../../../../../../jest/translate';
 
-const t = (_key: string, fallback: string) => fallback;
+const t = createTestT();
 
 describe('formatDiscoveryError', () => {
 	it('bt-none-found → mentions Bluetooth Classic', () => {

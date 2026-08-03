@@ -7,19 +7,19 @@ export function useSettingsNavigationItems(): NavigationAreaItem[] {
 	return [
 		{
 			href: '/settings/general',
-			label: t('settings.general', 'General'),
+			label: t('settings.general'),
 			icon: 'sliders',
 			testID: 'settings-nav-general',
 		},
 		{
 			href: '/settings/tax',
-			label: t('settings.tax', 'Tax'),
+			label: t('settings.tax'),
 			icon: 'percent',
 			testID: 'settings-nav-tax',
 		},
 		{
 			href: '/settings/printing',
-			label: t('settings.printing', 'Printing'),
+			label: t('settings.printing'),
 			icon: 'printer',
 			testID: 'settings-nav-printing',
 		},

@@ -125,9 +125,7 @@ function AppStack() {
 						},
 						wpUser: wpCredentials,
 						getHttpClient: createRefreshHttpClient,
-						sessionRenewedMessage: t('auth.session_renewed_automatically', {
-							defaultValue: 'Session renewed automatically',
-						}),
+						sessionRenewedMessage: t('auth.session_renewed_automatically'),
 						operationId: context?.operationId,
 					}),
 				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },

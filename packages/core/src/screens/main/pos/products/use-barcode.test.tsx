@@ -323,7 +323,7 @@ describe('useBarcode online escalation', () => {
 			expect(mockToastShow).toHaveBeenCalledWith({
 				id: expect.stringMatching(/^scan:\d+$/),
 				type: 'success',
-				title: 'pos_products.scan_added:{"defaultValue":"Added to cart"}',
+				title: 'pos_products.scan_added',
 				description: 'Keyboard',
 				duration: 2500,
 			});
@@ -358,9 +358,8 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).toHaveBeenLastCalledWith({
 			id: expect.stringMatching(/^scan:\d+$/),
 			type: 'warning',
-			title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
-			description:
-				'pos_products.scan_not_found_description:{"code":"ABC","defaultValue":"{code} — not in this store, locally or online"}',
+			title: 'pos_products.scan_not_found',
+			description: 'pos_products.scan_not_found_description:{"code":"ABC"}',
 			duration: 6000,
 		});
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
@@ -400,7 +399,7 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				type: 'warning',
-				title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+				title: 'pos_products.scan_not_found',
 			})
 		);
 	});
@@ -499,7 +498,7 @@ describe('useBarcode online escalation', () => {
 		expect(order).toEqual(['toast', 'fetch']);
 		expect(mockToastShow).toHaveBeenNthCalledWith(1, {
 			id: expect.stringMatching(/^scan:\d+$/),
-			title: 'common.barcode_searching_online:{"defaultValue":"Searching store…"}',
+			title: 'common.barcode_searching_online',
 			description: 'ABC',
 			duration: 30000,
 		});
@@ -508,7 +507,7 @@ describe('useBarcode online escalation', () => {
 		const [searching, terminal] = mockToastShow.mock.calls.map(([toast]) => toast);
 		expect(terminal).toMatchObject({
 			type: 'warning',
-			title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+			title: 'pos_products.scan_not_found',
 		});
 		expect(terminal.id).toBe(searching.id);
 		expect(mockBarcodeLogger.info).toHaveBeenCalledWith(
@@ -614,7 +613,7 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				type: 'warning',
-				title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+				title: 'pos_products.scan_not_found',
 			})
 		);
 	});
@@ -673,7 +672,7 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				type: 'warning',
-				title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+				title: 'pos_products.scan_not_found',
 			})
 		);
 	});
@@ -734,7 +733,7 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).toHaveBeenLastCalledWith({
 			id: expect.stringMatching(/^scan:\d+$/),
 			type: 'warning',
-			title: 'pos_products.scan_several_matches:{"defaultValue":"Several matches"}',
+			title: 'pos_products.scan_several_matches',
 			description: 'common.product_found_locally:{"count":3} — ABC',
 			duration: 6000,
 		});
@@ -794,7 +793,7 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				type: 'error',
-				title: 'pos_products.scan_lookup_failed:{"defaultValue":"Lookup failed"}',
+				title: 'pos_products.scan_lookup_failed',
 			})
 		);
 		for (const result of mockEngineRequire.mock.results) {
@@ -833,9 +832,8 @@ describe('useBarcode online escalation', () => {
 			expect(mockToastShow).toHaveBeenLastCalledWith({
 				id: expect.stringMatching(/^scan:\d+$/),
 				type: 'error',
-				title: 'pos_products.scan_lookup_failed:{"defaultValue":"Lookup failed"}',
-				description:
-					'pos_products.scan_lookup_failed_description:{"code":"ABC","defaultValue":"{code} — Store didn’t respond — check your connection and scan again"}',
+				title: 'pos_products.scan_lookup_failed',
+				description: 'pos_products.scan_lookup_failed_description:{"code":"ABC"}',
 				duration: 6000,
 			});
 			expect(mockSetSearch).toHaveBeenCalledWith('ABC');
@@ -849,13 +847,13 @@ describe('useBarcode online escalation', () => {
 			name: 'not found online',
 			fetch: () => Promise.resolve(onlineResponse()),
 			type: 'warning',
-			title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+			title: 'pos_products.scan_not_found',
 		},
 		{
 			name: 'online lookup failure',
 			fetch: () => Promise.reject(new Error('offline')),
 			type: 'error',
-			title: 'pos_products.scan_lookup_failed:{"defaultValue":"Lookup failed"}',
+			title: 'pos_products.scan_lookup_failed',
 		},
 	])('uses the distinct $name toast', async ({ fetch, type, title }) => {
 		mockFetcher.mockImplementation(fetch);
@@ -881,9 +879,8 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).toHaveBeenCalledWith({
 			id: expect.stringMatching(/^scan:\d+$/),
 			type: 'error',
-			title: 'pos_products.scan_unavailable:{"defaultValue":"Scanning unavailable"}',
-			description:
-				'pos_products.scan_unavailable_description:{"code":"ABC","defaultValue":"{code} — Sync engine is offline — see the banner above the products"}',
+			title: 'pos_products.scan_unavailable',
+			description: 'pos_products.scan_unavailable_description:{"code":"ABC"}',
 			duration: 6000,
 		});
 	});
@@ -901,7 +898,7 @@ describe('useBarcode online escalation', () => {
 			expect(mockToastShow).toHaveBeenLastCalledWith(
 				expect.objectContaining({
 					type: 'warning',
-					title: 'pos_products.scan_not_found:{"defaultValue":"Barcode not found"}',
+					title: 'pos_products.scan_not_found',
 				})
 			);
 		}
@@ -933,7 +930,7 @@ describe('useBarcode online escalation', () => {
 		expect(mockToastShow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'success',
-				title: 'pos_products.scan_added:{"defaultValue":"Added to cart"}',
+				title: 'pos_products.scan_added',
 			})
 		);
 	});
@@ -1005,10 +1002,7 @@ describe('useBarcode online escalation', () => {
 
 		expect(mockAddProduct).toHaveBeenCalledTimes(1);
 		const toasts = mockToastShow.mock.calls.map(([toast]) => toast);
-		const searching = toasts.find(
-			(toast) =>
-				toast.title === 'common.barcode_searching_online:{"defaultValue":"Searching store…"}'
-		);
+		const searching = toasts.find((toast) => toast.title === 'common.barcode_searching_online');
 		const failed = toasts.find((toast) => toast.type === 'error');
 		expect(searching).toBeDefined();
 		expect(failed).toMatchObject({

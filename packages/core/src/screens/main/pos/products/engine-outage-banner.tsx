@@ -33,16 +33,12 @@ export function EngineOutageBanner() {
 		>
 			<Text className="text-destructive flex-1 text-sm">
 				{isOffline
-					? t('pos_products.scan_outage_banner', {
-							defaultValue: 'Scanning unavailable — sync engine offline.',
-						})
-					: t('pos_products.scan_engine_unavailable_banner', {
-							defaultValue: 'Scanning unavailable — sync engine isn’t ready.',
-						})}
+					? t('pos_products.scan_outage_banner')
+					: t('pos_products.scan_engine_unavailable_banner')}
 			</Text>
 			<Pressable onPress={() => router.push('/health/database')}>
 				<Text className="text-destructive text-sm font-medium underline">
-					{t('pos_products.scan_outage_view_status', { defaultValue: 'View status' })}
+					{t('pos_products.scan_outage_view_status')}
 				</Text>
 			</Pressable>
 		</View>

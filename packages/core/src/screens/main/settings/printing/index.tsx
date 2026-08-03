@@ -89,9 +89,9 @@ export function PrintingSettings() {
 				profiles: printers,
 			});
 			if (matched) {
-				return `${t('common.auto', 'Auto')} — ${matched.name}`;
+				return `${t('common.auto')} — ${matched.name}`;
 			}
-			return `${t('common.auto', 'Auto')} — ${t('receipt.print_dialog', 'Print Dialog')}`;
+			return `${t('common.auto')} — ${t('receipt.print_dialog')}`;
 		},
 		[printers, t]
 	);
@@ -159,12 +159,12 @@ export function PrintingSettings() {
 					await printerService.testPrint(profile);
 				}
 				Toast.show({
-					title: t('settings.test_print_sent', 'Test print sent to %s').replace('%s', profile.name),
+					title: t('settings.test_print_sent').replace('%s', profile.name),
 					type: 'success',
 				});
 			} catch (err) {
 				Toast.show({
-					title: t('settings.test_print_failed', 'Test print failed'),
+					title: t('settings.test_print_failed'),
 					description: err instanceof Error ? err.message : String(err),
 					type: 'error',
 				});
@@ -199,8 +199,8 @@ export function PrintingSettings() {
 			{/* Printers section */}
 			<SettingsSection
 				first
-				title={t('settings.printers', 'Printers')}
-				description={t('settings.printers_description', 'Devices receipts can be sent to.')}
+				title={t('settings.printers')}
+				description={t('settings.printers_description')}
 			>
 				{!hasVisiblePrinterTargets ? (
 					<PrintersEmptyState onAddPrinter={openAddDialog} />
@@ -228,7 +228,7 @@ export function PrintingSettings() {
 								onPress={openAddDialog}
 								testID="printing-add-printer-button"
 							>
-								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
+								<Text>{t('settings.add_printer')}</Text>
 							</Button>
 						</HStack>
 					</>
@@ -237,16 +237,11 @@ export function PrintingSettings() {
 
 			{/* Receipt Templates section */}
 			<SettingsSection
-				title={t('receipt.receipt_templates', 'Receipt Templates')}
-				description={t(
-					'settings.templates_description',
-					'Choose which printer each template prints to.'
-				)}
+				title={t('receipt.receipt_templates')}
+				description={t('settings.templates_description')}
 			>
 				{templates.length === 0 ? (
-					<Text className="text-muted-foreground text-sm">
-						{t('settings.no_templates', 'No active templates found.')}
-					</Text>
+					<Text className="text-muted-foreground text-sm">{t('settings.no_templates')}</Text>
 				) : (
 					<View>
 						{templates.map((tmpl) => {
@@ -264,7 +259,7 @@ export function PrintingSettings() {
 							const selectedLabel = selectedPrinter
 								? selectedPrinter.name
 								: isUnavailableOverride
-									? t('settings.printer_unavailable', 'Unavailable printer')
+									? t('settings.printer_unavailable')
 									: autoLabel;
 
 							return (
