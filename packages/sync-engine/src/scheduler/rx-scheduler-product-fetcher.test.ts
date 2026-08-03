@@ -152,11 +152,9 @@ describe('createProductsSchedulerFetcher', () => {
 			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=2&orderby=id&order=desc&status=publish',
 			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=3&orderby=id&order=desc&status=publish',
 		]);
-		// The tail is the true tail (ids 1000-976), not a re-read of page 2's rows.
-		const upserted = repository.upsertMany.mock.calls[0][0];
-		expect(upserted).toHaveLength(25);
-		expect(upserted.map((doc: { wooProductId: number }) => doc.wooProductId)).toEqual(
-			Array.from({ length: 25 }, (_, i) => 1000 - i)
+		// The tail is the true tail (ids 1000-976, in order), not a re-read of page 2's rows.
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			Array.from({ length: 25 }, (_, i) => expect.objectContaining({ wooProductId: 1000 - i }))
 		);
 		// The leg filled its limit with no short page — the server may hold more
 		// matches, so the search coverage is honestly incomplete.
