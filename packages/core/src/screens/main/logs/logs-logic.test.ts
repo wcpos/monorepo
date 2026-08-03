@@ -274,13 +274,16 @@ describe('buildDebugInfo', () => {
 					category: 'wcpos.sync.engine',
 					message: 'push failed',
 					count: 3,
+					context: { type: 'push.error' },
 				}),
 			],
 		});
 		expect(text).toContain('App version: 1.10.0');
 		expect(text).toContain('Errors today: 2');
 		expect(text).toContain('products/812: invalid tax class (×3)');
-		expect(text).toContain('SYNC132 | sync.engine | push failed (×3)');
+		// The raw event code is exported alongside the message: support greps it,
+		// and the on-screen title is translated per till (#912).
+		expect(text).toContain('SYNC132 | sync.engine | push.error | push failed (×3)');
 		expect(text).toContain('1970-01-01T00:00:00.000Z (ok)');
 	});
 

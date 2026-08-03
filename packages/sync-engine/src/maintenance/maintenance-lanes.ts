@@ -240,9 +240,14 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 								const { summary, level } = bodyReport;
 								if (summary !== null) {
 									deps.diagnostics({
-										type: `${name}.tick`,
+										// The lane rides in `fields`, never in the event type: types are a
+										// closed, labelled set (each needs a merchant-readable title in the
+										// event registry), so a per-lane `${name}.tick` type would mint
+										// unlabelled types every time a lane is added.
+										type: 'maintenance.lane.tick',
 										level: level ?? 'info',
 										message: summary,
+										fields: { lane: name },
 									});
 								}
 							});
@@ -275,7 +280,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					}
 					const message = error instanceof Error ? error.message : String(error);
 					lastError = message;
-					deps.diagnostics({ type: `${name}.tick-error`, level: 'error', message });
+					deps.diagnostics({
+						type: 'maintenance.lane.error',
+						level: 'error',
+						message,
+						fields: { lane: name },
+					});
 					return { lane: name, status: 'error', error: message };
 				}
 			},
