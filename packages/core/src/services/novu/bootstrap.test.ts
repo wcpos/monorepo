@@ -11,6 +11,7 @@ import {
 import { syncNotificationsToRxDB } from './notification-sync';
 import { syncSubscriberToServer } from './subscriber';
 
+import type { NovuNotification } from './client';
 import type { NovuSubscriberMetadata } from './subscriber';
 
 const unsubscribeSpy = jest.fn();
@@ -179,6 +180,90 @@ describe('novu bootstrap', () => {
 		expect(mockedGetNovuClient).toHaveBeenCalledTimes(1);
 		expect(mockedSubscribe).toHaveBeenCalledTimes(1);
 		expect(unsubscribeSpy).not.toHaveBeenCalled();
+	});
+
+	it('serializes notification fetches so a stale snapshot cannot land last', async () => {
+		const pending: ((notifications: NovuNotification[]) => void)[] = [];
+		mockedFetch.mockImplementation(
+			() =>
+				new Promise<NovuNotification[]>((resolve) => {
+					pending.push(resolve);
+				})
+		);
+
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata(),
+			notificationsCollection: collection,
+		});
+		await flush();
+
+		expect(mockedFetch).toHaveBeenCalledTimes(1);
+
+		// Clear & Sync swaps the collection while the initial fetch is still open
+		const replacement = {} as NotificationCollection;
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata(),
+			notificationsCollection: replacement,
+		});
+		await flush();
+
+		// Queued behind the open fetch rather than racing it
+		expect(mockedFetch).toHaveBeenCalledTimes(1);
+
+		const older = [{ id: 'older' }] as unknown as NovuNotification[];
+		pending[0](older);
+		await flush();
+
+		expect(mockedFetch).toHaveBeenCalledTimes(2);
+		expect(mockedSyncToRxDB).toHaveBeenCalledTimes(1);
+		expect(mockedSyncToRxDB).toHaveBeenCalledWith(replacement, SUBSCRIBER_ID, older);
+
+		const newer = [{ id: 'newer' }] as unknown as NovuNotification[];
+		pending[1](newer);
+		await flush();
+
+		// The newer snapshot is written last, so it cannot be rolled back by the older one
+		expect(mockedSyncToRxDB).toHaveBeenCalledTimes(2);
+		expect(mockedSyncToRxDB).toHaveBeenLastCalledWith(replacement, SUBSCRIBER_ID, newer);
+	});
+
+	it('keeps isLoading set until the last queued fetch settles', async () => {
+		const pending: ((notifications: NovuNotification[]) => void)[] = [];
+		mockedFetch.mockImplementation(
+			() =>
+				new Promise<NovuNotification[]>((resolve) => {
+					pending.push(resolve);
+				})
+		);
+
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata(),
+			notificationsCollection: collection,
+		});
+		await flush();
+
+		startNovuBootstrap({
+			subscriberId: SUBSCRIBER_ID,
+			subscriberMetadata: makeMetadata(),
+			notificationsCollection: {} as NotificationCollection,
+		});
+		await flush();
+
+		expect(getNovuBootstrapStatus().isLoading).toBe(true);
+
+		pending[0]([]);
+		await flush();
+
+		// The first fetch is done but the re-hydration is not - the session is still loading
+		expect(getNovuBootstrapStatus().isLoading).toBe(true);
+
+		pending[1]([]);
+		await flush();
+
+		expect(getNovuBootstrapStatus().isLoading).toBe(false);
 	});
 
 	it('defers a repeat metadata sync until the socket readiness check resolves', async () => {

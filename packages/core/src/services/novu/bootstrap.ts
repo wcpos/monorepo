@@ -96,6 +96,21 @@ let readinessSettled = false;
  */
 let metadataSyncChain: Promise<void> = Promise.resolve();
 /**
+ * Tail of the notification fetch queue.
+ *
+ * Hydrations and manual refreshes run one at a time because each writes a *whole* snapshot with
+ * `upsert`. Left unsequenced, an older response landing last would roll back the read/seen state
+ * a newer snapshot had already applied.
+ */
+let notificationFetchChain: Promise<void> = Promise.resolve();
+/**
+ * Fetches queued or in flight for the running session.
+ *
+ * `isLoading` only drops when the last one settles - otherwise the first response to arrive
+ * would report the session as loaded while another fetch is still pending.
+ */
+let pendingNotificationFetches = 0;
+/**
  * Bumped on every teardown/restart so async continuations belonging to a previous session
  * cannot write to the state of the current one.
  */
@@ -170,30 +185,70 @@ async function performMetadataSync(gen: number): Promise<void> {
 	}
 }
 
-async function loadInitialNotifications(gen: number): Promise<void> {
+/**
+ * Queue a notification fetch behind any fetch already in flight.
+ *
+ * Both entry points (session hydration and manual refresh) go through here, so a collection
+ * swap during an open fetch - or a user-triggered refresh landing on top of one - can never
+ * apply snapshots out of order.
+ */
+function queueNotificationFetch(gen: number, source: 'initial' | 'refresh'): Promise<void> {
+	if (gen !== generation) return Promise.resolve();
+
+	pendingNotificationFetches += 1;
 	patchStatus({ isLoading: true });
+
+	const run = notificationFetchChain.then(() => fetchAndSyncNotifications(gen, source));
+	// The chain itself must never reject, or every later fetch would be skipped
+	notificationFetchChain = run.catch(() => undefined);
+
+	return run.finally(() => {
+		// A torn-down session's counter was already reset by `stopNovuBootstrap`
+		if (gen !== generation) return;
+
+		pendingNotificationFetches -= 1;
+		if (pendingNotificationFetches === 0) {
+			patchStatus({ isLoading: false });
+		}
+	});
+}
+
+/**
+ * Fetch the current notification snapshot and write it into the session's collection.
+ *
+ * The collection and subscriber are read when this actually runs rather than when it was
+ * queued, so a fetch that waited behind an earlier one always writes into the current
+ * collection. Callers must go through `queueNotificationFetch`.
+ */
+async function fetchAndSyncNotifications(
+	gen: number,
+	source: 'initial' | 'refresh'
+): Promise<void> {
+	if (gen !== generation) return;
+
 	try {
 		const notifications = await fetchNotifications();
 		if (gen !== generation) return;
 
-		novuLogger.info('Novu: Initial notifications loaded', {
-			context: { count: notifications.length },
-		});
-
 		const collection = activeCollection;
 		const subscriberId = activeSubscriberId;
-		if (collection && subscriberId) {
-			await syncNotificationsToRxDB(collection, subscriberId, notifications);
-		}
+		if (!collection || !subscriberId) return;
+
+		await syncNotificationsToRxDB(collection, subscriberId, notifications);
+		if (gen !== generation) return;
+
+		novuLogger.info(
+			source === 'initial' ? 'Novu: Initial notifications loaded' : 'Novu: Notifications refreshed',
+			{ context: { count: notifications.length } }
+		);
 	} catch (error) {
 		if (gen !== generation) return;
-		novuLogger.error('Novu: Failed to load initial notifications', {
-			context: { error: error instanceof Error ? error.message : String(error) },
-		});
-	} finally {
-		if (gen === generation) {
-			patchStatus({ isLoading: false });
-		}
+		novuLogger.error(
+			source === 'initial'
+				? 'Novu: Failed to load initial notifications'
+				: 'Novu: Failed to refresh notifications',
+			{ context: { error: error instanceof Error ? error.message : String(error) } }
+		);
 	}
 }
 
@@ -231,7 +286,7 @@ export function startNovuBootstrap({
 			// empty, so re-hydrate it instead of leaving history and badge counts blank until the
 			// next WebSocket event or manual refresh.
 			novuLogger.info('Novu: Notifications collection replaced, re-hydrating');
-			void loadInitialNotifications(generation);
+			void queueNotificationFetch(generation, 'initial');
 		}
 
 		return;
@@ -312,7 +367,7 @@ export function startNovuBootstrap({
 		await syncMetadataIfChanged(gen);
 	})();
 
-	void loadInitialNotifications(gen);
+	void queueNotificationFetch(gen, 'initial');
 }
 
 /**
@@ -340,6 +395,13 @@ export function stopNovuBootstrap(): void {
 	activeCollection = null;
 	syncedMetadataKey = null;
 	readinessSettled = false;
+	pendingNotificationFetches = 0;
+
+	// Don't make the next session queue behind a dead one's in-flight request. Continuations from
+	// the torn-down session already bail on the generation check, so dropping the tails loses
+	// nothing.
+	metadataSyncChain = Promise.resolve();
+	notificationFetchChain = Promise.resolve();
 
 	statusSubject.next(IDLE_STATUS);
 }
@@ -348,29 +410,10 @@ export function stopNovuBootstrap(): void {
  * Re-fetch notifications from Novu for the running session.
  */
 export async function refreshNovuNotifications(): Promise<void> {
-	const gen = generation;
-	const subscriberId = activeSubscriberId;
-	const collection = activeCollection;
-
-	if (!subscriberId || !collection) {
+	if (!activeSubscriberId || !activeCollection) {
 		novuLogger.warn('Novu: Not configured, skipping refresh');
 		return;
 	}
 
-	patchStatus({ isLoading: true });
-	try {
-		const notifications = await fetchNotifications();
-		if (gen !== generation) return;
-
-		await syncNotificationsToRxDB(collection, subscriberId, notifications);
-		novuLogger.info('Novu: Notifications refreshed', {
-			context: { count: notifications.length },
-		});
-	} catch (error) {
-		novuLogger.error('Novu: Failed to refresh notifications', { context: { error } });
-	} finally {
-		if (gen === generation) {
-			patchStatus({ isLoading: false });
-		}
-	}
+	await queueNotificationFetch(generation, 'refresh');
 }
