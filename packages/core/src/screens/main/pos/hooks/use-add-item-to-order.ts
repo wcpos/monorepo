@@ -65,20 +65,26 @@ export const useAddItemToOrder = () => {
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 
 	/**
-	 * Build the cart lines for an add.
+	 * Build the cart lines for an add, folding a repeat add into the line it
+	 * duplicates.
 	 *
-	 * `mergeRepeatAdd` is set when the caller's own duplicate check could not run
-	 * (see `addItemToOrder`): the repeat add then has to be folded into the
-	 * resident line here, otherwise the same product splits into a second line and
-	 * — because callers only increment when EXACTLY one line matches — never
+	 * useAddProduct/useAddVariation increment an existing line themselves, but their
+	 * duplicate check reads `currentOrder` OUTSIDE this hook's mutation queue, so it
+	 * can miss a match two ways: against a temporary order it is skipped entirely,
+	 * and against a persisted one it reads the cart before an overlapping add has
+	 * been written. Either way the repeat add arrives here as an append, and because
+	 * those callers only increment when EXACTLY one line matches, a split cart never
 	 * merges again.
+	 *
+	 * Merging only ever fires on that exactly-one-match case — the increment the
+	 * caller would have made had it seen the current cart.
 	 */
 	const buildCartLines = React.useCallback(
-		(existing: CartLine[], type: CartLineType, data: CartLine, mergeRepeatAdd: boolean) => {
+		(existing: CartLine[], type: CartLineType, data: CartLine) => {
 			const lineItem = data as LineItem;
 			// A miscellaneous product (product_id 0) is always its own line, matching
 			// the duplicate check in useAddProduct/useAddVariation.
-			if (!mergeRepeatAdd || type !== 'line_items' || !lineItem.product_id) {
+			if (type !== 'line_items' || !lineItem.product_id) {
 				return [...existing, data];
 			}
 			const matches = findByProductVariationID(
@@ -107,7 +113,7 @@ export const useAddItemToOrder = () => {
 			order: import('@wcpos/database').OrderDocument,
 			type: CartLineType,
 			data: CartLine,
-			options?: { orphanedSkeleton?: EngineResident | null; mergeRepeatAdd?: boolean }
+			options?: { orphanedSkeleton?: EngineResident | null }
 		) => {
 			const date_created_gmt = convertLocalDateToUTCString(new Date());
 
@@ -128,8 +134,7 @@ export const useAddItemToOrder = () => {
 						[type]: buildCartLines(
 							(priorPayload[type] as CartLine[] | undefined) ?? [],
 							type,
-							data,
-							options?.mergeRepeatAdd ?? false
+							data
 						),
 					},
 				});
@@ -211,11 +216,6 @@ export const useAddItemToOrder = () => {
 				const temporaryOrder = order.getLatest();
 				let latest = context.order?.getLatest() ?? temporaryOrder;
 				let isNew = Boolean((latest as unknown as { isNew?: boolean }).isNew);
-				// useAddProduct/useAddVariation only merge a repeat add into an existing
-				// line while their currentOrder is persisted; against a temporary order
-				// they skip that check entirely. If this add then lands on the order
-				// resolved below, the merge has to happen here instead.
-				const mergeRepeatAdd = Boolean((temporaryOrder as unknown as { isNew?: boolean }).isNew);
 				let orphanedSkeleton: EngineResident | null = null;
 				if (isNew && !context.order) {
 					const resident = await findEngineResident(manager, 'orders', recordId);
@@ -255,7 +255,6 @@ export const useAddItemToOrder = () => {
 				if (isNew) {
 					const savedOrder = await saveNewOrder(temporaryOrder, type, data, {
 						orphanedSkeleton,
-						mergeRepeatAdd,
 					});
 					context.order = savedOrder;
 					result = savedOrder;
@@ -263,12 +262,7 @@ export const useAddItemToOrder = () => {
 					result = await localPatch({
 						document: latest,
 						data: {
-							[type]: buildCartLines(
-								(latest[type] as CartLine[] | undefined) ?? [],
-								type,
-								data,
-								mergeRepeatAdd
-							),
+							[type]: buildCartLines((latest[type] as CartLine[] | undefined) ?? [], type, data),
 						} as never,
 					});
 				}

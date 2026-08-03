@@ -225,6 +225,7 @@ describe('useAddItemToOrder', () => {
 
 	it('reuses an existing engine order when the current order is a stale temporary order', async () => {
 		order.isNew = true;
+		mockStockGuardEnabled = true;
 		const resident = {
 			...CREATE_QUEUED,
 			payload: { uuid: 'order-uuid', line_items: [{ product_id: 1 }] },
@@ -264,6 +265,10 @@ describe('useAddItemToOrder', () => {
 			document: savedOrder,
 			data: { line_items: [{ product_id: 1 }, expect.objectContaining({ product_id: 2 })] },
 		});
+		// Stock is validated on both adds, and the second one sees the recovered
+		// resident's line — the lookup runs before the stock check, not after.
+		expect(mockCheckCartStock).toHaveBeenCalledTimes(2);
+		expect(mockCheckCartStock.mock.calls.map(([args]) => args.lineItems.length)).toEqual([0, 1]);
 	});
 
 	it('reuses an acked order that carries a server id but no revision', async () => {
@@ -394,6 +399,51 @@ describe('useAddItemToOrder', () => {
 		expect(patched).toHaveLength(1);
 		expect(patched[0]).toMatchObject({ product_id: 1, quantity: 2, total: '10' });
 		expect(patched[0].meta_data).toEqual([{ key: '_woocommerce_pos_uuid', value: 'line-1' }]);
+	});
+
+	it('merges two overlapping scans of one product on a persisted order', async () => {
+		// No temporary order here: the cart is already persisted, so useAddProduct DOES
+		// run its duplicate check — but both scans run it before either patch lands, so
+		// both see an empty cart and arrive as appends.
+		let releaseFirst!: () => void;
+		const firstPatchMayFinish = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		let calls = 0;
+		mockLocalPatch.mockImplementation(
+			async ({ data }: { data: { line_items: Record<string, unknown>[] } }) => {
+				calls += 1;
+				if (calls === 1) await firstPatchMayFinish;
+				order.line_items = data.line_items;
+				return { changes: data, document: order };
+			}
+		);
+
+		const { result: firstHook } = renderHook(() => useAddItemToOrder());
+		const { result: secondHook } = renderHook(() => useAddItemToOrder());
+		let firstScan!: Promise<unknown>;
+		let secondScan!: Promise<unknown>;
+		act(() => {
+			firstScan = firstHook.current.addItemToOrder('line_items', {
+				product_id: 1,
+				quantity: 1,
+				price: 5,
+				meta_data: [],
+			} as never);
+			secondScan = secondHook.current.addItemToOrder('line_items', {
+				product_id: 1,
+				quantity: 1,
+				price: 5,
+				meta_data: [],
+			} as never);
+		});
+		await Promise.resolve();
+		releaseFirst();
+		await act(async () => Promise.all([firstScan, secondScan]));
+
+		expect(mockLocalPatch).toHaveBeenCalledTimes(2);
+		expect(order.line_items).toHaveLength(1);
+		expect(order.line_items[0]).toMatchObject({ product_id: 1, quantity: 2, total: '10' });
 	});
 
 	it('merges a repeat scan into its own variation line, not a sibling variation', async () => {
