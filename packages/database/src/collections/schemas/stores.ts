@@ -190,7 +190,8 @@ export const storesLiteral = {
 			type: 'number',
 			minimum: 5000,
 			maximum: 300000,
-			default: 10000,
+			// Balanced (#908 re-tune): 10 s was over-ambitious for the average server.
+			default: 60000,
 		},
 		sync_pull_batch_size: {
 			title: 'Records per sync request',

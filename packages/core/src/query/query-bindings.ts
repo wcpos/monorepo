@@ -24,6 +24,7 @@ import {
 	registerActiveBinding,
 	type RequirementHandle,
 	requirementsForQuery,
+	type RequirementSortPart,
 	type RxdbSyncEngine,
 	type SyncCollectionName,
 	useLocalQuery,
@@ -192,6 +193,9 @@ function useDemand(
 	}, [active$, searchActive$]);
 	const selector = selectorWithSearch(descriptor);
 	const selectorKey = JSON.stringify(selector);
+	// The products browse window travels with the grid's sort (#909), so the sort is part
+	// of what the demand effect depends on — a serialized key keeps the array identity out.
+	const sortKey = JSON.stringify(descriptor.sort ?? []);
 
 	React.useEffect(() => {
 		generation.current += 1;
@@ -207,6 +211,7 @@ function useDemand(
 			collectionName: descriptor.collection,
 			selector: stableSelector,
 			limit: descriptor.limit,
+			sort: JSON.parse(sortKey) as RequirementSortPart[],
 		};
 		const unregister = registerActiveBinding(engine, binding);
 		const requirements = requirementsForQuery(binding);
@@ -263,6 +268,7 @@ function useDemand(
 		id,
 		publish,
 		selectorKey,
+		sortKey,
 	]);
 
 	React.useEffect(
@@ -280,6 +286,7 @@ function useDemand(
 			collectionName: descriptor.collection,
 			selector: selectorWithSearch(descriptor),
 			limit: descriptor.limit,
+			sort: descriptor.sort as RequirementSortPart[] | undefined,
 			priority: 1000,
 			forceRefresh: true,
 		});
@@ -326,11 +333,13 @@ function coverageQueryKey(id: string, descriptor: EngineQueryDescriptor): string
 		collectionName: descriptor.collection,
 		selector,
 		limit: descriptor.limit,
+		sort: descriptor.sort as RequirementSortPart[] | undefined,
 	}).find((candidate) => candidate.kind === 'query' && candidate.queryKey);
+	// The products browse-window key used to be hardcoded here at limit=100 regardless of
+	// the descriptor (#909): the coverage lane the grid reported against was never the one
+	// its own limit/sort demanded. It now comes from requirementsForQuery like every other
+	// query key, so the projected total tracks the window the grid actually asked for.
 	if (requirement?.queryKey) return requirement.queryKey;
-	if (descriptor.collection === 'products' && Object.keys(selector).length === 0) {
-		return 'products:browse-window:limit=100';
-	}
 	if (Object.keys(selector).length > 0) return null;
 	return COMPLETE_COLLECTION_LANES[descriptor.collection] ?? null;
 }

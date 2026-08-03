@@ -150,7 +150,10 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 		},
 		10(oldDoc: any) {
 			// #559 knob contract: per-store sync tuning, Balanced defaults.
-			oldDoc.sync_check_interval_ms = 10_000;
+			// Amended pre-release by the #908 re-tune (Balanced = 60 s / 50): this
+			// migration has never shipped, so it writes the final default directly
+			// instead of stacking a corrective migration on an unreleased one.
+			oldDoc.sync_check_interval_ms = 60_000;
 			oldDoc.sync_pull_batch_size = 50;
 			return oldDoc;
 		},

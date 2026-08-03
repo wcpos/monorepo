@@ -13,9 +13,15 @@
  *  - **order query descriptors** (unbounded orders browse) →
  *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
  *    `orders:browser:status=…:search=…:limit=…` descriptor the engine parses.
+ *  - **the products browse window** (UNFILTERED products browse — ADR 0027 §2, #909) →
+ *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
+ *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor. It carries the
+ *    grid's own limit and sort, so infinite scroll fetches the next window and a sort
+ *    change re-seeds a server-sorted one.
  *
- * UNBOUNDED filtered browse over every other collection creates NO remote demand
- * (local residents only) — that is the accepted ADR 0027 design, not a gap. The
+ * FILTERED browse over products, and unbounded browse over every other collection,
+ * creates NO remote demand (local residents only) — that is the accepted ADR 0027
+ * design, not a gap. The
  * `greedy`/`endpoint` keys no longer create remote work; they are accepted and
  * ignored (deleted at convergence).
  *
@@ -97,11 +103,70 @@ function orderBrowseDescriptor(
 	return `orders:browser:status=${statusValue}:search=${searchValue}:limit=${boundedLimit}`;
 }
 
+/**
+ * The products browse-window grammar (ADR 0027 §2), the products mirror of
+ * `orderBrowseDescriptor` above. The engine owns the authoritative parser
+ * (`parseProductBrowseWindowDescriptor`); this builds the same string, as the orders
+ * descriptor already does, rather than widening the engine's two-door surface.
+ */
+const PRODUCT_BROWSE_WINDOW_STEP = 100;
+const PRODUCT_BROWSE_WINDOW_MAX_LIMIT = 1_000;
+const PRODUCT_BROWSE_DEFAULT_ORDERBY = 'menu_order';
+const PRODUCT_BROWSE_DEFAULT_ORDER = 'asc';
+
+/**
+ * UI sort field → WC core products `orderby`. Fields NOT in this map (sku, barcode,
+ * stock, regular/sale price) have no Woo REST equivalent: those browses fall back to the
+ * DEFAULT window rather than pretending a server-sorted slice exists.
+ */
+const PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD: Record<string, string> = {
+	menu_order: 'menu_order',
+	id: 'id',
+	name: 'title',
+	price: 'price',
+	sortable_price: 'price',
+	total_sales: 'popularity',
+	date_created_gmt: 'date',
+	date_modified_gmt: 'modified',
+};
+
+export type RequirementSortPart = Record<string, 'asc' | 'desc'>;
+
+function productBrowseWindowDescriptor(
+	limit: number | undefined,
+	sort: readonly RequirementSortPart[] | undefined
+): string {
+	// The grid extends its limit 10 rows at a time; quantizing to the window step keeps
+	// the coverage-lane space small (limit=100, 200, 300 …) instead of one lane per tick.
+	const requested =
+		typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+			? limit
+			: PRODUCT_BROWSE_WINDOW_STEP;
+	const boundedLimit = Math.min(
+		Math.ceil(requested / PRODUCT_BROWSE_WINDOW_STEP) * PRODUCT_BROWSE_WINDOW_STEP,
+		PRODUCT_BROWSE_WINDOW_MAX_LIMIT
+	);
+	const [primary] = sort ?? [];
+	const [field, direction] = Object.entries(primary ?? {})[0] ?? [];
+	const orderby = field ? PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD[field] : undefined;
+	const order = direction === 'desc' ? 'desc' : 'asc';
+	const base = `products:browse-window:limit=${boundedLimit}`;
+	if (
+		orderby === undefined ||
+		(orderby === PRODUCT_BROWSE_DEFAULT_ORDERBY && order === PRODUCT_BROWSE_DEFAULT_ORDER)
+	) {
+		return base;
+	}
+	return `${base}:orderby=${orderby}:order=${order}`;
+}
+
 export interface RequirementInput {
 	id: string;
 	collectionName: string;
 	selector: Record<string, unknown> | undefined;
 	limit: number | undefined;
+	/** The query's sort, primary part first. Only the products browse window reads it. */
+	sort?: readonly RequirementSortPart[];
 	priority?: number;
 	forceRefresh?: boolean;
 }
@@ -154,6 +219,24 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 				collection: 'orders',
 				kind: 'query',
 				queryKey: orderBrowseDescriptor(selector, limit),
+				...(input.priority !== undefined ? { priority: input.priority } : {}),
+				...(input.forceRefresh ? { forceRefresh: true } : {}),
+			},
+		];
+	}
+
+	// UNFILTERED products browse → the browse window (ADR 0027 §2, #909). The window
+	// carries the grid's own limit and sort, so scrolling past the cold seed fetches the
+	// next rows and a sort change re-seeds a SERVER-sorted window instead of locally
+	// re-sorting the wrong slice of the catalog. Filtered browses are untouched: they
+	// still ride local residents only.
+	if (engineCollection === 'products' && Object.keys(selector ?? {}).length === 0) {
+		return [
+			{
+				id: `${input.id}:products-browse-window`,
+				collection: 'products',
+				kind: 'query',
+				queryKey: productBrowseWindowDescriptor(limit, input.sort),
 				...(input.priority !== undefined ? { priority: input.priority } : {}),
 				...(input.forceRefresh ? { forceRefresh: true } : {}),
 			},

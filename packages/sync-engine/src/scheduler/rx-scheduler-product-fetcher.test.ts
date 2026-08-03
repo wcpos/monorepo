@@ -6,7 +6,7 @@ import type { ProductDocument } from '@wcpos/sync-core';
 import {
 	coverageRecordId,
 	createProductsSchedulerFetcher,
-	PRODUCT_BROWSE_WINDOW_MAX_PAGES,
+	PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES,
 } from './rx-scheduler-product-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -41,7 +41,7 @@ const uuidFor = (n: number): string => `00000000-0000-4000-8000-${String(n).padS
 const posMeta = (n: number) => [{ key: '_woocommerce_pos_uuid', value: uuidFor(n) }];
 
 describe('createProductsSchedulerFetcher', () => {
-	it('keeps the task limit for non-paginated product search requests', async () => {
+	it('walks each product search leg in Performance-dial pages, not one task-limit request', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -65,13 +65,15 @@ describe('createProductsSchedulerFetcher', () => {
 
 		const result = await schedulerFetcher(productTask());
 
+		// #908: per_page follows the dial (10), NOT the task limit (25). The short page
+		// exhausts each leg, so it is still two requests.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			{
@@ -109,7 +111,62 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
-	it('keeps the browse-window limit for its single page request', async () => {
+	it('keeps a constant per_page across search pages when the limit is not dial-divisible', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		// 30+ matches on the search leg; the sku leg is empty. Woo's offset is
+		// (page-1)*per_page, so shrinking the final page to the 5 remaining rows
+		// would re-read rows 11-15 and drop the true tail (greptile/codex P1).
+		const wooProduct = (id: number) => ({
+			id,
+			name: `Widget ${id}`,
+			date_modified_gmt: '2026-05-20T10:10:00',
+			meta_data: posMeta(id),
+		});
+		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=')) return response([]);
+			const params = new URL(url).searchParams;
+			const perPage = Number(params.get('per_page'));
+			const page = Number(params.get('page'));
+			const first = 1000 - (page - 1) * perPage;
+			return response(Array.from({ length: perPage }, (_, i) => wooProduct(first - i)));
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 10,
+		});
+
+		const result = await schedulerFetcher(productTask());
+
+		// limit=25 at dial=10: three FULL pages (per_page=10 on every request,
+		// including the last), trimmed to 25 locally — never a shrunk page 3.
+		const searchCalls = fetcher.mock.calls
+			.map(([url]) => url)
+			.filter((url: string) => url.includes('search='));
+		expect(searchCalls).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=1&orderby=id&order=desc&status=publish',
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=2&orderby=id&order=desc&status=publish',
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=10&page=3&orderby=id&order=desc&status=publish',
+		]);
+		// The tail is the true tail (ids 1000-976, in order), not a re-read of page 2's rows.
+		expect(repository.upsertMany).toHaveBeenCalledWith(
+			Array.from({ length: 25 }, (_, i) => expect.objectContaining({ wooProductId: 1000 - i }))
+		);
+		// The leg filled its limit with no short page — the server may hold more
+		// matches, so the search coverage is honestly incomplete.
+		expect(result).toEqual({
+			taskId: 'products:search:keyboard:windowed',
+			documentCount: 25,
+			requestCount: 4,
+			completed: false,
+		});
+	});
+
+	it('requests the browse window at the dial page size, not the window size', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -144,10 +201,11 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
-		// A short first page exhausts the servable set without a boundary-page walk.
+		// A short first page exhausts the servable set without walking the rest of the
+		// window, and per_page is the dial (10) even though the WINDOW is 100 rows (#908).
 		expect(fetcher).toHaveBeenCalledTimes(1);
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=menu_order&order=asc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=10&orderby=menu_order&order=asc&status=publish&page=1'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ id: uuidFor(321), wooProductId: 321 }),
@@ -235,15 +293,15 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=1&orderby=menu_order&order=asc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=1'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=2&orderby=menu_order&order=asc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=2'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			3,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&page=3&orderby=menu_order&order=asc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=3'
 		);
 		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
 			{ wooProductId: number }[],
@@ -267,7 +325,8 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('bounds an all-tied browse window to the best rows from the scanned pages', async () => {
-		const maxPages = PRODUCT_BROWSE_WINDOW_MAX_PAGES;
+		// One page fills the 100-row window, then the tiebreak budget scans the rest.
+		const maxPages = PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES + 1;
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -324,6 +383,189 @@ describe('createProductsSchedulerFetcher', () => {
 			requestCount: maxPages,
 			completed: true,
 		});
+	});
+
+	// -------------------------------------------------------------------------
+	// #908 dial compliance / #909 window growth + sort
+	// -------------------------------------------------------------------------
+
+	/** A servable catalog of `count` products, page-served in the requested order. */
+	function catalogServer(
+		products: { id: number; menu_order?: number; price?: string }[],
+		perPageSeen: number[]
+	) {
+		return vi.fn(async (request: RequestInfo | URL) => {
+			const params = new URL(String(request)).searchParams;
+			const perPage = Number(params.get('per_page'));
+			const page = Number(params.get('page'));
+			perPageSeen.push(perPage);
+			const start = (page - 1) * perPage;
+			const slice = products.slice(start, start + perPage).map((product) => ({
+				...product,
+				date_modified_gmt: '2026-05-20T10:10:00',
+				meta_data: posMeta(product.id),
+			}));
+			return response(slice, Math.ceil(products.length / perPage));
+		});
+	}
+
+	const browseTask = (overrides: Partial<FetchTask> = {}): FetchTask =>
+		productTask({
+			id: 'products:browse-window:limit=100:windowed',
+			requirementId: 'products.browse-window.limit.100',
+			queryKey: 'products:browse-window:limit=100',
+			limit: 100,
+			...overrides,
+		});
+
+	it('walks the 100-row window in four requests at pullBatchSize=25, never exceeding the dial', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		// Distinct menu_order values, so the window fills with no tiebreak walk at all.
+		const products = Array.from({ length: 400 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const perPageSeen: number[] = [];
+		const fetcher = catalogServer(products, perPageSeen);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 25,
+		});
+
+		const result = await schedulerFetcher(browseTask());
+
+		// 4 pages fill the 100-row window; the 5th is the boundary probe — the row at the
+		// window edge shares its menu_order with the last row fetched, so the fetcher has
+		// to look one page further to know no lower id belongs inside the window. Under the
+		// old code that probe cost a 100-record request; now it costs a dial-sized one.
+		expect(result.requestCount).toBe(5);
+		// THE #908 INVARIANT: no request ever asks for more than the dial allows.
+		expect(perPageSeen).toEqual([25, 25, 25, 25, 25]);
+		expect(Math.max(...perPageSeen)).toBeLessThanOrEqual(25);
+		// Four dial-sized pages still seed the FULL 100-row window.
+		expect(result.documentCount).toBe(100);
+		const upserted = repository.upsertMany.mock.calls as unknown as [{ wooProductId: number }[]][];
+		expect(upserted[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+			Array.from({ length: 100 }, (_, index) => index + 1)
+		);
+	});
+
+	it('grows past the seed: a 300-row window walks 6 pages at pullBatchSize=50', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 500 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const perPageSeen: number[] = [];
+		const fetcher = catalogServer(products, perPageSeen);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 50,
+		});
+
+		const result = await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		// Windows past a single Woo page are exactly what makes infinite scroll work (#909):
+		// 6 pages fill the 300-row window, plus the one boundary probe.
+		expect(result.requestCount).toBe(7);
+		expect(perPageSeen).toEqual([50, 50, 50, 50, 50, 50, 50]);
+		expect(result.documentCount).toBe(300);
+	});
+
+	it('resolves the id tiebreak across a page seam when the dial splits the window', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		// Every product ties on menu_order=0 and the server hands them back id-DESC, so the
+		// correct window (menu_order asc, id asc) is only reachable by walking past the seam.
+		const products = Array.from({ length: 60 }, (_, index) => ({
+			id: 60 - index,
+			menu_order: 0,
+		}));
+		const perPageSeen: number[] = [];
+		const fetcher = catalogServer(products, perPageSeen);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 20,
+		});
+
+		const result = await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=40:windowed',
+				queryKey: 'products:browse-window:limit=40',
+				limit: 40,
+			})
+		);
+
+		// 2 pages fill the 40-row window; the boundary is still menu_order=0, so the walk
+		// continues until the server runs short — and the window holds the LOWEST 40 ids.
+		expect(perPageSeen.every((perPage) => perPage <= 20)).toBe(true);
+		expect(result.requestCount).toBe(3);
+		const upserted = repository.upsertMany.mock.calls as unknown as [{ wooProductId: number }[]][];
+		expect(upserted[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+			Array.from({ length: 40 }, (_, index) => index + 1)
+		);
+	});
+
+	it('seeds a server-sorted window for a non-default sort instead of re-sorting locally', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		// Server order IS the answer for price desc — highest price first.
+		const products = Array.from({ length: 40 }, (_, index) => ({
+			id: 900 - index,
+			menu_order: 0,
+			price: String(1_000 - index),
+		}));
+		const perPageSeen: number[] = [];
+		const fetcher = catalogServer(products, perPageSeen);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 20,
+		});
+
+		const result = await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=40:orderby=price:order=desc:windowed',
+				queryKey: 'products:browse-window:limit=40:orderby=price:order=desc',
+				limit: 40,
+			})
+		);
+
+		expect(fetcher).toHaveBeenNthCalledWith(
+			1,
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=20&orderby=price&order=desc&status=publish&page=1'
+		);
+		// No menu_order/id tiebreak walk on a non-default sort: the server's own order is
+		// authoritative, so it is exactly ceil(40 / 20) requests.
+		expect(result.requestCount).toBe(2);
+		const upserted = repository.upsertMany.mock.calls as unknown as [{ wooProductId: number }[]][];
+		// Server order preserved — NOT re-sorted into menu_order/id order locally.
+		expect(upserted[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+			Array.from({ length: 40 }, (_, index) => 900 - index)
+		);
 	});
 
 	it('populates the Leg-3 manifest from _rxdb_digest and strips it from the stored payload', async () => {
