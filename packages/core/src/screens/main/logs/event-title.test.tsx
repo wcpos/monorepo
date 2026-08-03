@@ -10,12 +10,11 @@ import { useEventTitle } from './event-title';
 import type { LogRow } from './logs-logic';
 
 /**
- * Stand-in for the till's current locale: every translated string comes back
- * prefixed, so a title that went through `t()` is distinguishable from one that
- * leaked a persisted English string or a raw event code.
+ * Stand-in for the till's current locale: a translated string comes back marked
+ * with its key, so a title that went through `t()` is distinguishable from one
+ * that leaked a persisted English string or a raw event code.
  */
-const translated = (key: string, options: { defaultValue: string }) =>
-	`[es] ${key}::${options.defaultValue}`;
+const translated = (key: string) => `[es] ${key}`;
 
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => translated,
@@ -33,9 +32,8 @@ describe('useEventTitle', () => {
 	it('translates a registered event code at render time', () => {
 		const title = titleFor(row({ context: { type: 'queue.scheduler.drain' } }));
 
-		expect(title).toBe(
-			`[es] health.logs.event.queue_scheduler_drain::${EVENT_LABELS['queue.scheduler.drain'].label}`
-		);
+		expect(title).toBe('[es] health.logs.event.queue_scheduler_drain');
+		expect(title).not.toContain(EVENT_LABELS['queue.scheduler.drain'].label);
 	});
 
 	it('never shows a raw dotted code as the title of a registered event', () => {
@@ -52,9 +50,7 @@ describe('useEventTitle', () => {
 			})
 		);
 
-		expect(title).toBe(
-			`[es] health.logs.event.signal_cycle::${EVENT_LABELS['signal.cycle'].label}`
-		);
+		expect(title).toBe('[es] health.logs.event.signal_cycle');
 	});
 
 	it('falls back to the persisted message for an event type it does not know', () => {

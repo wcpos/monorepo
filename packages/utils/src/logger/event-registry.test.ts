@@ -17,6 +17,10 @@ const repoRoot = path.resolve(__dirname, '../../../..');
 const generator = path.join(repoRoot, 'scripts/generate-event-labels.mjs');
 const catalogueDirectory = path.join(__dirname, 'generated');
 const titlesDirectory = path.join(repoRoot, 'packages/core/src/screens/main/logs/generated');
+const localePath = path.join(
+	repoRoot,
+	'packages/core/src/contexts/translations/locales/en/core.json'
+);
 
 function runGenerator(outputDirectory: string, registryPath?: string): void {
 	const args = [generator, '--output-dir', outputDirectory];
@@ -82,6 +86,11 @@ describe('event registry', () => {
 			expect(readFileSync(path.join(outputDirectory, 'event-titles.generated.ts'), 'utf8')).toBe(
 				readFileSync(path.join(titlesDirectory, 'event-titles.generated.ts'), 'utf8')
 			);
+			// The generator owns the health.logs.event.* block of the English
+			// catalogue, so a label edited in the registry cannot go un-shipped.
+			expect(readFileSync(path.join(outputDirectory, 'core.json'), 'utf8')).toBe(
+				readFileSync(localePath, 'utf8')
+			);
 		} finally {
 			rmSync(outputDirectory, { recursive: true, force: true });
 		}
@@ -105,18 +114,20 @@ describe('event registry', () => {
 		for (const entry of registry) {
 			const key = `health.logs.event.${entry.type.replace(/[.-]/g, '_')}`;
 			expect(source).toContain(`case '${entry.type}':`);
-			expect(source).toContain(`t('${key}'`);
+			expect(source).toContain(`t('${key}');`);
 		}
+		// No `defaultValue` fallbacks: English is bundled and is the fallback
+		// language, so a copy here would be a third, drift-prone one.
+		expect(source).not.toContain('defaultValue:');
 	});
 
-	it('ships an English source string for every label key', () => {
-		const locale = JSON.parse(
-			readFileSync(
-				path.join(repoRoot, 'packages/core/src/contexts/translations/locales/en/core.json'),
-				'utf8'
-			)
-		) as Record<string, string>;
+	it('is the only source of the English strings those keys resolve to', () => {
+		const locale = JSON.parse(readFileSync(localePath, 'utf8')) as Record<string, string>;
+		const shipped = Object.keys(locale).filter((key) => key.startsWith('health.logs.event.'));
 
+		expect(shipped).toEqual(
+			registry.map(({ type }) => `health.logs.event.${type.replace(/[.-]/g, '_')}`)
+		);
 		for (const entry of registry) {
 			expect(locale[`health.logs.event.${entry.type.replace(/[.-]/g, '_')}`]).toBe(entry.label);
 		}

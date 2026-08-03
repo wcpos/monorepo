@@ -115,24 +115,26 @@ export function isSyncEventType(value: unknown): value is SyncEventType {
 function renderTitles(registry) {
 	const cases = registry
 		.map((entry) =>
-			[
-				`\t\tcase ${quote(entry.type)}:`,
-				`\t\t\treturn t(${quote(labelKey(entry.type))}, {`,
-				`\t\t\t\tdefaultValue: ${quote(entry.label)},`,
-				'\t\t\t});',
-			].join('\n')
+			[`\t\tcase ${quote(entry.type)}:`, `\t\t\treturn t(${quote(labelKey(entry.type))});`].join(
+				'\n'
+			)
 		)
 		.join('\n');
 	return `${BANNER}
 import type { SyncEventType } from '@wcpos/utils/logger/generated/event-labels.generated';
 
 /** The translate function shape \`useT()\` returns. */
-type TranslateEvent = (key: string, options: { defaultValue: string }) => string;
+type TranslateEvent = (key: string) => string;
 
 /**
  * Merchant-readable title for an engine event, translated at render time.
  * One literal \`t()\` call per type — a dynamic key is invisible to the string
  * extractor, so translators would never see it.
+ *
+ * No \`defaultValue\`: the English catalogue is bundled statically and is the
+ * fallback language, and this generator writes those strings into it from the
+ * registry. A defaultValue here would be a third copy of every label that
+ * nothing renders — and one this generator could silently drift from.
  */
 export function translateEventTitle(t: TranslateEvent, type: SyncEventType): string {
 	switch (type) {
@@ -146,17 +148,46 @@ ${cases}
 `;
 }
 
+/**
+ * The English source strings the generated `t()` calls resolve against. The
+ * registry owns this block of the catalogue, so editing a label and running the
+ * generator is all it takes for the change to reach the screen.
+ *
+ * Only `health.logs.event.*` keys are touched: every other key keeps its value
+ * AND its position, and the block itself is rewritten where it already sits, so
+ * the diff stays to the labels that actually changed.
+ */
+export function renderLocale(registry, source) {
+	const existing = Object.entries(source);
+	const anchor = existing.findIndex(([key]) => key.startsWith(KEY_PREFIX));
+	const untouched = existing.filter(([key]) => !key.startsWith(KEY_PREFIX));
+	const block = registry.map((entry) => [labelKey(entry.type), entry.label]);
+	const at = anchor === -1 ? untouched.length : anchor;
+	const merged = [...untouched.slice(0, at), ...block, ...untouched.slice(at)];
+	return `${JSON.stringify(Object.fromEntries(merged), null, '\t')}\n`;
+}
+
 function parseArguments(args) {
+	const localePath = path.join(
+		repoRoot,
+		'packages/core/src/contexts/translations/locales/en/core.json'
+	);
 	const options = {
 		registry: path.join(repoRoot, 'packages/utils/src/logger/event-registry.json'),
 		catalogueDirectory: path.join(repoRoot, 'packages/utils/src/logger/generated'),
 		titlesDirectory: path.join(repoRoot, 'packages/core/src/screens/main/logs/generated'),
+		localeSource: localePath,
+		localeOutput: localePath,
 	};
 	for (let index = 0; index < args.length; index += 2) {
 		if (args[index] === '--registry') options.registry = path.resolve(args[index + 1]);
 		else if (args[index] === '--output-dir') {
-			options.catalogueDirectory = path.resolve(args[index + 1]);
-			options.titlesDirectory = path.resolve(args[index + 1]);
+			// Test mode: every artifact lands in one throwaway directory, and the
+			// real English catalogue is read but never written.
+			const directory = path.resolve(args[index + 1]);
+			options.catalogueDirectory = directory;
+			options.titlesDirectory = directory;
+			options.localeOutput = path.join(directory, 'core.json');
 		} else throw new Error(`Unknown argument: ${args[index]}`);
 	}
 	return options;
@@ -165,6 +196,7 @@ function parseArguments(args) {
 export async function generateEventLabels(options = parseArguments([])) {
 	const registry = JSON.parse(await readFile(options.registry, 'utf8'));
 	validateRegistry(registry);
+	const locale = JSON.parse(await readFile(options.localeSource, 'utf8'));
 	await mkdir(options.catalogueDirectory, { recursive: true });
 	await mkdir(options.titlesDirectory, { recursive: true });
 	await Promise.all([
@@ -176,6 +208,7 @@ export async function generateEventLabels(options = parseArguments([])) {
 			path.join(options.titlesDirectory, 'event-titles.generated.ts'),
 			renderTitles(registry)
 		),
+		writeFile(options.localeOutput, renderLocale(registry, locale)),
 	]);
 }
 

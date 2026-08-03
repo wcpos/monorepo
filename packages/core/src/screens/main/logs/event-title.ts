@@ -23,7 +23,7 @@ export function useEventTitle(): (row: LogRow) => string {
 		(row: LogRow) => {
 			const type = eventTypeOf(row);
 			if (type !== undefined && isSyncEventType(type)) {
-				return translateEventTitle((key, options) => t(key, options), type);
+				return translateEventTitle((key) => t(key), type);
 			}
 			if (typeof row.message === 'string' && row.message.trim() !== '') return row.message;
 			return type ?? '';

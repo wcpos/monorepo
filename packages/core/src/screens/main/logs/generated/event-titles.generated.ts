@@ -2,239 +2,132 @@
 import type { SyncEventType } from '@wcpos/utils/logger/generated/event-labels.generated';
 
 /** The translate function shape `useT()` returns. */
-type TranslateEvent = (key: string, options: { defaultValue: string }) => string;
+type TranslateEvent = (key: string) => string;
 
 /**
  * Merchant-readable title for an engine event, translated at render time.
  * One literal `t()` call per type — a dynamic key is invisible to the string
  * extractor, so translators would never see it.
+ *
+ * No `defaultValue`: the English catalogue is bundled statically and is the
+ * fallback language, and this generator writes those strings into it from the
+ * registry. A defaultValue here would be a third copy of every label that
+ * nothing renders — and one this generator could silently drift from.
  */
 export function translateEventTitle(t: TranslateEvent, type: SyncEventType): string {
 	switch (type) {
 		case 'apply.barcode-rederive':
-			return t('health.logs.event.apply_barcode_rederive', {
-				defaultValue: 'Rebuilt barcode lookups',
-			});
+			return t('health.logs.event.apply_barcode_rederive');
 		case 'apply.delete':
-			return t('health.logs.event.apply_delete', {
-				defaultValue: 'Removed items deleted in your store',
-			});
+			return t('health.logs.event.apply_delete');
 		case 'apply.escalation':
-			return t('health.logs.event.apply_escalation', {
-				defaultValue: 'An update from your store could not be saved',
-			});
+			return t('health.logs.event.apply_escalation');
 		case 'apply.pull':
-			return t('health.logs.event.apply_pull', {
-				defaultValue: 'Saved updates from your store',
-			});
+			return t('health.logs.event.apply_pull');
 		case 'apply.rebaseline':
-			return t('health.logs.event.apply_rebaseline', {
-				defaultValue: 'Refreshed local data from your store',
-			});
+			return t('health.logs.event.apply_rebaseline');
 		case 'apply.refetch':
-			return t('health.logs.event.apply_refetch', {
-				defaultValue: 'Fetched records again for missing details',
-			});
+			return t('health.logs.event.apply_refetch');
 		case 'apply.refresh':
-			return t('health.logs.event.apply_refresh', {
-				defaultValue: 'Refreshed a list from your store',
-			});
+			return t('health.logs.event.apply_refresh');
 		case 'coverage.compacted':
-			return t('health.logs.event.coverage_compacted', {
-				defaultValue: 'Tidied up local sync bookkeeping',
-			});
+			return t('health.logs.event.coverage_compacted');
 		case 'coverage.existence-prime':
-			return t('health.logs.event.coverage_existence_prime', {
-				defaultValue: 'Checked which records exist in your store',
-			});
+			return t('health.logs.event.coverage_existence_prime');
 		case 'coverage.existence-reconcile':
-			return t('health.logs.event.coverage_existence_reconcile', {
-				defaultValue: 'Reconciled this device with your store',
-			});
+			return t('health.logs.event.coverage_existence_reconcile');
 		case 'coverage.gate.hit':
-			return t('health.logs.event.coverage_gate_hit', {
-				defaultValue: 'Answered a search from data already on this device',
-			});
+			return t('health.logs.event.coverage_gate_hit');
 		case 'coverage.gate.miss':
-			return t('health.logs.event.coverage_gate_miss', {
-				defaultValue: 'Fetched a search from your store',
-			});
+			return t('health.logs.event.coverage_gate_miss');
 		case 'coverage.require.error':
-			return t('health.logs.event.coverage_require_error', {
-				defaultValue: 'Could not load the records this screen needs',
-			});
+			return t('health.logs.event.coverage_require_error');
 		case 'coverage.require.log':
-			return t('health.logs.event.coverage_require_log', {
-				defaultValue: 'Record loading detail',
-			});
+			return t('health.logs.event.coverage_require_log');
 		case 'coverage.require.outcome':
-			return t('health.logs.event.coverage_require_outcome', {
-				defaultValue: 'Loaded the records this screen needs',
-			});
+			return t('health.logs.event.coverage_require_outcome');
 		case 'engine.barcode-selector-hydrate-failed':
-			return t('health.logs.event.engine_barcode_selector_hydrate_failed', {
-				defaultValue: 'Barcode settings could not be loaded',
-			});
+			return t('health.logs.event.engine_barcode_selector_hydrate_failed');
 		case 'engine.collection-reset':
-			return t('health.logs.event.engine_collection_reset', {
-				defaultValue: 'Local data was reset',
-			});
+			return t('health.logs.event.engine_collection_reset');
 		case 'engine.connectivity-error':
-			return t('health.logs.event.engine_connectivity_error', {
-				defaultValue: 'Lost the connection to your store',
-			});
+			return t('health.logs.event.engine_connectivity_error');
 		case 'engine.disposed':
-			return t('health.logs.event.engine_disposed', {
-				defaultValue: 'Syncing stopped',
-			});
+			return t('health.logs.event.engine_disposed');
 		case 'engine.guard':
-			return t('health.logs.event.engine_guard', {
-				defaultValue: 'Sync work stopped because the store changed',
-			});
+			return t('health.logs.event.engine_guard');
 		case 'engine.lane.tick':
-			return t('health.logs.event.engine_lane_tick', {
-				defaultValue: 'Background sync task finished',
-			});
+			return t('health.logs.event.engine_lane_tick');
 		case 'engine.listener-error':
-			return t('health.logs.event.engine_listener_error', {
-				defaultValue: 'A sync update could not be delivered to the app',
-			});
+			return t('health.logs.event.engine_listener_error');
 		case 'engine.pos-bootstrap-error':
-			return t('health.logs.event.engine_pos_bootstrap_error', {
-				defaultValue: 'Setting up this store failed',
-			});
+			return t('health.logs.event.engine_pos_bootstrap_error');
 		case 'engine.ready':
-			return t('health.logs.event.engine_ready', {
-				defaultValue: 'Syncing started',
-			});
+			return t('health.logs.event.engine_ready');
 		case 'engine.ready-failed':
-			return t('health.logs.event.engine_ready_failed', {
-				defaultValue: 'Syncing could not start',
-			});
+			return t('health.logs.event.engine_ready_failed');
 		case 'engine.ready-stalled':
-			return t('health.logs.event.engine_ready_stalled', {
-				defaultValue: 'Syncing is taking longer than expected to start',
-			});
+			return t('health.logs.event.engine_ready_stalled');
 		case 'engine.reconnect.retick':
-			return t('health.logs.event.engine_reconnect_retick', {
-				defaultValue: 'Resumed syncing after reconnecting',
-			});
+			return t('health.logs.event.engine_reconnect_retick');
 		case 'engine.reset-needs-confirmation':
-			return t('health.logs.event.engine_reset_needs_confirmation', {
-				defaultValue: 'A data reset is waiting for your confirmation',
-			});
+			return t('health.logs.event.engine_reset_needs_confirmation');
 		case 'engine.scope-switched':
-			return t('health.logs.event.engine_scope_switched', {
-				defaultValue: 'Switched to another store',
-			});
+			return t('health.logs.event.engine_scope_switched');
 		case 'maintenance.lane.error':
-			return t('health.logs.event.maintenance_lane_error', {
-				defaultValue: 'A background maintenance task failed',
-			});
+			return t('health.logs.event.maintenance_lane_error');
 		case 'maintenance.lane.tick':
-			return t('health.logs.event.maintenance_lane_tick', {
-				defaultValue: 'Background maintenance ran',
-			});
+			return t('health.logs.event.maintenance_lane_tick');
 		case 'product.browse-window.approximate':
-			return t('health.logs.event.product_browse_window_approximate', {
-				defaultValue: 'Product totals are approximate in a catalogue this large',
-			});
+			return t('health.logs.event.product_browse_window_approximate');
 		case 'push.aborted':
-			return t('health.logs.event.push_aborted', {
-				defaultValue: 'Sending a change was cancelled',
-			});
+			return t('health.logs.event.push_aborted');
 		case 'push.conflict':
-			return t('health.logs.event.push_conflict', {
-				defaultValue: 'A change clashed with an edit in your store',
-			});
+			return t('health.logs.event.push_conflict');
 		case 'push.error':
-			return t('health.logs.event.push_error', {
-				defaultValue: 'Could not send a change to your store',
-			});
+			return t('health.logs.event.push_error');
 		case 'push.in_progress':
-			return t('health.logs.event.push_in_progress', {
-				defaultValue: 'This change was already being sent',
-			});
+			return t('health.logs.event.push_in_progress');
 		case 'push.outcome':
-			return t('health.logs.event.push_outcome', {
-				defaultValue: 'Sent a change to your store',
-			});
+			return t('health.logs.event.push_outcome');
 		case 'push.rejected':
-			return t('health.logs.event.push_rejected', {
-				defaultValue: 'Your store rejected a change',
-			});
+			return t('health.logs.event.push_rejected');
 		case 'queue.drain.progress':
-			return t('health.logs.event.queue_drain_progress', {
-				defaultValue: 'Still loading records',
-			});
+			return t('health.logs.event.queue_drain_progress');
 		case 'queue.scheduler.drain':
-			return t('health.logs.event.queue_scheduler_drain', {
-				defaultValue: 'Background sync finished a batch',
-			});
+			return t('health.logs.event.queue_scheduler_drain');
 		case 'queue.write.annihilate':
-			return t('health.logs.event.queue_write_annihilate', {
-				defaultValue: 'A change cancelled itself out before it was sent',
-			});
+			return t('health.logs.event.queue_write_annihilate');
 		case 'queue.write.born-twice-requeue':
-			return t('health.logs.event.queue_write_born_twice_requeue', {
-				defaultValue: 'Queued a change again after a duplicate was created',
-			});
+			return t('health.logs.event.queue_write_born_twice_requeue');
 		case 'queue.write.coalesce':
-			return t('health.logs.event.queue_write_coalesce', {
-				defaultValue: 'Merged repeated edits into one update',
-			});
+			return t('health.logs.event.queue_write_coalesce');
 		case 'queue.write.conflict-transition':
-			return t('health.logs.event.queue_write_conflict_transition', {
-				defaultValue: 'Could not settle a clashing change',
-			});
+			return t('health.logs.event.queue_write_conflict_transition');
 		case 'queue.write.discard-repull-deferred':
-			return t('health.logs.event.queue_write_discard_repull_deferred', {
-				defaultValue: 'Postponed refreshing a record from your store',
-			});
+			return t('health.logs.event.queue_write_discard_repull_deferred');
 		case 'queue.write.drain':
-			return t('health.logs.event.queue_write_drain', {
-				defaultValue: 'Processed queued changes for your store',
-			});
+			return t('health.logs.event.queue_write_drain');
 		case 'queue.write.enqueued':
-			return t('health.logs.event.queue_write_enqueued', {
-				defaultValue: 'Queued a change to send to your store',
-			});
+			return t('health.logs.event.queue_write_enqueued');
 		case 'queue.write.needs-revision':
-			return t('health.logs.event.queue_write_needs_revision', {
-				defaultValue: 'A change needs fixing before it can be sent',
-			});
+			return t('health.logs.event.queue_write_needs_revision');
 		case 'queue.write.reschedule-failed':
-			return t('health.logs.event.queue_write_reschedule_failed', {
-				defaultValue: 'Could not schedule another try for a change',
-			});
+			return t('health.logs.event.queue_write_reschedule_failed');
 		case 'queue.write.resolve':
-			return t('health.logs.event.queue_write_resolve', {
-				defaultValue: 'Settled a clashing change',
-			});
+			return t('health.logs.event.queue_write_resolve');
 		case 'queue.write.tick.error':
-			return t('health.logs.event.queue_write_tick_error', {
-				defaultValue: 'Sending queued changes failed',
-			});
+			return t('health.logs.event.queue_write_tick_error');
 		case 'signal.cursor':
-			return t('health.logs.event.signal_cursor', {
-				defaultValue: 'Sync position moved unexpectedly',
-			});
+			return t('health.logs.event.signal_cursor');
 		case 'signal.cycle':
-			return t('health.logs.event.signal_cycle', {
-				defaultValue: 'Checked your store for changes',
-			});
+			return t('health.logs.event.signal_cycle');
 		case 'signal.log':
-			return t('health.logs.event.signal_log', {
-				defaultValue: 'Change check detail',
-			});
+			return t('health.logs.event.signal_log');
 		case 'signal.tick.error':
-			return t('health.logs.event.signal_tick_error', {
-				defaultValue: 'Checking your store for changes failed',
-			});
+			return t('health.logs.event.signal_tick_error');
 		case 'transport.request':
-			return t('health.logs.event.transport_request', {
-				defaultValue: 'Request to your store',
-			});
+			return t('health.logs.event.transport_request');
 		default: {
 			const exhaustive: never = type;
 			return exhaustive;
