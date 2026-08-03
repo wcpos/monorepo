@@ -396,6 +396,55 @@ describe('useAddItemToOrder', () => {
 		expect(patched[0].meta_data).toEqual([{ key: '_woocommerce_pos_uuid', value: 'line-1' }]);
 	});
 
+	it('merges a repeat scan into its own variation line, not a sibling variation', async () => {
+		order.isNew = true;
+		// Two variations of one parent product — the everyday variable-product cart.
+		const lines = [
+			{
+				product_id: 1,
+				variation_id: 11,
+				quantity: 1,
+				price: 5,
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-11' }],
+			},
+			{
+				product_id: 1,
+				variation_id: 12,
+				quantity: 1,
+				price: 5,
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-12' }],
+			},
+		];
+		const resident = {
+			...CREATE_QUEUED,
+			payload: { uuid: 'order-uuid', line_items: lines },
+			toMutableJSON: () => ({ payload: { uuid: 'order-uuid', line_items: lines } }),
+		};
+		const savedOrder = { ...resident.payload, getLatest: () => savedOrder };
+		mockFindEngineResident.mockResolvedValue(resident);
+		mockWrapEngineDocument.mockReturnValue(savedOrder);
+		mockLocalPatch.mockResolvedValue({ document: savedOrder });
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', {
+				product_id: 1,
+				variation_id: 11,
+				quantity: 1,
+				price: 5,
+				meta_data: [],
+			} as never);
+		});
+
+		// variation_id is half the match key. Matching on product_id alone sees two
+		// lines here, calls the match ambiguous and appends a third — so the scanned
+		// variation splits instead of merging, and the cart never recovers.
+		const patched = mockLocalPatch.mock.calls[0][0].data.line_items;
+		expect(patched).toHaveLength(2);
+		expect(patched[0]).toMatchObject({ variation_id: 11, quantity: 2, total: '10' });
+		expect(patched[1]).toMatchObject({ variation_id: 12, quantity: 1 });
+	});
+
 	it('appends when the resident already holds more than one line for the product', async () => {
 		order.isNew = true;
 		const lines = [
