@@ -244,6 +244,62 @@ describe('useAddItemToOrder', () => {
 		});
 	});
 
+	it('checks stock against the recovered engine order, not the stale temporary order', async () => {
+		order.isNew = true;
+		mockStockGuardEnabled = true;
+		const resident = {
+			payload: { uuid: 'order-uuid', line_items: [{ product_id: 1, quantity: 1 }] },
+			toMutableJSON: () => ({
+				payload: { uuid: 'order-uuid', line_items: [{ product_id: 1, quantity: 1 }] },
+			}),
+		};
+		const savedOrder = {
+			...resident.payload,
+			getLatest: () => savedOrder,
+		};
+		mockInsertEngineResident.mockResolvedValue(resident);
+		mockWrapEngineDocument.mockReturnValue(savedOrder);
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+		mockLocalPatch.mockResolvedValue({ document: savedOrder });
+		// Only one unit in stock: the cart is allowed to go from empty to one item.
+		mockCheckCartStock.mockImplementation(
+			async ({ lineItems }: { lineItems: Record<string, unknown>[] }) => ({
+				allowed: lineItems.length === 0,
+				warning: null,
+				available: 1,
+				name: 'Item',
+			})
+		);
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', {
+				product_id: 1,
+				quantity: 1,
+				meta_data: [],
+			} as never);
+		});
+
+		// The scanner still holds the temporary order, but the engine order now exists.
+		mockFindEngineResident.mockResolvedValue(resident);
+		let secondAdd: unknown;
+		await act(async () => {
+			secondAdd = await result.current.addItemToOrder('line_items', {
+				product_id: 1,
+				quantity: 1,
+				meta_data: [],
+			} as never);
+		});
+
+		// The second check must see the resident's line item, otherwise the stale empty
+		// temporary order would let an out-of-stock repeat scan through.
+		expect(mockCheckCartStock.mock.calls.map(([args]) => args.lineItems.length)).toEqual([0, 1]);
+		expect(secondAdd).toBe(false);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockInsertEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockWrite).toHaveBeenCalledTimes(1);
+	});
+
 	it('checks stock inside the append chain so overlapping adds see the latest cart', async () => {
 		mockStockGuardEnabled = true;
 		mockCheckCartStock.mockImplementation(
