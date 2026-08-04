@@ -174,15 +174,18 @@ describe('requirementsForQuery', () => {
 		]);
 	});
 
-	it('maps root created_via selectors to the store dimension', () => {
-		for (const created_via of ['woocommerce-pos', { $eq: 'woocommerce-pos' }]) {
+	// The translator only promotes status/customer_id/dateRange to the selector root, so a
+	// slug store arrives as an `$and` condition — both shapes must reach the wire.
+	it('maps root and nested created_via selectors to the store dimension', () => {
+		const selectors: Record<string, unknown>[] = [
+			{ created_via: 'woocommerce-pos' },
+			{ created_via: { $eq: 'woocommerce-pos' } },
+			{ $and: [{ created_via: 'woocommerce-pos' }] },
+			{ $and: [{ created_via: { $eq: 'woocommerce-pos' } }] },
+		];
+		for (const selector of selectors) {
 			expect(
-				requirementsForQuery({
-					id: 'orders',
-					collectionName: 'orders',
-					selector: { created_via },
-					limit: 25,
-				})[0]
+				requirementsForQuery({ id: 'orders', collectionName: 'orders', selector, limit: 25 })[0]
 			).toMatchObject({
 				queryKey: 'orders:browser:status=all:store=woocommerce-pos:search=:limit=25',
 				priority: 700,

@@ -145,8 +145,17 @@ function orderBrowseDescriptor(
 		Number.isSafeInteger(customerId) && (customerId as number) >= 0
 			? `:customer=${customerId}`
 			: '';
+	// Only `status`, `customer_id` and `dateRange` are promoted to the selector ROOT
+	// (`REQUIREMENT_TOP_LEVEL_FIELDS` in query-state-translator); cashier and store compile
+	// into `$and` conditions instead, because both meta filters land on the same `meta_data`
+	// key and would otherwise overwrite each other. Every dimension below therefore has to
+	// look in both places.
+	const conditionsToScan = () => [
+		selector,
+		...(Array.isArray(selector?.$and) ? selector.$and : []),
+	];
 	const metaValue = (key: '_pos_user' | '_pos_store'): string | undefined => {
-		const conditions = [selector, ...(Array.isArray(selector?.$and) ? selector.$and : [])];
+		const conditions = conditionsToScan();
 		for (const condition of conditions) {
 			if (condition === null || typeof condition !== 'object') continue;
 			const metaData = (condition as Record<string, unknown>).meta_data;
@@ -168,13 +177,22 @@ function orderBrowseDescriptor(
 	const cashierPart =
 		cashierId !== undefined && Number.isSafeInteger(cashierId) ? `:cashier=${cashierId}` : '';
 	const metaStore = metaValue('_pos_store');
-	const createdViaValue = selector?.created_via;
-	const createdVia =
-		typeof createdViaValue === 'string'
-			? createdViaValue
-			: createdViaValue !== null && typeof createdViaValue === 'object'
-				? (createdViaValue as Record<string, unknown>).$eq
-				: undefined;
+	// A store-less install selects its store by slug, which the translator compiles to
+	// `created_via` — a nested `$and` condition, not a root field (see the note above). A
+	// root-only read silently dropped `:store=` for exactly that case, leaving the ranged
+	// reports fetch unscoped and letting other stores' orders consume its record backstop.
+	const createdVia = (() => {
+		for (const condition of conditionsToScan()) {
+			if (condition === null || typeof condition !== 'object') continue;
+			const value = (condition as Record<string, unknown>).created_via;
+			if (typeof value === 'string') return value;
+			if (value !== null && typeof value === 'object') {
+				const eq = (value as Record<string, unknown>).$eq;
+				if (typeof eq === 'string') return eq;
+			}
+		}
+		return undefined;
+	})();
 	const store =
 		typeof metaStore === 'string' && /^\d+$/.test(metaStore)
 			? metaStore
