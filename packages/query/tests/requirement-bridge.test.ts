@@ -127,6 +127,45 @@ describe('requirementsForQuery', () => {
 		});
 	});
 
+	it('maps reports date ranges to ranged complete order descriptors', () => {
+		expect(
+			requirementsForQuery({
+				id: 'reports',
+				collectionName: 'orders',
+				selector: {
+					status: { $eq: 'completed' },
+					date_created_gmt: {
+						$gte: '2026-07-01T00:00:00',
+						$lte: '2026-07-14T23:59:59',
+					},
+				},
+				limit: Number.MAX_SAFE_INTEGER,
+			})
+		).toEqual([
+			{
+				id: 'reports:orders-query',
+				collection: 'orders',
+				kind: 'query',
+				queryKey:
+					'orders:browser:status=completed:search=:after=1782864000:before=1784073599:limit=all',
+				priority: 700,
+			},
+		]);
+	});
+
+	it('keeps ranged order descriptors bounded for small limits', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'reports',
+			collectionName: 'orders',
+			selector: { date_created_gmt: { $gte: '2026-07-01T00:00:00' } },
+			limit: 25,
+		});
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:search=:after=1782864000:limit=25',
+		});
+		expect(requirement).not.toHaveProperty('priority');
+	});
+
 	it('creates no demand for a FILTERED products browse', () => {
 		// Filters still ride local residents only (ADR 0027) — only the UNFILTERED
 		// browse gets a window.

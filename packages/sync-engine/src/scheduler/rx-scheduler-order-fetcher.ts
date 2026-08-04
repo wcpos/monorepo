@@ -31,6 +31,7 @@ type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Respons
 const SUPPORTED_ORDER_QUERY_KEY = 'orders:custom-pull';
 const MAX_STALLED_BATCHES = 3;
 const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
+const RANGED_COMPLETE_MAX_RECORDS = 10_000;
 
 export type OrdersSchedulerCoverageRepository = {
 	recordQueryResult(input: BuildCoverageDocumentsFromQueryResultInput): Promise<void>;
@@ -74,10 +75,7 @@ function assertSupportedOrderTask(task: FetchTask): void {
 	}
 }
 
-function browserOrderQueryDescriptor(
-	task: FetchTask,
-	pullBatchSize?: () => number | undefined
-): { status: string; search: string; limit: number; perPage: number } | null {
+function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => number | undefined) {
 	const decision = parseOrderBrowserSchedulerDescriptor(task.queryKey);
 	if (!decision) return null;
 	if ('skipReason' in decision) {
@@ -91,12 +89,21 @@ function browserOrderQueryDescriptor(
 		throw new Error('Order scheduler browser task limit must be a positive integer');
 	}
 
-	const limit = Math.min(task.limit, decision.descriptor.limit);
+	const limit = decision.descriptor.complete
+		? undefined
+		: Math.min(task.limit, decision.descriptor.limit);
 	return {
 		status: decision.descriptor.wooStatus,
 		search: decision.descriptor.search,
-		limit,
-		perPage: Math.min(limit, pullRequestLimit(task, pullBatchSize), WOO_REST_MAX_PER_PAGE),
+		...(limit !== undefined ? { limit } : {}),
+		afterSeconds: decision.descriptor.afterSeconds,
+		beforeSeconds: decision.descriptor.beforeSeconds,
+		complete: decision.descriptor.complete,
+		perPage: Math.min(
+			limit ?? WOO_REST_MAX_PER_PAGE,
+			pullRequestLimit(task, pullBatchSize),
+			WOO_REST_MAX_PER_PAGE
+		),
 	};
 }
 
@@ -275,7 +282,7 @@ function targetedBatchSize(task: FetchTask, pullBatchSize?: () => number | undef
 async function fetchBrowserOrderQuery(
 	input: OrdersSchedulerFetcherInput,
 	task: FetchTask,
-	descriptor: { status: string; search: string; limit: number; perPage: number },
+	descriptor: NonNullable<ReturnType<typeof browserOrderQueryDescriptor>>,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
 	if (task.collection !== 'orders') {
@@ -287,10 +294,18 @@ async function fetchBrowserOrderQuery(
 	const fetchedDocumentIds: string[] = [];
 	let exhausted = false;
 
-	while (documentCount < descriptor.limit) {
+	const recordLimit = descriptor.limit ?? RANGED_COMPLETE_MAX_RECORDS;
+	while (documentCount < recordLimit) {
 		const query = new URLSearchParams();
 		if (descriptor.status) query.set('status', descriptor.status);
 		if (descriptor.search) query.set('search', descriptor.search);
+		if (descriptor.afterSeconds !== undefined)
+			query.set('after', new Date(descriptor.afterSeconds * 1_000).toISOString());
+		if (descriptor.beforeSeconds !== undefined)
+			query.set('before', new Date(descriptor.beforeSeconds * 1_000).toISOString());
+		if (descriptor.afterSeconds !== undefined || descriptor.beforeSeconds !== undefined) {
+			query.set('dates_are_gmt', 'true');
+		}
 		query.set('per_page', String(descriptor.perPage));
 		query.set('page', String(requestCount + 1));
 		query.set('orderby', 'id');
@@ -303,7 +318,7 @@ async function fetchBrowserOrderQuery(
 		}
 
 		const payloads = JSON.parse(await response.text()) as WooOrderPayload[];
-		const remaining = descriptor.limit - documentCount;
+		const remaining = recordLimit - documentCount;
 		const documents = payloads.slice(0, remaining).map(orderDocumentFromWooPayload);
 		// Offline-first: never overwrite an order that has queued local mutations.
 		// Re-read the pending set IMMEDIATELY before each page's upsert (not once up
@@ -322,7 +337,11 @@ async function fetchBrowserOrderQuery(
 		documentCount += documents.length;
 		requestCount += 1;
 
-		if (payloads.length < descriptor.perPage && payloads.length <= remaining) {
+		if (
+			payloads.length < descriptor.perPage &&
+			payloads.length <= remaining &&
+			!(descriptor.complete && documentCount >= RANGED_COMPLETE_MAX_RECORDS)
+		) {
 			exhausted = true;
 			break;
 		}

@@ -96,11 +96,27 @@ function orderBrowseDescriptor(
 		return 'all';
 	})();
 	const searchValue = typeof selector?.search === 'string' ? (selector.search as string) : '';
+	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
+	const epochSeconds = (value: unknown): number | undefined => {
+		if (typeof value !== 'string') return undefined;
+		const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`;
+		const milliseconds = Date.parse(normalized);
+		if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
+		return Math.floor(milliseconds / 1_000);
+	};
+	const afterSeconds = range && typeof range === 'object' ? epochSeconds(range.$gte) : undefined;
+	const beforeSeconds = range && typeof range === 'object' ? epochSeconds(range.$lte) : undefined;
+	const rangePart = `${afterSeconds === undefined ? '' : `:after=${afterSeconds}`}${
+		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
+	}`;
+	if (rangePart && typeof limit === 'number' && limit > ORDER_BROWSE_MAX_LIMIT) {
+		return `orders:browser:status=${statusValue}:search=${searchValue}${rangePart}:limit=all`;
+	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}:search=${searchValue}:limit=${boundedLimit}`;
+	return `orders:browser:status=${statusValue}:search=${searchValue}${rangePart}:limit=${boundedLimit}`;
 }
 
 /**
@@ -213,13 +229,15 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 	}
 
 	if (engineCollection === 'orders') {
+		const queryKey = orderBrowseDescriptor(selector, limit);
+		const priority = input.priority ?? (queryKey.endsWith(':limit=all') ? 700 : undefined);
 		return [
 			{
 				id: `${input.id}:orders-query`,
 				collection: 'orders',
 				kind: 'query',
-				queryKey: orderBrowseDescriptor(selector, limit),
-				...(input.priority !== undefined ? { priority: input.priority } : {}),
+				queryKey,
+				...(priority !== undefined ? { priority } : {}),
 				...(input.forceRefresh ? { forceRefresh: true } : {}),
 			},
 		];

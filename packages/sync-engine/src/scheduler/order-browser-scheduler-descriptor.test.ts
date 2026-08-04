@@ -16,6 +16,7 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 				status: 'processing',
 				search: '',
 				limit: 150,
+				complete: false,
 				wooStatus: 'processing',
 			},
 		});
@@ -35,9 +36,46 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 				status: 'processing',
 				search: 'hat',
 				limit: 50,
+				complete: false,
 				wooStatus: 'processing',
 			},
 		});
+	});
+
+	it('parses ranged windowed and fetch-to-completion descriptors', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=completed:search=:after=1782864000:before=1784073599:limit=25'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({
+				afterSeconds: 1782864000,
+				beforeSeconds: 1784073599,
+				limit: 25,
+				complete: false,
+			}),
+		});
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:search=:after=1782864000:limit=all'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({ afterSeconds: 1782864000, complete: true }),
+		});
+	});
+
+	it('rejects unbounded completion and malformed epoch values', () => {
+		for (const queryKey of [
+			'orders:browser:status=all:search=:limit=all',
+			'orders:browser:status=all:search=:after=-1:limit=all',
+			'orders:browser:status=all:search=:after=1.5:limit=all',
+			'orders:browser:status=all:search=:before=nope:limit=25',
+			'orders:browser:status=all:search=:before=2:after=1:limit=25',
+		]) {
+			expect(parseOrderBrowserSchedulerDescriptor(queryKey)).toEqual({
+				skipReason: 'descriptor is not supported',
+			});
+		}
 	});
 
 	it('classifies unsupported browser descriptors with stable skip reasons', () => {

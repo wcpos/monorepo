@@ -28,7 +28,7 @@ const entry = (
 ): FilterTranslator => ({ legacyPath, enginePath, storage, operator });
 
 // requirementsForQuery reads these predicates directly from the selector root.
-const REQUIREMENT_TOP_LEVEL_FIELDS = new Set(['status']);
+const REQUIREMENT_TOP_LEVEL_FIELDS = new Set(['status', 'dateRange']);
 
 export const FILTER_TRANSLATORS = {
 	products: {

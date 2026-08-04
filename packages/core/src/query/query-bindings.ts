@@ -317,6 +317,15 @@ function useDemand(
 function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boolean {
 	return Object.entries(selector).every(([field, value]) => {
 		if (field === 'search') return typeof value === 'string';
+		if (field === 'date_created_gmt') {
+			if (value === null || typeof value !== 'object') return false;
+			const entries = Object.entries(value as Record<string, unknown>);
+			const valid = entries.every(
+				([operator, boundary]) =>
+					(operator === '$gte' || operator === '$lte') && typeof boundary === 'string'
+			);
+			return entries.length > 0 && valid;
+		}
 		if (field !== 'status') return false;
 		if (typeof value === 'string') return value.length > 0;
 		const status = value as Record<string, unknown> | null;
