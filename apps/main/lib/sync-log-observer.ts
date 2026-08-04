@@ -194,6 +194,7 @@ const CONFORMANCE = new Map<string, Conformance>([
 			didWork: (f) => num(f.removed) > 0,
 		},
 	],
+	['coverage.ledger-rebuilt', { operationType: 'sync.coverage', outcome: 'recovered' }],
 	[
 		'transport.request',
 		{

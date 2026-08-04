@@ -13,7 +13,11 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createRxdbSyncEngine, type StoreScopeIdentity } from '../create-rxdb-sync-engine';
 import { memoryEngineStorage } from '../testing';
-import { engineCollectionCreators } from './engine-collections';
+import {
+	DERIVABLE_METADATA_COLLECTIONS,
+	engineCollectionCreators,
+	resetDerivableMetadataCollection,
+} from './engine-collections';
 
 setPremiumFlag();
 
@@ -39,6 +43,17 @@ const TIER_COLLECTIONS = [
 ] as const;
 
 describe('engine scope recipe: the scheduler/coverage tier (slice 5a)', () => {
+	it('hard-whitelists only the three derivable ledger collections', async () => {
+		expect(DERIVABLE_METADATA_COLLECTIONS).toEqual([
+			'coverageRecords',
+			'coverageLanes',
+			'schedulerTaskStates',
+		]);
+		await expect(
+			resetDerivableMetadataCollection({ name: 'test' } as never, 'products')
+		).rejects.toThrow('Collection "products" is not derivable metadata');
+	});
+
 	it('declares every tier collection with migration strategies for every versioned schema', () => {
 		const creators = engineCollectionCreators();
 		for (const name of TIER_COLLECTIONS) {
