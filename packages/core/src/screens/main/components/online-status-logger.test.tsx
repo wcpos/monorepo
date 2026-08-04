@@ -1,12 +1,27 @@
 /** @jest-environment jsdom */
+jest.mock('@wcpos/utils/logger', () => {
+	const actual = jest.requireActual<typeof import('@wcpos/utils/logger')>('@wcpos/utils/logger');
+	const logger = {
+		error: jest.fn(),
+		success: jest.fn(),
+	};
+
+	return {
+		...actual,
+		getLogger: jest.fn(() => logger),
+		__logger: logger,
+	};
+});
+
+/* eslint-disable import/first -- logger mock must precede component module initialization */
 import * as React from 'react';
 
 import { render } from '@testing-library/react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { getLogger } from '@wcpos/utils/logger';
 
 import { OnlineStatusLogger } from './online-status-logger';
+/* eslint-enable import/first */
 
 jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
 jest.mock('../../../contexts/translations', () => ({
@@ -14,7 +29,9 @@ jest.mock('../../../contexts/translations', () => ({
 }));
 
 const mockUseOnlineStatus = jest.mocked(useOnlineStatus);
-const logger = getLogger(['wcpos', 'ui', 'header']);
+const { __logger: logger } = jest.requireMock('@wcpos/utils/logger') as {
+	__logger: { error: jest.Mock; success: jest.Mock };
+};
 
 describe('OnlineStatusLogger', () => {
 	beforeEach(() => {
