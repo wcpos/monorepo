@@ -15,15 +15,15 @@
  */
 
 import {
+	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT,
 	PRODUCT_BROWSE_WINDOW_MAX_LIMIT,
 	PRODUCT_BROWSE_WINDOW_ORDER,
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
-	parseProductBrowseWindowDescriptor,
+	productBrowseWindowFilterPart,
 	type ProductBrowseWindowFilters,
 	type ProductBrowseWindowOrder,
 	type ProductBrowseWindowOrderby,
-	productBrowseWindowFilterPart,
 	productBrowseWindowQueryKey,
 } from './product-browse-window-descriptor';
 import {
