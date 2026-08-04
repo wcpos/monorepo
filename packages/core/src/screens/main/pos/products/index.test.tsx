@@ -224,13 +224,19 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().filters).not.toHaveProperty('stock_status');
 	});
 
-	it('remounts the reset baseline when showOutOfStock changes', () => {
+	it('rebases the reset baseline when showOutOfStock changes without remounting the store', () => {
 		const { rerender } = render(<POSProducts />);
 		expect(latestState().filters.stock_status).toBe('instock');
+
+		const setSearch = mockUseBarcode.mock.calls[0]?.[0];
+		act(() => setSearch?.('persisted term'));
 
 		mockShowOutOfStock = true;
 		rerender(<POSProducts />);
 		expect(latestState().filters).not.toHaveProperty('stock_status');
+		// The store survives the toggle — committed search is preserved, where the
+		// old remount key wiped search, sort, and pagination.
+		expect(latestState().search).toBe('persisted term');
 
 		act(() => {
 			const actions = mockDataTableProps.actions as {
