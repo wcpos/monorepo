@@ -12,7 +12,9 @@
  *    `engine.require({collection, kind: 'search', term, limit})`.
  *  - **order query descriptors** (unbounded orders browse) →
  *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
- *    `orders:browser:status=…:search=…:limit=…` descriptor the engine parses.
+ *    `orders:browser:status=…[:customer=…][:after=…][:before=…]:search=…:limit=…`
+ *    descriptor the engine parses. Structured dimensions precede `:search=`, which
+ *    stays the last free-text field.
  *  - **the products browse window** (UNFILTERED products browse — ADR 0027 §2, #909) →
  *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
  *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor. It carries the

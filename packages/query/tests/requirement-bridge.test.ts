@@ -305,9 +305,7 @@ describe('requirementsForQuery', () => {
 			'products:browse-window:limit=100:orderby=popularity:order=desc'
 		);
 		// The POS catalog default keeps the bare key — one identity for the cold seed.
-		expect(keyFor([{ menu_order: 'asc' }, { id: 'asc' }])).toBe(
-			'products:browse-window:limit=100'
-		);
+		expect(keyFor([{ menu_order: 'asc' }, { id: 'asc' }])).toBe('products:browse-window:limit=100');
 		// Sorts Woo REST cannot express fall back to the default window rather than
 		// pretending a server-sorted slice exists.
 		expect(keyFor([{ sku: 'asc' }])).toBe('products:browse-window:limit=100');
