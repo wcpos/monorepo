@@ -56,6 +56,15 @@ const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
 /** The web scheduler's browse-lane cap; the engine rejects larger order descriptors. */
 const ORDER_BROWSE_MAX_LIMIT = 200;
 
+/**
+ * The "give me every result" sentinel a screen passes when it wants a ranged fetch run to
+ * completion. Reports is the only such screen (`REPORTS_ALL_RESULTS_LIMIT =
+ * Number.MAX_SAFE_INTEGER`); ordinary grids extend their limit one page at a time (orders:
+ * 10, 20 … 200, 210 …) and must stay windowed even once they climb past the browse cap,
+ * per the ruling that Reports is the ONLY fetch-to-completion case.
+ */
+const ORDER_COMPLETE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER;
+
 function finiteWooIds(selector: Record<string, unknown> | undefined): number[] | null {
 	const idSelector = selector?.id as unknown;
 	if (idSelector === undefined || idSelector === null) {
@@ -111,7 +120,7 @@ function orderBrowseDescriptor(
 	}`;
 	// Range dimensions precede `:search=` so arbitrary search text can never be read back
 	// as a date bound — see the grammar note in order-browser-scheduler-descriptor.ts.
-	if (rangePart && typeof limit === 'number' && limit > ORDER_BROWSE_MAX_LIMIT) {
+	if (rangePart && typeof limit === 'number' && limit >= ORDER_COMPLETE_REQUEST_LIMIT) {
 		return `orders:browser:status=${statusValue}${rangePart}:search=${searchValue}:limit=all`;
 	}
 	const boundedLimit = Math.min(

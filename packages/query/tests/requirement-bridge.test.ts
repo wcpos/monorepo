@@ -166,6 +166,21 @@ describe('requirementsForQuery', () => {
 		expect(requirement).not.toHaveProperty('priority');
 	});
 
+	// Fetch-to-completion is reserved for the all-results sentinel Reports passes. An
+	// ordinary ranged grid that scrolls past the browse cap (limit 210) must stay windowed.
+	it('does not promote a scrolled ranged browse to fetch-to-completion', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { date_created_gmt: { $gte: '2026-07-01T00:00:00' } },
+			limit: 210,
+		});
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=200',
+		});
+		expect(requirement).not.toHaveProperty('priority');
+	});
+
 	// A cashier search containing literal range tokens must round-trip as search text.
 	it('keeps literal range tokens in the search component of the descriptor', () => {
 		const [requirement] = requirementsForQuery({
