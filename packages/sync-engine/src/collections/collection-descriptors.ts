@@ -46,7 +46,10 @@ import {
 	materializeTargeted,
 	materializeUpsertRefresh,
 } from '../materialization/record-materialization';
-import { EngineOrderRepository } from '../write-path/engine-order-repository';
+import {
+	EngineOrderRepository,
+	POS_ORDER_IDENTITY_META_KEYS,
+} from '../write-path/engine-order-repository';
 import { taxRateDocumentId, type WooTaxRatePayload } from './tax-rate-schema';
 
 import type { RxDatabase } from 'rxdb';
@@ -390,7 +393,7 @@ const ordersWriteFacet = createWriteFacet({
 		withOrderColumns({
 			payload: orderDocument(document as WooPayload).payload as WooOrderPayload,
 		}) as unknown as Record<string, unknown>,
-	preserveMetaKeys: ['_pos_user', '_pos_store', '_woocommerce_pos_tax_based_on'],
+	preserveMetaKeys: [...POS_ORDER_IDENTITY_META_KEYS],
 	upsert: async (db, document) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
 	},
