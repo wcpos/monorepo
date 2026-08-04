@@ -108,7 +108,14 @@ function orderBrowseDescriptor(
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
 	const epochSeconds = (value: unknown): number | undefined => {
 		if (typeof value !== 'string') return undefined;
-		const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`;
+		// `YYYY-MM-DD` is already UTC-anchored by the Date Time String Format; `YYYY-MM-DDZ`
+		// is NOT a production of that format, so appending `Z` would drop it into each
+		// engine's implementation-defined fallback (this app runs on Hermes and JSC as well
+		// as V8). Only a time-of-day with no offset needs the explicit UTC designator — the
+		// shape `convertLocalDateToUTCString` emits (`yyyy-MM-dd'T'HH:mm:ss`).
+		const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+		const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+		const normalized = dateOnly || hasTimezone ? value : `${value}Z`;
 		const milliseconds = Date.parse(normalized);
 		if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
 		return Math.floor(milliseconds / 1_000);

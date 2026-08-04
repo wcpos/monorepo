@@ -166,6 +166,21 @@ describe('requirementsForQuery', () => {
 		expect(requirement).not.toHaveProperty('priority');
 	});
 
+	// `2026-07-01Z` is not a Date Time String Format production; leaving date-only values
+	// untouched keeps the bound identical across V8, Hermes and JSC.
+	it('reads date-only range bounds as UTC midnight', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'reports',
+			collectionName: 'orders',
+			selector: { date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
+			limit: Number.MAX_SAFE_INTEGER,
+		});
+		// 2026-07-01T00:00:00Z and 2026-07-14T00:00:00Z — UTC midnight, not local midnight.
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
+		});
+	});
+
 	// Fetch-to-completion is reserved for the all-results sentinel Reports passes. An
 	// ordinary ranged grid that scrolls past the browse cap (limit 210) must stay windowed.
 	it('does not promote a scrolled ranged browse to fetch-to-completion', () => {
