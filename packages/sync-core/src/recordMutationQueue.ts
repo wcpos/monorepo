@@ -44,6 +44,8 @@ import type { RecordMutation } from './recordMutation';
  * bookkeeping ⇒ a fresh mutation: 0 attempts, `pending`, ready to push now.
  */
 export type QueuedMutation = RecordMutation & {
+	/** Queue-local override for cashier-triggered pushes; never serialized to the server. */
+	readonly explicit?: boolean;
 	/** Monotonic, per-scope queue position — minted by `enqueue`, the primary drain order key. */
 	readonly seq?: number;
 	/**
@@ -410,6 +412,7 @@ export const recordMutationQueueSchema = {
 		payload: { type: 'object', additionalProperties: true },
 		baseRevision: { type: ['string', 'null'] },
 		queuedAt: { type: 'string', maxLength: 32 },
+		explicit: { type: 'boolean' },
 		seq: { type: 'number', minimum: 1, multipleOf: 1 },
 		coalesced: { type: 'number', minimum: 0, multipleOf: 1 },
 		status: {
