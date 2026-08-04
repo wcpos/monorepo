@@ -49,7 +49,10 @@ export function TemplateRow({
 			className="web:hover:bg-accent flex-row items-center gap-3 rounded-lg px-2 py-2"
 		>
 			<Text className="flex-1 text-sm font-medium">{template.title}</Text>
-			<StatusBadge variant="muted" label={templateTypeLabel(template)} />
+			<StatusBadge
+				variant="muted"
+				label={templateTypeLabel(template, t('settings.template_type_thermal'))}
+			/>
 			<View testID={`template-row-${templateId}-printer-select`}>
 				<Select
 					value={{ value: currentValue, label: selectedLabel }}
