@@ -339,6 +339,16 @@ function productBrowseWindowDescriptor(
  * project a total off the lane must consult this rather than restating these rules
  * elsewhere — a rule stated twice is a rule that drifts.
  */
+/** A condition value in either the bare or single-key `$eq` shape the translator can emit. */
+function eqValue(value: unknown): string | undefined {
+	if (typeof value === 'string') return value;
+	if (value === null || typeof value !== 'object') return undefined;
+	const record = value as Record<string, unknown>;
+	return Object.keys(record).length === 1 && typeof record.$eq === 'string'
+		? record.$eq
+		: undefined;
+}
+
 export function productBrowseWindowFilters(selector: Record<string, unknown> | undefined): {
 	filters: Record<string, string>;
 	residual: boolean;
@@ -391,17 +401,17 @@ export function productBrowseWindowFilters(selector: Record<string, unknown> | u
 				consumed.add(field);
 			}
 		}
-		const stock = record.stock_status;
-		const stockValue =
-			typeof stock === 'string'
-				? stock
-				: stock !== null && typeof stock === 'object'
-					? (stock as Record<string, unknown>).$eq
-					: undefined;
+		const stockValue = eqValue(record.stock_status);
 		if (PRODUCT_STOCK_STATUSES.has(stockValue as string)) {
 			filters.stock_status = stockValue as string;
 			consumed.add('stock_status');
 		}
+		// `status` carries NO dimension on the key, yet `status: 'publish'` is still fully
+		// represented: fetchProductBrowseWindow hardcodes `status=publish` on every window
+		// request, so a published-only selector is exactly what the lane holds. The POS
+		// products grid sets this on every browse — without it the main grid would lose its
+		// coverage total. Any OTHER status has an empty intersection with the window.
+		if (eqValue(record.status) === 'publish') consumed.add('status');
 		if (Object.keys(record).some((key) => !consumed.has(key))) residual = true;
 	}
 	return { filters, residual };

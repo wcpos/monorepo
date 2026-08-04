@@ -482,6 +482,17 @@ describe('requirementsForQuery', () => {
 			).toBe(true);
 		});
 
+		// The POS products grid sets this on EVERY browse. It carries no key dimension, but
+		// the fetcher hardcodes `status=publish` on the wire, so the lane holds exactly it.
+		it('accepts the published-only status the wire window already implies', () => {
+			expect(
+				isFullyRepresentedProductSelector({ status: 'publish', stock_status: 'instock' })
+			).toBe(true);
+			expect(isFullyRepresentedProductSelector({ status: { $eq: 'publish' } })).toBe(true);
+			// Any other status has an empty intersection with a published-only window.
+			expect(isFullyRepresentedProductSelector({ status: 'draft' })).toBe(false);
+		});
+
 		it('rejects selectors the browse-window grammar only partly carries', () => {
 			// Exactly the mixed selector the encoder test above narrows to two dimensions.
 			expect(
