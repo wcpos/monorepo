@@ -172,6 +172,38 @@ describe('query bindings', () => {
 		);
 	});
 
+	it('recovers from a query error when the descriptor changes', async () => {
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'coffee', id: 1, name: 'Coffee' })
+		);
+		const base: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 10,
+		};
+		const { result, rerender } = renderHook(
+			({ state }) => useCollectionBinding('products', state),
+			{ wrapper: Provider, initialProps: { state: base } }
+		);
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+
+		const products = engineDB.collections.products;
+		(products as unknown as { initSearch: () => Promise<never> }).initSearch = async () => {
+			throw new Error('search index failed');
+		};
+		rerender({ state: { ...base, search: 'broken' } });
+		await waitFor(() =>
+			expect(() => result.current.resource.read()).toThrow('search index failed')
+		);
+
+		installResidentSearch(products);
+		rerender({ state: { ...base, search: 'coffee' } });
+		await waitFor(() =>
+			expect(result.current.resource.read().hits.map((hit) => hit.id)).toEqual(['coffee'])
+		);
+	});
+
 	it('keeps finite variation ids at the selector root while applying query-state filters', async () => {
 		await engineDB.collections.variations.bulkInsert([
 			engineVariation({
