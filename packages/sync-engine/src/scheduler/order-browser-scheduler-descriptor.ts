@@ -7,6 +7,9 @@ export type OrderBrowserSchedulerDescriptor = {
 	status: string;
 	search: string;
 	limit: number;
+	afterSeconds?: number;
+	beforeSeconds?: number;
+	complete: boolean;
 	wooStatus: string;
 };
 
@@ -34,12 +37,34 @@ export function parseOrderBrowserSchedulerDescriptor(
 ): OrderBrowserSchedulerDescriptorDecision | null {
 	if (!queryKey.startsWith('orders:browser:')) return null;
 
-	const match = /^orders:browser:status=([^:]*):search=(.*):limit=(\d+)$/.exec(queryKey);
+	// `search` carries arbitrary cashier text, so it must stay the LAST free-text field:
+	// it is delimited only by the literal `:limit=` suffix (greedy `.*` + anchored end),
+	// which is how this grammar has always terminated it. The range dimensions therefore
+	// sit BETWEEN the colon-free `status` and `:search=` — appending them after `search`
+	// would let a literal search term like `invoice:after=1` be read as a date bound.
+	const match =
+		/^orders:browser:status=([^:]*)(?::after=(\d+))?(?::before=(\d+))?:search=(.*):limit=(\d+|all)$/.exec(
+			queryKey
+		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 
-	const [, status, search, limitText] = match;
+	const [, status, afterText, beforeText, search, limitText] = match;
 	if (status === '') return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
-	const limit = browserOrderSchedulerDescriptorLimit(limitText);
+	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
+	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
+	if (
+		(afterSeconds !== undefined && !Number.isSafeInteger(afterSeconds)) ||
+		(beforeSeconds !== undefined && !Number.isSafeInteger(beforeSeconds))
+	) {
+		return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
+	}
+	const complete = limitText === 'all';
+	if (complete && afterSeconds === undefined && beforeSeconds === undefined) {
+		return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
+	}
+	const limit = complete
+		? ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS
+		: browserOrderSchedulerDescriptorLimit(limitText);
 	if (limit === null) return { skipReason: browserOrderSchedulerDescriptorLimitError() };
 
 	return {
@@ -48,6 +73,9 @@ export function parseOrderBrowserSchedulerDescriptor(
 			status,
 			search,
 			limit,
+			...(afterSeconds !== undefined ? { afterSeconds } : {}),
+			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
+			complete,
 			wooStatus: status === 'all' ? '' : status,
 		},
 	};

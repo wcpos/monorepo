@@ -1305,6 +1305,135 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 
+	it('fetches ranged complete order descriptors until a short page', async () => {
+		const repository = {
+			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
+		};
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const fullPage = Array.from({ length: 25 }, (_, index) => ({
+			id: 1_000 - index,
+			date_modified_gmt: '2026-07-01T00:00:00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(1_000 - index) }],
+		}));
+		const shortPage = [
+			{
+				id: 900,
+				date_modified_gmt: '2026-07-02T00:00:00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(900) }],
+			},
+		];
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(response(fullPage))
+			.mockResolvedValueOnce(response(shortPage));
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+		const queryKey =
+			'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all';
+
+		const result = await schedulerFetcher(
+			orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 25 })
+		);
+
+		expect(fetcher).toHaveBeenNthCalledWith(
+			1,
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=2026-07-14T23%3A59%3A59.000Z&dates_are_gmt=true&per_page=25&page=1&orderby=id&order=desc'
+		);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(result.documentCount).toBe(26);
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ queryKey, complete: true })
+		);
+	});
+
+	// A range whose total is an exact multiple of the page size never short-pages, so the
+	// advertised last page is the only stop signal — without it the walk asks for page 3 of
+	// 2 and Woo fails the whole task after every record has already been downloaded.
+	it('stops ranged complete order descriptors at the advertised last page', async () => {
+		const repository = {
+			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
+		};
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const pageOf = (startId: number) =>
+			Array.from({ length: 25 }, (_, index) => ({
+				id: startId - index,
+				date_modified_gmt: '2026-07-01T00:00:00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(startId - index) }],
+			}));
+		const pagedResponse = (payload: unknown[]) =>
+			new Response(JSON.stringify(payload), {
+				status: 200,
+				headers: { 'content-type': 'application/json', 'X-WP-TotalPages': '2' },
+			});
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(pagedResponse(pageOf(1_000)))
+			.mockResolvedValueOnce(pagedResponse(pageOf(900)))
+			.mockRejectedValue(new Error('requested a page past the advertised last page'));
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+		const queryKey =
+			'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all';
+
+		const result = await schedulerFetcher(
+			orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 25 })
+		);
+
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(result.documentCount).toBe(50);
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ queryKey, complete: true })
+		);
+	});
+
+	it('stops ranged complete order descriptors at the runaway backstop as incomplete', async () => {
+		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const page = Array.from({ length: 100 }, (_, index) => ({
+			id: 10_000 - index,
+			date_modified_gmt: '2026-07-01T00:00:00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(10_000 - index) }],
+		}));
+		const fetcher = vi.fn(async () => response(page));
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+		const queryKey = 'orders:browser:status=all:after=1782864000:search=:limit=all';
+
+		const result = await schedulerFetcher(
+			orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 })
+		);
+
+		expect(result.documentCount).toBe(10_000);
+		expect(fetcher).toHaveBeenCalledTimes(100);
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ queryKey, complete: false })
+		);
+	});
+
 	it('fetches browser order search descriptors through Woo REST search requests', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),

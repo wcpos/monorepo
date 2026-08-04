@@ -279,9 +279,46 @@ describe('query bindings', () => {
 			).toMatchObject({
 				collection: 'orders',
 				kind: 'query',
-				queryKey: 'orders:browser:status=processing:search=smith:limit=50',
+				queryKey:
+					'orders:browser:status=processing:after=1782864000:before=1783987200:search=smith:limit=50',
 			})
 		);
+	});
+
+	it('uses coverage for an order status and date-range selector', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		const queryKey =
+			'orders:browser:status=processing:after=1782864000:before=1783987200:search=:limit=25';
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: `orders::${queryKey}`,
+			collectionName: 'orders',
+			queryKey,
+			complete: true,
+			expectedRecordIds: ['order-1', 'order-2'],
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 2,
+		});
+		const { result } = renderHook(
+			() =>
+				useCollectionBinding('orders', {
+					search: '',
+					filters: {
+						status: 'processing',
+						dateRange: { from: '2026-07-01', to: '2026-07-14' },
+					},
+					sort: { field: 'date_created_gmt', direction: 'desc' },
+					limit: 25,
+				}),
+			{ wrapper: Provider }
+		);
+
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
+		).resolves.toBe('coverage');
 	});
 
 	it('keeps the current window rendered while an extended limit loads (no re-suspension)', async () => {

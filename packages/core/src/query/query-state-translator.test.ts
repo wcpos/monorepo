@@ -148,11 +148,11 @@ describe('query-state translator', () => {
 
 		expect(translated.selector).toEqual({
 			status: 'processing',
+			date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' },
 			$and: [
 				{ customer_id: 42 },
 				{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
 				{ meta_data: { $elemMatch: { key: '_pos_store', value: '3' } } },
-				{ date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 			],
 		});
 		expect(translated.search).toBe('smith');
@@ -217,7 +217,13 @@ describe('query-state translator', () => {
 		};
 
 		expect(requirementsForQuery({ ...requirementInput, selector: translated.selector })).toEqual(
-			requirementsForQuery({ ...requirementInput, selector: { status: 'processing' } })
+			requirementsForQuery({
+				...requirementInput,
+				selector: {
+					status: 'processing',
+					date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' },
+				},
+			})
 		);
 	});
 
@@ -246,7 +252,9 @@ describe('query-state translator', () => {
 				id: 'reports-orders-binding:orders-query',
 				collection: 'orders',
 				kind: 'query',
-				queryKey: 'orders:browser:status=completed:search=:limit=200',
+				queryKey:
+					'orders:browser:status=completed:after=1784073600:before=1784159999:search=:limit=all',
+				priority: 700,
 			},
 		]);
 	});

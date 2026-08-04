@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	browserOrderSchedulerDescriptorLimitError,
+	ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS,
 	parseOrderBrowserSchedulerDescriptor,
 } from './order-browser-scheduler-descriptor';
 
@@ -16,6 +17,7 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 				status: 'processing',
 				search: '',
 				limit: 150,
+				complete: false,
 				wooStatus: 'processing',
 			},
 		});
@@ -35,9 +37,88 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 				status: 'processing',
 				search: 'hat',
 				limit: 50,
+				complete: false,
 				wooStatus: 'processing',
 			},
 		});
+	});
+
+	it('parses ranged windowed and fetch-to-completion descriptors', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=25'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({
+				afterSeconds: 1782864000,
+				beforeSeconds: 1784073599,
+				limit: 25,
+				complete: false,
+			}),
+		});
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:after=1782864000:search=:limit=all'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({ afterSeconds: 1782864000, complete: true }),
+		});
+	});
+
+	// The range dimensions sit ahead of `:search=`, so a cashier searching for literal
+	// `:after=` / `:before=` text round-trips as search text instead of silently becoming a
+	// date bound (or being rejected outright and stalling the browse).
+	it('keeps literal range tokens inside the search component', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:search=invoice:after=123:limit=25'
+			)
+		).toEqual({
+			descriptor: {
+				queryKey: 'orders:browser:status=all:search=invoice:after=123:limit=25',
+				status: 'all',
+				search: 'invoice:after=123',
+				limit: 25,
+				complete: false,
+				wooStatus: '',
+			},
+		});
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=all:search=:before=nope:limit=25')
+		).toEqual({
+			descriptor: expect.objectContaining({ search: ':before=nope', limit: 25 }),
+		});
+		// A literal `:before=` INSIDE the search text does not become a second bound: the
+		// range is read before `:search=`, everything after it is search text.
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:after=1782864000:search=x:before=9:limit=all'
+			)
+		).toEqual({
+			descriptor: {
+				queryKey: 'orders:browser:status=all:after=1782864000:search=x:before=9:limit=all',
+				status: 'all',
+				search: 'x:before=9',
+				limit: ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS,
+				afterSeconds: 1782864000,
+				complete: true,
+				wooStatus: '',
+			},
+		});
+	});
+
+	it('rejects unbounded completion and malformed epoch values', () => {
+		for (const queryKey of [
+			'orders:browser:status=all:search=:limit=all',
+			'orders:browser:status=all:after=-1:search=:limit=all',
+			'orders:browser:status=all:after=1.5:search=:limit=all',
+			'orders:browser:status=all:before=nope:search=:limit=25',
+			'orders:browser:status=all:before=2:after=1:search=:limit=25',
+		]) {
+			expect(parseOrderBrowserSchedulerDescriptor(queryKey)).toEqual({
+				skipReason: 'descriptor is not supported',
+			});
+		}
 	});
 
 	it('classifies unsupported browser descriptors with stable skip reasons', () => {
