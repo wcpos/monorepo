@@ -96,11 +96,26 @@ function selectorWithSearch(descriptor: EngineQueryDescriptor): Record<string, u
 }
 
 function useObservableResource<T>(observable$: Observable<T>): ObservableResource<T> {
-	const resource = React.useMemo(() => new ObservableResource(observable$), [observable$]);
+	// One resource for the binding's lifetime: descriptor changes (limit, filters,
+	// search) swap the inner observable via switchMap instead of replacing the
+	// resource, so a mounted consumer keeps its last value until the new query
+	// emits. A fresh resource per descriptor re-suspends useObservableSuspense,
+	// which tears the whole table down to its Suspense fallback on every
+	// pagination bump.
+	const [input$$] = React.useState(() => new BehaviorSubject(observable$));
+	const [resource] = React.useState(
+		() => new ObservableResource(input$$.pipe(switchMap((inner$) => inner$)))
+	);
 	React.useEffect(() => {
-		// The resource owns the direct RxDB/db$ subscription for this descriptor.
-		return () => resource.destroy();
-	}, [resource]);
+		if (input$$.getValue() !== observable$) input$$.next(observable$);
+	}, [input$$, observable$]);
+	React.useEffect(() => {
+		// The resource owns the direct RxDB/db$ subscription for this binding.
+		return () => {
+			resource.destroy();
+			input$$.complete();
+		};
+	}, [input$$, resource]);
 	return resource;
 }
 

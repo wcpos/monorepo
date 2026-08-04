@@ -7,7 +7,8 @@ import { TextDecoder, TextEncoder } from 'node:util';
 
 import * as React from 'react';
 
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react';
+import { useObservableSuspense } from 'observable-hooks';
 import { filter, firstValueFrom } from 'rxjs';
 
 import { QueryProvider, useQueryManager } from '@wcpos/query';
@@ -27,6 +28,7 @@ import { createStoreDatabase } from '../../../query/tests/helpers/db';
 import {
 	createEngineDatabase,
 	createFakeEngine,
+	engineOrder,
 	engineProduct,
 	engineVariation,
 } from '../../../query/tests/helpers/engine';
@@ -248,6 +250,48 @@ describe('query bindings', () => {
 				queryKey: 'orders:browser:status=processing:search=smith:limit=50',
 			})
 		);
+	});
+
+	it('keeps the current window rendered while an extended limit loads (no re-suspension)', async () => {
+		await engineDB.collections.orders.bulkInsert(
+			Array.from({ length: 15 }, (_, index) =>
+				engineOrder({
+					uuid: `order-${index}`,
+					id: index + 1,
+					date_created_gmt: `2026-01-${String(index + 1).padStart(2, '0')}T00:00:00`,
+				})
+			)
+		);
+		const base: QueryStateOf<'orders'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 10,
+		};
+		function OrdersTable({ currentState }: { currentState: QueryStateOf<'orders'> }) {
+			const binding = useCollectionBinding('orders', currentState);
+			const result = useObservableSuspense(binding.resource);
+			return <div data-testid="rows">{result.hits.length}</div>;
+		}
+		function Screen({ currentState }: { currentState: QueryStateOf<'orders'> }) {
+			return (
+				<Provider>
+					<React.Suspense fallback={<div data-testid="skeleton" />}>
+						<OrdersTable currentState={currentState} />
+					</React.Suspense>
+				</Provider>
+			);
+		}
+		const view = render(<Screen currentState={base} />);
+		await waitFor(() => expect(view.getByTestId('rows').textContent).toBe('10'));
+
+		// Infinite scroll: extendLimit bumps the window 10 → 20. The mounted table
+		// must keep showing the first page while the wider window loads — the
+		// Suspense fallback replacing it is the whole-table flash.
+		view.rerender(<Screen currentState={{ ...base, limit: 20 }} />);
+		expect(view.queryByTestId('skeleton')).toBeNull();
+
+		await waitFor(() => expect(view.getByTestId('rows').textContent).toBe('15'));
 	});
 
 	it('exposes coverage-aware total and totalSource rather than the loaded window', async () => {
