@@ -105,18 +105,55 @@ export function normalizeProductBrowseWindowLimit(limit: number | undefined): nu
 	return Math.min(Math.max(stepped, PRODUCT_BROWSE_WINDOW_STEP), PRODUCT_BROWSE_WINDOW_MAX_LIMIT);
 }
 
+/** The filter dimensions, in the one order the grammar admits. */
+export type ProductBrowseWindowFilters = Pick<
+	ProductBrowseWindowDescriptor,
+	'category' | 'tag' | 'brand' | 'featured' | 'on_sale' | 'stock_status'
+>;
+
 /**
- * Build the window's queryKey. The default sort keeps the bare `limit=N` form so the
- * cold-start seed's lane identity is unchanged; any other sort appends the wire sort.
+ * Build the window's queryKey — the ENCODER half of this grammar, and the exact inverse of
+ * {@link parseProductBrowseWindowDescriptor}. The default sort and an empty filter set keep
+ * the bare `limit=N` form so the cold-start seed's lane identity is unchanged; anything else
+ * appends the wire sort, then the filter dimensions in grammar order.
+ *
+ * Encoder and parser must stay in lockstep: a dimension one side can express and the other
+ * drops would either mint a second coverage lane for one filter set or silently widen the
+ * lane relative to the demand that asked for it.
  */
 export function productBrowseWindowQueryKey(
 	limit: number,
-	sort?: { orderby: string; order: string }
+	sort?: { orderby: string; order: string },
+	filters?: ProductBrowseWindowFilters
 ): string {
 	const orderby = sort?.orderby ?? PRODUCT_BROWSE_WINDOW_ORDERBY;
 	const order = sort?.order ?? PRODUCT_BROWSE_WINDOW_ORDER;
 	const base = `${PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX}limit=${limit}`;
-	return isDefaultSort(orderby, order) ? base : `${base}:orderby=${orderby}:order=${order}`;
+	const sortPart = isDefaultSort(orderby, order) ? '' : `:orderby=${orderby}:order=${order}`;
+	return `${base}${sortPart}${productBrowseWindowFilterPart(filters)}`;
+}
+
+/** The `:category=…:tag=…:…` tail of the key; `''` when no dimension is set. */
+export function productBrowseWindowFilterPart(filters?: ProductBrowseWindowFilters): string {
+	if (!filters) return '';
+	const idPart = (field: 'category' | 'tag' | 'brand') => {
+		const ids = filters[field];
+		if (!ids || ids.length === 0) return '';
+		// Canonical spelling — strictly ascending and unique — so one filter set can never
+		// mint two coverage lanes. The parser rejects any other spelling.
+		const canonical = [...new Set(ids)].sort((a, b) => a - b);
+		return `:${field}=${canonical.join(',')}`;
+	};
+	const flagPart = (field: 'featured' | 'on_sale') =>
+		filters[field] === undefined ? '' : `:${field}=${filters[field] ? '1' : '0'}`;
+	return [
+		idPart('category'),
+		idPart('tag'),
+		idPart('brand'),
+		flagPart('featured'),
+		flagPart('on_sale'),
+		filters.stock_status ? `:stock_status=${filters.stock_status}` : '',
+	].join('');
 }
 
 const QUERY_KEY_PATTERN =
