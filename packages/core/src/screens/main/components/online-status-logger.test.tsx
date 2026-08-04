@@ -1,0 +1,68 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { render } from '@testing-library/react';
+
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { getLogger } from '@wcpos/utils/logger';
+
+import { OnlineStatusLogger } from './online-status-logger';
+
+jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
+jest.mock('../../../contexts/translations', () => ({
+	useT: () => (key: string) => key,
+}));
+
+const mockUseOnlineStatus = jest.mocked(useOnlineStatus);
+const logger = getLogger(['wcpos', 'ui', 'header']);
+
+describe('OnlineStatusLogger', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-unavailable' });
+	});
+
+	it('does not log on initial mount', () => {
+		render(<OnlineStatusLogger />);
+
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.success).not.toHaveBeenCalled();
+	});
+
+	it('logs once when the device goes offline', () => {
+		const { rerender } = render(<OnlineStatusLogger />);
+		mockUseOnlineStatus.mockReturnValue({ status: 'offline' });
+
+		rerender(<OnlineStatusLogger />);
+
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		expect(logger.error).toHaveBeenCalledWith('common.device_went_offline', {
+			showToast: true,
+			saveToDb: true,
+		});
+	});
+
+	it('logs once when the connection is restored', () => {
+		const { rerender } = render(<OnlineStatusLogger />);
+		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+
+		rerender(<OnlineStatusLogger />);
+
+		expect(logger.success).toHaveBeenCalledTimes(1);
+		expect(logger.success).toHaveBeenCalledWith('common.connection_restored', {
+			showToast: true,
+			saveToDb: true,
+		});
+	});
+
+	it('does not log again when the status is unchanged', () => {
+		const { rerender } = render(<OnlineStatusLogger />);
+		mockUseOnlineStatus.mockReturnValue({ status: 'offline' });
+		rerender(<OnlineStatusLogger />);
+
+		rerender(<OnlineStatusLogger />);
+
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		expect(logger.success).not.toHaveBeenCalled();
+	});
+});

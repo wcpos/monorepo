@@ -12,6 +12,7 @@ import { registerEngineScopeSwitcher } from '@wcpos/core/contexts/app-state/engi
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
+import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status-logger';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { DeviceScanProvider } from '@wcpos/core/screens/main/hooks/barcodes/device-scan-context';
@@ -362,6 +363,7 @@ export default function AppLayout() {
 
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
+			<OnlineStatusLogger />
 			<EngineConnectivityBridge />
 			<MetricsPersistenceBridge />
 			<SyncStatusPersistenceBridge />
