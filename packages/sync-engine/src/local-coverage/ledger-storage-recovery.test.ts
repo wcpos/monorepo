@@ -60,18 +60,23 @@ afterEach(async () => {
 	openDatabase = undefined;
 });
 
+async function openLedgerDatabase(): Promise<RxDatabase> {
+	const db = await createRxDatabase({
+		name: `ledgerrecovery${(databaseSequence += 1)}`,
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	});
+	openDatabase = db;
+	const creators = engineCollectionCreators();
+	await db.addCollections(
+		Object.fromEntries(LEDGER_COLLECTIONS.map((name) => [name, creators[name]])) as never
+	);
+	return db;
+}
+
 describe('coverage ledger recovery', () => {
 	it('rebuilds the whole ledger once, refreshes the repository, observes it, and retries once', async () => {
-		const db = await createRxDatabase({
-			name: `ledgerrecovery${(databaseSequence += 1)}`,
-			storage: getRxStorageMemory(),
-			multiInstance: false,
-		});
-		openDatabase = db;
-		const creators = engineCollectionCreators();
-		await db.addCollections(
-			Object.fromEntries(LEDGER_COLLECTIONS.map((name) => [name, creators[name]])) as never
-		);
+		const db = await openLedgerDatabase();
 		const events: SyncEvent[] = [];
 		const coverage = createLocalCoverage({
 			database: db as never,
@@ -143,5 +148,35 @@ describe('coverage ledger recovery', () => {
 			expect(db.collections[name]).toBe(rebuiltCollections.get(name));
 		}
 		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
+
+	it('shares one rebuild between concurrent callers instead of leaking the refusal', async () => {
+		const db = await openLedgerDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+
+		// Both callers catch the same refusal before either rebuild finishes: the
+		// second must await the in-flight rebuild and retry, not rethrow.
+		const read = vi
+			.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments')
+			.mockRejectedValueOnce(refusalError('duplicate-primary-id:categories::woo-category:16'))
+			.mockRejectedValueOnce(refusalError('duplicate-primary-id:categories::woo-category:16'));
+
+		await expect(Promise.all([coverage.readSnapshot(), coverage.readSnapshot()])).resolves.toEqual([
+			{ records: [], lanes: [] },
+			{ records: [], lanes: [] },
+		]);
+
+		// Two failures + two retries, and only one ledger rebuild between them.
+		expect(read).toHaveBeenCalledTimes(4);
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+		// Both retries ran against the rebuilt repository, not the stale one.
+		expect(read.mock.contexts[2]).not.toBe(read.mock.contexts[0]);
+		expect(read.mock.contexts[3]).toBe(read.mock.contexts[2]);
 	});
 });

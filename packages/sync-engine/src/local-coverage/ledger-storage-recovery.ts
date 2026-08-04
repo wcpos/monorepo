@@ -33,30 +33,62 @@ export function withLedgerRecovery<T extends object>(input: {
 	rebuild: (reason: string) => Promise<T>;
 }): T {
 	let repository = input.repository;
+	// Startup and the maintenance lanes run coverage operations in parallel, so
+	// several callers catch the same refusal. The rebuild is therefore shared:
+	// one runs at a time, and an operation whose failure predates a completed
+	// rebuild retries against the refreshed ledger instead of rethrowing a stale
+	// error. Same shape as the worker's own reconcileOnce/reconcileGeneration
+	// (packages/database/src/plugins/opfs-targeted-recovery.mjs).
+	let pendingRebuild: Promise<void> | undefined;
+	let rebuildGeneration = 0;
+
+	const invoke = (property: string | symbol, args: unknown[]): unknown =>
+		Reflect.apply(
+			Reflect.get(repository, property) as (...methodArgs: unknown[]) => unknown,
+			repository,
+			args
+		);
+
+	const rebuildOnce = (reason: string): Promise<void> => {
+		if (!pendingRebuild) {
+			pendingRebuild = input
+				.rebuild(reason)
+				.then((freshRepository) => {
+					repository = freshRepository;
+					rebuildGeneration += 1;
+				})
+				.finally(() => {
+					pendingRebuild = undefined;
+				});
+		}
+		return pendingRebuild;
+	};
+
 	const run = async (property: string | symbol, args: unknown[]): Promise<unknown> => {
+		const generationAtStart = rebuildGeneration;
 		try {
-			return await Reflect.apply(
-				Reflect.get(repository, property) as (...methodArgs: unknown[]) => unknown,
-				repository,
-				args
-			);
+			return await invoke(property, args);
 		} catch (error) {
 			const reason = reconciliationRefusalReason(error);
-			if (
-				reason === undefined ||
-				NON_CORRUPTION_REFUSALS.has(reason) ||
-				rebuiltDatabases.has(input.databaseName)
-			) {
-				throw error;
+			if (reason === undefined || NON_CORRUPTION_REFUSALS.has(reason)) throw error;
+
+			// Someone else's rebuild landed while this operation was in flight.
+			if (rebuildGeneration !== generationAtStart) return invoke(property, args);
+
+			// A rebuild is running right now — wait for it rather than leaking the
+			// refusal into an otherwise recoverable caller. If it fails, this
+			// operation genuinely failed, so surface its own storage error.
+			if (pendingRebuild) {
+				await pendingRebuild.catch(() => {
+					throw error;
+				});
+				return invoke(property, args);
 			}
 
+			if (rebuiltDatabases.has(input.databaseName)) throw error;
 			rebuiltDatabases.add(input.databaseName);
-			repository = await input.rebuild(reason);
-			return Reflect.apply(
-				Reflect.get(repository, property) as (...methodArgs: unknown[]) => unknown,
-				repository,
-				args
-			);
+			await rebuildOnce(reason);
+			return invoke(property, args);
 		}
 	};
 
