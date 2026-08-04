@@ -109,14 +109,12 @@ function List<T>({
 	ListFooterComponent,
 	...rest
 }: ListProps<T>) {
-	// extraData is used to force re-renders - we include it in a key or dependency
-	// to ensure items re-render when it changes
-	const extraDataKey = React.useMemo(() => JSON.stringify(extraData), [extraData]);
 	const { ref: rootRef, scrollElement, horizontal } = useRootContext();
 
 	// set up virtualizer
 	const rowVirtualizer = useVirtualWrapper({
 		count: data.length,
+		getItemKey: (index) => (keyExtractor ? keyExtractor(data[index], index) : index),
 		getScrollElement: () => scrollElement,
 		horizontal,
 		overscan,
@@ -201,9 +199,10 @@ function List<T>({
 		<Parent {...wrapperProps}>
 			{rowVirtualizer.getVirtualItems().map((vItem) => {
 				const item = data[vItem.index];
-				// Include extraDataKey in the key to force re-render when extraData changes
-				const baseKey = keyExtractor ? keyExtractor(item, vItem.index) : String(vItem.key);
-				const key = extraDataKey ? `${baseKey}-${extraDataKey}` : baseKey;
+				// Rows render inline (not memoized), so extraData changes reach them via
+				// ordinary re-render — extraData must never be folded into the key, which
+				// would remount every visible row instead.
+				const key = keyExtractor ? keyExtractor(item, vItem.index) : String(vItem.key);
 
 				const itemContext = {
 					item,

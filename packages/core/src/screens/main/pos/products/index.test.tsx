@@ -224,24 +224,39 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().filters).not.toHaveProperty('stock_status');
 	});
 
-	it('remounts the reset baseline when showOutOfStock changes', () => {
+	it('rebases the reset baseline when showOutOfStock changes without remounting the store', () => {
 		const { rerender } = render(<POSProducts />);
 		expect(latestState().filters.stock_status).toBe('instock');
+
+		const setSearch = mockUseBarcode.mock.calls[0]?.[0];
+		act(() => setSearch?.('persisted term'));
+		const actions = mockDataTableProps.actions as {
+			extendLimit: () => void;
+			setFilter: (field: 'stock_status', value: string) => void;
+		};
+		act(() => actions.extendLimit());
 
 		mockShowOutOfStock = true;
 		rerender(<POSProducts />);
 		expect(latestState().filters).not.toHaveProperty('stock_status');
+		// The store survives the toggle — committed search is preserved, where the
+		// old remount key wiped search, sort, and pagination.
+		expect(latestState().search).toBe('persisted term');
+		expect(latestState().limit).toBe(20);
 
-		act(() => {
-			const actions = mockDataTableProps.actions as {
-				setFilter: (field: 'stock_status', value: string) => void;
-			};
-			actions.setFilter('stock_status', 'outofstock');
-		});
+		mockShowOutOfStock = false;
+		rerender(<POSProducts />);
+		expect(latestState()).toMatchObject({ filters: { stock_status: 'instock' }, limit: 20 });
+
+		mockShowOutOfStock = true;
+		rerender(<POSProducts />);
+
+		act(() => actions.setFilter('stock_status', 'outofstock'));
 		fireEvent.click(screen.getByTestId('clear-and-refresh'));
 
 		expect(latestState().filters).not.toHaveProperty('stock_status');
 		expect(latestState().filters).toMatchObject({ status: 'publish' });
+		expect(latestState().limit).toBe(10);
 	});
 
 	it('normalizes the persisted price column key to sortable_price', () => {

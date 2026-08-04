@@ -75,6 +75,7 @@ function List<T>({
 						</ItemContext.Provider>
 					);
 				}}
+				keyExtractor={keyExtractor}
 				drawDistance={overscan * estimatedItemSize}
 				onEndReached={onEndReached}
 				onEndReachedThreshold={onEndReachedThreshold}

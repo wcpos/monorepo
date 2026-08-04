@@ -206,13 +206,13 @@ function POSProductsContent({
 	 */
 	const { onKeyPress } = useBarcode(actions.setSearch, actions.clearSearch);
 
-	/** UI settings are an external observable projected into committed query state. */
+	/**
+	 * UI settings are an external observable projected into committed query state.
+	 * rebaseFilter (not setFilter) so the resetFilters baseline follows the toggle:
+	 * clear-and-refresh must reset to the setting's stock_status, not the mount-time one.
+	 */
 	React.useEffect(() => {
-		if (showOutOfStock) {
-			actions.clearFilter('stock_status');
-		} else {
-			actions.setFilter('stock_status', 'instock');
-		}
+		actions.rebaseFilter('stock_status', showOutOfStock ? undefined : 'instock');
 	}, [actions, showOutOfStock]);
 
 	/**
@@ -354,7 +354,6 @@ export function POSProducts({ isColumn = false }) {
 
 	return (
 		<QueryStateProvider
-			key={showOutOfStock ? 'show-out-of-stock' : 'in-stock-only'}
 			collection="products"
 			initialPageSize={POS_PRODUCTS_PAGE_SIZE}
 			initialSort={initialSort}

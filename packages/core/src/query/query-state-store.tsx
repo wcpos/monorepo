@@ -55,6 +55,8 @@ function createStore<C extends CollectionKey>(
 	pageSize: number
 ): Store<C> {
 	let state = initial;
+	// Cloned so rebaseFilter never mutates the object aliased into the initial state.
+	let resetBaseline = clone(resetFilters);
 	let searchResetNonce = 0;
 	const listeners = new Set<() => void>();
 	const searchResetListeners = new Set<() => void>();
@@ -92,7 +94,19 @@ function createStore<C extends CollectionKey>(
 				else delete filters[field];
 				resultChange({ filters });
 			},
-			resetFilters: () => resultChange({ filters: clone(resetFilters) }),
+			resetFilters: () => resultChange({ filters: clone(resetBaseline) }),
+			rebaseFilter: (field, value) => {
+				resetBaseline = { ...resetBaseline };
+				const filters = { ...state.filters };
+				if (value === undefined) {
+					delete resetBaseline[field];
+					delete filters[field];
+				} else {
+					resetBaseline[field] = value;
+					filters[field] = value;
+				}
+				publish({ ...state, filters });
+			},
 			setSort: (field, direction) => resultChange({ sort: { field, direction } }),
 			extendLimit: () => publish({ ...state, limit: state.limit + pageSize }),
 		},
