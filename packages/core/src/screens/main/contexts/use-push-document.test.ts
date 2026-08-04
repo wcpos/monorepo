@@ -81,6 +81,7 @@ describe('usePushDocument', () => {
 			collection: 'orders',
 			operation: 'update',
 			recordId: 'order-uuid',
+			explicit: true,
 			payload: expect.objectContaining({
 				status: 'processing',
 				line_items: [{ id: 1, product_id: 42, quantity: 2 }],
@@ -113,6 +114,7 @@ describe('usePushDocument', () => {
 			collection: 'orders',
 			operation: 'create',
 			recordId: 'order-uuid',
+			explicit: true,
 			payload: expect.objectContaining({
 				status: 'pos-open',
 				line_items: [],

@@ -278,6 +278,27 @@ describe('createSyncLogObserver', () => {
 		expect(rows).toHaveLength(1);
 	});
 
+	it('persists a rebuilt coverage ledger as a recovered warning', () => {
+		observer.observe(
+			event({
+				type: 'coverage.ledger-rebuilt',
+				level: 'warn',
+				fields: { reason: 'duplicate-primary-id:categories::woo-category:16' },
+			})
+		);
+
+		expect(rows).toEqual([
+			expect.objectContaining({
+				level: 'warn',
+				context: expect.objectContaining({ type: 'coverage.ledger-rebuilt' }),
+				terminal: expect.objectContaining({
+					operationType: 'sync.coverage',
+					outcome: 'recovered',
+				}),
+			}),
+		]);
+	});
+
 	it('persists only failed HTTP attempts, never successful ones', () => {
 		observer.observe(event({ type: 'transport.request', fields: { status: 200, bytes: 9_000 } }));
 		observer.observe(event({ type: 'transport.request', fields: { status: 304, bytes: 0 } }));

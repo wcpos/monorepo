@@ -142,6 +142,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 							operation: 'create',
 							recordId,
 							payload: residentPayload,
+							...(awaitRemoteId ? { explicit: true } : {}),
 						});
 					} catch (error) {
 						writeError = error;

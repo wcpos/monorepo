@@ -266,7 +266,7 @@ describe('query-state translator', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=completed:search=:cashier=7:store=12:after=1784073600:before=1784159999:orderby=date:order=desc:limit=all',
+					'orders:browser:status=completed:cashier=7:store=12:after=1784073600:before=1784159999:orderby=date:order=desc:search=:limit=all',
 				priority: 700,
 			},
 		]);

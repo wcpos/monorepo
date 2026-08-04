@@ -12,7 +12,10 @@
  *    `engine.require({collection, kind: 'search', term, limit})`.
  *  - **order query descriptors** (unbounded orders browse) →
  *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
- *    `orders:browser:status=…:search=…:limit=…` descriptor the engine parses.
+ *    `orders:browser:status=…[:customer=…][:cashier=…][:store=…][:after=…][:before=…]`
+ *    `[:orderby=…:order=…]:search=…:limit=…` descriptor the engine parses. Structured
+ *    dimensions precede `:search=`, which stays the last free-text field; `orderby`
+ *    and `order` only ever appear as a pair, and the `id`/`desc` default is omitted.
  *  - **the products browse window** (UNFILTERED products browse — ADR 0027 §2, #909) →
  *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
  *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor. It carries the
@@ -61,6 +64,15 @@ const ORDER_BROWSE_ORDERBY_BY_SORT_FIELD = {
 	number: 'id',
 	id: 'id',
 } as const;
+
+/**
+ * The "give me every result" sentinel a screen passes when it wants a ranged fetch run to
+ * completion. Reports is the only such screen (`REPORTS_ALL_RESULTS_LIMIT =
+ * Number.MAX_SAFE_INTEGER`); ordinary grids extend their limit one page at a time (orders:
+ * 10, 20 … 200, 210 …) and must stay windowed even once they climb past the browse cap,
+ * per the ruling that Reports is the ONLY fetch-to-completion case.
+ */
+const ORDER_COMPLETE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER;
 
 function finiteWooIds(selector: Record<string, unknown> | undefined): number[] | null {
 	const idSelector = selector?.id as unknown;
@@ -159,7 +171,14 @@ function orderBrowseDescriptor(
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
 	const epochSeconds = (value: unknown): number | undefined => {
 		if (typeof value !== 'string') return undefined;
-		const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`;
+		// `YYYY-MM-DD` is already UTC-anchored by the Date Time String Format; `YYYY-MM-DDZ`
+		// is NOT a production of that format, so appending `Z` would drop it into each
+		// engine's implementation-defined fallback (this app runs on Hermes and JSC as well
+		// as V8). Only a time-of-day with no offset needs the explicit UTC designator — the
+		// shape `convertLocalDateToUTCString` emits (`yyyy-MM-dd'T'HH:mm:ss`).
+		const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+		const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+		const normalized = dateOnly || hasTimezone ? value : `${value}Z`;
 		const milliseconds = Date.parse(normalized);
 		if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
 		return Math.floor(milliseconds / 1_000);
@@ -181,14 +200,18 @@ function orderBrowseDescriptor(
 		orderby === undefined || (orderby === 'id' && direction === 'desc')
 			? ''
 			: `:orderby=${orderby}:order=${direction}`;
-	if (rangePart && typeof limit === 'number' && limit > ORDER_BROWSE_MAX_LIMIT) {
-		return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:limit=all`;
+	// Structured dimensions (customer, cashier, store, the range bounds, then the sort pair)
+	// precede `:search=` so arbitrary search text can never be read back as a filter or sort —
+	// see the grammar note in order-browser-scheduler-descriptor.ts.
+	const dimensionParts = `${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}`;
+	if (rangePart && typeof limit === 'number' && limit >= ORDER_COMPLETE_REQUEST_LIMIT) {
+		return `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=all`;
 	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:limit=${boundedLimit}`;
+	return `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=${boundedLimit}`;
 }
 
 /**

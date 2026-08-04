@@ -42,32 +42,32 @@ export function parseOrderBrowserSchedulerDescriptor(
 ): OrderBrowserSchedulerDescriptorDecision | null {
 	if (!queryKey.startsWith('orders:browser:')) return null;
 
-	const match = /^orders:browser:status=([^:]*):search=(.*):limit=(\d+|all)$/.exec(queryKey);
-	if (!match)
-		return {
-			skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON,
-		};
+	// `search` carries arbitrary cashier text, so it must stay the LAST free-text field:
+	// it is delimited only by the literal `:limit=` suffix (greedy `.*` + anchored end),
+	// which is how this grammar has always terminated it. Every structured dimension
+	// (customer, cashier, store, the range bounds, then the sort pair) therefore sits
+	// BETWEEN the colon-free `status` and `:search=` — appending them after `search`
+	// would let a literal search term like `invoice:after=1` be read as a date bound.
+	const match =
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
+			queryKey
+		);
+	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 
-	const [, status, searchAndDimensions, limitText] = match;
-	if (status === '')
-		return {
-			skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON,
-		};
-	const dimensionsMatch =
-		/^(.*?)(?::customer=(\d+))?(?::cashier=(\d+))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id))?(?::order=(asc|desc))?$/.exec(
-			searchAndDimensions
-		)!;
-	const [, search, customerText, cashierText, store, afterText, beforeText, orderby, order] =
-		dimensionsMatch;
-	if (
-		[':customer=', ':cashier=', ':store=', ':after=', ':before=', ':orderby=', ':order='].some(
-			(marker) => search.includes(marker)
-		)
-	) {
-		return {
-			skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON,
-		};
-	}
+	const [
+		,
+		status,
+		customerText,
+		cashierText,
+		store,
+		afterText,
+		beforeText,
+		orderby,
+		order,
+		search,
+		limitText,
+	] = match;
+	if (status === '') return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 	const customerId = customerText === undefined ? undefined : Number(customerText);
 	const cashierId = cashierText === undefined ? undefined : Number(cashierText);
 	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
