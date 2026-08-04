@@ -636,6 +636,35 @@ describe('query bindings', () => {
 		).resolves.toBe(1);
 	});
 
+	it('keeps the current logs window while an extended limit loads instead of blanking', async () => {
+		await localDB.collections.logs.bulkInsert([
+			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one', context: {} },
+			{ logId: '2', timestamp: 2, code: 'B', level: 'error', message: 'two', context: {} },
+		]);
+		const state: QueryStateOf<'logs'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'timestamp', direction: 'desc' },
+			limit: 1,
+		};
+		const { result, rerender } = renderHook(
+			({ currentState }) => useCollectionBinding('logs', currentState),
+			{ wrapper: Provider, initialProps: { currentState: state } }
+		);
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		const initialResource = result.current.resource;
+
+		// Infinite scroll: the limit extends 1 → 2. The mounted table must keep the
+		// loaded window (same resource, same value) until the wider query emits —
+		// a fresh resource with a synchronous empty first emission blanks the table.
+		rerender({ currentState: { ...state, limit: 2 } });
+
+		expect(result.current.resource).toBe(initialResource);
+		expect(current(result.current.resource)?.hits).toHaveLength(1);
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(2));
+	});
+
 	it('rebinds residents when engine db$ moves to another scope', async () => {
 		const secondDB = await createEngineDatabase(['products']);
 		installResidentSearch(secondDB.collections.products);

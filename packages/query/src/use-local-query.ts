@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { combineLatest, defer, EMPTY, from, of, throwError } from 'rxjs';
+import { combineLatest, defer, from, of, throwError } from 'rxjs';
 import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
 import { useQueryManager } from './provider';
@@ -28,11 +28,14 @@ export interface LocalQueryOptions {
 	search?: string;
 }
 
-function recoverAsEmpty<T>(collection: LocalCollection): MonoTypeOperatorFunction<T> {
+function recoverAsEmpty<T>(
+	collection: LocalCollection,
+	emptyValue: T
+): MonoTypeOperatorFunction<T> {
 	return catchError((error: unknown) =>
 		from(recoverLogsCollectionStorage(collection, error)).pipe(
 			switchMap((recovered) => {
-				return recovered ? EMPTY : throwError(() => error);
+				return recovered ? of(emptyValue) : throwError(() => error);
 			})
 		)
 	);
@@ -79,16 +82,19 @@ function localQueryResult$(
 	return selectors$.pipe(
 		switchMap((matchingSelector) => {
 			const startedAt = performance.now();
+			// No startWith(empty) on these: the first emission must be the real query
+			// result, so a descriptor swap in useLocalQuery keeps the previous window
+			// on screen instead of flashing an empty table.
 			const documents$ = collection
 				.find({
 					selector: matchingSelector,
 					sort: options.sort,
 					limit: options.limit,
 				})
-				.$.pipe(recoverAsEmpty<LocalDocument[]>(collection), startWith([] as LocalDocument[]));
+				.$.pipe(recoverAsEmpty<LocalDocument[]>(collection, []));
 			const total$ = collection
 				.count({ selector: matchingSelector })
-				.$.pipe(recoverAsEmpty<number>(collection), startWith(0));
+				.$.pipe(recoverAsEmpty<number>(collection, 0));
 			return combineLatest([documents$, total$]).pipe(
 				map(([documents, count]): QueryResult<LocalCollection> => ({
 					elapsed: performance.now() - startedAt,
@@ -116,14 +122,22 @@ export const useLocalQuery = (options: LocalQueryOptions) => {
 		() => localQueryResult$(collection, runtime.locale, stableOptions),
 		[collection, runtime.locale, stableOptions]
 	);
-	const resource = React.useMemo(() => new ObservableResource(result$), [result$]);
+	// One resource for the hook's lifetime (mirrors useObservableResource in
+	// @wcpos/core query-bindings): reloading retains the current value while the
+	// new query loads and clears terminal errors, so a descriptor change never
+	// blanks a mounted consumer.
+	const [resource] = React.useState(() => new ObservableResource(result$));
 	const total$ = React.useMemo(
 		() => result$.pipe(map((result) => result.count ?? result.hits.length)),
 		[result$]
 	);
 
 	React.useEffect(() => {
-		// ObservableResource owns the local RxDB subscriptions for this descriptor.
+		if (resource.input$ !== result$) resource.reload(result$);
+	}, [resource, result$]);
+
+	React.useEffect(() => {
+		// The resource owns the local RxDB subscriptions for this hook.
 		return () => resource.destroy();
 	}, [resource]);
 
