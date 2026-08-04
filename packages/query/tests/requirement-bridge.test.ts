@@ -150,6 +150,70 @@ describe('requirementsForQuery', () => {
 		}
 	});
 
+	it('maps cashier and store metadata filters to interactive order dimensions', () => {
+		expect(
+			requirementsForQuery({
+				id: 'orders',
+				collectionName: 'orders',
+				selector: {
+					$and: [
+						{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
+						{ meta_data: { $elemMatch: { key: '_pos_store', value: '12' } } },
+					],
+				},
+				limit: 25,
+			})
+		).toEqual([
+			{
+				id: 'orders:orders-query',
+				collection: 'orders',
+				kind: 'query',
+				queryKey: 'orders:browser:status=all:cashier=7:store=12:search=:limit=25',
+				priority: 700,
+			},
+		]);
+	});
+
+	// The translator only promotes status/customer_id/dateRange to the selector root, so a
+	// slug store arrives as an `$and` condition — both shapes must reach the wire.
+	it('maps root and nested created_via selectors to the store dimension', () => {
+		const selectors: Record<string, unknown>[] = [
+			{ created_via: 'woocommerce-pos' },
+			{ created_via: { $eq: 'woocommerce-pos' } },
+			{ $and: [{ created_via: 'woocommerce-pos' }] },
+			{ $and: [{ created_via: { $eq: 'woocommerce-pos' } }] },
+		];
+		for (const selector of selectors) {
+			expect(
+				requirementsForQuery({ id: 'orders', collectionName: 'orders', selector, limit: 25 })[0]
+			).toMatchObject({
+				queryKey: 'orders:browser:status=all:store=woocommerce-pos:search=:limit=25',
+				priority: 700,
+			});
+		}
+	});
+
+	it('carries only mapped non-default order sorts', () => {
+		const keyFor = (sort: Record<string, 'asc' | 'desc'>[]) =>
+			requirementsForQuery({
+				id: 'orders',
+				collectionName: 'orders',
+				selector: {},
+				limit: 25,
+				sort,
+			})[0];
+		expect(keyFor([{ date_created_gmt: 'desc' }])).toEqual({
+			id: 'orders:orders-query',
+			collection: 'orders',
+			kind: 'query',
+			queryKey: 'orders:browser:status=all:orderby=date:order=desc:search=:limit=25',
+		});
+		expect(keyFor([{ total: 'asc' }])?.queryKey).toBe('orders:browser:status=all:search=:limit=25');
+		expect(keyFor([{ number: 'desc' }])?.queryKey).toBe(
+			'orders:browser:status=all:search=:limit=25'
+		);
+	});
+
 	it('maps reports date ranges to ranged complete order descriptors', () => {
 		expect(
 			requirementsForQuery({
@@ -234,6 +298,25 @@ describe('requirementsForQuery', () => {
 		expect(requirement).toMatchObject({
 			queryKey: 'orders:browser:status=all:search=invoice:after=123:limit=25',
 		});
+	});
+
+	// Priority comes from the computed dimensions, never from sniffing the key text —
+	// otherwise a cashier searching for `note:customer=42` would promote an unfiltered
+	// browse to the interactive band.
+	it('does not promote an unfiltered browse whose search text looks like a dimension', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { search: 'note:customer=42' },
+			limit: 25,
+		});
+		expect(requirement).toEqual({
+			id: 'orders:orders-query',
+			collection: 'orders',
+			kind: 'query',
+			queryKey: 'orders:browser:status=all:search=note:customer=42:limit=25',
+		});
+		expect(requirement).not.toHaveProperty('priority');
 	});
 
 	it('creates no demand for a FILTERED products browse', () => {

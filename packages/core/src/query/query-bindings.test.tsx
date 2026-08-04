@@ -280,7 +280,7 @@ describe('query bindings', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=processing:customer=42:after=1782864000:before=1783987200:search=smith:limit=50',
+					'orders:browser:status=processing:customer=42:cashier=7:store=12:after=1782864000:before=1783987200:orderby=date:order=desc:search=smith:limit=50',
 			})
 		);
 	});
@@ -321,15 +321,66 @@ describe('query bindings', () => {
 
 	it('uses coverage for an order status and date-range selector', async () => {
 		await expectCoverageTotalSource(
-			'orders:browser:status=processing:after=1782864000:before=1783987200:search=:limit=25',
+			'orders:browser:status=processing:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25',
 			{ status: 'processing', dateRange: { from: '2026-07-01', to: '2026-07-14' } }
 		);
 	});
 
 	it('uses coverage for an order status and customer selector', async () => {
 		await expectCoverageTotalSource(
-			'orders:browser:status=processing:customer=42:search=:limit=25',
+			'orders:browser:status=processing:customer=42:orderby=date:order=desc:search=:limit=25',
 			{ status: 'processing', customer_id: 42 }
+		);
+	});
+
+	// The lane may only stand in for the grid's total when the descriptor carries EVERY
+	// condition in the selector. A bound the encoder cannot resolve to epoch seconds is
+	// dropped from the key, so the lane it names is the UNRANGED browse — reporting its
+	// size would over-count the ranged grid.
+	it('keeps the total local when a range bound is not representable in the descriptor', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		const unrangedKey = 'orders:browser:status=processing:orderby=date:order=desc:search=:limit=25';
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: `orders::${unrangedKey}`,
+			collectionName: 'orders',
+			queryKey: unrangedKey,
+			complete: true,
+			expectedRecordIds: ['order-1', 'order-2'],
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 2,
+		});
+		const { result } = renderHook(
+			() =>
+				useCollectionBinding('orders', {
+					search: '',
+					filters: { status: 'processing', dateRange: { from: 'nope', to: 'nope' } },
+					sort: { field: 'date_created_gmt', direction: 'desc' },
+					limit: 25,
+				}),
+			{ wrapper: Provider }
+		);
+
+		const sources: string[] = [];
+		const subscription = result.current.totalSource$.subscribe((source) => sources.push(source));
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		subscription.unsubscribe();
+		expect(sources.length).toBeGreaterThan(0);
+		expect(sources).not.toContain('coverage');
+	});
+
+	it('uses coverage for a reports-shaped order selector (cashier, store and range)', async () => {
+		await expectCoverageTotalSource(
+			'orders:browser:status=completed:cashier=7:store=12:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25',
+			{
+				status: 'completed',
+				cashier: '7',
+				store: '12',
+				dateRange: { from: '2026-07-01', to: '2026-07-14' },
+			}
 		);
 	});
 

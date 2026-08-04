@@ -1080,6 +1080,75 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 
+	it('sends cashier, store, and sort dimensions through Woo REST browser requests', async () => {
+		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const fetcher = vi.fn(async (_url: string) => response([]));
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+
+		for (const queryKey of [
+			'orders:browser:status=processing:cashier=7:store=12:orderby=date:order=asc:search=:limit=25',
+			'orders:browser:status=all:store=woocommerce-pos:search=:limit=25',
+		]) {
+			await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey }));
+		}
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&pos_cashier=7&pos_store=12&per_page=25&page=1&orderby=date&order=asc',
+			'http://wcpos.local/wp-json/wcpos/v2/orders?created_via=woocommerce-pos&per_page=25&page=1&orderby=id&order=desc',
+		]);
+	});
+
+	// `pos_cashier`/`pos_store` are WCPOS proxy params, not wc/v3 core params: a store on an
+	// older plugin ignores them and answers with the unfiltered superset. That superset must
+	// not be recorded as a complete lane, or the grid's projected total (the lane's record
+	// count, un-narrowed) reports every cashier's orders as the filtered total.
+	it('withholds lane completion when the server ignored the POS dimensions', async () => {
+		const orderPayload = (wooId: number, cashier: string) => ({
+			id: wooId,
+			status: 'processing',
+			date_modified_gmt: '2026-05-20T10:12:00',
+			meta_data: [
+				{ key: '_woocommerce_pos_uuid', value: uuidFor(wooId) },
+				{ key: '_pos_user', value: cashier },
+			],
+		});
+		const runWith = async (cashiers: string[]) => {
+			const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+			const schedulerFetcher = createOrdersSchedulerFetcher({
+				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+				repository: { upsertMany: vi.fn(async () => undefined) },
+				coverageRepository,
+				checkpointStore: {
+					readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+					writeCustomPullCheckpoint: vi.fn(async () => undefined),
+				},
+				fetcher: vi.fn(async () =>
+					response(cashiers.map((cashier, index) => orderPayload(900 + index, cashier)))
+				),
+			});
+			const queryKey = 'orders:browser:status=processing:cashier=7:search=:limit=25';
+			await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey }));
+			return coverageRepository.recordQueryResult;
+		};
+
+		// Current plugin: every record carries the requested cashier — lane completes.
+		expect(await runWith(['7', '7'])).toHaveBeenLastCalledWith(
+			expect.objectContaining({ complete: true })
+		);
+		// Old plugin: the param was ignored, so another cashier's order came back too.
+		expect(await runWith(['7', '9'])).toHaveBeenLastCalledWith(
+			expect.objectContaining({ complete: false })
+		);
+	});
+
 	it('records capped browser order query coverage as incomplete without exhaustion evidence', async () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),

@@ -190,7 +190,7 @@ describe('seedOrderSchedulerTasks', () => {
 		expect(seederInput).not.toHaveProperty('ignoreRetryBackoff');
 	});
 
-	it('round-trips a customer through a browser order search descriptor', async () => {
+	function arrangeBrowserOrderSeed() {
 		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
@@ -208,6 +208,11 @@ describe('seedOrderSchedulerTasks', () => {
 			}
 		);
 		mocks.seedPersistedSchedulerTasks.mockResolvedValue(result);
+		return { schedulerRepository, result };
+	}
+
+	it('round-trips a customer through a browser order search descriptor', async () => {
+		const { schedulerRepository, result } = arrangeBrowserOrderSeed();
 
 		await expect(
 			seedOrderFilterSchedulerTask({
@@ -229,6 +234,45 @@ describe('seedOrderSchedulerTasks', () => {
 						requirementId: 'orders.browser.status=processing.customer=42.search=hat.limit=50',
 						collection: 'orders',
 						queryKey: 'orders:browser:status=processing:customer=42:search=hat:limit=50',
+						limit: 50,
+						priority: 700,
+						mode: 'windowed',
+					},
+				],
+				nowMs: 15_500,
+			})
+		);
+	});
+
+	it('round-trips all order dimensions through a browser order search descriptor', async () => {
+		const { schedulerRepository, result } = arrangeBrowserOrderSeed();
+
+		await expect(
+			seedOrderFilterSchedulerTask({
+				getRepository: mocks.getRepository,
+				status: 'processing',
+				search: 'hat',
+				customerId: 42,
+				cashierId: 7,
+				store: '12',
+				orderby: 'date',
+				order: 'asc',
+				limit: 50,
+				nowMs: 15_500,
+			})
+		).resolves.toBe(result);
+
+		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith(
+			expect.objectContaining({
+				repository: schedulerRepository,
+				tasks: [
+					{
+						id: 'orders:browser:status=processing:customer=42:cashier=7:store=12:orderby=date:order=asc:search=hat:limit=50:windowed',
+						requirementId:
+							'orders.browser.status=processing.customer=42.cashier=7.store=12.orderby=date.order=asc.search=hat.limit=50',
+						collection: 'orders',
+						queryKey:
+							'orders:browser:status=processing:customer=42:cashier=7:store=12:orderby=date:order=asc:search=hat:limit=50',
 						limit: 50,
 						priority: 700,
 						mode: 'windowed',

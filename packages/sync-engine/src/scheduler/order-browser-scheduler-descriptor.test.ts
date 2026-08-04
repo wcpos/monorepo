@@ -85,9 +85,42 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 		});
 	});
 
+	it('parses cashier, store, and sort dimensions alone and combined', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=all:cashier=7:search=:limit=25')
+		).toEqual({ descriptor: expect.objectContaining({ cashierId: 7 }) });
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:store=woocommerce-pos:search=:limit=25'
+			)
+		).toEqual({ descriptor: expect.objectContaining({ store: 'woocommerce-pos' }) });
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:orderby=modified:order=asc:search=:limit=25'
+			)
+		).toEqual({ descriptor: expect.objectContaining({ orderby: 'modified', order: 'asc' }) });
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=processing:customer=42:cashier=7:store=12:after=1782864000:before=1784073599:orderby=date:order=desc:search=hat:limit=25'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({
+				search: 'hat',
+				customerId: 42,
+				cashierId: 7,
+				store: '12',
+				afterSeconds: 1782864000,
+				beforeSeconds: 1784073599,
+				orderby: 'date',
+				order: 'desc',
+			}),
+		});
+	});
+
 	// Every structured dimension sits ahead of `:search=`, so a cashier searching for literal
-	// `:customer=` / `:after=` / `:before=` text round-trips as search text instead of silently
-	// becoming a bound (or being rejected outright and stalling the browse).
+	// `:customer=` / `:cashier=` / `:store=` / `:after=` / `:before=` / `:orderby=` text
+	// round-trips as search text instead of silently becoming a filter or sort (or being
+	// rejected outright and stalling the browse).
 	it('keeps literal dimension tokens inside the search component', () => {
 		expect(
 			parseOrderBrowserSchedulerDescriptor(
@@ -139,6 +172,53 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 				wooStatus: '',
 			},
 		});
+		// …and for this PR's dimensions: `table:store=main`, `note:cashier=42` and a trailing
+		// sort pair all stay search text, so no unintended filter or sort reaches the wire.
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:search=table:store=main:limit=25'
+			)
+		).toEqual({
+			descriptor: {
+				queryKey: 'orders:browser:status=all:search=table:store=main:limit=25',
+				status: 'all',
+				search: 'table:store=main',
+				limit: 25,
+				complete: false,
+				wooStatus: '',
+			},
+		});
+		// An applied cashier dimension and a literal `:cashier=` search term coexist: the
+		// dimension is the one ahead of `:search=`, the search term stays verbatim.
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:cashier=7:search=note:cashier=42:limit=25'
+			)
+		).toEqual({
+			descriptor: {
+				queryKey: 'orders:browser:status=all:cashier=7:search=note:cashier=42:limit=25',
+				status: 'all',
+				search: 'note:cashier=42',
+				cashierId: 7,
+				limit: 25,
+				complete: false,
+				wooStatus: '',
+			},
+		});
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:search=hat:orderby=total:order=desc:limit=25'
+			)
+		).toEqual({
+			descriptor: {
+				queryKey: 'orders:browser:status=all:search=hat:orderby=total:order=desc:limit=25',
+				status: 'all',
+				search: 'hat:orderby=total:order=desc',
+				limit: 25,
+				complete: false,
+				wooStatus: '',
+			},
+		});
 	});
 
 	it('rejects unbounded completion and malformed epoch values', () => {
@@ -163,6 +243,27 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 			expect(
 				parseOrderBrowserSchedulerDescriptor(
 					`orders:browser:status=all:customer=${customer}:search=:limit=25`
+				)
+			).toEqual({ skipReason: 'descriptor is not supported' });
+		}
+	});
+
+	it('rejects malformed cashier, store, and sort dimensions', () => {
+		for (const dimension of [
+			'cashier=-1',
+			'cashier=1.5',
+			'cashier=9007199254740992',
+			'store=',
+			'store=WCPOS',
+			'store=bad:value',
+			'store=bad=value',
+			'orderby=date',
+			'order=desc',
+			'orderby=total:order=desc',
+		]) {
+			expect(
+				parseOrderBrowserSchedulerDescriptor(
+					`orders:browser:status=all:${dimension}:search=:limit=25`
 				)
 			).toEqual({ skipReason: 'descriptor is not supported' });
 		}
