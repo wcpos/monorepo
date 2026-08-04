@@ -205,6 +205,30 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.sync('reference-seed');
 		await engine.sync('scheduler-drain');
 		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
+
+		// An ACTIVE lane is not the same answer as a deduped one: another owner is mid-pull,
+		// so this caller is released (as the orders/products require branches do) rather than
+		// being told its stale residents are fresh.
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const [categoriesTask] = await (
+			scope.database.collections.schedulerTaskStates as {
+				find(query: unknown): {
+					exec(): Promise<{ incrementalPatch(patch: unknown): Promise<unknown> }[]>;
+				};
+			}
+		)
+			.find({ selector: { taskId: { $regex: '^categories' } } })
+			.exec();
+		await categoriesTask!.incrementalPatch({ status: 'in-flight' });
+
+		const contended = await engine.require({
+			id: 'category-picker-contended',
+			collection: 'categories',
+			kind: 'refresh',
+		}).ready;
+		expect(contended).toMatchObject({ action: 'released' });
+		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
 		await engine.dispose();
 	});
 

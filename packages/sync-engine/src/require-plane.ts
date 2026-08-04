@@ -463,6 +463,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// pull, so repeated opens cost nothing until the window lapses.
 			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
 				let drainResult = emptyDrainResult();
+				let skippedActive = false;
 				let deduped = false;
 				const applied = await bound.guardWrite(async () => {
 					const nowMs = deps.now?.();
@@ -472,7 +473,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						getRepository: async () => ({ getDatabase: () => database as never }),
 						...(nowMs !== undefined ? { nowMs } : {}),
 					});
-					if (seedResult.skippedActive > 0 || seedResult.skippedCompleted > 0) {
+					// `skippedActive` and `skippedCompleted` are NOT the same answer. An active
+					// lane means another owner is mid-pull, which releases this caller the way the
+					// order/product branches above do. Only a completed lane inside the dedupe
+					// window is a genuine "your data is already fresh" — that one serves local.
+					if (seedResult.skippedActive > 0) {
+						skippedActive = true;
+						return;
+					}
+					if (seedResult.skippedCompleted > 0) {
 						deduped = true;
 						return;
 					}
@@ -491,8 +500,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				});
 				if (applied === 'dropped')
 					throw new Error('require: scope moved mid-refresh (writes dropped)');
-				if (drainResult.failed > 0)
-					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
+				if (skippedActive)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: `${descriptor.collection} refresh already in progress`,
+					};
 				if (deduped) {
 					return {
 						action: 'serve-local',
@@ -502,6 +515,19 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						requests: 0,
 					};
 				}
+				if (drainResult.failed > 0)
+					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
+				const lostReferenceClaims = drainLostOutcomeCount(drainResult);
+				// Claim loss means another owner is completing the durable task. Like
+				// skippedActive, it releases this caller rather than reporting failure.
+				if (lostReferenceClaims > 0)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'claim lost to another owner',
+						documents: drainResult.totalDocuments,
+						requests: drainResult.totalRequests,
+					};
 				return {
 					action: 'fetched',
 					missingRecordIds: [],
