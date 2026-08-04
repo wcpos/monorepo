@@ -24,6 +24,11 @@ import {
 	type CoverageCompactionFailureDatabase,
 	RxCoverageCompactionFailureRepository,
 } from './rx-coverage-compaction-failure-repository';
+import { withLedgerRecovery } from './ledger-storage-recovery';
+import {
+	DERIVABLE_METADATA_COLLECTIONS,
+	resetDerivableMetadataCollection,
+} from '../collections/engine-collections';
 
 import type { PersistedCoverageDocumentSet } from '../scheduler/persisted-coverage-schema';
 import type { LocalRecordCoverage } from '../scheduler/coverage-model';
@@ -35,6 +40,7 @@ import type {
 import type { ReconcileSummary } from './reconcile-existence-pass';
 import type { ExistenceManifestDocument } from './existence-manifest-schema';
 import type { ServerDigestEntry } from '../reconcile-bucket-plan';
+import type { RxDatabase } from 'rxdb';
 
 /**
  * Narrow override used by paired marker writes that must establish ordering
@@ -141,7 +147,7 @@ const emptyReconcileSummary = (): ReconcileSummary => ({
 });
 
 export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalCoverage {
-	const repository = new RxCoverageRepository(options.database);
+	const database = options.database as unknown as RxDatabase;
 	const now = options.now ?? Date.now;
 	const observe = (event: Parameters<SyncObserver>[0]) => {
 		try {
@@ -150,6 +156,18 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			/* telemetry never breaks coverage */
 		}
 	};
+	const repository = withLedgerRecovery({
+		databaseName: database.name,
+		repository: new RxCoverageRepository(options.database),
+		rebuild: async (reason) => {
+			for (const name of DERIVABLE_METADATA_COLLECTIONS) {
+				await resetDerivableMetadataCollection(database, name);
+			}
+			const freshRepository = new RxCoverageRepository(options.database);
+			observe({ type: 'coverage.ledger-rebuilt', level: 'warn', fields: { reason } });
+			return freshRepository;
+		},
+	});
 
 	return {
 		recordQueryResult: (input) =>
