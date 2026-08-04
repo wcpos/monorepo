@@ -56,6 +56,15 @@ const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
 /** The web scheduler's browse-lane cap; the engine rejects larger order descriptors. */
 const ORDER_BROWSE_MAX_LIMIT = 200;
 
+/**
+ * The "give me every result" sentinel a screen passes when it wants a ranged fetch run to
+ * completion. Reports is the only such screen (`REPORTS_ALL_RESULTS_LIMIT =
+ * Number.MAX_SAFE_INTEGER`); ordinary grids extend their limit one page at a time (orders:
+ * 10, 20 … 200, 210 …) and must stay windowed even once they climb past the browse cap,
+ * per the ruling that Reports is the ONLY fetch-to-completion case.
+ */
+const ORDER_COMPLETE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER;
+
 function finiteWooIds(selector: Record<string, unknown> | undefined): number[] | null {
 	const idSelector = selector?.id as unknown;
 	if (idSelector === undefined || idSelector === null) {
@@ -115,7 +124,14 @@ function orderBrowseDescriptor(
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
 	const epochSeconds = (value: unknown): number | undefined => {
 		if (typeof value !== 'string') return undefined;
-		const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`;
+		// `YYYY-MM-DD` is already UTC-anchored by the Date Time String Format; `YYYY-MM-DDZ`
+		// is NOT a production of that format, so appending `Z` would drop it into each
+		// engine's implementation-defined fallback (this app runs on Hermes and JSC as well
+		// as V8). Only a time-of-day with no offset needs the explicit UTC designator — the
+		// shape `convertLocalDateToUTCString` emits (`yyyy-MM-dd'T'HH:mm:ss`).
+		const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+		const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+		const normalized = dateOnly || hasTimezone ? value : `${value}Z`;
 		const milliseconds = Date.parse(normalized);
 		if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
 		return Math.floor(milliseconds / 1_000);
@@ -125,14 +141,17 @@ function orderBrowseDescriptor(
 	const rangePart = `${afterSeconds === undefined ? '' : `:after=${afterSeconds}`}${
 		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
 	}`;
-	if (rangePart && typeof limit === 'number' && limit > ORDER_BROWSE_MAX_LIMIT) {
-		return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${rangePart}:limit=all`;
+	// Structured dimensions (customer, then the range bounds) precede `:search=` so arbitrary
+	// search text can never be read back as a filter — see the grammar note in
+	// order-browser-scheduler-descriptor.ts.
+	if (rangePart && typeof limit === 'number' && limit >= ORDER_COMPLETE_REQUEST_LIMIT) {
+		return `orders:browser:status=${statusValue}${customerPart}${rangePart}:search=${searchValue}:limit=all`;
 	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${rangePart}:limit=${boundedLimit}`;
+	return `orders:browser:status=${statusValue}${customerPart}${rangePart}:search=${searchValue}:limit=${boundedLimit}`;
 }
 
 /**

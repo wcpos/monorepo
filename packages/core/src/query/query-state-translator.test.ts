@@ -254,7 +254,7 @@ describe('query-state translator', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=completed:search=:after=1784073600:before=1784159999:limit=all',
+					'orders:browser:status=completed:after=1784073600:before=1784159999:search=:limit=all',
 				priority: 700,
 			},
 		]);

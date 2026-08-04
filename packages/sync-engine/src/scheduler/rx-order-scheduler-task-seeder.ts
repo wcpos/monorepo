@@ -104,12 +104,15 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 
 	const status = input.status.trim() || 'all';
 	const search = input.search.trim();
+	// Structured dimensions (customer, then the range bounds) precede `:search=` so arbitrary
+	// search text can never be read back as a filter — see the grammar note in
+	// order-browser-scheduler-descriptor.ts.
 	const customerPart = input.customerId === undefined ? '' : `:customer=${input.customerId}`;
 	const rangePart = `${
 		input.afterSeconds === undefined ? '' : `:after=${input.afterSeconds}`
 	}${input.beforeSeconds === undefined ? '' : `:before=${input.beforeSeconds}`}`;
 	const limitPart = input.complete ? 'all' : input.limit;
-	const queryKey = `orders:browser:status=${status}:search=${search}${customerPart}${rangePart}:limit=${limitPart}`;
+	const queryKey = `orders:browser:status=${status}${customerPart}${rangePart}:search=${search}:limit=${limitPart}`;
 	const descriptorDecision = parseOrderBrowserSchedulerDescriptor(queryKey);
 	if (!descriptorDecision || 'skipReason' in descriptorDecision) {
 		throw new Error(

@@ -141,9 +141,9 @@ describe('requirementsForQuery', () => {
 					id: 'customer-orders:orders-query',
 					collection: 'orders',
 					kind: 'query',
-					queryKey: `orders:browser:status=processing:search=:customer=${
+					queryKey: `orders:browser:status=processing:customer=${
 						typeof customer_id === 'number' ? customer_id : customer_id.$eq
-					}:limit=25`,
+					}:search=:limit=25`,
 					priority: 700,
 				},
 			]);
@@ -170,7 +170,7 @@ describe('requirementsForQuery', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=completed:search=:after=1782864000:before=1784073599:limit=all',
+					'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all',
 				priority: 700,
 			},
 		]);
@@ -184,8 +184,55 @@ describe('requirementsForQuery', () => {
 			limit: 25,
 		});
 		expect(requirement).toMatchObject({
-			queryKey: 'orders:browser:status=all:search=:after=1782864000:limit=25',
+			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=25',
 			priority: 700,
+		});
+	});
+
+	// `2026-07-01Z` is not a Date Time String Format production; leaving date-only values
+	// untouched keeps the bound identical across V8, Hermes and JSC.
+	it('reads date-only range bounds as UTC midnight', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'reports',
+			collectionName: 'orders',
+			selector: { date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
+			limit: Number.MAX_SAFE_INTEGER,
+		});
+		// 2026-07-01T00:00:00Z and 2026-07-14T00:00:00Z — UTC midnight, not local midnight.
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
+		});
+	});
+
+	// Fetch-to-completion is reserved for the all-results sentinel Reports passes. An
+	// ordinary ranged grid that scrolls past the browse cap (limit 210) must stay windowed.
+	it('does not promote a scrolled ranged browse to fetch-to-completion', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { date_created_gmt: { $gte: '2026-07-01T00:00:00' } },
+			limit: 210,
+		});
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=200',
+			// Priority and completion are independent axes: a cashier-applied dimension is
+			// interactive demand (700) whether or not it is allowed to run to completion.
+			// Only `:limit=all` — the sentinel Reports passes — authorises completion.
+			priority: 700,
+		});
+		expect(requirement.queryKey).not.toContain(':limit=all');
+	});
+
+	// A cashier search containing literal range tokens must round-trip as search text.
+	it('keeps literal range tokens in the search component of the descriptor', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { search: 'invoice:after=123' },
+			limit: 25,
+		});
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:search=invoice:after=123:limit=25',
 		});
 	});
 

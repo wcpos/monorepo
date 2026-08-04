@@ -222,10 +222,10 @@ describe('seedOrderSchedulerTasks', () => {
 				repository: schedulerRepository,
 				tasks: [
 					{
-						id: 'orders:browser:status=processing:search=hat:customer=42:limit=50:windowed',
-						requirementId: 'orders.browser.status=processing.search=hat.customer=42.limit=50',
+						id: 'orders:browser:status=processing:customer=42:search=hat:limit=50:windowed',
+						requirementId: 'orders.browser.status=processing.customer=42.search=hat.limit=50',
 						collection: 'orders',
-						queryKey: 'orders:browser:status=processing:search=hat:customer=42:limit=50',
+						queryKey: 'orders:browser:status=processing:customer=42:search=hat:limit=50',
 						limit: 50,
 						priority: 700,
 						mode: 'windowed',

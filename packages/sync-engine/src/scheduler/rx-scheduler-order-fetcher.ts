@@ -319,6 +319,8 @@ async function fetchBrowserOrderQuery(
 			throw new Error(`Woo REST browser order query request failed: ${response.status}`);
 		}
 
+		const totalPagesHeader = response.headers.get('X-WP-TotalPages');
+		const totalPages = Number(totalPagesHeader);
 		const payloads = JSON.parse(await response.text()) as WooOrderPayload[];
 		const remaining = recordLimit - documentCount;
 		const documents = payloads.slice(0, remaining).map(orderDocumentFromWooPayload);
@@ -339,8 +341,15 @@ async function fetchBrowserOrderQuery(
 		documentCount += documents.length;
 		requestCount += 1;
 
+		// A short page is the usual end-of-walk signal, but a range whose total is an exact
+		// multiple of the page size never produces one — every page is full. Woo advertises
+		// the last page in `X-WP-TotalPages` (the same signal the product fetcher and the
+		// customer trickle already stop on), so honour it rather than requesting a page past
+		// the end and failing the whole task after downloading every record.
+		const atAdvertisedLastPage =
+			totalPagesHeader !== null && Number.isSafeInteger(totalPages) && requestCount >= totalPages;
 		if (
-			payloads.length < descriptor.perPage &&
+			(payloads.length < descriptor.perPage || atAdvertisedLastPage) &&
 			payloads.length <= remaining &&
 			!(descriptor.complete && documentCount >= RANGED_COMPLETE_MAX_RECORDS)
 		) {
