@@ -2,9 +2,9 @@ import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 
 /**
  * The products BROWSE-WINDOW descriptor (ADR 0027 §2) — the products mirror of the
- * orders open-recent window (orderBrowserSchedulerDescriptor.ts), deliberately thinner:
- * one bounded result window over the servable set, with no filters. It exists so a cold
- * grid shows products without a search; it is a seed, not a query engine.
+ * orders open-recent window (orderBrowserSchedulerDescriptor.ts): one bounded result
+ * window over the servable set. It exists so a cold grid shows products without a search;
+ * it is a seed, not a query engine.
  *
  * §2, revised (#909): the window is no longer single-sort and no longer single-page.
  *
@@ -14,12 +14,15 @@ import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
  *    sort): plausible-looking, silently wrong data. The window now carries `orderby`/
  *    `order`, so a non-default sort RE-SEEDS a server-sorted window. Only sorts inside WC
  *    core's products `orderby` enum are expressible; the rest fall back to the default
- *    window (the caller maps them — see requirementsForQuery). The line ADR 0027 §2 draws
- *    is unchanged in kind: still no filters, still one bounded window, still no arbitrary
- *    predicate — the window simply travels with the sort the grid is actually showing.
+ *    window (the caller maps them — see requirementsForQuery). The window remains bounded
+ *    and travels with the sort the grid is actually showing.
  *  - **Size.** The window grows with the grid's limit (infinite scroll) in
  *    {@link PRODUCT_BROWSE_WINDOW_STEP} steps up to {@link PRODUCT_BROWSE_WINDOW_MAX_LIMIT},
  *    quantized so a 10-row scroll tick does not mint a new coverage lane every time.
+ *  - **Filters.** The old “filtered browse = local residents only” ruling was overturned
+ *    by Paul on 2026-08-04 (wayfinder: reports-date-range-demand-wayfinder). Representable
+ *    cashier-applied filters now create wired, WINDOWED demand. The window remains bounded
+ *    (G3); fetch-to-completion remains an orders/reports concept.
  *
  * WINDOW SIZE IS NOT WIRE PAGE SIZE (#908). The limit here is a coverage total — how many
  * rows the grid seeds, a UX choice. How many records travel per HTTP request is the
@@ -49,11 +52,18 @@ export const PRODUCT_BROWSE_WINDOW_ORDERBY_VALUES = [
 
 export type ProductBrowseWindowOrderby = (typeof PRODUCT_BROWSE_WINDOW_ORDERBY_VALUES)[number];
 export type ProductBrowseWindowOrder = 'asc' | 'desc';
+export type ProductBrowseWindowStockStatus = 'instock' | 'outofstock' | 'onbackorder';
 
 export type ProductBrowseWindowDescriptor = {
 	limit: number;
 	orderby: ProductBrowseWindowOrderby;
 	order: ProductBrowseWindowOrder;
+	category?: number[];
+	tag?: number[];
+	brand?: number[];
+	featured?: boolean;
+	on_sale?: boolean;
+	stock_status?: ProductBrowseWindowStockStatus;
 };
 
 /** Default result-window size — one Woo page's worth of rows, NOT a per-request size. */
@@ -67,7 +77,7 @@ export const PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT = PRODUCT_BROWSE_WINDOW_LIMIT;
 export const PRODUCT_BROWSE_WINDOW_STEP = 100;
 /**
  * Hard ceiling on the seeded window. Browse is a seed, not a query engine — past this,
- * the answer is search or a filter, not more scrolling.
+ * narrow with search or filters rather than keep scrolling.
  */
 export const PRODUCT_BROWSE_WINDOW_MAX_LIMIT = 1_000;
 export const PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX = 'products:browse-window:';
@@ -110,7 +120,17 @@ export function productBrowseWindowQueryKey(
 }
 
 const QUERY_KEY_PATTERN =
-	/^products:browse-window:limit=(\d+)(?::orderby=([a-z_]+):order=(asc|desc))?$/;
+	/^products:browse-window:limit=(\d+)(?::orderby=([a-z_]+):order=(asc|desc))?(?::category=(\d+(?:,\d+)*))?(?::tag=(\d+(?:,\d+)*))?(?::brand=(\d+(?:,\d+)*))?(?::featured=(0|1))?(?::on_sale=(0|1))?(?::stock_status=(instock|outofstock|onbackorder))?$/;
+
+function parseCanonicalIds(value: string | undefined): number[] | null | undefined {
+	if (value === undefined) return undefined;
+	const ids = value.split(',').map(Number);
+	return ids.every(
+		(id, index) => Number.isSafeInteger(id) && id > 0 && (index === 0 || id > ids[index - 1]!)
+	)
+		? ids
+		: null;
+}
 
 /**
  * Parse a browse-window queryKey. The limit is a positive integer within
@@ -127,19 +147,24 @@ export function parseProductBrowseWindowDescriptor(
 	if (!Number.isSafeInteger(limit) || limit <= 0 || limit > PRODUCT_BROWSE_WINDOW_MAX_LIMIT) {
 		return null;
 	}
-	if (match[2] === undefined) {
-		return {
-			limit,
-			orderby: PRODUCT_BROWSE_WINDOW_ORDERBY,
-			order: PRODUCT_BROWSE_WINDOW_ORDER,
-		};
-	}
-	const orderby = match[2];
-	const order = match[3] as ProductBrowseWindowOrder;
+	const orderby = match[2] ?? PRODUCT_BROWSE_WINDOW_ORDERBY;
+	const order = (match[3] ?? PRODUCT_BROWSE_WINDOW_ORDER) as ProductBrowseWindowOrder;
 	if (!isProductBrowseWindowOrderby(orderby)) return null;
 	// The default sort has exactly one spelling — the bare `limit=N` key.
-	if (isDefaultSort(orderby, order)) return null;
-	return { limit, orderby, order };
+	if (match[2] !== undefined && isDefaultSort(orderby, order)) return null;
+	const [category, tag, brand] = [match[4], match[5], match[6]].map(parseCanonicalIds);
+	if (category === null || tag === null || brand === null) return null;
+	return {
+		limit,
+		orderby,
+		order,
+		...(category ? { category } : {}),
+		...(tag ? { tag } : {}),
+		...(brand ? { brand } : {}),
+		...(match[7] ? { featured: match[7] === '1' } : {}),
+		...(match[8] ? { on_sale: match[8] === '1' } : {}),
+		...(match[9] ? { stock_status: match[9] as ProductBrowseWindowStockStatus } : {}),
+	};
 }
 
 /** The window's limit, or null when the queryKey is not a browse-window descriptor. */

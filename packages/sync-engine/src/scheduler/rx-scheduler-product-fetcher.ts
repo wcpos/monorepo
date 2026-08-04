@@ -304,6 +304,13 @@ async function fetchProductBrowseWindow(
 	query.set('orderby', descriptor.orderby);
 	query.set('order', descriptor.order);
 	query.set('status', 'publish');
+	for (const field of ['category', 'tag', 'brand'] as const) {
+		if (descriptor[field]) query.set(field, descriptor[field].join(','));
+	}
+	for (const field of ['featured', 'on_sale'] as const) {
+		if (descriptor[field] !== undefined) query.set(field, String(descriptor[field]));
+	}
+	if (descriptor.stock_status) query.set('stock_status', descriptor.stock_status);
 
 	const windowPages = Math.ceil(limit / pageSize);
 	let payloads: WooProductPayload[] = [];

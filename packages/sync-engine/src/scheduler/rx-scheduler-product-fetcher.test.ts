@@ -227,7 +227,7 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
-	it('applies the id tiebreak before truncating a full remote browse window', async () => {
+	it('keeps browse filters on phase-1 and phase-2 requests while applying the id tiebreak', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -286,22 +286,23 @@ describe('createProductsSchedulerFetcher', () => {
 		const result = await schedulerFetcher(
 			productTask({
 				id: 'products:browse-window:limit=100:windowed',
-				queryKey: 'products:browse-window:limit=100',
+				queryKey:
+					'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
 				limit: 100,
 			})
 		);
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=1'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&category=2%2C7&tag=3&brand=5&featured=true&on_sale=false&stock_status=instock&page=1'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=2'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&category=2%2C7&tag=3&brand=5&featured=true&on_sale=false&stock_status=instock&page=2'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			3,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=3'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&category=2%2C7&tag=3&brand=5&featured=true&on_sale=false&stock_status=instock&page=3'
 		);
 		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
 			{ wooProductId: number }[],
@@ -312,7 +313,8 @@ describe('createProductsSchedulerFetcher', () => {
 		]);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({
-				queryKey: 'products:browse-window:limit=100',
+				queryKey:
+					'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
 				complete: true,
 			})
 		);

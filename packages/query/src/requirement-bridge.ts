@@ -13,16 +13,13 @@
  *  - **order query descriptors** (unbounded orders browse) →
  *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
  *    `orders:browser:status=…:search=…:limit=…` descriptor the engine parses.
- *  - **the products browse window** (UNFILTERED products browse — ADR 0027 §2, #909) →
+ *  - **the products browse window** (products browse — ADR 0027 §2, #909) →
  *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
- *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor. It carries the
- *    grid's own limit and sort, so infinite scroll fetches the next window and a sort
- *    change re-seeds a server-sorted one.
+ *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor plus optional native
+ *    filter dimensions. It carries the grid's own limit, sort, and representable filters.
  *
- * FILTERED browse over products, and unbounded browse over every other collection,
- * creates NO remote demand (local residents only) — that is the accepted ADR 0027
- * design, not a gap. The
- * `greedy`/`endpoint` keys no longer create remote work; they are accepted and
+ * Unbounded browse over every other collection creates NO remote demand (local residents
+ * only). The `greedy`/`endpoint` keys no longer create remote work; they are accepted and
  * ignored (deleted at convergence).
  *
  */
@@ -201,6 +198,7 @@ const PRODUCT_BROWSE_WINDOW_STEP = 100;
 const PRODUCT_BROWSE_WINDOW_MAX_LIMIT = 1_000;
 const PRODUCT_BROWSE_DEFAULT_ORDERBY = 'menu_order';
 const PRODUCT_BROWSE_DEFAULT_ORDER = 'asc';
+const PRODUCT_STOCK_STATUSES = new Set(['instock', 'outofstock', 'onbackorder']);
 
 /**
  * UI sort field → WC core products `orderby`. Fields NOT in this map (sku, barcode,
@@ -221,9 +219,10 @@ const PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD: Record<string, string> = {
 export type RequirementSortPart = Record<string, 'asc' | 'desc'>;
 
 function productBrowseWindowDescriptor(
+	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
 	sort: readonly RequirementSortPart[] | undefined
-): string {
+): { queryKey: string; filtered: boolean } {
 	// The grid extends its limit 10 rows at a time; quantizing to the window step keeps
 	// the coverage-lane space small (limit=100, 200, 300 …) instead of one lane per tick.
 	const requested =
@@ -239,13 +238,54 @@ function productBrowseWindowDescriptor(
 	const orderby = field ? PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD[field] : undefined;
 	const order = direction === 'desc' ? 'desc' : 'asc';
 	const base = `products:browse-window:limit=${boundedLimit}`;
-	if (
+	const sortPart =
 		orderby === undefined ||
 		(orderby === PRODUCT_BROWSE_DEFAULT_ORDERBY && order === PRODUCT_BROWSE_DEFAULT_ORDER)
-	) {
-		return base;
+			? ''
+			: `:orderby=${orderby}:order=${order}`;
+	const filters: Record<string, string> = {};
+	const conditions = [selector, ...(Array.isArray(selector?.$and) ? selector.$and : [])];
+	for (const condition of conditions) {
+		if (condition === null || typeof condition !== 'object') continue;
+		const record = condition as Record<string, unknown>;
+		const alternatives = Array.isArray(record.$or) ? record.$or : [];
+		for (const [local, remote] of [
+			['categories', 'category'],
+			['tags', 'tag'],
+			['brands', 'brand'],
+		] as const) {
+			const ids = alternatives.map((alternative) => {
+				if (alternative === null || typeof alternative !== 'object') return null;
+				const taxonomy = (alternative as Record<string, unknown>)[local];
+				if (taxonomy === null || typeof taxonomy !== 'object') return null;
+				const elemMatch = (taxonomy as Record<string, unknown>).$elemMatch;
+				if (elemMatch === null || typeof elemMatch !== 'object') return null;
+				const id = (elemMatch as Record<string, unknown>).id;
+				return Number.isSafeInteger(id) && (id as number) > 0 ? (id as number) : null;
+			});
+			if (ids.length > 0 && ids.every((id): id is number => id !== null)) {
+				const previous = filters[remote]?.split(',').map(Number) ?? [];
+				filters[remote] = [...new Set([...previous, ...ids])].sort((a, b) => a - b).join(',');
+			}
+		}
+		for (const field of ['featured', 'on_sale'] as const) {
+			if (typeof record[field] === 'boolean') filters[field] = record[field] ? '1' : '0';
+		}
+		const stock = record.stock_status;
+		const stockValue =
+			typeof stock === 'string'
+				? stock
+				: stock !== null && typeof stock === 'object'
+					? (stock as Record<string, unknown>).$eq
+					: undefined;
+		if (PRODUCT_STOCK_STATUSES.has(stockValue as string))
+			filters.stock_status = stockValue as string;
 	}
-	return `${base}:orderby=${orderby}:order=${order}`;
+	const filterPart = ['category', 'tag', 'brand', 'featured', 'on_sale', 'stock_status']
+		.filter((field) => filters[field] !== undefined)
+		.map((field) => `:${field}=${filters[field]}`)
+		.join('');
+	return { queryKey: `${base}${sortPart}${filterPart}`, filtered: filterPart.length > 0 };
 }
 
 export interface RequirementInput {
@@ -323,19 +363,21 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 		];
 	}
 
-	// UNFILTERED products browse → the browse window (ADR 0027 §2, #909). The window
+	// Products browse → the browse window (ADR 0027 §2, #909). The window
 	// carries the grid's own limit and sort, so scrolling past the cold seed fetches the
 	// next rows and a sort change re-seeds a SERVER-sorted window instead of locally
-	// re-sorting the wrong slice of the catalog. Filtered browses are untouched: they
-	// still ride local residents only.
-	if (engineCollection === 'products' && Object.keys(selector ?? {}).length === 0) {
+	// re-sorting the wrong slice of the catalog. Representable filters travel on the key;
+	// every other predicate keeps narrowing the resulting superset locally.
+	if (engineCollection === 'products') {
+		const descriptor = productBrowseWindowDescriptor(selector, limit, input.sort);
+		const priority = input.priority ?? (descriptor.filtered ? 700 : undefined);
 		return [
 			{
 				id: `${input.id}:products-browse-window`,
 				collection: 'products',
 				kind: 'query',
-				queryKey: productBrowseWindowDescriptor(limit, input.sort),
-				...(input.priority !== undefined ? { priority: input.priority } : {}),
+				queryKey: descriptor.queryKey,
+				...(priority !== undefined ? { priority } : {}),
 				...(input.forceRefresh ? { forceRefresh: true } : {}),
 			},
 		];

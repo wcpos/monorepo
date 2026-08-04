@@ -48,7 +48,7 @@ describe('requirementsForQuery', () => {
 		expect(bareId[0]).toMatchObject({ wooIds: [42] });
 	});
 
-	it('drops unusable id selectors instead of guessing', () => {
+	it('keeps unusable product id selectors local while emitting a superset window', () => {
 		expect(
 			requirementsForQuery({
 				id: 'q',
@@ -56,7 +56,14 @@ describe('requirementsForQuery', () => {
 				selector: { id: { $in: ['junk'] } },
 				limit: 10,
 			})
-		).toEqual([]);
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey: 'products:browse-window:limit=100',
+			},
+		]);
 		expect(
 			requirementsForQuery({
 				id: 'q',
@@ -64,7 +71,14 @@ describe('requirementsForQuery', () => {
 				selector: { id: 'junk' },
 				limit: 10,
 			})
-		).toEqual([]);
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey: 'products:browse-window:limit=100',
+			},
+		]);
 	});
 
 	it('maps search terms for searchable collections only', () => {
@@ -252,17 +266,68 @@ describe('requirementsForQuery', () => {
 		});
 	});
 
-	it('creates no demand for a FILTERED products browse', () => {
-		// Filters still ride local residents only (ADR 0027) — only the UNFILTERED
-		// browse gets a window.
+	it('maps a filtered products browse to an interactive browse-window descriptor', () => {
 		expect(
 			requirementsForQuery({
 				id: 'q',
 				collectionName: 'products',
-				selector: { stock_status: 'instock' },
+				selector: {
+					$and: [
+						{
+							$or: [
+								{ categories: { $elemMatch: { id: 7 } } },
+								{ categories: { $elemMatch: { id: 2 } } },
+								{ categories: { $elemMatch: { id: 7 } } },
+							],
+						},
+						{ $or: [{ tags: { $elemMatch: { id: 3 } } }] },
+						{ $or: [{ brands: { $elemMatch: { id: 5 } } }] },
+						{ featured: true },
+						{ on_sale: false },
+						{ stock_status: { $eq: 'instock' } },
+					],
+				},
 				limit: 10,
 			})
-		).toEqual([]);
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey:
+					'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
+				priority: 700,
+			},
+		]);
+	});
+
+	it('emits only the representable subset of mixed product filters', () => {
+		expect(
+			requirementsForQuery({
+				id: 'q',
+				collectionName: 'products',
+				selector: {
+					featured: false,
+					$and: [
+						{ stock_status: 'onbackorder' },
+						{ status: 'publish' },
+						{ attributes: { $allMatch: [{ id: 1, option: 'Large' }] } },
+						{ uuid: 'local-only' },
+					],
+				},
+				limit: 110,
+				sort: [{ sortable_price: 'desc' }],
+			})
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey:
+					'products:browse-window:limit=200:orderby=price:order=desc:featured=0:stock_status=onbackorder',
+				priority: 700,
+			},
+		]);
 	});
 
 	// #909 — the browse window carries the grid's own limit …
