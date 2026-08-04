@@ -33,6 +33,13 @@ import { hasPendingLocalWork, withoutLocallyProtected } from './local-work-guard
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
 
+/** POS identity metadata whose resident values must survive server adoption. */
+export const POS_ORDER_IDENTITY_META_KEYS = [
+	'_pos_user',
+	'_pos_store',
+	'_woocommerce_pos_tax_based_on',
+] as const;
+
 type StoredOrderDoc = { toJSON(): unknown };
 
 type OrdersCollection = {
@@ -72,6 +79,9 @@ export class EngineOrderRepository {
 		// `resetForResync` (F8) and `removeDeletedOrders` (F6) already apply via `unprotectedOrders`.
 		const applicable = await withoutLocallyProtected(this.db.orders, documents);
 		if (applicable.length === 0) return;
+		const residents = await this.db.orders
+			.findByIds(applicable.map((document) => document.id))
+			.exec();
 		// Leg-3 (ADR 0015): seed the order existence manifest (its OWN collection) from each pull's
 		// `_rxdb_digest`, and strip the digest from the stored payload so it never pollutes the order doc.
 		const materialized = applicable.map((document) =>
@@ -79,6 +89,29 @@ export class EngineOrderRepository {
 				? { storedDocument: document, manifestRow: manifestRowOf(document) }
 				: materializeExistingLocalOnly(document)
 		);
+		for (const entry of materialized) {
+			const resident = residents.get(entry.storedDocument.id)?.toJSON() as
+				{ payload?: Record<string, unknown> } | undefined;
+			const localMeta = Array.isArray(resident?.payload?.meta_data)
+				? resident.payload.meta_data
+				: [];
+			const serverMeta = Array.isArray(entry.storedDocument.payload.meta_data)
+				? [...entry.storedDocument.payload.meta_data]
+				: [];
+			for (const key of POS_ORDER_IDENTITY_META_KEYS) {
+				const localEntry = localMeta.find((meta) => meta?.key === key);
+				if (!localEntry) continue;
+				const index = serverMeta.findIndex((meta) => meta?.key === key);
+				if (index === -1) serverMeta.push(localEntry);
+				else serverMeta[index] = localEntry;
+			}
+			if (serverMeta.length > 0) {
+				entry.storedDocument = {
+					...entry.storedDocument,
+					payload: { ...entry.storedDocument.payload, meta_data: serverMeta },
+				};
+			}
+		}
 		const manifestRows = materialized.flatMap(({ manifestRow }) =>
 			manifestRow ? [manifestRow] : []
 		);

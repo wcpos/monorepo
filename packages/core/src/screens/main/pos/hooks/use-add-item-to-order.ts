@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
 import { wrapEngineDocument } from '@wcpos/query/engine-compat';
@@ -8,7 +9,8 @@ import { wrapEngineDocument } from '@wcpos/query/engine-compat';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { enqueueOrderMutation } from './order-mutation-queue';
-import { findByProductVariationID } from './utils';
+import { ensurePosOrderIdentityMeta, findByProductVariationID } from './utils';
+import { useAppState } from '../../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import {
 	documentRecordId,
@@ -57,12 +59,23 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
 	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
 }
 
+/**
+ * Provides the queued mutation used to add a cart line to the current order.
+ *
+ * @returns An object containing the callback that adds a line to the order.
+ */
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const manager = useQueryManager();
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
+	const { store, wpCredentials } = useAppState();
+	const taxBasedOn = useObservableEagerState(store.tax_based_on$) as string | undefined;
+	const identity = React.useMemo(
+		() => ({ userId: wpCredentials.id, storeId: store.id, taxBasedOn }),
+		[store.id, taxBasedOn, wpCredentials.id]
+	);
 
 	/**
 	 * Build the cart lines for an add, folding a repeat add into the line it
@@ -136,11 +149,17 @@ export const useAddItemToOrder = () => {
 							type,
 							data
 						),
+						meta_data: ensurePosOrderIdentityMeta(
+							priorPayload.meta_data as Parameters<typeof ensurePosOrderIdentityMeta>[0],
+							identity
+						),
 					},
 				});
 			} else {
+				const orderData = order.toMutableJSON();
 				const orderJSON: Record<string, unknown> = {
-					...order.toMutableJSON(),
+					...orderData,
+					meta_data: ensurePosOrderIdentityMeta(orderData.meta_data, identity),
 					date_created_gmt,
 					[type]: [data],
 				};
@@ -188,7 +207,7 @@ export const useAddItemToOrder = () => {
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},
-		[buildCartLines, manager, setCurrentOrderID]
+		[buildCartLines, identity, manager, setCurrentOrderID]
 	);
 
 	/**

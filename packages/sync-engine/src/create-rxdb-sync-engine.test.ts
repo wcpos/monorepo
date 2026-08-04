@@ -12,7 +12,12 @@ import { describe, expect, it, vi } from 'vitest';
 // the flag. devDependency only — the engine's runtime never imports premium.
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { normalizeCheckpoint, scopeDatabaseName, scopeKeyFor } from '@wcpos/sync-core';
+import {
+	normalizeCheckpoint,
+	type OrderDocument,
+	scopeDatabaseName,
+	scopeKeyFor,
+} from '@wcpos/sync-core';
 
 import {
 	createRxdbSyncEngine,
@@ -297,6 +302,74 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 		await repository.writeCustomPullCheckpoint(saved);
 		await engine.scope.resetCollection('products');
 		expect(await repository.readCustomPullCheckpoint()).toEqual(saved);
+		await engine.dispose();
+	});
+
+	it('preserves local POS identity meta during clean server order upserts', async () => {
+		const { a } = freshIdentities();
+		const engine = engineWith(undefined, a);
+		const scope = await engine.ready;
+		const repository = new EngineOrderRepository(scope.database as never);
+		const id = 'order-identity-pull';
+		const checkpoint = normalizeCheckpoint({
+			orderId: 1,
+			updatedAtGmt: '2026-07-01T00:00:00.000Z',
+			revision: 'r1',
+		});
+		await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+			id,
+			wooOrderId: 1,
+			number: '1001',
+			dateCreatedGmt: '2026-07-01T00:00:00',
+			status: 'pos-open',
+			total: '10.00',
+			customerId: 0,
+			payload: {
+				id: 1,
+				status: 'pos-open',
+				meta_data: [
+					{ key: '_pos_user', value: '7' },
+					{ key: '_pos_store', value: '11' },
+					{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+				],
+			},
+			sync: { revision: 'r1', checkpoint, partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+
+		await repository.upsertMany([
+			{
+				id,
+				wooOrderId: 1,
+				payload: {
+					id: 1,
+					status: 'pos-open',
+					meta_data: [
+						{ key: '_pos_user', value: '999' },
+						{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
+						{ key: 'echo_meta', value: 'adopted' },
+					],
+				},
+				sync: { revision: 'r2', checkpoint, partial: false, source: 'woo-rest' },
+				local: { dirty: false, pendingMutationIds: [] },
+			} satisfies OrderDocument,
+		]);
+
+		const stored = await (
+			scope.database.collections.orders as {
+				findOne(id: string): {
+					exec(): Promise<{ toJSON(): { payload: { meta_data?: unknown[] } } } | null>;
+				};
+			}
+		)
+			.findOne(id)
+			.exec();
+		expect(stored?.toJSON().payload.meta_data).toEqual([
+			{ key: '_pos_user', value: '7' },
+			{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+			{ key: 'echo_meta', value: 'adopted' },
+			{ key: '_pos_store', value: '11' },
+		]);
 		await engine.dispose();
 	});
 

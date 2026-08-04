@@ -434,6 +434,53 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('preserves local POS identity meta while adopting other create-ack meta', async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_105 });
+		const localPayload = {
+			status: 'pos-open',
+			meta_data: [
+				{ key: '_woocommerce_pos_uuid', value: UUID_A },
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+			],
+		};
+		const fetch = withAckDocument(server, (document) => ({
+			...document,
+			meta_data: [
+				{ key: '_woocommerce_pos_uuid', value: UUID_A },
+				{ key: '_pos_user', value: '999' },
+				{ key: 'echo_meta', value: 'adopted' },
+			],
+		}));
+		const engine = engineWith({ fetch });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, localPayload);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: localPayload,
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const metaData = (
+				(await orderJson(engine, UUID_A))?.payload as {
+					meta_data?: { key: string; value: unknown }[];
+				}
+			).meta_data;
+			expect(metaData).toEqual(
+				expect.arrayContaining([
+					{ key: '_pos_user', value: '7' },
+					{ key: '_pos_store', value: '11' },
+					{ key: 'echo_meta', value: 'adopted' },
+				])
+			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('does not merge an order ack payload over a queued local successor', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_102 });
 		const localPayload = {

@@ -10,6 +10,7 @@ import { distinctUntilChanged, filter, shareReplay, switchMap, tap } from 'rxjs/
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { createTemporaryDB } from '@wcpos/database';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import allCurrencies from '../../../../../contexts/currencies/currencies.json';
@@ -17,6 +18,7 @@ import { useDefaultCustomer } from '../../../hooks/use-default-customer';
 import { transformCustomerJSONToOrderJSON } from '../../hooks/utils';
 
 const temporaryDB$ = from(createTemporaryDB()).pipe(shareReplay(1));
+const newOrderLogger = getLogger(['wcpos', 'pos', 'new-order']);
 
 const newOrder$ = temporaryDB$.pipe(
 	switchMap((db) => {
@@ -45,7 +47,9 @@ const newOrder$ = temporaryDB$.pipe(
 const newOrderResource = new ObservableResource(newOrder$);
 
 /**
+ * Provides a temporary order populated from the current customer and store state.
  *
+ * @returns An object containing the current temporary order document.
  */
 export const useNewOrder = () => {
 	const { store, wpCredentials } = useAppState();
@@ -93,7 +97,9 @@ export const useNewOrder = () => {
 			});
 		}
 
-		newOrder!.incrementalPatch(data);
+		newOrder!.incrementalPatch(data).catch((error) => {
+			newOrderLogger.error(error instanceof Error ? error.message : String(error));
+		});
 	}, [newOrder, defaultCustomer, currency, prices_include_tax, tax_based_on, country]);
 
 	return { newOrder };

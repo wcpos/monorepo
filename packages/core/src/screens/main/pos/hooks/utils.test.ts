@@ -7,6 +7,7 @@ import {
 	type CartLine,
 	convertProductToLineItemWithoutTax,
 	convertVariationToLineItemWithoutTax,
+	ensurePosOrderIdentityMeta,
 	findByMetaDataUUID,
 	findByProductVariationID,
 	getTaxStatusFromMetaData,
@@ -16,6 +17,50 @@ import {
 // Logger mocks are provided by moduleNameMapper in jest.config.js
 
 describe('Utilities', () => {
+	describe('ensurePosOrderIdentityMeta', () => {
+		it('appends missing POS identity entries', () => {
+			expect(
+				ensurePosOrderIdentityMeta([{ key: 'custom', value: 'keep' }], {
+					userId: 7,
+					storeId: 11,
+					taxBasedOn: 'billing',
+				})
+			).toEqual([
+				{ key: 'custom', value: 'keep' },
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
+			]);
+		});
+
+		it('preserves existing POS identity values', () => {
+			const existing = [
+				{ key: '_pos_user', value: '3' },
+				{ key: '_pos_store', value: '4' },
+				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
+			];
+			expect(
+				ensurePosOrderIdentityMeta(existing, {
+					userId: 7,
+					storeId: 11,
+					taxBasedOn: 'billing',
+				})
+			).toEqual(existing);
+		});
+
+		it('omits the store entry for the default store', () => {
+			expect(
+				ensurePosOrderIdentityMeta([], { userId: 7, storeId: 0, taxBasedOn: 'base' })
+			).not.toContainEqual(expect.objectContaining({ key: '_pos_store' }));
+		});
+
+		it('omits the tax entry when tax basis is undefined', () => {
+			expect(
+				ensurePosOrderIdentityMeta([], { userId: 7, storeId: 11, taxBasedOn: undefined })
+			).not.toContainEqual(expect.objectContaining({ key: '_woocommerce_pos_tax_based_on' }));
+		});
+	});
+
 	// Test getTaxStatusFromMetaData
 	describe('getTaxStatusFromMetaData', () => {
 		it('should return tax status if present in meta data', () => {
