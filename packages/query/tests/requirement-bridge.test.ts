@@ -299,6 +299,25 @@ describe('requirementsForQuery', () => {
 		});
 	});
 
+	// Priority comes from the computed dimensions, never from sniffing the key text —
+	// otherwise a cashier searching for `note:customer=42` would promote an unfiltered
+	// browse to the interactive band.
+	it('does not promote an unfiltered browse whose search text looks like a dimension', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { search: 'note:customer=42' },
+			limit: 25,
+		});
+		expect(requirement).toEqual({
+			id: 'orders:orders-query',
+			collection: 'orders',
+			kind: 'query',
+			queryKey: 'orders:browser:status=all:search=note:customer=42:limit=25',
+		});
+		expect(requirement).not.toHaveProperty('priority');
+	});
+
 	it('creates no demand for a FILTERED products browse', () => {
 		// Filters still ride local residents only (ADR 0027) — only the UNFILTERED
 		// browse gets a window.

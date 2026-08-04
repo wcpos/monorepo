@@ -58,6 +58,13 @@ const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
 
 /** The web scheduler's browse-lane cap; the engine rejects larger order descriptors. */
 const ORDER_BROWSE_MAX_LIMIT = 200;
+
+/**
+ * Interactive priority for a browse the cashier has actually narrowed (customer, cashier,
+ * store or a date range) — ratified on #943: a cashier-applied dimension rides the same
+ * priority band as the browse it replaces.
+ */
+const ORDER_SCOPED_QUERY_PRIORITY = 700;
 const ORDER_BROWSE_ORDERBY_BY_SORT_FIELD = {
 	date_created_gmt: 'date',
 	date_modified_gmt: 'modified',
@@ -101,11 +108,18 @@ function finiteWooIds(selector: Record<string, unknown> | undefined): number[] |
 	return null;
 }
 
+/**
+ * `scoped` is the cashier-applied-dimension flag that earns interactive priority. It is
+ * returned alongside the key rather than re-derived by sniffing the key text: `search` is
+ * arbitrary cashier input, so a term like `note:customer=42` would match a
+ * `queryKey.includes(':customer=')` test and promote an entirely unfiltered browse. Sort is
+ * deliberately NOT scoping — a sort change reshapes the window, it does not narrow it.
+ */
 function orderBrowseDescriptor(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
 	sort: readonly RequirementSortPart[] | undefined
-): string {
+): { queryKey: string; scoped: boolean } {
 	const statusValue = (() => {
 		const status = selector?.status as unknown;
 		if (typeof status === 'string' && status.length > 0) return status;
@@ -204,14 +218,21 @@ function orderBrowseDescriptor(
 	// precede `:search=` so arbitrary search text can never be read back as a filter or sort —
 	// see the grammar note in order-browser-scheduler-descriptor.ts.
 	const dimensionParts = `${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}`;
+	const filtered = Boolean(customerPart || cashierPart || storePart || rangePart);
 	if (rangePart && typeof limit === 'number' && limit >= ORDER_COMPLETE_REQUEST_LIMIT) {
-		return `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=all`;
+		return {
+			queryKey: `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=all`,
+			scoped: true,
+		};
 	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=${boundedLimit}`;
+	return {
+		queryKey: `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=${boundedLimit}`,
+		scoped: filtered,
+	};
 }
 
 /**
@@ -323,17 +344,8 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 	}
 
 	if (engineCollection === 'orders') {
-		const queryKey = orderBrowseDescriptor(selector, limit, input.sort);
-		const priority =
-			input.priority ??
-			(queryKey.includes(':customer=') ||
-			queryKey.includes(':cashier=') ||
-			queryKey.includes(':store=') ||
-			queryKey.includes(':after=') ||
-			queryKey.includes(':before=') ||
-			queryKey.endsWith(':limit=all')
-				? 700
-				: undefined);
+		const { queryKey, scoped } = orderBrowseDescriptor(selector, limit, input.sort);
+		const priority = input.priority ?? (scoped ? ORDER_SCOPED_QUERY_PRIORITY : undefined);
 		return [
 			{
 				id: `${input.id}:orders-query`,
