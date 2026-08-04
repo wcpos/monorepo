@@ -91,10 +91,11 @@ type CachedEngine = {
 	databaseNames: Set<string>;
 	engine: RxdbSyncEngine;
 	fetcherOptions: MutableFetcherOptions;
+	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
+	clockSkew: { generation: number; evaluated: boolean };
 };
 
 let cachedEngine: CachedEngine | null = null;
-let clockSkewEvaluated = false;
 const pendingDisposals = new Map<string, Promise<void>>();
 
 const CENSUS_WC_ROUTES: Record<string, string | null> = {
@@ -135,7 +136,6 @@ function scopeCacheKey(scope: StoreScopeIdentity): string {
 }
 
 function disposeCachedEngine(entry: CachedEngine): void {
-	clockSkewEvaluated = false;
 	const priorDisposal = pendingDisposals.get(entry.key);
 	let disposal: Promise<void>;
 	try {
@@ -235,7 +235,8 @@ export async function switchAppEngineScope(session: {
 
 	entry.key = targetKey;
 	entry.databaseName = scopeDatabaseName(scope);
-	clockSkewEvaluated = false;
+	entry.clockSkew.generation += 1;
+	entry.clockSkew.evaluated = false;
 }
 
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
@@ -258,6 +259,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		const previousKey = entry.key;
 		const previousDatabaseName = entry.databaseName;
 		const previousFetcherOptions: MutableFetcherOptions = { ...entry.fetcherOptions };
+		const previousClockSkewEvaluated = entry.clockSkew.evaluated;
 		const switching = entry.engine.scope.switch(options.scope);
 		entry.key = cacheKey;
 		entry.databaseName = scopeDatabaseName(options.scope);
@@ -265,7 +267,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.fetcherOptions.credentials = options.credentials;
 		entry.fetcherOptions.refreshAuth = options.refreshAuth;
 		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
-		clockSkewEvaluated = false;
+		entry.clockSkew.generation += 1;
+		entry.clockSkew.evaluated = false;
 		void switching.catch((error) => {
 			engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
 				context: {
@@ -280,6 +283,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				entry.fetcherOptions.credentials = previousFetcherOptions.credentials;
 				entry.fetcherOptions.refreshAuth = previousFetcherOptions.refreshAuth;
 				entry.fetcherOptions.useJwtAsParam = previousFetcherOptions.useJwtAsParam;
+				entry.clockSkew.generation += 1;
+				entry.clockSkew.evaluated = previousClockSkewEvaluated;
 			}
 		});
 		return entry.engine;
@@ -301,6 +306,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		refreshAuth: options.refreshAuth,
 		useJwtAsParam: options.useJwtAsParam,
 	};
+	const clockSkew = { generation: 0, evaluated: false };
 
 	// Host-side transport events must reach BOTH sinks. The engine's own diagnostics
 	// port is composed of the metrics collector and the guarded log observer, but
@@ -359,6 +365,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		// refresh arc the ending is not known yet (#899). The network-failure path
 		// still emits inline — a thrown fetch has no arc to wait for.
 		const performAttempt = async (arcFields?: Record<string, unknown>): Promise<SettledAttempt> => {
+			const clockSkewGeneration = clockSkew.generation;
 			const token = fetcherOptions.credentials.getLatest().access_token;
 			tokenUsed = token;
 			const headers = new Headers(init?.headers ?? {});
@@ -409,7 +416,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 
 			const atMs = Date.now();
 			const durationMs = atMs - startedAtMs;
-			if (!clockSkewEvaluated) {
+			if (clockSkew.generation === clockSkewGeneration && !clockSkew.evaluated) {
 				try {
 					const dateHeader = response.headers.get('Date');
 					if (dateHeader !== null && !Number.isNaN(Date.parse(dateHeader))) {
@@ -418,7 +425,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 							requestStartedAtMs: startedAtMs,
 							responseAtMs: atMs,
 						});
-						clockSkewEvaluated = true;
+						clockSkew.evaluated = true;
 						if (result) {
 							engineLogger.warn(
 								`Server clock is ${Math.abs(result.skewSeconds)}s ${result.skewSeconds > 0 ? 'ahead of' : 'behind'} the device clock`,
@@ -653,6 +660,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		databaseNames: new Set([scopeDatabaseName(options.scope)]),
 		engine,
 		fetcherOptions,
+		clockSkew,
 	};
 	return engine;
 }

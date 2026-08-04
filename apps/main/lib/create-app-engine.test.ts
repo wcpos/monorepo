@@ -270,6 +270,87 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
+	it('does not let a late prior-site response suppress the new site warning', async () => {
+		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
+		let resolvePriorFetch!: (response: Response) => void;
+		const priorFetch = new Promise<Response>((resolve) => {
+			resolvePriorFetch = resolve;
+		});
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockReturnValueOnce(priorFetch)
+			.mockResolvedValueOnce(
+				new Response(null, {
+					status: 200,
+					headers: { Date: 'Thu, 01 Jan 1970 00:03:00 GMT' },
+				})
+			);
+		const { createAppSyncEngine, createRxdbSyncEngine, networkWarn } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const priorFetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+		const priorRequest = priorFetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		createAppSyncEngine(OTHER_SITE_OPTIONS);
+		const currentFetcher = createRxdbSyncEngine.mock.calls[1]?.[0].fetcher;
+		resolvePriorFetch(
+			new Response(null, {
+				status: 200,
+				headers: { Date: 'Thu, 01 Jan 1970 00:02:00 GMT' },
+			})
+		);
+		await priorRequest;
+		await currentFetcher?.('https://other.example.test/wp-json/wcpos/v2/products');
+
+		expect(networkWarn).toHaveBeenCalledWith(
+			'Server clock is 180s ahead of the device clock',
+			expect.any(Object)
+		);
+		now.mockRestore();
+		fetch.mockRestore();
+	});
+
+	it('does not let a late response from an earlier activation of the same scope suppress it', async () => {
+		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
+		let resolvePriorFetch!: (response: Response) => void;
+		const priorFetch = new Promise<Response>((resolve) => {
+			resolvePriorFetch = resolve;
+		});
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockReturnValueOnce(priorFetch)
+			.mockResolvedValueOnce(
+				new Response(null, {
+					status: 200,
+					headers: { Date: 'Thu, 01 Jan 1970 00:03:00 GMT' },
+				})
+			);
+		const { createAppSyncEngine, createRxdbSyncEngine, networkWarn } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+		const priorRequest = fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+		});
+		createAppSyncEngine(BASE_OPTIONS);
+		resolvePriorFetch(
+			new Response(null, {
+				status: 200,
+				headers: { Date: 'Thu, 01 Jan 1970 00:02:00 GMT' },
+			})
+		);
+		await priorRequest;
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
+
+		expect(networkWarn).toHaveBeenCalledWith(
+			'Server clock is 180s ahead of the device clock',
+			expect.any(Object)
+		);
+		now.mockRestore();
+		fetch.mockRestore();
+	});
+
 	it('classifies a conditional-GET 304 as a successful transport outcome', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_010);
 		const response = new Response(null, {
