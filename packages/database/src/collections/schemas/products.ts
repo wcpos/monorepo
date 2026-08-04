@@ -4,7 +4,6 @@ export const productsLiteral = {
 	description: 'WooCommerce Product schema',
 	type: 'object',
 	primaryKey: 'uuid',
-	attachments: {},
 	indexes: ['id', 'barcode', 'stock_status', 'parent_id', 'sortable_price'],
 	properties: {
 		uuid: {
