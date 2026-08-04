@@ -24,10 +24,12 @@ import {
 	productBrowseWindowQueryKey,
 } from './product-browse-window-descriptor';
 import {
+	emptySeedPersistedSchedulerTasksResult,
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import { withSchedulerLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 
 import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
@@ -96,25 +98,33 @@ export async function seedProductBrowseWindowSchedulerTask(
 			? `products.browse-window.limit.${limit}`
 			: `products.browse-window.limit.${limit}.${orderby}.${order}`;
 	const repository = await input.getRepository();
-	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
+	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
-	return seedPersistedSchedulerTasks({
-		repository: schedulerRepository,
-		tasks: [
-			{
-				id: `${queryKey}:windowed`,
-				requirementId,
-				collection: 'products',
-				queryKey,
-				limit,
-				priority: input.priority ?? PRODUCT_BROWSE_WINDOW_SCHEDULER_PRIORITY,
-				mode: 'windowed',
-			},
-		],
-		nowMs,
-		completedDedupeForMs:
-			input.completedDedupeForMs ?? PRODUCT_BROWSE_WINDOW_COMPLETED_DEDUPE_FOR_MS,
+	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
+	// (#956); the seed then ends as a no-op — the tasks are re-seedable, so the next
+	// cadence enqueues them again against the rebuilt store.
+	return withSchedulerLedgerRecovery({
+		database,
+		aborted: emptySeedPersistedSchedulerTasksResult,
+		run: () =>
+			seedPersistedSchedulerTasks({
+				repository: new RxSchedulerTaskStateRepository(database),
+				tasks: [
+					{
+						id: `${queryKey}:windowed`,
+						requirementId,
+						collection: 'products',
+						queryKey,
+						limit,
+						priority: input.priority ?? PRODUCT_BROWSE_WINDOW_SCHEDULER_PRIORITY,
+						mode: 'windowed',
+					},
+				],
+				nowMs,
+				completedDedupeForMs:
+					input.completedDedupeForMs ?? PRODUCT_BROWSE_WINDOW_COMPLETED_DEDUPE_FOR_MS,
+			}),
 	});
 }
 

@@ -50,6 +50,26 @@ export type PersistedSchedulerTaskRunnerResult = {
 	totalRequests: number;
 };
 
+/**
+ * A drain tick that did nothing. Also the neutral result a tick returns when a
+ * ledger rebuild aborts it mid-flight (#956): the rebuild drops the store holding
+ * the tick's claims, so the tick ends here and the next cadence re-claims.
+ */
+export function emptyPersistedSchedulerTaskRunnerResult(): PersistedSchedulerTaskRunnerResult {
+	return {
+		scanned: 0,
+		claimLost: 0,
+		completionLost: 0,
+		succeeded: 0,
+		coalescedReruns: 0,
+		failed: 0,
+		failureLost: 0,
+		renewalLost: 0,
+		totalDocuments: 0,
+		totalRequests: 0,
+	};
+}
+
 function throwIfAborted(signal?: AbortSignal): void {
 	if (!signal?.aborted) return;
 	if (signal.reason instanceof Error) throw signal.reason;
@@ -197,16 +217,8 @@ export async function runPersistedSchedulerTasks(
 		(left, right) => right.priority - left.priority || left.taskId.localeCompare(right.taskId)
 	);
 	const result: PersistedSchedulerTaskRunnerResult = {
+		...emptyPersistedSchedulerTaskRunnerResult(),
 		scanned: taskStates.length,
-		claimLost: 0,
-		completionLost: 0,
-		succeeded: 0,
-		coalescedReruns: 0,
-		failed: 0,
-		failureLost: 0,
-		renewalLost: 0,
-		totalDocuments: 0,
-		totalRequests: 0,
 	};
 
 	for (const runnableState of taskStates) {

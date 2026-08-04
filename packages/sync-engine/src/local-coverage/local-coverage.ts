@@ -24,7 +24,7 @@ import {
 	type CoverageCompactionFailureDatabase,
 	RxCoverageCompactionFailureRepository,
 } from './rx-coverage-compaction-failure-repository';
-import { withLedgerRecovery } from './ledger-storage-recovery';
+import { registerLedgerRecovery, withLedgerRecovery } from './ledger-storage-recovery';
 import {
 	DERIVABLE_METADATA_COLLECTIONS,
 	resetDerivableMetadataCollection,
@@ -156,17 +156,22 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			/* telemetry never breaks coverage */
 		}
 	};
-	const repository = withLedgerRecovery({
-		databaseName: database.name,
-		repository: new RxCoverageRepository(options.database),
-		rebuild: async (reason) => {
+	// The ledger is one unit of three collections, but two repository families read
+	// it. Coverage owns the drop/recreate recipe and the observer, so it registers
+	// them for the database; the scheduler seed/drain sites trigger the same rebuild
+	// through the registry (#956).
+	registerLedgerRecovery({
+		database,
+		rebuild: async (reason, trigger) => {
 			for (const name of DERIVABLE_METADATA_COLLECTIONS) {
 				await resetDerivableMetadataCollection(database, name);
 			}
-			const freshRepository = new RxCoverageRepository(options.database);
-			observe({ type: 'coverage.ledger-rebuilt', level: 'warn', fields: { reason } });
-			return freshRepository;
+			observe({ type: 'coverage.ledger-rebuilt', level: 'warn', fields: { reason, trigger } });
 		},
+	});
+	const repository = withLedgerRecovery({
+		database,
+		create: () => new RxCoverageRepository(options.database),
 	});
 
 	return {

@@ -1,8 +1,10 @@
 import {
+	emptySeedPersistedSchedulerTasksResult,
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import { withSchedulerLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
 import { parseOrderBrowserSchedulerDescriptor } from './order-browser-scheduler-descriptor';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
@@ -70,25 +72,33 @@ export async function seedOrderSchedulerTasks(
 	input: SeedOrderSchedulerTasksInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	const repository = await input.getRepository();
-	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
+	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
-	return seedPersistedSchedulerTasks({
-		repository: schedulerRepository,
-		tasks: [
-			{
-				id: 'orders:custom-pull:greedy',
-				requirementId: 'orders.custom-pull.background',
-				collection: 'orders',
-				queryKey: 'orders:custom-pull',
-				limit: input.perPage,
-				priority: input.priority ?? BACKGROUND_ORDER_SCHEDULER_PRIORITY,
-				mode: 'greedy',
-			},
-		],
-		nowMs,
-		completedDedupeForMs:
-			input.completedDedupeForMs ?? BACKGROUND_ORDER_SCHEDULER_COMPLETED_DEDUPE_FOR_MS,
+	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
+	// (#956); the seed then ends as a no-op — the tasks are re-seedable, so the next
+	// cadence enqueues them again against the rebuilt store.
+	return withSchedulerLedgerRecovery({
+		database,
+		aborted: emptySeedPersistedSchedulerTasksResult,
+		run: () =>
+			seedPersistedSchedulerTasks({
+				repository: new RxSchedulerTaskStateRepository(database),
+				tasks: [
+					{
+						id: 'orders:custom-pull:greedy',
+						requirementId: 'orders.custom-pull.background',
+						collection: 'orders',
+						queryKey: 'orders:custom-pull',
+						limit: input.perPage,
+						priority: input.priority ?? BACKGROUND_ORDER_SCHEDULER_PRIORITY,
+						mode: 'greedy',
+					},
+				],
+				nowMs,
+				completedDedupeForMs:
+					input.completedDedupeForMs ?? BACKGROUND_ORDER_SCHEDULER_COMPLETED_DEDUPE_FOR_MS,
+			}),
 	});
 }
 
@@ -149,25 +159,33 @@ export async function seedOrderFilterSchedulerTask(
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	const descriptor = orderFilterDescriptor(input);
 	const repository = await input.getRepository();
-	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
+	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
-	return seedPersistedSchedulerTasks({
-		repository: schedulerRepository,
-		tasks: [
-			{
-				id: `${descriptor.queryKey}:windowed`,
-				requirementId: descriptor.requirementId,
-				collection: 'orders',
-				queryKey: descriptor.queryKey,
-				limit: descriptor.limit,
-				priority: input.priority ?? ORDER_FILTER_SCHEDULER_PRIORITY,
-				mode: 'windowed',
-			},
-		],
-		nowMs,
-		completedDedupeForMs:
-			input.completedDedupeForMs ?? ORDER_FILTER_SCHEDULER_COMPLETED_DEDUPE_FOR_MS,
+	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
+	// (#956); the seed then ends as a no-op — the tasks are re-seedable, so the next
+	// cadence enqueues them again against the rebuilt store.
+	return withSchedulerLedgerRecovery({
+		database,
+		aborted: emptySeedPersistedSchedulerTasksResult,
+		run: () =>
+			seedPersistedSchedulerTasks({
+				repository: new RxSchedulerTaskStateRepository(database),
+				tasks: [
+					{
+						id: `${descriptor.queryKey}:windowed`,
+						requirementId: descriptor.requirementId,
+						collection: 'orders',
+						queryKey: descriptor.queryKey,
+						limit: descriptor.limit,
+						priority: input.priority ?? ORDER_FILTER_SCHEDULER_PRIORITY,
+						mode: 'windowed',
+					},
+				],
+				nowMs,
+				completedDedupeForMs:
+					input.completedDedupeForMs ?? ORDER_FILTER_SCHEDULER_COMPLETED_DEDUPE_FOR_MS,
+			}),
 	});
 }
 

@@ -19,10 +19,12 @@
  */
 
 import {
+	emptySeedPersistedSchedulerTasksResult,
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import { withSchedulerLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
 
 import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
@@ -138,29 +140,37 @@ export async function seedTargetedLane(
 	const ids = normalizedLaneIds(descriptor, input.ids);
 	const batchSize = laneBatchSize(descriptor, input.batchSize);
 	const repository = await input.getRepository();
-	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
+	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
-	return seedPersistedSchedulerTasks({
-		repository: schedulerRepository,
-		tasks: chunkLaneIds(descriptor, ids, batchSize).map((chunk) => {
-			const { idsPart, requirementId, queryKey } = laneKeyParts(descriptor, chunk);
-			return {
-				id: `${descriptor.keyPrefix}:ids:${idsPart}:on-demand`,
-				requirementId,
-				collection: descriptor.collection,
-				queryKey,
-				ids: chunk.map((id) => descriptor.documentId(id)),
-				// The validated numeric ids ride alongside the document keys so the fetcher
-				// reads them directly — decoupled from the key encoding (uuid-ready).
-				wooIds: chunk,
-				limit: batchSize,
-				priority: input.priority ?? descriptor.defaultPriority,
-				mode: 'on-demand',
-			};
-		}),
-		nowMs,
-		completedDedupeForMs: input.completedDedupeForMs ?? descriptor.defaultCompletedDedupeForMs,
-		coalesceInFlight: input.coalesceInFlight ?? false,
+	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
+	// (#956); the seed then ends as a no-op — the tasks are re-seedable, so the next
+	// cadence enqueues them again against the rebuilt store.
+	return withSchedulerLedgerRecovery({
+		database,
+		aborted: emptySeedPersistedSchedulerTasksResult,
+		run: () =>
+			seedPersistedSchedulerTasks({
+				repository: new RxSchedulerTaskStateRepository(database),
+				tasks: chunkLaneIds(descriptor, ids, batchSize).map((chunk) => {
+					const { idsPart, requirementId, queryKey } = laneKeyParts(descriptor, chunk);
+					return {
+						id: `${descriptor.keyPrefix}:ids:${idsPart}:on-demand`,
+						requirementId,
+						collection: descriptor.collection,
+						queryKey,
+						ids: chunk.map((id) => descriptor.documentId(id)),
+						// The validated numeric ids ride alongside the document keys so the fetcher
+						// reads them directly — decoupled from the key encoding (uuid-ready).
+						wooIds: chunk,
+						limit: batchSize,
+						priority: input.priority ?? descriptor.defaultPriority,
+						mode: 'on-demand',
+					};
+				}),
+				nowMs,
+				completedDedupeForMs: input.completedDedupeForMs ?? descriptor.defaultCompletedDedupeForMs,
+				coalesceInFlight: input.coalesceInFlight ?? false,
+			}),
 	});
 }

@@ -3,14 +3,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addRxPlugin, createRxDatabase, type RxDatabase } from 'rxdb';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import type { SyncEvent } from '@wcpos/sync-core';
 
 import { engineCollectionCreators } from '../collections/engine-collections';
+import { runEngineSchedulerDrain } from '../scheduler/engine-scheduler-drain';
+import { seedPosBootstrapLanes } from '../scheduler/rx-pos-bootstrap-seeder';
+import { emptySeedPersistedSchedulerTasksResult } from '../scheduler/rx-scheduler-task-seeder';
+import { emptyPersistedSchedulerTaskRunnerResult } from '../scheduler/rx-scheduler-task-runner';
+import { RxSchedulerTaskStateRepository } from '../scheduler/rx-scheduler-task-state-repository';
 import { createLocalCoverage } from './local-coverage';
 import { RxCoverageRepository } from './persistence';
 import { isReconciliationRefusalError } from './ledger-storage-recovery';
 
+// The full engine recipe is past the open-core collection cap; the drain tick test
+// opens all of it (ADR 0018 — premium stays host-side, and this harness is the host).
+setPremiumFlag();
 addRxPlugin(RxDBMigrationSchemaPlugin);
 
 const CORRUPTION_REFUSALS = [
@@ -74,6 +83,38 @@ async function openLedgerDatabase(): Promise<RxDatabase> {
 	return db;
 }
 
+function schedulerTaskStateDocument(status: 'queued' | 'completed'): Record<string, unknown> {
+	return {
+		stateKey: 'task-orders',
+		taskId: 'task-orders',
+		requirementId: 'requirement-orders',
+		collectionName: 'orders',
+		queryKey: 'orders:open',
+		limit: 100,
+		priority: 500,
+		mode: 'windowed',
+		status,
+		ownerId: null,
+		claimedUntilMs: null,
+		attempt: 1,
+		retryAfterMs: null,
+		updatedAtMs: 1,
+		schemaVersion: 4,
+	};
+}
+
+/** The FULL engine scope recipe — what a drain tick reads through. */
+async function openEngineDatabase(): Promise<RxDatabase> {
+	const db = await createRxDatabase({
+		name: `ledgerrecoveryengine${(databaseSequence += 1)}`,
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	});
+	openDatabase = db;
+	await db.addCollections(engineCollectionCreators() as never);
+	return db;
+}
+
 describe('coverage ledger recovery', () => {
 	it('rebuilds the whole ledger once, refreshes the repository, observes it, and retries once', async () => {
 		const db = await openLedgerDatabase();
@@ -133,7 +174,7 @@ describe('coverage ledger recovery', () => {
 		expect(events).toContainEqual({
 			type: 'coverage.ledger-rebuilt',
 			level: 'warn',
-			fields: { reason: 'duplicate-primary-id:categories::woo-category:16' },
+			fields: { reason: 'duplicate-primary-id:categories::woo-category:16', trigger: 'coverage' },
 		});
 
 		const rebuiltCollections = new Map(
@@ -178,5 +219,125 @@ describe('coverage ledger recovery', () => {
 		// Both retries ran against the rebuilt repository, not the stale one.
 		expect(read.mock.contexts[2]).not.toBe(read.mock.contexts[0]);
 		expect(read.mock.contexts[3]).toBe(read.mock.contexts[2]);
+	});
+	it('rebuilds the ledger from a schedulerTaskStates refusal raised during a seed', async () => {
+		const db = await openLedgerDatabase();
+		const events: SyncEvent[] = [];
+		// Coverage owns the rebuild recipe; registering it is what gives the scheduler
+		// repositories a rebuild to trigger (#956).
+		createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		await db.collections.schedulerTaskStates.insert(schedulerTaskStateDocument('completed'));
+		const originalCollections = new Map(
+			LEDGER_COLLECTIONS.map((name) => [name, db.collections[name]])
+		);
+
+		const readForTaskIds = vi
+			.spyOn(RxSchedulerTaskStateRepository.prototype, 'readForTaskIds')
+			.mockRejectedValueOnce(refusalError('duplicate-primary-id:schedulerTaskStates::task-orders'));
+		const claimNew = vi.spyOn(RxSchedulerTaskStateRepository.prototype, 'claimNew');
+
+		await expect(
+			seedPosBootstrapLanes({
+				getRepository: async () => ({ getDatabase: () => db as never }),
+				nowMs: 1_000,
+			})
+		).resolves.toEqual(emptySeedPersistedSchedulerTasksResult());
+
+		// The seed aborted on the refusal: read once, nothing re-seeded into the store
+		// that was just dropped.
+		expect(readForTaskIds).toHaveBeenCalledTimes(1);
+		expect(claimNew).not.toHaveBeenCalled();
+		for (const name of LEDGER_COLLECTIONS) {
+			expect(db.collections[name]).not.toBe(originalCollections.get(name));
+			await expect(db.collections[name].count().exec()).resolves.toBe(0);
+		}
+		expect(events).toContainEqual({
+			type: 'coverage.ledger-rebuilt',
+			level: 'warn',
+			fields: {
+				reason: 'duplicate-primary-id:schedulerTaskStates::task-orders',
+				trigger: 'scheduler',
+			},
+		});
+	});
+
+	it('aborts a drain tick cleanly when the ledger is rebuilt mid-tick', async () => {
+		const db = await openEngineDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		await db.collections.schedulerTaskStates.insert(schedulerTaskStateDocument('queued'));
+
+		const readRunnable = vi
+			.spyOn(RxSchedulerTaskStateRepository.prototype, 'readRunnable')
+			.mockRejectedValueOnce(refusalError('unsorted-primary'));
+		const claim = vi.spyOn(RxSchedulerTaskStateRepository.prototype, 'claim');
+		const fetcher = vi.fn();
+
+		// The ruling: no error reaches the drain's caller — the tick ends as an empty drain.
+		await expect(
+			runEngineSchedulerDrain({
+				db: db as never,
+				coverage,
+				baseUrl: 'https://ledger.example.test',
+				ownerId: 'tab-1',
+				fetcher: fetcher as never,
+				nowMs: 1_000,
+			})
+		).resolves.toEqual(emptyPersistedSchedulerTaskRunnerResult());
+
+		// No claim resurrection: the claims lived in the store the rebuild dropped, and
+		// the tick does not re-read or re-claim them.
+		expect(readRunnable).toHaveBeenCalledTimes(1);
+		expect(claim).not.toHaveBeenCalled();
+		expect(fetcher).not.toHaveBeenCalled();
+		await expect(db.collections.schedulerTaskStates.count().exec()).resolves.toBe(0);
+		expect(events).toContainEqual({
+			type: 'coverage.ledger-rebuilt',
+			level: 'warn',
+			fields: { reason: 'unsorted-primary', trigger: 'scheduler' },
+		});
+	});
+
+	it('shares ONE rebuild between a racing coverage caller and a scheduler caller', async () => {
+		const db = await openLedgerDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+
+		const reason = 'duplicate-primary-id:categories::woo-category:16';
+		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
+			refusalError(reason)
+		);
+		vi.spyOn(RxSchedulerTaskStateRepository.prototype, 'readForTaskIds').mockRejectedValueOnce(
+			refusalError(reason)
+		);
+
+		const [snapshot, seeded] = await Promise.all([
+			coverage.readSnapshot(),
+			seedPosBootstrapLanes({
+				getRepository: async () => ({ getDatabase: () => db as never }),
+				nowMs: 1_000,
+			}),
+		]);
+
+		// The coverage caller retries against the rebuilt ledger; the scheduler caller
+		// aborts its seed. Both ride ONE rebuild — one guard, one emission.
+		expect(snapshot).toEqual({ records: [], lanes: [] });
+		expect(seeded).toEqual(emptySeedPersistedSchedulerTasksResult());
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
 	});
 });

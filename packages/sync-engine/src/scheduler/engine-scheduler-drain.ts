@@ -10,9 +10,11 @@ import type { SyncObserver } from '@wcpos/sync-core';
  */
 
 import {
+	emptyPersistedSchedulerTaskRunnerResult,
 	type PersistedSchedulerTaskRunnerResult,
 	runPersistedSchedulerTasks,
 } from './rx-scheduler-task-runner';
+import { withSchedulerLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import {
 	RxSchedulerTaskStateRepository,
 	type SchedulerTaskStateDatabase,
@@ -346,19 +348,30 @@ export async function runEngineSchedulerDrain(
 	const db = input.db;
 	const nowMs = input.nowMs ?? Date.now();
 	const getNowMs = input.nowMs === undefined ? Date.now : () => nowMs;
-	const schedulerRepository = new RxSchedulerTaskStateRepository(db);
-	const fetcherRegistry = createEngineSchedulerFetcherRegistry(input);
 
-	return runPersistedSchedulerTasks({
-		repository: fetcherRegistry.supportedRepository(schedulerRepository),
-		fetcher: fetcherRegistry.fetcher,
-		ownerId: input.ownerId,
-		nowMs,
-		getNowMs,
-		leaseForMs: ORDER_SCHEDULER_LEASE_FOR_MS,
-		retryAfterMs: ORDER_SCHEDULER_RETRY_AFTER_MS,
-		maxRequestsPerTask: input.maxRequestsPerTask ?? ORDER_SCHEDULER_MAX_REQUESTS,
-		...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {}),
-		...(input.signal !== undefined ? { signal: input.signal } : {}),
+	// A `schedulerTaskStates` reconciliation refusal caught mid-tick rebuilds the
+	// derivable ledger (#956). The rebuild drops the store this tick claims rows in,
+	// so the tick ends as an empty drain — no error to the caller, no re-claim; the
+	// next cadence reseeds and re-claims against the rebuilt store.
+	return withSchedulerLedgerRecovery({
+		database: db,
+		aborted: emptyPersistedSchedulerTaskRunnerResult,
+		run: () => {
+			const schedulerRepository = new RxSchedulerTaskStateRepository(db);
+			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input);
+
+			return runPersistedSchedulerTasks({
+				repository: fetcherRegistry.supportedRepository(schedulerRepository),
+				fetcher: fetcherRegistry.fetcher,
+				ownerId: input.ownerId,
+				nowMs,
+				getNowMs,
+				leaseForMs: ORDER_SCHEDULER_LEASE_FOR_MS,
+				retryAfterMs: ORDER_SCHEDULER_RETRY_AFTER_MS,
+				maxRequestsPerTask: input.maxRequestsPerTask ?? ORDER_SCHEDULER_MAX_REQUESTS,
+				...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {}),
+				...(input.signal !== undefined ? { signal: input.signal } : {}),
+			});
+		},
 	});
 }
