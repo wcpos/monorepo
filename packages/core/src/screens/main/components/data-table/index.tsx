@@ -195,6 +195,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 			<VirtualizedList.Root style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={table.getRowModel().rows}
+					keyExtractor={(item) => item.id}
 					renderItem={({ item, index }) =>
 						renderItem
 							? renderItem({ item, index, table })
