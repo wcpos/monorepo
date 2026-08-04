@@ -45,6 +45,56 @@ describe('product browse-window descriptor', () => {
 		});
 	});
 
+	it.each([
+		['category=2,7', { category: [2, 7] }],
+		['tag=3,11', { tag: [3, 11] }],
+		['brand=5,13', { brand: [5, 13] }],
+		['featured=1', { featured: true }],
+		['on_sale=0', { on_sale: false }],
+		['stock_status=onbackorder', { stock_status: 'onbackorder' }],
+	] as const)('parses the %s filter dimension', (dimension, parsed) => {
+		expect(
+			parseProductBrowseWindowDescriptor(`products:browse-window:limit=100:${dimension}`)
+		).toEqual({
+			limit: 100,
+			orderby: 'menu_order',
+			order: 'asc',
+			...parsed,
+		});
+	});
+
+	it('parses all filter dimensions after a non-default sort in canonical order', () => {
+		expect(
+			parseProductBrowseWindowDescriptor(
+				'products:browse-window:limit=200:orderby=price:order=desc:category=2,7:tag=3,11:brand=5,13:featured=1:on_sale=0:stock_status=instock'
+			)
+		).toEqual({
+			limit: 200,
+			orderby: 'price',
+			order: 'desc',
+			category: [2, 7],
+			tag: [3, 11],
+			brand: [5, 13],
+			featured: true,
+			on_sale: false,
+			stock_status: 'instock',
+		});
+	});
+
+	it.each([
+		'category=2,1',
+		'category=2,2',
+		'category=0,2',
+		'featured=true',
+		'on_sale=2',
+		'stock_status=lowstock',
+		'tag=3:category=2',
+	])('rejects the non-canonical or invalid filter dimension %s', (dimension) => {
+		expect(
+			parseProductBrowseWindowDescriptor(`products:browse-window:limit=100:${dimension}`)
+		).toBeNull();
+	});
+
 	it('gives the default sort exactly one spelling — the bare limit key', () => {
 		expect(productBrowseWindowQueryKey(100, { orderby: 'menu_order', order: 'asc' })).toBe(
 			'products:browse-window:limit=100'

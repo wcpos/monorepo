@@ -344,9 +344,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				let skippedActive = false;
 				const applied = await bound.guardWrite(async () => {
 					const seedResult = await seedProductBrowseWindowSchedulerTask({
-						limit: browseWindow.limit,
-						orderby: browseWindow.orderby,
-						order: browseWindow.order,
+						// Spread the WHOLE descriptor, as the orders branch above does. Cherry-picking
+						// limit/orderby/order silently dropped every filter dimension: the seeder then
+						// rebuilt an UNFILTERED key, so filtered demand could never reach the wire and
+						// its coverage lane collided with the unfiltered window's.
+						...browseWindow,
 						priority: item.priority,
 						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
 						getRepository: async () => ({ getDatabase: () => database as never }),

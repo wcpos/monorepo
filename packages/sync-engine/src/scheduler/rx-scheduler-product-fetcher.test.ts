@@ -227,16 +227,20 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
-	it('applies the id tiebreak before truncating a full remote browse window', async () => {
+	it('keeps browse filters on phase-1 and phase-2 requests while applying the id tiebreak', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		// The store honours `brand`: every returned product carries the requested brand, so
+		// the lane is allowed to complete (see the ignored-brand case below).
+		const brands = [{ id: 5, name: 'Acme', slug: 'acme' }];
 		const pageOneProducts = Array.from({ length: 100 }, (_, index) => ({
 			id: index + 200,
 			menu_order: 0,
 			date_modified_gmt: '2026-05-20T10:10:00',
+			brands,
 			meta_data: posMeta(index + 200),
 		}));
 		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
@@ -248,6 +252,7 @@ describe('createProductsSchedulerFetcher', () => {
 						id: index + 300,
 						menu_order: 0,
 						date_modified_gmt: '2026-05-20T10:10:00',
+						brands,
 						meta_data: posMeta(index + 300),
 					})),
 					4
@@ -260,12 +265,14 @@ describe('createProductsSchedulerFetcher', () => {
 							id: 1,
 							menu_order: 0,
 							date_modified_gmt: '2026-05-20T10:10:00',
+							brands,
 							meta_data: posMeta(1),
 						},
 						...Array.from({ length: 99 }, (_, index) => ({
 							id: index + 400,
 							menu_order: 1,
 							date_modified_gmt: '2026-05-20T10:10:00',
+							brands,
 							meta_data: posMeta(index + 400),
 						})),
 					],
@@ -286,22 +293,23 @@ describe('createProductsSchedulerFetcher', () => {
 		const result = await schedulerFetcher(
 			productTask({
 				id: 'products:browse-window:limit=100:windowed',
-				queryKey: 'products:browse-window:limit=100',
+				queryKey:
+					'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
 				limit: 100,
 			})
 		);
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=1'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&category=2%2C7&tag=3&brand=5&featured=true&on_sale=false&stock_status=instock&page=1'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=2'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&category=2%2C7&tag=3&brand=5&featured=true&on_sale=false&stock_status=instock&page=2'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			3,
-			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&page=3'
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&category=2%2C7&tag=3&brand=5&featured=true&on_sale=false&stock_status=instock&page=3'
 		);
 		const upsertCalls = repository.upsertMany.mock.calls as unknown as [
 			{ wooProductId: number }[],
@@ -312,7 +320,8 @@ describe('createProductsSchedulerFetcher', () => {
 		]);
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({
-				queryKey: 'products:browse-window:limit=100',
+				queryKey:
+					'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
 				complete: true,
 			})
 		);
@@ -322,6 +331,107 @@ describe('createProductsSchedulerFetcher', () => {
 			requestCount: 3,
 			completed: true,
 		});
+	});
+
+	// `brand` needs a WC version with core brands in the REST controller. An older store
+	// ignores the param and answers with the unfiltered superset; recording that as a
+	// COMPLETE lane would make the grid report the whole catalog as its brand-filtered total.
+	// Mirrors the orders-side fix for the WCPOS proxy params (901761cc9).
+	it('withholds lane completion when the store ignored the brand filter', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const diagnostics = vi.fn();
+		const fetcher = vi.fn(async () =>
+			response(
+				[
+					{
+						id: 11,
+						menu_order: 0,
+						date_modified_gmt: '2026-05-20T10:10:00',
+						brands: [{ id: 9, name: 'Other', slug: 'other' }],
+						meta_data: posMeta(11),
+					},
+				],
+				1
+			)
+		);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			diagnostics,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:browse-window:limit=100:brand=5:windowed',
+				queryKey: 'products:browse-window:limit=100:brand=5',
+				limit: 100,
+			})
+		);
+
+		// The superset is still real product data — keep it locally…
+		expect(repository.upsertMany).toHaveBeenCalled();
+		expect(result).toMatchObject({ documentCount: 1 });
+		// …but never as coverage for a brand the store demonstrably did not filter on.
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey: 'products:browse-window:limit=100:brand=5',
+				complete: false,
+			})
+		);
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'product.browse-window.brand-filter-ignored' })
+		);
+	});
+
+	// A filtered result set that is an exact multiple of the page size never yields a short
+	// page, so a short page alone cannot prove exhaustion. Without the X-WP-TotalPages stop
+	// the walk asks for a page past the last, which WP answers with a 400 and the fetcher
+	// turns into a failed browse. Same class as the orders fix 35be526ed.
+	it('stops the window walk at the advertised last page', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			const page = Number(new URL(String(request)).searchParams.get('page'));
+			// Two full pages of 25 and nothing beyond — exactly the exact-multiple case.
+			if (page > 2) {
+				return new Response(JSON.stringify({ code: 'rest_invalid_param' }), { status: 400 });
+			}
+			return response(
+				Array.from({ length: 25 }, (_, index) => ({
+					id: (page - 1) * 25 + index + 1,
+					menu_order: 0,
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta((page - 1) * 25 + index + 1),
+				})),
+				2
+			);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			pullBatchSize: () => 25,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:browse-window:limit=100:stock_status=outofstock:windowed',
+				queryKey: 'products:browse-window:limit=100:stock_status=outofstock',
+				limit: 100,
+			})
+		);
+
+		// The 100-row window wants four 25-row pages; the server advertises two.
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(result).toMatchObject({ documentCount: 50, requestCount: 2, completed: true });
 	});
 
 	it('bounds an all-tied browse window to the best rows from the scanned pages', async () => {

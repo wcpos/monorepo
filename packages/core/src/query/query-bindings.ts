@@ -17,6 +17,7 @@ import {
 	type EngineEvent,
 	type EngineLane,
 	type EngineQueryDescriptor,
+	isFullyRepresentedProductSelector,
 	observeEngineDatabases,
 	observeEngineQuery,
 	orderRangeBoundSeconds,
@@ -402,6 +403,15 @@ function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boo
 function coverageQueryKey(id: string, descriptor: EngineQueryDescriptor): string | null {
 	const selector = selectorWithSearch(descriptor);
 	if (descriptor.collection === 'orders' && !isFullyRepresentedOrderSelector(selector)) return null;
+	// Products browses became wired+windowed when filters went on the wire (2026-08-04
+	// ruling), and the bridge deliberately emits only the REPRESENTABLE subset of the
+	// selector — an attribute match or a mixed `$or` keeps narrowing locally. That superset
+	// is right for demand and wrong for a total: a browse filtered on something the grammar
+	// cannot carry would otherwise report the wider window's size as its own count. Unlike
+	// the orders predicate above this asks the encoder itself, so the two cannot drift.
+	if (descriptor.collection === 'products' && !isFullyRepresentedProductSelector(selector)) {
+		return null;
+	}
 	const requirement = requirementsForQuery({
 		id,
 		collectionName: descriptor.collection,
