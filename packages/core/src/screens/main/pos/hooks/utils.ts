@@ -40,6 +40,24 @@ const posLogger = getLogger(['wcpos', 'pos', 'utils']);
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type LineItemImage = LineItem['image'];
+type OrderMetaData = NonNullable<import('@wcpos/database').OrderDocument['meta_data']>;
+
+export function ensurePosOrderIdentityMeta(
+	metaData: OrderMetaData | undefined,
+	identity: { userId: number | string; storeId: number; taxBasedOn?: string }
+): OrderMetaData {
+	const ensured = Array.isArray(metaData) ? [...metaData] : [];
+	const appendMissing = (key: string, value: string) => {
+		if (!ensured.some((entry) => entry.key === key)) ensured.push({ key, value });
+	};
+
+	appendMissing('_pos_user', String(identity.userId));
+	if (identity.storeId !== 0) appendMissing('_pos_store', String(identity.storeId));
+	if (identity.taxBasedOn) {
+		appendMissing('_woocommerce_pos_tax_based_on', identity.taxBasedOn);
+	}
+	return ensured;
+}
 
 const normalizeLineItemImage = (
 	image?: { id?: number | string | null; src?: string | null } | null

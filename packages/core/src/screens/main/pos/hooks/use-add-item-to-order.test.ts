@@ -18,6 +18,17 @@ const mockWrapEngineDocument = jest.fn();
 const mockCalculateLineItemTaxesAndTotals = jest.fn();
 let mockStockGuardEnabled = false;
 
+jest.mock('observable-hooks', () => ({
+	useObservableEagerState: () => 'billing',
+}));
+
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({
+		wpCredentials: { id: 7 },
+		store: { id: 11, tax_based_on$: {} },
+	}),
+}));
+
 /** The state a resident carries once its create is durably enqueued. */
 const CREATE_QUEUED = { local: { dirty: true, pendingMutationIds: ['mutation-1'] } };
 
@@ -139,6 +150,31 @@ describe('useAddItemToOrder', () => {
 
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('order-uuid');
 		expect(mockCheckCartStock).not.toHaveBeenCalled();
+	});
+
+	it('stamps missing POS identity meta before inserting a new engine order', async () => {
+		order.isNew = true;
+		mockInsertEngineResident.mockImplementation(
+			async ({ payload }: { payload: Record<string, unknown> }) => ({
+				toMutableJSON: () => ({ payload }),
+			})
+		);
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1' });
+
+		const { result } = renderHook(() => useAddItemToOrder());
+		await act(async () => {
+			await result.current.addItemToOrder('line_items', {
+				product_id: 1,
+				meta_data: [],
+			} as never);
+		});
+
+		expect(mockInsertEngineResident.mock.calls[0][0].payload.meta_data).toEqual(
+			expect.arrayContaining([
+				{ key: '_pos_user', value: '7' },
+				{ key: '_pos_store', value: '11' },
+			])
+		);
 	});
 
 	it('keeps both items when two appends overlap for the same order', async () => {
@@ -592,6 +628,10 @@ describe('useAddItemToOrder', () => {
 				recordId: 'order-uuid',
 				changes: {
 					line_items: [{ product_id: 1, quantity: 1 }, expect.objectContaining({ product_id: 2 })],
+					meta_data: expect.arrayContaining([
+						{ key: '_pos_user', value: '7' },
+						{ key: '_pos_store', value: '11' },
+					]),
 				},
 			})
 		);

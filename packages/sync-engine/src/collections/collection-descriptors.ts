@@ -192,7 +192,8 @@ function ackBookkeeping(
 	collection: CollectionWriteFacet['collection'],
 	remoteIdField: CollectionWriteFacet['remoteIdField'],
 	createAckSource?: 'woo-rest',
-	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>
+	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>,
+	preserveMetaKeys?: string[]
 ): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
 	return {
 		reconcile: async (db, ack, signal) => {
@@ -217,9 +218,29 @@ function ackBookkeeping(
 					Array.isArray(local.pendingMutationIds) ? local.pendingMutationIds : []
 				).filter((id) => id !== ack.mutation.mutationId);
 				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
+				let adoptionPatch = ackDocumentPatch;
+				if (adoptionPatch && preserveMetaKeys && pending.length === 0) {
+					const localPayload = (data.payload ?? {}) as Record<string, unknown>;
+					const adoptedPayload = (adoptionPatch.payload ?? {}) as Record<string, unknown>;
+					const localMeta = Array.isArray(localPayload.meta_data) ? localPayload.meta_data : [];
+					const adoptedMeta = Array.isArray(adoptedPayload.meta_data)
+						? [...adoptedPayload.meta_data]
+						: [];
+					for (const key of preserveMetaKeys) {
+						const localEntry = localMeta.find((entry) => entry?.key === key);
+						if (!localEntry) continue;
+						const index = adoptedMeta.findIndex((entry) => entry?.key === key);
+						if (index === -1) adoptedMeta.push(localEntry);
+						else adoptedMeta[index] = localEntry;
+					}
+					adoptionPatch = withOrderColumns({
+						...adoptionPatch,
+						payload: { ...adoptedPayload, meta_data: adoptedMeta },
+					});
+				}
 				return {
 					...data,
-					...(ackDocumentPatch && pending.length === 0 ? ackDocumentPatch : {}),
+					...(adoptionPatch && pending.length === 0 ? adoptionPatch : {}),
 					[remoteIdField]:
 						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
 							? ack.remoteId
@@ -281,6 +302,7 @@ function createWriteFacet(input: {
 	project: (payload: WooPayload) => Record<string, unknown>;
 	createAckSource?: 'woo-rest';
 	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
+	preserveMetaKeys?: string[];
 	upsert?: CollectionWriteFacet['upsertServerDocument'];
 }): CollectionWriteFacet {
 	return {
@@ -317,7 +339,8 @@ function createWriteFacet(input: {
 			input.collection,
 			input.remoteIdField,
 			input.createAckSource,
-			input.documentPatchFromAckDocument
+			input.documentPatchFromAckDocument,
+			input.preserveMetaKeys
 		),
 	};
 }
@@ -367,6 +390,7 @@ const ordersWriteFacet = createWriteFacet({
 		withOrderColumns({
 			payload: orderDocument(document as WooPayload).payload as WooOrderPayload,
 		}) as unknown as Record<string, unknown>,
+	preserveMetaKeys: ['_pos_user', '_pos_store', '_woocommerce_pos_tax_based_on'],
 	upsert: async (db, document) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
 	},
