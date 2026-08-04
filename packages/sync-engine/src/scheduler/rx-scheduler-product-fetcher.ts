@@ -266,6 +266,34 @@ const compareMenuOrderPayloads = (left: WooProductPayload, right: WooProductPayl
 	Number(left.id) - Number(right.id);
 
 /**
+ * Whether a returned product actually carries the `brand` dimension the descriptor asked for.
+ *
+ * `category`, `tag`, `featured`, `on_sale` and `stock_status` are long-standing wc/v3 core
+ * product params, but `brand` filtering needs a WC version with core brands in the REST
+ * controller. An older store IGNORES the param and answers with the unfiltered superset —
+ * the same silent-ignore shape the orders side hit with the WCPOS proxy params, fixed there
+ * by withholding lane completion (`901761cc9`).
+ *
+ * That superset is still worth keeping locally — they are real products — but recording it
+ * as a COMPLETE lane makes `projectTotal` report the whole catalog's size as the brand-
+ * filtered grid's total. Checking the records already in hand detects the old store from the
+ * response itself, with no capability handshake or version probe: on a current WC every
+ * returned record carries a requested brand and the lane completes exactly as before.
+ */
+function honorsRequestedBrands(payload: WooProductPayload, brands: number[]): boolean {
+	const returned = (payload as { brands?: unknown }).brands;
+	// A store whose REST controller has no brands support omits the field entirely — which is
+	// itself proof it could not have applied the filter.
+	if (!Array.isArray(returned)) return false;
+	return returned.some(
+		(brand) =>
+			brand !== null &&
+			typeof brand === 'object' &&
+			brands.includes(Number((brand as { id?: unknown }).id))
+	);
+}
+
+/**
  * The products browse-window seed (ADR 0027 §2): a bounded window over the servable set,
  * sorted by the window descriptor's sort — the POS default catalog sort (menu_order ASC,
  * id ASC, #810) unless the grid asked for another Woo-expressible column (#909).
@@ -327,6 +355,14 @@ async function fetchProductBrowseWindow(
 		totalPages = page.totalPages ?? totalPages;
 		payloads = payloads.concat(pagePayloads);
 		if (pagePayloads.length < pageSize) break; // server exhausted before the window filled
+		// A result set that is an exact multiple of pageSize never yields a short page, so a
+		// short page alone cannot detect exhaustion: without this the walk asks for one page
+		// past the last, which WP answers with `rest_..._invalid_page_number` (a 400) and
+		// fetchProductQuery turns into a thrown, failed browse. Phase 2 already respects the
+		// advertised last page; phase 1 must too. Same class as the orders fix in 35be526ed —
+		// pre-filters this needed a catalog sized to an exact page multiple, but a FILTERED
+		// window lands on small exact counts routinely.
+		if (totalPages !== null && requestCount >= totalPages) break;
 	}
 	if (isDefaultSort) payloads = payloads.sort(compareMenuOrderPayloads);
 	payloads = payloads.slice(0, limit);
@@ -362,14 +398,29 @@ async function fetchProductBrowseWindow(
 		});
 	}
 
-	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
+	const windowPayloads = payloads.slice(0, limit);
+	// A superset from a store that ignored `brand` must never be recorded as a COMPLETE lane
+	// for this descriptor, or the grid reports the superset's size as its brand-filtered total.
+	const brandsHonored =
+		descriptor.brand === undefined ||
+		windowPayloads.every((payload) => honorsRequestedBrands(payload, descriptor.brand!));
+	if (!brandsHonored) {
+		input.diagnostics?.({
+			type: 'product.browse-window.brand-filter-ignored',
+			level: 'warn',
+			collection: 'products',
+			message:
+				'Store returned products outside the requested brands — brand filtering needs a WooCommerce version with core brands in the REST API; keeping the superset locally without claiming coverage',
+		});
+	}
+	const documents = windowPayloads.map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
 	await recordCoverage(
 		'products',
 		input,
 		task,
 		documents.map(({ storedDocument }) => coverageRecordId(storedDocument as ProductDocument)),
-		true
+		brandsHonored
 	);
 
 	return { taskId: task.id, documentCount: documents.length, requestCount, completed: true };
