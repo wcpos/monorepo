@@ -147,7 +147,7 @@ describe('requirementsForQuery', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=completed:search=:after=1782864000:before=1784073599:limit=all',
+					'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all',
 				priority: 700,
 			},
 		]);
@@ -161,9 +161,22 @@ describe('requirementsForQuery', () => {
 			limit: 25,
 		});
 		expect(requirement).toMatchObject({
-			queryKey: 'orders:browser:status=all:search=:after=1782864000:limit=25',
+			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=25',
 		});
 		expect(requirement).not.toHaveProperty('priority');
+	});
+
+	// A cashier search containing literal range tokens must round-trip as search text.
+	it('keeps literal range tokens in the search component of the descriptor', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { search: 'invoice:after=123' },
+			limit: 25,
+		});
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:search=invoice:after=123:limit=25',
+		});
 	});
 
 	it('creates no demand for a FILTERED products browse', () => {

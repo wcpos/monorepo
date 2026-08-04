@@ -109,14 +109,16 @@ function orderBrowseDescriptor(
 	const rangePart = `${afterSeconds === undefined ? '' : `:after=${afterSeconds}`}${
 		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
 	}`;
+	// Range dimensions precede `:search=` so arbitrary search text can never be read back
+	// as a date bound — see the grammar note in order-browser-scheduler-descriptor.ts.
 	if (rangePart && typeof limit === 'number' && limit > ORDER_BROWSE_MAX_LIMIT) {
-		return `orders:browser:status=${statusValue}:search=${searchValue}${rangePart}:limit=all`;
+		return `orders:browser:status=${statusValue}${rangePart}:search=${searchValue}:limit=all`;
 	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}:search=${searchValue}${rangePart}:limit=${boundedLimit}`;
+	return `orders:browser:status=${statusValue}${rangePart}:search=${searchValue}:limit=${boundedLimit}`;
 }
 
 /**

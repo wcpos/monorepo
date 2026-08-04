@@ -280,7 +280,7 @@ describe('query bindings', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=processing:search=smith:after=1782864000:before=1783987200:limit=50',
+					'orders:browser:status=processing:after=1782864000:before=1783987200:search=smith:limit=50',
 			})
 		);
 	});
@@ -291,7 +291,7 @@ describe('query bindings', () => {
 			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
 		} as never);
 		const queryKey =
-			'orders:browser:status=processing:search=:after=1782864000:before=1783987200:limit=25';
+			'orders:browser:status=processing:after=1782864000:before=1783987200:search=:limit=25';
 		await engineDB.collections.coverageLanes.insert({
 			laneKey: `orders::${queryKey}`,
 			collectionName: 'orders',

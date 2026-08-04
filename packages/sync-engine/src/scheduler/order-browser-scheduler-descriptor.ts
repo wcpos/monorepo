@@ -37,16 +37,19 @@ export function parseOrderBrowserSchedulerDescriptor(
 ): OrderBrowserSchedulerDescriptorDecision | null {
 	if (!queryKey.startsWith('orders:browser:')) return null;
 
-	const match = /^orders:browser:status=([^:]*):search=(.*):limit=(\d+|all)$/.exec(queryKey);
+	// `search` carries arbitrary cashier text, so it must stay the LAST free-text field:
+	// it is delimited only by the literal `:limit=` suffix (greedy `.*` + anchored end),
+	// which is how this grammar has always terminated it. The range dimensions therefore
+	// sit BETWEEN the colon-free `status` and `:search=` — appending them after `search`
+	// would let a literal search term like `invoice:after=1` be read as a date bound.
+	const match =
+		/^orders:browser:status=([^:]*)(?::after=(\d+))?(?::before=(\d+))?:search=(.*):limit=(\d+|all)$/.exec(
+			queryKey
+		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 
-	const [, status, searchAndRange, limitText] = match;
+	const [, status, afterText, beforeText, search, limitText] = match;
 	if (status === '') return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
-	const rangeMatch = /^(.*?)(?::after=(\d+))?(?::before=(\d+))?$/.exec(searchAndRange)!;
-	const [, search, afterText, beforeText] = rangeMatch;
-	if (search.includes(':after=') || search.includes(':before=')) {
-		return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
-	}
 	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
 	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
 	if (

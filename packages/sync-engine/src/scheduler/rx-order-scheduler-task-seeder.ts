@@ -103,11 +103,13 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 
 	const status = input.status.trim() || 'all';
 	const search = input.search.trim();
+	// Range dimensions precede `:search=` so arbitrary search text can never be read back
+	// as a date bound — see the grammar note in order-browser-scheduler-descriptor.ts.
 	const rangePart = `${
 		input.afterSeconds === undefined ? '' : `:after=${input.afterSeconds}`
 	}${input.beforeSeconds === undefined ? '' : `:before=${input.beforeSeconds}`}`;
 	const limitPart = input.complete ? 'all' : input.limit;
-	const queryKey = `orders:browser:status=${status}:search=${search}${rangePart}:limit=${limitPart}`;
+	const queryKey = `orders:browser:status=${status}${rangePart}:search=${search}:limit=${limitPart}`;
 	const descriptorDecision = parseOrderBrowserSchedulerDescriptor(queryKey);
 	if (!descriptorDecision || 'skipReason' in descriptorDecision) {
 		throw new Error(
