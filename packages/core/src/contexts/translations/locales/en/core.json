@@ -759,6 +759,7 @@
 	"settings.tax": "Tax",
 	"settings.tax_calculation": "Calculation",
 	"settings.tax_display": "Display",
+	"settings.template_type_thermal": "Thermal",
 	"settings.templates_description": "Choose which printer each template prints to.",
 	"settings.test_print": "Test Print",
 	"settings.test_print_failed": "Test print failed",
