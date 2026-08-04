@@ -4,24 +4,31 @@ import { render } from '@testing-library/react';
 
 import { List, Root } from './virtualized-list.web';
 
+type VirtualizerOptions = {
+	count: number;
+	getItemKey?: (index: number) => string | number;
+};
+
+const mockUseVirtualizer = jest.fn((options: VirtualizerOptions) => ({
+	getVirtualItems: () =>
+		Array.from({ length: options.count }, (_, index) => ({
+			index,
+			key: options.getItemKey?.(index) ?? index,
+			start: index * 50,
+			size: 50,
+			end: (index + 1) * 50,
+			lane: 0,
+		})),
+	getTotalSize: () => options.count * 50,
+	scrollToIndex: jest.fn(),
+	scrollToOffset: jest.fn(),
+	measureElement: jest.fn(),
+}));
+
 // Render every row without real measurement so jsdom (no layout) can exercise
 // the list's keying/reconciliation logic.
 jest.mock('@tanstack/react-virtual', () => ({
-	useVirtualizer: (options: { count: number }) => ({
-		getVirtualItems: () =>
-			Array.from({ length: options.count }, (_, index) => ({
-				index,
-				key: index,
-				start: index * 50,
-				size: 50,
-				end: (index + 1) * 50,
-				lane: 0,
-			})),
-		getTotalSize: () => options.count * 50,
-		scrollToIndex: jest.fn(),
-		scrollToOffset: jest.fn(),
-		measureElement: jest.fn(),
-	}),
+	useVirtualizer: (options: VirtualizerOptions) => mockUseVirtualizer(options),
 }));
 
 type Item = { id: string };
@@ -64,5 +71,17 @@ describe('VirtualizedList (web)', () => {
 		view.rerender(<ListFixture data={[{ id: 'b' }, { id: 'a' }]} />);
 
 		expect(view.getByTestId('row-b')).toBe(rowB);
+	});
+
+	it('passes record identity to the virtualizer when data reorders', () => {
+		const view = render(<ListFixture data={[{ id: 'a' }, { id: 'b' }]} />);
+		let options = mockUseVirtualizer.mock.calls.at(-1)?.[0];
+
+		expect(options?.getItemKey?.(0)).toBe('a');
+
+		view.rerender(<ListFixture data={[{ id: 'b' }, { id: 'a' }]} />);
+		options = mockUseVirtualizer.mock.calls.at(-1)?.[0];
+
+		expect(options?.getItemKey?.(0)).toBe('b');
 	});
 });

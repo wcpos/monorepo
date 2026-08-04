@@ -114,6 +114,7 @@ function List<T>({
 	// set up virtualizer
 	const rowVirtualizer = useVirtualWrapper({
 		count: data.length,
+		getItemKey: (index) => (keyExtractor ? keyExtractor(data[index], index) : index),
 		getScrollElement: () => scrollElement,
 		horizontal,
 		overscan,

@@ -127,6 +127,7 @@ export const useLocalQuery = (options: LocalQueryOptions) => {
 	// new query loads and clears terminal errors, so a descriptor change never
 	// blanks a mounted consumer.
 	const [resource] = React.useState(() => new ObservableResource(result$));
+	const resourceRef = React.useRef(resource);
 	const total$ = React.useMemo(
 		() => result$.pipe(map((result) => result.count ?? result.hits.length)),
 		[result$]
@@ -137,9 +138,10 @@ export const useLocalQuery = (options: LocalQueryOptions) => {
 	}, [resource, result$]);
 
 	React.useEffect(() => {
+		const lifetimeResource = resourceRef.current;
 		// The resource owns the local RxDB subscriptions for this hook.
-		return () => resource.destroy();
-	}, [resource]);
+		return () => lifetimeResource.destroy();
+	}, []);
 
 	return { resource, result$, total$ };
 };
