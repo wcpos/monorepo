@@ -73,6 +73,24 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 		deleteIndexedDbDatabases(),
 		deleteOpfsDatabases(),
 	]);
+
+	if (typeof caches !== 'undefined') {
+		try {
+			void caches
+				.open('wcpos-images-v1')
+				.then((cache) =>
+					cache.keys().then((keys) =>
+						keys.forEach((key) => {
+							void cache.delete(key).catch(() => {});
+						})
+					)
+				)
+				.catch(() => {});
+		} catch {
+			// Cache API storage is optional; the database reset can still complete.
+		}
+	}
+
 	const databasesDeleted = deletedIndexedDbDatabases + deletedOpfsDatabases;
 	const message =
 		databasesDeleted > 0
