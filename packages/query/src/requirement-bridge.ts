@@ -109,6 +109,28 @@ function finiteWooIds(selector: Record<string, unknown> | undefined): number[] |
 }
 
 /**
+ * A `date_created_gmt` range bound as epoch SECONDS, or `undefined` when the bound cannot be
+ * represented in the descriptor grammar. Exported because coverage eligibility in
+ * `@wcpos/core` has to accept exactly the bounds this encodes — a bound one side accepts and
+ * the other drops makes the coverage lane wider than the selector it reports for.
+ *
+ * `YYYY-MM-DD` is already UTC-anchored by the Date Time String Format; `YYYY-MM-DDZ` is NOT a
+ * production of that format, so appending `Z` would drop it into each engine's
+ * implementation-defined fallback (this app runs on Hermes and JSC as well as V8). Only a
+ * time-of-day with no offset needs the explicit UTC designator — the shape
+ * `convertLocalDateToUTCString` emits (`yyyy-MM-dd'T'HH:mm:ss`).
+ */
+export function orderRangeBoundSeconds(value: unknown): number | undefined {
+	if (typeof value !== 'string') return undefined;
+	const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+	const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+	const normalized = dateOnly || hasTimezone ? value : `${value}Z`;
+	const milliseconds = Date.parse(normalized);
+	if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
+	return Math.floor(milliseconds / 1_000);
+}
+
+/**
  * `scoped` is the cashier-applied-dimension flag that earns interactive priority. It is
  * returned alongside the key rather than re-derived by sniffing the key text: `search` is
  * arbitrary cashier input, so a term like `note:customer=42` would match a
@@ -201,22 +223,10 @@ function orderBrowseDescriptor(
 				: undefined;
 	const storePart = store === undefined ? '' : `:store=${store}`;
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
-	const epochSeconds = (value: unknown): number | undefined => {
-		if (typeof value !== 'string') return undefined;
-		// `YYYY-MM-DD` is already UTC-anchored by the Date Time String Format; `YYYY-MM-DDZ`
-		// is NOT a production of that format, so appending `Z` would drop it into each
-		// engine's implementation-defined fallback (this app runs on Hermes and JSC as well
-		// as V8). Only a time-of-day with no offset needs the explicit UTC designator — the
-		// shape `convertLocalDateToUTCString` emits (`yyyy-MM-dd'T'HH:mm:ss`).
-		const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
-		const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
-		const normalized = dateOnly || hasTimezone ? value : `${value}Z`;
-		const milliseconds = Date.parse(normalized);
-		if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
-		return Math.floor(milliseconds / 1_000);
-	};
-	const afterSeconds = range && typeof range === 'object' ? epochSeconds(range.$gte) : undefined;
-	const beforeSeconds = range && typeof range === 'object' ? epochSeconds(range.$lte) : undefined;
+	const afterSeconds =
+		range && typeof range === 'object' ? orderRangeBoundSeconds(range.$gte) : undefined;
+	const beforeSeconds =
+		range && typeof range === 'object' ? orderRangeBoundSeconds(range.$lte) : undefined;
 	const rangePart = `${afterSeconds === undefined ? '' : `:after=${afterSeconds}`}${
 		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
 	}`;
