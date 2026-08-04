@@ -63,6 +63,19 @@ const ORDER_BROWSE_MAX_LIMIT = 200;
  * priority band as the browse it replaces.
  */
 const ORDER_SCOPED_QUERY_PRIORITY = 700;
+/**
+ * UI sort field → WC core orders `orderby`. Unlike the products map below, a field absent
+ * here does NOT fall back to an unsorted window silently — it falls back to the default
+ * `id desc` browse, which for an ascending sort is the far end of the catalog.
+ *
+ * `number → id` is deliberate. WC REST's orders `orderby` enum has no `number`, and core's
+ * `get_order_number()` returns the post ID, so under stock WooCommerce this mapping is
+ * exact. A third-party sequential-order-number plugin can decouple the two, and then a
+ * `number asc` window is the first N by ID rather than by number. Dropping the mapping does
+ * not fix that case — it fetches the NEWEST orders for an ascending browse, a strictly worse
+ * slice — and it would regress the stock case from exact to wrong. The residual is a bounded
+ * browse showing a near-miss slice on such stores; the rows are still reachable by search.
+ */
 const ORDER_BROWSE_ORDERBY_BY_SORT_FIELD = {
 	date_created_gmt: 'date',
 	date_modified_gmt: 'modified',
