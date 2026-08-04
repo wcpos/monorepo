@@ -518,7 +518,11 @@ export async function requeueBornTwiceSnapshot(input: {
 				payload,
 				baseRevision: input.ackRevision,
 				queuedAt: input.now(),
-				...(mutation.explicit === true ? { explicit: true } : {}),
+				// The follow-up carries every contributor's payload, so it carries the
+				// release too: one explicit contributor makes the recovery explicit.
+				...(mutation.explicit === true || rows.some((item) => item.explicit === true)
+					? { explicit: true }
+					: {}),
 			},
 			(fresh) =>
 				fresh

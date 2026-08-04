@@ -235,6 +235,16 @@ export async function drainMutationQueue(input: {
 		blockedRecords.add(mutation.recordId);
 	};
 
+	// A drainable release row — an explicit mutation or a delete — must drain its
+	// record's WHOLE chain in FIFO order. An already-attempted predecessor cannot
+	// coalesce with the release, so holding it would starve the release behind
+	// blockedRecords forever: a held row never retries, and the status transition
+	// that would free it (checkout) is itself waiting on the release's push.
+	const releaseRecords = new Set<string>(
+		batch
+			.filter((mutation) => mutation.explicit === true || mutation.operation === 'delete')
+			.map((mutation) => mutation.recordId)
+	);
 	for (const mutation of batch) {
 		if (input.signal?.aborted) {
 			break;
@@ -242,7 +252,7 @@ export async function drainMutationQueue(input: {
 		if (blockedRecords.has(mutation.recordId)) {
 			continue;
 		}
-		if (await input.shouldHold?.(mutation)) {
+		if (!releaseRecords.has(mutation.recordId) && (await input.shouldHold?.(mutation))) {
 			held += 1;
 			blockedRecords.add(mutation.recordId);
 			continue;

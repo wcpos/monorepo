@@ -312,6 +312,67 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('releases an already-attempted held chain when an explicit write queues behind it', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			// An earlier attempt (e.g. pushed while released, then the cashier backed
+			// out of checkout) makes the row un-coalescable — Pay's explicit write
+			// must still drain the chain instead of starving behind the hold.
+			const queue = queueFor(engine.active()!.database);
+			const [row] = await queue.pending();
+			await queue.replace({ ...row!, attempts: 1 });
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { customer_note: 'release me' },
+				explicit: true,
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 2 });
+			expect(server.received).toHaveLength(2);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('releases an already-attempted held chain when a delete queues behind it', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			const queue = queueFor(engine.active()!.database);
+			const [row] = await queue.pending();
+			await queue.replace({ ...row!, attempts: 1 });
+			// attempts > 0 blocks annihilation, so the delete queues behind the
+			// create — and must release the held chain rather than wait for a
+			// status transition that will never come.
+			await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 2 });
+			expect(server.received).toHaveLength(2);
+			expect(await engine.active()?.database.collections.orders.findOne(UUID_A).exec()).toBeNull();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('does not hold a delete for a pos-open order', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:base-r1' });

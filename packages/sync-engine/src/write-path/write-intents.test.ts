@@ -286,4 +286,65 @@ describe('enqueueWriteIntent', () => {
 			}),
 		]);
 	});
+
+	it('marks a tail-appended born-twice follow-up explicit when a contributing successor is explicit', async () => {
+		const queued = new Map<string, QueuedMutation>([
+			[
+				'successor-1',
+				{
+					mutationId: 'successor-1',
+					collectionName: 'orders',
+					operation: 'update',
+					recordId: 'order-1',
+					origin: 'existing',
+					payload: { customer_note: 'ring twice' },
+					baseRevision: 'sha256:server-r1',
+					queuedAt: '2026-08-04T00:00:01.000Z',
+					seq: 2,
+					status: 'claimed',
+					explicit: true,
+				},
+			],
+		]);
+		const mutationCollection: RxRecordMutationCollection = {
+			bulkUpsert: async (items) => {
+				for (const item of items) queued.set(item.mutationId, item);
+				return { error: [] };
+			},
+			find: () => ({ exec: async () => [...queued.values()] }),
+			bulkRemove: async (ids) => {
+				for (const id of ids) queued.delete(id);
+				return { error: [] };
+			},
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => null }) },
+				recordMutations: mutationCollection,
+			},
+		} as unknown as RxDatabase;
+
+		await requeueBornTwiceSnapshot({
+			db,
+			mutation: {
+				mutationId: 'create-1',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: 'order-1',
+				origin: 'minted',
+				payload: { status: 'pos-open', total: '25.00' },
+				baseRevision: null,
+				queuedAt: '2026-08-04T00:00:00.000Z',
+			} as never,
+			ackRevision: 'sha256:server-r1',
+			mintUuid: () => 'follow-up-1',
+			now: () => '2026-08-04T00:00:02.000Z',
+		});
+
+		// The claimed successor cannot coalesce, so the snapshot tail-appends —
+		// and inherits the successor's release: its payload rides the follow-up.
+		expect(queued.get('follow-up-1')).toEqual(
+			expect.objectContaining({ mutationId: 'follow-up-1', explicit: true })
+		);
+	});
 });
