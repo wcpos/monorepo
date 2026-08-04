@@ -1136,13 +1136,17 @@ describe('createOrdersSchedulerFetcher', () => {
 			});
 			const queryKey = 'orders:browser:status=processing:cashier=7:search=:limit=25';
 			await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey }));
-			return coverageRepository.recordQueryResult.mock.calls.at(-1)?.[0];
+			return coverageRepository.recordQueryResult;
 		};
 
 		// Current plugin: every record carries the requested cashier — lane completes.
-		expect(await runWith(['7', '7'])).toMatchObject({ complete: true });
+		expect(await runWith(['7', '7'])).toHaveBeenLastCalledWith(
+			expect.objectContaining({ complete: true })
+		);
 		// Old plugin: the param was ignored, so another cashier's order came back too.
-		expect(await runWith(['7', '9'])).toMatchObject({ complete: false });
+		expect(await runWith(['7', '9'])).toHaveBeenLastCalledWith(
+			expect.objectContaining({ complete: false })
+		);
 	});
 
 	it('records capped browser order query coverage as incomplete without exhaustion evidence', async () => {
