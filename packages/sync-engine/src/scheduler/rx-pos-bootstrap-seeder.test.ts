@@ -27,34 +27,10 @@ describe('posBootstrapTasks', () => {
 		expect((tax?.limit ?? 0) > 0).toBe(true);
 	});
 
-	it('only seeds eager greedy lanes — never a bulk order/product backlog pull (orders stay on-demand)', () => {
+	it('only seeds tax rates — reference collections and historical data stay on-demand', () => {
 		const tasks = posBootstrapTasks();
-		// Guardrail G3: the bootstrap never bulk-downloads huge historical collections.
-		expect(tasks.some((task) => task.collection === 'orders')).toBe(false);
-		// Every bootstrap lane is a small required greedy lane (no windowed/on-demand
-		// historical backlog seeded eagerly here).
-		expect(tasks.every((task) => task.mode === 'greedy')).toBe(true);
-	});
-
-	it('seeds greedy categories + brands + tags + coupons reference lanes just below tax rates', () => {
-		const tasks = posBootstrapTasks();
-		const byCollection = (collection: string) =>
-			tasks.find((task) => task.collection === collection);
-
-		const categories = byCollection('categories');
-		const brands = byCollection('brands');
-		const tags = byCollection('tags');
-		const coupons = byCollection('coupons');
-		expect(categories).toMatchObject({ queryKey: 'categories:all', mode: 'greedy' });
-		expect(brands).toMatchObject({ queryKey: 'brands:all', mode: 'greedy' });
-		expect(tags).toMatchObject({ queryKey: 'tags:all', mode: 'greedy' });
-		expect(coupons).toMatchObject({ queryKey: 'coupons:all', mode: 'greedy' });
-		// Priority order: tax (1000) > categories > brands > tags > coupons > everything operational.
-		const tax = byCollection('taxRates');
-		expect((tax?.priority ?? 0) > (categories?.priority ?? 0)).toBe(true);
-		expect((categories?.priority ?? 0) > (brands?.priority ?? 0)).toBe(true);
-		expect((brands?.priority ?? 0) > (tags?.priority ?? 0)).toBe(true);
-		expect((tags?.priority ?? 0) > (coupons?.priority ?? 0)).toBe(true);
+		expect(tasks).toHaveLength(1);
+		expect(tasks[0]?.collection).toBe('taxRates');
 	});
 });
 
@@ -66,12 +42,6 @@ describe('referenceLaneTasks (F11 — in-session reference refresh)', () => {
 		expect(collections).toEqual(['brands', 'categories', 'coupons', 'tags']);
 		expect(tasks.every((task) => task.mode === 'greedy')).toBe(true);
 		expect(tasks.some((task) => task.collection === 'taxRates')).toBe(false); // tax rates have their own change-signal refresh
-	});
-
-	it('matches the reference lanes posBootstrapTasks seeds at boot (same ids re-queue on re-seed)', () => {
-		const referenceCollections = new Set(['categories', 'brands', 'tags', 'coupons']);
-		const bootRef = posBootstrapTasks().filter((task) => referenceCollections.has(task.collection));
-		expect(referenceLaneTasks()).toEqual(bootRef);
 	});
 });
 

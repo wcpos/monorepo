@@ -8,8 +8,7 @@
  *   - tax rates → a GREEDY `taxRates:all` lane at top priority (1000). Small,
  *     required, blocks cart math — the canonical greedy case (pain point #2,
  *     CONTEXT.md "Greedy lane" / "Required startup subset"). Drains to completion.
- *   - categories, brands, tags, and coupons → one GREEDY reference lane per
- *     collection, ordered just below tax rates.
+ *   - Categories, brands, tags, and coupons are fetched on demand, not seeded at boot.
  *   - It does NOT seed orders or the full product catalog. Those are huge and
  *     historical: orders stay on-demand (recent window + targeted/search), the
  *     catalog is a working set grown by coverage. Bulk-pulling them at boot is
@@ -72,8 +71,7 @@ export function taxRatesLaneTask(): FetchTask {
 
 /**
  * Per-reference-collection lane inputs: its config (queryKey/collection) + greedy
- * priority. One map drives BOTH boot seeding and the change-signal per-collection
- * re-seed, so a new reference collection is a map entry, not another copy.
+ * priority. These lanes are seeded by on-demand and upkeep refreshes, never boot.
  */
 const REFERENCE_LANE_CONFIGS: Record<
 	ReferenceCollection,
@@ -115,7 +113,7 @@ export function referenceLaneTasks(): FetchTask[] {
 }
 
 export function posBootstrapTasks(): FetchTask[] {
-	return [taxRatesLaneTask(), ...referenceLaneTasks()];
+	return [taxRatesLaneTask()];
 }
 
 export type SeedPosBootstrapLanesInput = {
@@ -173,9 +171,9 @@ export async function seedTaxRatesLane(
  * set is cheap.
  */
 export async function seedReferenceLanes(
-	input: SeedPosBootstrapLanesInput
+	input: SeedPosBootstrapLanesInput & { collections?: readonly ReferenceCollection[] }
 ): Promise<SeedPersistedSchedulerTasksResult> {
-	return seedTasks(referenceLaneTasks(), input);
+	return seedTasks((input.collections ?? REFERENCE_COLLECTIONS).map(referenceLaneTaskFor), input);
 }
 
 /**

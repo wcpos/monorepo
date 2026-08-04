@@ -17,6 +17,10 @@
  *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
  *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor plus optional native
  *    filter dimensions. It carries the grid's own limit, sort, and representable filters.
+ *  - **reference browse** (categories/tags/brands/coupons — #952) →
+ *    `engine.require({collection, kind: 'refresh'})`. These lanes are no longer seeded at
+ *    boot, so mounting a picker/screen over one is what fetches it, deduped by the engine's
+ *    `REFERENCE_REFRESH_DEDUPE_MS` window.
  *
  * Unbounded browse over every other collection creates NO remote demand (local residents
  * only). The `greedy`/`endpoint` keys no longer create remote work; they are accepted and
@@ -47,6 +51,12 @@ const TARGETED_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
 ]);
 
 const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>(['products', 'customers']);
+const REFERENCE_ENGINE_COLLECTIONS: EngineCollectionName[] = [
+	'categories',
+	'tags',
+	'brands',
+	'coupons',
+];
 
 const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
 
@@ -383,6 +393,23 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 		];
 	}
 
+	// Reference browse → an on-demand greedy pull at open (#952). These collections are no
+	// longer seeded at boot, so the picker/screen/cart binding that mounts over one is what
+	// materializes it. Deliberately drops `forceRefresh`: a UI binding re-declares on every
+	// render, and forcing would bypass REFERENCE_REFRESH_DEDUPE_MS and re-pull the whole
+	// collection per mount — the boot-time server hammering this issue set out to remove.
+	// The one caller that legitimately forces (Clear & Sync refill) re-applies it below.
+	if (REFERENCE_ENGINE_COLLECTIONS.includes(engineCollection)) {
+		return [
+			{
+				id: `${input.id}:reference-refresh`,
+				collection: engineCollection,
+				kind: 'refresh',
+				priority: input.priority ?? 700,
+			},
+		];
+	}
+
 	// Every other collection: unbounded browse → local residents only (ADR 0027).
 	return [];
 }
@@ -445,6 +472,10 @@ function requirementsForReset(
 				priority: 1000,
 				forceRefresh: true,
 			})
+				// Reset refill is the one path that must beat the dedupe window: the local
+				// collection was just wiped, so serving "recently refreshed" residents would
+				// serve nothing. Re-applied here because the reference branch drops it (#952).
+				.map((requirement) => ({ ...requirement, forceRefresh: true }))
 		);
 	}
 	if (wanted.has('taxes')) {

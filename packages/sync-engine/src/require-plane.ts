@@ -50,6 +50,8 @@ import {
 import { parseOrderBrowserSchedulerDescriptor } from './scheduler/order-browser-scheduler-descriptor';
 import { parseProductBrowseWindowDescriptor } from './scheduler/product-browse-window-descriptor';
 import { seedProductBrowseWindowSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
+import { seedReferenceLanes } from './scheduler/rx-pos-bootstrap-seeder';
+import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import {
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	runEngineSchedulerDrain,
@@ -447,6 +449,61 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					action: 'fetched',
 					missingRecordIds: [],
 					reason: 'drained full order refresh',
+					documents: drainResult.totalDocuments,
+					requests: drainResult.totalRequests,
+				};
+			}
+
+			// On-demand reference pull (#952). Categories/tags/brands/coupons are no longer
+			// seeded at boot; the mounted picker/screen/cart binding that needs one declares a
+			// `refresh` and the greedy lane runs HERE, at open. `REFERENCE_REFRESH_DEDUPE_MS`
+			// collapses a remount (or a second surface over the same collection) into the one
+			// pull, so repeated opens cost nothing until the window lapses.
+			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
+				let drainResult = emptyDrainResult();
+				let deduped = false;
+				const applied = await bound.guardWrite(async () => {
+					const nowMs = deps.now?.();
+					const seedResult = await seedReferenceLanes({
+						collections: [descriptor.collection],
+						completedDedupeForMs: item.requirement.forceRefresh ? 0 : REFERENCE_REFRESH_DEDUPE_MS,
+						getRepository: async () => ({ getDatabase: () => database as never }),
+						...(nowMs !== undefined ? { nowMs } : {}),
+					});
+					if (seedResult.skippedActive > 0 || seedResult.skippedCompleted > 0) {
+						deduped = true;
+						return;
+					}
+					drainResult = await runEngineSchedulerDrain({
+						db: database as unknown as SchedulerDrainDatabase,
+						coverage,
+						baseUrl: deps.syncBaseUrl,
+						ownerId: 'require-plane',
+						fetcher: boundFetch as never,
+						diagnostics: deps.diagnostics,
+						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+						signal: item.abortController.signal,
+						...(nowMs !== undefined ? { nowMs } : {}),
+						onProgress: progressObserver(item.requirement),
+					});
+				});
+				if (applied === 'dropped')
+					throw new Error('require: scope moved mid-refresh (writes dropped)');
+				if (drainResult.failed > 0)
+					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
+				if (deduped) {
+					return {
+						action: 'serve-local',
+						missingRecordIds: [],
+						reason: `${descriptor.collection} refreshed within the dedupe window`,
+						documents: 0,
+						requests: 0,
+					};
+				}
+				return {
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: `drained ${descriptor.collection} refresh`,
 					documents: drainResult.totalDocuments,
 					requests: drainResult.totalRequests,
 				};

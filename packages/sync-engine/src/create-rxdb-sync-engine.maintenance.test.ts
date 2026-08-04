@@ -14,6 +14,7 @@ import {
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
+import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { memoryEngineStorage } from './testing';
 
 setPremiumFlag();
@@ -61,13 +62,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.ready;
 
 		const initialRows = await taskRows(engine);
-		expect(initialRows.map((row) => row['collectionName']).sort()).toEqual([
-			'brands',
-			'categories',
-			'coupons',
-			'tags',
-			'taxRates',
-		]);
+		expect(initialRows.map((row) => row['collectionName'])).toEqual(['taxRates']);
 
 		const initialScope = engine.active();
 		if (!initialScope) throw new Error('no active scope');
@@ -87,13 +82,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 
 		await engine.scope.switch(freshIdentity());
 		const switchedRows = await taskRows(engine);
-		expect(switchedRows.map((row) => row['collectionName']).sort()).toEqual([
-			'brands',
-			'categories',
-			'coupons',
-			'tags',
-			'taxRates',
-		]);
+		expect(switchedRows.map((row) => row['collectionName'])).toEqual(['taxRates']);
 
 		await engine.scope.switch(initialIdentity);
 		const returnedRows = await taskRows(engine);
@@ -151,18 +140,71 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
-	it('reference-seed persists all four greedy reference lanes', async () => {
-		const engine = engineWith();
+	it('refreshes a reference on demand, dedupes a remount, and maintains only materialized lanes', async () => {
+		let nowMs = 1_000_000;
+		const pulls = { categories: 0, brands: 0, tags: 0, coupons: 0 };
+		const engine = engineWith({
+			now: () => nowMs,
+			fetcher: async (url) => {
+				const path = new URL(url).pathname;
+				for (const collection of Object.keys(pulls) as (keyof typeof pulls)[]) {
+					const endpoint = collection === 'coupons' ? '/coupons' : `/products/${collection}`;
+					if (path.endsWith(endpoint)) {
+						pulls[collection] += 1;
+						return Response.json(
+							collection === 'categories'
+								? [
+										{
+											id: 1,
+											name: 'Category 1',
+											meta_data: [
+												{
+													key: '_woocommerce_pos_uuid',
+													value: '55555555-5555-4555-8555-555555555555',
+												},
+											],
+										},
+									]
+								: []
+						);
+					}
+				}
+				return Response.json([]);
+			},
+		});
 		await engine.ready;
-		const report = await engine.sync('reference-seed');
-		expect(report.status).toBe('ran');
 
-		const rows = await taskRows(engine);
-		const greedy = rows
-			.filter((row) => row['mode'] === 'greedy' && row['collectionName'] !== 'taxRates')
-			.map((row) => row['collectionName'])
-			.sort();
-		expect(greedy).toEqual(['brands', 'categories', 'coupons', 'tags']);
+		await engine.sync('reference-seed');
+		expect((await taskRows(engine)).filter((row) => row['collectionName'] !== 'taxRates')).toEqual(
+			[]
+		);
+
+		const opened = await engine.require({
+			id: 'category-picker',
+			collection: 'categories',
+			kind: 'refresh',
+		}).ready;
+		expect(opened).toMatchObject({ action: 'fetched' });
+		expect(pulls).toEqual({ categories: 1, brands: 0, tags: 0, coupons: 0 });
+
+		// A remount inside the dedupe window resolves against local residents rather than
+		// re-pulling — the outcome has to say so, not claim a fetch that never happened.
+		const remounted = await engine.require({
+			id: 'category-picker-remount',
+			collection: 'categories',
+			kind: 'refresh',
+		}).ready;
+		expect(remounted).toMatchObject({
+			action: 'serve-local',
+			requests: 0,
+			documents: 0,
+		});
+		expect(pulls).toEqual({ categories: 1, brands: 0, tags: 0, coupons: 0 });
+
+		nowMs += REFERENCE_REFRESH_DEDUPE_MS + 1;
+		await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
 		await engine.dispose();
 	});
 
@@ -453,10 +495,13 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			).toEqual(bootLanes);
 
 			for (const lane of bootLanes) {
-				expect(lifecycle.filter((event) => 'lane' in event && event.lane === lane)).toEqual([
-					{ type: 'lane-start', lane },
-					{ type: 'lane-finish', lane, status: 'ran' },
-				]);
+				const events = lifecycle.filter((event) => 'lane' in event && event.lane === lane);
+				expect(events[0]).toEqual({ type: 'lane-start', lane });
+				expect(events[1]).toMatchObject({
+					type: 'lane-finish',
+					lane,
+					status: lane === 'reference-seed' ? 'skipped' : 'ran',
+				});
 			}
 			const fetchedUrls = fetcher.mock.calls.map(([url]) => url);
 			expect(fetchedUrls).toContainEqual(
@@ -530,13 +575,21 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		engine.events((event) => events.push(event));
 
 		const report = await engine.sync('reference-seed');
-		expect(report.status).toBe('ran');
+		expect(report).toMatchObject({
+			status: 'skipped',
+			reason: 'no materialized reference collections',
+		});
 		const lifecycle = events.filter(
 			(event) => event.type === 'lane-start' || event.type === 'lane-finish'
 		);
 		expect(lifecycle).toEqual([
 			{ type: 'lane-start', lane: 'reference-seed' },
-			{ type: 'lane-finish', lane: 'reference-seed', status: 'ran' },
+			{
+				type: 'lane-finish',
+				lane: 'reference-seed',
+				status: 'skipped',
+				detail: 'no materialized reference collections',
+			},
 		]);
 		await engine.dispose();
 	});

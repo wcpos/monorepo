@@ -50,6 +50,7 @@ function scriptedServer() {
 		productIncludes: [] as number[][],
 		variationPulls: 0,
 		customerPulls: 0,
+		referencePulls: { categories: 0, brands: 0, tags: 0, coupons: 0 },
 		sequenceLogFetches: 0,
 		sequenceLogSince: [] as number[],
 		headFetches: 0,
@@ -164,14 +165,32 @@ function scriptedServer() {
 				}))
 			);
 		}
-		if (
-			path.endsWith('/taxes') ||
-			path.endsWith('/products/categories') ||
-			path.endsWith('/products/brands') ||
-			path.endsWith('/products/tags') ||
-			path.endsWith('/coupons')
-		) {
+		if (path.endsWith('/taxes')) {
 			return json([]);
+		}
+		for (const collection of Object.keys(state.referencePulls) as (
+			'categories' | 'brands' | 'tags' | 'coupons'
+		)[]) {
+			const endpoint = collection === 'coupons' ? '/coupons' : `/products/${collection}`;
+			if (path.endsWith(endpoint)) {
+				state.referencePulls[collection] += 1;
+				return json(
+					collection === 'categories'
+						? [
+								{
+									id: 1,
+									name: 'Category 1',
+									meta_data: [
+										{
+											key: '_woocommerce_pos_uuid',
+											value: '55555555-5555-4555-8555-555555555555',
+										},
+									],
+								},
+							]
+						: []
+				);
+			}
 		}
 		throw new Error(`scripted server: unexpected ${path}`);
 	};
@@ -221,6 +240,44 @@ async function productCount(engine: RxdbSyncEngine): Promise<number> {
 }
 
 describe('sync("change-signal") through the public handle', () => {
+	it('refreshes changed references only after their lane has been materialized', async () => {
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		await engine.ready;
+		await engine.sync('change-signal');
+
+		server.state.head = 6;
+		server.state.rows.push({
+			sequence: 6,
+			id: 1,
+			type: 'update',
+			collection: 'categories',
+			modified_gmt: '2026-07-10T00:00:01',
+		});
+		await engine.sync('change-signal');
+		expect(server.state.referencePulls.categories).toBe(0);
+
+		await engine.require({ id: 'category-picker', collection: 'categories', kind: 'refresh' })
+			.ready;
+		expect(server.state.referencePulls.categories).toBe(1);
+
+		server.state.head = 7;
+		server.state.rows.push({
+			sequence: 7,
+			id: 2,
+			type: 'update',
+			collection: 'categories',
+			modified_gmt: '2026-07-10T00:00:02',
+		});
+		await engine.sync('change-signal');
+		expect(server.state.referencePulls.categories).toBe(2);
+		await engine.dispose();
+	});
+
 	it('primes to head, applies a fresh signal, persists the cursor across engines', async () => {
 		const server = scriptedServer();
 		const storage = memoryEngineStorage();

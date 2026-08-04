@@ -20,6 +20,50 @@ describe('requirementsForQuery', () => {
 		).toEqual([]);
 	});
 
+	it.each([
+		['products/categories', 'categories'],
+		['products/tags', 'tags'],
+		['products/brands', 'brands'],
+		['coupons', 'coupons'],
+	] as const)('maps a %s browse to an on-demand %s refresh', (collectionName, collection) => {
+		expect(
+			requirementsForQuery({
+				id: 'picker',
+				collectionName,
+				selector: {},
+				limit: 10,
+				forceRefresh: true,
+			})
+		).toEqual([
+			{
+				id: 'picker:reference-refresh',
+				collection,
+				kind: 'refresh',
+				priority: 700,
+			},
+		]);
+	});
+
+	it('carries an explicit reference browse priority without forcing the refresh', () => {
+		expect(
+			requirementsForQuery({
+				id: 'picker',
+				collectionName: 'products/categories',
+				selector: {},
+				limit: 10,
+				priority: 725,
+				forceRefresh: true,
+			})
+		).toEqual([
+			{
+				id: 'picker:reference-refresh',
+				collection: 'categories',
+				kind: 'refresh',
+				priority: 725,
+			},
+		]);
+	});
+
 	it('maps finite id selectors to targeted-records', () => {
 		const inSelector = requirementsForQuery({
 			id: 'q',
@@ -487,6 +531,27 @@ describe('declareRequirements / registerActiveBinding / reset refill', () => {
 		const engine2 = createFakeEngine(database);
 		await prepareCollectionResetRefill(engine2 as never, ['products'])();
 		expect(engine2.requireCalls.filter((r) => r.kind === 'targeted-records')).toEqual([]);
+	});
+
+	it('force-refreshes an active reference binding only for collection reset refill', async () => {
+		const engine = createFakeEngine(database);
+		const unregister = registerActiveBinding(engine as never, {
+			id: 'coupon-picker',
+			collectionName: 'coupons',
+			selector: {},
+			limit: 50,
+		});
+
+		await prepareCollectionResetRefill(engine as never, ['coupons'])();
+
+		expect(engine.requireCalls).toContainEqual({
+			id: 'coupon-picker:collection-reset:reference-refresh',
+			collection: 'coupons',
+			kind: 'refresh',
+			priority: 1000,
+			forceRefresh: true,
+		});
+		unregister();
 	});
 
 	it('synthesizes the taxRates refresh on a taxes reset', async () => {
