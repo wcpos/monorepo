@@ -208,9 +208,7 @@ describe('requirementsForQuery', () => {
 			kind: 'query',
 			queryKey: 'orders:browser:status=all:orderby=date:order=desc:search=:limit=25',
 		});
-		expect(keyFor([{ total: 'asc' }])?.queryKey).toBe(
-			'orders:browser:status=all:search=:limit=25'
-		);
+		expect(keyFor([{ total: 'asc' }])?.queryKey).toBe('orders:browser:status=all:search=:limit=25');
 		expect(keyFor([{ number: 'desc' }])?.queryKey).toBe(
 			'orders:browser:status=all:search=:limit=25'
 		);
