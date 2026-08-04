@@ -21,6 +21,7 @@ export {
 } from './engine-monitor';
 export {
 	declareRequirements,
+	isFullyRepresentedProductSelector,
 	orderRangeBoundSeconds,
 	prepareCollectionResetRefill,
 	registerActiveBinding,

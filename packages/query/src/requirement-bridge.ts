@@ -295,7 +295,7 @@ function productBrowseWindowDescriptor(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
 	sort: readonly RequirementSortPart[] | undefined
-): { queryKey: string; filtered: boolean } {
+): { queryKey: string; filtered: boolean; residual: boolean } {
 	// The grid extends its limit 10 rows at a time; quantizing to the window step keeps
 	// the coverage-lane space small (limit=100, 200, 300 …) instead of one lane per tick.
 	const requested =
@@ -316,11 +316,51 @@ function productBrowseWindowDescriptor(
 		(orderby === PRODUCT_BROWSE_DEFAULT_ORDERBY && order === PRODUCT_BROWSE_DEFAULT_ORDER)
 			? ''
 			: `:orderby=${orderby}:order=${order}`;
+	const { filters, residual } = productBrowseWindowFilters(selector);
+	const filterPart = ['category', 'tag', 'brand', 'featured', 'on_sale', 'stock_status']
+		.filter((field) => filters[field] !== undefined)
+		.map((field) => `:${field}=${filters[field]}`)
+		.join('');
+	return {
+		queryKey: `${base}${sortPart}${filterPart}`,
+		filtered: filterPart.length > 0,
+		residual,
+	};
+}
+
+/**
+ * Split a products selector into the dimensions the browse-window grammar can carry and
+ * whether anything was left over.
+ *
+ * `residual` is true when some part of the selector could NOT be encoded — an attribute or
+ * variation match, a status, a bare uuid, a mixed `$or`. Those predicates keep narrowing
+ * locally, which is exactly right for DEMAND (the wire window is a deliberate superset) but
+ * makes the coverage lane wider than the selector it would be reported for. Callers that
+ * project a total off the lane must consult this rather than restating these rules
+ * elsewhere — a rule stated twice is a rule that drifts.
+ */
+export function productBrowseWindowFilters(selector: Record<string, unknown> | undefined): {
+	filters: Record<string, string>;
+	residual: boolean;
+} {
 	const filters: Record<string, string> = {};
-	const conditions = [selector, ...(Array.isArray(selector?.$and) ? selector.$and : [])];
+	let residual = false;
+	// An absent selector is the UNFILTERED browse — nothing to represent, nothing left over.
+	// A nullish entry inside `$and` is a different thing: a predicate that cannot be encoded.
+	const conditions = [
+		...(selector ? [selector] : []),
+		...(Array.isArray(selector?.$and) ? selector.$and : []),
+	];
 	for (const condition of conditions) {
-		if (condition === null || typeof condition !== 'object') continue;
+		if (condition === null || typeof condition !== 'object') {
+			residual = true;
+			continue;
+		}
 		const record = condition as Record<string, unknown>;
+		// Keys this condition contributed to the wire key. Anything left over at the end is
+		// a predicate only the local selector enforces.
+		const consumed = new Set<string>();
+		if (condition === selector && Array.isArray(record.$and)) consumed.add('$and');
 		const alternatives = Array.isArray(record.$or) ? record.$or : [];
 		for (const [local, remote] of [
 			['categories', 'category'],
@@ -334,15 +374,22 @@ function productBrowseWindowDescriptor(
 				const elemMatch = (taxonomy as Record<string, unknown>).$elemMatch;
 				if (elemMatch === null || typeof elemMatch !== 'object') return null;
 				const id = (elemMatch as Record<string, unknown>).id;
+				// A one-key `$elemMatch` is the whole predicate; `{id, option}` (the attribute
+				// matcher's shape) narrows further than `?category=` can express.
+				if (Object.keys(elemMatch as Record<string, unknown>).length !== 1) return null;
 				return Number.isSafeInteger(id) && (id as number) > 0 ? (id as number) : null;
 			});
 			if (ids.length > 0 && ids.every((id): id is number => id !== null)) {
 				const previous = filters[remote]?.split(',').map(Number) ?? [];
 				filters[remote] = [...new Set([...previous, ...ids])].sort((a, b) => a - b).join(',');
+				consumed.add('$or');
 			}
 		}
 		for (const field of ['featured', 'on_sale'] as const) {
-			if (typeof record[field] === 'boolean') filters[field] = record[field] ? '1' : '0';
+			if (typeof record[field] === 'boolean') {
+				filters[field] = record[field] ? '1' : '0';
+				consumed.add(field);
+			}
 		}
 		const stock = record.stock_status;
 		const stockValue =
@@ -351,14 +398,25 @@ function productBrowseWindowDescriptor(
 				: stock !== null && typeof stock === 'object'
 					? (stock as Record<string, unknown>).$eq
 					: undefined;
-		if (PRODUCT_STOCK_STATUSES.has(stockValue as string))
+		if (PRODUCT_STOCK_STATUSES.has(stockValue as string)) {
 			filters.stock_status = stockValue as string;
+			consumed.add('stock_status');
+		}
+		if (Object.keys(record).some((key) => !consumed.has(key))) residual = true;
 	}
-	const filterPart = ['category', 'tag', 'brand', 'featured', 'on_sale', 'stock_status']
-		.filter((field) => filters[field] !== undefined)
-		.map((field) => `:${field}=${filters[field]}`)
-		.join('');
-	return { queryKey: `${base}${sortPart}${filterPart}`, filtered: filterPart.length > 0 };
+	return { filters, residual };
+}
+
+/**
+ * Whether the browse-window coverage lane for this products selector covers EXACTLY the
+ * selector — i.e. every predicate reached the wire. The products mirror of
+ * `isFullyRepresentedOrderSelector` in `@wcpos/core`, but kept here beside the encoder so
+ * the two can never disagree.
+ */
+export function isFullyRepresentedProductSelector(
+	selector: Record<string, unknown> | undefined
+): boolean {
+	return !productBrowseWindowFilters(selector).residual;
 }
 
 export interface RequirementInput {

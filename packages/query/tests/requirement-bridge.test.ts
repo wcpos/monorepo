@@ -1,5 +1,6 @@
 import {
 	declareRequirements,
+	isFullyRepresentedProductSelector,
 	prepareCollectionResetRefill,
 	registerActiveBinding,
 	requirementsForQuery,
@@ -458,6 +459,56 @@ describe('requirementsForQuery', () => {
 		// pretending a server-sorted slice exists.
 		expect(keyFor([{ sku: 'asc' }])).toBe('products:browse-window:limit=100');
 		expect(keyFor([{ stock_quantity: 'desc' }])).toBe('products:browse-window:limit=100');
+	});
+
+	// The wire window is a deliberate SUPERSET whenever a predicate cannot be encoded. That
+	// is right for demand and wrong for a total, so the lane's own encoder reports whether
+	// anything was left over — query-bindings suppresses the coverage total when it was.
+	describe('isFullyRepresentedProductSelector', () => {
+		it('accepts selectors whose every predicate reaches the wire', () => {
+			expect(isFullyRepresentedProductSelector({})).toBe(true);
+			expect(isFullyRepresentedProductSelector(undefined)).toBe(true);
+			expect(
+				isFullyRepresentedProductSelector({
+					$and: [
+						{ $or: [{ categories: { $elemMatch: { id: 7 } } }] },
+						{ $or: [{ tags: { $elemMatch: { id: 3 } } }] },
+						{ $or: [{ brands: { $elemMatch: { id: 5 } } }] },
+						{ featured: true },
+						{ on_sale: false },
+						{ stock_status: { $eq: 'instock' } },
+					],
+				})
+			).toBe(true);
+		});
+
+		it('rejects selectors the browse-window grammar only partly carries', () => {
+			// Exactly the mixed selector the encoder test above narrows to two dimensions.
+			expect(
+				isFullyRepresentedProductSelector({
+					featured: false,
+					$and: [
+						{ stock_status: 'onbackorder' },
+						{ status: 'publish' },
+						{ attributes: { $allMatch: [{ id: 1, option: 'Large' }] } },
+						{ uuid: 'local-only' },
+					],
+				})
+			).toBe(false);
+			// The variation matcher's mixed `$or` — the encoder emits nothing for it.
+			expect(
+				isFullyRepresentedProductSelector({
+					$or: [{ categories: { $elemMatch: { id: 7 } } }, { name: 'Hat' }],
+				})
+			).toBe(false);
+			// An `$elemMatch` that narrows past a bare id is not `?category=7`.
+			expect(
+				isFullyRepresentedProductSelector({
+					$or: [{ categories: { $elemMatch: { id: 7, name: 'Hats' } } }],
+				})
+			).toBe(false);
+			expect(isFullyRepresentedProductSelector({ stock_status: 'sold' })).toBe(false);
+		});
 	});
 
 	it('creates no demand for unbounded customer browse', () => {

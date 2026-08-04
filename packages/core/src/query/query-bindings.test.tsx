@@ -474,6 +474,47 @@ describe('query bindings', () => {
 		expect(engine.syncCalls).toContain('scheduler-drain');
 	});
 
+	// The browse-window grammar carries category/tag/brand/featured/on_sale/stock_status and
+	// nothing else, so a browse ALSO filtered on `status` gets a lane that is a deliberate
+	// superset of what the grid shows. Right for demand, wrong for a total — the lane's
+	// encoder reports the leftover and the projection falls back to the local count.
+	it('ignores browse-window coverage when the products filter is only partly on the wire', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'resident', id: 1, name: 'Resident' })
+		);
+		// The lane the wire window would fill: stock_status only — `status` never gets there.
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: 'products::products:browse-window:limit=100:stock_status=instock',
+			collectionName: 'products',
+			queryKey: 'products:browse-window:limit=100:stock_status=instock',
+			complete: true,
+			expectedRecordIds: ['p1', 'p2', 'p3', 'p4'],
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 2,
+		});
+
+		const partly: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [], stock_status: 'instock', status: 'draft' },
+			sort: { field: 'menu_order', direction: 'asc' },
+			limit: 1,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', partly), {
+			wrapper: Provider,
+		});
+		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
+		const sources: string[] = [];
+		const subscription = result.current.totalSource$.subscribe((source) => sources.push(source));
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		subscription.unsubscribe();
+		expect(sources).not.toContain('coverage');
+	});
+
 	it('uses coupons:all coverage only for the unfiltered reference lane', async () => {
 		await engineDB.addCollections({
 			coverageLanes: { schema: coverageLaneSchema },
