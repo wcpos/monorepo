@@ -31,14 +31,24 @@ const emptyResource: ImageResource = new ObservableResource(of(EMPTY_STATE));
 
 export const ERROR_RETRY_DELAY_MS = 30_000;
 
-async function fetchImageBlob(document: RxDocument, imageUrl: string, get: HttpGet): Promise<Blob> {
-	// First, check if we already have this attachment
-	const existingAttachment = document.getAttachment(imageUrl);
-	if (existingAttachment) {
-		return existingAttachment.getData();
+async function fetchImageBlob(
+	_document: RxDocument,
+	imageUrl: string,
+	get: HttpGet
+): Promise<Blob> {
+	let cache: Cache | undefined;
+	if (typeof caches !== 'undefined') {
+		try {
+			cache = await caches.open('wcpos-images-v1');
+			const cachedResponse = await cache.match(imageUrl);
+			if (cachedResponse) {
+				return cachedResponse.blob();
+			}
+		} catch {
+			cache = undefined;
+		}
 	}
 
-	// If not, fetch and store it
 	// wcposHeaders: false prevents X-WCPOS header which triggers CORS preflight on external URLs
 	// @ts-expect-error: wcposHeaders is a custom config option from our axios interceptor
 	const response = await get(imageUrl, { responseType: 'arraybuffer', wcposHeaders: false });
@@ -57,12 +67,13 @@ async function fetchImageBlob(document: RxDocument, imageUrl: string, get: HttpG
 		throw new Error('Fetched blob is empty');
 	}
 
-	// Store the attachment so the image is available offline
-	await document.putAttachment({
-		id: imageUrl,
-		data: blob,
-		type: blob.type,
-	});
+	if (cache) {
+		try {
+			await cache.put(imageUrl, new Response(blob, { headers: { 'content-type': blob.type } }));
+		} catch {
+			// Browser storage may be unavailable or over quota; the fetched image is still usable.
+		}
+	}
 
 	return blob;
 }
@@ -90,7 +101,7 @@ function getImageResource(document: RxDocument, imageUrl: string, get: HttpGet):
 }
 
 /**
- * Resolves an image URL to a local object URL backed by an RxDB attachment,
+ * Resolves an image URL to a local object URL backed by the browser Cache API,
  * suspending until the image is available. Callers must have a Suspense
  * boundary above them. Errors are returned as state, not thrown, so callers
  * can fall back to a placeholder.
