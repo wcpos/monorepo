@@ -281,8 +281,8 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 								key={previewKey}
 								paperWidth={previewPaperWidth}
 								contentSize={contentSize}
-								zoomInLabel={t('receipt.zoom_in', 'Zoom in')}
-								zoomOutLabel={t('receipt.zoom_out', 'Zoom out')}
+								zoomInLabel={t('receipt.zoom_in')}
+								zoomOutLabel={t('receipt.zoom_out')}
 								testID="receipt-preview"
 							>
 								<WebView

@@ -10,12 +10,12 @@ export function useHealthNavigationItems(unreadErrorCount: number): NavigationAr
 	return [
 		{
 			href: '/health/database',
-			label: t('common.database', 'Database'),
+			label: t('common.database'),
 			testID: 'health-nav-database',
 		},
 		{
 			href: '/health/performance',
-			label: t('common.performance', 'Performance'),
+			label: t('common.performance'),
 			testID: 'health-nav-performance',
 		},
 		{

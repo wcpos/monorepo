@@ -55,12 +55,7 @@ export function AddCoupon() {
 			if (result.success) {
 				onOpenChange(false);
 			} else {
-				setError(
-					result.error ||
-						t('pos_cart.failed_to_apply_coupon', {
-							defaultValue: 'Failed to apply coupon.',
-						})
-				);
+				setError(result.error || t('pos_cart.failed_to_apply_coupon'));
 			}
 		} finally {
 			setIsApplying(false);
@@ -72,9 +67,7 @@ export function AddCoupon() {
 			{error && <Text className="text-destructive">{error}</Text>}
 			<Combobox onValueChange={handleValueChange}>
 				<ComboboxTrigger>
-					<ComboboxValue
-						placeholder={t('pos_cart.select_coupon', { defaultValue: 'Select coupon...' })}
-					/>
+					<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
 				</ComboboxTrigger>
 				<ComboboxContent
 					portalHost="pos"
@@ -92,7 +85,7 @@ export function AddCoupon() {
 					onPress={handleApply}
 					disabled={!selected || isApplying}
 				>
-					{t('common.apply', { defaultValue: 'Apply' })}
+					{t('common.apply')}
 				</DialogAction>
 			</DialogFooter>
 		</VStack>
@@ -114,7 +107,7 @@ function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 	return (
 		<>
 			<ComboboxInput
-				placeholder={t('pos_cart.search_coupons', { defaultValue: 'Search coupons...' })}
+				placeholder={t('pos_cart.search_coupons')}
 				value={binding.search}
 				onChangeText={onSearch}
 			/>
@@ -146,11 +139,7 @@ function CouponList({ resource }: { resource: ReturnType<typeof useSearchSelect>
 				);
 			}}
 			estimatedItemSize={52}
-			ListEmptyComponent={
-				<ComboboxEmpty>
-					{t('pos_cart.no_coupons_found', { defaultValue: 'No coupons found' })}
-				</ComboboxEmpty>
-			}
+			ListEmptyComponent={<ComboboxEmpty>{t('pos_cart.no_coupons_found')}</ComboboxEmpty>}
 		/>
 	);
 }
@@ -175,11 +164,11 @@ function CouponItemContent({ coupon }: { coupon: CouponDocument }) {
 	const typeLabel = React.useMemo(() => {
 		switch (coupon.discount_type) {
 			case 'percent':
-				return t('pos_cart.percentage_discount', { defaultValue: 'Percentage discount' });
+				return t('pos_cart.percentage_discount');
 			case 'fixed_cart':
-				return t('pos_cart.fixed_cart_discount', { defaultValue: 'Fixed cart discount' });
+				return t('pos_cart.fixed_cart_discount');
 			case 'fixed_product':
-				return t('pos_cart.fixed_product_discount', { defaultValue: 'Fixed product discount' });
+				return t('pos_cart.fixed_product_discount');
 			default:
 				return '';
 		}

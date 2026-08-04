@@ -48,14 +48,14 @@ export function PrinterSwitcher({
 		const printerId = printerSelection.type === 'manual' ? printerSelection.printerId : undefined;
 		const printer = printerId ? printers.find((p) => p.id === printerId) : undefined;
 		selectedValue = printer ? printer.id : AUTO_VALUE;
-		selectedLabel = printer ? printer.name?.trim() || printer.id : t('common.auto', 'Auto');
+		selectedLabel = printer ? printer.name?.trim() || printer.id : t('common.auto');
 	} else {
 		// auto — show which printer it resolved to
 		selectedValue = AUTO_VALUE;
 		const resolvedPrinter = resolvedPrinterId
 			? printers.find((p) => p.id === resolvedPrinterId)
 			: null;
-		const autoLabel = t('common.auto', 'Auto');
+		const autoLabel = t('common.auto');
 		const resolvedName = resolvedPrinter?.name?.trim();
 		selectedLabel = resolvedName ? `${autoLabel}  —  ${resolvedName}` : autoLabel;
 	}
@@ -73,11 +73,11 @@ export function PrinterSwitcher({
 			}}
 		>
 			<SelectTrigger>
-				<SelectValue placeholder={t('receipt.select_printer', 'Select printer')} />
+				<SelectValue placeholder={t('receipt.select_printer')} />
 			</SelectTrigger>
 			<SelectContent>
 				<SelectGroup>
-					<SelectItem value={AUTO_VALUE} label={t('common.auto', 'Auto')} />
+					<SelectItem value={AUTO_VALUE} label={t('common.auto')} />
 					{printers.map((printer) => (
 						<SelectItem
 							key={printer.id}

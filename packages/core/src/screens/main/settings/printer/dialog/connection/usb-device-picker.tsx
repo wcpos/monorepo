@@ -20,11 +20,9 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 
 	return (
 		<VStack className="gap-2">
-			<Text className="text-sm font-medium">{t('settings.usb_printer', 'USB Printer')}</Text>
+			<Text className="text-sm font-medium">{t('settings.usb_printer')}</Text>
 			{devices.length === 0 && (
-				<Text className="text-muted-foreground text-xs">
-					{t('settings.no_devices_found', 'No devices found yet.')}
-				</Text>
+				<Text className="text-muted-foreground text-xs">{t('settings.no_devices_found')}</Text>
 			)}
 			{devices.map((device) => {
 				const selected = device.address === selectedAddress;
@@ -63,7 +61,7 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 				onPress={startScan}
 				loading={isScanning}
 			>
-				<Text>{t('settings.refresh_devices', 'Refresh')}</Text>
+				<Text>{t('settings.refresh_devices')}</Text>
 			</Button>
 		</VStack>
 	);

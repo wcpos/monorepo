@@ -79,14 +79,14 @@ export function AddCartItemsMenu() {
 					{isPro ? (
 						<DropdownMenuItem testID="menu-add-coupon" onPress={() => setOpenDialog('coupon')}>
 							<Icon name="badgePercent" />
-							<Text>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</Text>
+							<Text>{t('pos_cart.add_coupon')}</Text>
 						</DropdownMenuItem>
 					) : (
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<DropdownMenuItem testID="menu-add-coupon" disabled>
 									<Icon name="badgePercent" />
-									<Text>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</Text>
+									<Text>{t('pos_cart.add_coupon')}</Text>
 								</DropdownMenuItem>
 							</TooltipTrigger>
 							<TooltipContent>
@@ -166,7 +166,7 @@ export function AddCartItemsMenu() {
 				>
 					<DialogContent size="lg" portalHost="pos">
 						<DialogHeader>
-							<DialogTitle>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</DialogTitle>
+							<DialogTitle>{t('pos_cart.add_coupon')}</DialogTitle>
 						</DialogHeader>
 						<DialogBody>
 							<ErrorBoundary>

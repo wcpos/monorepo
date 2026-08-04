@@ -42,7 +42,7 @@ export function UsbPrintersSection({
 					loading={!!scanning}
 					disabled={!!scanning}
 				>
-					<Text>{t('settings.refresh_devices', 'Refresh')}</Text>
+					<Text>{t('settings.refresh_devices')}</Text>
 				</Button>
 			)}
 			{children}

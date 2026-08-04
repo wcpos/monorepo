@@ -43,7 +43,7 @@ export function useDownloadReceiptPdf() {
 				})) as PdfResponse;
 
 				await saveOrSharePdf(data, filename);
-				httpLogger.success(t('receipt.pdf_downloaded', 'PDF downloaded'), {
+				httpLogger.success(t('receipt.pdf_downloaded'), {
 					showToast: true,
 					saveToDb: true,
 					context: {

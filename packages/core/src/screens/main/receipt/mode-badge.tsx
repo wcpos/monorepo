@@ -35,9 +35,7 @@ export function ReceiptModeBadge({ mode }: ReceiptModeBadgeProps) {
 				<Text
 					className={`text-xs font-medium ${isFiscal ? 'text-primary' : 'text-muted-foreground'}`}
 				>
-					{isFiscal
-						? t('receipt.fiscal_receipt', 'Fiscal receipt')
-						: t('receipt.updated_copy', 'Updated copy')}
+					{isFiscal ? t('receipt.fiscal_receipt') : t('receipt.updated_copy')}
 				</Text>
 			</HStack>
 		</View>

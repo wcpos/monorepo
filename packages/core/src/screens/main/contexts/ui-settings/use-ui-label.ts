@@ -42,8 +42,8 @@ export const useUILabel = () => {
 				'pos-cart': {
 					autoShowReceipt: t('common.automatically_show_receipt_after_checkout'),
 					autoPrintReceipt: t('common.automatically_print_receipt_after_checkout'),
-					receiptOutputType: t('receipt.output_type', 'Receipt Output Type'),
-					openCashDrawer: t('receipt.open_cash_drawer', 'Open Cash Drawer on Print'),
+					receiptOutputType: t('receipt.output_type'),
+					openCashDrawer: t('receipt.open_cash_drawer'),
 					quickDiscounts: t('common.quick_discounts'),
 					quantity: t('pos_cart.qty_abbrev'),
 					image: t('common.image'),

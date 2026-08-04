@@ -25,18 +25,13 @@ export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
 				<View className="bg-muted rounded-lg p-3">
 					<Icon name="printer" variant="muted" size="2xl" />
 				</View>
-				<Text className="text-center font-medium">
-					{t('settings.no_printers_configured', 'No printers configured')}
-				</Text>
+				<Text className="text-center font-medium">{t('settings.no_printers_configured')}</Text>
 				<Text className="text-muted-foreground text-center text-sm">
-					{t(
-						'settings.no_printers_body',
-						'Add a printer to send receipts straight to your hardware. You can always use the Print Dialog without one.'
-					)}
+					{t('settings.no_printers_body')}
 				</Text>
 				<HStack className="gap-2">
 					<Button leftIcon="plus" onPress={onAddPrinter} testID="printing-add-printer-button">
-						<Text>{t('settings.add_printer', 'Add Printer')}</Text>
+						<Text>{t('settings.add_printer')}</Text>
 					</Button>
 				</HStack>
 			</VStack>

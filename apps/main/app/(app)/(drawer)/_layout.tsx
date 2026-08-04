@@ -158,8 +158,8 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="health"
 				options={{
-					title: t('common.store_health', 'Store health'),
-					drawerLabel: t('common.store_health', 'Store health'),
+					title: t('common.store_health'),
+					drawerLabel: t('common.store_health'),
 					drawerIcon: ({ focused }) => (
 						<View>
 							<Icon

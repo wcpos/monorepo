@@ -64,19 +64,13 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 	const statusMessage = React.useMemo(() => {
 		switch (status) {
 			case 'initializing':
-				return t('pos_products.camera_starting', { defaultValue: 'Starting camera…' });
+				return t('pos_products.camera_starting');
 			case 'camera-denied':
-				return t('pos_products.camera_permission_prompt', {
-					defaultValue: 'WCPOS needs camera access to scan barcodes.',
-				});
+				return t('pos_products.camera_permission_prompt');
 			case 'camera-unavailable':
-				return t('pos_products.camera_unavailable', {
-					defaultValue: 'Camera unavailable — check that no other app is using it.',
-				});
+				return t('pos_products.camera_unavailable');
 			case 'decoder-error':
-				return t('pos_products.camera_decoder_error', {
-					defaultValue: 'Barcode decoding is failing — close the scanner and try again.',
-				});
+				return t('pos_products.camera_decoder_error');
 			default:
 				return null;
 		}
@@ -89,15 +83,9 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 				className="border-border items-center rounded-md border p-4"
 				testID="camera-permission-request"
 			>
-				<Text className="text-center text-sm">
-					{t('pos_products.camera_permission_prompt', {
-						defaultValue: 'WCPOS needs camera access to scan barcodes.',
-					})}
-				</Text>
+				<Text className="text-center text-sm">{t('pos_products.camera_permission_prompt')}</Text>
 				<Button onPress={requestPermission}>
-					<ButtonText>
-						{t('pos_products.camera_permission_grant', { defaultValue: 'Allow camera' })}
-					</ButtonText>
+					<ButtonText>{t('pos_products.camera_permission_grant')}</ButtonText>
 				</Button>
 			</VStack>
 		);

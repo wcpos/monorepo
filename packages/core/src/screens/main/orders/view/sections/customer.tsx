@@ -89,7 +89,7 @@ export function AddressesRail({ order, last }: { order: OrderDocument; last?: bo
 	if (!hasAddress(billing) && !hasAddress(shipping)) return null;
 
 	return (
-		<RailSection title={t('common.addresses', { defaultValue: 'Addresses' })} last={last}>
+		<RailSection title={t('common.addresses')} last={last}>
 			<View className="gap-3">
 				{hasAddress(billing) ? (
 					<View>

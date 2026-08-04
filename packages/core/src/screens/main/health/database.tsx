@@ -95,16 +95,16 @@ const ROW_TO_LEGACY: Record<CollectionKey, string> = {
 	taxRates: 'taxes',
 };
 
-const ROW_LABEL_KEYS: Record<CollectionKey, { key: string; fallback: string }> = {
-	products: { key: 'common.products', fallback: 'Products' },
-	variations: { key: 'common.variations', fallback: 'Variations' },
-	orders: { key: 'common.orders', fallback: 'Orders' },
-	customers: { key: 'common.customers', fallback: 'Customers' },
-	categories: { key: 'common.categories', fallback: 'Categories' },
-	brands: { key: 'common.brands', fallback: 'Brands' },
-	tags: { key: 'common.tags', fallback: 'Tags' },
-	coupons: { key: 'common.coupons', fallback: 'Coupons' },
-	taxRates: { key: 'common.tax_rates', fallback: 'Tax rates' },
+const ROW_LABEL_KEYS: Record<CollectionKey, string> = {
+	products: 'common.products',
+	variations: 'common.variations',
+	orders: 'common.orders',
+	customers: 'common.customers',
+	categories: 'common.categories',
+	brands: 'common.brands',
+	tags: 'common.tags',
+	coupons: 'common.coupons',
+	taxRates: 'common.tax_rates',
 };
 
 function useStorageEstimate(): number | null {
@@ -152,13 +152,13 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			serverText: row.serverTotal !== null ? row.serverTotal.toLocaleString() : '—',
 			coverage: {
 				kind: 'clearing',
-				label: t('health.database.redownloading', { defaultValue: 'Re-downloading…' }),
+				label: t('health.database.redownloading'),
 			},
 		};
 	}
 	if (row.key === 'variations') {
 		return {
-			serverText: t('health.database.with_products', { defaultValue: 'with products' }),
+			serverText: t('health.database.with_products'),
 			coverage: { kind: 'none', label: '—' },
 		};
 	}
@@ -167,7 +167,7 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			serverText: '…',
 			coverage: {
 				kind: 'checking',
-				label: t('health.database.checking', { defaultValue: 'checking…' }),
+				label: t('health.database.checking'),
 			},
 		};
 	}
@@ -176,7 +176,7 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			serverText: '0',
 			coverage: {
 				kind: 'empty',
-				label: t('health.database.none_on_server', { defaultValue: 'none on your server' }),
+				label: t('health.database.none_on_server'),
 			},
 		};
 	}
@@ -189,7 +189,6 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 				kind: 'windowed',
 				percent,
 				tooltip: t('health.database.window_tooltip', {
-					defaultValue: '{p}% — open + recent orders ready',
 					p: percent,
 				}),
 			},
@@ -201,9 +200,7 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			coverage: {
 				kind: 'complete',
 				percent: 100,
-				tooltip: t('health.database.all_tooltip', {
-					defaultValue: 'All records on this device',
-				}),
+				tooltip: t('health.database.all_tooltip'),
 			},
 		};
 	}
@@ -213,7 +210,6 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			kind: 'partial',
 			percent: row.percentLocal ?? 0,
 			tooltip: t('health.database.percent_tooltip', {
-				defaultValue: '{p}% on this device',
 				p: row.percentLocal ?? 0,
 			}),
 		},
@@ -298,17 +294,13 @@ function CollectionRowView({
 			const successMessage =
 				row.key === 'products'
 					? t('health.database.redownload_done_products', {
-							defaultValue:
-								'{label} cleared — the first products are back; the rest re-download as you use them',
 							label,
 						})
 					: row.key === 'variations' || row.key === 'customers' || row.key === 'orders'
 						? t('health.database.redownload_done_lazy', {
-								defaultValue: '{label} cleared — records re-download as you use them',
 								label,
 							})
 						: t('health.database.redownload_done', {
-								defaultValue: '{label} re-downloaded fresh from your server',
 								label,
 							});
 			Toast.show({
@@ -319,7 +311,6 @@ function CollectionRowView({
 			Toast.show({
 				type: 'error',
 				text1: t('health.database.redownload_failed', {
-					defaultValue: "Couldn't finish re-downloading {label}",
 					label,
 				}),
 				text2: error instanceof Error ? error.message : String(error),
@@ -343,12 +334,10 @@ function CollectionRowView({
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
 				<DropdownMenuItem onPress={() => void engine.sync()}>
-					<Text>{t('health.database.sync_now', { defaultValue: 'Check for changes now' })}</Text>
+					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuItem onPress={() => setConfirming(true)}>
-					<Text className="text-destructive">
-						{t('health.database.clear_redownload', { defaultValue: 'Clear & re-download…' })}
-					</Text>
+					<Text className="text-destructive">{t('health.database.clear_redownload')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -358,7 +347,6 @@ function CollectionRowView({
 		phase === 'clearing' ? (
 			<Text className="text-muted-foreground text-xs">
 				{t('health.database.redownloading_count', {
-					defaultValue: 'Re-downloading — {count} so far',
 					count: row.local.toLocaleString(),
 				})}
 			</Text>
@@ -378,22 +366,18 @@ function CollectionRowView({
 						</Text>
 						{stuckCount > 0 ? (
 							<Pill testID={`db-stuck-${row.key}`}>
-								{t('health.database.n_stuck', { defaultValue: '{n} stuck', n: stuckCount })}
+								{t('health.database.n_stuck', { n: stuckCount })}
 							</Pill>
 						) : null}
 					</HStack>
 					{isVariations ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('health.database.variations_policy', {
-								defaultValue: 'download with their products',
-							})}
+							{t('health.database.variations_policy')}
 						</Text>
 					) : null}
 					{row.key === 'orders' ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('health.database.orders_policy', {
-								defaultValue: 'open + recent stay on device · older download when viewed',
-							})}
+							{t('health.database.orders_policy')}
 						</Text>
 					) : null}
 					{clearingSub}
@@ -423,7 +407,7 @@ function CollectionRowView({
 						</Text>
 						{stuckCount > 0 ? (
 							<Pill testID={`db-stuck-sm-${row.key}`}>
-								{t('health.database.n_stuck', { defaultValue: '{n} stuck', n: stuckCount })}
+								{t('health.database.n_stuck', { n: stuckCount })}
 							</Pill>
 						) : null}
 					</HStack>
@@ -432,23 +416,19 @@ function CollectionRowView({
 					>
 						{phase === 'clearing'
 							? t('health.database.redownloading_count', {
-									defaultValue: 'Re-downloading — {count} so far',
 									count: row.local.toLocaleString(),
 								})
 							: isVariations
-								? `${row.local.toLocaleString()} · ${t('health.database.with_products', { defaultValue: 'with products' })}`
+								? `${row.local.toLocaleString()} · ${t('health.database.with_products')}`
 								: row.key === 'orders'
-									? `${row.local.toLocaleString()} ${t('health.database.of_total', { defaultValue: 'of {total}', total: story.serverText })} · ${t('health.database.window_short', { defaultValue: 'open + recent' })}`
+									? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.window_short')}`
 									: story.coverage.kind === 'empty'
-										? t('health.database.none_on_server', {
-												defaultValue: 'none on your server',
-											})
+										? t('health.database.none_on_server')
 										: story.coverage.kind === 'complete'
 											? t('health.database.all_n_local', {
-													defaultValue: 'all {count} on device',
 													count: row.local.toLocaleString(),
 												})
-											: `${row.local.toLocaleString()} ${t('health.database.of_total', { defaultValue: 'of {total}', total: story.serverText })}`}
+											: `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })}`}
 					</Text>
 				</View>
 				<View className="items-end">
@@ -467,49 +447,35 @@ function CollectionRowView({
 					<AlertDialogHeader>
 						<AlertDialogTitle>
 							{t('health.database.clear_title', {
-								defaultValue: 'Clear {label} from this device?',
 								label,
 							})}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
 							{row.key === 'products'
 								? t('health.database.clear_body_products', {
-										defaultValue:
-											'{count} {label} ({size}) will be removed from this device. Nothing on the server changes. The first products re-download right away; the rest come back as you browse, search and sell.',
 										...clearBodyValues,
 									})
 								: row.key === 'variations'
 									? t('health.database.clear_body_variations', {
-											defaultValue:
-												"{count} {label} ({size}) will be removed from this device. Nothing on the server changes. Variations re-download with their products as they're used.",
 											...clearBodyValues,
 										})
 									: row.key === 'customers'
 										? t('health.database.clear_body_customers', {
-												defaultValue:
-													"{count} {label} ({size}) will be removed from this device. Nothing on the server changes. Customers re-download as they're used — lookups fetch on demand, and the full list refills gradually in the background.",
 												...clearBodyValues,
 											})
 										: row.key === 'orders'
-											? t('health.database.clear_body_orders', {
-													defaultValue:
-														'The orders held on this device will be removed. Nothing on the server changes. Orders re-download as you view them — open and recent orders return in the background.',
-												})
+											? t('health.database.clear_body_orders')
 											: t('health.database.clear_body', {
-													defaultValue:
-														'{count} {label} ({size}) will be removed and re-downloaded fresh from your server. Sales and orders are not affected. You can keep selling — search may be incomplete for a minute.',
 													...clearBodyValues,
 												})}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>
-							<Text>{t('common.cancel', { defaultValue: 'Cancel' })}</Text>
+							<Text>{t('common.cancel')}</Text>
 						</AlertDialogCancel>
 						<AlertDialogAction onPress={() => void resetCollection()}>
-							<Text className="text-destructive">
-								{t('health.database.clear_confirm', { defaultValue: 'Clear & re-download' })}
-							</Text>
+							<Text className="text-destructive">{t('health.database.clear_confirm')}</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -527,44 +493,20 @@ function HowSyncingWorksDialog() {
 				<Button variant="ghost" size="sm" testID="db-how-syncing-works">
 					<HStack className="items-center gap-1">
 						<Icon name="circleInfo" size="sm" className="text-muted-foreground" />
-						<Text className="text-muted-foreground text-xs">
-							{t('health.database.how_title', { defaultValue: 'How syncing works' })}
-						</Text>
+						<Text className="text-muted-foreground text-xs">{t('health.database.how_title')}</Text>
 					</HStack>
 				</Button>
 			</DialogTrigger>
 			<DialogContent className="max-w-md">
 				<DialogHeader>
-					<DialogTitle>
-						{t('health.database.how_title', { defaultValue: 'How syncing works' })}
-					</DialogTitle>
+					<DialogTitle>{t('health.database.how_title')}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<VStack className="gap-3">
-						<Text className="text-sm">
-							{t('health.database.how_changes', {
-								defaultValue:
-									'Every 10 seconds this till asks your server one lightweight question: "what changed?" — one request covering products, variations, customers, categories, brands, tags, coupons and tax rates. Only changed records are downloaded, so the check stays fast no matter how big your catalog is.',
-							})}
-						</Text>
-						<Text className="text-sm">
-							{t('health.database.how_orders', {
-								defaultValue:
-									'Orders work differently: open and recent orders refresh every 5 minutes, and older orders download when you view them. Sales made on this till are sent to your server within seconds.',
-							})}
-						</Text>
-						<Text className="text-sm">
-							{t('health.database.how_audits', {
-								defaultValue:
-									'Deeper safety nets run in the background: an integrity sweep every few minutes catches edits that slip past the normal signals, and a deletion audit about every 17 minutes removes records deleted on the server.',
-							})}
-						</Text>
-						<Text className="text-sm">
-							{t('health.database.how_totals', {
-								defaultValue:
-									'The server totals on this page refresh every 15 minutes — they are a snapshot for comparison, not the live sync itself.',
-							})}
-						</Text>
+						<Text className="text-sm">{t('health.database.how_changes')}</Text>
+						<Text className="text-sm">{t('health.database.how_orders')}</Text>
+						<Text className="text-sm">{t('health.database.how_audits')}</Text>
+						<Text className="text-sm">{t('health.database.how_totals')}</Text>
 					</VStack>
 				</DialogBody>
 			</DialogContent>
@@ -622,43 +564,32 @@ export function DatabaseScreen() {
 	return (
 		<ScrollView className="flex-1">
 			<VStack testID="screen-health-database" className="max-w-3xl gap-3 p-4 md:p-6">
-				<Text className="text-muted-foreground text-sm">
-					{t(
-						'health.database.subtitle',
-						'Your store, on this device — sales keep working even if your server does not.'
-					)}
-				</Text>
+				<Text className="text-muted-foreground text-sm">{t('health.database.subtitle')}</Text>
 
 				{/* Summary strip — shared Store health stat header */}
 				<StatHeader testID="db-stats">
 					<Stat
-						value={
-							readyToSell
-								? t('health.database.ready', { defaultValue: '✓ Ready to sell' })
-								: t('health.database.preparing', { defaultValue: 'Preparing…' })
-						}
+						value={readyToSell ? t('health.database.ready') : t('health.database.preparing')}
 						tone={readyToSell ? 'good' : 'default'}
-						label={t('health.database.ready_sub', { defaultValue: 'catalog & open orders local' })}
+						label={t('health.database.ready_sub')}
 						testID="db-stat-ready"
 					/>
 					<Stat
 						value={totalRecords}
-						label={t('health.database.records_on_device', {
-							defaultValue: 'records on this device',
-						})}
+						label={t('health.database.records_on_device')}
 						testID="db-stat-records"
 					/>
 					{storageText ? (
 						<Stat
 							value={storageText}
-							label={t('health.database.storage_used', { defaultValue: 'storage used' })}
+							label={t('health.database.storage_used')}
 							testID="db-stat-storage"
 						/>
 					) : null}
 					<Stat
 						value={mutations.pendingOrders}
 						tone={mutations.pendingOrders > 0 ? 'bad' : 'good'}
-						label={t('health.database.waiting_to_send', { defaultValue: 'sales waiting to send' })}
+						label={t('health.database.waiting_to_send')}
 						testID="db-stat-waiting"
 					/>
 				</StatHeader>
@@ -668,15 +599,7 @@ export function DatabaseScreen() {
 				{status.connectivity === 'offline' ? (
 					<Callout tone="warning">
 						<Text className="text-warning text-sm">
-							{readyToSell
-								? t('health.database.offline', {
-										defaultValue:
-											"You're offline. Sales keep working — anything you make is stored here and delivered when your server is back.",
-									})
-								: t('health.database.offline_preparing', {
-										defaultValue:
-											"You're offline and still setting up — this till can't sell until its catalog finishes downloading.",
-									})}
+							{readyToSell ? t('health.database.offline') : t('health.database.offline_preparing')}
 						</Text>
 					</Callout>
 				) : null}
@@ -685,19 +608,19 @@ export function DatabaseScreen() {
 				<VStack className="gap-0">
 					<HairlineHeaderRow className="hidden md:flex">
 						<HairlineHeaderCell className="flex-1">
-							{t('health.database.col_collection', { defaultValue: 'Collection' })}
+							{t('health.database.col_collection')}
 						</HairlineHeaderCell>
 						<HairlineHeaderCell className="w-20 text-right">
-							{t('health.database.col_on_device', { defaultValue: 'On device' })}
+							{t('health.database.col_on_device')}
 						</HairlineHeaderCell>
 						<HairlineHeaderCell className="w-24 text-right">
-							{t('health.database.col_on_server', { defaultValue: 'On server' })}
+							{t('health.database.col_on_server')}
 						</HairlineHeaderCell>
 						<HairlineHeaderCell className="w-32 text-right">
-							{t('health.database.col_coverage', { defaultValue: 'Coverage' })}
+							{t('health.database.col_coverage')}
 						</HairlineHeaderCell>
 						<HairlineHeaderCell className="w-20 text-right">
-							{t('health.database.col_size', { defaultValue: 'Size' })}
+							{t('health.database.col_size')}
 						</HairlineHeaderCell>
 						<View className="w-9" />
 					</HairlineHeaderRow>
@@ -707,9 +630,7 @@ export function DatabaseScreen() {
 							row={row}
 							sizeBytes={sizes[row.key]}
 							stuckCount={stuckByRow[row.key] ?? 0}
-							label={t(ROW_LABEL_KEYS[row.key].key, {
-								defaultValue: ROW_LABEL_KEYS[row.key].fallback,
-							})}
+							label={t(ROW_LABEL_KEYS[row.key])}
 						/>
 					))}
 					{everythingElseText ? (
@@ -719,12 +640,10 @@ export function DatabaseScreen() {
 						>
 							<View className="min-w-0 flex-1">
 								<Text className="text-muted-foreground">
-									{t('health.database.everything_else', { defaultValue: 'Everything else' })}
+									{t('health.database.everything_else')}
 								</Text>
 								<Text className="text-muted-foreground/80 text-xs">
-									{t('health.database.everything_else_sub', {
-										defaultValue: 'Search indexes, logs and sync bookkeeping',
-									})}
+									{t('health.database.everything_else_sub')}
 								</Text>
 							</View>
 							<Text className="text-muted-foreground text-right text-sm tabular-nums">
@@ -740,8 +659,6 @@ export function DatabaseScreen() {
 					<Callout tone="destructive">
 						<Text className="text-destructive text-sm">
 							{t('health.database.conflicts', {
-								defaultValue:
-									'{n} sale(s) need attention — changed on the server while a till was editing.',
 								n: mutations.conflicts,
 							})}
 						</Text>
@@ -761,31 +678,22 @@ export function DatabaseScreen() {
 							/>
 							<Text className="text-muted-foreground text-xs">
 								{lastCheck === null
-									? t('health.database.first_check_pending', {
-											defaultValue: 'First check pending…',
-										})
+									? t('health.database.first_check_pending')
 									: lastCheck.status === 'error'
-										? t('health.database.last_check_error', {
-												defaultValue: "Last check didn't complete — retrying",
-											})
+										? t('health.database.last_check_error')
 										: t('health.database.watching', {
-												defaultValue: 'Watching your server for changes — last check {ago}',
 												ago: relative(lastCheck.atMs, nowMs),
 											})}
 							</Text>
 						</HStack>
 						<Text className="text-muted-foreground pl-3.5 text-xs">
 							{censusWindow.updatedAtMs === null
-								? t('health.database.totals_pending', {
-										defaultValue: 'Server totals — first check pending',
-									})
+								? t('health.database.totals_pending')
 								: censusRefreshDue(censusWindow, nowMs)
 									? t('health.database.totals_refreshing', {
-											defaultValue: 'Server totals updated {ago} ago · refreshing now…',
 											ago: relative(censusWindow.updatedAtMs, nowMs),
 										})
 									: t('health.database.totals_updated', {
-											defaultValue: 'Server totals updated {ago} ago · next update in ~{next}',
 											ago: relative(censusWindow.updatedAtMs, nowMs),
 											next: relative(nowMs, censusWindow.nextUpdateAtMs ?? nowMs),
 										})}
@@ -802,9 +710,7 @@ export function DatabaseScreen() {
 					<HStack className="items-center gap-2">
 						<HowSyncingWorksDialog />
 						<Button variant="outline" size="sm" onPress={() => void engine.sync()}>
-							<ButtonText>
-								{t('health.database.check_everything', { defaultValue: 'Check everything now' })}
-							</ButtonText>
+							<ButtonText>{t('health.database.check_everything')}</ButtonText>
 						</Button>
 					</HStack>
 				</HStack>

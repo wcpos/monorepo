@@ -13,7 +13,12 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 
 jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => (_key: string, fallback: string) => fallback,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../../jest/translate')>(
+				'../../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 describe('DrawerEmulationWarning', () => {

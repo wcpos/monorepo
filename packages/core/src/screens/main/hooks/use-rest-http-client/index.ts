@@ -106,9 +106,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				site,
 				wpUser: wpCredentials,
 				getHttpClient,
-				sessionRenewedMessage: t('auth.session_renewed_automatically', {
-					defaultValue: 'Session renewed automatically',
-				}),
+				sessionRenewedMessage: t('auth.session_renewed_automatically'),
 			}),
 		[site, wpCredentials, getHttpClient, t]
 	);

@@ -68,7 +68,7 @@ export const useScanFeedback = () => {
 			searchingOnline: (code) => {
 				Toast.show({
 					id,
-					title: t('common.barcode_searching_online', { defaultValue: 'Searching store…' }),
+					title: t('common.barcode_searching_online'),
 					description: code,
 					duration: SEARCHING_DURATION,
 				});
@@ -78,7 +78,7 @@ export const useScanFeedback = () => {
 				Toast.show({
 					id,
 					type: 'success',
-					title: t('pos_products.scan_added', { defaultValue: 'Added to cart' }),
+					title: t('pos_products.scan_added'),
 					description: name,
 					duration: SUCCESS_DURATION,
 				});
@@ -88,7 +88,7 @@ export const useScanFeedback = () => {
 				Toast.show({
 					id,
 					type: 'error',
-					title: t('pos_products.scan_add_failed', { defaultValue: 'Couldn’t add to cart' }),
+					title: t('pos_products.scan_add_failed'),
 					description: name,
 					duration: ALERT_DURATION,
 				});
@@ -98,10 +98,9 @@ export const useScanFeedback = () => {
 				Toast.show({
 					id,
 					type: 'warning',
-					title: t('pos_products.scan_not_found', { defaultValue: 'Barcode not found' }),
+					title: t('pos_products.scan_not_found'),
 					description: t('pos_products.scan_not_found_description', {
 						code,
-						defaultValue: '{code} — not in this store, locally or online',
 					}),
 					duration: ALERT_DURATION,
 				});
@@ -111,7 +110,7 @@ export const useScanFeedback = () => {
 				Toast.show({
 					id,
 					type: 'warning',
-					title: t('pos_products.scan_several_matches', { defaultValue: 'Several matches' }),
+					title: t('pos_products.scan_several_matches'),
 					description: `${t('common.product_found_locally', { count })} — ${code}`,
 					duration: ALERT_DURATION,
 				});
@@ -121,10 +120,9 @@ export const useScanFeedback = () => {
 				Toast.show({
 					id,
 					type: 'error',
-					title: t('pos_products.scan_lookup_failed', { defaultValue: 'Lookup failed' }),
+					title: t('pos_products.scan_lookup_failed'),
 					description: t('pos_products.scan_lookup_failed_description', {
 						code,
-						defaultValue: '{code} — Store didn’t respond — check your connection and scan again',
 					}),
 					duration: ALERT_DURATION,
 				});
@@ -144,10 +142,9 @@ export const useScanFeedback = () => {
 				Toast.show({
 					id,
 					type: 'error',
-					title: t('pos_products.scan_unavailable', { defaultValue: 'Scanning unavailable' }),
+					title: t('pos_products.scan_unavailable'),
 					description: t('pos_products.scan_unavailable_description', {
 						code,
-						defaultValue: '{code} — Sync engine is offline — see the banner above the products',
 					}),
 					duration: ALERT_DURATION,
 				});

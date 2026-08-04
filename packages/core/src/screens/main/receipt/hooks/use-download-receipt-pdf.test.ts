@@ -18,9 +18,12 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 	}),
 }));
 
-jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string, fallback?: string) => fallback ?? key,
-}));
+jest.mock('../../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../../jest/translate')>(
+		'../../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({

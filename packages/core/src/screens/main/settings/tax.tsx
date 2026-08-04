@@ -155,7 +155,7 @@ export function TaxSettings() {
 		<Form {...form}>
 			<VStack className="gap-5">
 				<FormErrors />
-				<SettingsSection first title={t('settings.tax_calculation', 'Calculation')}>
+				<SettingsSection first title={t('settings.tax_calculation')}>
 					<FormField
 						control={form.control}
 						name="calc_taxes"
@@ -225,7 +225,7 @@ export function TaxSettings() {
 					/>
 				</SettingsSection>
 
-				<SettingsSection title={t('settings.tax_display', 'Display')}>
+				<SettingsSection title={t('settings.tax_display')}>
 					<FormField
 						control={form.control}
 						name="tax_total_display"
@@ -264,7 +264,7 @@ export function TaxSettings() {
 					/>
 				</SettingsSection>
 
-				<SettingsSection title={t('tax_rates.tax_rates', 'Tax Rates')}>
+				<SettingsSection title={t('tax_rates.tax_rates')}>
 					<View className="flex-row py-2">
 						<Button
 							variant="outline"
@@ -277,10 +277,7 @@ export function TaxSettings() {
 				</SettingsSection>
 
 				<SettingsDangerZone
-					description={t(
-						'settings.restore_server_settings_description',
-						'These settings were copied from your WooCommerce store. Restoring will overwrite local changes with the server’s values.'
-					)}
+					description={t('settings.restore_server_settings_description')}
 					buttonLabel={t('settings.restore_server_settings')}
 					onPress={handleRestoreServerSettings}
 					loading={loading}

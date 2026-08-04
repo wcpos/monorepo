@@ -26,7 +26,7 @@ export function VendorSelect({ value, options, ...props }: VendorSelectProps) {
 	return (
 		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
 			<SelectTrigger>
-				<SelectValue placeholder={t('settings.select_vendor', 'Select vendor')} />
+				<SelectValue placeholder={t('settings.select_vendor')} />
 			</SelectTrigger>
 			<SelectContent matchWidth>
 				<SelectGroup>

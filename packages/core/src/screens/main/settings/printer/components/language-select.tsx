@@ -34,7 +34,7 @@ export function LanguageSelect({ value, ...props }: SelectSingleRootProps) {
 	return (
 		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
 			<SelectTrigger>
-				<SelectValue placeholder={t('settings.select_language', 'Select printer language')} />
+				<SelectValue placeholder={t('settings.select_language')} />
 			</SelectTrigger>
 			<SelectContent matchWidth>
 				<SelectGroup>

@@ -120,12 +120,10 @@ export function ScannerDeviceChooser() {
 			className="border-info/40 bg-info/10 rounded-md border p-2"
 			testID="scanner-device-chooser"
 		>
-			<Text className="text-sm font-medium">
-				{t('settings.scanner_choose_device', { defaultValue: 'Choose a scanner to connect' })}
-			</Text>
+			<Text className="text-sm font-medium">{t('settings.scanner_choose_device')}</Text>
 			{candidates.length === 0 ? (
 				<Text className="text-muted-foreground text-xs">
-					{t('settings.scanner_searching_devices', { defaultValue: 'Searching for devices…' })}
+					{t('settings.scanner_searching_devices')}
 				</Text>
 			) : (
 				candidates.map((device) => (

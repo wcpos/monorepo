@@ -66,6 +66,21 @@ const style = theme === 'light' ? 'dark' : 'light';
 ### Typography
 Base font size: Web = 14px, Native = 16px. Use rem-based classes for proportional scaling: `text-xs`, `text-sm`, `text-base`, `text-lg`.
 
+## Translations
+
+`packages/core/src/contexts/translations/locales/en/core.json` is the single source of English.
+It is statically bundled as the `en` resource with `fallbackLng: 'en'`, so a key always resolves
+there — an inline `defaultValue` is never read at runtime and only creates drift.
+
+1. Write `t('namespace.descriptive_key')` — key only. Never `t(key, 'English')` or
+   `t(key, { defaultValue: 'English' })`.
+2. Put the English in `en/core.json`, with `{interpolation}` placeholders. Pass interpolation
+   variables as the second argument: `t('health.database.n_stuck', { n })`.
+3. `pnpm translations:check` fails CI when a literal `t()` key is missing from `en/core.json`.
+   Run it after adding keys.
+4. Test fakes for `t` must resolve from the catalog (`packages/core/jest/translate.ts`) or return
+   the key — never from an inline default.
+
 ## E2E Locator Rules
 
 Tests must be language-agnostic because demo stores may run in any locale.

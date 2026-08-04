@@ -60,7 +60,7 @@ export function TemplateRow({
 					}}
 				>
 					<SelectTrigger>
-						<SelectValue placeholder={t('settings.select_printer', 'Select printer...')} />
+						<SelectValue placeholder={t('settings.select_printer')} />
 					</SelectTrigger>
 					<SelectContent>
 						<SelectGroup>
@@ -68,7 +68,7 @@ export function TemplateRow({
 							{unavailablePrinterId && (
 								<SelectItem
 									value={unavailablePrinterId}
-									label={t('settings.printer_unavailable', 'Unavailable printer')}
+									label={t('settings.printer_unavailable')}
 								/>
 							)}
 							{printers.map((printer) => (

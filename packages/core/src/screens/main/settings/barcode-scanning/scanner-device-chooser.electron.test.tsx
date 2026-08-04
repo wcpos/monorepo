@@ -45,7 +45,12 @@ jest.mock('@wcpos/components/vstack', () => {
 	};
 });
 jest.mock('../../../../contexts/translations', () => ({
-	useT: () => (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key,
+	useT: () =>
+		jest
+			.requireActual<typeof import('../../../../../jest/translate')>(
+				'../../../../../jest/translate'
+			)
+			.createTestT(),
 }));
 
 beforeEach(() => {

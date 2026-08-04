@@ -28,9 +28,7 @@ export function CameraScanButton({ open, onToggle }: CameraScanButtonProps) {
 			</TooltipTrigger>
 			<TooltipContent>
 				<Text>
-					{open
-						? t('pos_products.camera_scan_close', { defaultValue: 'Close barcode scanner' })
-						: t('pos_products.camera_scan_open', { defaultValue: 'Scan barcode with camera' })}
+					{open ? t('pos_products.camera_scan_close') : t('pos_products.camera_scan_open')}
 				</Text>
 			</TooltipContent>
 		</Tooltip>

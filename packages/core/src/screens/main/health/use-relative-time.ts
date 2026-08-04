@@ -22,13 +22,13 @@ export function useRelativeTime(): (fromMs: number, toMs: number) => string {
 			const { unit, value } = relativeTimeParts(fromMs, toMs);
 			if (unit === 'seconds') {
 				return value < 5
-					? t('health.database.just_now', { defaultValue: 'just now' })
-					: t('health.database.n_seconds', { defaultValue: '{n} seconds', n: value });
+					? t('health.database.just_now')
+					: t('health.database.n_seconds', { n: value });
 			}
 			if (unit === 'minutes') {
-				return t('health.database.n_minutes', { defaultValue: '{n} min', n: value });
+				return t('health.database.n_minutes', { n: value });
 			}
-			return t('health.database.n_hours', { defaultValue: '{n} h', n: value });
+			return t('health.database.n_hours', { n: value });
 		},
 		[t]
 	);

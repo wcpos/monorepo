@@ -18,8 +18,8 @@ export function DrawerConnectorSelect({ value, ...props }: SelectSingleRootProps
 
 	const options = React.useMemo(
 		() => [
-			{ value: 'pin2', label: t('settings.drawer_pin2', 'Pin 2 / Drawer 1') },
-			{ value: 'pin5', label: t('settings.drawer_pin5', 'Pin 5 / Drawer 2') },
+			{ value: 'pin2', label: t('settings.drawer_pin2') },
+			{ value: 'pin5', label: t('settings.drawer_pin5') },
 		],
 		[t]
 	);
@@ -33,9 +33,7 @@ export function DrawerConnectorSelect({ value, ...props }: SelectSingleRootProps
 	return (
 		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
 			<SelectTrigger>
-				<SelectValue
-					placeholder={t('settings.select_drawer_connector', 'Select drawer connector')}
-				/>
+				<SelectValue placeholder={t('settings.select_drawer_connector')} />
 			</SelectTrigger>
 			<SelectContent matchWidth>
 				<SelectGroup>

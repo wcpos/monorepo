@@ -67,16 +67,14 @@ export function TotalsSection({ order }: { order: OrderDocument }) {
 	const shippingMethod = shippingLines.length ? shippingLines[0]?.method_title : undefined;
 
 	return (
-		<Section title={t('orders.totals', { defaultValue: 'Totals' })}>
+		<Section title={t('orders.totals')}>
 			<View className="gap-0.5">
 				<Row label={t('common.subtotal')} value={format(subtotal)} />
 				{discount > 0 ? (
 					<Row
 						label={
 							<View className="flex-row items-center gap-2">
-								<Text className="text-muted-foreground text-sm">
-									{t('common.discount', { defaultValue: 'Discount' })}
-								</Text>
+								<Text className="text-muted-foreground text-sm">{t('common.discount')}</Text>
 								{couponLabel ? (
 									<View className="bg-primary/10 rounded px-1.5 py-0.5">
 										<Text className="text-primary text-[10px] font-medium tabular-nums">

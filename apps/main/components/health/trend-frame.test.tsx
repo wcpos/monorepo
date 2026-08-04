@@ -15,9 +15,23 @@ jest.mock('@wcpos/components/text', () => {
 	const { Text } = jest.requireActual('react-native');
 	return { Text };
 });
-jest.mock('@wcpos/core/contexts/translations', () => ({
-	useT: () => (_key: string, fallback: string) => fallback,
-}));
+jest.mock('@wcpos/core/contexts/translations', () => {
+	// Resolve from the catalog the app actually registers as its `en` resource,
+	// so assertions on rendered copy match what ships.
+	const en = jest.requireActual<Record<string, string>>(
+		'@wcpos/core/contexts/translations/locales/en/core.json'
+	);
+	return {
+		useT: () => (key: string, values?: Record<string, unknown>) => {
+			const template = en[key] ?? key;
+			return values
+				? template.replace(/\{(\w+)\}/g, (match, name: string) =>
+						values[name] === undefined ? match : String(values[name])
+					)
+				: template;
+		},
+	};
+});
 
 const WAITING = 'Not enough data yet — this trend fills in as the till runs';
 

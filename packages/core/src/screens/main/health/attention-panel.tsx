@@ -102,15 +102,13 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 			<HStack className="flex-wrap items-baseline gap-x-3 gap-y-1">
 				<Text className="font-semibold">
 					{stuck.length === 1
-						? t('health.database.attention_one', { defaultValue: '1 record needs attention' })
+						? t('health.database.attention_one')
 						: t('health.database.attention_many', {
-								defaultValue: '{n} records need attention',
 								n: stuck.length,
 							})}
 				</Text>
 				<Text className="text-muted-foreground min-w-0 flex-shrink text-sm">
 					{t('health.database.attention_reason', {
-						defaultValue: '"{name}" can\'t upload — {reason}',
 						name: displayName,
 						reason: first.reason,
 					})}
@@ -123,9 +121,7 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 							testID="db-attention-fix"
 							onPress={() => router.push(fixRoute)}
 						>
-							<ButtonText className="text-sm">
-								{t('health.database.attention_fix', { defaultValue: 'Fix record' })}
-							</ButtonText>
+							<ButtonText className="text-sm">{t('health.database.attention_fix')}</ButtonText>
 						</Button>
 					) : null}
 					{first.retryable ? (
@@ -135,9 +131,7 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 							testID="db-attention-retry"
 							onPress={() => void engine.sync()}
 						>
-							<ButtonText className="text-sm">
-								{t('health.database.attention_retry', { defaultValue: 'Retry' })}
-							</ButtonText>
+							<ButtonText className="text-sm">{t('health.database.attention_retry')}</ButtonText>
 						</Button>
 					) : null}
 					<Button
@@ -147,7 +141,7 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 						onPress={() => router.push('/health/logs')}
 					>
 						<ButtonText className="text-muted-foreground text-sm">
-							{t('health.database.attention_view_log', { defaultValue: 'View log ›' })}
+							{t('health.database.attention_view_log')}
 						</ButtonText>
 					</Button>
 				</HStack>

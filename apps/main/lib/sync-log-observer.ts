@@ -208,8 +208,7 @@ const CONFORMANCE = new Map<string, Conformance>([
 			// part of a refresh arc (carries an operationId, #899) is chain evidence,
 			// not idle traffic — rare (once per JWT TTL), and without it the recovered
 			// chain would be missing its successful ending under verbose.
-			didWork: (f) =>
-				f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
+			didWork: (f) => f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
 			forensic: true,
 		},
 	],

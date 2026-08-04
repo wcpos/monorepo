@@ -180,7 +180,7 @@ export function GeneralSettings() {
 		<Form {...form}>
 			<VStack className="gap-5">
 				<FormErrors />
-				<SettingsSection first title={t('settings.store', 'Store')}>
+				<SettingsSection first title={t('settings.store')}>
 					<FormField
 						control={form.control}
 						name="name"
@@ -231,7 +231,7 @@ export function GeneralSettings() {
 					/>
 				</SettingsSection>
 
-				<SettingsSection title={t('settings.localization', 'Localization')}>
+				<SettingsSection title={t('settings.localization')}>
 					<FormField
 						control={form.control}
 						name="locale"
@@ -252,10 +252,7 @@ export function GeneralSettings() {
 						render={({ field: { value, onChange, ...rest } }) => (
 							<SettingsRow
 								label={t('settings.default_customer')}
-								description={t(
-									'settings.default_customer_description',
-									'Pre-selected on every new cart.'
-								)}
+								description={t('settings.default_customer_description')}
 							>
 								<FormCombobox
 									customComponent={CustomerSelect}
@@ -280,7 +277,7 @@ export function GeneralSettings() {
 					/>
 				</SettingsSection>
 
-				<SettingsSection title={t('settings.currency_and_numbers', 'Currency & numbers')}>
+				<SettingsSection title={t('settings.currency_and_numbers')}>
 					<FormField
 						control={form.control}
 						name="currency"
@@ -353,10 +350,7 @@ export function GeneralSettings() {
 				</SettingsSection>
 
 				<SettingsDangerZone
-					description={t(
-						'settings.restore_server_settings_description',
-						'These settings were copied from your WooCommerce store. Restoring will overwrite local changes with the server’s values.'
-					)}
+					description={t('settings.restore_server_settings_description')}
 					buttonLabel={t('settings.restore_server_settings')}
 					onPress={handleRestoreServerSettings}
 					loading={loading}

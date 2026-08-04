@@ -7,7 +7,7 @@ export default function PrintingSettingsPage() {
 	const t = useT();
 
 	return (
-		<SettingsPage title={t('settings.printing', 'Printing')} testID="screen-settings-printing">
+		<SettingsPage title={t('settings.printing')} testID="screen-settings-printing">
 			<PrintingSettings />
 		</SettingsPage>
 	);

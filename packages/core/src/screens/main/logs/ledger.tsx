@@ -44,17 +44,17 @@ function useLevelLabel(): (kind: LevelKind) => string {
 		(kind: LevelKind) => {
 			switch (kind) {
 				case 'error':
-					return t('health.logs.level_error', { defaultValue: 'error' });
+					return t('health.logs.level_error');
 				case 'warn':
-					return t('health.logs.level_warn', { defaultValue: 'warn' });
+					return t('health.logs.level_warn');
 				case 'action':
-					return t('health.logs.level_action', { defaultValue: 'action' });
+					return t('health.logs.level_action');
 				case 'sync':
-					return t('health.logs.level_sync', { defaultValue: 'sync' });
+					return t('health.logs.level_sync');
 				case 'debug':
-					return t('health.logs.level_debug', { defaultValue: 'debug' });
+					return t('health.logs.level_debug');
 				default:
-					return t('health.logs.level_info', { defaultValue: 'info' });
+					return t('health.logs.level_info');
 			}
 		},
 		[t]
@@ -246,17 +246,11 @@ export function Ledger({
 	return (
 		<VStack testID="logs-ledger" className="gap-0">
 			<HairlineHeaderRow className="hidden pl-2 md:flex">
-				<HairlineHeaderCell className="w-20">
-					{t('health.logs.col_time', { defaultValue: 'Time' })}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell className="w-16">
-					{t('health.logs.col_level', { defaultValue: 'Level' })}
-				</HairlineHeaderCell>
-				<HairlineHeaderCell className="flex-1">
-					{t('health.logs.col_event', { defaultValue: 'Event' })}
-				</HairlineHeaderCell>
+				<HairlineHeaderCell className="w-20">{t('health.logs.col_time')}</HairlineHeaderCell>
+				<HairlineHeaderCell className="w-16">{t('health.logs.col_level')}</HairlineHeaderCell>
+				<HairlineHeaderCell className="flex-1">{t('health.logs.col_event')}</HairlineHeaderCell>
 				<HairlineHeaderCell className="w-24 text-right">
-					{t('health.logs.col_code', { defaultValue: 'Code' })}
+					{t('health.logs.col_code')}
 				</HairlineHeaderCell>
 				<View className="w-6" />
 			</HairlineHeaderRow>
@@ -286,7 +280,7 @@ export function Ledger({
 				</Text>
 				{rows.length < total ? (
 					<Button variant="ghost" size="sm" testID="logs-show-more" onPress={onShowMore}>
-						<ButtonText>{t('health.logs.show_more', { defaultValue: 'Show more' })}</ButtonText>
+						<ButtonText>{t('health.logs.show_more')}</ButtonText>
 					</Button>
 				) : null}
 			</HStack>

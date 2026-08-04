@@ -65,20 +65,17 @@ export function UptimeStrip({ cells }: { cells: UptimeCell[] }) {
 			const hour = hourLabel(cell.hourStartMs);
 			if (cell.state === 'closed') {
 				return t('health.performance.uptime_closed_tip', {
-					defaultValue: '{hour} — app closed',
 					hour,
 				});
 			}
 			if (cell.state === 'errors') {
 				return t('health.performance.uptime_errors_tip', {
-					defaultValue: '{hour} — {n} requests · {e} failed',
 					hour,
 					n: cell.requests.toLocaleString(),
 					e: cell.errors.toLocaleString(),
 				});
 			}
 			return t('health.performance.uptime_running_tip', {
-				defaultValue: '{hour} — {n} requests, all ok',
 				hour,
 				n: cell.requests.toLocaleString(),
 			});
@@ -104,7 +101,7 @@ export function UptimeStrip({ cells }: { cells: UptimeCell[] }) {
 					{middle ? hourLabel(middle.hourStartMs) : ''}
 				</Text>
 				<Text className="text-muted-foreground/80 font-mono text-[11px]">
-					{t('health.performance.uptime_now', { defaultValue: 'now ▸' })}
+					{t('health.performance.uptime_now')}
 				</Text>
 			</HStack>
 			<HStack className="flex-wrap gap-x-4 gap-y-1">
@@ -114,19 +111,19 @@ export function UptimeStrip({ cells }: { cells: UptimeCell[] }) {
 						style={{ backgroundColor: UPTIME_GREEN, opacity: 0.75 }}
 					/>
 					<Text className="text-muted-foreground text-xs">
-						{t('health.performance.uptime_running', { defaultValue: 'running' })}
+						{t('health.performance.uptime_running')}
 					</Text>
 				</HStack>
 				<HStack className="items-center gap-1.5">
 					<View className="h-3 w-3 rounded-sm border" style={{ borderColor: UPTIME_AMBER }} />
 					<Text className="text-muted-foreground text-xs">
-						{t('health.performance.uptime_errors', { defaultValue: '⚠ errors that hour' })}
+						{t('health.performance.uptime_errors')}
 					</Text>
 				</HStack>
 				<HStack className="items-center gap-1.5">
 					<View className="border-border h-3 w-3 rounded-sm border" />
 					<Text className="text-muted-foreground text-xs">
-						{t('health.performance.uptime_closed', { defaultValue: 'app closed' })}
+						{t('health.performance.uptime_closed')}
 					</Text>
 				</HStack>
 			</HStack>

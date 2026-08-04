@@ -23,10 +23,7 @@ export function DrawerEmulationWarning({ vendor, language }: DrawerEmulationWarn
 
 	return (
 		<Text testID="add-printer-drawer-emulation-warning" className="text-warning text-xs">
-			{t(
-				'settings.cash_drawer_emulation_warning',
-				'Cash drawer kicks depend on printer language/emulation. If the drawer does not open, match this language to the printer emulation mode.'
-			)}
+			{t('settings.cash_drawer_emulation_warning')}
 		</Text>
 	);
 }
