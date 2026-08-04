@@ -48,13 +48,15 @@ export type PersistedSchedulerTaskRunnerResult = {
 	renewalLost: number;
 	totalDocuments: number;
 	totalRequests: number;
+	/**
+	 * The tick was ABORTED by a derivable-ledger rebuild (#956), not drained: the
+	 * scheduler store was dropped mid-tick, so nothing was claimed or fetched. A
+	 * demand-driven caller must release rather than report the requirement fetched.
+	 */
+	ledgerRebuilt: boolean;
 };
 
-/**
- * A drain tick that did nothing. Also the neutral result a tick returns when a
- * ledger rebuild aborts it mid-flight (#956): the rebuild drops the store holding
- * the tick's claims, so the tick ends here and the next cadence re-claims.
- */
+/** A drain tick that did nothing. */
 export function emptyPersistedSchedulerTaskRunnerResult(): PersistedSchedulerTaskRunnerResult {
 	return {
 		scanned: 0,
@@ -67,7 +69,13 @@ export function emptyPersistedSchedulerTaskRunnerResult(): PersistedSchedulerTas
 		renewalLost: 0,
 		totalDocuments: 0,
 		totalRequests: 0,
+		ledgerRebuilt: false,
 	};
+}
+
+/** The neutral result a drain tick returns when a ledger rebuild aborted it (#956). */
+export function ledgerRebuiltSchedulerTaskRunnerResult(): PersistedSchedulerTaskRunnerResult {
+	return { ...emptyPersistedSchedulerTaskRunnerResult(), ledgerRebuilt: true };
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

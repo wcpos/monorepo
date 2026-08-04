@@ -121,6 +121,8 @@ describe('runPersistedSchedulerTasks', () => {
 			failed: 0,
 			totalDocuments: 25,
 			totalRequests: 1,
+			// A real drain is never a ledger-rebuild abort (#956).
+			ledgerRebuilt: false,
 		});
 	});
 

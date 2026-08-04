@@ -9,8 +9,7 @@ import type { SyncEvent } from '@wcpos/sync-core';
 
 import { engineCollectionCreators } from '../collections/engine-collections';
 import { runEngineSchedulerDrain } from '../scheduler/engine-scheduler-drain';
-import { seedPosBootstrapLanes } from '../scheduler/rx-pos-bootstrap-seeder';
-import { emptySeedPersistedSchedulerTasksResult } from '../scheduler/rx-scheduler-task-seeder';
+import { posBootstrapTasks, seedPosBootstrapLanes } from '../scheduler/rx-pos-bootstrap-seeder';
 import { emptyPersistedSchedulerTaskRunnerResult } from '../scheduler/rx-scheduler-task-runner';
 import { RxSchedulerTaskStateRepository } from '../scheduler/rx-scheduler-task-state-repository';
 import { createLocalCoverage } from './local-coverage';
@@ -239,23 +238,25 @@ describe('coverage ledger recovery', () => {
 		const readForTaskIds = vi
 			.spyOn(RxSchedulerTaskStateRepository.prototype, 'readForTaskIds')
 			.mockRejectedValueOnce(refusalError('duplicate-primary-id:schedulerTaskStates::task-orders'));
-		const claimNew = vi.spyOn(RxSchedulerTaskStateRepository.prototype, 'claimNew');
 
-		await expect(
-			seedPosBootstrapLanes({
-				getRepository: async () => ({ getDatabase: () => db as never }),
-				nowMs: 1_000,
-			})
-		).resolves.toEqual(emptySeedPersistedSchedulerTasksResult());
+		const seeded = await seedPosBootstrapLanes({
+			getRepository: async () => ({ getDatabase: () => db as never }),
+			nowMs: 1_000,
+		});
 
-		// The seed aborted on the refusal: read once, nothing re-seeded into the store
-		// that was just dropped.
-		expect(readForTaskIds).toHaveBeenCalledTimes(1);
-		expect(claimNew).not.toHaveBeenCalled();
+		// A seed holds no claims, so it takes the coverage contract: rebuild once, then
+		// run again. It must NOT resolve empty — callers treat a resolved seed as a
+		// durable enqueue.
+		expect(readForTaskIds).toHaveBeenCalledTimes(2);
+		expect(seeded.inserted).toBe(posBootstrapTasks().length);
 		for (const name of LEDGER_COLLECTIONS) {
 			expect(db.collections[name]).not.toBe(originalCollections.get(name));
-			await expect(db.collections[name].count().exec()).resolves.toBe(0);
 		}
+		// The rebuild dropped the pre-existing rows; only the re-run seed's tasks remain.
+		await expect(db.collections.coverageRecords.count().exec()).resolves.toBe(0);
+		await expect(db.collections.schedulerTaskStates.count().exec()).resolves.toBe(
+			posBootstrapTasks().length
+		);
 		expect(events).toContainEqual({
 			type: 'coverage.ledger-rebuilt',
 			level: 'warn',
@@ -293,7 +294,7 @@ describe('coverage ledger recovery', () => {
 				fetcher: fetcher as never,
 				nowMs: 1_000,
 			})
-		).resolves.toEqual(emptyPersistedSchedulerTaskRunnerResult());
+		).resolves.toEqual({ ...emptyPersistedSchedulerTaskRunnerResult(), ledgerRebuilt: true });
 
 		// No claim resurrection: the claims lived in the store the rebuild dropped, and
 		// the tick does not re-read or re-claim them.
@@ -334,10 +335,10 @@ describe('coverage ledger recovery', () => {
 			}),
 		]);
 
-		// The coverage caller retries against the rebuilt ledger; the scheduler caller
-		// aborts its seed. Both ride ONE rebuild — one guard, one emission.
+		// Both callers retry against the rebuilt ledger, riding ONE rebuild — one guard,
+		// one emission.
 		expect(snapshot).toEqual({ records: [], lanes: [] });
-		expect(seeded).toEqual(emptySeedPersistedSchedulerTasksResult());
+		expect(seeded.inserted).toBe(posBootstrapTasks().length);
 		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
 	});
 });

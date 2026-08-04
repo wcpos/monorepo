@@ -10,11 +10,11 @@ import type { SyncObserver } from '@wcpos/sync-core';
  */
 
 import {
-	emptyPersistedSchedulerTaskRunnerResult,
+	ledgerRebuiltSchedulerTaskRunnerResult,
 	type PersistedSchedulerTaskRunnerResult,
 	runPersistedSchedulerTasks,
 } from './rx-scheduler-task-runner';
-import { withSchedulerLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
+import { withSchedulerDrainLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import {
 	RxSchedulerTaskStateRepository,
 	type SchedulerTaskStateDatabase,
@@ -352,10 +352,11 @@ export async function runEngineSchedulerDrain(
 	// A `schedulerTaskStates` reconciliation refusal caught mid-tick rebuilds the
 	// derivable ledger (#956). The rebuild drops the store this tick claims rows in,
 	// so the tick ends as an empty drain — no error to the caller, no re-claim; the
-	// next cadence reseeds and re-claims against the rebuilt store.
-	return withSchedulerLedgerRecovery({
+	// next cadence reseeds and re-claims against the rebuilt store. The result is
+	// flagged so a demand caller releases rather than reporting a fetch.
+	return withSchedulerDrainLedgerRecovery({
 		database: db,
-		aborted: emptyPersistedSchedulerTaskRunnerResult,
+		aborted: ledgerRebuiltSchedulerTaskRunnerResult,
 		run: () => {
 			const schedulerRepository = new RxSchedulerTaskStateRepository(db);
 			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input);

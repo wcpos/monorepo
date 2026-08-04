@@ -25,12 +25,11 @@ import { REFERENCE_COLLECTIONS, type ReferenceCollection } from '@wcpos/sync-cor
 
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
-	emptySeedPersistedSchedulerTasksResult,
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
-import { withSchedulerLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
+import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import {
 	BRAND_REFERENCE_CONFIG,
 	CATEGORY_REFERENCE_CONFIG,
@@ -141,11 +140,10 @@ async function seedTasks(
 	const repository = await input.getRepository();
 	const database = repository.getDatabase();
 	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
-	// (#956); the seed then ends as a no-op — the tasks are re-seedable, so the next
-	// cadence enqueues them again against the rebuilt store.
-	return withSchedulerLedgerRecovery({
+	// and the seed runs again against the fresh store (#956) — callers treat a
+	// resolved seed as a durable enqueue, so it must not resolve empty.
+	return withSchedulerSeedLedgerRecovery({
 		database,
-		aborted: emptySeedPersistedSchedulerTasksResult,
 		run: () =>
 			seedPersistedSchedulerTasks({
 				repository: new RxSchedulerTaskStateRepository(database),

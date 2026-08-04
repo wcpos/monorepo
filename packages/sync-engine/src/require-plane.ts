@@ -56,11 +56,14 @@ import {
 	runEngineSchedulerTask,
 	type SchedulerDrainDatabase,
 } from './scheduler/engine-scheduler-drain';
+import {
+	emptyPersistedSchedulerTaskRunnerResult,
+	type PersistedSchedulerTaskRunnerResult,
+} from './scheduler/rx-scheduler-task-runner';
 
 import type { SyncCollectionName } from './collections/engine-collections';
 import type { EngineSourceFetcher } from './change-signal/change-signal-source';
 import type { RxCollection, RxDatabase } from 'rxdb';
-import type { PersistedSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
 import type { LocalCoverage } from './local-coverage/local-coverage';
 import type { FetchTask } from './scheduler/replication-policy';
 
@@ -182,18 +185,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	const descriptorFor = (collection: SyncCollectionName) =>
 		COLLECTION_DESCRIPTORS.find((d) => d.collection === collection);
 
-	const emptyDrainResult = (): PersistedSchedulerTaskRunnerResult => ({
-		scanned: 0,
-		claimLost: 0,
-		completionLost: 0,
-		succeeded: 0,
-		coalescedReruns: 0,
-		failed: 0,
-		failureLost: 0,
-		renewalLost: 0,
-		totalDocuments: 0,
-		totalRequests: 0,
-	});
+	const emptyDrainResult = emptyPersistedSchedulerTaskRunnerResult;
 
 	const drainLostOutcomeCount = (result: PersistedSchedulerTaskRunnerResult): number =>
 		result.claimLost + result.completionLost + result.failureLost + result.renewalLost;
@@ -306,6 +298,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						missingRecordIds: [],
 						reason: 'order query refresh already in progress',
 					};
+				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
+				// nothing was fetched, so release instead of reporting the requirement met.
+				if (drainResult.ledgerRebuilt)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'local sync bookkeeping was rebuilt mid-drain',
+					};
 				if (drainResult.failed > 0)
 					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
 				const lost = drainLostOutcomeCount(drainResult);
@@ -375,6 +375,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						missingRecordIds: [],
 						reason: 'product browse window already in progress',
 					};
+				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
+				// nothing was fetched, so release instead of reporting the requirement met.
+				if (drainResult.ledgerRebuilt)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'local sync bookkeeping was rebuilt mid-drain',
+					};
 				if (drainResult.failed > 0)
 					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
 				const lost = drainLostOutcomeCount(drainResult);
@@ -429,6 +437,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						action: 'released',
 						missingRecordIds: [],
 						reason: 'full order refresh already in progress',
+					};
+				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
+				// nothing was fetched, so release instead of reporting the requirement met.
+				if (drainResult.ledgerRebuilt)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'local sync bookkeeping was rebuilt mid-drain',
 					};
 				if (drainResult.failed > 0)
 					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);

@@ -1,10 +1,9 @@
 import {
-	emptySeedPersistedSchedulerTasksResult,
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
-import { withSchedulerLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
+import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
 import { parseOrderBrowserSchedulerDescriptor } from './order-browser-scheduler-descriptor';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
@@ -76,11 +75,10 @@ export async function seedOrderSchedulerTasks(
 	const nowMs = input.nowMs ?? Date.now();
 
 	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
-	// (#956); the seed then ends as a no-op — the tasks are re-seedable, so the next
-	// cadence enqueues them again against the rebuilt store.
-	return withSchedulerLedgerRecovery({
+	// and the seed runs again against the fresh store (#956) — callers treat a
+	// resolved seed as a durable enqueue, so it must not resolve empty.
+	return withSchedulerSeedLedgerRecovery({
 		database,
-		aborted: emptySeedPersistedSchedulerTasksResult,
 		run: () =>
 			seedPersistedSchedulerTasks({
 				repository: new RxSchedulerTaskStateRepository(database),
@@ -163,11 +161,10 @@ export async function seedOrderFilterSchedulerTask(
 	const nowMs = input.nowMs ?? Date.now();
 
 	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
-	// (#956); the seed then ends as a no-op — the tasks are re-seedable, so the next
-	// cadence enqueues them again against the rebuilt store.
-	return withSchedulerLedgerRecovery({
+	// and the seed runs again against the fresh store (#956) — callers treat a
+	// resolved seed as a durable enqueue, so it must not resolve empty.
+	return withSchedulerSeedLedgerRecovery({
 		database,
-		aborted: emptySeedPersistedSchedulerTasksResult,
 		run: () =>
 			seedPersistedSchedulerTasks({
 				repository: new RxSchedulerTaskStateRepository(database),

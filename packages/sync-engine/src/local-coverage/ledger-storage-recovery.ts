@@ -168,6 +168,43 @@ function rebuildLedgerOnce(
 }
 
 /**
+ * Waits until a ledger rebuild covering `error` has completed, so the caller can
+ * take its recovery action (retry, or abort its tick). Rethrows the original error
+ * when no rebuild is available: no registration, a registration replaced under the
+ * caller, the one-shot already spent, or a rebuild that itself failed.
+ */
+async function awaitLedgerRebuild(input: {
+	database: LedgerRecoveryDatabase | undefined;
+	error: unknown;
+	reason: string;
+	entryAtStart: LedgerRecoveryEntry | undefined;
+	generationAtStart: number;
+	trigger: LedgerRebuildTrigger;
+}): Promise<void> {
+	// No registered rebuild (or the database was closed and re-registered under us):
+	// nothing safe to drop, so the refusal is the caller's problem.
+	const entry = lookupEntry(input.database);
+	if (!entry || entry !== input.entryAtStart) throw input.error;
+
+	// Someone else's rebuild landed while this operation was in flight.
+	if (entry.generation !== input.generationAtStart) return;
+
+	// A rebuild is running right now — wait for it rather than leaking the refusal
+	// into an otherwise recoverable caller. If it fails, this operation genuinely
+	// failed, so surface its own storage error.
+	if (entry.pendingRebuild) {
+		await entry.pendingRebuild.catch(() => {
+			throw input.error;
+		});
+		return;
+	}
+
+	if (entry.rebuilt) throw input.error;
+	entry.rebuilt = true;
+	await rebuildLedgerOnce(entry, input.reason, input.trigger);
+}
+
+/**
  * Proxies a repository whose refusals are RECOVERABLE by retry: the ledger is
  * rebuilt (once), the repository is rebuilt against the recreated collections, and
  * the failed operation runs again. An operation whose failure predates a completed
@@ -209,28 +246,14 @@ export function withLedgerRecovery<T extends object>(input: {
 		} catch (error) {
 			const reason = corruptionRefusalReason(error);
 			if (reason === undefined) throw error;
-
-			// No registered rebuild (or the database was closed and re-registered under
-			// us): nothing safe to drop, so the refusal is the caller's problem.
-			const entry = lookupEntry(input.database);
-			if (!entry || entry !== entryAtStart) throw error;
-
-			// Someone else's rebuild landed while this operation was in flight.
-			if (entry.generation !== generationAtStart) return invoke(property, args);
-
-			// A rebuild is running right now — wait for it rather than leaking the
-			// refusal into an otherwise recoverable caller. If it fails, this
-			// operation genuinely failed, so surface its own storage error.
-			if (entry.pendingRebuild) {
-				await entry.pendingRebuild.catch(() => {
-					throw error;
-				});
-				return invoke(property, args);
-			}
-
-			if (entry.rebuilt) throw error;
-			entry.rebuilt = true;
-			await rebuildLedgerOnce(entry, reason, 'coverage');
+			await awaitLedgerRebuild({
+				database: input.database,
+				error,
+				reason,
+				entryAtStart,
+				generationAtStart,
+				trigger: 'coverage',
+			});
 			return invoke(property, args);
 		}
 	};
@@ -244,23 +267,58 @@ export function withLedgerRecovery<T extends object>(input: {
 }
 
 /**
- * Runs one scheduler seed or drain tick with ledger recovery attached (#956).
+ * Runs one scheduler SEED with ledger recovery attached (#956).
  *
  * `schedulerTaskStates` is part of the same derivable ledger, but its refusals are
- * only ever raised through `RxSchedulerTaskStateRepository` during a seed or a
- * drain — a family the coverage proxy never sees. This is that family's trigger.
+ * only ever raised through `RxSchedulerTaskStateRepository` — a family the coverage
+ * proxy never sees. This is that family's trigger for the seed sites.
  *
- * Mid-tick semantics differ from the coverage side deliberately: the rebuild DROPS
- * the store the tick holds its claims in, so retrying would re-claim rows that no
- * longer exist. The tick therefore ABORTS CLEANLY — the rebuild runs, the caller
- * gets the neutral (empty) result rather than an error, nothing is re-claimed, and
- * the next scheduler cadence reseeds and re-claims against the fresh store. The
- * rebuild is reported through the same `coverage.ledger-rebuilt` emission.
+ * A seed holds no claims: it is insert-if-absent against the ledger. So it takes
+ * the SAME contract as the coverage side — rebuild once, then run the seed again
+ * against the fresh (empty) store. Callers depend on that: the conflict-discard
+ * path seeds a durable targeted re-pull BEFORE clearing local state, and POS
+ * bootstrap marks a scope bootstrapped once its seed resolves. A silently empty
+ * seed would strand both.
+ */
+export async function withSchedulerSeedLedgerRecovery<T>(input: {
+	database: LedgerRecoveryDatabase | undefined;
+	run: () => Promise<T>;
+}): Promise<T> {
+	const entryAtStart = lookupEntry(input.database);
+	const generationAtStart = entryAtStart?.generation ?? 0;
+	try {
+		return await input.run();
+	} catch (error) {
+		const reason = corruptionRefusalReason(error);
+		if (reason === undefined) throw error;
+		await awaitLedgerRebuild({
+			database: input.database,
+			error,
+			reason,
+			entryAtStart,
+			generationAtStart,
+			trigger: 'scheduler',
+		});
+		// Exactly one retry: a refusal that survives the rebuild surfaces.
+		return input.run();
+	}
+}
+
+/**
+ * Runs one scheduler DRAIN tick with ledger recovery attached (#956).
+ *
+ * Unlike a seed, a drain tick holds CLAIMS on rows in the store the rebuild drops,
+ * so retrying would re-claim rows that no longer exist. The tick therefore ABORTS
+ * CLEANLY — the rebuild runs, the caller gets the neutral result rather than an
+ * error, nothing is re-claimed, and the next scheduler cadence reseeds and
+ * re-claims against the fresh store. The neutral result is FLAGGED
+ * (`ledgerRebuilt`) so a demand-driven caller can release instead of reporting the
+ * requirement fetched.
  *
  * A refusal with no rebuild available (no registration, or the one-shot already
  * spent) still surfaces to the caller — today's behaviour, unchanged.
  */
-export async function withSchedulerLedgerRecovery<T>(input: {
+export async function withSchedulerDrainLedgerRecovery<T>(input: {
 	database: LedgerRecoveryDatabase | undefined;
 	/** The neutral result for an aborted tick. */
 	aborted: () => T;
@@ -273,23 +331,14 @@ export async function withSchedulerLedgerRecovery<T>(input: {
 	} catch (error) {
 		const reason = corruptionRefusalReason(error);
 		if (reason === undefined) throw error;
-
-		const entry = lookupEntry(input.database);
-		if (!entry || entry !== entryAtStart) throw error;
-
-		// The ledger was rebuilt under this tick — its claims went with it.
-		if (entry.generation !== generationAtStart) return input.aborted();
-
-		if (entry.pendingRebuild) {
-			await entry.pendingRebuild.catch(() => {
-				throw error;
-			});
-			return input.aborted();
-		}
-
-		if (entry.rebuilt) throw error;
-		entry.rebuilt = true;
-		await rebuildLedgerOnce(entry, reason, 'scheduler');
+		await awaitLedgerRebuild({
+			database: input.database,
+			error,
+			reason,
+			entryAtStart,
+			generationAtStart,
+			trigger: 'scheduler',
+		});
 		return input.aborted();
 	}
 }
