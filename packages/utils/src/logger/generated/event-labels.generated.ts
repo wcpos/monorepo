@@ -314,7 +314,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		type: 'product.browse-window.brand-filter-ignored',
 		domain: 'PRODUCT',
 		key: 'health.logs.event.product_browse_window_brand_filter_ignored',
-		label: 'This store\'s WooCommerce version cannot filter products by brand',
+		label: 'This WooCommerce version cannot filter products by brand',
 		introducedIn: '1.10.0',
 	},
 	'push.aborted': {

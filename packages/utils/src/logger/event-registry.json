@@ -200,7 +200,7 @@
 	{
 		"type": "product.browse-window.brand-filter-ignored",
 		"domain": "PRODUCT",
-		"label": "This store's WooCommerce version cannot filter products by brand",
+		"label": "This WooCommerce version cannot filter products by brand",
 		"introducedIn": "1.10.0"
 	},
 	{
