@@ -317,6 +317,16 @@ function useDemand(
 function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boolean {
 	return Object.entries(selector).every(([field, value]) => {
 		if (field === 'search') return typeof value === 'string';
+		if (field === 'customer_id') {
+			if (typeof value === 'number') return true;
+			const customer = value as Record<string, unknown> | null;
+			return (
+				customer !== null &&
+				typeof customer === 'object' &&
+				Object.keys(customer).length === 1 &&
+				typeof customer.$eq === 'number'
+			);
+		}
 		if (field === 'date_created_gmt') {
 			if (value === null || typeof value !== 'object') return false;
 			const entries = Object.entries(value as Record<string, unknown>);

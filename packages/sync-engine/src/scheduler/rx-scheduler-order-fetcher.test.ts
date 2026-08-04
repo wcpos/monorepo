@@ -1021,7 +1021,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(repository.upsertMany).not.toHaveBeenCalled();
 	});
 
-	it('fetches status-only browser order query tasks through Woo REST filter descriptors', async () => {
+	it('fetches customer browser order query tasks through Woo REST filter descriptors', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 		};
@@ -1049,14 +1049,14 @@ describe('createOrdersSchedulerFetcher', () => {
 			orderTask({
 				id: 'orders:browser:processing:windowed',
 				requirementId: 'orders.browser.processing',
-				queryKey: 'orders:browser:status=processing:search=:limit=50',
+				queryKey: 'orders:browser:status=processing:customer=42:search=:limit=50',
 				limit: 25,
 				mode: 'windowed',
 			})
 		);
 
 		expect(fetcher).toHaveBeenCalledWith(
-			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&customer=42&per_page=25&page=1&orderby=id&order=desc'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({

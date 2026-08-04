@@ -127,6 +127,29 @@ describe('requirementsForQuery', () => {
 		});
 	});
 
+	it('maps customer order filters to interactive windowed descriptors', () => {
+		for (const customer_id of [42, { $eq: 0 }]) {
+			expect(
+				requirementsForQuery({
+					id: 'customer-orders',
+					collectionName: 'orders',
+					selector: { status: 'processing', customer_id },
+					limit: 25,
+				})
+			).toEqual([
+				{
+					id: 'customer-orders:orders-query',
+					collection: 'orders',
+					kind: 'query',
+					queryKey: `orders:browser:status=processing:customer=${
+						typeof customer_id === 'number' ? customer_id : customer_id.$eq
+					}:search=:limit=25`,
+					priority: 700,
+				},
+			]);
+		}
+	});
+
 	it('maps reports date ranges to ranged complete order descriptors', () => {
 		expect(
 			requirementsForQuery({
@@ -162,8 +185,8 @@ describe('requirementsForQuery', () => {
 		});
 		expect(requirement).toMatchObject({
 			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=25',
+			priority: 700,
 		});
-		expect(requirement).not.toHaveProperty('priority');
 	});
 
 	// `2026-07-01Z` is not a Date Time String Format production; leaving date-only values
@@ -192,8 +215,12 @@ describe('requirementsForQuery', () => {
 		});
 		expect(requirement).toMatchObject({
 			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=200',
+			// Priority and completion are independent axes: a cashier-applied dimension is
+			// interactive demand (700) whether or not it is allowed to run to completion.
+			// Only `:limit=all` — the sentinel Reports passes — authorises completion.
+			priority: 700,
 		});
-		expect(requirement).not.toHaveProperty('priority');
+		expect(requirement.queryKey).not.toContain(':limit=all');
 	});
 
 	// A cashier search containing literal range tokens must round-trip as search text.
@@ -278,9 +305,7 @@ describe('requirementsForQuery', () => {
 			'products:browse-window:limit=100:orderby=popularity:order=desc'
 		);
 		// The POS catalog default keeps the bare key — one identity for the cold seed.
-		expect(keyFor([{ menu_order: 'asc' }, { id: 'asc' }])).toBe(
-			'products:browse-window:limit=100'
-		);
+		expect(keyFor([{ menu_order: 'asc' }, { id: 'asc' }])).toBe('products:browse-window:limit=100');
 		// Sorts Woo REST cannot express fall back to the default window rather than
 		// pretending a server-sorted slice exists.
 		expect(keyFor([{ sku: 'asc' }])).toBe('products:browse-window:limit=100');

@@ -7,6 +7,7 @@ export type OrderBrowserSchedulerDescriptor = {
 	status: string;
 	search: string;
 	limit: number;
+	customerId?: number;
 	afterSeconds?: number;
 	beforeSeconds?: number;
 	complete: boolean;
@@ -39,20 +40,23 @@ export function parseOrderBrowserSchedulerDescriptor(
 
 	// `search` carries arbitrary cashier text, so it must stay the LAST free-text field:
 	// it is delimited only by the literal `:limit=` suffix (greedy `.*` + anchored end),
-	// which is how this grammar has always terminated it. The range dimensions therefore
-	// sit BETWEEN the colon-free `status` and `:search=` — appending them after `search`
-	// would let a literal search term like `invoice:after=1` be read as a date bound.
+	// which is how this grammar has always terminated it. Every structured dimension
+	// (customer, then the range bounds) therefore sits BETWEEN the colon-free `status`
+	// and `:search=` — appending them after `search` would let a literal search term
+	// like `invoice:after=1` be read as a date bound.
 	const match =
-		/^orders:browser:status=([^:]*)(?::after=(\d+))?(?::before=(\d+))?:search=(.*):limit=(\d+|all)$/.exec(
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::after=(\d+))?(?::before=(\d+))?:search=(.*):limit=(\d+|all)$/.exec(
 			queryKey
 		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 
-	const [, status, afterText, beforeText, search, limitText] = match;
+	const [, status, customerText, afterText, beforeText, search, limitText] = match;
 	if (status === '') return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
+	const customerId = customerText === undefined ? undefined : Number(customerText);
 	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
 	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
 	if (
+		(customerId !== undefined && !Number.isSafeInteger(customerId)) ||
 		(afterSeconds !== undefined && !Number.isSafeInteger(afterSeconds)) ||
 		(beforeSeconds !== undefined && !Number.isSafeInteger(beforeSeconds))
 	) {
@@ -73,6 +77,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 			status,
 			search,
 			limit,
+			...(customerId !== undefined ? { customerId } : {}),
 			...(afterSeconds !== undefined ? { afterSeconds } : {}),
 			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
 			complete,

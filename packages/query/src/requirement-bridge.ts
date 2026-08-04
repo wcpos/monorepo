@@ -12,7 +12,9 @@
  *    `engine.require({collection, kind: 'search', term, limit})`.
  *  - **order query descriptors** (unbounded orders browse) →
  *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
- *    `orders:browser:status=…:search=…:limit=…` descriptor the engine parses.
+ *    `orders:browser:status=…[:customer=…][:after=…][:before=…]:search=…:limit=…`
+ *    descriptor the engine parses. Structured dimensions precede `:search=`, which
+ *    stays the last free-text field.
  *  - **the products browse window** (UNFILTERED products browse — ADR 0027 §2, #909) →
  *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
  *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor. It carries the
@@ -105,6 +107,22 @@ function orderBrowseDescriptor(
 		return 'all';
 	})();
 	const searchValue = typeof selector?.search === 'string' ? (selector.search as string) : '';
+	const customerValue = selector?.customer_id;
+	const customerId = (() => {
+		if (typeof customerValue === 'number') return customerValue;
+		if (
+			customerValue &&
+			typeof customerValue === 'object' &&
+			Object.keys(customerValue).length === 1
+		) {
+			return (customerValue as Record<string, unknown>).$eq;
+		}
+		return undefined;
+	})();
+	const customerPart =
+		Number.isSafeInteger(customerId) && (customerId as number) >= 0
+			? `:customer=${customerId}`
+			: '';
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
 	const epochSeconds = (value: unknown): number | undefined => {
 		if (typeof value !== 'string') return undefined;
@@ -125,16 +143,17 @@ function orderBrowseDescriptor(
 	const rangePart = `${afterSeconds === undefined ? '' : `:after=${afterSeconds}`}${
 		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
 	}`;
-	// Range dimensions precede `:search=` so arbitrary search text can never be read back
-	// as a date bound — see the grammar note in order-browser-scheduler-descriptor.ts.
+	// Structured dimensions (customer, then the range bounds) precede `:search=` so arbitrary
+	// search text can never be read back as a filter — see the grammar note in
+	// order-browser-scheduler-descriptor.ts.
 	if (rangePart && typeof limit === 'number' && limit >= ORDER_COMPLETE_REQUEST_LIMIT) {
-		return `orders:browser:status=${statusValue}${rangePart}:search=${searchValue}:limit=all`;
+		return `orders:browser:status=${statusValue}${customerPart}${rangePart}:search=${searchValue}:limit=all`;
 	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}${rangePart}:search=${searchValue}:limit=${boundedLimit}`;
+	return `orders:browser:status=${statusValue}${customerPart}${rangePart}:search=${searchValue}:limit=${boundedLimit}`;
 }
 
 /**
@@ -248,7 +267,14 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 
 	if (engineCollection === 'orders') {
 		const queryKey = orderBrowseDescriptor(selector, limit);
-		const priority = input.priority ?? (queryKey.endsWith(':limit=all') ? 700 : undefined);
+		const priority =
+			input.priority ??
+			(queryKey.includes(':customer=') ||
+			queryKey.includes(':after=') ||
+			queryKey.includes(':before=') ||
+			queryKey.endsWith(':limit=all')
+				? 700
+				: undefined);
 		return [
 			{
 				id: `${input.id}:orders-query`,

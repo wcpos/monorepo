@@ -65,10 +65,30 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 		});
 	});
 
-	// The range dimensions sit ahead of `:search=`, so a cashier searching for literal
-	// `:after=` / `:before=` text round-trips as search text instead of silently becoming a
-	// date bound (or being rejected outright and stalling the browse).
-	it('keeps literal range tokens inside the search component', () => {
+	it('parses customer descriptors with and without a range, including guest orders', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=processing:customer=42:search=:limit=25'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({ customerId: 42, limit: 25, complete: false }),
+		});
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:customer=0:after=1782864000:search=:limit=25'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({
+				customerId: 0,
+				afterSeconds: 1782864000,
+			}),
+		});
+	});
+
+	// Every structured dimension sits ahead of `:search=`, so a cashier searching for literal
+	// `:customer=` / `:after=` / `:before=` text round-trips as search text instead of silently
+	// becoming a bound (or being rejected outright and stalling the browse).
+	it('keeps literal dimension tokens inside the search component', () => {
 		expect(
 			parseOrderBrowserSchedulerDescriptor(
 				'orders:browser:status=all:search=invoice:after=123:limit=25'
@@ -105,11 +125,28 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 				wooStatus: '',
 			},
 		});
+		// Same for a literal `:customer=` in the search text — the dimension is read before
+		// `:search=`, so this stays a search term and no customer filter reaches the wire.
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=all:search=:customer=7:limit=25')
+		).toEqual({
+			descriptor: {
+				queryKey: 'orders:browser:status=all:search=:customer=7:limit=25',
+				status: 'all',
+				search: ':customer=7',
+				limit: 25,
+				complete: false,
+				wooStatus: '',
+			},
+		});
 	});
 
 	it('rejects unbounded completion and malformed epoch values', () => {
 		for (const queryKey of [
 			'orders:browser:status=all:search=:limit=all',
+			// A customer filter is a cashier-applied dimension, not a completion warrant:
+			// only a date range authorises `limit=all` (fetch-to-completion stays reports-only).
+			'orders:browser:status=all:customer=42:search=:limit=all',
 			'orders:browser:status=all:after=-1:search=:limit=all',
 			'orders:browser:status=all:after=1.5:search=:limit=all',
 			'orders:browser:status=all:before=nope:search=:limit=25',
@@ -118,6 +155,16 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 			expect(parseOrderBrowserSchedulerDescriptor(queryKey)).toEqual({
 				skipReason: 'descriptor is not supported',
 			});
+		}
+	});
+
+	it('rejects malformed customer values', () => {
+		for (const customer of ['-1', '1.5', 'nope', '9007199254740992']) {
+			expect(
+				parseOrderBrowserSchedulerDescriptor(
+					`orders:browser:status=all:customer=${customer}:search=:limit=25`
+				)
+			).toEqual({ skipReason: 'descriptor is not supported' });
 		}
 	});
 
