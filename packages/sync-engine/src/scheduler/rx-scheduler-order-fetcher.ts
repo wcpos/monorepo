@@ -112,6 +112,51 @@ function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => numb
 	};
 }
 
+function payloadMetaValue(payload: WooOrderPayload, key: string): string | undefined {
+	const metaData = (payload as { meta_data?: unknown }).meta_data;
+	if (!Array.isArray(metaData)) return undefined;
+	for (const entry of metaData) {
+		if (entry === null || typeof entry !== 'object') continue;
+		if ((entry as { key?: unknown }).key !== key) continue;
+		const value = (entry as { value?: unknown }).value;
+		if (value !== undefined && value !== null) return String(value);
+	}
+	return undefined;
+}
+
+/**
+ * Whether a returned order actually carries the POS dimensions the descriptor asked for.
+ *
+ * `pos_cashier`, `pos_store` and `created_via` are WCPOS proxy params
+ * (wcpos/woocommerce-pos#1432), NOT wc/v3 core params: a store still running an older
+ * plugin ignores them silently and answers with the unfiltered superset. Recording that
+ * superset as a COMPLETE lane would make the grid's projected total — which is the lane's
+ * `expectedRecordIds.length`, with no local re-narrowing — report every cashier's and every
+ * store's orders as the filtered total.
+ *
+ * Checking the records already in hand detects the old server without a capability
+ * handshake or a version probe, and costs nothing once the companion ships: on a current
+ * plugin every returned record matches and the lane completes exactly as before.
+ */
+function honorsRequestedDimensions(
+	payload: WooOrderPayload,
+	descriptor: { cashierId?: number; store?: string }
+): boolean {
+	if (
+		descriptor.cashierId !== undefined &&
+		payloadMetaValue(payload, '_pos_user') !== String(descriptor.cashierId)
+	) {
+		return false;
+	}
+	if (descriptor.store !== undefined) {
+		const matched = /^\d+$/.test(descriptor.store)
+			? payloadMetaValue(payload, '_pos_store') === descriptor.store
+			: (payload as { created_via?: unknown }).created_via === descriptor.store;
+		if (!matched) return false;
+	}
+	return true;
+}
+
 function targetedOrderIds(task: FetchTask): number[] {
 	// The numeric server ids travel ONLY on the explicit wooIds channel — independent of
 	// the document-key encoding (storage keys are uuids since the P0-1 emit-flip, so the
@@ -298,6 +343,7 @@ async function fetchBrowserOrderQuery(
 	let requestCount = 0;
 	const fetchedDocumentIds: string[] = [];
 	let exhausted = false;
+	let dimensionsHonored = true;
 
 	const recordLimit = descriptor.limit ?? RANGED_COMPLETE_MAX_RECORDS;
 	while (documentCount < recordLimit) {
@@ -330,6 +376,9 @@ async function fetchBrowserOrderQuery(
 		const totalPagesHeader = response.headers.get('X-WP-TotalPages');
 		const totalPages = Number(totalPagesHeader);
 		const payloads = JSON.parse(await response.text()) as WooOrderPayload[];
+		if (!payloads.every((payload) => honorsRequestedDimensions(payload, descriptor))) {
+			dimensionsHonored = false;
+		}
 		const remaining = recordLimit - documentCount;
 		const documents = payloads.slice(0, remaining).map(orderDocumentFromWooPayload);
 		// Offline-first: never overwrite an order that has queued local mutations.
@@ -367,7 +416,10 @@ async function fetchBrowserOrderQuery(
 	}
 
 	if (descriptor.search === '') {
-		await recordOrderFetchCoverage(input, task, fetchedDocumentIds, exhausted);
+		// A superset from a server that ignored the POS dimensions is still worth keeping
+		// locally — it is real order data — but it must never be recorded as a COMPLETE lane
+		// for this descriptor, or the grid reports the superset's size as its total.
+		await recordOrderFetchCoverage(input, task, fetchedDocumentIds, exhausted && dimensionsHonored);
 	} else {
 		await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
 	}
