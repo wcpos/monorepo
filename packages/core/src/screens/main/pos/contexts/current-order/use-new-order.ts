@@ -47,7 +47,9 @@ const newOrder$ = temporaryDB$.pipe(
 const newOrderResource = new ObservableResource(newOrder$);
 
 /**
+ * Provides a temporary order populated from the current customer and store state.
  *
+ * @returns An object containing the current temporary order document.
  */
 export const useNewOrder = () => {
 	const { store, wpCredentials } = useAppState();

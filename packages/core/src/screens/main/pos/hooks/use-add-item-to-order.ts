@@ -59,6 +59,11 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
 	return typeof record.sync?.revision === 'string' && record.sync.revision !== '';
 }
 
+/**
+ * Provides the queued mutation used to add a cart line to the current order.
+ *
+ * @returns An object containing the callback that adds a line to the order.
+ */
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const manager = useQueryManager();

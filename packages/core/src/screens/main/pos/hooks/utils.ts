@@ -42,6 +42,16 @@ type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items'
 type LineItemImage = LineItem['image'];
 type OrderMetaData = NonNullable<import('@wcpos/database').OrderDocument['meta_data']>;
 
+/**
+ * Adds missing POS identity entries without replacing existing metadata values.
+ *
+ * @param metaData - Existing order metadata, or undefined for a new order.
+ * @param identity - Identity values to add to the order.
+ * @param identity.userId - The cashier's WordPress user ID.
+ * @param identity.storeId - The store ID; zero omits the store entry.
+ * @param identity.taxBasedOn - The tax-address basis, when available.
+ * @returns A new metadata array containing every applicable identity entry.
+ */
 export function ensurePosOrderIdentityMeta(
 	metaData: OrderMetaData | undefined,
 	identity: { userId: number | string; storeId: number; taxBasedOn?: string }

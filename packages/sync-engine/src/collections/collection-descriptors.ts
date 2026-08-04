@@ -468,7 +468,12 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 	{ shape: 'local-only', collection: 'orders', write: ordersWriteFacet },
 ] as const;
 
-/** The write dispatch: descriptor lookup by collection, null when not writeable. */
+/**
+ * Finds the write facet for a sync collection.
+ *
+ * @param collection - Collection name to look up.
+ * @returns The collection's write facet, or null when the collection is not writeable.
+ */
 export function writeFacetFor(collection: string): CollectionWriteFacet | null {
 	const descriptor = COLLECTION_DESCRIPTORS.find((d) => d.collection === collection);
 	if (!descriptor || !('write' in descriptor) || !descriptor.write) return null;
