@@ -8,8 +8,12 @@ export type OrderBrowserSchedulerDescriptor = {
 	search: string;
 	limit: number;
 	customerId?: number;
+	cashierId?: number;
+	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
+	orderby?: 'date' | 'modified' | 'id';
+	order?: 'asc' | 'desc';
 	complete: boolean;
 	wooStatus: string;
 };
@@ -41,30 +45,49 @@ export function parseOrderBrowserSchedulerDescriptor(
 	// `search` carries arbitrary cashier text, so it must stay the LAST free-text field:
 	// it is delimited only by the literal `:limit=` suffix (greedy `.*` + anchored end),
 	// which is how this grammar has always terminated it. Every structured dimension
-	// (customer, then the range bounds) therefore sits BETWEEN the colon-free `status`
-	// and `:search=` — appending them after `search` would let a literal search term
-	// like `invoice:after=1` be read as a date bound.
+	// (customer, cashier, store, the range bounds, then the sort pair) therefore sits
+	// BETWEEN the colon-free `status` and `:search=` — appending them after `search`
+	// would let a literal search term like `invoice:after=1` be read as a date bound.
 	const match =
-		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::after=(\d+))?(?::before=(\d+))?:search=(.*):limit=(\d+|all)$/.exec(
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
 			queryKey
 		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 
-	const [, status, customerText, afterText, beforeText, search, limitText] = match;
+	const [
+		,
+		status,
+		customerText,
+		cashierText,
+		store,
+		afterText,
+		beforeText,
+		orderby,
+		order,
+		search,
+		limitText,
+	] = match;
 	if (status === '') return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 	const customerId = customerText === undefined ? undefined : Number(customerText);
+	const cashierId = cashierText === undefined ? undefined : Number(cashierText);
 	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
 	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
 	if (
 		(customerId !== undefined && !Number.isSafeInteger(customerId)) ||
+		(cashierId !== undefined && !Number.isSafeInteger(cashierId)) ||
 		(afterSeconds !== undefined && !Number.isSafeInteger(afterSeconds)) ||
-		(beforeSeconds !== undefined && !Number.isSafeInteger(beforeSeconds))
+		(beforeSeconds !== undefined && !Number.isSafeInteger(beforeSeconds)) ||
+		(orderby === undefined) !== (order === undefined)
 	) {
-		return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
+		return {
+			skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON,
+		};
 	}
 	const complete = limitText === 'all';
 	if (complete && afterSeconds === undefined && beforeSeconds === undefined) {
-		return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
+		return {
+			skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON,
+		};
 	}
 	const limit = complete
 		? ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS
@@ -78,8 +101,14 @@ export function parseOrderBrowserSchedulerDescriptor(
 			search,
 			limit,
 			...(customerId !== undefined ? { customerId } : {}),
+			...(cashierId !== undefined ? { cashierId } : {}),
+			...(store !== undefined ? { store } : {}),
 			...(afterSeconds !== undefined ? { afterSeconds } : {}),
 			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
+			...(orderby !== undefined
+				? { orderby: orderby as OrderBrowserSchedulerDescriptor['orderby'] }
+				: {}),
+			...(order !== undefined ? { order: order as OrderBrowserSchedulerDescriptor['order'] } : {}),
 			complete,
 			wooStatus: status === 'all' ? '' : status,
 		},
