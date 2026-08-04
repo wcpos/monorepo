@@ -20,6 +20,7 @@ import {
 	queryTotalCacheSchema,
 } from '../../../sync-engine/src/testing';
 import {
+	useAppliedCouponReferenceDemand,
 	useCollectionBinding,
 	useRelationalCollectionBinding,
 	useSearchSelect,
@@ -960,6 +961,44 @@ describe('query bindings', () => {
 		expect(
 			(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits.length
 		).toBeLessThanOrEqual(2);
+	});
+
+	it('declares coupon refresh demand when the cart coupon picker binding mounts', async () => {
+		renderHook(() => useSearchSelect('coupon'), { wrapper: Provider });
+
+		await waitFor(() =>
+			expect(engine.requireCalls).toContainEqual(
+				expect.objectContaining({ collection: 'coupons', kind: 'refresh', priority: 700 })
+			)
+		);
+	});
+
+	it('declares coupon and category demand for a cart that carries applied coupon lines', async () => {
+		renderHook(() => useAppliedCouponReferenceDemand(true), { wrapper: Provider });
+
+		// Replay resolves applied codes AND the category tree by scanning residents directly,
+		// so both collections have to be materialized by the cart's own demand (#952).
+		await waitFor(() =>
+			expect(engine.requireCalls).toContainEqual(
+				expect.objectContaining({ collection: 'coupons', kind: 'refresh', priority: 700 })
+			)
+		);
+		await waitFor(() =>
+			expect(engine.requireCalls).toContainEqual(
+				expect.objectContaining({ collection: 'categories', kind: 'refresh', priority: 700 })
+			)
+		);
+	});
+
+	it('declares no reference demand for a cart with no applied coupon lines', async () => {
+		renderHook(() => useAppliedCouponReferenceDemand(false), { wrapper: Provider });
+
+		await act(async () => Promise.resolve());
+		expect(
+			engine.requireCalls.filter(
+				(call) => call.collection === 'coupons' || call.collection === 'categories'
+			)
+		).toEqual([]);
 	});
 
 	it('binds cashier search-select to eligible customer roles only', async () => {

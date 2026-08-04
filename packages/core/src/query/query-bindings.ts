@@ -818,3 +818,40 @@ export function useAllCategoriesBinding() {
 		sort: [{ name: 'asc' }],
 	});
 }
+
+const COUPON_REPLAY_COUPONS_DESCRIPTOR: EngineQueryDescriptor = {
+	collection: 'coupons',
+	selector: {},
+	sort: [{ code: 'asc' }],
+};
+
+const COUPON_REPLAY_CATEGORIES_DESCRIPTOR: EngineQueryDescriptor = {
+	collection: 'products/categories',
+	selector: {},
+	sort: [{ name: 'asc' }],
+};
+
+/**
+ * Reference demand for replaying coupons already applied to the cart (#952).
+ *
+ * The coupon picker declares its own demand when it mounts, but coupon *replay*
+ * does not go through a query at all: `useRecalculateCoupons` scans the resident
+ * coupons collection for each applied code (throwing when one is missing) and the
+ * resident categories collection to enrich product categories with their ancestors,
+ * the way `wc_get_product_cat_ids()` does. Both scans are invisible to the
+ * requirement bridge.
+ *
+ * Before #952 those collections were greedily seeded at boot, so the scans always
+ * found their data. Now that reference lanes are on demand, a cart carrying coupon
+ * lines has to declare that demand itself — otherwise re-opening an order with a
+ * coupon on a device that never opened the picker fails to recalculate, and
+ * category-restricted coupons silently mis-validate against an empty tree.
+ *
+ * Declared only while coupon lines are present, and collapsed by the engine's
+ * existing `REFERENCE_REFRESH_DEDUPE_MS` window, so a coupon cart costs at most one
+ * refresh per collection per dedupe window rather than a pull per cart edit.
+ */
+export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): void {
+	useEngineBinding(COUPON_REPLAY_COUPONS_DESCRIPTOR, hasAppliedCoupons);
+	useEngineBinding(COUPON_REPLAY_CATEGORIES_DESCRIPTOR, hasAppliedCoupons);
+}

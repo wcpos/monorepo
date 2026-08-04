@@ -7,6 +7,7 @@ export {
 export {
 	useCollectionBinding,
 	useAllCategoriesBinding,
+	useAppliedCouponReferenceDemand,
 	useRelationalCollectionBinding,
 	useSearchSelect,
 } from './query-bindings';

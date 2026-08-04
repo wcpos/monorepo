@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservable, useObservableEagerState, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
+import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { calculateOrderTotals } from './calculate-order-totals';
 import { useFeeLineData } from './use-fee-line-data';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
@@ -40,6 +41,14 @@ export const useCartLines = () => {
 			coupon_lines: (couponLines || []).filter((item) => item.code != null),
 		};
 	}, [lineItems, feeLines, shippingLines, couponLines]);
+
+	/**
+	 * Coupon replay below scans the resident coupons/categories collections directly, which
+	 * declares no demand of its own. Since reference lanes fetch on demand (#952), a cart
+	 * carrying coupon lines has to declare that demand itself or the replay throws on a
+	 * device that never opened the coupon picker.
+	 */
+	useAppliedCouponReferenceDemand(cartLines.coupon_lines.length > 0);
 
 	/**
 	 * If line items change, and we have a percentage fee line, we need to recalculate the fee line total.
