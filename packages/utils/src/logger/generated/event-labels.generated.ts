@@ -18,6 +18,7 @@ export const SYNC_EVENT_TYPES = [
 	'coverage.existence-reconcile',
 	'coverage.gate.hit',
 	'coverage.gate.miss',
+	'coverage.ledger-rebuilt',
 	'coverage.require.error',
 	'coverage.require.log',
 	'coverage.require.outcome',
@@ -38,6 +39,7 @@ export const SYNC_EVENT_TYPES = [
 	'maintenance.lane.error',
 	'maintenance.lane.tick',
 	'product.browse-window.approximate',
+	'product.browse-window.brand-filter-ignored',
 	'push.aborted',
 	'push.conflict',
 	'push.error',
@@ -159,6 +161,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.coverage_gate_miss',
 		label: 'Fetched a search from your store',
+		introducedIn: '1.10.0',
+	},
+	'coverage.ledger-rebuilt': {
+		type: 'coverage.ledger-rebuilt',
+		domain: 'SYNC',
+		key: 'health.logs.event.coverage_ledger_rebuilt',
+		label: 'Rebuilt local sync bookkeeping',
 		introducedIn: '1.10.0',
 	},
 	'coverage.require.error': {
@@ -299,6 +308,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'PRODUCT',
 		key: 'health.logs.event.product_browse_window_approximate',
 		label: 'Product totals are approximate in a catalogue this large',
+		introducedIn: '1.10.0',
+	},
+	'product.browse-window.brand-filter-ignored': {
+		type: 'product.browse-window.brand-filter-ignored',
+		domain: 'PRODUCT',
+		key: 'health.logs.event.product_browse_window_brand_filter_ignored',
+		label: 'This WooCommerce version cannot filter products by brand',
 		introducedIn: '1.10.0',
 	},
 	'push.aborted': {

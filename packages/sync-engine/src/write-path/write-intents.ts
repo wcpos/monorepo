@@ -61,12 +61,7 @@ import {
 	RecordMutationQueue,
 	RxRecordMutationStorage,
 } from '@wcpos/sync-core';
-import type {
-	QueuedMutation,
-	RecordMutation,
-	RxRecordMutationCollection,
-	SyncObserver,
-} from '@wcpos/sync-core';
+import type { QueuedMutation, RxRecordMutationCollection, SyncObserver } from '@wcpos/sync-core';
 
 import {
 	MUTATION_QUEUE_RXDB_COLLECTION,
@@ -82,6 +77,7 @@ export type WriteIntent =
 			operation: 'create';
 			payload: Record<string, unknown>;
 			recordId: string;
+			explicit?: boolean;
 	  }
 	| {
 			collection: SyncCollectionName;
@@ -89,6 +85,7 @@ export type WriteIntent =
 			recordId: string;
 			payload: Record<string, unknown>;
 			baseRevision?: string;
+			explicit?: boolean;
 	  }
 	| {
 			collection: SyncCollectionName;
@@ -245,7 +242,7 @@ export async function enqueueWriteIntent(input: {
 			? (doc.toJSON() as { sync?: { revision?: string }; payload?: Record<string, unknown> })
 			: undefined;
 
-		let mutation: RecordMutation;
+		let mutation: QueuedMutation;
 		if (intent.operation === 'create') {
 			// A create must target a RESIDENT born-local row (the web contract): the
 			// ack write-back reconciles the server id/revision ONTO that row — a
@@ -255,7 +252,7 @@ export async function enqueueWriteIntent(input: {
 					`write(create): record "${intent.recordId}" is not resident in "${intent.collection}" — insert the born-local row first`
 				);
 			}
-			mutation = buildCreateMutation(
+			const built = buildCreateMutation(
 				{
 					collectionName: intent.collection,
 					payload: intent.payload as never,
@@ -263,6 +260,7 @@ export async function enqueueWriteIntent(input: {
 				},
 				deps
 			);
+			mutation = intent.explicit ? { ...built, explicit: true } : built;
 		} else {
 			if (!doc) {
 				throw new Error(
@@ -271,7 +269,7 @@ export async function enqueueWriteIntent(input: {
 			}
 			const storedRevision = stored?.sync?.revision ?? '';
 			if (intent.operation === 'update') {
-				mutation = buildUpdateMutation(
+				const built = buildUpdateMutation(
 					{
 						collectionName: intent.collection,
 						recordId: intent.recordId,
@@ -280,6 +278,7 @@ export async function enqueueWriteIntent(input: {
 					},
 					deps
 				);
+				mutation = intent.explicit ? { ...built, explicit: true } : built;
 			} else {
 				const baseRevision = intent.baseRevision ?? storedRevision;
 				if (!baseRevision && !createAhead) {
@@ -338,6 +337,9 @@ export async function enqueueWriteIntent(input: {
 				queuedAt: prior.queuedAt,
 				seq: prior.seq,
 				coalesced: (prior.coalesced ?? 0) + 1,
+				...(prior.explicit || (intent.operation !== 'delete' && intent.explicit)
+					? { explicit: true }
+					: {}),
 				status: 'pending' as const,
 			};
 			// Conditional swap: refuses when the prior row is no longer pending
@@ -422,7 +424,7 @@ export async function enqueueWriteIntent(input: {
 export async function requeueBornTwiceSnapshot(input: {
 	db: RxDatabase;
 	/** The pushed create whose payload the server discarded. */
-	mutation: RecordMutation;
+	mutation: QueuedMutation;
 	/** The ack's currentRevision — the EXISTING document's revision, the follow-up's base. */
 	ackRevision: string | null;
 	mintUuid: () => string;
@@ -468,6 +470,7 @@ export async function requeueBornTwiceSnapshot(input: {
 						? stripNonStringMetaDisplayFields({ ...mutation.payload, ...last.payload })
 						: { ...mutation.payload, ...last.payload },
 				coalesced: (last.coalesced ?? 0) + 1,
+				...(last.explicit || mutation.explicit ? { explicit: true } : {}),
 				status: 'pending',
 			};
 			if (!(await queue.coalesceInto(last.mutationId, replacement))) continue;
@@ -515,6 +518,11 @@ export async function requeueBornTwiceSnapshot(input: {
 				payload,
 				baseRevision: input.ackRevision,
 				queuedAt: input.now(),
+				// The follow-up carries every contributor's payload, so it carries the
+				// release too: one explicit contributor makes the recovery explicit.
+				...(mutation.explicit === true || rows.some((item) => item.explicit === true)
+					? { explicit: true }
+					: {}),
 			},
 			(fresh) =>
 				fresh

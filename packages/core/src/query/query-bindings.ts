@@ -17,8 +17,10 @@ import {
 	type EngineEvent,
 	type EngineLane,
 	type EngineQueryDescriptor,
+	isFullyRepresentedProductSelector,
 	observeEngineDatabases,
 	observeEngineQuery,
+	orderRangeBoundSeconds,
 	type QueryResult,
 	type QueryTotalCacheDocument,
 	registerActiveBinding,
@@ -314,20 +316,50 @@ function useDemand(
 	return { active$: active$.pipe(distinctUntilChanged()), searchActive$, sync };
 }
 
+/**
+ * A `created_via` slug the descriptor grammar can carry, in either the bare or `$eq` shape
+ * the translator can produce. Mirrors `orderBrowseDescriptor`'s `/^[a-z0-9_-]+$/` rule.
+ */
+function representedCreatedVia(value: unknown): boolean {
+	const slug =
+		typeof value === 'string'
+			? value
+			: value !== null && typeof value === 'object' && Object.keys(value).length === 1
+				? (value as Record<string, unknown>).$eq
+				: undefined;
+	return typeof slug === 'string' && /^[a-z0-9_-]+$/.test(slug);
+}
+
+/**
+ * Whether the coverage lane for this selector's descriptor covers exactly the selector.
+ *
+ * The rules below have to match `orderBrowseDescriptor` in `@wcpos/query`, which is the
+ * thing that decides what actually reaches the wire. Anything this predicate accepts but
+ * the encoder drops widens the lane relative to the selector, and `projectTotal` then
+ * reports that wider lane's size as the grid's total.
+ */
 function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boolean {
 	return Object.entries(selector).every(([field, value]) => {
 		if (field === 'search') return typeof value === 'string';
-		if (field === 'created_via') return typeof value === 'string';
+		if (field === 'created_via') return representedCreatedVia(value);
 		if (field === '$and') {
 			if (!Array.isArray(value) || value.length === 0) return false;
 			return value.every((condition) => {
 				if (condition === null || typeof condition !== 'object') return false;
+				if ('created_via' in (condition as Record<string, unknown>)) {
+					return representedCreatedVia((condition as Record<string, unknown>).created_via);
+				}
 				const metaData = (condition as Record<string, unknown>).meta_data;
 				if (metaData === null || typeof metaData !== 'object') return false;
 				const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
 				if (elemMatch === null || typeof elemMatch !== 'object') return false;
 				const { key, value: metaValue } = elemMatch as Record<string, unknown>;
-				return (key === '_pos_user' || key === '_pos_store') && typeof metaValue === 'string';
+				// The encoder only emits `:cashier=`/`:store=` for an all-digits meta value.
+				return (
+					(key === '_pos_user' || key === '_pos_store') &&
+					typeof metaValue === 'string' &&
+					/^\d+$/.test(metaValue)
+				);
 			});
 		}
 		if (field === 'customer_id') {
@@ -345,7 +377,14 @@ function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boo
 			const entries = Object.entries(value as Record<string, unknown>);
 			const valid = entries.every(
 				([operator, boundary]) =>
-					(operator === '$gte' || operator === '$lte') && typeof boundary === 'string'
+					(operator === '$gte' || operator === '$lte') &&
+					// A bound the encoder cannot resolve to epoch seconds is dropped from the key,
+					// which would leave the lane unbounded relative to the selector — so ask the
+					// encoder's own parser rather than restating its rule here.
+					// A bound the encoder cannot resolve to epoch seconds is dropped from the key,
+					// which would leave the lane unbounded relative to the selector — so ask the
+					// encoder's own parser rather than restating its rule here.
+					orderRangeBoundSeconds(boundary) !== undefined
 			);
 			return entries.length > 0 && valid;
 		}
@@ -364,6 +403,15 @@ function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boo
 function coverageQueryKey(id: string, descriptor: EngineQueryDescriptor): string | null {
 	const selector = selectorWithSearch(descriptor);
 	if (descriptor.collection === 'orders' && !isFullyRepresentedOrderSelector(selector)) return null;
+	// Products browses became wired+windowed when filters went on the wire (2026-08-04
+	// ruling), and the bridge deliberately emits only the REPRESENTABLE subset of the
+	// selector — an attribute match or a mixed `$or` keeps narrowing locally. That superset
+	// is right for demand and wrong for a total: a browse filtered on something the grammar
+	// cannot carry would otherwise report the wider window's size as its own count. Unlike
+	// the orders predicate above this asks the encoder itself, so the two cannot drift.
+	if (descriptor.collection === 'products' && !isFullyRepresentedProductSelector(selector)) {
+		return null;
+	}
 	const requirement = requirementsForQuery({
 		id,
 		collectionName: descriptor.collection,

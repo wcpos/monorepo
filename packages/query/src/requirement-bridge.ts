@@ -12,8 +12,12 @@
  *    `engine.require({collection, kind: 'search', term, limit})`.
  *  - **order query descriptors** (unbounded orders browse) →
  *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
- *    `orders:browser:status=…:search=…:limit=…` descriptor the engine parses.
+ *    `orders:browser:status=…[:customer=…][:cashier=…][:store=…][:after=…][:before=…]`
+ *    `[:orderby=…:order=…]:search=…:limit=…` descriptor the engine parses. Structured
+ *    dimensions precede `:search=`, which stays the last free-text field; `orderby`
+ *    and `order` only ever appear as a pair, and the `id`/`desc` default is omitted.
  *  - **the products browse window** (products browse — ADR 0027 §2, #909) →
+
  *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
  *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor plus optional native
  *    filter dimensions. It carries the grid's own limit, sort, and representable filters.
@@ -62,12 +66,41 @@ const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
 
 /** The web scheduler's browse-lane cap; the engine rejects larger order descriptors. */
 const ORDER_BROWSE_MAX_LIMIT = 200;
+
+/**
+ * Interactive priority for a browse the cashier has actually narrowed (customer, cashier,
+ * store or a date range) — ratified on #943: a cashier-applied dimension rides the same
+ * priority band as the browse it replaces.
+ */
+const ORDER_SCOPED_QUERY_PRIORITY = 700;
+/**
+ * UI sort field → WC core orders `orderby`. Unlike the products map below, a field absent
+ * here does NOT fall back to an unsorted window silently — it falls back to the default
+ * `id desc` browse, which for an ascending sort is the far end of the catalog.
+ *
+ * `number → id` is deliberate. WC REST's orders `orderby` enum has no `number`, and core's
+ * `get_order_number()` returns the post ID, so under stock WooCommerce this mapping is
+ * exact. A third-party sequential-order-number plugin can decouple the two, and then a
+ * `number asc` window is the first N by ID rather than by number. Dropping the mapping does
+ * not fix that case — it fetches the NEWEST orders for an ascending browse, a strictly worse
+ * slice — and it would regress the stock case from exact to wrong. The residual is a bounded
+ * browse showing a near-miss slice on such stores; the rows are still reachable by search.
+ */
 const ORDER_BROWSE_ORDERBY_BY_SORT_FIELD = {
 	date_created_gmt: 'date',
 	date_modified_gmt: 'modified',
 	number: 'id',
 	id: 'id',
 } as const;
+
+/**
+ * The "give me every result" sentinel a screen passes when it wants a ranged fetch run to
+ * completion. Reports is the only such screen (`REPORTS_ALL_RESULTS_LIMIT =
+ * Number.MAX_SAFE_INTEGER`); ordinary grids extend their limit one page at a time (orders:
+ * 10, 20 … 200, 210 …) and must stay windowed even once they climb past the browse cap,
+ * per the ruling that Reports is the ONLY fetch-to-completion case.
+ */
+const ORDER_COMPLETE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER;
 
 function finiteWooIds(selector: Record<string, unknown> | undefined): number[] | null {
 	const idSelector = selector?.id as unknown;
@@ -96,11 +129,40 @@ function finiteWooIds(selector: Record<string, unknown> | undefined): number[] |
 	return null;
 }
 
+/**
+ * A `date_created_gmt` range bound as epoch SECONDS, or `undefined` when the bound cannot be
+ * represented in the descriptor grammar. Exported because coverage eligibility in
+ * `@wcpos/core` has to accept exactly the bounds this encodes — a bound one side accepts and
+ * the other drops makes the coverage lane wider than the selector it reports for.
+ *
+ * `YYYY-MM-DD` is already UTC-anchored by the Date Time String Format; `YYYY-MM-DDZ` is NOT a
+ * production of that format, so appending `Z` would drop it into each engine's
+ * implementation-defined fallback (this app runs on Hermes and JSC as well as V8). Only a
+ * time-of-day with no offset needs the explicit UTC designator — the shape
+ * `convertLocalDateToUTCString` emits (`yyyy-MM-dd'T'HH:mm:ss`).
+ */
+export function orderRangeBoundSeconds(value: unknown): number | undefined {
+	if (typeof value !== 'string') return undefined;
+	const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+	const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+	const normalized = dateOnly || hasTimezone ? value : `${value}Z`;
+	const milliseconds = Date.parse(normalized);
+	if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
+	return Math.floor(milliseconds / 1_000);
+}
+
+/**
+ * `scoped` is the cashier-applied-dimension flag that earns interactive priority. It is
+ * returned alongside the key rather than re-derived by sniffing the key text: `search` is
+ * arbitrary cashier input, so a term like `note:customer=42` would match a
+ * `queryKey.includes(':customer=')` test and promote an entirely unfiltered browse. Sort is
+ * deliberately NOT scoping — a sort change reshapes the window, it does not narrow it.
+ */
 function orderBrowseDescriptor(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
 	sort: readonly RequirementSortPart[] | undefined
-): string {
+): { queryKey: string; scoped: boolean } {
 	const statusValue = (() => {
 		const status = selector?.status as unknown;
 		if (typeof status === 'string' && status.length > 0) return status;
@@ -126,8 +188,17 @@ function orderBrowseDescriptor(
 		Number.isSafeInteger(customerId) && (customerId as number) >= 0
 			? `:customer=${customerId}`
 			: '';
+	// Only `status`, `customer_id` and `dateRange` are promoted to the selector ROOT
+	// (`REQUIREMENT_TOP_LEVEL_FIELDS` in query-state-translator); cashier and store compile
+	// into `$and` conditions instead, because both meta filters land on the same `meta_data`
+	// key and would otherwise overwrite each other. Every dimension below therefore has to
+	// look in both places.
+	const conditionsToScan = () => [
+		selector,
+		...(Array.isArray(selector?.$and) ? selector.$and : []),
+	];
 	const metaValue = (key: '_pos_user' | '_pos_store'): string | undefined => {
-		const conditions = [selector, ...(Array.isArray(selector?.$and) ? selector.$and : [])];
+		const conditions = conditionsToScan();
 		for (const condition of conditions) {
 			if (condition === null || typeof condition !== 'object') continue;
 			const metaData = (condition as Record<string, unknown>).meta_data;
@@ -149,13 +220,22 @@ function orderBrowseDescriptor(
 	const cashierPart =
 		cashierId !== undefined && Number.isSafeInteger(cashierId) ? `:cashier=${cashierId}` : '';
 	const metaStore = metaValue('_pos_store');
-	const createdViaValue = selector?.created_via;
-	const createdVia =
-		typeof createdViaValue === 'string'
-			? createdViaValue
-			: createdViaValue !== null && typeof createdViaValue === 'object'
-				? (createdViaValue as Record<string, unknown>).$eq
-				: undefined;
+	// A store-less install selects its store by slug, which the translator compiles to
+	// `created_via` — a nested `$and` condition, not a root field (see the note above). A
+	// root-only read silently dropped `:store=` for exactly that case, leaving the ranged
+	// reports fetch unscoped and letting other stores' orders consume its record backstop.
+	const createdVia = (() => {
+		for (const condition of conditionsToScan()) {
+			if (condition === null || typeof condition !== 'object') continue;
+			const value = (condition as Record<string, unknown>).created_via;
+			if (typeof value === 'string') return value;
+			if (value !== null && typeof value === 'object') {
+				const eq = (value as Record<string, unknown>).$eq;
+				if (typeof eq === 'string') return eq;
+			}
+		}
+		return undefined;
+	})();
 	const store =
 		typeof metaStore === 'string' && /^\d+$/.test(metaStore)
 			? metaStore
@@ -164,15 +244,10 @@ function orderBrowseDescriptor(
 				: undefined;
 	const storePart = store === undefined ? '' : `:store=${store}`;
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
-	const epochSeconds = (value: unknown): number | undefined => {
-		if (typeof value !== 'string') return undefined;
-		const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`;
-		const milliseconds = Date.parse(normalized);
-		if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
-		return Math.floor(milliseconds / 1_000);
-	};
-	const afterSeconds = range && typeof range === 'object' ? epochSeconds(range.$gte) : undefined;
-	const beforeSeconds = range && typeof range === 'object' ? epochSeconds(range.$lte) : undefined;
+	const afterSeconds =
+		range && typeof range === 'object' ? orderRangeBoundSeconds(range.$gte) : undefined;
+	const beforeSeconds =
+		range && typeof range === 'object' ? orderRangeBoundSeconds(range.$lte) : undefined;
 	const rangePart = `${afterSeconds === undefined ? '' : `:after=${afterSeconds}`}${
 		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
 	}`;
@@ -188,14 +263,25 @@ function orderBrowseDescriptor(
 		orderby === undefined || (orderby === 'id' && direction === 'desc')
 			? ''
 			: `:orderby=${orderby}:order=${direction}`;
-	if (rangePart && typeof limit === 'number' && limit > ORDER_BROWSE_MAX_LIMIT) {
-		return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:limit=all`;
+	// Structured dimensions (customer, cashier, store, the range bounds, then the sort pair)
+	// precede `:search=` so arbitrary search text can never be read back as a filter or sort —
+	// see the grammar note in order-browser-scheduler-descriptor.ts.
+	const dimensionParts = `${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}`;
+	const filtered = Boolean(customerPart || cashierPart || storePart || rangePart);
+	if (rangePart && typeof limit === 'number' && limit >= ORDER_COMPLETE_REQUEST_LIMIT) {
+		return {
+			queryKey: `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=all`,
+			scoped: true,
+		};
 	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:limit=${boundedLimit}`;
+	return {
+		queryKey: `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=${boundedLimit}`,
+		scoped: filtered,
+	};
 }
 
 /**
@@ -232,7 +318,7 @@ function productBrowseWindowDescriptor(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
 	sort: readonly RequirementSortPart[] | undefined
-): { queryKey: string; filtered: boolean } {
+): { queryKey: string; filtered: boolean; residual: boolean } {
 	// The grid extends its limit 10 rows at a time; quantizing to the window step keeps
 	// the coverage-lane space small (limit=100, 200, 300 …) instead of one lane per tick.
 	const requested =
@@ -253,11 +339,61 @@ function productBrowseWindowDescriptor(
 		(orderby === PRODUCT_BROWSE_DEFAULT_ORDERBY && order === PRODUCT_BROWSE_DEFAULT_ORDER)
 			? ''
 			: `:orderby=${orderby}:order=${order}`;
+	const { filters, residual } = productBrowseWindowFilters(selector);
+	const filterPart = ['category', 'tag', 'brand', 'featured', 'on_sale', 'stock_status']
+		.filter((field) => filters[field] !== undefined)
+		.map((field) => `:${field}=${filters[field]}`)
+		.join('');
+	return {
+		queryKey: `${base}${sortPart}${filterPart}`,
+		filtered: filterPart.length > 0,
+		residual,
+	};
+}
+
+/**
+ * Split a products selector into the dimensions the browse-window grammar can carry and
+ * whether anything was left over.
+ *
+ * `residual` is true when some part of the selector could NOT be encoded — an attribute or
+ * variation match, a status, a bare uuid, a mixed `$or`. Those predicates keep narrowing
+ * locally, which is exactly right for DEMAND (the wire window is a deliberate superset) but
+ * makes the coverage lane wider than the selector it would be reported for. Callers that
+ * project a total off the lane must consult this rather than restating these rules
+ * elsewhere — a rule stated twice is a rule that drifts.
+ */
+/** A condition value in either the bare or single-key `$eq` shape the translator can emit. */
+function eqValue(value: unknown): string | undefined {
+	if (typeof value === 'string') return value;
+	if (value === null || typeof value !== 'object') return undefined;
+	const record = value as Record<string, unknown>;
+	return Object.keys(record).length === 1 && typeof record.$eq === 'string'
+		? record.$eq
+		: undefined;
+}
+
+export function productBrowseWindowFilters(selector: Record<string, unknown> | undefined): {
+	filters: Record<string, string>;
+	residual: boolean;
+} {
 	const filters: Record<string, string> = {};
-	const conditions = [selector, ...(Array.isArray(selector?.$and) ? selector.$and : [])];
+	let residual = false;
+	// An absent selector is the UNFILTERED browse — nothing to represent, nothing left over.
+	// A nullish entry inside `$and` is a different thing: a predicate that cannot be encoded.
+	const conditions = [
+		...(selector ? [selector] : []),
+		...(Array.isArray(selector?.$and) ? selector.$and : []),
+	];
 	for (const condition of conditions) {
-		if (condition === null || typeof condition !== 'object') continue;
+		if (condition === null || typeof condition !== 'object') {
+			residual = true;
+			continue;
+		}
 		const record = condition as Record<string, unknown>;
+		// Keys this condition contributed to the wire key. Anything left over at the end is
+		// a predicate only the local selector enforces.
+		const consumed = new Set<string>();
+		if (condition === selector && Array.isArray(record.$and)) consumed.add('$and');
 		const alternatives = Array.isArray(record.$or) ? record.$or : [];
 		for (const [local, remote] of [
 			['categories', 'category'],
@@ -271,31 +407,49 @@ function productBrowseWindowDescriptor(
 				const elemMatch = (taxonomy as Record<string, unknown>).$elemMatch;
 				if (elemMatch === null || typeof elemMatch !== 'object') return null;
 				const id = (elemMatch as Record<string, unknown>).id;
+				// A one-key `$elemMatch` is the whole predicate; `{id, option}` (the attribute
+				// matcher's shape) narrows further than `?category=` can express.
+				if (Object.keys(elemMatch as Record<string, unknown>).length !== 1) return null;
 				return Number.isSafeInteger(id) && (id as number) > 0 ? (id as number) : null;
 			});
 			if (ids.length > 0 && ids.every((id): id is number => id !== null)) {
 				const previous = filters[remote]?.split(',').map(Number) ?? [];
 				filters[remote] = [...new Set([...previous, ...ids])].sort((a, b) => a - b).join(',');
+				consumed.add('$or');
 			}
 		}
 		for (const field of ['featured', 'on_sale'] as const) {
-			if (typeof record[field] === 'boolean') filters[field] = record[field] ? '1' : '0';
+			if (typeof record[field] === 'boolean') {
+				filters[field] = record[field] ? '1' : '0';
+				consumed.add(field);
+			}
 		}
-		const stock = record.stock_status;
-		const stockValue =
-			typeof stock === 'string'
-				? stock
-				: stock !== null && typeof stock === 'object'
-					? (stock as Record<string, unknown>).$eq
-					: undefined;
-		if (PRODUCT_STOCK_STATUSES.has(stockValue as string))
+		const stockValue = eqValue(record.stock_status);
+		if (PRODUCT_STOCK_STATUSES.has(stockValue as string)) {
 			filters.stock_status = stockValue as string;
+			consumed.add('stock_status');
+		}
+		// `status` carries NO dimension on the key, yet `status: 'publish'` is still fully
+		// represented: fetchProductBrowseWindow hardcodes `status=publish` on every window
+		// request, so a published-only selector is exactly what the lane holds. The POS
+		// products grid sets this on every browse — without it the main grid would lose its
+		// coverage total. Any OTHER status has an empty intersection with the window.
+		if (eqValue(record.status) === 'publish') consumed.add('status');
+		if (Object.keys(record).some((key) => !consumed.has(key))) residual = true;
 	}
-	const filterPart = ['category', 'tag', 'brand', 'featured', 'on_sale', 'stock_status']
-		.filter((field) => filters[field] !== undefined)
-		.map((field) => `:${field}=${filters[field]}`)
-		.join('');
-	return { queryKey: `${base}${sortPart}${filterPart}`, filtered: filterPart.length > 0 };
+	return { filters, residual };
+}
+
+/**
+ * Whether the browse-window coverage lane for this products selector covers EXACTLY the
+ * selector — i.e. every predicate reached the wire. The products mirror of
+ * `isFullyRepresentedOrderSelector` in `@wcpos/core`, but kept here beside the encoder so
+ * the two can never disagree.
+ */
+export function isFullyRepresentedProductSelector(
+	selector: Record<string, unknown> | undefined
+): boolean {
+	return !productBrowseWindowFilters(selector).residual;
 }
 
 export interface RequirementInput {
@@ -350,17 +504,8 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 	}
 
 	if (engineCollection === 'orders') {
-		const queryKey = orderBrowseDescriptor(selector, limit, input.sort);
-		const priority =
-			input.priority ??
-			(queryKey.includes(':customer=') ||
-			queryKey.includes(':cashier=') ||
-			queryKey.includes(':store=') ||
-			queryKey.includes(':after=') ||
-			queryKey.includes(':before=') ||
-			queryKey.endsWith(':limit=all')
-				? 700
-				: undefined);
+		const { queryKey, scoped } = orderBrowseDescriptor(selector, limit, input.sort);
+		const priority = input.priority ?? (scoped ? ORDER_SCOPED_QUERY_PRIORITY : undefined);
 		return [
 			{
 				id: `${input.id}:orders-query`,

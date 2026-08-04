@@ -188,6 +188,12 @@ const SCHEDULER_TIER_CREATORS: Record<string, CollectionCreator> = {
 	},
 };
 
+export const DERIVABLE_METADATA_COLLECTIONS = [
+	'coverageRecords',
+	'coverageLanes',
+	'schedulerTaskStates',
+] as const;
+
 /** The full addCollections() argument for one engine scope database. */
 export function engineCollectionCreators(): Record<string, CollectionCreator> {
 	return {
@@ -245,4 +251,20 @@ export async function resetEngineCollection(
 	}
 	await live.remove();
 	await db.addCollections({ [rxdbName]: creatorFor(name) as never });
+}
+
+/** Drop and recreate only the hard-whitelisted, server-derivable metadata stores. */
+export async function resetDerivableMetadataCollection(
+	db: RxDatabase,
+	name: string
+): Promise<void> {
+	if (!(DERIVABLE_METADATA_COLLECTIONS as readonly string[]).includes(name)) {
+		throw new Error(`Collection "${name}" is not derivable metadata`);
+	}
+	const live = db.collections[name];
+	if (!live) {
+		throw new Error(`Collection "${name}" is not open on engine database ${db.name}`);
+	}
+	await live.remove();
+	await db.addCollections({ [name]: SCHEDULER_TIER_CREATORS[name] as never });
 }

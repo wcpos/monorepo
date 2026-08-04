@@ -48,6 +48,27 @@ async function queueWith(...mutations: RecordMutation[]) {
 }
 
 describe('drainMutationQueue', () => {
+	it('holds a mutation without claiming it or applying backoff', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'held' }),
+			mut({ mutationId: 'ready', recordId: 'rec-B' })
+		);
+		const push = vi.fn(async (mutation: RecordMutation) => ok(mutation));
+
+		const result = await drainMutationQueue({
+			queue: q,
+			push,
+			shouldHold: async (mutation) => mutation.mutationId === 'held',
+		});
+
+		expect(result).toMatchObject({ held: 1, pushed: 1, failed: 0, deferred: 0 });
+		expect(push).toHaveBeenCalledOnce();
+		expect(push.mock.calls[0]?.[0].mutationId).toBe('ready');
+		expect((await q.pending())[0]).toMatchObject({ mutationId: 'held' });
+		expect((await q.pending())[0]).not.toHaveProperty('attempts');
+		expect((await q.pending())[0]).not.toHaveProperty('nextAttemptAt');
+	});
+
 	it('pushes each pending mutation, applies the ack, and acknowledges on success', async () => {
 		const q = await queueWith(
 			mut({ mutationId: 'm1', queuedAt: '..1' }),
@@ -55,7 +76,14 @@ describe('drainMutationQueue', () => {
 		);
 		const applyAck = vi.fn(async () => {});
 		const result = await drainMutationQueue({ queue: q, push: async (m) => ok(m), applyAck });
-		expect(result).toEqual({ pushed: 2, conflicts: [], failed: 0, deferred: 0, rejected: [] });
+		expect(result).toEqual({
+			pushed: 2,
+			held: 0,
+			conflicts: [],
+			failed: 0,
+			deferred: 0,
+			rejected: [],
+		});
 		expect(applyAck).toHaveBeenCalledTimes(2);
 		expect(await q.pending()).toEqual([]); // fully drained
 	});

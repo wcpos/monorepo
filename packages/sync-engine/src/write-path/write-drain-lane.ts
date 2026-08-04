@@ -104,6 +104,7 @@ export type WriteDrainReport = {
 	reason?: string;
 	error?: string;
 	pushed?: number;
+	held?: number;
 	conflicts?: number;
 	deferred?: number;
 	failed?: number;
@@ -217,6 +218,18 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						const result = await drainMutationQueue({
 							queue,
 							signal: tickAbort.signal,
+							shouldHold: async (mutation) => {
+								if (
+									(mutation.status !== undefined && mutation.status !== 'pending') ||
+									mutation.collectionName !== 'orders' ||
+									mutation.operation === 'delete' ||
+									mutation.explicit === true
+								)
+									return false;
+								const doc = await database.collections.orders?.findOne(mutation.recordId).exec();
+								const row = doc?.toJSON() as { status?: unknown } | undefined;
+								return row?.status === 'pos-open';
+							},
 							currentRevision: async (mutation) => {
 								const doc = await database.collections[mutation.collectionName]
 									?.findOne(mutation.recordId)
@@ -410,6 +423,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							lane: 'write-drain',
 							status: 'ran',
 							pushed: result.pushed,
+							held: result.held,
 							conflicts: result.conflicts.length,
 							deferred: result.deferred,
 							failed: result.failed,

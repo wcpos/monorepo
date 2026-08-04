@@ -40,6 +40,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.coverage_gate_hit');
 		case 'coverage.gate.miss':
 			return t('health.logs.event.coverage_gate_miss');
+		case 'coverage.ledger-rebuilt':
+			return t('health.logs.event.coverage_ledger_rebuilt');
 		case 'coverage.require.error':
 			return t('health.logs.event.coverage_require_error');
 		case 'coverage.require.log':
@@ -80,6 +82,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.maintenance_lane_tick');
 		case 'product.browse-window.approximate':
 			return t('health.logs.event.product_browse_window_approximate');
+		case 'product.browse-window.brand-filter-ignored':
+			return t('health.logs.event.product_browse_window_brand_filter_ignored');
 		case 'push.aborted':
 			return t('health.logs.event.push_aborted');
 		case 'push.conflict':
