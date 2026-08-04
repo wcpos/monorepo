@@ -56,6 +56,7 @@ export type SeedOrderFilterSchedulerTaskInput = {
 	status: string;
 	search: string;
 	limit: number;
+	customerId?: number;
 	afterSeconds?: number;
 	beforeSeconds?: number;
 	complete?: boolean;
@@ -103,11 +104,12 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 
 	const status = input.status.trim() || 'all';
 	const search = input.search.trim();
+	const customerPart = input.customerId === undefined ? '' : `:customer=${input.customerId}`;
 	const rangePart = `${
 		input.afterSeconds === undefined ? '' : `:after=${input.afterSeconds}`
 	}${input.beforeSeconds === undefined ? '' : `:before=${input.beforeSeconds}`}`;
 	const limitPart = input.complete ? 'all' : input.limit;
-	const queryKey = `orders:browser:status=${status}:search=${search}${rangePart}:limit=${limitPart}`;
+	const queryKey = `orders:browser:status=${status}:search=${search}${customerPart}${rangePart}:limit=${limitPart}`;
 	const descriptorDecision = parseOrderBrowserSchedulerDescriptor(queryKey);
 	if (!descriptorDecision || 'skipReason' in descriptorDecision) {
 		throw new Error(
@@ -116,9 +118,10 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 	}
 	const { limit } = descriptorDecision.descriptor;
 	const searchPart = search === '' ? '' : `.search.${search}`;
-	const requirementId = rangePart
-		? queryKey.replaceAll(':', '.')
-		: `orders.browser.status.${status}${searchPart}.limit.${limitPart}`;
+	const requirementId =
+		customerPart || rangePart
+			? queryKey.replaceAll(':', '.')
+			: `orders.browser.status.${status}${searchPart}.limit.${limitPart}`;
 	if (queryKey.length > SCHEDULER_TASK_KEY_MAX_LENGTH) {
 		throw new Error(
 			`Browser order scheduler descriptor queryKey exceeds schema limit: ${queryKey.length} > ${SCHEDULER_TASK_KEY_MAX_LENGTH}`

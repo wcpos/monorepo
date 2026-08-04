@@ -95,6 +95,7 @@ function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => numb
 	return {
 		status: decision.descriptor.wooStatus,
 		search: decision.descriptor.search,
+		customerId: decision.descriptor.customerId,
 		...(limit !== undefined ? { limit } : {}),
 		afterSeconds: decision.descriptor.afterSeconds,
 		beforeSeconds: decision.descriptor.beforeSeconds,
@@ -299,6 +300,7 @@ async function fetchBrowserOrderQuery(
 		const query = new URLSearchParams();
 		if (descriptor.status) query.set('status', descriptor.status);
 		if (descriptor.search) query.set('search', descriptor.search);
+		if (descriptor.customerId !== undefined) query.set('customer', String(descriptor.customerId));
 		if (descriptor.afterSeconds !== undefined)
 			query.set('after', new Date(descriptor.afterSeconds * 1_000).toISOString());
 		if (descriptor.beforeSeconds !== undefined)

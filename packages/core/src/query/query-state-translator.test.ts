@@ -148,9 +148,9 @@ describe('query-state translator', () => {
 
 		expect(translated.selector).toEqual({
 			status: 'processing',
+			customer_id: 42,
 			date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' },
 			$and: [
-				{ customer_id: 42 },
 				{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
 				{ meta_data: { $elemMatch: { key: '_pos_store', value: '3' } } },
 			],
@@ -221,6 +221,7 @@ describe('query-state translator', () => {
 				...requirementInput,
 				selector: {
 					status: 'processing',
+					customer_id: 42,
 					date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' },
 				},
 			})

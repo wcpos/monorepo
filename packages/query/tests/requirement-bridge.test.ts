@@ -127,6 +127,29 @@ describe('requirementsForQuery', () => {
 		});
 	});
 
+	it('maps customer order filters to interactive windowed descriptors', () => {
+		for (const customer_id of [42, { $eq: 0 }]) {
+			expect(
+				requirementsForQuery({
+					id: 'customer-orders',
+					collectionName: 'orders',
+					selector: { status: 'processing', customer_id },
+					limit: 25,
+				})
+			).toEqual([
+				{
+					id: 'customer-orders:orders-query',
+					collection: 'orders',
+					kind: 'query',
+					queryKey: `orders:browser:status=processing:search=:customer=${
+						typeof customer_id === 'number' ? customer_id : customer_id.$eq
+					}:limit=25`,
+					priority: 700,
+				},
+			]);
+		}
+	});
+
 	it('maps reports date ranges to ranged complete order descriptors', () => {
 		expect(
 			requirementsForQuery({
@@ -162,8 +185,8 @@ describe('requirementsForQuery', () => {
 		});
 		expect(requirement).toMatchObject({
 			queryKey: 'orders:browser:status=all:search=:after=1782864000:limit=25',
+			priority: 700,
 		});
-		expect(requirement).not.toHaveProperty('priority');
 	});
 
 	it('creates no demand for a FILTERED products browse', () => {

@@ -7,6 +7,7 @@ export type OrderBrowserSchedulerDescriptor = {
 	status: string;
 	search: string;
 	limit: number;
+	customerId?: number;
 	afterSeconds?: number;
 	beforeSeconds?: number;
 	complete: boolean;
@@ -40,16 +41,20 @@ export function parseOrderBrowserSchedulerDescriptor(
 	const match = /^orders:browser:status=([^:]*):search=(.*):limit=(\d+|all)$/.exec(queryKey);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 
-	const [, status, searchAndRange, limitText] = match;
+	const [, status, searchAndDimensions, limitText] = match;
 	if (status === '') return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
-	const rangeMatch = /^(.*?)(?::after=(\d+))?(?::before=(\d+))?$/.exec(searchAndRange)!;
-	const [, search, afterText, beforeText] = rangeMatch;
-	if (search.includes(':after=') || search.includes(':before=')) {
+	const dimensionsMatch = /^(.*?)(?::customer=(\d+))?(?::after=(\d+))?(?::before=(\d+))?$/.exec(
+		searchAndDimensions
+	)!;
+	const [, search, customerText, afterText, beforeText] = dimensionsMatch;
+	if (search.includes(':customer=') || search.includes(':after=') || search.includes(':before=')) {
 		return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
 	}
+	const customerId = customerText === undefined ? undefined : Number(customerText);
 	const afterSeconds = afterText === undefined ? undefined : Number(afterText);
 	const beforeSeconds = beforeText === undefined ? undefined : Number(beforeText);
 	if (
+		(customerId !== undefined && !Number.isSafeInteger(customerId)) ||
 		(afterSeconds !== undefined && !Number.isSafeInteger(afterSeconds)) ||
 		(beforeSeconds !== undefined && !Number.isSafeInteger(beforeSeconds))
 	) {
@@ -70,6 +75,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 			status,
 			search,
 			limit,
+			...(customerId !== undefined ? { customerId } : {}),
 			...(afterSeconds !== undefined ? { afterSeconds } : {}),
 			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
 			complete,

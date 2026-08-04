@@ -96,6 +96,22 @@ function orderBrowseDescriptor(
 		return 'all';
 	})();
 	const searchValue = typeof selector?.search === 'string' ? (selector.search as string) : '';
+	const customerValue = selector?.customer_id;
+	const customerId = (() => {
+		if (typeof customerValue === 'number') return customerValue;
+		if (
+			customerValue &&
+			typeof customerValue === 'object' &&
+			Object.keys(customerValue).length === 1
+		) {
+			return (customerValue as Record<string, unknown>).$eq;
+		}
+		return undefined;
+	})();
+	const customerPart =
+		Number.isSafeInteger(customerId) && (customerId as number) >= 0
+			? `:customer=${customerId}`
+			: '';
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
 	const epochSeconds = (value: unknown): number | undefined => {
 		if (typeof value !== 'string') return undefined;
@@ -110,13 +126,13 @@ function orderBrowseDescriptor(
 		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
 	}`;
 	if (rangePart && typeof limit === 'number' && limit > ORDER_BROWSE_MAX_LIMIT) {
-		return `orders:browser:status=${statusValue}:search=${searchValue}${rangePart}:limit=all`;
+		return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${rangePart}:limit=all`;
 	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}:search=${searchValue}${rangePart}:limit=${boundedLimit}`;
+	return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${rangePart}:limit=${boundedLimit}`;
 }
 
 /**
@@ -230,7 +246,14 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 
 	if (engineCollection === 'orders') {
 		const queryKey = orderBrowseDescriptor(selector, limit);
-		const priority = input.priority ?? (queryKey.endsWith(':limit=all') ? 700 : undefined);
+		const priority =
+			input.priority ??
+			(queryKey.includes(':customer=') ||
+			queryKey.includes(':after=') ||
+			queryKey.includes(':before=') ||
+			queryKey.endsWith(':limit=all')
+				? 700
+				: undefined);
 		return [
 			{
 				id: `${input.id}:orders-query`,

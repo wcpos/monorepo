@@ -64,9 +64,30 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 		});
 	});
 
+	it('parses customer descriptors with and without a range, including guest orders', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=processing:search=:customer=42:limit=25'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({ customerId: 42, limit: 25, complete: false }),
+		});
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:search=:customer=0:after=1782864000:limit=25'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({
+				customerId: 0,
+				afterSeconds: 1782864000,
+			}),
+		});
+	});
+
 	it('rejects unbounded completion and malformed epoch values', () => {
 		for (const queryKey of [
 			'orders:browser:status=all:search=:limit=all',
+			'orders:browser:status=all:search=:customer=42:limit=all',
 			'orders:browser:status=all:search=:after=-1:limit=all',
 			'orders:browser:status=all:search=:after=1.5:limit=all',
 			'orders:browser:status=all:search=:before=nope:limit=25',
@@ -75,6 +96,16 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 			expect(parseOrderBrowserSchedulerDescriptor(queryKey)).toEqual({
 				skipReason: 'descriptor is not supported',
 			});
+		}
+	});
+
+	it('rejects malformed customer values', () => {
+		for (const customer of ['-1', '1.5', 'nope', '9007199254740992']) {
+			expect(
+				parseOrderBrowserSchedulerDescriptor(
+					`orders:browser:status=all:search=:customer=${customer}:limit=25`
+				)
+			).toEqual({ skipReason: 'descriptor is not supported' });
 		}
 	});
 
