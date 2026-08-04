@@ -71,6 +71,7 @@ export const usePushDocument = () => {
 					operation: remoteId == null ? 'create' : 'update',
 					recordId,
 					payload,
+					...(collectionName === 'orders' ? { explicit: true } : {}),
 				});
 
 				let currentResident = resident;

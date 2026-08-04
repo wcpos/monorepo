@@ -60,6 +60,8 @@ import type { PushResult } from './recordPushAdapter';
 export type DrainResult = {
 	/** Mutations pushed + acknowledged this drain. */
 	pushed: number;
+	/** Mutations deliberately left pending by the host's hold policy. */
+	held: number;
 	/** Push results that came back as 409 conflicts (durable 'conflicted' rows) or unrecoverable
 	 * 428s (durable 'needs-revision' rows, synthesized here) — resolved via the engine's conflict surface. */
 	conflicts: PushResult[];
@@ -110,6 +112,8 @@ export async function drainMutationQueue(input: {
 	backoff?: RetryBackoffPolicy;
 	/** Reads the resident record's latest server revision immediately before push. */
 	currentRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
+	/** Leaves matching mutations pending without claiming, retrying, or backing off. */
+	shouldHold?: (mutation: QueuedMutation) => Promise<boolean>;
 	/** On a 428 precondition failure, performs one targeted server refresh and
 	 * returns the record's newly observed revision. The drain retries once with
 	 * that revision; a missing revision parks update/delete, while an unrefreshable
@@ -157,6 +161,7 @@ export async function drainMutationQueue(input: {
 	);
 	const rejected: DrainResult['rejected'] = [];
 	let pushed = 0;
+	let held = 0;
 	let failed = 0;
 	let deferred = 0;
 	let attempted = 0;
@@ -235,6 +240,11 @@ export async function drainMutationQueue(input: {
 			break;
 		}
 		if (blockedRecords.has(mutation.recordId)) {
+			continue;
+		}
+		if (await input.shouldHold?.(mutation)) {
+			held += 1;
+			blockedRecords.add(mutation.recordId);
 			continue;
 		}
 		// Backoff gate (ADR 0012): a mutation rescheduled after an earlier failure must wait until
@@ -415,11 +425,12 @@ export async function drainMutationQueue(input: {
 			scanned: batch.length,
 			attempted,
 			pushed,
+			held,
 			deferred,
 			conflicts: conflicts.length,
 			failed,
 			rejected: rejected.length,
 		},
 	});
-	return { pushed, conflicts, failed, deferred, rejected };
+	return { pushed, held, conflicts, failed, deferred, rejected };
 }

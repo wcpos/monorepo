@@ -157,6 +157,7 @@ export type SyncReport = {
 	reason?: string;
 	error?: string;
 	pushed?: number;
+	held?: number;
 	conflicts?: number;
 	deferred?: number;
 	failed?: number;
@@ -1619,6 +1620,7 @@ export function createRxdbSyncEngine(
 				...(report.pushed !== undefined
 					? {
 							pushed: report.pushed,
+							held: report.held ?? 0,
 							conflicts: report.conflicts ?? 0,
 							deferred: report.deferred ?? 0,
 							failed: report.failed ?? 0,
@@ -2276,6 +2278,7 @@ export function createRxdbSyncEngine(
 						...(report.pushed !== undefined
 							? {
 									pushed: report.pushed,
+									held: report.held ?? 0,
 									conflicts: report.conflicts ?? 0,
 									deferred: report.deferred ?? 0,
 									failed: report.failed ?? 0,
@@ -2354,6 +2357,7 @@ export function createRxdbSyncEngine(
 				...(drain.pushed !== undefined
 					? {
 							pushed: drain.pushed,
+							held: drain.held,
 							conflicts: drain.conflicts,
 							deferred: drain.deferred,
 							failed: drain.failed,

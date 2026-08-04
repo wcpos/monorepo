@@ -176,6 +176,7 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 			operation: 'create',
 			recordId: UUID_1,
 			payload: { status: 'pos-open', meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_1 }] },
+			explicit: true,
 		});
 		const controller = new AbortController();
 		const report = await engine.sync('write-drain', { signal: controller.signal });
