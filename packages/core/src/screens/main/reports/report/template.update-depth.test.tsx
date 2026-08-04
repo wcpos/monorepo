@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { ZReport } from './template';
@@ -46,14 +46,22 @@ jest.mock('../../../../contexts/app-state', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
-// Stable identities: a fresh { formatDate } per call put a new function into
-// the component's reach every render, and toISOString's ms precision meant a
-// distinct output per call — the recipe for the intermittent 'Maximum update
-// depth' warning under full-suite load (see template.update-depth.test.tsx).
-const LOCAL_DATE = { formatDate: (date: Date) => date.toISOString() };
+
+// The adversarial shape this test exists for: the real useLocalDate returns a
+// fresh formatDate closure on every render, and every call yields a distinct
+// string (here a counter; in production, time advancing across a granularity
+// boundary). If formatDate participates in a set-state effect's dependencies,
+// each render re-runs the effect with an always-new value — a nested-update
+// loop. On fast machines the real-clock version only manifested under
+// full-suite CPU load; the counter makes it deterministic. The counter caps at
+// 1000 (comfortably past React's nested-update limit of 50) so the loop terminates via the
+// same-value bailout instead of hanging the test run.
+let formatCallCount = 0;
 jest.mock('../../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (value: string) => new Date(value),
-	useLocalDate: () => LOCAL_DATE,
+	useLocalDate: () => ({
+		formatDate: () => `formatted-${Math.min((formatCallCount += 1), 1000)}`,
+	}),
 }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: String }),
@@ -69,29 +77,32 @@ jest.mock('../context', () => ({
 	useReports: () => REPORTS,
 }));
 
-describe('ZReport query-state dates', () => {
-	it('renders the dateRange filter without reading a contextual Query selector', () => {
-		render(
-			<QueryStateProvider
-				collection="orders"
-				initialPageSize={Number.MAX_SAFE_INTEGER}
-				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
-				initialFilters={{
-					dateRange: {
-						from: '2026-07-01T08:00:00.000Z',
-						to: '2026-07-02T18:00:00.000Z',
-					},
-				}}
-			>
-				<ZReport />
-			</QueryStateProvider>
-		);
+describe('ZReport render stability', () => {
+	it('renders without a nested-update loop when formatDate identity and output churn', () => {
+		const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			render(
+				<QueryStateProvider
+					collection="orders"
+					initialPageSize={Number.MAX_SAFE_INTEGER}
+					initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+					initialFilters={{
+						dateRange: {
+							from: '2026-07-01T08:00:00.000Z',
+							to: '2026-07-02T18:00:00.000Z',
+						},
+					}}
+				>
+					<ZReport />
+				</QueryStateProvider>
+			);
 
-		expect(screen.getByText(/reports.report_period_start/).textContent).toContain(
-			'2026-07-01T08:00:00.000Z'
-		);
-		expect(screen.getByText(/reports.report_period_end/).textContent).toContain(
-			'2026-07-02T18:00:00.000Z'
-		);
+			const maxDepthErrors = consoleError.mock.calls.filter((call) =>
+				String(call[0]).includes('Maximum update depth exceeded')
+			);
+			expect(maxDepthErrors).toEqual([]);
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 });
