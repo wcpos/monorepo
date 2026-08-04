@@ -660,7 +660,7 @@ describe('declareRequirements / registerActiveBinding / reset refill', () => {
 		expect(engine2.requireCalls.filter((r) => r.kind === 'targeted-records')).toEqual([]);
 	});
 
-	it('force-refreshes an active reference binding only for collection reset refill', async () => {
+	it('force-refreshes a reset reference collection exactly once, binding or no binding', async () => {
 		const engine = createFakeEngine(database);
 		const unregister = registerActiveBinding(engine as never, {
 			id: 'coupon-picker',
@@ -671,14 +671,37 @@ describe('declareRequirements / registerActiveBinding / reset refill', () => {
 
 		await prepareCollectionResetRefill(engine as never, ['coupons'])();
 
-		expect(engine.requireCalls).toContainEqual({
-			id: 'coupon-picker:collection-reset:reference-refresh',
-			collection: 'coupons',
-			kind: 'refresh',
-			priority: 1000,
-			forceRefresh: true,
-		});
+		// One forced refresh per COLLECTION, not one per binding: a second surface over the
+		// same collection must not double the reset pull.
+		expect(engine.requireCalls).toEqual([
+			{
+				id: 'coupons:collection-reset',
+				collection: 'coupons',
+				kind: 'refresh',
+				priority: 1000,
+				forceRefresh: true,
+			},
+		]);
 		unregister();
+	});
+
+	// The reset can be triggered from the Health → Database row or a collection footer, where
+	// nothing is mounted over coupons. Keying the refill on active bindings left that reset
+	// with no demand at all, and the materialized gate then skipped the seed lane too (#952).
+	it('force-refreshes a reset reference collection that has no active binding', async () => {
+		const engine = createFakeEngine(database);
+
+		await prepareCollectionResetRefill(engine as never, ['coupons'])();
+
+		expect(engine.requireCalls).toEqual([
+			{
+				id: 'coupons:collection-reset',
+				collection: 'coupons',
+				kind: 'refresh',
+				priority: 1000,
+				forceRefresh: true,
+			},
+		]);
 	});
 
 	it('synthesizes the taxRates refresh on a taxes reset', async () => {
