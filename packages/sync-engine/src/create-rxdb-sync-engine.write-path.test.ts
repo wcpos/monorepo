@@ -75,7 +75,8 @@ async function insertBornLocalOrder(
 	payload: Record<string, unknown> = {
 		status: 'pos-open',
 		meta_data: [{ key: '_woocommerce_pos_uuid', value: id }],
-	}
+	},
+	promotedStatus = 'pending'
 ): Promise<void> {
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
@@ -84,7 +85,7 @@ async function insertBornLocalOrder(
 		wooOrderId: null,
 		number: '',
 		dateCreatedGmt: '2026-07-10T00:00:00',
-		status: 'pos-open',
+		status: promotedStatus,
 		total: '0.00',
 		customerId: 0,
 		payload,
@@ -196,6 +197,202 @@ function withAckDocument(
 }
 
 describe('write() + sync("write-drain") through the public handle', () => {
+	it('holds a non-explicit pos-open create without touching retry bookkeeping', async () => {
+		const server = createFakeWriteServer();
+		const events: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: (url, init) => server.fetch(url, init as never),
+			diagnostics: (event) => events.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({
+				status: 'ran',
+				held: 1,
+				pushed: 0,
+				failed: 0,
+				deferred: 0,
+			});
+			expect(server.received).toEqual([]);
+			expect(await queueRows(engine)).toHaveLength(1);
+			expect((await queueRows(engine))[0]).not.toHaveProperty('attempts');
+			expect((await queueRows(engine))[0]).not.toHaveProperty('nextAttemptAt');
+			expect(events).toContainEqual(
+				expect.objectContaining({
+					type: 'engine.lane.tick',
+					fields: expect.objectContaining({ lane: 'write-drain', held: 1, pushed: 0 }),
+				})
+			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('replays a stale claimed non-explicit pos-open create', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			const queue = queueFor(engine.active()!.database);
+			const [mutation] = await queue.pending();
+			expect(mutation).toBeDefined();
+			expect(await queue.claim({ ...mutation!, status: 'claimed' })).toBe(true);
+
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 1 });
+			expect(server.received).toHaveLength(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('pushes an explicit pos-open create', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+				explicit: true,
+			} as never);
+
+			expect(await queueRows(engine)).toEqual([
+				expect.objectContaining({ explicit: true, operation: 'create' }),
+			]);
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 1 });
+			expect(server.received).toHaveLength(1);
+			expect(server.received[0]).not.toHaveProperty('explicit');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('releases a held mutation after the resident status leaves pos-open', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 1, pushed: 0 });
+
+			const resident = await engine.active()?.database.collections.orders.findOne(UUID_A).exec();
+			await resident?.incrementalModify((data: Record<string, unknown>) => ({
+				...data,
+				status: 'pending',
+			}));
+
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 1 });
+			expect(server.received).toHaveLength(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('releases an already-attempted held chain when an explicit write queues behind it', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			// An earlier attempt (e.g. pushed while released, then the cashier backed
+			// out of checkout) makes the row un-coalescable — Pay's explicit write
+			// must still drain the chain instead of starving behind the hold.
+			const queue = queueFor(engine.active()!.database);
+			const [row] = await queue.pending();
+			await queue.replace({ ...row!, attempts: 1 });
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { customer_note: 'release me' },
+				explicit: true,
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 2 });
+			expect(server.received).toHaveLength(2);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('releases an already-attempted held chain when a delete queues behind it', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			const queue = queueFor(engine.active()!.database);
+			const [row] = await queue.pending();
+			await queue.replace({ ...row!, attempts: 1 });
+			// attempts > 0 blocks annihilation, so the delete queues behind the
+			// create — and must release the held chain rather than wait for a
+			// status transition that will never come.
+			await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 2 });
+			expect(server.received).toHaveLength(2);
+			expect(await engine.active()?.database.collections.orders.findOne(UUID_A).exec()).toBeNull();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('does not hold a delete for a pos-open order', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:base-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, {
+				wooOrderId: 42,
+				revision: 'sha256:base-r1',
+				status: 'pos-open',
+			});
+			await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 1 });
+			expect(server.received).toEqual([expect.objectContaining({ operation: 'delete' })]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('uses the host UUID generator for queued mutation identity', async () => {
 		const server = createFakeWriteServer();
 		const engine = engineWith({
@@ -271,7 +468,8 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				operation: 'update',
 				recordId: UUID_A,
 				payload: { status: 'pos-paid' },
-			});
+				explicit: true,
+			} as never);
 			expect((await engine.sync('write-drain')).pushed).toBe(1);
 		} finally {
 			await engine.dispose();
@@ -1972,6 +2170,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				operation: 'update',
 				recordId: UUID_A,
 				payload: { note: 'U1' },
+				explicit: true,
 			});
 			failNext = true;
 			const drain1 = engine.sync('write-drain');
@@ -1985,6 +2184,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				operation: 'update',
 				recordId: UUID_A,
 				payload: { note: 'U2', discount: '5.00' },
+				explicit: true,
 			});
 			gate!();
 			expect((await drain1).failed).toBe(1);

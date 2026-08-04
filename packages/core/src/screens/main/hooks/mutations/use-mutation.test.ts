@@ -156,12 +156,29 @@ describe('useMutation', () => {
 			expect.objectContaining({ write: mockWrite }),
 			'mutation-1'
 		);
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({ explicit: true, operation: 'create' })
+		);
 		expect(mockFindEngineResident).toHaveBeenCalledWith(
 			expect.anything(),
 			'customers',
 			'born-local-uuid'
 		);
 		expect((created as { id: number }).id).toBe(321);
+	});
+
+	it('does not mark a create explicit when no remote id is awaited', async () => {
+		mockInsertEngineResident.mockResolvedValue({
+			get: () => ({ status: 'pos-open' }),
+			remove: jest.fn().mockResolvedValue(undefined),
+		});
+		const { result } = renderHook(() => useMutation({ collectionName: 'orders' }));
+
+		await act(() => result.current.create({ data: { status: 'pos-open' } }));
+
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.not.objectContaining({ explicit: expect.anything() })
+		);
 	});
 
 	it('throws without removing the resident when an awaited customer create is rejected', async () => {

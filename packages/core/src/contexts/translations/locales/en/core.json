@@ -1050,6 +1050,7 @@
 	"health.logs.event.coverage_existence_reconcile": "Reconciled this device with your store",
 	"health.logs.event.coverage_gate_hit": "Answered a search from data already on this device",
 	"health.logs.event.coverage_gate_miss": "Fetched a search from your store",
+	"health.logs.event.coverage_ledger_rebuilt": "Rebuilt local sync bookkeeping",
 	"health.logs.event.coverage_require_error": "Could not load the records this screen needs",
 	"health.logs.event.coverage_require_log": "Record loading detail",
 	"health.logs.event.coverage_require_outcome": "Loaded the records this screen needs",

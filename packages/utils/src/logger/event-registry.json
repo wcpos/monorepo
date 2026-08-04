@@ -72,6 +72,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "coverage.ledger-rebuilt",
+		"domain": "SYNC",
+		"label": "Rebuilt local sync bookkeeping",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "coverage.require.error",
 		"domain": "SYNC",
 		"label": "Could not load the records this screen needs",

@@ -155,9 +155,9 @@ describe('requirementsForQuery', () => {
 					id: 'customer-orders:orders-query',
 					collection: 'orders',
 					kind: 'query',
-					queryKey: `orders:browser:status=processing:search=:customer=${
+					queryKey: `orders:browser:status=processing:customer=${
 						typeof customer_id === 'number' ? customer_id : customer_id.$eq
-					}:limit=25`,
+					}:search=:limit=25`,
 					priority: 700,
 				},
 			]);
@@ -182,23 +182,26 @@ describe('requirementsForQuery', () => {
 				id: 'orders:orders-query',
 				collection: 'orders',
 				kind: 'query',
-				queryKey: 'orders:browser:status=all:search=:cashier=7:store=12:limit=25',
+				queryKey: 'orders:browser:status=all:cashier=7:store=12:search=:limit=25',
 				priority: 700,
 			},
 		]);
 	});
 
-	it('maps root created_via selectors to the store dimension', () => {
-		for (const created_via of ['woocommerce-pos', { $eq: 'woocommerce-pos' }]) {
+	// The translator only promotes status/customer_id/dateRange to the selector root, so a
+	// slug store arrives as an `$and` condition — both shapes must reach the wire.
+	it('maps root and nested created_via selectors to the store dimension', () => {
+		const selectors: Record<string, unknown>[] = [
+			{ created_via: 'woocommerce-pos' },
+			{ created_via: { $eq: 'woocommerce-pos' } },
+			{ $and: [{ created_via: 'woocommerce-pos' }] },
+			{ $and: [{ created_via: { $eq: 'woocommerce-pos' } }] },
+		];
+		for (const selector of selectors) {
 			expect(
-				requirementsForQuery({
-					id: 'orders',
-					collectionName: 'orders',
-					selector: { created_via },
-					limit: 25,
-				})[0]
+				requirementsForQuery({ id: 'orders', collectionName: 'orders', selector, limit: 25 })[0]
 			).toMatchObject({
-				queryKey: 'orders:browser:status=all:search=:store=woocommerce-pos:limit=25',
+				queryKey: 'orders:browser:status=all:store=woocommerce-pos:search=:limit=25',
 				priority: 700,
 			});
 		}
@@ -217,11 +220,9 @@ describe('requirementsForQuery', () => {
 			id: 'orders:orders-query',
 			collection: 'orders',
 			kind: 'query',
-			queryKey: 'orders:browser:status=all:search=:orderby=date:order=desc:limit=25',
+			queryKey: 'orders:browser:status=all:orderby=date:order=desc:search=:limit=25',
 		});
-		expect(keyFor([{ total: 'asc' }])?.queryKey).toBe(
-			'orders:browser:status=all:search=:limit=25'
-		);
+		expect(keyFor([{ total: 'asc' }])?.queryKey).toBe('orders:browser:status=all:search=:limit=25');
 		expect(keyFor([{ number: 'desc' }])?.queryKey).toBe(
 			'orders:browser:status=all:search=:limit=25'
 		);
@@ -247,7 +248,7 @@ describe('requirementsForQuery', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=completed:search=:after=1782864000:before=1784073599:limit=all',
+					'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all',
 				priority: 700,
 			},
 		]);
@@ -261,9 +262,75 @@ describe('requirementsForQuery', () => {
 			limit: 25,
 		});
 		expect(requirement).toMatchObject({
-			queryKey: 'orders:browser:status=all:search=:after=1782864000:limit=25',
+			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=25',
 			priority: 700,
 		});
+	});
+
+	// `2026-07-01Z` is not a Date Time String Format production; leaving date-only values
+	// untouched keeps the bound identical across V8, Hermes and JSC.
+	it('reads date-only range bounds as UTC midnight', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'reports',
+			collectionName: 'orders',
+			selector: { date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
+			limit: Number.MAX_SAFE_INTEGER,
+		});
+		// 2026-07-01T00:00:00Z and 2026-07-14T00:00:00Z — UTC midnight, not local midnight.
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
+		});
+	});
+
+	// Fetch-to-completion is reserved for the all-results sentinel Reports passes. An
+	// ordinary ranged grid that scrolls past the browse cap (limit 210) must stay windowed.
+	it('does not promote a scrolled ranged browse to fetch-to-completion', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { date_created_gmt: { $gte: '2026-07-01T00:00:00' } },
+			limit: 210,
+		});
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=200',
+			// Priority and completion are independent axes: a cashier-applied dimension is
+			// interactive demand (700) whether or not it is allowed to run to completion.
+			// Only `:limit=all` — the sentinel Reports passes — authorises completion.
+			priority: 700,
+		});
+		expect(requirement.queryKey).not.toContain(':limit=all');
+	});
+
+	// A cashier search containing literal range tokens must round-trip as search text.
+	it('keeps literal range tokens in the search component of the descriptor', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { search: 'invoice:after=123' },
+			limit: 25,
+		});
+		expect(requirement).toMatchObject({
+			queryKey: 'orders:browser:status=all:search=invoice:after=123:limit=25',
+		});
+	});
+
+	// Priority comes from the computed dimensions, never from sniffing the key text —
+	// otherwise a cashier searching for `note:customer=42` would promote an unfiltered
+	// browse to the interactive band.
+	it('does not promote an unfiltered browse whose search text looks like a dimension', () => {
+		const [requirement] = requirementsForQuery({
+			id: 'orders',
+			collectionName: 'orders',
+			selector: { search: 'note:customer=42' },
+			limit: 25,
+		});
+		expect(requirement).toEqual({
+			id: 'orders:orders-query',
+			collection: 'orders',
+			kind: 'query',
+			queryKey: 'orders:browser:status=all:search=note:customer=42:limit=25',
+		});
+		expect(requirement).not.toHaveProperty('priority');
 	});
 
 	it('maps a filtered products browse to an interactive browse-window descriptor', () => {
@@ -386,9 +453,7 @@ describe('requirementsForQuery', () => {
 			'products:browse-window:limit=100:orderby=popularity:order=desc'
 		);
 		// The POS catalog default keeps the bare key — one identity for the cold seed.
-		expect(keyFor([{ menu_order: 'asc' }, { id: 'asc' }])).toBe(
-			'products:browse-window:limit=100'
-		);
+		expect(keyFor([{ menu_order: 'asc' }, { id: 'asc' }])).toBe('products:browse-window:limit=100');
 		// Sorts Woo REST cannot express fall back to the default window rather than
 		// pretending a server-sorted slice exists.
 		expect(keyFor([{ sku: 'asc' }])).toBe('products:browse-window:limit=100');

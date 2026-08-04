@@ -46,6 +46,31 @@ const baseState: LocalCoverageState = {
 };
 
 describe('evaluateCoverageRequirement', () => {
+	it('never serves from an empty ledger for either record or lane coverage', () => {
+		const emptyState: LocalCoverageState = { records: [], lanes: [] };
+		const query = requirement({
+			id: 'products.initialAlphabetical',
+			collection: 'products',
+			queryKey: 'products:initial:alphabetical',
+		});
+
+		expect(
+			evaluateCoverageRequirement({
+				strategy: 'record-only',
+				state: emptyState,
+				requirement: query,
+				expectedRecordIds: ['product:alpha'],
+			}).action
+		).toBe('fetch-remote');
+		expect(
+			evaluateCoverageRequirement({
+				strategy: 'lane-only',
+				state: emptyState,
+				requirement: query,
+			}).action
+		).toBe('fetch-remote');
+	});
+
 	it('serves a targeted historical order locally with record-only coverage when the record is fresh', () => {
 		const decision = evaluateCoverageRequirement({
 			strategy: 'record-only',
