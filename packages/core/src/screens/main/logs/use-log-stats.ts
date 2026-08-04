@@ -6,7 +6,14 @@ import { catchError, map, switchMap } from 'rxjs/operators';
 
 import { useQueryManager } from '@wcpos/query';
 
-import { deriveStuckRecords, type LogRow, startOfLocalDay, type StuckRecord } from './logs-logic';
+import {
+	type ClockSkewWarning,
+	deriveClockSkew,
+	deriveStuckRecords,
+	type LogRow,
+	startOfLocalDay,
+	type StuckRecord,
+} from './logs-logic';
 
 import type { Observable } from 'rxjs';
 
@@ -17,9 +24,10 @@ export type LogStats = {
 	eventsToday: number;
 	errorsToday: number;
 	stuck: StuckRecord[];
+	clockSkew: ClockSkewWarning | null;
 };
 
-const EMPTY_STATS: LogStats = { eventsToday: 0, errorsToday: 0, stuck: [] };
+const EMPTY_STATS: LogStats = { eventsToday: 0, errorsToday: 0, stuck: [], clockSkew: null };
 
 type LogsCollectionLike = {
 	count(query: { selector: Record<string, unknown> }): { $: Observable<number> };
@@ -63,8 +71,31 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 					sort: [{ timestamp: 'desc' }],
 				})
 				.$.pipe(map((docs) => deriveStuckRecords(docs.map((doc) => doc.toJSON()))));
-			return combineLatest([events$, errors$, stuck$]).pipe(
-				map(([eventsToday, errorsToday, stuck]): LogStats => ({ eventsToday, errorsToday, stuck })),
+			// The engine writes its once-per-store-open clock check to this exact
+			// category at `warn`; the derivation ignores unrelated warn rows.
+			const clockSkew$ = logsCollection
+				.find({
+					selector: {
+						category: { $eq: 'wcpos.sync.engine' },
+						level: { $eq: 'warn' },
+					},
+					sort: [{ timestamp: 'desc' }],
+				})
+				.$.pipe(
+					map((docs) =>
+						deriveClockSkew(
+							docs.map((doc) => doc.toJSON()),
+							Date.now()
+						)
+					)
+				);
+			return combineLatest([events$, errors$, stuck$, clockSkew$]).pipe(
+				map(([eventsToday, errorsToday, stuck, clockSkew]): LogStats => ({
+					eventsToday,
+					errorsToday,
+					stuck,
+					clockSkew,
+				})),
 				// Storage trouble must not take the whole Logs tab down — the ledger
 				// has its own recovery; the header quietly reads zero for this tick
 				// and the outer timer retries on the next one (an outer catchError

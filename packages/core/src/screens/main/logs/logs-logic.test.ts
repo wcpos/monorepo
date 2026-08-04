@@ -1,11 +1,13 @@
 import {
 	buildDebugInfo,
 	chainMarkedIds,
+	deriveClockSkew,
 	deriveStuckRecords,
 	displayCategory,
 	displayKind,
 	formatCadence,
 	formatDurationMs,
+	formatSkewMagnitude,
 	type LogRow,
 	presetFilters,
 	rowDetailData,
@@ -93,6 +95,124 @@ describe('chainMarkedIds', () => {
 			{ logId: 'b', operationId: undefined },
 		];
 		expect(chainMarkedIds(rows).size).toBe(0);
+	});
+});
+
+describe('deriveClockSkew', () => {
+	const NOW = 1_000_000_000;
+
+	it('returns the most recently measured skew warning', () => {
+		const rows = [
+			row({ logId: 'a', timestamp: NOW - 5_000, context: { skewSeconds: 120 } }),
+			row({ logId: 'b', timestamp: NOW - 50_000, context: { skewSeconds: -300 } }),
+		];
+		expect(deriveClockSkew(rows, NOW)).toEqual({
+			skewSeconds: 120,
+			observedAt: NOW - 5_000,
+			lastSeen: NOW - 5_000,
+		});
+	});
+
+	it('never lets a collapsed repeat lend its fresh lastSeen to a stale skew value', () => {
+		// Repeat-collapse moves only count/lastSeen — the context still carries the
+		// FIRST check's value, so a later check that found the opposite sign must
+		// not be reported through this row's refreshed lastSeen.
+		const rows = [
+			row({
+				logId: 'a',
+				timestamp: NOW - 5_000,
+				lastSeen: NOW - 1_000,
+				count: 2,
+				context: { skewSeconds: 300 },
+			}),
+			row({ logId: 'b', timestamp: NOW - 2_000, context: { skewSeconds: -300 } }),
+		];
+		// The standalone row measured later, so its value is the one shown.
+		expect(deriveClockSkew(rows, NOW)).toEqual({
+			skewSeconds: -300,
+			observedAt: NOW - 2_000,
+			lastSeen: NOW - 2_000,
+		});
+	});
+
+	it('ages a collapsed row out 24 hours after its value was measured, not after its last sighting', () => {
+		const dayMs = 24 * 60 * 60 * 1000;
+		const rows = [
+			row({
+				logId: 'a',
+				timestamp: NOW - dayMs - 1,
+				lastSeen: NOW - 1_000,
+				count: 5,
+				context: { skewSeconds: 300 },
+			}),
+		];
+		expect(deriveClockSkew(rows, NOW)).toBeNull();
+	});
+
+	it('ignores warn rows without a numeric skewSeconds', () => {
+		const rows = [
+			row({ logId: 'a', timestamp: NOW, context: { type: 'engine.scope-switch' } }),
+			row({ logId: 'b', timestamp: NOW, context: { skewSeconds: 'oops' } }),
+			row({ logId: 'c', timestamp: NOW, context: { skewSeconds: 0 } }),
+		];
+		expect(deriveClockSkew(rows, NOW)).toBeNull();
+	});
+
+	it('ages a warning out of the panel after 24 hours', () => {
+		const dayMs = 24 * 60 * 60 * 1000;
+		const stale = [row({ logId: 'a', timestamp: NOW - dayMs - 1, context: { skewSeconds: 90 } })];
+		expect(deriveClockSkew(stale, NOW)).toBeNull();
+		const fresh = [
+			row({ logId: 'a', timestamp: NOW - dayMs + 1_000, context: { skewSeconds: 90 } }),
+		];
+		expect(deriveClockSkew(fresh, NOW)).toEqual({
+			skewSeconds: 90,
+			observedAt: NOW - dayMs + 1_000,
+			lastSeen: NOW - dayMs + 1_000,
+		});
+	});
+
+	it('drops future-dated rows left behind by a backward clock correction', () => {
+		const dayMs = 24 * 60 * 60 * 1000;
+		// Written while the device was two days fast; the clock has since been fixed.
+		const rows = [row({ logId: 'a', timestamp: NOW + 2 * dayMs, context: { skewSeconds: 300 } })];
+		expect(deriveClockSkew(rows, NOW)).toBeNull();
+	});
+
+	it('never lets a future-dated row mask a current warning', () => {
+		const dayMs = 24 * 60 * 60 * 1000;
+		const rows = [
+			row({ logId: 'a', timestamp: NOW + 2 * dayMs, context: { skewSeconds: 300 } }),
+			row({ logId: 'b', timestamp: NOW - 1_000, context: { skewSeconds: -120 } }),
+		];
+		expect(deriveClockSkew(rows, NOW)).toEqual({
+			skewSeconds: -120,
+			observedAt: NOW - 1_000,
+			lastSeen: NOW - 1_000,
+		});
+	});
+
+	it('tolerates a row a few seconds ahead of now', () => {
+		const rows = [row({ logId: 'a', timestamp: NOW + 5_000, context: { skewSeconds: 300 } })];
+		expect(deriveClockSkew(rows, NOW)).toEqual({
+			skewSeconds: 300,
+			observedAt: NOW + 5_000,
+			lastSeen: NOW + 5_000,
+		});
+	});
+
+	it('returns null for no rows', () => {
+		expect(deriveClockSkew([], NOW)).toBeNull();
+	});
+});
+
+describe('formatSkewMagnitude', () => {
+	it('reads magnitudes in the unit a merchant would say out loud', () => {
+		expect(formatSkewMagnitude(45)).toBe('45 s');
+		expect(formatSkewMagnitude(-300)).toBe('5 min');
+		expect(formatSkewMagnitude(3_540)).toBe('59 min');
+		expect(formatSkewMagnitude(2 * 3_600)).toBe('2.0 h');
+		expect(formatSkewMagnitude(-5 * 3_600)).toBe('5.0 h');
 	});
 });
 

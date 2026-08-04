@@ -203,6 +203,74 @@ export function deriveStuckRecords(rows: LogRow[]): StuckRecord[] {
 	return stuck.sort((a, b) => b.lastSeen - a.lastSeen);
 }
 
+export type ClockSkewWarning = {
+	/** Signed; positive = server clock ahead of the device. */
+	skewSeconds: number;
+	/** When THIS skew value was measured — the row's own write time. */
+	observedAt: number;
+	/** Latest sighting of the same warning; ahead of `observedAt` when repeats collapsed. */
+	lastSeen: number;
+};
+
+/**
+ * The engine re-checks the clock once per store open, so a persistent
+ * misconfiguration keeps writing fresh rows; a fixed clock ages out of the
+ * panel within a day while the rows themselves stay in the ledger.
+ */
+const CLOCK_SKEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How far ahead of `nowMs` a row may sit and still count as current. Every
+ * ledger timestamp is device-derived, so correcting a fast device clock
+ * BACKWARD leaves rows dated in the future; without a lower bound their age is
+ * negative and they would satisfy the window forever. A minute of slack absorbs
+ * ordinary NTP slew — anything further ahead is a clock that has since been
+ * corrected, which is exactly the warning that must expire.
+ */
+const CLOCK_SKEW_FUTURE_TOLERANCE_MS = 60 * 1000;
+
+/**
+ * Derived clock-skew view for the Database-tab callout: the freshest MEASURED
+ * skew wins.
+ *
+ * Recency is judged on the row's own `timestamp`, not on `lastSeen`, because
+ * `skewSeconds` lives in the row context and the logger's repeat-collapse
+ * refreshes only `count`/`lastSeen`. A collapsed row therefore pairs a moving
+ * `lastSeen` with the FIRST check's value, and reporting that pair could say
+ * "server ahead" long after a later check found it behind. Ageing the value
+ * from when it was actually measured keeps the callout no fresher than its
+ * evidence — a still-skewed clock writes new rows anyway (collapse folds only
+ * back-to-back identical writes, and sync logging lands in between).
+ */
+export function deriveClockSkew(rows: LogRow[], nowMs: number): ClockSkewWarning | null {
+	let latest: ClockSkewWarning | null = null;
+	for (const row of rows) {
+		const skewSeconds = row.context?.skewSeconds;
+		if (typeof skewSeconds !== 'number' || !Number.isFinite(skewSeconds) || skewSeconds === 0) {
+			continue;
+		}
+		const observedAt = row.timestamp;
+		const age = nowMs - observedAt;
+		if (age > CLOCK_SKEW_WINDOW_MS || age < -CLOCK_SKEW_FUTURE_TOLERANCE_MS) continue;
+		if (latest === null || observedAt > latest.observedAt) {
+			latest = { skewSeconds, observedAt, lastSeen: Math.max(observedAt, row.lastSeen ?? 0) };
+		}
+	}
+	return latest;
+}
+
+/**
+ * Merchant-facing magnitude for the clock-skew callout. Skew below the
+ * detector's 60 s threshold never reaches the ledger, so the floor is minutes;
+ * seconds only appear for hand-written rows in tests.
+ */
+export function formatSkewMagnitude(skewSeconds: number): string {
+	const seconds = Math.abs(Math.round(skewSeconds));
+	if (seconds < 60) return `${seconds} s`;
+	if (seconds < 2 * 3_600) return `${Math.round(seconds / 60)} min`;
+	return `${(seconds / 3_600).toFixed(1)} h`;
+}
+
 /**
  * Correlation data for the expanded row detail. Raw values out — the component
  * owns locale-aware time formatting.
