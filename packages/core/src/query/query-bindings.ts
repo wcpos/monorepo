@@ -96,9 +96,13 @@ function selectorWithSearch(descriptor: EngineQueryDescriptor): Record<string, u
 }
 
 function useObservableResource<T>(observable$: Observable<T>): ObservableResource<T> {
-	const resource = React.useMemo(() => new ObservableResource(observable$), [observable$]);
+	const [resource] = React.useState(() => new ObservableResource(observable$));
 	React.useEffect(() => {
-		// The resource owns the direct RxDB/db$ subscription for this descriptor.
+		// Reloading retains the current value while the new query loads and clears terminal errors.
+		if (resource.input$ !== observable$) resource.reload(observable$);
+	}, [observable$, resource]);
+	React.useEffect(() => {
+		// The resource owns the direct RxDB/db$ subscription for this binding.
 		return () => resource.destroy();
 	}, [resource]);
 	return resource;

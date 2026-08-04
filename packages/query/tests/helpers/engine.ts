@@ -142,6 +142,41 @@ export function engineProduct(input: {
 	};
 }
 
+/** Build an ENGINE-shaped order document. */
+export function engineOrder(input: {
+	uuid: string;
+	id?: number;
+	number?: string;
+	status?: string;
+	date_created_gmt?: string;
+	total?: string;
+	customer_id?: number;
+	[key: string]: unknown;
+}): Record<string, unknown> {
+	const { uuid, id, number, status, date_created_gmt, total, customer_id, ...rest } = input;
+	const wooId = id ?? 0;
+	return {
+		id: uuid,
+		wooOrderId: wooId,
+		number: number ?? String(wooId),
+		dateCreatedGmt: date_created_gmt ?? '2026-01-01T00:00:00',
+		status: status ?? 'processing',
+		total: total ?? '0',
+		customerId: customer_id ?? 0,
+		payload: {
+			id: wooId,
+			number: number ?? String(wooId),
+			status: status ?? 'processing',
+			date_created_gmt: date_created_gmt ?? '2026-01-01T00:00:00',
+			total: total ?? '0',
+			customer_id: customer_id ?? 0,
+			...rest,
+		},
+		sync: { revision: '1', partial: false, source: 'woo-rest' },
+		local: { dirty: false, pendingMutationIds: [] },
+	};
+}
+
 /** Build an ENGINE-shaped variation document. */
 export function engineVariation(input: {
 	uuid: string;
