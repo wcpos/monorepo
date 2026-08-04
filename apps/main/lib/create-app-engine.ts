@@ -353,6 +353,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	};
 
 	const fetcher = async (url: string, init?: RequestInit): Promise<Response> => {
+		const clockSkewGeneration = clockSkew.generation;
 		let tokenUsed: string | undefined;
 		const method = (init?.method ?? 'GET').toUpperCase();
 		const requestPath = url.split(/[?#]/, 1)[0]?.replace(/\/+$/, '');
@@ -365,7 +366,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		// refresh arc the ending is not known yet (#899). The network-failure path
 		// still emits inline — a thrown fetch has no arc to wait for.
 		const performAttempt = async (arcFields?: Record<string, unknown>): Promise<SettledAttempt> => {
-			const clockSkewGeneration = clockSkew.generation;
 			const token = fetcherOptions.credentials.getLatest().access_token;
 			tokenUsed = token;
 			const headers = new Headers(init?.headers ?? {});

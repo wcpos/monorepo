@@ -351,6 +351,55 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
+	it('does not let an auth retry adopt a later scope activation', async () => {
+		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
+		let resolveRefresh!: (token: string) => void;
+		const refreshAuth = jest.fn(
+			() =>
+				new Promise<string>((resolve) => {
+					resolveRefresh = resolve;
+				})
+		);
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 401 }))
+			.mockResolvedValueOnce(
+				new Response(null, {
+					status: 200,
+					headers: { Date: 'Thu, 01 Jan 1970 00:02:00 GMT' },
+				})
+			)
+			.mockResolvedValueOnce(
+				new Response(null, {
+					status: 200,
+					headers: { Date: 'Thu, 01 Jan 1970 00:03:00 GMT' },
+				})
+			);
+		const { createAppSyncEngine, createRxdbSyncEngine, networkWarn } = loadCreateAppEngine();
+		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth });
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+		const priorRequest = fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(refreshAuth).toHaveBeenCalledTimes(1);
+
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+		});
+		resolveRefresh('refreshed-token');
+		await priorRequest;
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
+
+		expect(networkWarn).toHaveBeenCalledTimes(1);
+		expect(networkWarn).toHaveBeenCalledWith(
+			'Server clock is 180s ahead of the device clock',
+			expect.any(Object)
+		);
+		now.mockRestore();
+		fetch.mockRestore();
+	});
+
 	it('classifies a conditional-GET 304 as a successful transport outcome', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_010);
 		const response = new Response(null, {
