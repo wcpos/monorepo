@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { utc } from '@date-fns/utc';
 import { format, parseISO } from 'date-fns';
 import * as Locales from 'date-fns/locale';
@@ -34,19 +36,27 @@ export const useLocalDate = () => {
 	const locale = shortCode in Locales ? Locales[shortCode as keyof typeof Locales] : undefined;
 
 	/**
-	 * Wrapper for date-fns format function
+	 * Wrapper for date-fns format function. Stable identity per locale — these
+	 * functions end up in consumers' dependency arrays, where a fresh closure
+	 * every render re-runs their effects/memos every render.
 	 */
-	const formatDate = (date: Date, formatString: string) => {
-		return format(date, formatString, { locale });
-	};
+	const formatDate = React.useCallback(
+		(date: Date, formatString: string) => {
+			return format(date, formatString, { locale });
+		},
+		[locale]
+	);
 
 	/**
 	 * Take a UTC date string (eg: date_created_gmt in WC REST API) and convert it to a local date format,
 	 * eg: 2024-01-01T20:26:03 to 1 de enero de 2024
 	 */
-	const formatUTCStringToLocalDate = (dateString: string, formatString: string) => {
-		return formatDate(convertUTCStringToLocalDate(dateString), formatString);
-	};
+	const formatUTCStringToLocalDate = React.useCallback(
+		(dateString: string, formatString: string) => {
+			return formatDate(convertUTCStringToLocalDate(dateString), formatString);
+		},
+		[formatDate]
+	);
 
 	return {
 		formatDate,

@@ -64,25 +64,30 @@ export function ZReport() {
 	}, [formatDate, selectedDateRange]);
 
 	/**
-	 * Create a report generated date string when:
+	 * Stamp a new report-generated time when:
 	 * - the screen is focused
 	 * - the selected orders change
+	 *
+	 * The state holds the Date and rendering formats it, so formatting concerns
+	 * (formatDate is a fresh closure every render) never sit in these effects'
+	 * dependencies — a formatDate dep re-runs the effect every render, and any
+	 * output change then feeds a nested-update loop (the 'Maximum update depth'
+	 * flake under full-suite load).
 	 */
-	const [reportGenerated, setReportGenerated] = React.useState(
-		formatDate(new Date(), 'yyyy-M-dd HH:mm:ss')
-	);
+	const [generatedAt, setGeneratedAt] = React.useState(() => new Date());
 	useFocusEffect(
 		React.useCallback(() => {
-			setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
-		}, [formatDate])
+			setGeneratedAt(new Date());
+		}, [])
 	);
 	React.useEffect(() => {
 		// This timestamp represents an event: the report input set changed.
 		// It is intentionally stateful because `new Date()` is impure and should not
 		// be recomputed during render.
-		// eslint-disable-next-line react-hooks/set-state-in-effect -- reportGenerated is an event timestamp, not derived render data; new Date() is impure and must not run during render.
-		setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
-	}, [selectedOrders, formatDate]);
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- generatedAt is an event timestamp, not derived render data; new Date() is impure and must not run during render.
+		setGeneratedAt(new Date());
+	}, [selectedOrders]);
+	const reportGenerated = formatDate(generatedAt, 'yyyy-M-dd HH:mm:ss');
 
 	return (
 		<View>
