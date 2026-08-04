@@ -220,6 +220,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							signal: tickAbort.signal,
 							shouldHold: async (mutation) => {
 								if (
+									(mutation.status !== undefined && mutation.status !== 'pending') ||
 									mutation.collectionName !== 'orders' ||
 									mutation.operation === 'delete' ||
 									mutation.explicit === true

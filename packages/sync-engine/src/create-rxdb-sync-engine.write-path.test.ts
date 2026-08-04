@@ -236,6 +236,30 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('replays a stale claimed non-explicit pos-open create', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, undefined, 'pos-open');
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			const queue = queueFor(engine.active()!.database);
+			const [mutation] = await queue.pending();
+			expect(mutation).toBeDefined();
+			expect(await queue.claim({ ...mutation!, status: 'claimed' })).toBe(true);
+
+			expect(await engine.sync('write-drain')).toMatchObject({ held: 0, pushed: 1 });
+			expect(server.received).toHaveLength(1);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('pushes an explicit pos-open create', async () => {
 		const server = createFakeWriteServer();
 		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });

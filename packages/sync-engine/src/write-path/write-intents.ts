@@ -470,6 +470,7 @@ export async function requeueBornTwiceSnapshot(input: {
 						? stripNonStringMetaDisplayFields({ ...mutation.payload, ...last.payload })
 						: { ...mutation.payload, ...last.payload },
 				coalesced: (last.coalesced ?? 0) + 1,
+				...(last.explicit || mutation.explicit ? { explicit: true } : {}),
 				status: 'pending',
 			};
 			if (!(await queue.coalesceInto(last.mutationId, replacement))) continue;

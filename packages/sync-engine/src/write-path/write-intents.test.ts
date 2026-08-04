@@ -219,4 +219,71 @@ describe('enqueueWriteIntent', () => {
 			{ key: '_woocommerce_pos_data', value: { price: '45' } },
 		]);
 	});
+
+	it('preserves explicit when a born-twice snapshot coalesces into a plain successor', async () => {
+		const queued = new Map<string, QueuedMutation>([
+			[
+				'successor-1',
+				{
+					mutationId: 'successor-1',
+					collectionName: 'orders',
+					operation: 'update',
+					recordId: 'order-1',
+					origin: 'existing',
+					payload: { customer_note: 'ring twice' },
+					baseRevision: 'sha256:server-r1',
+					queuedAt: '2026-08-04T00:00:01.000Z',
+					seq: 2,
+					status: 'pending',
+				},
+			],
+		]);
+		const mutationCollection: RxRecordMutationCollection = {
+			bulkUpsert: async (items) => {
+				for (const item of items) queued.set(item.mutationId, item);
+				return { error: [] };
+			},
+			find: () => ({ exec: async () => [...queued.values()] }),
+			bulkRemove: async (ids) => {
+				for (const id of ids) queued.delete(id);
+				return { error: [] };
+			},
+		};
+		const db = {
+			collections: {
+				orders: { findOne: () => ({ exec: async () => null }) },
+				recordMutations: mutationCollection,
+			},
+		} as unknown as RxDatabase;
+
+		await requeueBornTwiceSnapshot({
+			db,
+			mutation: {
+				mutationId: 'create-1',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: 'order-1',
+				origin: 'minted',
+				payload: { status: 'pos-open', total: '25.00' },
+				baseRevision: null,
+				queuedAt: '2026-08-04T00:00:00.000Z',
+				explicit: true,
+			} as never,
+			ackRevision: 'sha256:server-r1',
+			mintUuid: () => 'follow-up-1',
+			now: () => '2026-08-04T00:00:02.000Z',
+		});
+
+		expect([...queued.values()]).toEqual([
+			expect.objectContaining({
+				mutationId: 'follow-up-1',
+				explicit: true,
+				payload: {
+					status: 'pos-open',
+					total: '25.00',
+					customer_note: 'ring twice',
+				},
+			}),
+		]);
+	});
 });
