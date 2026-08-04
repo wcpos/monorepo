@@ -19,7 +19,7 @@
 		"@point-of-sale/webbluetooth-receipt-printer": "2.0.0",
 		"@point-of-sale/webusb-receipt-printer": "2.0.0",
 		"@wcpos/receipt-renderer": "workspace:*",
-		"p-queue": "^9.3.0",
+		"p-queue": "^9.3.3",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
