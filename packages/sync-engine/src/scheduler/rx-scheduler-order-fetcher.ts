@@ -96,9 +96,13 @@ function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => numb
 		status: decision.descriptor.wooStatus,
 		search: decision.descriptor.search,
 		customerId: decision.descriptor.customerId,
+		cashierId: decision.descriptor.cashierId,
+		store: decision.descriptor.store,
 		...(limit !== undefined ? { limit } : {}),
 		afterSeconds: decision.descriptor.afterSeconds,
 		beforeSeconds: decision.descriptor.beforeSeconds,
+		orderby: decision.descriptor.orderby,
+		order: decision.descriptor.order,
 		complete: decision.descriptor.complete,
 		perPage: Math.min(
 			limit ?? WOO_REST_MAX_PER_PAGE,
@@ -301,6 +305,10 @@ async function fetchBrowserOrderQuery(
 		if (descriptor.status) query.set('status', descriptor.status);
 		if (descriptor.search) query.set('search', descriptor.search);
 		if (descriptor.customerId !== undefined) query.set('customer', String(descriptor.customerId));
+		if (descriptor.cashierId !== undefined) query.set('pos_cashier', String(descriptor.cashierId));
+		if (descriptor.store !== undefined) {
+			query.set(/^\d+$/.test(descriptor.store) ? 'pos_store' : 'created_via', descriptor.store);
+		}
 		if (descriptor.afterSeconds !== undefined)
 			query.set('after', new Date(descriptor.afterSeconds * 1_000).toISOString());
 		if (descriptor.beforeSeconds !== undefined)
@@ -310,8 +318,8 @@ async function fetchBrowserOrderQuery(
 		}
 		query.set('per_page', String(descriptor.perPage));
 		query.set('page', String(requestCount + 1));
-		query.set('orderby', 'id');
-		query.set('order', 'desc');
+		query.set('orderby', descriptor.orderby ?? 'id');
+		query.set('order', descriptor.order ?? 'desc');
 
 		const url = `${input.baseUrl}/orders?${query.toString()}`;
 		const response = await httpGet(input, url, context);

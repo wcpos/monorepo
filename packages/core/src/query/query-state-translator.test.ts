@@ -129,7 +129,10 @@ describe('query-state translator', () => {
 				{ status: 'publish' },
 			],
 		});
-		expect(products).toMatchObject({ sort: [{ sortable_price: 'desc' }], limit: 25 });
+		expect(products).toMatchObject({
+			sort: [{ sortable_price: 'desc' }],
+			limit: 25,
+		});
 	});
 
 	it('composes order payload metadata with promoted filters and dates', () => {
@@ -216,7 +219,12 @@ describe('query-state translator', () => {
 			limit: translated.limit,
 		};
 
-		expect(requirementsForQuery({ ...requirementInput, selector: translated.selector })).toEqual(
+		expect(
+			requirementsForQuery({
+				...requirementInput,
+				selector: translated.selector,
+			})
+		).toEqual(
 			requirementsForQuery({
 				...requirementInput,
 				selector: {
@@ -235,7 +243,10 @@ describe('query-state translator', () => {
 				status: 'completed',
 				cashier: '7',
 				store: '12',
-				dateRange: { from: '2026-07-15T00:00:00.000Z', to: '2026-07-15T23:59:59.999Z' },
+				dateRange: {
+					from: '2026-07-15T00:00:00.000Z',
+					to: '2026-07-15T23:59:59.999Z',
+				},
 			},
 			sort: { field: 'date_created_gmt', direction: 'desc' },
 			limit: Number.MAX_SAFE_INTEGER,
@@ -247,6 +258,7 @@ describe('query-state translator', () => {
 				collectionName: translated.collectionName,
 				selector: translated.selector,
 				limit: translated.limit,
+				sort: translated.sort,
 			})
 		).toEqual([
 			{
@@ -254,7 +266,7 @@ describe('query-state translator', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=completed:search=:after=1784073600:before=1784159999:limit=all',
+					'orders:browser:status=completed:search=:cashier=7:store=12:after=1784073600:before=1784159999:orderby=date:order=desc:limit=all',
 				priority: 700,
 			},
 		]);
@@ -271,7 +283,10 @@ describe('logs preset filters', () => {
 	it('translates the sync preset to an index-friendly category prefix range', () => {
 		const translated = translateQueryState('logs', {
 			...base,
-			filters: { level: ['info', 'warn', 'error'], category_prefix: 'wcpos.sync' },
+			filters: {
+				level: ['info', 'warn', 'error'],
+				category_prefix: 'wcpos.sync',
+			},
 		} satisfies QueryStateOf<'logs'>);
 
 		expect(translated.selector).toEqual({
@@ -299,6 +314,8 @@ describe('logs preset filters', () => {
 			filters: { level: ['error'], has_actor: false },
 		} satisfies QueryStateOf<'logs'>);
 
-		expect(translated.selector).toEqual({ $and: [{ level: { $in: ['error'] } }] });
+		expect(translated.selector).toEqual({
+			$and: [{ level: { $in: ['error'] } }],
+		});
 	});
 });

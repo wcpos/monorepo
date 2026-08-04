@@ -150,6 +150,69 @@ describe('requirementsForQuery', () => {
 		}
 	});
 
+	it('maps cashier and store metadata filters to interactive order dimensions', () => {
+		expect(
+			requirementsForQuery({
+				id: 'orders',
+				collectionName: 'orders',
+				selector: {
+					$and: [
+						{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
+						{ meta_data: { $elemMatch: { key: '_pos_store', value: '12' } } },
+					],
+				},
+				limit: 25,
+			})
+		).toEqual([
+			{
+				id: 'orders:orders-query',
+				collection: 'orders',
+				kind: 'query',
+				queryKey: 'orders:browser:status=all:search=:cashier=7:store=12:limit=25',
+				priority: 700,
+			},
+		]);
+	});
+
+	it('maps root created_via selectors to the store dimension', () => {
+		for (const created_via of ['woocommerce-pos', { $eq: 'woocommerce-pos' }]) {
+			expect(
+				requirementsForQuery({
+					id: 'orders',
+					collectionName: 'orders',
+					selector: { created_via },
+					limit: 25,
+				})[0]
+			).toMatchObject({
+				queryKey: 'orders:browser:status=all:search=:store=woocommerce-pos:limit=25',
+				priority: 700,
+			});
+		}
+	});
+
+	it('carries only mapped non-default order sorts', () => {
+		const keyFor = (sort: Record<string, 'asc' | 'desc'>[]) =>
+			requirementsForQuery({
+				id: 'orders',
+				collectionName: 'orders',
+				selector: {},
+				limit: 25,
+				sort,
+			})[0];
+		expect(keyFor([{ date_created_gmt: 'desc' }])).toEqual({
+			id: 'orders:orders-query',
+			collection: 'orders',
+			kind: 'query',
+			queryKey: 'orders:browser:status=all:search=:orderby=date:order=desc:limit=25',
+		});
+		expect(keyFor([{ total: 'asc' }])?.queryKey).toBe(
+			'orders:browser:status=all:search=:limit=25'
+		);
+		expect(keyFor([{ number: 'desc' }])?.queryKey).toBe(
+			'orders:browser:status=all:search=:limit=25'
+		);
+	});
+
 	it('maps reports date ranges to ranged complete order descriptors', () => {
 		expect(
 			requirementsForQuery({

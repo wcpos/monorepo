@@ -57,8 +57,12 @@ export type SeedOrderFilterSchedulerTaskInput = {
 	search: string;
 	limit: number;
 	customerId?: number;
+	cashierId?: number;
+	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
+	orderby?: 'date' | 'modified' | 'id';
+	order?: 'asc' | 'desc';
 	complete?: boolean;
 	priority?: number;
 	completedDedupeForMs?: number;
@@ -105,11 +109,16 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 	const status = input.status.trim() || 'all';
 	const search = input.search.trim();
 	const customerPart = input.customerId === undefined ? '' : `:customer=${input.customerId}`;
+	const cashierPart = input.cashierId === undefined ? '' : `:cashier=${input.cashierId}`;
+	const storePart = input.store === undefined ? '' : `:store=${input.store}`;
 	const rangePart = `${
 		input.afterSeconds === undefined ? '' : `:after=${input.afterSeconds}`
 	}${input.beforeSeconds === undefined ? '' : `:before=${input.beforeSeconds}`}`;
+	const sortPart = `${input.orderby === undefined ? '' : `:orderby=${input.orderby}`}${
+		input.order === undefined ? '' : `:order=${input.order}`
+	}`;
 	const limitPart = input.complete ? 'all' : input.limit;
-	const queryKey = `orders:browser:status=${status}:search=${search}${customerPart}${rangePart}:limit=${limitPart}`;
+	const queryKey = `orders:browser:status=${status}:search=${search}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:limit=${limitPart}`;
 	const descriptorDecision = parseOrderBrowserSchedulerDescriptor(queryKey);
 	if (!descriptorDecision || 'skipReason' in descriptorDecision) {
 		throw new Error(
@@ -119,7 +128,7 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 	const { limit } = descriptorDecision.descriptor;
 	const searchPart = search === '' ? '' : `.search.${search}`;
 	const requirementId =
-		customerPart || rangePart
+		customerPart || cashierPart || storePart || rangePart || sortPart
 			? queryKey.replaceAll(':', '.')
 			: `orders.browser.status.${status}${searchPart}.limit.${limitPart}`;
 	if (queryKey.length > SCHEDULER_TASK_KEY_MAX_LENGTH) {

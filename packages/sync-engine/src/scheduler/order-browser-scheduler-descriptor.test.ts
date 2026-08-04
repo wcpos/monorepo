@@ -84,6 +84,37 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 		});
 	});
 
+	it('parses cashier, store, and sort dimensions alone and combined', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=all:search=:cashier=7:limit=25')
+		).toEqual({ descriptor: expect.objectContaining({ cashierId: 7 }) });
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:search=:store=woocommerce-pos:limit=25'
+			)
+		).toEqual({ descriptor: expect.objectContaining({ store: 'woocommerce-pos' }) });
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=all:search=:orderby=modified:order=asc:limit=25'
+			)
+		).toEqual({ descriptor: expect.objectContaining({ orderby: 'modified', order: 'asc' }) });
+		expect(
+			parseOrderBrowserSchedulerDescriptor(
+				'orders:browser:status=processing:search=hat:customer=42:cashier=7:store=12:after=1782864000:before=1784073599:orderby=date:order=desc:limit=25'
+			)
+		).toEqual({
+			descriptor: expect.objectContaining({
+				customerId: 42,
+				cashierId: 7,
+				store: '12',
+				afterSeconds: 1782864000,
+				beforeSeconds: 1784073599,
+				orderby: 'date',
+				order: 'desc',
+			}),
+		});
+	});
+
 	it('rejects unbounded completion and malformed epoch values', () => {
 		for (const queryKey of [
 			'orders:browser:status=all:search=:limit=all',
@@ -104,6 +135,27 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 			expect(
 				parseOrderBrowserSchedulerDescriptor(
 					`orders:browser:status=all:search=:customer=${customer}:limit=25`
+				)
+			).toEqual({ skipReason: 'descriptor is not supported' });
+		}
+	});
+
+	it('rejects malformed cashier, store, and sort dimensions', () => {
+		for (const dimension of [
+			'cashier=-1',
+			'cashier=1.5',
+			'cashier=9007199254740992',
+			'store=',
+			'store=WCPOS',
+			'store=bad:value',
+			'store=bad=value',
+			'orderby=date',
+			'order=desc',
+			'orderby=total:order=desc',
+		]) {
+			expect(
+				parseOrderBrowserSchedulerDescriptor(
+					`orders:browser:status=all:search=:${dimension}:limit=25`
 				)
 			).toEqual({ skipReason: 'descriptor is not supported' });
 		}

@@ -55,6 +55,12 @@ const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
 
 /** The web scheduler's browse-lane cap; the engine rejects larger order descriptors. */
 const ORDER_BROWSE_MAX_LIMIT = 200;
+const ORDER_BROWSE_ORDERBY_BY_SORT_FIELD = {
+	date_created_gmt: 'date',
+	date_modified_gmt: 'modified',
+	number: 'id',
+	id: 'id',
+} as const;
 
 function finiteWooIds(selector: Record<string, unknown> | undefined): number[] | null {
 	const idSelector = selector?.id as unknown;
@@ -85,7 +91,8 @@ function finiteWooIds(selector: Record<string, unknown> | undefined): number[] |
 
 function orderBrowseDescriptor(
 	selector: Record<string, unknown> | undefined,
-	limit: number | undefined
+	limit: number | undefined,
+	sort: readonly RequirementSortPart[] | undefined
 ): string {
 	const statusValue = (() => {
 		const status = selector?.status as unknown;
@@ -112,6 +119,43 @@ function orderBrowseDescriptor(
 		Number.isSafeInteger(customerId) && (customerId as number) >= 0
 			? `:customer=${customerId}`
 			: '';
+	const metaValue = (key: '_pos_user' | '_pos_store'): string | undefined => {
+		const conditions = [selector, ...(Array.isArray(selector?.$and) ? selector.$and : [])];
+		for (const condition of conditions) {
+			if (condition === null || typeof condition !== 'object') continue;
+			const metaData = (condition as Record<string, unknown>).meta_data;
+			if (metaData === null || typeof metaData !== 'object') continue;
+			const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
+			if (
+				elemMatch !== null &&
+				typeof elemMatch === 'object' &&
+				(elemMatch as Record<string, unknown>).key === key &&
+				typeof (elemMatch as Record<string, unknown>).value === 'string'
+			) {
+				return (elemMatch as Record<string, unknown>).value as string;
+			}
+		}
+		return undefined;
+	};
+	const cashier = metaValue('_pos_user');
+	const cashierId = cashier !== undefined && /^\d+$/.test(cashier) ? Number(cashier) : undefined;
+	const cashierPart =
+		cashierId !== undefined && Number.isSafeInteger(cashierId) ? `:cashier=${cashierId}` : '';
+	const metaStore = metaValue('_pos_store');
+	const createdViaValue = selector?.created_via;
+	const createdVia =
+		typeof createdViaValue === 'string'
+			? createdViaValue
+			: createdViaValue !== null && typeof createdViaValue === 'object'
+				? (createdViaValue as Record<string, unknown>).$eq
+				: undefined;
+	const store =
+		typeof metaStore === 'string' && /^\d+$/.test(metaStore)
+			? metaStore
+			: typeof createdVia === 'string' && /^[a-z0-9_-]+$/.test(createdVia)
+				? createdVia
+				: undefined;
+	const storePart = store === undefined ? '' : `:store=${store}`;
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
 	const epochSeconds = (value: unknown): number | undefined => {
 		if (typeof value !== 'string') return undefined;
@@ -125,14 +169,26 @@ function orderBrowseDescriptor(
 	const rangePart = `${afterSeconds === undefined ? '' : `:after=${afterSeconds}`}${
 		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
 	}`;
+	const [primarySort] = sort ?? [];
+	const [rawSortField, direction] = Object.entries(primarySort ?? {})[0] ?? [];
+	const sortField = rawSortField?.replace(/^sortable_/, '');
+	const orderby = sortField
+		? ORDER_BROWSE_ORDERBY_BY_SORT_FIELD[
+				sortField as keyof typeof ORDER_BROWSE_ORDERBY_BY_SORT_FIELD
+			]
+		: undefined;
+	const sortPart =
+		orderby === undefined || (orderby === 'id' && direction === 'desc')
+			? ''
+			: `:orderby=${orderby}:order=${direction}`;
 	if (rangePart && typeof limit === 'number' && limit > ORDER_BROWSE_MAX_LIMIT) {
-		return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${rangePart}:limit=all`;
+		return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:limit=all`;
 	}
 	const boundedLimit = Math.min(
 		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
 		ORDER_BROWSE_MAX_LIMIT
 	);
-	return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${rangePart}:limit=${boundedLimit}`;
+	return `orders:browser:status=${statusValue}:search=${searchValue}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:limit=${boundedLimit}`;
 }
 
 /**
@@ -197,7 +253,6 @@ export interface RequirementInput {
 	collectionName: string;
 	selector: Record<string, unknown> | undefined;
 	limit: number | undefined;
-	/** The query's sort, primary part first. Only the products browse window reads it. */
 	sort?: readonly RequirementSortPart[];
 	priority?: number;
 	forceRefresh?: boolean;
@@ -245,10 +300,12 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 	}
 
 	if (engineCollection === 'orders') {
-		const queryKey = orderBrowseDescriptor(selector, limit);
+		const queryKey = orderBrowseDescriptor(selector, limit, input.sort);
 		const priority =
 			input.priority ??
 			(queryKey.includes(':customer=') ||
+			queryKey.includes(':cashier=') ||
+			queryKey.includes(':store=') ||
 			queryKey.includes(':after=') ||
 			queryKey.includes(':before=') ||
 			queryKey.endsWith(':limit=all')

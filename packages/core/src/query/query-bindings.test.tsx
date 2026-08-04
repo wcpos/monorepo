@@ -280,17 +280,18 @@ describe('query bindings', () => {
 				collection: 'orders',
 				kind: 'query',
 				queryKey:
-					'orders:browser:status=processing:search=smith:customer=42:after=1782864000:before=1783987200:limit=50',
+					'orders:browser:status=processing:search=smith:customer=42:cashier=7:store=12:after=1782864000:before=1783987200:orderby=date:order=desc:limit=50',
 			})
 		);
 	});
 
-	it('uses coverage for an order status and customer selector', async () => {
+	it('uses coverage for a reports-shaped order selector', async () => {
 		await engineDB.addCollections({
 			coverageLanes: { schema: coverageLaneSchema },
 			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
 		} as never);
-		const queryKey = 'orders:browser:status=processing:search=:customer=42:limit=25';
+		const queryKey =
+			'orders:browser:status=completed:search=:cashier=7:store=12:after=1782864000:before=1783987200:orderby=date:order=desc:limit=25';
 		await engineDB.collections.coverageLanes.insert({
 			laneKey: `orders::${queryKey}`,
 			collectionName: 'orders',
@@ -306,8 +307,10 @@ describe('query bindings', () => {
 				useCollectionBinding('orders', {
 					search: '',
 					filters: {
-						status: 'processing',
-						customer_id: 42,
+						status: 'completed',
+						cashier: '7',
+						store: '12',
+						dateRange: { from: '2026-07-01', to: '2026-07-14' },
 					},
 					sort: { field: 'date_created_gmt', direction: 'desc' },
 					limit: 25,

@@ -1080,6 +1080,32 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 
+	it('sends cashier, store, and sort dimensions through Woo REST browser requests', async () => {
+		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const fetcher = vi.fn(async (_url: string) => response([]));
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+
+		for (const queryKey of [
+			'orders:browser:status=processing:search=:cashier=7:store=12:orderby=date:order=asc:limit=25',
+			'orders:browser:status=all:search=:store=woocommerce-pos:limit=25',
+		]) {
+			await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey }));
+		}
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=processing&pos_cashier=7&pos_store=12&per_page=25&page=1&orderby=date&order=asc',
+			'http://wcpos.local/wp-json/wcpos/v2/orders?created_via=woocommerce-pos&per_page=25&page=1&orderby=id&order=desc',
+		]);
+	});
+
 	it('records capped browser order query coverage as incomplete without exhaustion evidence', async () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),

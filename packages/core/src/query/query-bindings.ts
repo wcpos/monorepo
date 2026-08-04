@@ -317,6 +317,19 @@ function useDemand(
 function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boolean {
 	return Object.entries(selector).every(([field, value]) => {
 		if (field === 'search') return typeof value === 'string';
+		if (field === 'created_via') return typeof value === 'string';
+		if (field === '$and') {
+			if (!Array.isArray(value) || value.length === 0) return false;
+			return value.every((condition) => {
+				if (condition === null || typeof condition !== 'object') return false;
+				const metaData = (condition as Record<string, unknown>).meta_data;
+				if (metaData === null || typeof metaData !== 'object') return false;
+				const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
+				if (elemMatch === null || typeof elemMatch !== 'object') return false;
+				const { key, value: metaValue } = elemMatch as Record<string, unknown>;
+				return (key === '_pos_user' || key === '_pos_store') && typeof metaValue === 'string';
+			});
+		}
 		if (field === 'customer_id') {
 			if (typeof value === 'number') return true;
 			const customer = value as Record<string, unknown> | null;
@@ -520,7 +533,14 @@ function useEngineBinding(
 		() => projection$.pipe(map(({ source }) => source)),
 		[projection$]
 	);
-	return { resource, result$, active$, total$, totalSource$, sync: demand.sync };
+	return {
+		resource,
+		result$,
+		active$,
+		total$,
+		totalSource$,
+		sync: demand.sync,
+	};
 }
 
 export function useCollectionBinding<C extends CollectionKey>(
@@ -760,7 +780,11 @@ function searchSelectDescriptor(
 			collection === 'cashier'
 				? { role: { $in: ['administrator', 'shop_manager', 'cashier'] } }
 				: {},
-		sort: [{ [isCustomer ? 'last_name' : collection === 'coupon' ? 'code' : 'name']: 'asc' }],
+		sort: [
+			{
+				[isCustomer ? 'last_name' : collection === 'coupon' ? 'code' : 'name']: 'asc',
+			},
+		],
 		limit,
 		search,
 	};

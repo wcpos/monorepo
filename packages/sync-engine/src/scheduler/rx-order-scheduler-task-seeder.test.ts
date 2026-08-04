@@ -187,7 +187,7 @@ describe('seedOrderSchedulerTasks', () => {
 		expect(seederInput).not.toHaveProperty('ignoreRetryBackoff');
 	});
 
-	it('round-trips a customer through a browser order search descriptor', async () => {
+	it('round-trips all order dimensions through a browser order search descriptor', async () => {
 		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
@@ -212,6 +212,10 @@ describe('seedOrderSchedulerTasks', () => {
 				status: 'processing',
 				search: 'hat',
 				customerId: 42,
+				cashierId: 7,
+				store: '12',
+				orderby: 'date',
+				order: 'asc',
 				limit: 50,
 				nowMs: 15_500,
 			})
@@ -222,10 +226,12 @@ describe('seedOrderSchedulerTasks', () => {
 				repository: schedulerRepository,
 				tasks: [
 					{
-						id: 'orders:browser:status=processing:search=hat:customer=42:limit=50:windowed',
-						requirementId: 'orders.browser.status=processing.search=hat.customer=42.limit=50',
+						id: 'orders:browser:status=processing:search=hat:customer=42:cashier=7:store=12:orderby=date:order=asc:limit=50:windowed',
+						requirementId:
+							'orders.browser.status=processing.search=hat.customer=42.cashier=7.store=12.orderby=date.order=asc.limit=50',
 						collection: 'orders',
-						queryKey: 'orders:browser:status=processing:search=hat:customer=42:limit=50',
+						queryKey:
+							'orders:browser:status=processing:search=hat:customer=42:cashier=7:store=12:orderby=date:order=asc:limit=50',
 						limit: 50,
 						priority: 700,
 						mode: 'windowed',
