@@ -105,7 +105,7 @@ function createStore<C extends CollectionKey>(
 					resetBaseline[field] = value;
 					filters[field] = value;
 				}
-				resultChange({ filters });
+				publish({ ...state, filters });
 			},
 			setSort: (field, direction) => resultChange({ sort: { field, direction } }),
 			extendLimit: () => publish({ ...state, limit: state.limit + pageSize }),
