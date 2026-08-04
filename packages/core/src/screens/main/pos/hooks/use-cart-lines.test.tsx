@@ -1,15 +1,19 @@
 /**
  * @jest-environment jsdom
  */
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { useCartLines } from './use-cart-lines';
 
 const appliedCouponReferenceDemand = jest.fn();
+let whenSettled = jest.fn(async () => undefined);
 
 jest.mock('../../../../query', () => ({
-	useAppliedCouponReferenceDemand: (enabled: boolean) => appliedCouponReferenceDemand(enabled),
+	useAppliedCouponReferenceDemand: (enabled: boolean) => {
+		appliedCouponReferenceDemand(enabled);
+		return { whenSettled: () => whenSettled() };
+	},
 }));
 
 type CouponLine = { code: string | null };
@@ -26,7 +30,12 @@ jest.mock('../contexts/current-order', () => ({
 			fee_lines$: feeLines$,
 			shipping_lines$: shippingLines$,
 			coupon_lines$: couponLines$,
-			getLatest: () => ({ line_items: [], fee_lines: [], shipping_lines: [], coupon_lines: [] }),
+			getLatest: () => ({
+				line_items: lineItems$.getValue(),
+				fee_lines: [],
+				shipping_lines: [],
+				coupon_lines: couponLines$.getValue(),
+			}),
 		},
 	}),
 }));
@@ -35,8 +44,10 @@ jest.mock('./use-fee-line-data', () => ({
 	useFeeLineData: () => ({ getFeeLineData: () => ({ percent: false }) }),
 }));
 
+const recalculate = jest.fn(async () => undefined);
+
 jest.mock('./use-recalculate-coupons', () => ({
-	useRecalculateCoupons: () => ({ recalculate: jest.fn() }),
+	useRecalculateCoupons: () => ({ recalculate }),
 }));
 
 jest.mock('./use-update-fee-line', () => ({
@@ -59,7 +70,10 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 describe('useCartLines reference demand (#952)', () => {
 	beforeEach(() => {
 		appliedCouponReferenceDemand.mockClear();
+		recalculate.mockClear();
+		whenSettled = jest.fn(async () => undefined);
 		couponLines$.next([]);
+		lineItems$.next([]);
 	});
 
 	it('declares no coupon reference demand for a cart without coupon lines', () => {
@@ -84,5 +98,41 @@ describe('useCartLines reference demand (#952)', () => {
 
 		expect(appliedCouponReferenceDemand).toHaveBeenCalledWith(false);
 		expect(appliedCouponReferenceDemand).not.toHaveBeenCalledWith(true);
+	});
+
+	it('declares demand when a coupon is applied to an already-mounted cart', async () => {
+		renderHook(() => useCartLines());
+		expect(appliedCouponReferenceDemand).not.toHaveBeenCalledWith(true);
+
+		await act(async () => {
+			couponLines$.next([{ code: 'bonus' }]);
+		});
+
+		expect(appliedCouponReferenceDemand).toHaveBeenCalledWith(true);
+	});
+
+	it('holds the coupon replay until the reference pull it declared has settled', async () => {
+		let releaseReferences: (() => void) | undefined;
+		whenSettled = jest.fn(
+			() =>
+				new Promise<undefined>((resolve) => {
+					releaseReferences = () => resolve(undefined);
+				})
+		);
+		couponLines$.next([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		// A cart edit while the on-demand pull is still in flight. Scanning now would hit the
+		// still-empty coupons/categories collections — the exact race the barrier closes.
+		await act(async () => {
+			lineItems$.next([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		expect(whenSettled).toHaveBeenCalled();
+		expect(recalculate).not.toHaveBeenCalled();
+
+		await act(async () => {
+			releaseReferences?.();
+		});
+		expect(recalculate).toHaveBeenCalled();
 	});
 });

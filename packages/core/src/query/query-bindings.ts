@@ -1,10 +1,20 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject, combineLatest, EMPTY, Observable, of, timer } from 'rxjs';
+import {
+	BehaviorSubject,
+	combineLatest,
+	EMPTY,
+	firstValueFrom,
+	Observable,
+	of,
+	race,
+	timer,
+} from 'rxjs';
 import {
 	distinctUntilChanged,
 	expand,
+	filter,
 	map,
 	shareReplay,
 	startWith,
@@ -867,6 +877,9 @@ export function useAllCategoriesBinding() {
 	});
 }
 
+/** How long the coupon replay waits for its reference pull before giving up on it. */
+const COUPON_REFERENCE_SETTLE_TIMEOUT_MS = 10_000;
+
 const COUPON_REPLAY_COUPONS_DESCRIPTOR: EngineQueryDescriptor = {
 	collection: 'coupons',
 	selector: {},
@@ -898,8 +911,34 @@ const COUPON_REPLAY_CATEGORIES_DESCRIPTOR: EngineQueryDescriptor = {
  * Declared only while coupon lines are present, and collapsed by the engine's
  * existing `REFERENCE_REFRESH_DEDUPE_MS` window, so a coupon cart costs at most one
  * refresh per collection per dedupe window rather than a pull per cart edit.
+ *
+ * Declaring the demand is not enough on its own: it is asynchronous, and the replay is
+ * driven by a cart edit that can land while the pull is still in flight. So this also
+ * returns `whenSettled()`, the barrier the replay awaits before it scans — without it a
+ * cashier who re-opens a coupon order and immediately changes a quantity still scans the
+ * empty collections, which is the exact failure the demand exists to prevent.
  */
-export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): void {
-	useEngineBinding(COUPON_REPLAY_COUPONS_DESCRIPTOR, hasAppliedCoupons);
-	useEngineBinding(COUPON_REPLAY_CATEGORIES_DESCRIPTOR, hasAppliedCoupons);
+export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
+	whenSettled: () => Promise<void>;
+} {
+	const coupons = useEngineBinding(COUPON_REPLAY_COUPONS_DESCRIPTOR, hasAppliedCoupons);
+	const categories = useEngineBinding(COUPON_REPLAY_CATEGORIES_DESCRIPTOR, hasAppliedCoupons);
+	const settled$ = React.useMemo(
+		() =>
+			combineLatest([coupons.active$, categories.active$]).pipe(
+				map(([couponsActive, categoriesActive]) => !couponsActive && !categoriesActive),
+				filter(Boolean)
+			),
+		[categories.active$, coupons.active$]
+	);
+	return React.useMemo(
+		() => ({
+			whenSettled: async () => {
+				// Bounded: cart math must never hang on sync. A lane that is still running after
+				// the deadline degrades to the pre-barrier behaviour rather than freezing totals.
+				await firstValueFrom(race(settled$, timer(COUPON_REFERENCE_SETTLE_TIMEOUT_MS)));
+			},
+		}),
+		[settled$]
+	);
 }
