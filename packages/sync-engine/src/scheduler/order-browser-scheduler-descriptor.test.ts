@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-	ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS,
 	browserOrderSchedulerDescriptorLimitError,
+	ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS,
 	parseOrderBrowserSchedulerDescriptor,
 } from './order-browser-scheduler-descriptor';
 
