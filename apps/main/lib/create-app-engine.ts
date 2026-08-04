@@ -25,6 +25,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
+import { evaluateClockSkew } from './clock-skew';
 import { getEngineConnectivity } from './connectivity';
 import {
 	appMetricsObserver,
@@ -93,6 +94,7 @@ type CachedEngine = {
 };
 
 let cachedEngine: CachedEngine | null = null;
+let clockSkewEvaluated = false;
 const pendingDisposals = new Map<string, Promise<void>>();
 
 const CENSUS_WC_ROUTES: Record<string, string | null> = {
@@ -133,6 +135,7 @@ function scopeCacheKey(scope: StoreScopeIdentity): string {
 }
 
 function disposeCachedEngine(entry: CachedEngine): void {
+	clockSkewEvaluated = false;
 	const priorDisposal = pendingDisposals.get(entry.key);
 	let disposal: Promise<void>;
 	try {
@@ -232,6 +235,7 @@ export async function switchAppEngineScope(session: {
 
 	entry.key = targetKey;
 	entry.databaseName = scopeDatabaseName(scope);
+	clockSkewEvaluated = false;
 }
 
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
@@ -261,6 +265,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.fetcherOptions.credentials = options.credentials;
 		entry.fetcherOptions.refreshAuth = options.refreshAuth;
 		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
+		clockSkewEvaluated = false;
 		void switching.catch((error) => {
 			engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
 				context: {
@@ -404,6 +409,33 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 
 			const atMs = Date.now();
 			const durationMs = atMs - startedAtMs;
+			if (!clockSkewEvaluated) {
+				try {
+					const dateHeader = response.headers.get('Date');
+					if (dateHeader !== null && !Number.isNaN(Date.parse(dateHeader))) {
+						const result = evaluateClockSkew({
+							dateHeader,
+							requestStartedAtMs: startedAtMs,
+							responseAtMs: atMs,
+						});
+						clockSkewEvaluated = true;
+						if (result) {
+							engineLogger.warn(
+								`Server clock is ${Math.abs(result.skewSeconds)}s ${result.skewSeconds > 0 ? 'ahead of' : 'behind'} the device clock`,
+								{
+									context: {
+										skewSeconds: result.skewSeconds,
+										serverDate: result.serverDate,
+										deviceDate: result.deviceDate,
+									},
+								}
+							);
+						}
+					}
+				} catch {
+					// Malformed server diagnostics must not affect the sync request.
+				}
+			}
 			const contentLengthRaw = Number(response.headers.get('content-length'));
 			// A malformed/negative content-length (broken server or proxy) must not
 			// poison the hourly byte totals — clamp to a finite non-negative count.

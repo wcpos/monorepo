@@ -243,6 +243,33 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
+	it('logs server clock skew at most once per scope', async () => {
+		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
+		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response(null, {
+				status: 200,
+				headers: { Date: 'Thu, 01 Jan 1970 00:02:00 GMT' },
+			})
+		);
+		const { createAppSyncEngine, createRxdbSyncEngine, networkWarn } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
+
+		expect(networkWarn).toHaveBeenCalledTimes(1);
+		expect(networkWarn).toHaveBeenCalledWith('Server clock is 120s ahead of the device clock', {
+			context: {
+				skewSeconds: 120,
+				serverDate: '1970-01-01T00:02:00.000Z',
+				deviceDate: '1970-01-01T00:00:00.000Z',
+			},
+		});
+		now.mockRestore();
+		fetch.mockRestore();
+	});
+
 	it('classifies a conditional-GET 304 as a successful transport outcome', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_010);
 		const response = new Response(null, {
