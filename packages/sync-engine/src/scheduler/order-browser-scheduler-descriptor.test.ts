@@ -118,6 +118,12 @@ describe('orderBrowserQueryKey', () => {
 		expect(() => orderBrowserQueryKey({ order: 'desc' })).toThrow(TypeError);
 		expect(() => orderBrowserQueryKey({ limit: 'all' })).toThrow(TypeError);
 	});
+
+	it('trims status and search before returning the persisted lane key', () => {
+		expect(orderBrowserQueryKey({ status: ' processing ', search: ' jane ' })).toBe(
+			'orders:browser:status=processing:search=jane:limit=10'
+		);
+	});
 });
 
 describe('parseOrderBrowserSchedulerDescriptor', () => {

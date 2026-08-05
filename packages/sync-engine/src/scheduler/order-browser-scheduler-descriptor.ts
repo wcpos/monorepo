@@ -26,7 +26,8 @@ export type OrderBrowserSchedulerDescriptorDecision =
 
 /** Build the canonical persisted lane identity for an orders browse window. */
 export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
-	const status = dims.status ?? 'all';
+	const status = (dims.status ?? 'all').trim();
+	const search = (dims.search ?? '').trim();
 	const safeNonNegativeInteger = (value: number | undefined): number | undefined =>
 		value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 	const afterSeconds = safeNonNegativeInteger(dims.afterSeconds);
@@ -56,7 +57,7 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 					)
 				: 10;
 
-	return `orders:browser:status=${status}${dimension('customer', safeNonNegativeInteger(dims.customerId))}${dimension('cashier', safeNonNegativeInteger(dims.cashierId))}${dimension('store', store)}${dimension('after', afterSeconds)}${dimension('before', beforeSeconds)}${sortPart}:search=${dims.search ?? ''}:limit=${limit}`;
+	return `orders:browser:status=${status}${dimension('customer', safeNonNegativeInteger(dims.customerId))}${dimension('cashier', safeNonNegativeInteger(dims.cashierId))}${dimension('store', store)}${dimension('after', afterSeconds)}${dimension('before', beforeSeconds)}${sortPart}:search=${search}:limit=${limit}`;
 }
 
 export function browserOrderSchedulerDescriptorLimit(limitText: string): number | null {

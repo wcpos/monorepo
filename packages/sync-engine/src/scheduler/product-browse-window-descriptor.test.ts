@@ -46,6 +46,20 @@ describe('productBrowseWindowQueryKeyFromDimensions', () => {
 			productBrowseWindowQueryKeyFromDimensions({ orderby: 'sku', order: 'asc' } as never)
 		).toThrow(TypeError);
 	});
+
+	it('filters unsupported taxonomy ids before encoding', () => {
+		const queryKey = productBrowseWindowQueryKeyFromDimensions({
+			category: [-1, 0, 1.5, 2, Number.MAX_SAFE_INTEGER + 1],
+			tag: [Number.NaN, 3, Number.POSITIVE_INFINITY],
+			brand: [Number.NEGATIVE_INFINITY, 5],
+		});
+
+		expect(queryKey).toBe('products:browse-window:limit=100:category=2:tag=3:brand=5');
+		expect(parseProductBrowseWindowDescriptor(queryKey)).not.toBeNull();
+		expect(productBrowseWindowQueryKeyFromDimensions({ category: [0] })).toBe(
+			'products:browse-window:limit=100'
+		);
+	});
 });
 
 describe('product browse-window descriptor', () => {

@@ -158,8 +158,10 @@ export function productBrowseWindowFilterPart(filters?: ProductBrowseWindowFilte
 		if (!ids || ids.length === 0) return '';
 		// Canonical spelling — strictly ascending and unique — so one filter set can never
 		// mint two coverage lanes. The parser rejects any other spelling.
-		const canonical = [...new Set(ids)].sort((a, b) => a - b);
-		return `:${field}=${canonical.join(',')}`;
+		const canonical = [...new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0))].sort(
+			(a, b) => a - b
+		);
+		return canonical.length === 0 ? '' : `:${field}=${canonical.join(',')}`;
 	};
 	const flagPart = (field: 'featured' | 'on_sale') =>
 		filters[field] === undefined ? '' : `:${field}=${filters[field] ? '1' : '0'}`;
