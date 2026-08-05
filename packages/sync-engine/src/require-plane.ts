@@ -157,6 +157,7 @@ export type RequirePlaneDeps = {
 	fetcher: EngineSourceFetcher;
 	syncBaseUrl: string;
 	diagnostics: SyncObserver;
+	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	pullBatchSize?: () => number | undefined;
 	now?: () => number;
 };
@@ -915,6 +916,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				}
 				return null;
 			})();
+			deps.onActivityChange?.(requirement.collection, 1);
+			let activitySettled = false;
+			const settleActivity = (): void => {
+				if (activitySettled) return;
+				activitySettled = true;
+				deps.onActivityChange?.(requirement.collection, -1);
+			};
 			// Browse requirements synchronously derive their lane identity, then delegate to
 			// the parser-based internal queued path used by the durable scheduler.
 			const queuedRequirement: InternalRequirement =
@@ -935,8 +943,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			let subscriber: RequirementSubscriber;
 			const ready = new Promise<CoverageOutcome>((resolve, reject) => {
 				subscriber = {
-					resolve,
-					reject,
+					resolve: (outcome) => {
+						settleActivity();
+						resolve(outcome);
+					},
+					reject: (error) => {
+						settleActivity();
+						reject(error);
+					},
 					released: false,
 				};
 			});

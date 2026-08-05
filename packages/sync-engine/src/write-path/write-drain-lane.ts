@@ -119,6 +119,7 @@ export type WriteDrainLaneDeps = {
 	syncBaseUrl: string;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
+	onActivityChange?: (delta: 1 | -1) => void;
 	emitWriteEvent: (event: WriteOutcomeEvent) => void;
 	now?: () => number;
 };
@@ -157,6 +158,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 					};
 				}
 				const queue = queueFor(database);
+				const hasPendingWrites = (await queue.pending()).length > 0;
 				const resolveEndpoint = pushEndpointResolver(deps.syncBaseUrl);
 				// A switch/reset mid-drain must read as CANCELLATION, not failure —
 				// without a signal the drain would classify the aborted push as a
@@ -213,6 +215,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				// acknowledgement the queue does not yet agree with.
 				const ackCandidates: WriteOutcomeEvent[] = [];
 				let report: WriteDrainReport = { lane: 'write-drain', status: 'ran' };
+				if (hasPendingWrites) deps.onActivityChange?.(1);
 				const wrote = await bound
 					.guardWrite(async () => {
 						const result = await drainMutationQueue({
@@ -433,6 +436,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 					.finally(() => {
 						bound.signal.removeEventListener('abort', abortTick);
 						signal?.removeEventListener('abort', abortTick);
+						if (hasPendingWrites) deps.onActivityChange?.(-1);
 					});
 				if (wrote === 'dropped') {
 					report = {

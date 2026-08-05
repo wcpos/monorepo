@@ -1,11 +1,6 @@
 import type { EngineRequirement } from '@wcpos/sync-engine';
 
-import {
-	declareRequirements,
-	prepareCollectionResetRefill,
-	registerActiveBinding,
-	requirementsForQuery,
-} from '../src/requirement-bridge';
+import { declareRequirements, requirementsForQuery } from '../src/requirement-bridge';
 import { createEngineDatabase, createFakeEngine } from './helpers/engine';
 
 import type { RequirementInput, RequirementPlan } from '../src/requirement-bridge';
@@ -150,7 +145,13 @@ describe('requirementsForQuery extraction', () => {
 			],
 			represented: false,
 		});
-		expect(plan({ collectionName: 'customers', selector: { search: 'ada' }, limit: 25 })).toEqual({
+		expect(
+			plan({
+				collectionName: 'customers',
+				selector: { search: 'ada' },
+				limit: 25,
+			})
+		).toEqual({
 			requirements: [
 				{
 					id: 'q:search',
@@ -172,7 +173,13 @@ describe('requirementsForQuery extraction', () => {
 
 		it('extracts empty, bare-status and $eq-status browses', () => {
 			expect(orderPlan({ selector: undefined, limit: undefined })).toEqual({
-				requirements: [{ id: 'q:orders-browse', collection: 'orders', kind: 'orders-browse' }],
+				requirements: [
+					{
+						id: 'q:orders-browse',
+						collection: 'orders',
+						kind: 'orders-browse',
+					},
+				],
 				represented: true,
 			});
 			expect(
@@ -194,7 +201,12 @@ describe('requirementsForQuery extraction', () => {
 		});
 
 		it.each([42, { $eq: 0 }])('extracts customer %p at interactive priority', (customer_id) => {
-			expect(orderPlan({ selector: { status: 'processing', customer_id }, limit: 25 })).toEqual({
+			expect(
+				orderPlan({
+					selector: { status: 'processing', customer_id },
+					limit: 25,
+				})
+			).toEqual({
 				requirements: [
 					{
 						id: 'q:orders-browse',
@@ -320,7 +332,10 @@ describe('requirementsForQuery extraction', () => {
 				})
 			).toMatchObject({ limit: Number.MAX_SAFE_INTEGER });
 			expect(
-				orderPlan({ selector: { date_created_gmt: { $gte: 'nope' } }, limit: 25 }).represented
+				orderPlan({
+					selector: { date_created_gmt: { $gte: 'nope' } },
+					limit: 25,
+				}).represented
 			).toBe(false);
 		});
 
@@ -342,7 +357,9 @@ describe('requirementsForQuery extraction', () => {
 		it('reads date-only bounds as UTC midnight', () => {
 			expect(
 				orderRequirement({
-					selector: { date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
+					selector: {
+						date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' },
+					},
 					limit: Number.MAX_SAFE_INTEGER,
 				})
 			).toMatchObject({
@@ -486,7 +503,9 @@ describe('requirementsForQuery extraction', () => {
 			).toBe(false);
 			expect(
 				plan({
-					selector: { $or: [{ categories: { $elemMatch: { id: 7, name: 'Hats' } } }] },
+					selector: {
+						$or: [{ categories: { $elemMatch: { id: 7, name: 'Hats' } } }],
+					},
 				}).represented
 			).toBe(false);
 			expect(plan({ selector: { stock_status: 'sold' } }).represented).toBe(false);
@@ -494,7 +513,7 @@ describe('requirementsForQuery extraction', () => {
 	});
 });
 
-describe('declareRequirements / registerActiveBinding / reset refill', () => {
+describe('declareRequirements', () => {
 	let database: RxDatabase;
 
 	beforeEach(async () => {
@@ -510,77 +529,18 @@ describe('declareRequirements / registerActiveBinding / reset refill', () => {
 		engine.searchFailure = new Error('offline');
 		const requirements: EngineRequirement[] = [
 			{ id: 'a', collection: 'products', kind: 'search', term: 'mug' },
-			{ id: 'b', collection: 'products', kind: 'targeted-records', wooIds: [1] },
+			{
+				id: 'b',
+				collection: 'products',
+				kind: 'targeted-records',
+				wooIds: [1],
+			},
 		];
 		const handles = declareRequirements(engine as never, requirements);
 		expect(handles).toHaveLength(2);
 		expect(engine.requireCalls).toEqual(requirements);
-		await expect(handles[1].ready).resolves.toMatchObject({ action: 'serve-local' });
-	});
-
-	it('re-declares a registered binding as a forced requirement object after reset', async () => {
-		const engine = createFakeEngine(database);
-		const unregister = registerActiveBinding(engine as never, {
-			id: 'grid',
-			collectionName: 'products',
-			selector: { id: { $in: [1, 2] } },
-			limit: 10,
+		await expect(handles[1].ready).resolves.toMatchObject({
+			action: 'serve-local',
 		});
-
-		await prepareCollectionResetRefill(engine as never, ['products'])();
-		expect(engine.requireCalls).toContainEqual({
-			id: 'grid:collection-reset:targeted',
-			collection: 'products',
-			kind: 'targeted-records',
-			forceRefresh: true,
-			priority: 1000,
-			wooIds: [1, 2],
-		});
-
-		unregister();
-		const engine2 = createFakeEngine(database);
-		await prepareCollectionResetRefill(engine2 as never, ['products'])();
-		expect(engine2.requireCalls).not.toContainEqual(
-			expect.objectContaining({ kind: 'targeted-records' })
-		);
-	});
-
-	it.each([
-		['coupons', 'coupons'],
-		['taxes', 'taxRates'],
-	] as const)('force-refreshes reset %s as one %s requirement object', async (name, collection) => {
-		const engine = createFakeEngine(database);
-		await prepareCollectionResetRefill(engine as never, [name])();
-		expect(engine.requireCalls).toEqual([
-			{
-				id: `${collection}:collection-reset`,
-				collection,
-				kind: 'refresh',
-				forceRefresh: true,
-				priority: 1000,
-			},
-		]);
-	});
-
-	it('emits one reset refresh requirement for a reference collection with an active binding', async () => {
-		const engine = createFakeEngine(database);
-		const unregister = registerActiveBinding(engine as never, {
-			id: 'coupon-picker',
-			collectionName: 'coupons',
-			selector: {},
-			limit: 50,
-		});
-
-		await prepareCollectionResetRefill(engine as never, ['coupons'])();
-		expect(engine.requireCalls).toEqual([
-			{
-				id: 'coupons:collection-reset',
-				collection: 'coupons',
-				kind: 'refresh',
-				forceRefresh: true,
-				priority: 1000,
-			},
-		]);
-		unregister();
 	});
 });

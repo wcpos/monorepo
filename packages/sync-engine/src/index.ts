@@ -23,6 +23,7 @@ export {
 	type EngineEvent,
 	type EngineFetcher,
 	type EngineHostTransport,
+	type EngineCollectionState,
 	type EngineStatus,
 	type EngineStringStore,
 	type ResettableCollectionName,

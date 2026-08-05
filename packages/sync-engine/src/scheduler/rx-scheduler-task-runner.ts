@@ -34,6 +34,7 @@ export type PersistedSchedulerTaskRunnerInput = {
 	maxRequestsPerTask?: number;
 	/** Called after each completed fetch batch with cumulative drain totals. */
 	onProgress?: (progress: { collection: string; documents: number; requests: number }) => void;
+	withTaskActivity?: <T>(task: FetchTask, work: () => Promise<T>) => Promise<T>;
 };
 
 export type PersistedSchedulerTaskRunnerResult = {
@@ -248,7 +249,7 @@ export async function runPersistedSchedulerTasks(
 		let taskCompleted = false;
 		let requests = 0;
 
-		try {
+		const executeTask = async (): Promise<void> => {
 			while (!taskCompleted) {
 				throwIfAborted(input.signal);
 				requests += 1;
@@ -283,6 +284,10 @@ export async function runPersistedSchedulerTasks(
 					activeState = renewedState;
 				}
 			}
+		};
+		try {
+			if (input.withTaskActivity) await input.withTaskActivity(task, executeTask);
+			else await executeTask();
 		} catch (error) {
 			if (input.signal?.aborted) throw error;
 

@@ -5,10 +5,11 @@ import { Subject } from 'rxjs';
 
 import { engineSyncCollectionCreators, memoryEngineStorage } from '@wcpos/sync-engine/testing';
 import type {
-	EngineEvent,
 	EngineRequirement,
+	EngineStatus,
 	RequirementHandle,
 	RxdbSyncEngine,
+	SyncCollectionName,
 } from '@wcpos/sync-engine';
 
 import { orderBrowserQueryKey } from '../../../sync-engine/src/scheduler/order-browser-scheduler-descriptor';
@@ -76,8 +77,10 @@ export interface FakeEngine extends RxdbSyncEngine {
 	searchFailure?: Error;
 	resetCalls: string[];
 	syncCalls: (string | undefined)[];
-	emit(event: EngineEvent): void;
-	eventListenerCount(): number;
+	setCollectionStatus(
+		collection: SyncCollectionName,
+		state: Partial<EngineStatus['collections'][SyncCollectionName]>
+	): void;
 }
 
 export interface RecordedSearchRequirement {
@@ -229,7 +232,38 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 	const searchRequireCalls: RecordedSearchRequirement[] = [];
 	const resetCalls: string[] = [];
 	const syncCalls: (string | undefined)[] = [];
-	const eventListeners = new Set<(event: EngineEvent) => void>();
+	const collectionNames: SyncCollectionName[] = [
+		'orders',
+		'products',
+		'variations',
+		'customers',
+		'taxRates',
+		'categories',
+		'brands',
+		'tags',
+		'coupons',
+	];
+	const activityCounts = new Map<SyncCollectionName, number>();
+	let collections = Object.fromEntries(
+		collectionNames.map((collection) => [collection, { active: false, coverageGeneration: 0 }])
+	) as EngineStatus['collections'];
+	const statusListeners = new Set<(status: EngineStatus) => void>();
+	const status = (): EngineStatus => ({ collections }) as EngineStatus;
+	const setCollectionStatus = (
+		collection: SyncCollectionName,
+		state: Partial<EngineStatus['collections'][SyncCollectionName]>
+	) => {
+		collections = {
+			...collections,
+			[collection]: { ...collections[collection], ...state },
+		};
+		for (const listener of statusListeners) listener(status());
+	};
+	const changeActivity = (collection: SyncCollectionName, delta: 1 | -1) => {
+		const count = Math.max(0, (activityCounts.get(collection) ?? 0) + delta);
+		activityCounts.set(collection, count);
+		setCollectionStatus(collection, { active: count > 0 });
+	};
 	const activeScope = {
 		identity: { site: 'https://test', storeId: '1', cashierId: '1' },
 		scopeId: 'test-scope',
@@ -254,25 +288,37 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 					const docs = await collection.find().exec();
 					await collection.bulkRemove(docs.map((doc: any) => doc.primary));
 				}
+				if (collectionNames.includes(name as SyncCollectionName)) {
+					const engineName = name as SyncCollectionName;
+					setCollectionStatus(engineName, {
+						coverageGeneration: collections[engineName].coverageGeneration + 1,
+					});
+				}
 				return 'reset' as const;
 			},
 		},
 		require: (requirement: EngineRequirement): RequirementHandle => {
 			requireCalls.push(requirement);
+			changeActivity(requirement.collection, 1);
 			const recordedSearch =
 				requirement.kind === 'search' ? { requirement, released: false } : undefined;
 			if (recordedSearch) {
 				searchRequireCalls.push(recordedSearch);
 			}
+			const ready =
+				requirement.kind === 'search' && engine.searchFailure
+					? Promise.reject(engine.searchFailure)
+					: Promise.resolve({
+							action: 'serve-local' as const,
+							missingRecordIds: [],
+							reason: 'fake',
+						});
+			void ready.then(
+				() => changeActivity(requirement.collection, -1),
+				() => changeActivity(requirement.collection, -1)
+			);
 			return {
-				ready:
-					requirement.kind === 'search' && engine.searchFailure
-						? Promise.reject(engine.searchFailure)
-						: Promise.resolve({
-								action: 'serve-local' as const,
-								missingRecordIds: [],
-								reason: 'fake',
-							}),
+				ready,
 				release: () => {
 					if (recordedSearch) {
 						recordedSearch.released = true;
@@ -285,15 +331,18 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 			syncCalls.push(lane);
 			return { lane: (lane ?? 'all') as never, status: 'ran' as const };
 		},
-		events: (listener: (event: EngineEvent) => void) => {
-			eventListeners.add(listener);
-			return () => eventListeners.delete(listener);
+		events: () => () => undefined,
+		setCollectionStatus,
+		onScopeEvent: () => () => undefined,
+		status,
+		statusChanges: (listener: (next: EngineStatus) => void) => {
+			statusListeners.add(listener);
+			listener(status());
+			return () => {
+				statusListeners.delete(listener);
+			};
 		},
-		emit: (event: EngineEvent) => {
-			for (const listener of eventListeners) listener(event);
-		},
-		eventListenerCount: () => eventListeners.size,
-		status: () => ({}) as never,
+		stats: () => ({}) as never,
 		write: async () => ({ mutationId: 'm', recordId: 'r' }),
 		conflicts: async () => [],
 		resolveConflict: async () => undefined,
@@ -324,6 +373,22 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 	const requireCalls: EngineRequirement[] = [];
 	const resetCalls: string[] = [];
 	const syncCalls: (string | undefined)[] = [];
+	const collections = Object.fromEntries(
+		(
+			[
+				'orders',
+				'products',
+				'variations',
+				'customers',
+				'taxRates',
+				'categories',
+				'brands',
+				'tags',
+				'coupons',
+			] as SyncCollectionName[]
+		).map((collection) => [collection, { active: false, coverageGeneration: 0 }])
+	) as EngineStatus['collections'];
+	const status = (): EngineStatus => ({ collections }) as EngineStatus;
 	const activeScope = {
 		identity: { site: 'https://test', storeId: '1', cashierId: '1' },
 		scopeId: 'test-scope',
@@ -366,7 +431,14 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 			return { lane: (lane ?? 'all') as never, status: 'ran' as const };
 		},
 		events: () => () => undefined,
-		status: () => ({}) as never,
+		setCollectionStatus: () => undefined,
+		onScopeEvent: () => () => undefined,
+		status,
+		statusChanges: (listener: (next: EngineStatus) => void) => {
+			listener(status());
+			return () => undefined;
+		},
+		stats: () => ({}) as never,
 		write: async () => ({ mutationId: 'm', recordId: 'r' }),
 		conflicts: async () => [],
 		resolveConflict: async () => undefined,

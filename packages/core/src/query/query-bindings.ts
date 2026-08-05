@@ -6,6 +6,7 @@ import {
 	combineLatest,
 	EMPTY,
 	firstValueFrom,
+	from,
 	Observable,
 	of,
 	race,
@@ -25,10 +26,10 @@ import {
 	declareRequirements,
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
+	observeCollectionActive,
 	observeEngineDatabases,
 	observeEngineQuery,
 	type QueryResult,
-	registerActiveBinding,
 	requirementsForQuery,
 	type RequirementSortPart,
 	useLocalQuery,
@@ -36,8 +37,6 @@ import {
 } from '@wcpos/query';
 import type {
 	CoverageLaneDocument,
-	EngineEvent,
-	EngineLane,
 	QueryTotalCacheDocument,
 	RequirementHandle,
 	RxdbSyncEngine,
@@ -69,13 +68,6 @@ const COMPLETE_COLLECTION_LANES: Partial<Record<LegacyCollectionName, string>> =
 	coupons: 'coupons:all',
 };
 
-const FIXED_COLLECTIONS_BY_LANE: Partial<Record<EngineLane, readonly SyncCollectionName[]>> = {
-	'reference-seed': ['categories', 'brands', 'tags', 'coupons'],
-	'product-browse-window-seed': ['products'],
-	'order-window-seed': ['orders'],
-};
-
-const LANE_ACTIVITY_SAFETY_MS = 60_000;
 const DEMAND_RETRY_BACKOFF_MS = 250;
 const LOCAL_TOTAL_SOURCE$ = of('local' as const);
 const INACTIVE$ = of(false);
@@ -109,74 +101,23 @@ function useObservableResource<T>(observable$: Observable<T>): ObservableResourc
 	return resource;
 }
 
-function useLaneActivity(
-	engine: RxdbSyncEngine,
-	collection: LegacyCollectionName,
-	enabled: boolean
-): Observable<boolean> {
-	const activity$ = React.useMemo(() => new BehaviorSubject(false), [engine, collection]);
-	React.useEffect(() => {
-		if (!enabled) return undefined;
-		const engineCollection = engineCollectionNameFor(collection);
-		const starts = new Map<EngineLane, number[]>();
-		let safetyTimer: ReturnType<typeof setTimeout> | undefined;
-		const publish = () => {
-			const active = [...starts].some(
-				([lane, laneStarts]) =>
-					laneStarts.length > 0 &&
-					(FIXED_COLLECTIONS_BY_LANE[lane] ?? []).includes(engineCollection)
-			);
-			if (activity$.value !== active) activity$.next(active);
-		};
-		const prune = () => {
-			const now = Date.now();
-			for (const [lane, laneStarts] of starts) {
-				const fresh = laneStarts.filter((startedAt) => now - startedAt <= LANE_ACTIVITY_SAFETY_MS);
-				if (fresh.length === 0) starts.delete(lane);
-				else starts.set(lane, fresh);
-			}
-		};
-		const scheduleSafety = () => {
-			if (safetyTimer !== undefined) clearTimeout(safetyTimer);
-			const oldest = [...starts.values()].flat().sort((a, b) => a - b)[0];
-			if (oldest === undefined) return;
-			safetyTimer = setTimeout(
-				() => {
-					prune();
-					publish();
-					scheduleSafety();
-				},
-				Math.max(0, oldest + LANE_ACTIVITY_SAFETY_MS - Date.now() + 1)
-			);
-		};
-		const unsubscribe = engine.events((event: EngineEvent) => {
-			if (event.type !== 'lane-start' && event.type !== 'lane-finish') return;
-			prune();
-			if (event.type === 'lane-start') {
-				starts.set(event.lane, [...(starts.get(event.lane) ?? []), Date.now()]);
-			} else {
-				const laneStarts = starts.get(event.lane) ?? [];
-				laneStarts.pop();
-				if (laneStarts.length === 0) starts.delete(event.lane);
-			}
-			publish();
-			scheduleSafety();
-		});
-		return () => {
-			unsubscribe();
-			if (safetyTimer !== undefined) clearTimeout(safetyTimer);
-			activity$.next(false);
-		};
-	}, [activity$, collection, enabled, engine]);
-	return activity$.pipe(distinctUntilChanged());
-}
-
 type DemandProjection = {
-	active$: Observable<boolean>;
-	searchActive$: Observable<boolean>;
 	queryKey$: Observable<string | null>;
+	whenReady(): Promise<void>;
 	sync(): Promise<void>;
 };
+
+function useCoverageGeneration(engine: RxdbSyncEngine, collection: SyncCollectionName): number {
+	const subscribe = React.useCallback(
+		(notify: () => void) => engine.statusChanges(() => notify()),
+		[engine]
+	);
+	const getSnapshot = React.useCallback(
+		() => engine.status().collections[collection].coverageGeneration,
+		[collection, engine]
+	);
+	return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
 
 function useDemand(
 	engine: RxdbSyncEngine,
@@ -184,32 +125,20 @@ function useDemand(
 	descriptor: EngineQueryDescriptor,
 	enabled: boolean
 ): DemandProjection {
-	const active$ = React.useMemo(() => new BehaviorSubject(false), [engine, id]);
-	const searchActive$ = React.useMemo(() => new BehaviorSubject(false), [engine, id]);
 	const queryKey$ = React.useMemo(() => new BehaviorSubject<string | null>(null), [engine, id]);
-	const generation = React.useRef(0);
-	const demandPending = React.useRef(0);
-	const syncPending = React.useRef(0);
-	const searchDemandPending = React.useRef(0);
-	const searchSyncPending = React.useRef(0);
-	const publish = React.useCallback(() => {
-		const active = demandPending.current + syncPending.current > 0;
-		if (active$.value !== active) active$.next(active);
-		const searchActive = searchDemandPending.current + searchSyncPending.current > 0;
-		if (searchActive$.value !== searchActive) searchActive$.next(searchActive);
-	}, [active$, searchActive$]);
+	const ready = React.useRef<Promise<void>>(Promise.resolve());
 	const selector = selectorWithSearch(descriptor);
 	const selectorKey = JSON.stringify(selector);
 	// The products browse window travels with the grid's sort (#909), so the sort is part
 	// of what the demand effect depends on — a serialized key keeps the array identity out.
 	const sortKey = JSON.stringify(descriptor.sort ?? []);
+	const engineCollection = engineCollectionNameFor(descriptor.collection);
+	const coverageGeneration = useCoverageGeneration(engine, engineCollection);
 
 	React.useEffect(() => {
-		generation.current += 1;
 		if (!enabled) {
-			demandPending.current = 0;
-			searchDemandPending.current = 0;
-			publish();
+			queryKey$.next(null);
+			ready.current = Promise.resolve();
 			return undefined;
 		}
 		const stableSelector = JSON.parse(selectorKey) as Record<string, unknown>;
@@ -220,14 +149,13 @@ function useDemand(
 			limit: descriptor.limit,
 			sort: JSON.parse(sortKey) as RequirementSortPart[],
 		};
-		const unregister = registerActiveBinding(engine, binding);
 		const plan = requirementsForQuery(binding);
 		const requirements = plan.requirements;
-		const isSearch = Boolean(descriptor.search?.trim());
 		let handles: RequirementHandle[] = [];
 		let retryTimer: ReturnType<typeof setTimeout> | undefined;
+		let cancelled = false;
 		const declare = (retryOnReject: boolean) => {
-			const declarationGeneration = (generation.current += 1);
+			if (cancelled) return;
 			handles = declareRequirements(engine, requirements);
 			const browseIndex = requirements.findIndex(
 				(requirement) =>
@@ -238,52 +166,30 @@ function useDemand(
 					? (COMPLETE_COLLECTION_LANES[descriptor.collection] ?? null)
 					: null;
 			queryKey$.next(plan.represented ? (handles[browseIndex]?.queryKey ?? fixedKey) : fixedKey);
-			demandPending.current = handles.length;
-			searchDemandPending.current = isSearch ? handles.length : 0;
-			publish();
-			for (const handle of handles) {
-				const settle = () => {
-					if (generation.current !== declarationGeneration) return;
-					demandPending.current = Math.max(0, demandPending.current - 1);
-					if (isSearch) {
-						searchDemandPending.current = Math.max(0, searchDemandPending.current - 1);
-					}
-					publish();
-				};
-				const reject = () => {
-					settle();
-					if (!retryOnReject || generation.current !== declarationGeneration) return;
-					const invalidatedGeneration = (generation.current += 1);
-					demandPending.current = 0;
-					searchDemandPending.current = 0;
-					publish();
-					retryTimer = setTimeout(() => {
-						if (generation.current !== invalidatedGeneration) return;
-						releaseHandles(handles);
-						declare(false);
-					}, DEMAND_RETRY_BACKOFF_MS);
-				};
-				void handle.ready.then(settle, reject);
-			}
+			ready.current = Promise.all(handles.map((handle) => handle.ready)).then(() => undefined);
+			void ready.current.catch(() => {
+				if (!retryOnReject || cancelled) return;
+				retryTimer = setTimeout(() => {
+					if (cancelled) return;
+					releaseHandles(handles);
+					declare(false);
+				}, DEMAND_RETRY_BACKOFF_MS);
+			});
 		};
 		declare(true);
 		return () => {
-			unregister();
+			cancelled = true;
 			if (retryTimer !== undefined) clearTimeout(retryTimer);
 			releaseHandles(handles);
-			generation.current += 1;
-			demandPending.current = 0;
-			searchDemandPending.current = 0;
-			publish();
 		};
 	}, [
+		coverageGeneration,
 		descriptor.collection,
 		descriptor.limit,
 		descriptor.search,
 		enabled,
 		engine,
 		id,
-		publish,
 		queryKey$,
 		selectorKey,
 		sortKey,
@@ -291,11 +197,9 @@ function useDemand(
 
 	React.useEffect(
 		() => () => {
-			active$.complete();
-			searchActive$.complete();
 			queryKey$.complete();
 		},
-		[active$, queryKey$, searchActive$]
+		[queryKey$]
 	);
 
 	const sync = React.useCallback(async () => {
@@ -310,23 +214,16 @@ function useDemand(
 			forceRefresh: true,
 		}).requirements;
 		const handles = declareRequirements(engine, requirements);
-		syncPending.current += 1;
-		if (descriptor.search?.trim()) searchSyncPending.current += 1;
-		publish();
-		await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
-		for (const handle of handles) handle.release();
 		try {
+			await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
 			await engine.sync('scheduler-drain');
 		} finally {
-			syncPending.current = Math.max(0, syncPending.current - 1);
-			if (descriptor.search?.trim()) {
-				searchSyncPending.current = Math.max(0, searchSyncPending.current - 1);
-			}
-			publish();
+			releaseHandles(handles);
 		}
-	}, [descriptor, enabled, engine, id, publish]);
+	}, [descriptor, enabled, engine, id]);
 
-	return { active$: active$.pipe(distinctUntilChanged()), searchActive$, queryKey$, sync };
+	const whenReady = React.useCallback(() => ready.current.catch(() => undefined), []);
+	return { queryKey$, sync, whenReady };
 }
 
 function coverageFreshnessTicks(
@@ -442,10 +339,32 @@ function emptyResult(): QueryResult<RxCollection> {
 	return { searchActive: false, count: 0, hits: [] };
 }
 
+export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
+	const translated = translateQueryState('logs', state);
+	const local = useLocalQuery({
+		collectionName: 'logs',
+		selector: translated.selector,
+		sort: translated.sort,
+		limit: translated.limit,
+		search: translated.search,
+	});
+	return {
+		resource: local.resource as unknown as ObservableResource<QueryResult<RxCollection>>,
+		result$: local.result$ as unknown as Observable<QueryResult<RxCollection>>,
+		total$: local.total$,
+		totalSource$: LOCAL_TOTAL_SOURCE$,
+		active$: INACTIVE$,
+		sync: async () => undefined,
+	};
+}
+
 function useEngineBinding(
 	descriptorInput: EngineQueryDescriptor,
 	enabled = true
-): QueryBinding & { result$: Observable<QueryResult<RxCollection>> } {
+): QueryBinding & {
+	result$: Observable<QueryResult<RxCollection>>;
+	whenReady(): Promise<void>;
+} {
 	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
 	const descriptor = useStableDescriptor({
@@ -453,26 +372,26 @@ function useEngineBinding(
 		searchFields: searchFieldsFor(runtime.localDB, descriptorInput.collection),
 	});
 	const demand = useDemand(runtime.engine, bindingId, descriptor, enabled);
-	const laneActive$ = useLaneActivity(runtime.engine, descriptor.collection, enabled);
 	const active$ = React.useMemo(
 		() =>
-			combineLatest([demand.active$, laneActive$]).pipe(
-				map(([demandActive, laneActive]) => demandActive || laneActive),
-				distinctUntilChanged(),
-				shareReplay({ bufferSize: 1, refCount: true })
-			),
-		[demand.active$, laneActive$]
+			enabled
+				? observeCollectionActive(
+						runtime.engine,
+						engineCollectionNameFor(descriptor.collection)
+					).pipe(shareReplay({ bufferSize: 1, refCount: true }))
+				: INACTIVE$,
+		[descriptor.collection, enabled, runtime.engine]
 	);
 	const result$ = React.useMemo(() => {
 		if (!enabled) return of(emptyResult());
-		return combineLatest([
-			observeEngineQuery(runtime.engine, runtime.locale, descriptor),
-			demand.searchActive$.pipe(startWith(false)),
-		]).pipe(
-			map(([result, searchActive]) => ({ ...result, searchActive })),
+		return observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
+			map((result) => ({
+				...result,
+				searchActive: Boolean(descriptor.search?.trim()),
+			})),
 			shareReplay({ bufferSize: 1, refCount: true })
 		);
-	}, [demand.searchActive$, descriptor, enabled, runtime.engine, runtime.locale]);
+	}, [descriptor, enabled, runtime.engine, runtime.locale]);
 	const projection$ = React.useMemo(
 		() => coverageProjection$(runtime.engine, descriptor, result$, demand.queryKey$),
 		[demand.queryKey$, descriptor, result$, runtime.engine]
@@ -490,6 +409,7 @@ function useEngineBinding(
 		total$,
 		totalSource$,
 		sync: demand.sync,
+		whenReady: demand.whenReady,
 	};
 }
 
@@ -513,25 +433,6 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	return useEngineBinding(engineDescriptor);
 }
 
-export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
-	const translated = translateQueryState('logs', state);
-	const local = useLocalQuery({
-		collectionName: 'logs',
-		selector: translated.selector,
-		sort: translated.sort,
-		limit: translated.limit,
-		search: translated.search,
-	});
-	return {
-		resource: local.resource as unknown as ObservableResource<QueryResult<RxCollection>>,
-		result$: local.result$ as unknown as Observable<QueryResult<RxCollection>>,
-		total$: local.total$,
-		totalSource$: LOCAL_TOTAL_SOURCE$,
-		active$: INACTIVE$,
-		sync: async () => undefined,
-	};
-}
-
 function andSelector(
 	left: Record<string, unknown>,
 	right: Record<string, unknown>
@@ -549,8 +450,7 @@ function observeParentLookup(
 	locale: string,
 	id: string,
 	parentIds: number[],
-	searchFields: string[] | undefined,
-	lookupActive$: BehaviorSubject<boolean>
+	searchFields: string[] | undefined
 ): Observable<QueryResult<RxCollection>> {
 	if (parentIds.length === 0) return of(emptyResult());
 	return new Observable<QueryResult<RxCollection>>((subscriber) => {
@@ -566,15 +466,10 @@ function observeParentLookup(
 			limit: undefined,
 		}).requirements;
 		const handles = declareRequirements(engine, requirements);
-		lookupActive$.next(handles.length > 0);
-		void Promise.all(handles.map((handle) => handle.ready.catch(() => undefined))).finally(() =>
-			lookupActive$.next(false)
-		);
 		const subscription = observeEngineQuery(engine, locale, descriptor).subscribe(subscriber);
 		return () => {
 			subscription.unsubscribe();
 			releaseHandles(handles);
-			lookupActive$.next(false);
 		};
 	});
 }
@@ -605,11 +500,6 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		childDescriptor,
 		Boolean(translated.search)
 	);
-	const laneActive$ = useLaneActivity(runtime.engine, 'products', true);
-	const lookupActive$ = React.useMemo(
-		() => new BehaviorSubject(false),
-		[runtime.engine, bindingId]
-	);
 	const result$ = React.useMemo(() => {
 		if (!translated.search) {
 			return observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
@@ -634,8 +524,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 					runtime.locale,
 					`${bindingId}:lookup`,
 					parentIds,
-					descriptor.searchFields,
-					lookupActive$
+					descriptor.searchFields
 				).pipe(map((lookup) => ({ direct, lookup, counts })));
 			}),
 			switchMap(({ direct, lookup, counts }) => {
@@ -649,7 +538,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 				}).pipe(
 					map((result) => ({
 						...result,
-						searchActive: false,
+						searchActive: Boolean(descriptor.search?.trim()),
 						hits: result.hits.map((hit) => {
 							const wooId = Number((hit.document as unknown as Record<string, unknown>).id);
 							return {
@@ -663,15 +552,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 			}),
 			shareReplay({ bufferSize: 1, refCount: true })
 		);
-	}, [
-		bindingId,
-		childDescriptor,
-		descriptor,
-		lookupActive$,
-		runtime.engine,
-		runtime.locale,
-		translated.search,
-	]);
+	}, [bindingId, childDescriptor, descriptor, runtime.engine, runtime.locale, translated.search]);
 	const resource = useObservableResource(result$);
 	const projection$ = React.useMemo(
 		() => coverageProjection$(runtime.engine, descriptor, result$, parentDemand.queryKey$),
@@ -680,16 +561,14 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	const active$ = React.useMemo(
 		() =>
 			combineLatest([
-				parentDemand.active$,
-				childDemand.active$,
-				lookupActive$.pipe(startWith(false)),
-				laneActive$,
+				observeCollectionActive(runtime.engine, 'products'),
+				observeCollectionActive(runtime.engine, 'variations'),
 			]).pipe(
 				map((values) => values.some(Boolean)),
 				distinctUntilChanged(),
 				shareReplay({ bufferSize: 1, refCount: true })
 			),
-		[childDemand.active$, laneActive$, lookupActive$, parentDemand.active$]
+		[runtime.engine]
 	);
 	const sync = React.useCallback(
 		() => Promise.all([parentDemand.sync(), childDemand.sync()]).then(() => undefined),
@@ -815,13 +694,15 @@ const COUPON_REPLAY_CATEGORIES_DESCRIPTOR: EngineQueryDescriptor = {
  * The caller must NOT scan on `false`: the barrier's whole point is that the residents are
  * not trustworthy yet, and a deadline does not make them trustworthy. Bail instead — the
  * next cart edit re-runs the replay, by which time the pull has almost certainly landed.
+ * Readiness is awaited before quietness so another owner's in-flight pull cannot be mistaken
+ * for completion when these handles resolve `released` after a skipped-active declaration.
  */
 export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 	whenSettled: () => Promise<boolean>;
 } {
 	const coupons = useEngineBinding(COUPON_REPLAY_COUPONS_DESCRIPTOR, hasAppliedCoupons);
 	const categories = useEngineBinding(COUPON_REPLAY_CATEGORIES_DESCRIPTOR, hasAppliedCoupons);
-	const settled$ = React.useMemo(
+	const quiet$ = React.useMemo(
 		() =>
 			combineLatest([coupons.active$, categories.active$]).pipe(
 				map(([couponsActive, categoriesActive]) => !couponsActive && !categoriesActive),
@@ -836,11 +717,15 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 			whenSettled: () =>
 				firstValueFrom(
 					race(
-						settled$.pipe(map(() => true)),
+						from(
+							Promise.all([coupons.whenReady(), categories.whenReady()]).then(() =>
+								firstValueFrom(quiet$)
+							)
+						).pipe(map(() => true)),
 						timer(COUPON_REFERENCE_SETTLE_TIMEOUT_MS).pipe(map(() => false))
 					)
 				),
 		}),
-		[settled$]
+		[categories, coupons, quiet$]
 	);
 }

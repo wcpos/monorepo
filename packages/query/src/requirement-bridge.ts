@@ -347,7 +347,11 @@ function productBrowseDimensions(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
 	sort: readonly RequirementSortPart[] | undefined
-): { dimensions: ProductBrowseDimensions; filtered: boolean; residual: boolean } {
+): {
+	dimensions: ProductBrowseDimensions;
+	filtered: boolean;
+	residual: boolean;
+} {
 	const dimensions: ProductBrowseDimensions = {};
 	if (limit !== undefined) dimensions.limit = limit;
 	const [primary] = sort ?? [];
@@ -608,27 +612,9 @@ export function declareRequirements(
 	});
 }
 
-type ActiveBinding = Omit<RequirementInput, 'priority' | 'forceRefresh'>;
-
-const activeBindings = new WeakMap<RxdbSyncEngine, Map<string, ActiveBinding>>();
-
-/** Register only the declarative descriptor needed to reconstruct demand after an engine reset. */
-export function registerActiveBinding(engine: RxdbSyncEngine, binding: ActiveBinding): () => void {
-	let registry = activeBindings.get(engine);
-	if (!registry) {
-		registry = new Map();
-		activeBindings.set(engine, registry);
-	}
-	registry.set(binding.id, binding);
-	return () => {
-		if (registry?.get(binding.id) === binding) registry.delete(binding.id);
-	};
-}
-
-function requirementsForReset(
-	engine: RxdbSyncEngine,
-	collectionNames: string[]
-): EngineRequirement[] {
+/** Binding-independent refill for collections a reset may have emptied with no binding
+ * mounted over them. Mounted bindings replay themselves (coverageGeneration). */
+export function resetRefillRequirements(collectionNames: string[]): EngineRequirement[] {
 	const wanted = new Set(collectionNames);
 	const resetEngineCollections = new Set<EngineCollectionName>(
 		collectionNames
@@ -636,27 +622,6 @@ function requirementsForReset(
 			.map((collectionName) => engineCollectionNameFor(collectionName))
 	);
 	const requirements: EngineRequirement[] = [];
-	for (const binding of activeBindings.get(engine)?.values() ?? []) {
-		if (!wanted.has(binding.collectionName)) continue;
-		// Reference collections are refilled once per collection below rather than once per
-		// binding: the reset can be triggered from a surface that has no binding over them at
-		// all (the Health → Database row, a collection footer), and the refill has to fetch
-		// either way.
-		if (
-			isMappedCollection(binding.collectionName) &&
-			REFERENCE_ENGINE_COLLECTIONS.includes(engineCollectionNameFor(binding.collectionName))
-		) {
-			continue;
-		}
-		requirements.push(
-			...requirementsForQuery({
-				...binding,
-				id: `${binding.id}:collection-reset`,
-				priority: 1000,
-				forceRefresh: true,
-			}).requirements
-		);
-	}
 	// Reset refill is the one path that must beat the dedupe window: the local collection was
 	// just wiped, so serving "recently refreshed" residents would serve nothing. The UI
 	// binding branch of `requirementsForQuery` deliberately drops `forceRefresh` (#952), so
@@ -676,19 +641,17 @@ function requirementsForReset(
 			id: 'taxRates:collection-reset',
 			collection: 'taxRates',
 			kind: 'refresh',
-			forceRefresh: true,
 			priority: 1000,
 		});
 	}
 	return requirements;
 }
 
-/** Capture the active binding descriptors before reset and return their one-shot refill. */
-export function prepareCollectionResetRefill(
+export async function runResetRefill(
 	engine: RxdbSyncEngine,
 	collectionNames: string[]
-): () => Promise<void> {
-	const requirements = requirementsForReset(engine, collectionNames);
+): Promise<void> {
+	const requirements = resetRefillRequirements(collectionNames);
 	const engineCollections = new Set<SyncCollectionName>(
 		collectionNames
 			.filter(isMappedCollection)
@@ -702,11 +665,12 @@ export function prepareCollectionResetRefill(
 	// page 1 (not ticked while active), and orders wait for view demand or their periodic
 	// window cadence.
 
-	return async () => {
-		if (seedProductBrowse) await engine.sync('product-browse-window-seed');
-		const handles = declareRequirements(engine, requirements);
+	if (seedProductBrowse) await engine.sync('product-browse-window-seed');
+	const handles = declareRequirements(engine, requirements);
+	try {
 		await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
+	} finally {
 		for (const handle of handles) handle.release();
-		await engine.sync('scheduler-drain');
-	};
+	}
+	await engine.sync('scheduler-drain');
 }

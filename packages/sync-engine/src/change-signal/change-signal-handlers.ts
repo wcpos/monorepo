@@ -40,6 +40,7 @@ import { upsertManifestRows } from '../local-coverage/rx-existence-manifest-repo
 import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
+import type { SyncCollectionName } from '../collections/engine-collections';
 
 // Re-exported for the require plane (slice 4): the demand plane's direct
 // pulls are exactly the change-signal arm effects — one implementation.
@@ -66,6 +67,10 @@ export type HandlerContext = {
 	log: (line: string) => void;
 	observe?: SyncObserver;
 	pullBatchSize?: () => number | undefined;
+	withCollectionActivity?: <T>(
+		collection: SyncCollectionName,
+		work: () => Promise<T>
+	) => Promise<T>;
 };
 
 const INCLUDE_CHUNK = 50;
@@ -335,7 +340,10 @@ async function loadSyncedTargetedDocs(
 	if (!descriptor) return [];
 	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
 	return docs.map((doc) => {
-		const json = doc.toJSON() as { id: string; payload: Record<string, unknown> };
+		const json = doc.toJSON() as {
+			id: string;
+			payload: Record<string, unknown>;
+		};
 		return { id: json.id, payload: json.payload };
 	});
 }
@@ -364,7 +372,9 @@ async function rebaselineTargeted(
 	const docs = await collectionOf(ctx, descriptor.collection).find().exec();
 	const wooIds = new Set<number>();
 	for (const doc of docs) {
-		const json = doc.toJSON() as Record<string, unknown> & { payload?: Record<string, unknown> };
+		const json = doc.toJSON() as Record<string, unknown> & {
+			payload?: Record<string, unknown>;
+		};
 		if (hasPendingLocalWork(json)) continue;
 		const mirrored = json[descriptor.wooIdField];
 		const wooId = typeof mirrored === 'number' ? mirrored : Number(json.payload?.id);
@@ -387,17 +397,21 @@ async function rebaselineTargeted(
  */
 export function buildReplicationHandlers(ctx: HandlerContext): ReplicationActionHandlers {
 	const effects = collectShapeEffects(ctx);
+	const active = <T>(collection: SyncCollectionName, work: () => Promise<T>): Promise<T> =>
+		ctx.withCollectionActivity?.(collection, work) ?? work();
 	const handlers: ReplicationActionHandlers = {
-		pullProducts: (ids) => effects.targeted.products.pull(ids),
+		pullProducts: (ids) => active('products', () => effects.targeted.products.pull(ids)),
 		deleteProducts: (ids) => effects.targeted.products.remove(ids),
-		pullVariations: (ids) => effects.targeted.variations.pull(ids),
+		pullVariations: (ids) => active('variations', () => effects.targeted.variations.pull(ids)),
 		deleteVariations: (ids) => effects.targeted.variations.remove(ids),
-		pullCustomers: (ids) => effects.targeted.customers.pull(ids),
+		pullCustomers: (ids) => active('customers', () => effects.targeted.customers.pull(ids)),
 		deleteCustomers: (ids) => effects.targeted.customers.remove(ids),
-		refreshTaxRates: () => effects.refreshTaxRates(),
+		refreshTaxRates: () => active('taxRates', () => effects.refreshTaxRates()),
 		deleteTaxRates: (ids) => effects.deleteTaxRates(ids),
-		refreshReferenceCollection: (collection) => effects.refreshReference(collection),
-		rebaselineTargeted: (collection) => rebaselineTargeted(ctx, collection),
+		refreshReferenceCollection: (collection) =>
+			active(collection, () => effects.refreshReference(collection)),
+		rebaselineTargeted: (collection) =>
+			active(collection, () => rebaselineTargeted(ctx, collection)),
 		loadSyncedDocs: (collection) => loadSyncedTargetedDocs(ctx, collection),
 		// The engine package carries no scan-index store (the web host's stance
 		// too): log and report applied so the config baseline can advance with
@@ -415,23 +429,25 @@ export function buildReplicationHandlers(ctx: HandlerContext): ReplicationAction
 		// and a payload.id-only mapping would drop it from the re-fetch.
 		reFetchCollection: async (collection) => {
 			if (collection !== 'products' && collection !== 'variations') return 0;
-			const descriptor = COLLECTION_DESCRIPTORS.find(
-				(candidate): candidate is TargetedDescriptor =>
-					candidate.shape === 'targeted' && candidate.hybrid === collection
-			);
-			if (!descriptor) return 0;
-			const docs = await collectionOf(ctx, descriptor.collection).find().exec();
-			const wooIds = new Set<number>();
-			for (const doc of docs) {
-				const json = doc.toJSON() as Record<string, unknown> & {
-					payload?: Record<string, unknown>;
-				};
-				if (hasPendingLocalWork(json)) continue;
-				const mirrored = json[descriptor.wooIdField];
-				const wooId = typeof mirrored === 'number' ? mirrored : Number(json.payload?.id);
-				if (Number.isSafeInteger(wooId) && wooId > 0) wooIds.add(wooId);
-			}
-			return effects.targeted[collection].pull([...wooIds].sort((left, right) => left - right));
+			return active(collection, async () => {
+				const descriptor = COLLECTION_DESCRIPTORS.find(
+					(candidate): candidate is TargetedDescriptor =>
+						candidate.shape === 'targeted' && candidate.hybrid === collection
+				);
+				if (!descriptor) return 0;
+				const docs = await collectionOf(ctx, descriptor.collection).find().exec();
+				const wooIds = new Set<number>();
+				for (const doc of docs) {
+					const json = doc.toJSON() as Record<string, unknown> & {
+						payload?: Record<string, unknown>;
+					};
+					if (hasPendingLocalWork(json)) continue;
+					const mirrored = json[descriptor.wooIdField];
+					const wooId = typeof mirrored === 'number' ? mirrored : Number(json.payload?.id);
+					if (Number.isSafeInteger(wooId) && wooId > 0) wooIds.add(wooId);
+				}
+				return effects.targeted[collection].pull([...wooIds].sort((left, right) => left - right));
+			});
 		},
 		persistState: (state) => ctx.persistState(state),
 		log: ctx.log,

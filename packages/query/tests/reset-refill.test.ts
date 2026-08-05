@@ -1,4 +1,4 @@
-import { prepareCollectionResetRefill } from '../src/requirement-bridge';
+import { resetRefillRequirements, runResetRefill } from '../src/requirement-bridge';
 import { createEngineDatabase, createFakeEngine } from './helpers/engine';
 
 import type { RxDatabase } from 'rxdb';
@@ -9,7 +9,7 @@ import type { RxDatabase } from 'rxdb';
  * customers resume on-demand + idle trickle, and orders wait for view demand
  * or their periodic window lane.
  */
-describe('prepareCollectionResetRefill seeding', () => {
+describe('runResetRefill seeding', () => {
 	let database: RxDatabase;
 
 	beforeEach(async () => {
@@ -22,8 +22,7 @@ describe('prepareCollectionResetRefill seeding', () => {
 
 	async function refillSyncCalls(collectionNames: string[]): Promise<(string | undefined)[]> {
 		const engine = createFakeEngine(database);
-		const refill = prepareCollectionResetRefill(engine as never, collectionNames);
-		await refill();
+		await runResetRefill(engine as never, collectionNames);
 		return engine.syncCalls;
 	}
 
@@ -42,7 +41,7 @@ describe('prepareCollectionResetRefill seeding', () => {
 	// was asked for. The refill declares a forced refresh requirement instead.
 	it('refills a reset reference collection through a forced refresh, not the reference-seed lane', async () => {
 		const engine = createFakeEngine(database);
-		await prepareCollectionResetRefill(engine as never, ['products/categories'])();
+		await runResetRefill(engine as never, ['products/categories']);
 
 		expect(engine.syncCalls).toEqual(['scheduler-drain']);
 		expect(engine.requireCalls).toEqual([
@@ -59,5 +58,16 @@ describe('prepareCollectionResetRefill seeding', () => {
 	it('creates no eager lane demand when customers were reset', async () => {
 		const syncCalls = await refillSyncCalls(['customers']);
 		expect(syncCalls).toEqual(['scheduler-drain']);
+	});
+
+	it('keeps tax refill binding-independent and relies on reset-cleared engine dedupe', () => {
+		expect(resetRefillRequirements(['taxes'])).toEqual([
+			{
+				id: 'taxRates:collection-reset',
+				collection: 'taxRates',
+				kind: 'refresh',
+				priority: 1000,
+			},
+		]);
 	});
 });

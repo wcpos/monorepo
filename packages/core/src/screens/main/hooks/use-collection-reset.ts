@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { prepareCollectionResetRefill, useQueryRuntime } from '@wcpos/query';
+import { runResetRefill, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { CollectionKey } from './use-collection';
@@ -66,7 +66,6 @@ export const useCollectionReset = (key: CollectionKey) => {
 
 	const clearAndSync = React.useCallback(async (): Promise<void> => {
 		logger.debug('clearAndSync: starting', { context: { key } });
-		const refill = prepareCollectionResetRefill(runtime.engine, collectionNames);
 		const results = await clear();
 		const pendingConfirmation = results.find((result) => result.outcome === 'needs-confirmation');
 		if (pendingConfirmation) {
@@ -75,7 +74,7 @@ export const useCollectionReset = (key: CollectionKey) => {
 			});
 			return;
 		}
-		await refill();
+		await runResetRefill(runtime.engine, collectionNames);
 		logger.debug('clearAndSync: complete', { context: { key } });
 	}, [clear, collectionNames, key, runtime.engine]);
 

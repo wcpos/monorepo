@@ -18,10 +18,11 @@ export {
 } from './engine-query';
 export {
 	declareRequirements,
-	prepareCollectionResetRefill,
-	registerActiveBinding,
+	resetRefillRequirements,
+	runResetRefill,
 	requirementsForQuery,
 	type RequirementPlan,
 	type RequirementSortPart,
 } from './requirement-bridge';
+export { observeCollectionActive, observeEngineCollections } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';

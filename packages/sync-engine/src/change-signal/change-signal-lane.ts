@@ -42,6 +42,7 @@ import { createConfigFingerprintLiveSource } from './config-fingerprint-source';
 import { deserializeChangeSignalState, serializeChangeSignalState } from './change-signal-state';
 
 import type { RxDatabase } from 'rxdb';
+import type { SyncCollectionName } from '../collections/engine-collections';
 
 /** The engine-owned kv key holding one scope's serialized engine state. */
 export const CHANGE_SIGNAL_STATE_KEY = 'checkpoint:change-signal';
@@ -70,6 +71,10 @@ export type ChangeSignalLaneDeps = {
 	writeBlob: (scopeId: string, key: string, value: string) => Promise<void>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
+	withCollectionActivity?: <T>(
+		collection: SyncCollectionName,
+		work: () => Promise<T>
+	) => Promise<T>;
 	pullBatchSize?: () => number | undefined;
 	now?: () => number;
 	forceConfigStaleCollections?: (
@@ -244,6 +249,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							log: (line) =>
 								deps.diagnostics({ type: 'signal.log', level: 'debug', message: line }),
 							observe: deps.diagnostics,
+							...(deps.withCollectionActivity !== undefined
+								? { withCollectionActivity: deps.withCollectionActivity }
+								: {}),
 							...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						})
 					);

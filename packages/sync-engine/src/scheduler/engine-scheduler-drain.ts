@@ -224,6 +224,10 @@ export type RunEngineSchedulerDrainInput = {
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
 	onProgress?: (progress: { collection: string; documents: number; requests: number }) => void;
+	withCollectionActivity?: <T>(
+		collection: FetchTask['collection'],
+		work: () => Promise<T>
+	) => Promise<T>;
 };
 
 export type RunEngineSchedulerTaskInput = Pick<
@@ -364,6 +368,12 @@ export async function runEngineSchedulerDrain(
 			return runPersistedSchedulerTasks({
 				repository: fetcherRegistry.supportedRepository(schedulerRepository),
 				fetcher: fetcherRegistry.fetcher,
+				...(input.withCollectionActivity !== undefined
+					? {
+							withTaskActivity: <T>(task: FetchTask, work: () => Promise<T>) =>
+								input.withCollectionActivity!(task.collection, work),
+						}
+					: {}),
 				ownerId: input.ownerId,
 				nowMs,
 				getNowMs,
