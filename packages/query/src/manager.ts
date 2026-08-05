@@ -582,8 +582,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		return this.replicationStates.get(endpoint) as
-			| CollectionReplicationState<RxCollection>
-			| undefined;
+			CollectionReplicationState<RxCollection> | undefined;
 	}
 
 	/**
@@ -634,8 +633,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		return this.replicationStates.get(queryEndpoint) as
-			| QueryReplicationState<RxCollection>
-			| undefined;
+			QueryReplicationState<RxCollection> | undefined;
 	}
 
 	/**

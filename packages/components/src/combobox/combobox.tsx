@@ -59,8 +59,7 @@ function Combobox<T = undefined>({
 		prop: valueProp as Option<any> | Option<any>[] | undefined,
 		defaultProp: defaultValue as Option<any> | Option<any>[] | undefined,
 		onChange: onValueChangeProp as
-			| ((value: Option<any> | Option<any>[] | undefined) => void)
-			| undefined,
+			((value: Option<any> | Option<any>[] | undefined) => void) | undefined,
 	});
 	const [filterValue, setFilterValue] = React.useState('');
 

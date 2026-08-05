@@ -31,8 +31,7 @@ export function DrawerItemList({ state, navigation, descriptors }: DrawerContent
 				key={route.key}
 				label={
 					(drawerLabel !== undefined ? drawerLabel : title !== undefined ? title : route.name) as
-						| string
-						| ((props: { focused?: boolean; color?: string }) => React.ReactNode)
+						string | ((props: { focused?: boolean; color?: string }) => React.ReactNode)
 				}
 				icon={
 					drawerIcon as

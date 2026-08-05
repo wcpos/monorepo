@@ -15,7 +15,7 @@
       "env": {
         "EXPO_USE_FAST_RESOLVER": "true"
       },
-      "node": "22.13.1"
+      "node": "22.18.0"
     },
     "development": {
       "extends": "monorepo",
