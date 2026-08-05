@@ -1097,6 +1097,7 @@
 	"health.logs.event.signal_cycle": "Checked your store for changes",
 	"health.logs.event.signal_log": "Change check detail",
 	"health.logs.event.signal_tick_error": "Checking your store for changes failed",
+	"health.logs.event.targeted_pull_shortfall_prune": "Removed records no longer returned by your store",
 	"health.logs.event.transport_request": "Request to your store",
 	"health.logs.kv_event": "Event"
 }

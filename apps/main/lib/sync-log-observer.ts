@@ -158,6 +158,7 @@ const CONFORMANCE = new Map<string, Conformance>([
 	],
 	['apply.refresh', { operationType: 'sync.apply', outcome: 'ok' }],
 	['apply.barcode-rederive', { operationType: 'sync.apply', outcome: 'ok' }],
+	['targeted.pull.shortfall-prune', { operationType: 'sync.apply', outcome: 'recovered' }],
 	[
 		'apply.escalation',
 		{
