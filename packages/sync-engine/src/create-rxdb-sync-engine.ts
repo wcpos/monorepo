@@ -13,7 +13,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
  * durable writes, requirements, and telemetry. `ready` means the initial
  * database is usable; a failed POS bootstrap seed is deliberately degraded
  * rather than fatal and is exposed by `status().bootstrapFailed`,
- * `status().gatedBy`, diagnostics, and `onScopeEvent`.
+ * `status().gatedBy`, diagnostics, and `events()`.
  *
  * A scope's write plane has exactly one engine owner. This is a hard engine
  * contract: hosts that can mount multiple instances must leader-elect before
@@ -40,11 +40,6 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
  *  5. Decisions the caller must make are values ('needs-confirmation');
  *     caller misuse is an exception (post-dispose call, unknown collection,
  *     cross-site identity — multi-site is a new engine).
- *
- * Host-facing projections stay deliberately small: `onScopeEvent()` maps the
- * lifecycle/guard subset both hosts otherwise translated independently, and
- * `stats()` projects the three shared scope/guard counters both hosts display. Raw
- * `events()` and full `status()` remain available for engine-specific UI.
  */
 
 import {
@@ -391,15 +386,6 @@ export type EngineStatus = {
 	queueDepth: number | null;
 };
 
-export type EngineScopeEvent =
-	| { type: 'switched'; scopeId: string }
-	| { type: 'reset'; scopeId: string; collection: ResettableCollectionName }
-	| { type: 'needs-confirmation'; scopeId: string; detail?: string }
-	| { type: 'write-dropped' | 'late-response-dropped'; scopeId: string; detail?: string }
-	| { type: 'bootstrap-failed'; scopeId: string; detail: string };
-
-export type EngineStats = Pick<EngineStatus, 'scopesOpen'> & EngineStatus['guards'];
-
 export type Unsubscribe = () => void;
 /** A terminal queue entry from `conflicts()`: the write-intent plus, for status
  * 'conflicted', the server truth captured from the 409 (`conflictDocument`,
@@ -491,17 +477,11 @@ export type RxdbSyncEngine = {
 	 * self-heals next tick (invariant 5); post-dispose calls reject. */
 	sync(lane?: EngineLane, options?: { signal?: AbortSignal }): Promise<SyncReport>;
 	events(cb: (e: EngineEvent) => void): Unsubscribe;
-	/** Host view projection of scope lifecycle and guard events. */
-	onScopeEvent(cb: (event: EngineScopeEvent) => void): Unsubscribe;
 	status(): EngineStatus;
 	/** Emits the current status immediately, then coalesced status snapshots as it changes. */
 	statusChanges(cb: (status: EngineStatus) => void): Unsubscribe;
-	/** Read per-collection server totals from the active scope's query-total cache. */
-	censusTotals(): Promise<CensusTotals>;
 	/** Emits the current census snapshot, then updated cache/scope/freshness snapshots. */
 	censusChanges(cb: (totals: CensusTotals) => void): Unsubscribe;
-	/** Host view projection of the shared scope/guard counters. */
-	stats(): EngineStats;
 	/** Abort in-flight, close every scope db; terminal. */
 	dispose(): Promise<void>;
 };
@@ -536,7 +516,6 @@ export function createRxdbSyncEngine(
 	const localCoverageByScopeId = new Map<string, LocalCoverage>();
 	const dbSubscribers = new Set<(db: RxDatabase | null) => void>();
 	const eventSubscribers = new Set<(e: EngineEvent) => void>();
-	const scopeEventSubscribers = new Set<(e: EngineScopeEvent) => void>();
 	const statusSubscribers = new Set<(status: EngineStatus) => void>();
 	const censusSubscribers = new Set<(totals: CensusTotals) => void>();
 	let censusNotificationVersion = 0;
@@ -990,39 +969,6 @@ export function createRxdbSyncEngine(
 			}
 		}
 		if (event.type === 'query-total-cache') publishCensusChanges();
-		const scopeEvent: EngineScopeEvent | null = (() => {
-			switch (event.type) {
-				case 'scope-switched':
-					return { type: 'switched', scopeId: event.scopeId };
-				case 'collection-reset':
-					return { type: 'reset', scopeId: event.scopeId, collection: event.collection };
-				case 'reset-needs-confirmation':
-					return {
-						type: 'needs-confirmation',
-						scopeId: event.scopeId,
-						...(event.detail !== undefined ? { detail: event.detail } : {}),
-					};
-				case 'guard':
-					return {
-						type: event.kind,
-						scopeId: event.scopeId,
-						...(event.detail !== undefined ? { detail: event.detail } : {}),
-					};
-				case 'bootstrap-failed':
-					return { type: 'bootstrap-failed', scopeId: event.scopeId, detail: event.detail };
-				default:
-					return null;
-			}
-		})();
-		if (scopeEvent) {
-			for (const subscriber of [...scopeEventSubscribers]) {
-				try {
-					subscriber(scopeEvent);
-				} catch {
-					/* observer seam never throws into the engine */
-				}
-			}
-		}
 	};
 
 	const emitDb = (db: RxDatabase | null): void => {
@@ -2379,13 +2325,6 @@ export function createRxdbSyncEngine(
 				eventSubscribers.delete(cb);
 			};
 		},
-		onScopeEvent: (cb) => {
-			assertNotDisposed();
-			scopeEventSubscribers.add(cb);
-			return () => {
-				scopeEventSubscribers.delete(cb);
-			};
-		},
 		statusChanges: (cb) => {
 			assertNotDisposed();
 			statusSubscribers.add(cb);
@@ -2398,24 +2337,12 @@ export function createRxdbSyncEngine(
 				statusSubscribers.delete(cb);
 			};
 		},
-		censusTotals: async () => {
-			assertNotDisposed();
-			return readCensusTotals();
-		},
 		censusChanges: (cb) => {
 			assertNotDisposed();
 			censusSubscribers.add(cb);
 			publishCensusChanges();
 			return () => {
 				censusSubscribers.delete(cb);
-			};
-		},
-		stats: () => {
-			const stats = manager.stats();
-			return {
-				scopesOpen: stats.scopesOpen,
-				wrongScopeWrites: stats.wrongScopeWrites,
-				lateResponsesDropped: stats.lateResponsesDropped,
 			};
 		},
 		status: readStatus,
@@ -2464,7 +2391,6 @@ export function createRxdbSyncEngine(
 				censusSubscribers.clear();
 				dbSubscribers.clear();
 				eventSubscribers.clear();
-				scopeEventSubscribers.clear();
 				// One synchronous, fully settled snapshot (disposed, ungated, zero
 				// scopes) before the set clears — the queued microtask would fire
 				// after the clear and monitors would never see the terminal state.

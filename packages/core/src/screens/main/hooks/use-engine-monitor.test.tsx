@@ -2,92 +2,97 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
-import { useCollectionCounts, useEngineStatus, useMutationCounts } from './use-engine-monitor';
+import { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
 
-const initialStatus = { connectivity: 'online' };
-const engine = { status: jest.fn(() => initialStatus), statusChanges: jest.fn() };
-const mockStatusSubscribers = new Set<(status: typeof initialStatus) => void>();
-const mockCollectionSubscribers = new Set<(counts: Record<string, number>) => void>();
-const mockMutationSubscribers = new Set<(counts: { pending: number; conflicts: number }) => void>();
-const mockStatusUnsubscribe = jest.fn();
-const mockCollectionUnsubscribe = jest.fn();
-const mockMutationUnsubscribe = jest.fn();
+import { useCollectionCounts, useMutationCounts } from './use-engine-monitor';
 
-engine.statusChanges.mockImplementation((cb) => {
-	mockStatusSubscribers.add(cb);
-	cb(initialStatus);
-	return () => {
-		mockStatusSubscribers.delete(cb);
-		mockStatusUnsubscribe();
-	};
-});
+type FakeDatabase = { collections: Record<string, unknown> };
+
+const mockDatabase$ = new BehaviorSubject<FakeDatabase | null>(null);
+const mockEngine = { database$: mockDatabase$ };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({ engine }),
-	observeEngineCollectionCounts: (
-		_engine: unknown,
-		cb: (counts: Record<string, number>) => void
-	) => {
-		mockCollectionSubscribers.add(cb);
-		cb({ orders: 1 });
-		return () => {
-			mockCollectionSubscribers.delete(cb);
-			mockCollectionUnsubscribe();
-		};
-	},
-	observeEngineMutationCounts: (
-		_engine: unknown,
-		cb: (counts: { pending: number; conflicts: number }) => void
-	) => {
-		mockMutationSubscribers.add(cb);
-		cb({ pending: 2, conflicts: 3 });
-		return () => {
-			mockMutationSubscribers.delete(cb);
-			mockMutationUnsubscribe();
-		};
-	},
+	useQueryRuntime: () => ({ engine: mockEngine }),
+	observeEngineDatabases: () => mockDatabase$,
 }));
 
+function countDatabase(offset: number) {
+	const counts = Object.fromEntries(
+		SYNC_COLLECTION_NAMES.map((name, index) => [name, new BehaviorSubject(offset + index)])
+	) as Record<(typeof SYNC_COLLECTION_NAMES)[number], BehaviorSubject<number>>;
+	return {
+		counts,
+		database: {
+			collections: Object.fromEntries(
+				SYNC_COLLECTION_NAMES.map((name) => [name, { count: () => ({ $: counts[name] }) }])
+			),
+		},
+	};
+}
+
+function mutationDatabase(pending: number, conflicts: number, pendingOrders = pending) {
+	const pending$ = new BehaviorSubject(Array.from({ length: pending }, () => ({})));
+	const pendingOrders$ = new BehaviorSubject(Array.from({ length: pendingOrders }, () => ({})));
+	const conflicts$ = new BehaviorSubject(Array.from({ length: conflicts }, () => ({})));
+	const find = jest.fn(
+		(query: { selector: { status: { $in: string[] }; collectionName?: { $eq: string } } }) => ({
+			$: query.selector.status.$in.includes('rejected')
+				? conflicts$
+				: query.selector.collectionName
+					? pendingOrders$
+					: pending$,
+		})
+	);
+	return {
+		pendingOrders$,
+		find,
+		database: {
+			collections: { [MUTATION_QUEUE_RXDB_COLLECTION]: { find } },
+		},
+	};
+}
+
 describe('engine monitor hooks', () => {
-	beforeEach(() => {
-		mockStatusUnsubscribe.mockClear();
-		mockCollectionUnsubscribe.mockClear();
-		mockMutationUnsubscribe.mockClear();
-	});
+	afterEach(() => mockDatabase$.next(null));
 
-	it('subscribes to engine monitor surfaces and releases them on unmount', () => {
-		const { result, unmount } = renderHook(() => ({
-			status: useEngineStatus(),
-			collections: useCollectionCounts(),
-			mutations: useMutationCounts(),
-		}));
+	it('re-subscribes collection counts when the engine database changes', () => {
+		const first = countDatabase(1);
+		const second = countDatabase(11);
+		mockDatabase$.next(first.database);
+		const { result, unmount } = renderHook(() => useCollectionCounts());
 
-		expect(result.current).toEqual({
-			status: initialStatus,
-			collections: { orders: 1 },
-			mutations: { pending: 2, conflicts: 3 },
-		});
-
-		act(() => {
-			for (const subscriber of mockStatusSubscribers) {
-				subscriber({ connectivity: 'offline' });
-			}
-			for (const subscriber of mockCollectionSubscribers) subscriber({ orders: 4 });
-			for (const subscriber of mockMutationSubscribers) {
-				subscriber({ pending: 5, conflicts: 6 });
-			}
-		});
-
-		expect(result.current).toEqual({
-			status: { connectivity: 'offline' },
-			collections: { orders: 4 },
-			mutations: { pending: 5, conflicts: 6 },
-		});
+		expect(result.current).toEqual(
+			Object.fromEntries(SYNC_COLLECTION_NAMES.map((name, index) => [name, index + 1]))
+		);
+		act(() => mockDatabase$.next(second.database));
+		expect(result.current).toEqual(
+			Object.fromEntries(SYNC_COLLECTION_NAMES.map((name, index) => [name, index + 11]))
+		);
+		act(() => first.counts.orders.next(99));
+		expect(result.current.orders).toBe(11);
+		act(() => second.counts.orders.next(50));
+		expect(result.current.orders).toBe(50);
 
 		unmount();
-		expect(mockStatusUnsubscribe).toHaveBeenCalledTimes(1);
-		expect(mockCollectionUnsubscribe).toHaveBeenCalledTimes(1);
-		expect(mockMutationUnsubscribe).toHaveBeenCalledTimes(1);
+	});
+
+	it('counts only order mutations as sales waiting to send', () => {
+		const mutations = mutationDatabase(3, 0, 1);
+		mockDatabase$.next(mutations.database);
+		const { result, unmount } = renderHook(() => useMutationCounts());
+
+		expect(mutations.find).toHaveBeenCalledWith({
+			selector: {
+				status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] },
+				collectionName: { $eq: 'orders' },
+			},
+		});
+		expect(result.current).toEqual({ pending: 3, pendingOrders: 1, conflicts: 0 });
+		act(() => mutations.pendingOrders$.next([]));
+		expect(result.current).toEqual({ pending: 3, pendingOrders: 0, conflicts: 0 });
+
+		unmount();
 	});
 });

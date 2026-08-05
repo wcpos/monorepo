@@ -22,27 +22,29 @@ import {
 } from 'rxjs/operators';
 
 import {
-	type CoverageLaneDocument,
 	declareRequirements,
 	engineCollectionNameFor,
-	type EngineEvent,
-	type EngineLane,
 	type EngineQueryDescriptor,
 	isFullyRepresentedProductSelector,
 	observeEngineDatabases,
 	observeEngineQuery,
 	orderRangeBoundSeconds,
 	type QueryResult,
-	type QueryTotalCacheDocument,
 	registerActiveBinding,
-	type RequirementHandle,
 	requirementsForQuery,
 	type RequirementSortPart,
-	type RxdbSyncEngine,
-	type SyncCollectionName,
 	useLocalQuery,
 	useQueryRuntime,
 } from '@wcpos/query';
+import type {
+	CoverageLaneDocument,
+	EngineEvent,
+	EngineLane,
+	QueryTotalCacheDocument,
+	RequirementHandle,
+	RxdbSyncEngine,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';
 
 import { translateQueryState } from './query-state-translator';
 

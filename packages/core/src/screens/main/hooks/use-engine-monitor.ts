@@ -1,23 +1,91 @@
 import * as React from 'react';
 
-import {
-	observeEngineCollectionCounts,
-	observeEngineMutationCounts,
-	useQueryRuntime,
-} from '@wcpos/query';
-import type { EngineCollectionCounts, EngineMutationCounts, EngineStatus } from '@wcpos/query';
+import { combineLatest, of } from 'rxjs';
+import { map, switchMap } from 'rxjs/operators';
 
-const EMPTY_COLLECTION_COUNTS: EngineCollectionCounts = {
-	orders: 0,
-	products: 0,
-	variations: 0,
-	customers: 0,
-	taxRates: 0,
-	categories: 0,
-	brands: 0,
-	tags: 0,
-	coupons: 0,
+import { observeEngineDatabases, useQueryRuntime } from '@wcpos/query';
+import { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
+import type { EngineStatus, RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
+
+import type { Observable } from 'rxjs';
+
+export type EngineCollectionCounts = Record<string, number>;
+export type EngineMutationCounts = {
+	pending: number;
+	/** Pending mutations on the orders collection only — the "sales waiting to send" number. */
+	pendingOrders: number;
+	conflicts: number;
 };
+
+type CountCollection = { count(): { $: Observable<number> } };
+type MutationCollection = {
+	find(query: { selector: { status: { $in: string[] }; collectionName?: { $eq: string } } }): {
+		$: Observable<readonly unknown[]>;
+	};
+};
+
+const EMPTY_COLLECTION_COUNTS = Object.fromEntries(
+	SYNC_COLLECTION_NAMES.map((name) => [name, 0])
+) as EngineCollectionCounts;
+
+function subscribeToCollectionCounts(
+	engine: RxdbSyncEngine,
+	cb: (counts: EngineCollectionCounts) => void
+): () => void {
+	const subscription = observeEngineDatabases(engine)
+		.pipe(
+			switchMap((database) => {
+				if (!database) return of(EMPTY_COLLECTION_COUNTS);
+				const collections = database.collections as unknown as Record<
+					SyncCollectionName,
+					CountCollection
+				>;
+				return combineLatest(SYNC_COLLECTION_NAMES.map((name) => collections[name].count().$)).pipe(
+					map((values) =>
+						Object.fromEntries(
+							SYNC_COLLECTION_NAMES.map((name, index) => [name, values[index] ?? 0])
+						)
+					)
+				);
+			})
+		)
+		.subscribe(cb);
+	return () => subscription.unsubscribe();
+}
+
+function subscribeToMutationCounts(
+	engine: RxdbSyncEngine,
+	cb: (counts: EngineMutationCounts) => void
+): () => void {
+	const subscription = observeEngineDatabases(engine)
+		.pipe(
+			switchMap((database) => {
+				if (!database) return of({ pending: 0, pendingOrders: 0, conflicts: 0 });
+				const mutations = database.collections[
+					MUTATION_QUEUE_RXDB_COLLECTION
+				] as unknown as MutationCollection;
+				const pendingSelector = {
+					status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] },
+				};
+				const pending$ = mutations.find({ selector: pendingSelector }).$;
+				const pendingOrders$ = mutations.find({
+					selector: { ...pendingSelector, collectionName: { $eq: 'orders' } },
+				}).$;
+				const conflicts$ = mutations.find({
+					selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },
+				}).$;
+				return combineLatest([pending$, pendingOrders$, conflicts$]).pipe(
+					map(([pending, pendingOrders, conflicts]) => ({
+						pending: pending.length,
+						pendingOrders: pendingOrders.length,
+						conflicts: conflicts.length,
+					}))
+				);
+			})
+		)
+		.subscribe(cb);
+	return () => subscription.unsubscribe();
+}
 
 export function useEngineStatus(): EngineStatus {
 	const { engine } = useQueryRuntime();
@@ -37,7 +105,7 @@ export function useCollectionCounts(): EngineCollectionCounts {
 
 	React.useEffect(() => {
 		// RxDB count streams are external subscriptions and must follow the active engine lifecycle.
-		return observeEngineCollectionCounts(engine, setCounts);
+		return subscribeToCollectionCounts(engine, setCounts);
 	}, [engine]);
 
 	return counts;
@@ -53,7 +121,7 @@ export function useMutationCounts(): EngineMutationCounts {
 
 	React.useEffect(() => {
 		// RxDB mutation selectors are external subscriptions and must follow the active engine lifecycle.
-		return observeEngineMutationCounts(engine, setCounts);
+		return subscribeToMutationCounts(engine, setCounts);
 	}, [engine]);
 
 	return counts;

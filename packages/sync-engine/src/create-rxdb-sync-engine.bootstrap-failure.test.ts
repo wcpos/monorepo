@@ -4,7 +4,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { memoryEngineStorage } from './testing';
 import {
 	createRxdbSyncEngine,
-	type EngineScopeEvent,
+	type EngineEvent,
 	type EngineStatus,
 } from './create-rxdb-sync-engine';
 
@@ -17,7 +17,7 @@ vi.mock('./scheduler/rx-pos-bootstrap-seeder', () => ({
 }));
 
 describe('bootstrap failure honesty', () => {
-	it('keeps ready usable while exposing degradation through status, telemetry and the view event', async () => {
+	it('keeps ready usable while exposing degradation through status, telemetry and events', async () => {
 		const diagnostics = vi.fn();
 		const engine = createRxdbSyncEngine(
 			{
@@ -31,8 +31,8 @@ describe('bootstrap failure honesty', () => {
 			},
 			{ site: 'https://example.test', storeId: 1, cashierId: `bootstrap-failure-${Date.now()}` }
 		);
-		const events: EngineScopeEvent[] = [];
-		engine.onScopeEvent((event) => events.push(event));
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
 		const statuses: EngineStatus[] = [];
 		engine.statusChanges((status) => statuses.push(status));
 

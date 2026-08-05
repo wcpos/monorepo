@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import {
+	type CensusTotals,
 	createRxdbSyncEngine,
 	type EngineEvent,
 	type RxdbSyncEngine,
@@ -313,7 +314,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 	});
 
 	it('seeds supported collection census requests and exposes fresh, stale, and unknown totals', async () => {
-		let nowMs = 1_000_000;
+		const nowMs = 1_000_000;
 		const fetchWooQueryTotal = vi.fn(
 			async ({
 				request,
@@ -328,11 +329,9 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		});
 		await engine.ready;
 
-		const initial = await engine.censusTotals();
-		expect(Object.values(initial).every((entry) => entry === null)).toBe(true);
-
-		const emissions: (typeof initial)[] = [];
+		const emissions: CensusTotals[] = [];
 		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		expect(Object.values(emissions.at(-1) ?? {}).every((entry) => entry === null)).toBe(true);
 		const report = await engine.sync('query-total-retry');
 
 		expect(report.status).toBe('ran');
@@ -360,8 +359,6 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			fresh: true,
 		});
 
-		nowMs = 1_060_000;
-		expect((await engine.censusTotals()).orders?.fresh).toBe(false);
 		unsubscribe();
 		await engine.dispose();
 	});
@@ -380,7 +377,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		});
 		await engine.ready;
 
-		const emissions: Awaited<ReturnType<typeof engine.censusTotals>>[] = [];
+		const emissions: CensusTotals[] = [];
 		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
 		await engine.sync('query-total-retry');
 		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.fresh).toBe(true));

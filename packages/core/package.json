@@ -98,6 +98,7 @@
 		"@wcpos/query": "workspace:*",
 		"@wcpos/scanner": "workspace:*",
 		"@wcpos/sync-core": "workspace:*",
+		"@wcpos/sync-engine": "workspace:*",
 		"@wcpos/utils": "workspace:*",
 		"@widgetbot/react-embed": "^1.11.3",
 		"barcode-detector": "^3.2.1",

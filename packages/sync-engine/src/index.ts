@@ -5,9 +5,9 @@
  * `./testing` are the package's entire surface; `packageExports.test.ts`
  * pins it. Everything else in src/ is implementation, free to move or die.
  *
- *  - `.` (here): `createRxdbSyncEngine` — the one runtime value — plus the
- *    type-only interface hosts program against (engine types, document/config
- *    types). New consumers use the handle, never internals.
+ *  - `.` (here): the engine factory, its canonical collection-name values,
+ *    and the type-only interface hosts program against (engine types,
+ *    document/config types). New consumers use the handle, never internals.
  *  - `./testing` (src/testing.ts): the measurement surface — in-memory ports,
  *    real schema fixtures, and the pure simulation models the lab's
  *    experiment panels run. The port checklist's "Measurement kit and
@@ -24,8 +24,6 @@ export {
 	type EngineFetcher,
 	type EngineHostTransport,
 	type EngineStatus,
-	type EngineScopeEvent,
-	type EngineStats,
 	type EngineStringStore,
 	type ResettableCollectionName,
 	type CoverageOutcome,
@@ -45,6 +43,11 @@ export {
 	type CensusTotal,
 	type CensusTotals,
 } from './create-rxdb-sync-engine';
+
+export {
+	MUTATION_QUEUE_RXDB_COLLECTION,
+	SYNC_COLLECTION_NAMES,
+} from './collections/engine-collections';
 
 // Facade configuration and reporting types.
 export type {

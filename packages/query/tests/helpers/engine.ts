@@ -282,9 +282,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 			for (const listener of eventListeners) listener(event);
 		},
 		eventListenerCount: () => eventListeners.size,
-		onScopeEvent: () => () => undefined,
 		status: () => ({}) as never,
-		stats: () => ({}) as never,
 		write: async () => ({ mutationId: 'm', recordId: 'r' }),
 		conflicts: async () => [],
 		resolveConflict: async () => undefined,
@@ -356,9 +354,7 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 			return { lane: (lane ?? 'all') as never, status: 'ran' as const };
 		},
 		events: () => () => undefined,
-		onScopeEvent: () => () => undefined,
 		status: () => ({}) as never,
-		stats: () => ({}) as never,
 		write: async () => ({ mutationId: 'm', recordId: 'r' }),
 		conflicts: async () => [],
 		resolveConflict: async () => undefined,
