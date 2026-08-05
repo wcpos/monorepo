@@ -55,20 +55,12 @@ import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-st
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
 
+import type { MaintenanceLaneName, MaintenanceLaneRegistryEntry } from './lane-registry';
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { RxDatabase } from 'rxdb';
 import type { SyncCollectionName } from '../collections/engine-collections';
 
-export type MaintenanceLaneName =
-	| 'scheduler-drain'
-	| 'order-window-seed'
-	| 'product-browse-window-seed'
-	| 'reference-seed'
-	| 'query-total-retry'
-	| 'customer-trickle'
-	| 'coverage-compaction'
-	| 'existence-prime'
-	| 'existence-reconcile';
+export type { MaintenanceLaneName } from './lane-registry';
 
 export type MaintenanceLaneReport = {
 	lane: MaintenanceLaneName;
@@ -143,17 +135,9 @@ export type MaintenanceLane = {
 };
 
 export type MaintenanceLanes = {
-	/** The persisted scheduler drain (slice 5e): fetch queued tasks through the per-collection fetchers. */
-	schedulerDrain: MaintenanceLane;
-	orderWindowSeed: MaintenanceLane;
-	productBrowseWindowSeed: MaintenanceLane;
-	referenceSeed: MaintenanceLane;
-	/** Null when the host provided no query-total port — the lane never arms. */
-	queryTotalRetry: MaintenanceLane | null;
-	customerTrickle: MaintenanceLane;
-	coverageCompaction: MaintenanceLane;
-	existencePrime: MaintenanceLane;
-	existenceReconcile: MaintenanceLane;
+	[
+		Entry in MaintenanceLaneRegistryEntry as Entry['targetKey']
+	]: Entry['laneName'] extends 'query-total-retry' ? MaintenanceLane | null : MaintenanceLane;
 };
 
 type MaintenanceLaneBodyReport = {
