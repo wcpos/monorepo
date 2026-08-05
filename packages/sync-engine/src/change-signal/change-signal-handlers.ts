@@ -292,7 +292,10 @@ function collectShapeEffects(ctx: HandlerContext): ShapeEffects {
 				break;
 			}
 			case 'greedy-prunable': {
-				referenceRefreshers.set(descriptor.hybrid, () => refreshPrunable(ctx, descriptor));
+				referenceRefreshers.set(descriptor.hybrid, async () => {
+					if ((await collectionOf(ctx, descriptor.collection).count().exec()) > 0)
+						await refreshPrunable(ctx, descriptor);
+				});
 				break;
 			}
 			case 'local-only':

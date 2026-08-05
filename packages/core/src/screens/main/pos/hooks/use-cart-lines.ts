@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservable, useObservableEagerState, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
+import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { calculateOrderTotals } from './calculate-order-totals';
 import { useFeeLineData } from './use-fee-line-data';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
@@ -40,6 +41,16 @@ export const useCartLines = () => {
 			coupon_lines: (couponLines || []).filter((item) => item.code != null),
 		};
 	}, [lineItems, feeLines, shippingLines, couponLines]);
+
+	/**
+	 * Coupon replay below scans the resident coupons/categories collections directly, which
+	 * declares no demand of its own. Since reference lanes fetch on demand (#952), a cart
+	 * carrying coupon lines has to declare that demand itself or the replay throws on a
+	 * device that never opened the coupon picker.
+	 */
+	const { whenSettled: whenCouponReferencesSettled } = useAppliedCouponReferenceDemand(
+		cartLines.coupon_lines.length > 0
+	);
 
 	/**
 	 * If line items change, and we have a percentage fee line, we need to recalculate the fee line total.
@@ -93,6 +104,13 @@ export const useCartLines = () => {
 		const allCouponLines = freshOrder.coupon_lines || [];
 		const hasActiveCoupons = allCouponLines.some((cl) => cl.code != null);
 		if (hasActiveCoupons) {
+			// The demand declared above is asynchronous, and this edit can land while the pull
+			// is still in flight — scanning now would hit the still-empty collections and throw
+			// (or validate a category-restricted coupon against an empty tree). Wait for it, and
+			// if the wait times out, bail rather than replaying against residents we know are
+			// not ready: same "avoid partial data" rule as the missing-coupon bail below. The
+			// next cart edit re-runs the replay.
+			if (!(await whenCouponReferencesSettled())) return;
 			const result = await recalculate(freshOrder.line_items || [], allCouponLines);
 			if (!result) return; // coupon missing locally — bail to avoid partial data
 			// Bail if order changed during async replay to avoid overwriting concurrent edits

@@ -37,9 +37,23 @@ describe('prepareCollectionResetRefill seeding', () => {
 		expect(syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
 	});
 
-	it('seeds references when a reference collection was reset', async () => {
-		const syncCalls = await refillSyncCalls(['products/categories']);
-		expect(syncCalls).toEqual(['reference-seed', 'scheduler-drain']);
+	// NOT the `reference-seed` maintenance lane: that lane gates on local residents (#952),
+	// and a reset has just emptied the collection, so the lane would skip the very refill it
+	// was asked for. The refill declares a forced refresh requirement instead.
+	it('refills a reset reference collection through a forced refresh, not the reference-seed lane', async () => {
+		const engine = createFakeEngine(database);
+		await prepareCollectionResetRefill(engine as never, ['products/categories'])();
+
+		expect(engine.syncCalls).toEqual(['scheduler-drain']);
+		expect(engine.requireCalls).toEqual([
+			{
+				id: 'categories:collection-reset',
+				collection: 'categories',
+				kind: 'refresh',
+				forceRefresh: true,
+				priority: 1000,
+			},
+		]);
 	});
 
 	it('creates no eager lane demand when customers were reset', async () => {

@@ -21,6 +21,10 @@
  *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
  *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor plus optional native
  *    filter dimensions. It carries the grid's own limit, sort, and representable filters.
+ *  - **reference browse** (categories/tags/brands/coupons — #952) →
+ *    `engine.require({collection, kind: 'refresh'})`. These lanes are no longer seeded at
+ *    boot, so mounting a picker/screen over one is what fetches it, deduped by the engine's
+ *    `REFERENCE_REFRESH_DEDUPE_MS` window.
  *
  * Unbounded browse over every other collection creates NO remote demand (local residents
  * only). The `greedy`/`endpoint` keys no longer create remote work; they are accepted and
@@ -51,6 +55,12 @@ const TARGETED_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
 ]);
 
 const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>(['products', 'customers']);
+const REFERENCE_ENGINE_COLLECTIONS: EngineCollectionName[] = [
+	'categories',
+	'tags',
+	'brands',
+	'coupons',
+];
 
 const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
 
@@ -528,6 +538,23 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 		];
 	}
 
+	// Reference browse → an on-demand greedy pull at open (#952). These collections are no
+	// longer seeded at boot, so the picker/screen/cart binding that mounts over one is what
+	// materializes it. Deliberately drops `forceRefresh`: a UI binding re-declares on every
+	// render, and forcing would bypass REFERENCE_REFRESH_DEDUPE_MS and re-pull the whole
+	// collection per mount — the boot-time server hammering this issue set out to remove.
+	// The one caller that legitimately forces (Clear & Sync refill) re-applies it below.
+	if (REFERENCE_ENGINE_COLLECTIONS.includes(engineCollection)) {
+		return [
+			{
+				id: `${input.id}:reference-refresh`,
+				collection: engineCollection,
+				kind: 'refresh',
+				priority: input.priority ?? 700,
+			},
+		];
+	}
+
 	// Every other collection: unbounded browse → local residents only (ADR 0027).
 	return [];
 }
@@ -580,9 +607,24 @@ function requirementsForReset(
 	collectionNames: string[]
 ): EngineRequirement[] {
 	const wanted = new Set(collectionNames);
+	const resetEngineCollections = new Set<EngineCollectionName>(
+		collectionNames
+			.filter(isMappedCollection)
+			.map((collectionName) => engineCollectionNameFor(collectionName))
+	);
 	const requirements: EngineRequirement[] = [];
 	for (const binding of activeBindings.get(engine)?.values() ?? []) {
 		if (!wanted.has(binding.collectionName)) continue;
+		// Reference collections are refilled once per collection below rather than once per
+		// binding: the reset can be triggered from a surface that has no binding over them at
+		// all (the Health → Database row, a collection footer), and the refill has to fetch
+		// either way.
+		if (
+			isMappedCollection(binding.collectionName) &&
+			REFERENCE_ENGINE_COLLECTIONS.includes(engineCollectionNameFor(binding.collectionName))
+		) {
+			continue;
+		}
 		requirements.push(
 			...requirementsForQuery({
 				...binding,
@@ -591,6 +633,20 @@ function requirementsForReset(
 				forceRefresh: true,
 			})
 		);
+	}
+	// Reset refill is the one path that must beat the dedupe window: the local collection was
+	// just wiped, so serving "recently refreshed" residents would serve nothing. The UI
+	// binding branch of `requirementsForQuery` deliberately drops `forceRefresh` (#952), so
+	// the refill declares its own forced refresh per reset reference collection.
+	for (const collection of REFERENCE_ENGINE_COLLECTIONS) {
+		if (!resetEngineCollections.has(collection)) continue;
+		requirements.push({
+			id: `${collection}:collection-reset`,
+			collection,
+			kind: 'refresh',
+			forceRefresh: true,
+			priority: 1000,
+		});
 	}
 	if (wanted.has('taxes')) {
 		requirements.push({
@@ -615,16 +671,15 @@ export function prepareCollectionResetRefill(
 			.filter(isMappedCollection)
 			.map((collectionName) => engineCollectionNameFor(collectionName))
 	);
-	const seedReferences = (['categories', 'brands', 'tags', 'coupons'] as const).some((collection) =>
-		engineCollections.has(collection)
-	);
 	const seedProductBrowse = engineCollections.has('products');
-	// Re-arm normal policy: product/variation browse seed and greedy references now;
-	// customers resume on demand plus idle trickle from page 1 (not ticked while
-	// active), and orders wait for view demand or their periodic window cadence.
+	// Re-arm normal policy: the product/variation browse seed now, and the reference
+	// collections through the forced refresh requirements built above — NOT through the
+	// `reference-seed` maintenance lane, which gates on local residents and would skip a
+	// collection the reset just emptied. Customers resume on demand plus idle trickle from
+	// page 1 (not ticked while active), and orders wait for view demand or their periodic
+	// window cadence.
 
 	return async () => {
-		if (seedReferences) await engine.sync('reference-seed');
 		if (seedProductBrowse) await engine.sync('product-browse-window-seed');
 		const handles = declareRequirements(engine, requirements);
 		await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
