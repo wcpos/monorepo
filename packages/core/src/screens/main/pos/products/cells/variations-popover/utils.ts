@@ -112,7 +112,7 @@ export const parseAttributes = (
 ) => {
 	return (attributes || [])
 		.filter((attribute) => attribute.variation)
-		.sort((a, b) => (a.position || 0) - (b.position || 0))
+		.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
 		.map((attribute) => {
 			const characterCount = (attribute.options || []).join('').length;
 			const selected = selectedAttributes?.find((a) => a.name === attribute.name);

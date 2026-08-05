@@ -240,9 +240,9 @@ describe('Utilities', () => {
 
 			it('handles total and total_tax as numbers', () => {
 				const item = { total: 50, total_tax: 5 };
-				// @ts-ignore
+				// @ts-expect-error — Numeric totals intentionally exercise runtime coercion
 				expect(calculateDefaultAmount(item, true)).toBe(55);
-				// @ts-ignore
+				// @ts-expect-error — Numeric totals intentionally exercise runtime coercion
 				expect(calculateDefaultAmount(item, false)).toBe(50);
 			});
 		});

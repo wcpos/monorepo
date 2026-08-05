@@ -33,7 +33,7 @@ const processErrorHandlers = async (
 	}
 
 	// Sort handlers by priority (higher first)
-	const sortedHandlers = [...errorHandlers].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+	const sortedHandlers = [...errorHandlers].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 
 	let retryCount = 0;
 	const maxRetries = 3;

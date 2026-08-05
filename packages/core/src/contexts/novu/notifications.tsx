@@ -138,7 +138,7 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 						body: doc.body || '',
 						status: doc.status as 'unread' | 'read' | 'archived',
 						seen: doc.seen ?? false,
-						createdAt: doc.createdAt || 0,
+						createdAt: doc.createdAt ?? 0,
 						workflowId: doc.workflowId ?? undefined,
 					}))
 				),

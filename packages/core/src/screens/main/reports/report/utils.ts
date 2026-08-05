@@ -8,6 +8,7 @@ interface CalculateTotalsProps {
 	num_decimals?: number;
 }
 
+/** Aggregates order values into the totals used by the POS report. */
 export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsProps) => {
 	const paymentMethodTotals: Record<string, { total: number; title: string }> = {};
 	const taxTotals: Record<number, { label: string; total: number }> = {};
@@ -121,7 +122,10 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 		userStoreTotals[key].totalAmount += toNumber(order.total || '0');
 
 		// Total items sold
-		totalItemsSold += (order.line_items || []).reduce((acc, item) => acc + (item.quantity || 0), 0);
+		totalItemsSold += (order.line_items || []).reduce(
+			(acc, item) => acc + (Number.isFinite(item.quantity) ? (item.quantity as number) : 0),
+			0
+		);
 	});
 
 	// Convert totals to arrays for easier usage
