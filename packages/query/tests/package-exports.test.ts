@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -61,5 +62,21 @@ describe('package exports', () => {
 			type: 'sourceFile',
 			filePath: fs.realpathSync(nodeResolved),
 		});
+	});
+
+	it('rejects the removed query subpaths', () => {
+		for (const specifier of ['@wcpos/query/engine-compat', '@wcpos/query/requirements']) {
+			const resolution = spawnSync(
+				process.execPath,
+				['-e', `require.resolve(${JSON.stringify(specifier)})`],
+				{
+					cwd: path.join(repoRoot, 'apps/main'),
+					encoding: 'utf8',
+				}
+			);
+
+			expect(resolution.status).toBe(1);
+			expect(resolution.stderr).toContain('ERR_PACKAGE_PATH_NOT_EXPORTED');
+		}
 	});
 });

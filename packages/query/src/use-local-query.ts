@@ -21,7 +21,7 @@ type LocalSearch = {
 };
 
 interface LocalQueryOptions {
-	collectionName: string;
+	collectionName: 'logs';
 	selector?: MangoQuerySelector<LocalDocumentData>;
 	sort?: MangoQuerySortPart<LocalDocumentData>[];
 	limit?: number;
@@ -112,11 +112,15 @@ function localQueryResult$(
 /** Direct local-only query binding. It never registers engine demand. */
 export const useLocalQuery = (options: LocalQueryOptions) => {
 	const runtime = useQueryRuntime();
-	const collection = runtime.localDB.collections[options.collectionName] as LocalCollection;
+	const collection = runtime.localDB.collections[options.collectionName] as
+		LocalCollection | undefined;
 	const key = JSON.stringify(options);
 	const stableOptions = React.useMemo(() => JSON.parse(key) as LocalQueryOptions, [key]);
 	const result$ = React.useMemo(
-		() => localQueryResult$(collection, runtime.locale, stableOptions),
+		() =>
+			collection
+				? localQueryResult$(collection, runtime.locale, stableOptions)
+				: of<QueryResult<LocalCollection>>({ searchActive: false, count: 0, hits: [] }),
 		[collection, runtime.locale, stableOptions]
 	);
 	// One resource for the hook's lifetime (mirrors useObservableResource in

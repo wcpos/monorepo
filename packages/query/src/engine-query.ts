@@ -121,7 +121,7 @@ function matchingSelectors$(
 }
 
 function emptyResult(): QueryResult<RxCollection> {
-	return { searchActive: false, count: 0, hits: [] };
+	return { count: 0, hits: [] };
 }
 
 /** Direct reactive read against the current engine database through the adapter execute path. */
