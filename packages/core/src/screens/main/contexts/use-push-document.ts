@@ -61,7 +61,11 @@ export const usePushDocument = () => {
 					typeof resident.get === 'function'
 						? resident.get(REMOTE_ID_FIELD[collectionName])
 						: (resident as unknown as Record<string, unknown>)[REMOTE_ID_FIELD[collectionName]];
-				const payload = cloneDeep(resident.get('payload') as Record<string, unknown>);
+				const payload = (
+					typeof resident.toMutableJSON === 'function'
+						? (resident.toMutableJSON().payload ?? {})
+						: cloneDeep((resident as unknown as Record<string, unknown>).payload ?? {})
+				) as Record<string, unknown>;
 				if (collectionName === 'orders') {
 					const billing = payload.billing as Record<string, unknown> | undefined;
 					if (billing?.email === '') delete billing.email;

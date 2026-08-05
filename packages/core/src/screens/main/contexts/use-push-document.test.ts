@@ -5,6 +5,22 @@ import { act, renderHook } from '@testing-library/react';
 
 import { usePushDocument } from './use-push-document';
 
+jest.mock('lodash/isBuffer', () => (value: unknown) => {
+	const structuredClone = (input: unknown) => {
+		const { MessageChannel } =
+			jest.requireActual<typeof import('node:worker_threads')>('node:worker_threads');
+		const { port1, port2 } = new MessageChannel();
+		try {
+			port1.postMessage(input);
+		} finally {
+			port1.close();
+			port2.close();
+		}
+	};
+	structuredClone(value);
+	return false;
+});
+
 const mockWrite = jest.fn();
 const mockFindOneExec = jest.fn();
 const mockAwaitWriteOutcome = jest.fn();
@@ -123,12 +139,16 @@ describe('usePushDocument', () => {
 	});
 
 	it('detaches a proxy-backed resident payload before the worker write', async () => {
-		const payload = new Proxy({ status: 'pos-open', billing: { email: '' }, line_items: [] }, {});
+		const plainPayload = { status: 'pos-open', billing: { email: '' }, line_items: [] };
+		const payload = new Proxy(
+			{ ...plainPayload, billing: new Proxy(plainPayload.billing, {}) },
+			{}
+		);
 		const resident: Record<string, unknown> = {
 			wooOrderId: null,
-			payload,
 		};
-		resident.get = (field: string) => resident[field];
+		resident.get = (field: string) => (field === 'payload' ? payload : resident[field]);
+		resident.toMutableJSON = () => ({ payload: plainPayload });
 		mockFindOneExec.mockResolvedValue(resident);
 		const doc = {
 			uuid: 'order-uuid',
@@ -139,13 +159,11 @@ describe('usePushDocument', () => {
 
 		const { result } = renderHook(() => usePushDocument());
 
-		await act(async () => {
-			await result.current(doc as never);
-		});
+		await expect(result.current(doc as never)).resolves.toBeDefined();
 
 		const queuedPayload = mockWrite.mock.calls[0][0].payload;
 		expect(queuedPayload).toEqual({ status: 'pos-open', billing: {}, line_items: [] });
-		expect(queuedPayload).not.toBe(payload);
+		expect(queuedPayload).toBe(plainPayload);
 	});
 
 	it('preserves a non-empty order billing email', async () => {
