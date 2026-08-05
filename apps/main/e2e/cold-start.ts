@@ -124,17 +124,21 @@ export async function installThinCatalogueRoutes(page: Page): Promise<void> {
 	);
 }
 
+type StoreAuthorization = { transport: 'header' | 'query'; value: string };
+
 /**
- * Record the `Authorization` header the app sends to the store, so a spec can
- * probe the server's REST API with the same credentials the app holds (there
- * is no other way to reach the JWT — it lives inside OPFS).
+ * Record the header or query-parameter authorization the app sends to the
+ * store, so a spec can probe the REST API with the same credentials and
+ * transport the app uses (the JWT itself lives inside OPFS).
  */
-function captureStoreAuthorization(page: Page): () => string | null {
-	let authorization: string | null = null;
+function captureStoreAuthorization(page: Page): () => StoreAuthorization | null {
+	let authorization: StoreAuthorization | null = null;
 	page.on('request', (request) => {
 		if (!request.url().includes('/wcpos/v2/')) return;
 		const header = request.headers()['authorization'];
-		if (header) authorization = header;
+		const query = new URL(request.url()).searchParams.get('authorization');
+		if (header) authorization = { transport: 'header', value: header };
+		else if (query) authorization = { transport: 'query', value: query };
 	});
 	return () => authorization;
 }
@@ -183,7 +187,7 @@ async function variationsRouteAdvertisesSearch(
 export async function probeVariationSearch(
 	request: APIRequestContext,
 	storeUrl: string,
-	authorization: string | null,
+	authorization: StoreAuthorization | null,
 	term: string
 ): Promise<VariationSearchProbe> {
 	const advertised = await variationsRouteAdvertisesSearch(request, storeUrl);
@@ -191,12 +195,19 @@ export async function probeVariationSearch(
 		return { supported: false, reason: 'variations route registers no `search` arg' };
 	}
 	if (!authorization) {
-		return { supported: false, reason: 'no store Authorization header was observed' };
+		return { supported: false, reason: 'no store authorization was observed' };
 	}
 	const endpoint = `${storeUrl.replace(/\/+$/, '')}/wp-json/wcpos/v2/variations`;
 	const response = await request.get(endpoint, {
-		params: { search: term, per_page: 1 },
-		headers: { Authorization: authorization, 'X-WCPOS': '1' },
+		params: {
+			search: term,
+			per_page: 1,
+			...(authorization.transport === 'query' ? { authorization: authorization.value } : {}),
+		},
+		headers: {
+			...(authorization.transport === 'header' ? { Authorization: authorization.value } : {}),
+			'X-WCPOS': '1',
+		},
 		failOnStatusCode: false,
 	});
 	if (response.status() === 400) {
@@ -225,7 +236,7 @@ export async function probeVariationSearch(
  */
 export const coldStartTest = base.extend<{
 	posPage: Page;
-	storeAuthorization: () => string | null;
+	storeAuthorization: () => StoreAuthorization | null;
 }>({
 	storeAuthorization: async ({ page }, use) => {
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook

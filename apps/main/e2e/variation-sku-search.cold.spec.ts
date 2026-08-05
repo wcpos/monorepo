@@ -73,18 +73,29 @@ test.describe('Cold start — variation SKU search', () => {
 		);
 
 		await page.getByTestId('search-products').fill(probe.sku);
-		await variationSearchRequest;
+		const variationRequest = await variationSearchRequest;
+		const requestUrl = new URL(variationRequest.url());
+		expect([requestUrl.searchParams.get('search'), requestUrl.searchParams.get('sku')]).toContain(
+			probe.sku
+		);
 
 		// The matching variation's PARENT is what the grid lists (the relational
 		// binding hydrates parents for child search hits).
-		await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
-			timeout: 60_000,
-		});
+		const variableProduct = page
+			.getByTestId('variable-product-tile')
+			.or(page.getByTestId('variable-product-expand'))
+			.first();
+		await expect(variableProduct).toBeVisible({ timeout: 60_000 });
 
 		await ensureTableView(page);
 		await page.getByTestId('variable-product-expand').first().click();
-		await expect(page.getByTestId('add-variation-to-cart-button').first()).toBeVisible({
+		const cartLines = page.getByTestId('cart-quantity-input');
+		const cartLineCount = await cartLines.count();
+		const addVariationButton = page.getByTestId('add-variation-to-cart-button').first();
+		await expect(addVariationButton).toBeVisible({
 			timeout: 30_000,
 		});
+		await addVariationButton.click();
+		await expect(cartLines).toHaveCount(cartLineCount + 1, { timeout: 30_000 });
 	});
 });
