@@ -531,6 +531,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						requests: 0,
 					};
 				}
+				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
+				// nothing was fetched, so release instead of reporting the requirement met.
+				if (drainResult.ledgerRebuilt)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'local sync bookkeeping was rebuilt mid-drain',
+					};
 				if (drainResult.failed > 0)
 					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
 				const lostReferenceClaims = drainLostOutcomeCount(drainResult);

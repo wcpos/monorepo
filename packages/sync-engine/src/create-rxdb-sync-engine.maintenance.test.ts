@@ -4,7 +4,7 @@
  * host's mountWebSyncHost lanes 4–7, now engine verbs.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import {
@@ -15,9 +15,16 @@ import {
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
 import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
+import * as schedulerDrain from './scheduler/engine-scheduler-drain';
+import { ledgerRebuiltSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
 import { memoryEngineStorage } from './testing';
 
 setPremiumFlag();
+
+// A spy installed inside a test must not survive a failed assertion into the next one.
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 const SITE = 'https://lab.example.test';
 let uniqueStore = 0;
@@ -228,6 +235,29 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			kind: 'refresh',
 		}).ready;
 		expect(contended).toMatchObject({ action: 'released' });
+		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
+
+		// #956: a derivable-ledger rebuild ABORTS the drain tick — the task store was
+		// dropped mid-tick, so nothing was claimed and nothing was pulled. Like a lost
+		// claim, that releases this caller instead of reporting a refresh that never ran.
+		await categoriesTask!.incrementalPatch({
+			status: 'queued',
+			ownerId: null,
+			claimedUntilMs: null,
+		});
+		nowMs += REFERENCE_REFRESH_DEDUPE_MS + 1;
+		vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockResolvedValue(
+			ledgerRebuiltSchedulerTaskRunnerResult()
+		);
+		const rebuilt = await engine.require({
+			id: 'category-picker-ledger-rebuilt',
+			collection: 'categories',
+			kind: 'refresh',
+		}).ready;
+		expect(rebuilt).toMatchObject({
+			action: 'released',
+			reason: expect.stringMatching(/local sync bookkeeping was rebuilt/i),
+		});
 		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });
 		await engine.dispose();
 	});
