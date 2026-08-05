@@ -8,6 +8,8 @@ export type StoreVariant = 'free' | 'pro';
 export interface WcposTestOptions {
 	storeVariant: StoreVariant;
 	storeUrl: string;
+	/** Cold-start profile: thin local catalogue, bulk sync starved (#991). */
+	coldStart?: boolean;
 }
 
 // dev-next is a PRO store: the free matrix (upgrade-gate expectations) is
@@ -16,6 +18,13 @@ export interface WcposTestOptions {
 const FREE_STORE_URL = process.env.E2E_STORE_URL_FREE || '';
 const PRO_STORE_URL = process.env.E2E_STORE_URL_PRO || 'https://dev-next.wcpos.com';
 const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
+
+// Cold-start profile (#991): a thin-local-DB variant that runs only the
+// `*.cold.spec.ts` subset. Opt-in — it needs a second OAuth bootstrap in
+// globalSetup. Keep this check in sync with COLD_START_ENABLED in
+// e2e/cold-start.ts (the config must not import the test fixtures).
+const COLD_START_ENABLED = /^(1|true)$/i.test(process.env.E2E_COLD_START || '');
+const COLD_SPEC = /\.cold\.spec\.ts$/;
 
 /**
  * Playwright configuration for WCPOS E2E tests
@@ -69,7 +78,7 @@ export default defineConfig<WcposTestOptions>({
 					},
 					{
 						name: 'free-authenticated',
-						testIgnore: /auth\.spec\.ts/,
+						testIgnore: [/auth\.spec\.ts/, COLD_SPEC],
 						use: {
 							...devices['Desktop Chrome'],
 							storeVariant: 'free' as const,
@@ -90,13 +99,29 @@ export default defineConfig<WcposTestOptions>({
 		},
 		{
 			name: 'pro-authenticated',
-			testIgnore: /auth\.spec\.ts/,
+			testIgnore: [/auth\.spec\.ts/, COLD_SPEC],
 			use: {
 				...devices['Desktop Chrome'],
 				storeVariant: 'pro',
 				storeUrl: PRO_STORE_URL,
 			},
 		},
+		// Cold start: thin local catalogue (#991). Runs the `*.cold.spec.ts`
+		// subset only — see e2e/cold-start.ts for the mechanism.
+		...(COLD_START_ENABLED
+			? [
+					{
+						name: 'pro-cold-start',
+						testMatch: COLD_SPEC,
+						use: {
+							...devices['Desktop Chrome'],
+							storeVariant: 'pro' as const,
+							storeUrl: PRO_STORE_URL,
+							coldStart: true,
+						},
+					},
+				]
+			: []),
 	],
 
 	/* Build and serve web app locally before tests (only when not testing against deployed URL) */

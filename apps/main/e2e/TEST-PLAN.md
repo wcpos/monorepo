@@ -5,9 +5,10 @@ Regenerated from the spec files themselves (see #691 for the audit that found th
 version stale). If you add, remove, or rename tests, update this file.
 
 The Playwright suite defines four projects (`apps/main/playwright.config.ts`):
-`free-unauthenticated`, `free-authenticated`, `pro-unauthenticated`, `pro-authenticated`.
+`free-unauthenticated`, `free-authenticated`, `pro-unauthenticated`, `pro-authenticated`,
+plus the opt-in `pro-cold-start` profile described below.
 `auth.spec.ts` runs in the two unauthenticated projects; all other specs run in the two
-authenticated projects.
+authenticated projects (`*.cold.spec.ts` excluded).
 Specs marked **pro only** or **free only** below skip themselves on the other variant via
 `getStoreVariant()`. Authenticated specs use the `authenticatedTest` fixture from
 `fixtures.ts`, which restores a saved login and lands on the POS screen.
@@ -259,6 +260,58 @@ Language Settings:
 
 - [x] Logs table shown with ≥3 columns
 - [x] Search logs
+
+---
+
+## Cold-start profile (thin local catalogue) — #991
+
+Every project above runs against a fully-synced tiny demo catalogue, so a query that
+silently falls back to **local residents only** still passes. That blind spot is how #950
+(variations search had no remote lane) and the #941–#945 filtered-browse family reached
+production. The `pro-cold-start` project removes the local shortcut.
+
+Mechanism (`e2e/cold-start.ts`, both halves deterministic — no sleeps):
+
+1. `globalSetup` runs a **second** OAuth bootstrap with bulk catalogue sync already
+   starved and `waitForCatalogue: false`, and exports it to `.auth-state/pro-cold.json`.
+   The snapshot is a genuine RxDB-consistent login with empty catalogue collections.
+2. Every cold test reinstalls the same route stub, so the catalogue cannot refill. Only
+   the **bulk** lanes over `/wcpos/v2/products` and `/wcpos/v2/customers` are answered
+   locally (empty page, huge `X-WP-Total` so the completeness gate can never claim the
+   catalogue is fully resident). Requests carrying `include=`, `search=` or `sku=`, and
+   the whole `/wcpos/v2/variations` route, reach the real server untouched.
+
+Run it:
+
+```sh
+E2E_COLD_START=1 npx playwright test --project=pro-cold-start
+```
+
+Specs opt in by file name: `*.cold.spec.ts`, using `coldStartTest` instead of
+`authenticatedTest`. Keep the subset small — the extra bootstrap costs a full OAuth round.
+
+### variation-sku-search.cold.spec.ts — 2 tests
+
+- [x] The local catalogue starts (and stays) empty — self-test for the profile
+- [x] Searching a variation SKU pulls the non-resident variation from the server
+      (skips with an explicit reason until `wcpos/v2/variations?search=` is deployed —
+      wcpos/woocommerce-pos#1441 — and PR #987 is in the bundle; the gate probes the live
+      endpoint rather than hard-coding a skip, and reuses the probe's response to
+      discover a real variation SKU)
+
+### Candidates for the same profile
+
+- **Filtered browse** (#941–#945): category / tag / brand / featured / on-sale / stock
+  pills against a thin DB — the exact regression class where a filtered window that never
+  reached the wire looked fine locally.
+- **Customer search**: `/wcpos/v2/customers` has the same census-completeness gate as
+  products, so a missing remote lane is equally invisible on a full local DB.
+- **Barcode scan of a never-seen item**: the scan path resolves by SKU/barcode and must
+  create remote demand; on a full catalogue it always hits locally.
+- **Sort change on a large catalogue**: a re-sort must re-seed a server-ordered browse
+  window rather than re-sorting the resident slice (ADR 0027 §2 / #909).
+- **Infinite scroll past the cold seed**: scrolling beyond the seeded window must fetch
+  the next page instead of stopping at the residents.
 
 ---
 

@@ -219,7 +219,12 @@ async function waitForOPFSPersistence(page: Page): Promise<void> {
  * the session state. Unlike the old approach (writing directly to IndexedDB),
  * this works with the OPFS storage backend.
  */
-export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
+export async function authenticateWithStore(
+	page: Page,
+	testInfo: TestInfo,
+	options: { waitForCatalogue?: boolean } = {}
+) {
+	const { waitForCatalogue = true } = options;
 	const storeUrl = getStoreUrl(testInfo);
 	const context = page.context();
 	await stubStoreVersionForE2E(context, storeUrl, getStoreVariant(testInfo));
@@ -474,10 +479,16 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		throw new Error('Failed to reach POS during auth bootstrap (wp-user-button/open-pos-button)');
 	}
 
-	// Wait for products to sync (use testID to avoid locale-dependent text)
-	await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
-		timeout: 120_000,
-	});
+	// Wait for products to sync (use testID to avoid locale-dependent text).
+	// The cold-start profile (e2e/cold-start.ts) keeps the catalogue empty on
+	// purpose, so it opts out of this wait rather than burning its timeout.
+	if (waitForCatalogue) {
+		await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
+			timeout: 120_000,
+		});
+	} else {
+		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 120_000 });
+	}
 	await waitForOPFSPersistence(page);
 }
 
@@ -503,6 +514,21 @@ export async function navigateToPage(
 	await page.waitForTimeout(2_000);
 }
 
+export interface HydrateAuthenticatedPageOptions {
+	/** Saved-state basename under e2e/.auth-state (default: the store variant). */
+	stateName?: string;
+	/**
+	 * Wait for a product marker once the app boots. The cold-start profile
+	 * turns this off — its catalogue is empty by design.
+	 */
+	waitForCatalogue?: boolean;
+	/**
+	 * Runs before the page loads anything — the hook the cold-start profile
+	 * uses to install its bulk-sync route stubs.
+	 */
+	beforeBoot?: (page: Page) => Promise<void>;
+}
+
 /**
  * Extended test fixture that provides an authenticated POS page.
  *
@@ -522,96 +548,108 @@ export async function navigateToPage(
  * Falls back to the full OAuth flow if no saved state exists (e.g. when
  * running individual tests locally without globalSetup).
  */
-export const authenticatedTest = base.extend<{ posPage: Page }>({
-	posPage: async ({ page }, use, testInfo) => {
-		const variant = getStoreVariant(testInfo);
-		await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
-		const statePath = path.join(__dirname, '.auth-state', `${variant}.json`);
+export async function hydrateAuthenticatedPage(
+	page: Page,
+	testInfo: TestInfo,
+	options: HydrateAuthenticatedPageOptions = {}
+): Promise<void> {
+	const { waitForCatalogue = true, beforeBoot } = options;
+	const variant = getStoreVariant(testInfo);
+	await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
+	if (beforeBoot) await beforeBoot(page);
+	const statePath = path.join(__dirname, '.auth-state', `${options.stateName ?? variant}.json`);
 
-		let state: SavedAuthState | null = null;
-		if (fs.existsSync(statePath)) {
-			try {
-				state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
-			} catch (e) {
-				console.warn(`[posPage] Failed to parse saved state, falling back to OAuth:`, e);
-			}
+	let state: SavedAuthState | null = null;
+	if (fs.existsSync(statePath)) {
+		try {
+			state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+		} catch (e) {
+			console.warn(`[posPage] Failed to parse saved state, falling back to OAuth:`, e);
 		}
+	}
 
-		if (state) {
-			try {
-				// Block JavaScript so the OPFS worker never starts — createSyncAccessHandle
-				// grants exclusive access, so we must restore files before any worker runs.
-				await page.route('**/*', blockScriptRequests);
-				await page.goto('/', { waitUntil: 'commit' });
+	if (state) {
+		try {
+			// Block JavaScript so the OPFS worker never starts — createSyncAccessHandle
+			// grants exclusive access, so we must restore files before any worker runs.
+			await page.route('**/*', blockScriptRequests);
+			await page.goto('/', { waitUntil: 'commit' });
 
-				// Restore OPFS and localStorage while JS is blocked (no worker running)
-				await restoreOPFS(page, state.opfs);
-				await restoreLocalStorage(page, state.localStorage);
+			// Restore OPFS and localStorage while JS is blocked (no worker running)
+			await restoreOPFS(page, state.opfs);
+			await restoreLocalStorage(page, state.localStorage);
 
-				// Unblock JS and reload so the app picks up the restored OPFS state
-				await page.unroute('**/*', blockScriptRequests);
-				await page.reload({ waitUntil: 'commit' });
+			// Unblock JS and reload so the app picks up the restored OPFS state
+			await page.unroute('**/*', blockScriptRequests);
+			await page.reload({ waitUntil: 'commit' });
 
-				// App should skip auth and go straight to POS. The product catalog can be
-				// empty or still syncing, so the search UI is the readiness marker. If a
-				// product marker appears quickly, wait for it to settle without making an
-				// empty catalog fail authentication bootstrap. Give product-backed tests a
-				// chance to start after the initial sync, but do not make auth depend on it.
-				await expect(page.getByTestId('search-products')).toBeVisible({
-					timeout: 60_000,
-				});
-				const appError = page.getByTestId('error-boundary-fallback').first();
-				if (await appError.isVisible({ timeout: 1_000 }).catch(() => false)) {
-					throw new Error('Saved auth state restored into an app error; falling back to OAuth.');
-				}
+			// App should skip auth and go straight to POS. The product catalog can be
+			// empty or still syncing, so the search UI is the readiness marker. If a
+			// product marker appears quickly, wait for it to settle without making an
+			// empty catalog fail authentication bootstrap. Give product-backed tests a
+			// chance to start after the initial sync, but do not make auth depend on it.
+			await expect(page.getByTestId('search-products')).toBeVisible({
+				timeout: 60_000,
+			});
+			const appError = page.getByTestId('error-boundary-fallback').first();
+			if (await appError.isVisible({ timeout: 1_000 }).catch(() => false)) {
+				throw new Error('Saved auth state restored into an app error; falling back to OAuth.');
+			}
+			if (waitForCatalogue) {
 				const productMarker = page
 					.getByTestId('product-tile')
 					.first()
 					.or(page.getByTestId('add-to-cart-button').first())
 					.first();
 				await productMarker.waitFor({ state: 'visible', timeout: 60_000 }).catch(() => {});
-			} catch (e) {
-				// Ensure the JS-blocking route is removed so the fallback can load scripts
-				await page.unroute('**/*', blockScriptRequests).catch(() => {});
-				console.warn('[posPage] Saved state invalid/expired; falling back to OAuth.', e);
-
-				// The OPFS worker is running and holds exclusive createSyncAccessHandle()
-				// locks. Block JS and reload to terminate it before clearing state.
-				await page.route('**/*', blockScriptRequests);
-				await page.reload({ waitUntil: 'commit' });
-
-				// Clear all persisted state so authenticateWithStore sees first-launch
-				await page
-					.evaluate(async () => {
-						// Clear localStorage first — it's synchronous and must happen even
-						// if OPFS cleanup throws (stale auth keys block the fallback).
-						localStorage.clear();
-						const root = await navigator.storage.getDirectory();
-						const errors: string[] = [];
-						// @ts-expect-error — FileSystemDirectoryHandle.entries() async iterable not typed in lib.dom
-						for await (const [name] of root.entries()) {
-							try {
-								await root.removeEntry(name, { recursive: true });
-							} catch (err) {
-								errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
-							}
-						}
-						if (errors.length) {
-							throw new Error(`Failed to remove OPFS entries: ${errors.join('; ')}`);
-						}
-					})
-					.catch((err) => {
-						console.warn('[posPage] Failed to clear OPFS/localStorage:', err);
-					});
-
-				// Unblock JS before re-authenticating
-				await page.unroute('**/*', blockScriptRequests).catch(() => {});
-				await authenticateWithStore(page, testInfo);
 			}
-		} else {
-			// No saved state — fall back to full OAuth (local dev without globalSetup)
-			await authenticateWithStore(page, testInfo);
+		} catch (e) {
+			// Ensure the JS-blocking route is removed so the fallback can load scripts
+			await page.unroute('**/*', blockScriptRequests).catch(() => {});
+			console.warn('[posPage] Saved state invalid/expired; falling back to OAuth.', e);
+
+			// The OPFS worker is running and holds exclusive createSyncAccessHandle()
+			// locks. Block JS and reload to terminate it before clearing state.
+			await page.route('**/*', blockScriptRequests);
+			await page.reload({ waitUntil: 'commit' });
+
+			// Clear all persisted state so authenticateWithStore sees first-launch
+			await page
+				.evaluate(async () => {
+					// Clear localStorage first — it's synchronous and must happen even
+					// if OPFS cleanup throws (stale auth keys block the fallback).
+					localStorage.clear();
+					const root = await navigator.storage.getDirectory();
+					const errors: string[] = [];
+					// @ts-expect-error — FileSystemDirectoryHandle.entries() async iterable not typed in lib.dom
+					for await (const [name] of root.entries()) {
+						try {
+							await root.removeEntry(name, { recursive: true });
+						} catch (err) {
+							errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+						}
+					}
+					if (errors.length) {
+						throw new Error(`Failed to remove OPFS entries: ${errors.join('; ')}`);
+					}
+				})
+				.catch((err) => {
+					console.warn('[posPage] Failed to clear OPFS/localStorage:', err);
+				});
+
+			// Unblock JS before re-authenticating
+			await page.unroute('**/*', blockScriptRequests).catch(() => {});
+			await authenticateWithStore(page, testInfo, { waitForCatalogue });
 		}
+	} else {
+		// No saved state — fall back to full OAuth (local dev without globalSetup)
+		await authenticateWithStore(page, testInfo, { waitForCatalogue });
+	}
+}
+
+export const authenticatedTest = base.extend<{ posPage: Page }>({
+	posPage: async ({ page }, use, testInfo) => {
+		await hydrateAuthenticatedPage(page, testInfo);
 
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 		await use(page);

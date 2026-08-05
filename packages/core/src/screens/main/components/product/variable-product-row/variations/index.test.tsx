@@ -14,7 +14,9 @@ const mockActions = {
 };
 const mockState = { search: '', filters: {}, sort: {}, limit: 10 };
 const mockUseCollectionBinding = jest.fn(
-	(_collection: string, _state: unknown, _options: { wooIds: readonly number[] }) => ({})
+	(_collection: string, _state: unknown, _options: { wooIds: readonly number[] }) => ({
+		sync: jest.fn().mockResolvedValue(undefined),
+	})
 );
 
 jest.mock('react-native', () => ({
