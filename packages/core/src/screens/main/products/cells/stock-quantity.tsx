@@ -34,7 +34,7 @@ export function StockQuantity({
 		<VStack>
 			<View className="flex-row justify-center">
 				<NumberInput
-					value={String(stockQuantity || 0)}
+					value={String(stockQuantity ?? 0)}
 					onChangeText={(stock_quantity) =>
 						meta.onChange({ document: product, changes: { stock_quantity } })
 					}

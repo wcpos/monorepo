@@ -206,20 +206,20 @@ export function RefundOrderForm({ order }: Props) {
 
 	const initialLineItems = React.useMemo(() => {
 		return (order.line_items || []).map((item) => ({
-			id: item.id || 0,
+			id: item.id ?? 0,
 			name: item.name || '',
-			quantity: item.quantity || 0,
+			quantity: item.quantity ?? 0,
 			remaining_quantity: refundDetailsLoading
 				? 0
 				: computeRemainingRefundQuantity({
-						lineItemId: item.id || 0,
-						quantity: item.quantity || 0,
+						lineItemId: item.id ?? 0,
+						quantity: item.quantity ?? 0,
 						refunds: refundDetails,
 					}),
 			total: item.total || '0.00',
 			total_tax: item.total_tax || '0.00',
 			taxes: (item.taxes || []).map((tax) => ({
-				id: tax.id || 0,
+				id: tax.id ?? 0,
 				total: tax.total || '0.00',
 			})),
 			refund_qty: 0,
@@ -243,7 +243,7 @@ export function RefundOrderForm({ order }: Props) {
 				...form.getValues(),
 				line_items: initialLineItems.map((item, index) => ({
 					...item,
-					refund_qty: Math.min(currentLineItems[index]?.refund_qty || 0, item.remaining_quantity),
+					refund_qty: Math.min(currentLineItems[index]?.refund_qty ?? 0, item.remaining_quantity),
 				})),
 			},
 			{ keepDirty: true, keepTouched: true }

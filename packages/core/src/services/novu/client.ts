@@ -329,7 +329,7 @@ export async function fetchNotifications(limit = 50): Promise<NovuNotification[]
 		}
 
 		novuLogger.info('Novu: Fetched notifications', {
-			context: { count: data?.notifications?.length || 0 },
+			context: { count: data?.notifications?.length ?? 0 },
 		});
 
 		return data?.notifications || [];
@@ -447,7 +447,7 @@ export async function getUnreadCount(): Promise<number> {
 			});
 			return 0;
 		}
-		return data?.count || 0;
+		return data?.count ?? 0;
 	} catch (error) {
 		novuLogger.error('Novu: Failed to get unread count', {
 			context: { error: error instanceof Error ? error.message : String(error) },

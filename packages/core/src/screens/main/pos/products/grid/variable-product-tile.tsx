@@ -231,7 +231,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 							)}
 							{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
 								<Text className="text-muted-foreground text-xs">
-									{t('common.cogs')}: {format(costOfGoodsSold?.total_value || 0)}
+									{t('common.cogs')}: {format(costOfGoodsSold?.total_value ?? 0)}
 								</Text>
 							) : null}
 						</VStack>

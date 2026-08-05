@@ -31,7 +31,7 @@ export async function exportOPFS(page: Page): Promise<OPFSSnapshot> {
 			dirHandle: FileSystemDirectoryHandle,
 			prefix: string
 		): Promise<void> {
-			// @ts-ignore — AsyncIterable entries() is available in Chromium
+			// @ts-expect-error — AsyncIterable entries() is available in Chromium
 			for await (const [name, handle] of dirHandle.entries()) {
 				const path = prefix ? `${prefix}/${name}` : name;
 				if (handle.kind === 'directory') {
@@ -75,7 +75,7 @@ export async function restoreOPFS(page: Page, snapshot: OPFSSnapshot): Promise<v
 		const root = await navigator.storage.getDirectory();
 
 		// Clear existing OPFS content
-		// @ts-ignore
+		// @ts-expect-error — AsyncIterable entries() is available in Chromium
 		for await (const [name] of root.entries()) {
 			try {
 				await root.removeEntry(name, { recursive: true });

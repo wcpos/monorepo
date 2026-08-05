@@ -49,7 +49,7 @@ export function PayButton() {
 						saveToDb: true,
 						context: {
 							total,
-							lineItemCount: currentOrder.line_items?.length || 0,
+							lineItemCount: currentOrder.line_items?.length ?? 0,
 						},
 					});
 

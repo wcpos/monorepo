@@ -145,6 +145,8 @@ export const useAddCoupon = () => {
 					appliedCouponsWithIndividualUse,
 					cartSubtotal,
 					customerEmail: order.billing?.email || '',
+					// customer_id 0 = guest: WC records guest coupon usage by email, so guests
+					// must map to null here to trigger the email-based used_by check
 					customerId: order.customer_id || null,
 				});
 

@@ -36,7 +36,6 @@ if (__DEV__) {
 	// }
 	addRxPlugin(RxDBDevModePlugin);
 	// add debugging
-	// @ts-ignore
 	// import('pouchdb-debug').then((pouchdbDebug) => {
 	// 	PouchDB.plugin(pouchdbDebug.default);
 	// 	PouchDB.debug.enable('*');

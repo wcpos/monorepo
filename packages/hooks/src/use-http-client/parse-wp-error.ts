@@ -200,7 +200,7 @@ export const parseWpError = (data: unknown, fallbackMessage: string): ParsedWpEr
 		rawServerCode === null || /^[A-Za-z0-9_.:\-]{1,64}$/.test(rawServerCode)
 			? rawServerCode
 			: 'invalid_server_code';
-	const status = data.data?.status || null;
+	const status = data.data?.status ?? null;
 
 	// Map to internal code for user-facing display
 	const code = mapToInternalCode(serverCode, status);
