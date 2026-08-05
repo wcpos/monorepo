@@ -38,40 +38,32 @@ import {
 } from './collections/collection-descriptors';
 import { pullTargetedByIds, refreshCollection } from './change-signal/change-signal-handlers';
 import {
-	seedOrderFilterSchedulerTask,
-	seedOrderSchedulerTasks,
-	seedTargetedOrderSchedulerTask,
-} from './scheduler/rx-order-scheduler-task-seeder';
-import {
+	censusQueryKey,
+	emptyPersistedSchedulerTaskRunnerResult,
+	type FetchTask,
+	ORDER_SCHEDULER_LEASE_FOR_MS,
 	orderBrowserQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
-} from './scheduler/order-browser-scheduler-descriptor';
-import {
 	parseProductBrowseWindowDescriptor,
+	type PersistedSchedulerTaskRunnerResult,
+	type ProductBrowseWindowOrderby,
 	productBrowseWindowQueryKeyFromDimensions,
-} from './scheduler/product-browse-window-descriptor';
-import { seedProductBrowseWindowSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
-import { seedReferenceLanes } from './scheduler/rx-pos-bootstrap-seeder';
-import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
-import {
-	ORDER_SCHEDULER_LEASE_FOR_MS,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
 	type SchedulerDrainDatabase,
-} from './scheduler/engine-scheduler-drain';
-import {
-	emptyPersistedSchedulerTaskRunnerResult,
-	type PersistedSchedulerTaskRunnerResult,
-} from './scheduler/rx-scheduler-task-runner';
-import { censusQueryKey } from './scheduler/census';
+	seedOrderFilterSchedulerTask,
+	seedOrderSchedulerTasks,
+	seedProductBrowseWindowSchedulerTask,
+	seedReferenceLanes,
+	seedTargetedOrderSchedulerTask,
+} from './scheduler';
+import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 
 import type { SyncCollectionName } from './collections/engine-collections';
 import type { EngineSourceFetcher } from './change-signal/change-signal-source';
 import type { RxCollection, RxDatabase } from 'rxdb';
 import type { LocalCoverage } from './local-coverage/local-coverage';
-import type { FetchTask } from './scheduler/replication-policy';
-import type { ProductBrowseWindowOrderby } from './scheduler/product-browse-window-descriptor';
 
 const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
 

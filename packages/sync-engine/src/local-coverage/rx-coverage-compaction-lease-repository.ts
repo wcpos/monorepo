@@ -3,7 +3,7 @@ import {
 	type CoverageCompactionLeaseDocument,
 } from './coverage-compaction-lease-schema';
 
-import type { CoverageCompactionLease } from '../scheduler/coverage-compaction-cadence';
+import type { CoverageCompactionLease } from '../scheduler';
 
 type RxCoverageCompactionLeaseDocument<T> = {
 	toJSON(withRevAndAttachments?: boolean): unknown;

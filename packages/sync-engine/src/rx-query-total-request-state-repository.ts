@@ -1,10 +1,9 @@
 import {
 	type QueryTotalRequestState,
+	type QueryTotalRequestStateDocument,
 	sameQueryTotalRequestState,
-} from './scheduler/query-total-request-lifecycle';
+} from './scheduler';
 import { createRxKeyedRepository, type RxKeyedCollection } from './collections/rx-keyed-repository';
-
-import type { QueryTotalRequestStateDocument } from './scheduler/query-total-request-state-schema';
 
 function toDocument(state: QueryTotalRequestState): QueryTotalRequestStateDocument {
 	return { ...state, schemaVersion: 2 };

@@ -1,5 +1,8 @@
-import type { QueryTotalRequestState } from './scheduler/query-total-request-lifecycle';
-import type { QueryTotalCacheEntry, QueryTotalWooRequest } from './scheduler/query-total-requests';
+import type {
+	QueryTotalCacheEntry,
+	QueryTotalRequestState,
+	QueryTotalWooRequest,
+} from './scheduler';
 
 export type QueryTotalRetryRunnerStateRepository = {
 	readRunnable(nowMs: number): Promise<QueryTotalRequestState[]>;

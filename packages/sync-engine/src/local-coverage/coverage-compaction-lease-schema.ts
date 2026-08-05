@@ -4,7 +4,7 @@ import {
 } from '../collections/schema-version';
 import { timestampMsSchemaField } from '../collections/timestamp-schema-field';
 
-import type { CoverageCompactionLease } from '../scheduler/coverage-compaction-cadence';
+import type { CoverageCompactionLease } from '../scheduler';
 
 export type CoverageCompactionLeaseDocument = CoverageCompactionLease &
 	PersistedSchedulerSchemaVersionMarker<1> & {

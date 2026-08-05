@@ -4,10 +4,7 @@ import {
 } from '../collections/schema-version';
 import { timestampMsSchemaField } from '../collections/timestamp-schema-field';
 
-import type {
-	PersistedCoverageLane,
-	PersistedCoverageRecord,
-} from '../scheduler/persisted-coverage-schema';
+import type { PersistedCoverageLane, PersistedCoverageRecord } from '../scheduler';
 
 export type CoverageRecordDocument = Omit<PersistedCoverageRecord, 'collection'> &
 	PersistedSchedulerSchemaVersionMarker<2> & {

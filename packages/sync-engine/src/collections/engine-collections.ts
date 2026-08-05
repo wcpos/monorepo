@@ -44,6 +44,7 @@ import {
 } from './reference-collection-schema';
 import { existenceManifestSchema } from '../local-coverage/existence-manifest-schema';
 import { syncCheckpointMigrationStrategies, syncCheckpointSchema } from './sync-checkpoint-schema';
+// Keep scheduler schemas as deep imports: the barrel evaluates census.ts before this list initializes.
 import {
 	schedulerTaskStateMigrationStrategies,
 	schedulerTaskStateSchema,
