@@ -154,6 +154,12 @@ function useDemand(
 		let handles: RequirementHandle[] = [];
 		let retryTimer: ReturnType<typeof setTimeout> | undefined;
 		let cancelled = false;
+		// Unmount/descriptor-change settles any pending readiness barrier so whenReady()
+		// callers (the coupon replay gate) never hang on an abandoned declaration.
+		let settleOnCancel: (() => void) | undefined;
+		const cancelBarrier = new Promise<void>((resolve) => {
+			settleOnCancel = resolve;
+		});
 		const declare = (retryOnReject: boolean) => {
 			if (cancelled) return;
 			handles = declareRequirements(engine, requirements);
@@ -166,19 +172,36 @@ function useDemand(
 					? (COMPLETE_COLLECTION_LANES[descriptor.collection] ?? null)
 					: null;
 			queryKey$.next(plan.represented ? (handles[browseIndex]?.queryKey ?? fixedKey) : fixedKey);
-			ready.current = Promise.all(handles.map((handle) => handle.ready)).then(() => undefined);
-			void ready.current.catch(() => {
-				if (!retryOnReject || cancelled) return;
-				retryTimer = setTimeout(() => {
-					if (cancelled) return;
-					releaseHandles(handles);
-					declare(false);
-				}, DEMAND_RETRY_BACKOFF_MS);
-			});
+			const settled = Promise.all(handles.map((handle) => handle.ready)).then(() => undefined);
+			// The readiness barrier must stay PENDING across the scheduled retry: settling
+			// through the rejection would let whenReady() complete while nothing is in
+			// flight yet, and the coupon barrier would read collections that are quiet only
+			// because the retry has not started.
+			ready.current = retryOnReject
+				? settled.catch(
+						() =>
+							new Promise<void>((resolve) => {
+								retryTimer = setTimeout(() => {
+									if (cancelled) {
+										resolve();
+										return;
+									}
+									releaseHandles(handles);
+									declare(false);
+									// declare(false) reassigned ready.current to the retried
+									// declaration; chain this barrier to it.
+									resolve(ready.current);
+								}, DEMAND_RETRY_BACKOFF_MS);
+								void cancelBarrier.then(resolve);
+							})
+					)
+				: settled;
+			void ready.current.catch(() => undefined);
 		};
 		declare(true);
 		return () => {
 			cancelled = true;
+			settleOnCancel?.();
 			if (retryTimer !== undefined) clearTimeout(retryTimer);
 			releaseHandles(handles);
 		};

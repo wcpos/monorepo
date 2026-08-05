@@ -75,6 +75,8 @@ export interface FakeEngine extends RxdbSyncEngine {
 	requireCalls: EngineRequirement[];
 	searchRequireCalls: RecordedSearchRequirement[];
 	searchFailure?: Error;
+	/** Rejects kind:'refresh' handles while set — drives the demand retry path. */
+	refreshFailure?: Error;
 	resetCalls: string[];
 	syncCalls: (string | undefined)[];
 	setCollectionStatus(
@@ -308,11 +310,13 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 			const ready =
 				requirement.kind === 'search' && engine.searchFailure
 					? Promise.reject(engine.searchFailure)
-					: Promise.resolve({
-							action: 'serve-local' as const,
-							missingRecordIds: [],
-							reason: 'fake',
-						});
+					: requirement.kind === 'refresh' && engine.refreshFailure
+						? Promise.reject(engine.refreshFailure)
+						: Promise.resolve({
+								action: 'serve-local' as const,
+								missingRecordIds: [],
+								reason: 'fake',
+							});
 			void ready.then(
 				() => changeActivity(requirement.collection, -1),
 				() => changeActivity(requirement.collection, -1)

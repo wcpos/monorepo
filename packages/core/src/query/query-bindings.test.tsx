@@ -1283,6 +1283,31 @@ describe('query bindings', () => {
 		await expect(barrier).resolves.toBe(true);
 	});
 
+	it('keeps whenSettled pending across a scheduled demand retry', async () => {
+		jest.useFakeTimers();
+		engine.refreshFailure = new Error('transient refresh failure');
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+
+		let settled: boolean | undefined;
+		const barrier = result.current.whenSettled().then((value) => {
+			settled = value;
+			return value;
+		});
+		// Every collection is quiet, so readiness is the only thing holding the barrier.
+		// The rejected first declaration must keep it PENDING while the retry is scheduled —
+		// settling here would let the coupon replay scan collections that are quiet only
+		// because the retry has not started.
+		await act(async () => jest.advanceTimersByTimeAsync(100));
+		expect(settled).toBeUndefined();
+
+		engine.refreshFailure = undefined;
+		await act(async () => jest.advanceTimersByTimeAsync(1_000));
+		await expect(barrier).resolves.toBe(true);
+	});
+
 	it('binds cashier search-select to eligible customer roles only', async () => {
 		await engineDB.collections.customers.bulkInsert([
 			{
