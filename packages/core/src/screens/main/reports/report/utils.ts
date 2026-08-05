@@ -121,7 +121,10 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 		userStoreTotals[key].totalAmount += toNumber(order.total || '0');
 
 		// Total items sold
-		totalItemsSold += (order.line_items || []).reduce((acc, item) => acc + (item.quantity ?? 0), 0);
+		totalItemsSold += (order.line_items || []).reduce(
+			(acc, item) => acc + (Number.isFinite(item.quantity) ? (item.quantity as number) : 0),
+			0
+		);
 	});
 
 	// Convert totals to arrays for easier usage
