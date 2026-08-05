@@ -537,19 +537,26 @@ const mainTransport = (props: any) => {
 	const levelSeverity = LOG_LEVEL_SEVERITY[levelName] ?? 0;
 	const currentSeverity = LOG_LEVEL_SEVERITY[currentLogLevel];
 
-	// Skip console logging if below current level (but still allow toast/db)
-	const shouldLogToConsole = levelSeverity >= currentSeverity;
+	// Production only sends warnings and errors to the console; toast/db remain available for all levels.
+	const shouldLogToConsole =
+		levelSeverity >= currentSeverity && (__DEV__ || levelName === 'warn' || levelName === 'error');
 
 	// 1. Log to console if level permits
 	if (shouldLogToConsole) {
 		const timestamp = new Date().toLocaleTimeString();
 		const levelText = level.text.toUpperCase();
-		// console.errors open a redbox in development which is annoying
-		const consoleMethod = console.log;
-
 		// Include context in console output if available (using safe stringify)
 		const contextStr = options.context ? ` | Context: ${safeStringify(options.context)}` : '';
-		consoleMethod(`${timestamp} | ${levelText} : ${message}${contextStr}`);
+		const formattedMessage = `${timestamp} | ${levelText} : ${message}${contextStr}`;
+
+		if (__DEV__) {
+			// console.errors open a redbox in development which is annoying
+			console.log(formattedMessage);
+		} else if (levelName === 'warn') {
+			console.warn(formattedMessage);
+		} else {
+			console.error(formattedMessage);
+		}
 	}
 
 	// 2. Show toast if available and requested
