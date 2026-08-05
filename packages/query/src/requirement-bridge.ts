@@ -38,6 +38,7 @@ import {
 	type EngineCollectionName,
 	engineCollectionNameFor,
 	isMappedCollection,
+	wooOrderbyFor,
 } from './engine-adapter/collection-map';
 import { FLEXSEARCH_MIN_TERM_LENGTH } from './engine-query';
 
@@ -65,26 +66,6 @@ const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
  * priority band as the browse it replaces.
  */
 const ORDER_SCOPED_QUERY_PRIORITY = 700;
-/**
- * UI sort field → WC core orders `orderby`. Unlike the products map below, a field absent
- * here does NOT fall back to an unsorted window silently — it falls back to the default
- * `id desc` browse, which for an ascending sort is the far end of the catalog.
- *
- * `number → id` is deliberate. WC REST's orders `orderby` enum has no `number`, and core's
- * `get_order_number()` returns the post ID, so under stock WooCommerce this mapping is
- * exact. A third-party sequential-order-number plugin can decouple the two, and then a
- * `number asc` window is the first N by ID rather than by number. Dropping the mapping does
- * not fix that case — it fetches the NEWEST orders for an ascending browse, a strictly worse
- * slice — and it would regress the stock case from exact to wrong. The residual is a bounded
- * browse showing a near-miss slice on such stores; the rows are still reachable by search.
- */
-const ORDER_BROWSE_ORDERBY_BY_SORT_FIELD = {
-	date_created_gmt: 'date',
-	date_modified_gmt: 'modified',
-	number: 'id',
-	id: 'id',
-} as const;
-
 /**
  * The "give me every result" sentinel a screen passes when it wants a ranged fetch run to
  * completion. Reports is the only such screen (`REPORTS_ALL_RESULTS_LIMIT =
@@ -289,11 +270,13 @@ function orderBrowseDimensions(
 	const [primarySort] = sort ?? [];
 	const [rawSortField, direction] = Object.entries(primarySort ?? {})[0] ?? [];
 	const sortField = rawSortField?.replace(/^sortable_/, '');
-	const orderby = sortField
-		? ORDER_BROWSE_ORDERBY_BY_SORT_FIELD[
-				sortField as keyof typeof ORDER_BROWSE_ORDERBY_BY_SORT_FIELD
-			]
-		: undefined;
+	/**
+	 * An absent order declaration falls back to the default `id desc` browse, which for an
+	 * ascending sort is the far end of the catalog. `number → id` is deliberate: core Woo's
+	 * order number is the post ID. A sequential-order-number plugin can decouple them, but
+	 * dropping the mapping would fetch the newest orders for an ascending browse instead.
+	 */
+	const orderby = sortField ? wooOrderbyFor('orders', sortField) : undefined;
 	if (orderby !== undefined && direction !== undefined) {
 		dimensions.orderby = orderby;
 		dimensions.order = direction;
@@ -323,27 +306,13 @@ function orderBrowseDimensions(
 	};
 }
 
-/**
- * UI sort field → WC core products `orderby`. Fields NOT in this map (sku, barcode,
- * stock, regular/sale price) have no Woo REST equivalent: those browses fall back to the
- * DEFAULT window rather than pretending a server-sorted slice exists.
- */
-const PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD: Record<
-	string,
-	NonNullable<ProductBrowseDimensions['orderby']>
-> = {
-	menu_order: 'menu_order',
-	id: 'id',
-	name: 'title',
-	price: 'price',
-	sortable_price: 'price',
-	total_sales: 'popularity',
-	date_created_gmt: 'date',
-	date_modified_gmt: 'modified',
-};
-
 export type RequirementSortPart = Record<string, 'asc' | 'desc'>;
 
+/**
+ * Wire sorting is currently limited to WooCommerce-core orderby values. The wcpos plugin
+ * supports additional product and order values; extending the wire grammar to those values
+ * is planned and tracked separately.
+ */
 function productBrowseDimensions(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
@@ -357,7 +326,7 @@ function productBrowseDimensions(
 	if (limit !== undefined) dimensions.limit = limit;
 	const [primary] = sort ?? [];
 	const [field, direction] = Object.entries(primary ?? {})[0] ?? [];
-	const orderby = field ? PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD[field] : undefined;
+	const orderby = field ? wooOrderbyFor('products', field) : undefined;
 	if (orderby !== undefined && direction !== undefined) {
 		dimensions.orderby = orderby;
 		dimensions.order = direction;
@@ -385,7 +354,7 @@ function eqValue(value: unknown): string | undefined {
 		: undefined;
 }
 
-export function productBrowseWindowFilters(selector: Record<string, unknown> | undefined): {
+function productBrowseWindowFilters(selector: Record<string, unknown> | undefined): {
 	filters: Pick<
 		ProductBrowseDimensions,
 		'category' | 'tag' | 'brand' | 'featured' | 'on_sale' | 'stock_status'

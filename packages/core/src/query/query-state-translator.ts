@@ -1,6 +1,12 @@
+import {
+	type LegacyCollectionName,
+	sortAliasFor,
+	sortTiebreakFor,
+} from '@wcpos/query/collection-map';
+
 import { parseRemoteId } from '../utils/parse-remote-id';
 
-import type { CollectionKey, FiltersOf, QueryStateOf, SortFieldOf } from './query-state-types';
+import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
 
 type Operator =
 	| 'taxonomy-many'
@@ -62,24 +68,18 @@ export const FILTER_TRANSLATORS = {
 	[C in CollectionKey]: { [F in keyof FiltersOf<C>]-?: FilterTranslator };
 };
 
-const UI_SORT_FIELD_ALIASES = {
-	products: { price: 'sortable_price' },
-	orders: {},
-	coupons: {},
-	variations: {},
-	customers: {},
-	'tax-rates': {},
-	logs: {},
-} as const satisfies { [C in CollectionKey]: Partial<Record<string, SortFieldOf<C>>> };
-
 /** Normalize persisted UI column keys before they enter query state. */
 export function normalizeQuerySortField(
 	collection: CollectionKey,
 	field: unknown
 ): string | undefined {
 	if (typeof field !== 'string') return undefined;
-	const aliases = UI_SORT_FIELD_ALIASES[collection] as Record<string, string>;
-	return aliases[field] ?? field;
+	return collection === 'products' ? (sortAliasFor(collection, field) ?? field) : field;
+}
+
+function legacySortCollection(collection: CollectionKey): LegacyCollectionName | undefined {
+	if (collection === 'logs') return undefined;
+	return collection === 'tax-rates' ? 'taxes' : collection;
 }
 
 function compile(
@@ -151,13 +151,14 @@ export function translateQueryState<C extends CollectionKey>(
 		...(nestedConditions.length > 0 ? { $and: nestedConditions } : {}),
 	};
 	const sortField = normalizeQuerySortField(collection, state.sort.field)!;
-	const adapterSortField =
-		collection === 'orders' && sortField === 'total' ? 'sortable_total' : sortField;
+	const legacyCollection = legacySortCollection(collection);
+	const adapterSortField = legacyCollection
+		? (sortAliasFor(legacyCollection, sortField) ?? sortField)
+		: sortField;
 	const sort: Record<string, 'asc' | 'desc'>[] = [{ [adapterSortField]: state.sort.direction }];
-	if ((collection === 'products' || collection === 'variations') && sortField === 'menu_order') {
-		// 1.9 catalog-order contract (#810, variations #871): equal menu_order values (usually 0)
-		// are the common case, so the Woo id tiebreak is part of the sort, not an implementation detail.
-		sort.push({ id: 'asc' });
+	const tiebreak = legacyCollection ? sortTiebreakFor(legacyCollection, sortField) : undefined;
+	for (const field of tiebreak ?? []) {
+		sort.push({ [field]: 'asc' });
 	}
 	return {
 		collectionName: collection === 'tax-rates' ? 'taxes' : collection,
