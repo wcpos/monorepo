@@ -50,7 +50,11 @@ const TARGETED_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
 	'orders',
 ]);
 
-const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>(['products', 'customers']);
+const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
+	'products',
+	'customers',
+	'variations',
+]);
 const REFERENCE_ENGINE_COLLECTIONS: EngineCollectionName[] = [
 	'categories',
 	'tags',
@@ -308,11 +312,6 @@ function orderBrowseDimensions(
 
 export type RequirementSortPart = Record<string, 'asc' | 'desc'>;
 
-/**
- * Wire sorting is currently limited to WooCommerce-core orderby values. The wcpos plugin
- * supports additional product and order values; extending the wire grammar to those values
- * is planned and tracked separately.
- */
 function productBrowseDimensions(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
@@ -473,6 +472,7 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	if (
 		trimmedSearchTerm &&
 		SEARCH_ENGINE_COLLECTIONS.has(engineCollection) &&
+		(engineCollection !== 'variations' || !wooIds) &&
 		(engineCollection !== 'customers' || trimmedSearchTerm.length >= FLEXSEARCH_MIN_TERM_LENGTH)
 	) {
 		requirements.push({

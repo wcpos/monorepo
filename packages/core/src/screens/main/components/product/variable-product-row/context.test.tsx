@@ -4,16 +4,19 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { VariationRowProvider } from './context';
 import { Variations } from './variations';
 
+const mockSync = jest.fn().mockResolvedValue(undefined);
+
 jest.mock('../../../../../query', () => {
 	const actual = jest.requireActual('../../../../../query');
 	return {
 		...actual,
-		useCollectionBinding: () => ({ resource: {}, active$: {}, total$: {}, sync: jest.fn() }),
+		useCollectionBinding: () => ({ resource: {}, active$: {}, total$: {}, sync: mockSync }),
 	};
 });
 jest.mock('./variations/filters', () => ({ VariationsFilterBar: () => null }));
@@ -46,6 +49,32 @@ function RowProbe({ name }: { name: string }) {
 }
 
 describe('VariationRowProvider', () => {
+	beforeEach(() => {
+		mockSync.mockClear();
+	});
+
+	it('refreshes variations once when expanded, not when re-rendered', () => {
+		const row = {
+			id: 'red-row',
+			original: { document: { variations: [11, 12] } },
+		} as never;
+		const { rerender } = render(
+			<VariationRowProvider row={row}>
+				<Variations row={row} />
+			</VariationRowProvider>
+		);
+
+		expect(mockSync).toHaveBeenCalledTimes(1);
+
+		rerender(
+			<VariationRowProvider row={row}>
+				<Variations row={row} hideOutOfStock />
+			</VariationRowProvider>
+		);
+
+		expect(mockSync).toHaveBeenCalledTimes(1);
+	});
+
 	it('owns isolated variations query state for every variable-product row', () => {
 		render(
 			<>
@@ -65,9 +94,10 @@ describe('VariationRowProvider', () => {
 	});
 
 	it('clears a row filter when its collapsed variations table unmounts', () => {
+		const variations$ = new BehaviorSubject([11, 12]);
 		const row = {
 			id: 'red-row',
-			original: { document: { variations: [11, 12] } },
+			original: { document: { variations: variations$.value, variations$ } },
 		} as never;
 		const { rerender } = render(
 			<VariationRowProvider row={row}>

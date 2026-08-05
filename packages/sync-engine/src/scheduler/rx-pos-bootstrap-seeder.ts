@@ -40,10 +40,12 @@ import {
 	TAG_REFERENCE_CONFIG,
 } from './rx-scheduler-reference-fetcher';
 
+import type { SyncCollectionName } from '../collections/engine-collections';
 import type { FetchTask } from './replication-policy';
 
 /** Canonical Tier-0 priority for the required greedy startup subset (tax rates). */
 const TAX_RATES_PRIORITY = 1000;
+const TAX_RATES_QUERY_KEY = 'taxRates:all';
 // Categories + brands + tags + coupons: small, sell-relevant pull-only data — greedy,
 // just below tax rates (pain point #2 groups categories with tax as critical-startup).
 // Ordered categories > brands > tags > coupons (coupons apply at checkout, after the
@@ -62,10 +64,10 @@ const COUPON_PRIORITY = 920;
 /** The greedy `taxRates:all` lane — Tier 0; the POS cannot sell without tax rates. */
 export function taxRatesLaneTask(): FetchTask {
 	return {
-		id: 'taxRates:all:greedy',
+		id: `${TAX_RATES_QUERY_KEY}:greedy`,
 		requirementId: 'taxRates.all',
 		collection: 'taxRates',
-		queryKey: 'taxRates:all',
+		queryKey: TAX_RATES_QUERY_KEY,
 		limit: WOO_REST_MAX_PER_PAGE,
 		priority: TAX_RATES_PRIORITY,
 		mode: 'greedy',
@@ -76,7 +78,7 @@ export function taxRatesLaneTask(): FetchTask {
  * Per-reference-collection lane inputs: its config (queryKey/collection) + greedy
  * priority. These lanes are seeded by on-demand and upkeep refreshes, never boot.
  */
-const REFERENCE_LANE_CONFIGS: Record<
+export const REFERENCE_LANE_CONFIGS: Record<
 	ReferenceCollection,
 	{ config: ReferenceCollectionConfig; priority: number }
 > = {
@@ -85,6 +87,11 @@ const REFERENCE_LANE_CONFIGS: Record<
 	tags: { config: TAG_REFERENCE_CONFIG, priority: TAG_PRIORITY },
 	coupons: { config: COUPON_REFERENCE_CONFIG, priority: COUPON_PRIORITY },
 };
+
+export function laneKeyFor(collection: SyncCollectionName): string | null {
+	if (collection === 'taxRates') return TAX_RATES_QUERY_KEY;
+	return REFERENCE_LANE_CONFIGS[collection as ReferenceCollection]?.config.queryKey ?? null;
+}
 
 /**
  * The greedy reference lane task for one collection. The greedy fetcher is prunable, so

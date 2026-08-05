@@ -106,6 +106,26 @@ describe('requirementsForQuery extraction', () => {
 		});
 	});
 
+	it('does not search variations globally when finite ids already scope the query', () => {
+		expect(
+			plan({
+				collectionName: 'variations',
+				selector: { id: { $in: [11, 12] }, search: 'blue' },
+				limit: 25,
+			})
+		).toEqual({
+			requirements: [
+				{
+					id: 'q:targeted',
+					collection: 'variations',
+					kind: 'targeted-records',
+					wooIds: [11, 12],
+				},
+			],
+			represented: false,
+		});
+	});
+
 	it.each([{ id: { $in: ['junk'] } }, { id: 'junk' }])(
 		'emits a residual product superset for unusable ids',
 		(selector) => {
@@ -163,11 +183,40 @@ describe('requirementsForQuery extraction', () => {
 			],
 			represented: false,
 		});
+		expect(
+			plan({
+				collectionName: 'variations',
+				selector: { search: 'blue' },
+				limit: 25,
+			})
+		).toEqual({
+			requirements: [
+				{
+					id: 'q:search',
+					collection: 'variations',
+					kind: 'search',
+					term: 'blue',
+					limit: 25,
+				},
+			],
+			represented: false,
+		});
+		expect(plan({ collectionName: 'taxes', selector: { search: 'GST' } })).toEqual({
+			requirements: [],
+			represented: false,
+		});
 	});
 
 	it('keeps short product SKU demand but suppresses short customer remote search', () => {
 		expect(onlyRequirement({ selector: { search: '42' } })).toMatchObject({
 			collection: 'products',
+			kind: 'search',
+			term: '42',
+		});
+		expect(
+			onlyRequirement({ collectionName: 'variations', selector: { search: '42' } })
+		).toMatchObject({
+			collection: 'variations',
 			kind: 'search',
 			term: '42',
 		});
@@ -300,16 +349,17 @@ describe('requirementsForQuery extraction', () => {
 			});
 		});
 
-		it('maps supported sorts, strips sortable_, and omits unmapped sorts', () => {
-			expect(orderRequirement({ sort: [{ date_created_gmt: 'desc' }] })).toMatchObject({
-				orderby: 'date',
-				order: 'desc',
-			});
-			expect(orderRequirement({ sort: [{ sortable_number: 'desc' }] })).toMatchObject({
-				orderby: 'id',
-				order: 'desc',
-			});
-			expect(orderRequirement({ sort: [{ total: 'asc' }] })).not.toHaveProperty('orderby');
+		// The WCPOS server plugin has supported its extended orderby values since 2023-10-27.
+		it.each([
+			['date_created_gmt', 'desc', 'date'],
+			['sortable_number', 'desc', 'id'],
+			['status', 'asc', 'status'],
+			['customer_id', 'asc', 'customer_id'],
+			['payment_method', 'asc', 'payment_method'],
+			['total', 'asc', 'total'],
+			['sortable_total', 'asc', 'total'],
+		] as const)('maps order sort %s %s to %s', (field, order, orderby) => {
+			expect(orderRequirement({ sort: [{ [field]: order }] })).toMatchObject({ orderby, order });
 		});
 
 		it('extracts reports ranges and reserves all-results for a representable bound', () => {
@@ -487,18 +537,17 @@ describe('requirementsForQuery extraction', () => {
 			['date_modified_gmt', 'desc', 'modified'],
 			['total_sales', 'desc', 'popularity'],
 			['menu_order', 'asc', 'menu_order'],
-		] as const)('maps %s %s to %s', (field, order, orderby) => {
+			// The WCPOS server plugin has supported these values since 2023-10-27.
+			['sku', 'asc', 'sku'],
+			['barcode', 'asc', 'barcode'],
+			['stock_quantity', 'asc', 'stock_quantity'],
+			['stock_status', 'asc', 'stock_status'],
+		] as const)('maps product sort %s %s to %s', (field, order, orderby) => {
 			expect(onlyRequirement({ limit: 100, sort: [{ [field]: order }] })).toMatchObject({
 				limit: 100,
 				orderby,
 				order,
 			});
-		});
-
-		it.each(['sku', 'stock_quantity'])('omits unmapped sort %s', (field) => {
-			expect(onlyRequirement({ limit: 100, sort: [{ [field]: 'asc' }] })).not.toHaveProperty(
-				'orderby'
-			);
 		});
 
 		it('reports represented only when every product predicate reaches the wire', () => {

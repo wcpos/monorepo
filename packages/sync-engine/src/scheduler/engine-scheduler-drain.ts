@@ -19,6 +19,7 @@ import {
 } from './scheduler-fetcher-registry';
 import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 import { createProductsSchedulerFetcher } from './rx-scheduler-product-fetcher';
+import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
 import { createTaxRateSchedulerFetcher } from './rx-scheduler-tax-rate-fetcher';
 import {
@@ -59,6 +60,7 @@ const SUPPORTED_ORDER_QUERY_KEY = 'orders:custom-pull';
 const SUPPORTED_TARGETED_ORDER_QUERY_KEY_PREFIX = 'orders:ids:';
 const SUPPORTED_TARGETED_PRODUCT_QUERY_KEY_PREFIX = 'products:ids:';
 const SUPPORTED_PRODUCT_SEARCH_QUERY_KEY_PATTERN = /^products:search:.+$/;
+const SUPPORTED_VARIATION_SEARCH_QUERY_KEY_PATTERN = /^variations:search:.+$/;
 const isSupportedProductBrowseWindowQueryKey = (queryKey: string): boolean =>
 	parseProductBrowseWindowDescriptor(queryKey) !== null;
 const SUPPORTED_TARGETED_CUSTOMER_QUERY_KEY_PREFIX = 'customers:ids:';
@@ -103,6 +105,14 @@ function isSupportedCustomerSearchTask(task: SchedulerTaskSupportCandidate): boo
 	if (!match) return false;
 	const queryLimit = Number(match[2]);
 	return task.limit === queryLimit && hasNoTargetedIds(task);
+}
+
+function isSupportedVariationSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
+	return (
+		task.collection === 'variations' &&
+		SUPPORTED_VARIATION_SEARCH_QUERY_KEY_PATTERN.test(task.queryKey) &&
+		hasNoTargetedIds(task)
+	);
 }
 
 function isSupportedCustomerSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
@@ -179,6 +189,7 @@ function collectionSchedulerRepository<T extends { id: string }>(
 export type SchedulerDrainDatabase = OrderRepositoryDatabase &
 	SchedulerTaskStateDatabase & {
 		products: BulkUpsertCollection<{ id: string }>;
+		variations: BulkUpsertCollection<{ id: string }>;
 		customers: BulkUpsertCollection<{ id: string }>;
 		taxRates: BulkUpsertCollection<{ id: string }>;
 		categories: BulkUpsertCollection<{ id: string }> & {
@@ -293,6 +304,15 @@ function createEngineSchedulerFetcherRegistry(
 					collectionSchedulerRepository(db.customers) as never,
 					db.existenceManifestCustomers
 				),
+			}),
+		},
+		{
+			name: 'variations',
+			supportsTask: isSupportedVariationSchedulerTask,
+			fetcher: createVariationsSchedulerFetcher({
+				...shared,
+				repository: collectionSchedulerRepository(db.variations) as never,
+				manifestSink: (rows) => upsertManifestRows(db.existenceManifest, rows),
 			}),
 		},
 		{

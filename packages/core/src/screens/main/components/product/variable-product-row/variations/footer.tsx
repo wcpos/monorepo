@@ -45,9 +45,11 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	}, [binding, runtime, parent.id]);
 
 	/**
-	 * Get total from sync collection
+	 * Prefer the parent product's server variation ids over the local collection total.
 	 */
-	const total = useObservableState(binding.total$, 0);
+	const localTotal = useObservableState(binding.total$, 0);
+	const parentVariations = useObservableEagerState(parent.variations$!);
+	const total = parentVariations?.length ? parentVariations.length : localTotal;
 	const t = useT();
 
 	return (
