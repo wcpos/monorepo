@@ -9,6 +9,9 @@ export {
 	engineCollectionNameFor,
 	promotedColumnsFor,
 	resolveLegacyField,
+	sortAliasFor,
+	sortTiebreakFor,
+	wooOrderbyFor,
 	type LegacyCollectionName,
 	type WriteableCollection,
 } from './engine-adapter/collection-map';
