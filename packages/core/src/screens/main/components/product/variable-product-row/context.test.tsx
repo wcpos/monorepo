@@ -4,6 +4,7 @@
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { VariationRowProvider } from './context';
@@ -65,9 +66,10 @@ describe('VariationRowProvider', () => {
 	});
 
 	it('clears a row filter when its collapsed variations table unmounts', () => {
+		const variations$ = new BehaviorSubject([11, 12]);
 		const row = {
 			id: 'red-row',
-			original: { document: { variations: [11, 12] } },
+			original: { document: { variations: variations$.value, variations$ } },
 		} as never;
 		const { rerender } = render(
 			<VariationRowProvider row={row}>

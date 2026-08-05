@@ -20,10 +20,12 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('../../../../components/sync-button', () => ({
 	SyncButton: () => null,
 }));
-jest.mock('../../../../../../contexts/translations', () => ({
-	useT: () => (_key: string, values: { shown: number; total: number }) =>
-		`${values.shown} of ${values.total}`,
-}));
+jest.mock('../../../../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../../../../jest/translate')>(
+		'../../../../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 
 const binding = {
 	active$: of(false),
@@ -38,10 +40,10 @@ describe('VariationTableFooter', () => {
 
 		render(<VariationTableFooter binding={binding} parent={parent} count={2} />);
 
-		expect(screen.getByText('2 of 4')).toBeTruthy();
+		expect(screen.getByText('Showing 2 of 4')).toBeTruthy();
 
 		act(() => variations$.next([11, 12, 13, 14, 15]));
-		expect(screen.getByText('2 of 5')).toBeTruthy();
+		expect(screen.getByText('Showing 2 of 5')).toBeTruthy();
 	});
 
 	it('falls back to the binding total when the parent variation list is empty', () => {
@@ -50,6 +52,6 @@ describe('VariationTableFooter', () => {
 
 		render(<VariationTableFooter binding={binding} parent={parent} count={2} />);
 
-		expect(screen.getByText('2 of 2')).toBeTruthy();
+		expect(screen.getByText('Showing 2 of 2')).toBeTruthy();
 	});
 });
