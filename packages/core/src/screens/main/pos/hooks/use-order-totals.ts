@@ -95,7 +95,7 @@ export const useOrderTotals = () => {
 			return;
 		}
 
-		localPatch({
+		void localPatch({
 			document: currentOrder,
 			data: {
 				discount_tax: totals.discount_tax,

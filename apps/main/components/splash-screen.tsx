@@ -9,7 +9,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 // Keep the splash screen visible while we get the js SplashScreen ready
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
 
 /**
  * NOTE: the ThemeProvider is not loaded yet, so we can't use any theme related components here

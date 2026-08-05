@@ -245,7 +245,7 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 	const handleLoad = () => {
 		if (uiSettings.autoPrintReceipt && checkoutRef.current && !hasAutoPrintedRef.current) {
 			hasAutoPrintedRef.current = true;
-			print();
+			void print();
 		}
 	};
 

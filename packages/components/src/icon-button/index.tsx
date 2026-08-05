@@ -63,7 +63,7 @@ function IconButton({
 	const handlePress = React.useCallback(
 		(e: any) => {
 			if (Platform.OS !== 'web' && !props.disabled && !disableHaptics) {
-				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 			}
 			onPress?.(e);
 		},

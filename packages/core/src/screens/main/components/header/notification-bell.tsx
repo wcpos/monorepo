@@ -19,7 +19,7 @@ export function NotificationBell() {
 	const handleOpenChange = (open: boolean) => {
 		setIsOpen(open);
 		if (open) {
-			markAllAsSeen();
+			void markAllAsSeen();
 		}
 	};
 

@@ -275,7 +275,8 @@ describe('VoidButton', () => {
 
 		await waitFor(() => expect(mockCartLogger.success).toHaveBeenCalled());
 		const toastOptions = mockCartLogger.success.mock.calls[0][1];
-		await toastOptions.toast.action.onClick();
+		toastOptions.toast.action.onClick();
+		await waitFor(() => expect(mockEngine.write).toHaveBeenCalledTimes(2));
 
 		expect(mockPatchEngineResident).toHaveBeenLastCalledWith({
 			manager: mockManager,

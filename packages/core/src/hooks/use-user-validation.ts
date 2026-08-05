@@ -354,7 +354,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			}
 		};
 
-		validateUser();
+		void validateUser();
 	}, [
 		httpClient,
 		apiUrl,

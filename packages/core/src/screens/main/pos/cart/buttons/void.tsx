@@ -106,7 +106,7 @@ export function VoidButton() {
 						label: t('common.undo'),
 						onClick: () => {
 							undone = true;
-							return undoRemove(orderJson);
+							void undoRemove(orderJson);
 						},
 					},
 				},

@@ -28,7 +28,7 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 		const rowRef = meta.rowRefs.current?.get(uuid);
 		if (rowRef) {
 			rowRef.pulseRemove(() => {
-				removeLineItem(uuid, type);
+				void removeLineItem(uuid, type);
 			});
 		}
 		// meta.rowRefs is a stable ref; its `.current` is read at call time, so it

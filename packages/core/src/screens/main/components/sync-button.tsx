@@ -40,7 +40,7 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 							triggerRef.current?.open?.();
 						}}
 						onPress={() => {
-							sync();
+							void sync();
 						}}
 					/>
 				</TooltipTrigger>

@@ -107,7 +107,7 @@ export function useReceiptData({
 			}
 		}
 
-		fetchReceipt();
+		void fetchReceipt();
 
 		return () => {
 			cancelled = true;

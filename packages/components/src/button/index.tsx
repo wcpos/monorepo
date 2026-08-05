@@ -214,7 +214,7 @@ function Button({
 	const handlePress = React.useCallback(
 		(e: any) => {
 			if (Platform.OS !== 'web' && !disabled && !disableHaptics) {
-				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 			}
 			onPress?.(e);
 		},

@@ -86,7 +86,7 @@ export function NotificationPanelContent() {
 	const { notifications, unreadCount, markAsRead, markAllAsRead } = useNovuNotifications();
 
 	const handleMarkAllAsRead = React.useCallback(() => {
-		markAllAsRead();
+		void markAllAsRead();
 	}, [markAllAsRead]);
 
 	const renderNotificationItem = React.useCallback(

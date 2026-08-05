@@ -125,7 +125,7 @@ function CouponsScreenContent() {
 					document: CouponDocument;
 					changes: Record<string, unknown>;
 				}) => {
-					patch({ document, data: changes });
+					void patch({ document, data: changes });
 				},
 			},
 		}),

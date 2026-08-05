@@ -88,7 +88,7 @@ export default function TabsLayout() {
 		() => ({
 			tabPress: () => {
 				if (Platform.OS !== 'web') {
-					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+					void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 				}
 			},
 		}),

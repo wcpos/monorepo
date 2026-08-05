@@ -28,7 +28,7 @@ export function UISettingsForm() {
 	const { setButtonPressHandler } = useDialogContext();
 
 	React.useEffect(() => {
-		setButtonPressHandler(resetUI);
+		setButtonPressHandler(() => void resetUI());
 	}, [setButtonPressHandler, resetUI]);
 
 	/**
@@ -43,7 +43,7 @@ export function UISettingsForm() {
 	/**
 	 * Handle form changes and patch UI
 	 */
-	useFormChangeHandler({ form: form as never, onChange: patchUI });
+	useFormChangeHandler({ form: form as never, onChange: (changes) => void patchUI(changes) });
 
 	/**
 	 *

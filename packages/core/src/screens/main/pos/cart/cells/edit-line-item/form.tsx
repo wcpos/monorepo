@@ -98,8 +98,8 @@ export function EditLineItemForm({ uuid, item }: Props) {
 	 *
 	 */
 	const handleSave = React.useCallback(
-		(data: FormValues) => {
-			updateLineItem(uuid, {
+		async (data: FormValues) => {
+			await updateLineItem(uuid, {
 				name: data.name,
 				sku: data.sku,
 				quantity: data.quantity,

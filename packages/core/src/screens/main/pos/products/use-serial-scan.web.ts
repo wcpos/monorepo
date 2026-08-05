@@ -235,7 +235,11 @@ export const useSerialScan = (emit: ScanBus['emit']): UseSerialScanResult => {
 			if (match && !cancelled) {
 				await attachPort(match, false);
 			}
-		})();
+		})().catch((error) => {
+			serialLogger.warn('Failed to reopen saved serial scanner', {
+				context: { error: String(error) },
+			});
+		});
 		return () => {
 			cancelled = true;
 		};

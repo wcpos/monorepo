@@ -122,7 +122,7 @@ function useClearLocalDataOnStartup() {
 
 		let cancelled = false;
 
-		(async () => {
+		void (async () => {
 			try {
 				const { clearAllDB } = await import('@wcpos/database/clear-all-db');
 				const result = await clearAllDB();

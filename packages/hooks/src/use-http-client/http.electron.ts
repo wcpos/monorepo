@@ -43,7 +43,11 @@
 
 import { AxiosError, CanceledError, isCancel } from 'axios';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import type { AxiosRequestConfig } from 'axios';
+
+const httpLogger = getLogger(['wcpos', 'http', 'electron']);
 
 declare global {
 	interface Window {
@@ -164,14 +168,18 @@ const setupCancellation = (
 	// Setup abort listener - sends IPC message to main process
 	if (signal) {
 		signal.addEventListener('abort', () => {
-			window.ipcRenderer.invoke('axios', { type: 'cancel', requestId });
+			void window.ipcRenderer
+				.invoke('axios', { type: 'cancel', requestId })
+				.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
 		});
 	}
 
 	// Legacy CancelToken support
 	if (cancelToken) {
 		cancelToken.promise.then(() => {
-			window.ipcRenderer.invoke('axios', { type: 'cancel', requestId });
+			void window.ipcRenderer
+				.invoke('axios', { type: 'cancel', requestId })
+				.catch((error) => httpLogger.warn('Failed to cancel IPC request', { context: { error } }));
 		});
 	}
 

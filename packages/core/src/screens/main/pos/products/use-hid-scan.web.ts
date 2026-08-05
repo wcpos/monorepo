@@ -215,7 +215,9 @@ export const useHidScan = (emit: ScanBus['emit']): UseHidScanResult => {
 			if (match && !cancelled) {
 				await attachDevice(match, false);
 			}
-		})();
+		})().catch((error) => {
+			hidLogger.warn('Failed to reopen saved HID scanner', { context: { error: String(error) } });
+		});
 		return () => {
 			cancelled = true;
 		};
