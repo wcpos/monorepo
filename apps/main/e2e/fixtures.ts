@@ -130,7 +130,18 @@ export async function stubStoreVersionForE2E(
 			}
 
 			const response = await route.fetch();
-			const data = await response.json();
+			let data: Record<string, unknown>;
+			try {
+				data = await response.json();
+			} catch {
+				// Not JSON (e.g. a transient wp-env error page). Pass the original
+				// response through unstubbed so only this test sees the failure.
+				console.warn(
+					`[stubStoreVersionForE2E] Non-JSON response (status ${response.status()}) for ${route.request().url()}; passing through unstubbed.`
+				);
+				await route.fulfill({ response });
+				return;
+			}
 			await route.fulfill({
 				response,
 				json: {
@@ -144,7 +155,11 @@ export async function stubStoreVersionForE2E(
 			if (isRouteTeardownError(error)) {
 				return;
 			}
-			throw error;
+			// Throwing from a route handler surfaces as an unhandled rejection and
+			// kills the whole worker process (every test in the shard fails). Log
+			// and let the request continue unstubbed instead.
+			console.warn('[stubStoreVersionForE2E] Route handler failed; continuing unstubbed:', error);
+			await route.fallback().catch(() => {});
 		}
 	});
 }
