@@ -64,11 +64,13 @@ describe('pullTargetedByIds product publication filter', () => {
 			{ primary: 'uuid-dirty', json: { wooProductId: 2, local: { dirty: true } } },
 		];
 
-		await pullTargetedByIds(
-			context('products', [], urls, residents, removed),
-			descriptor('products'),
-			[1, 2]
-		);
+		await expect(
+			pullTargetedByIds(
+				context('products', [], urls, residents, removed),
+				descriptor('products'),
+				[1, 2]
+			)
+		).resolves.toBe(0);
 		// The dirty row keeps the local-work protection every removal path honours.
 		expect(removed).toEqual(['uuid-clean']);
 	});
@@ -76,12 +78,34 @@ describe('pullTargetedByIds product publication filter', () => {
 	it.each([
 		['variations', { documents: [] }],
 		['customers', []],
-	] as const)('does not send status for %s targeted pulls', async (collection, body) => {
+	] as const)('prunes a short %s pull without sending status', async (collection, body) => {
 		const urls: string[] = [];
+		const observe = vi.fn();
+		const ctx = context(collection, body, urls);
+		ctx.observe = observe;
 
-		await expect(
-			pullTargetedByIds(context(collection, body, urls), descriptor(collection), [1])
-		).rejects.toThrow(/returned 0\/1 records/);
+		await expect(pullTargetedByIds(ctx, descriptor(collection), [1])).resolves.toBe(0);
 		expect(new URL(urls[0]!).searchParams.has('status')).toBe(false);
+		expect(observe).toHaveBeenCalledWith({
+			type: 'targeted.pull.shortfall-prune',
+			level: 'warn',
+			collection,
+			fields: { requested: 1, received: 0, missing: 1 },
+		});
+	});
+
+	it('keeps a resident variation when transport fails before parsing', async () => {
+		const removed: string[] = [];
+		const ctx = context(
+			'variations',
+			{ documents: [] },
+			[],
+			[{ primary: 'uuid-resident', json: { wooId: 1 } }],
+			removed
+		);
+		ctx.fetch = vi.fn(async () => new Response(null, { status: 503 })) as never;
+
+		await expect(pullTargetedByIds(ctx, descriptor('variations'), [1])).rejects.toThrow(/HTTP 503/);
+		expect(removed).toEqual([]);
 	});
 });
