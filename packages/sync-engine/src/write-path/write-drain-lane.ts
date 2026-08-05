@@ -54,6 +54,9 @@ export async function fetchOrderServerRevision(input: {
 	syncBaseUrl: string;
 	wooOrderId: number;
 }): Promise<string | null> {
+	// No `dp` — see the monetary-precision note in rx-scheduler-order-fetcher (#946). This
+	// read is the sharpest case: it exists ONLY to adopt the server's stamped revision, so a
+	// `dp`-shifted payload here would hand the drain a hash the push side can never match.
 	const response = await input.fetch(
 		`${input.syncBaseUrl}/orders?include=${input.wooOrderId}&per_page=1&orderby=include`
 	);

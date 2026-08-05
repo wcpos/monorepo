@@ -1672,4 +1672,127 @@ describe('createOrdersSchedulerFetcher', () => {
 			'Custom pull stalled: checkpoint did not advance while hasMore=true'
 		);
 	});
+
+	/**
+	 * #946 — sub-cent monetary precision.
+	 *
+	 * 1.9 pinned `dp=6` on every order read so monetary fields arrived with six
+	 * decimals; the sync rewrite dropped the client-side param (#639 severed the call
+	 * site, #662 deleted the producer and its test together) and the v2 lane never
+	 * carried over 1.9's SERVER-side pin
+	 * (`V1\Orders_Controller::wcpos_dispatch_request` → `$request->set_param('dp','6')`).
+	 *
+	 * The restoration has to happen server-side, NOT here — see the monetary-precision
+	 * warning above the read URL builders in rx-scheduler-order-fetcher.ts. What the client owes
+	 * the contract is that it carries whatever precision the server sends through to
+	 * storage verbatim: no reformatting, no rounding to display decimals. This is the
+	 * half of #946 that lives on this side of the wire, and it is pinned for EVERY
+	 * order read shape so a future read path that normalizes money fails loudly.
+	 */
+	describe('preserves server monetary precision verbatim on every order read shape (#946)', () => {
+		// A 6dp payload as wc/v3 serves it under `dp=6`: sub-cent tax components that
+		// round away entirely at the store's display decimals (2dp).
+		const sixDecimalMoney = {
+			total: '10.123456',
+			total_tax: '1.234567',
+			line_items: [
+				{
+					id: 1,
+					total: '8.888889',
+					total_tax: '0.740741',
+					taxes: [{ id: 1, total: '0.740741', subtotal: '0.740741' }],
+				},
+			],
+			tax_lines: [{ id: 2, tax_total: '1.234567', shipping_tax_total: '0.000001' }],
+		};
+
+		function sixDecimalPayload(wooId: number) {
+			return {
+				id: wooId,
+				date_modified_gmt: '2026-05-20T10:00:00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(wooId) }],
+				...sixDecimalMoney,
+			};
+		}
+
+		type ReadShape = {
+			name: string;
+			task: FetchTask;
+			body: (wooId: number) => PullResponse | unknown[];
+		};
+
+		const readShapes: ReadShape[] = [
+			{
+				name: 'custom-pull',
+				task: orderTask(),
+				body: (wooId) => ({
+					documents: [
+						{
+							...customPullDoc(wooId),
+							payload: sixDecimalPayload(wooId),
+						},
+					] as PullResponse['documents'],
+					checkpoint: nextCheckpoint,
+					hasMore: false,
+				}),
+			},
+			{
+				name: 'browse',
+				task: orderTask({
+					id: 'orders:browser:processing:windowed',
+					requirementId: 'orders.browser.processing',
+					queryKey: 'orders:browser:status=processing:search=:limit=50',
+				}),
+				body: (wooId) => [{ ...sixDecimalPayload(wooId), status: 'processing' }],
+			},
+			{
+				name: 'ranged/report',
+				task: orderTask({
+					id: 'orders:browser:ranged:windowed',
+					requirementId: 'orders.browser.ranged',
+					queryKey: 'orders:browser:status=any:after=1747699200:before=1747785600:search=:limit=50',
+				}),
+				body: (wooId) => [sixDecimalPayload(wooId)],
+			},
+			{
+				name: 'targeted include',
+				task: orderTask({
+					id: 'orders:ids:bulk:on-demand',
+					requirementId: 'orders.bulk-deep-link',
+					queryKey: 'orders:ids:bulk',
+					ids: ['woo-order:77'],
+					wooIds: [77],
+					limit: 1,
+					mode: 'on-demand',
+				}),
+				body: (wooId) => [sixDecimalPayload(wooId)],
+			},
+		];
+
+		it.each(readShapes)('$name', async ({ task, body }) => {
+			const wooId = task.wooIds?.[0] ?? 77;
+			const upserted: PullResponse['documents'] = [];
+			const repository = {
+				upsertMany: vi.fn(async (documents: PullResponse['documents']) => {
+					upserted.push(...documents);
+				}),
+			};
+			const schedulerFetcher = createOrdersSchedulerFetcher({
+				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+				repository,
+				checkpointStore: {
+					readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+					writeCustomPullCheckpoint: vi.fn(async () => undefined),
+				},
+				fetcher: vi.fn(async () => response(body(wooId))),
+			});
+
+			await schedulerFetcher(task);
+
+			expect(upserted).toHaveLength(1);
+			// Every monetary string round-trips byte-for-byte: the sub-cent digits the
+			// server sent are still there after materialization.
+			expect(upserted[0].payload).toMatchObject(sixDecimalMoney);
+		});
+	});
 });
