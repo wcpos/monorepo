@@ -1,7 +1,6 @@
 import {
 	adapterDerivedFieldsFor,
 	collectionMap,
-	legacyFieldForEnginePath,
 	promotedColumnsFor,
 	resolveLegacyField,
 } from '../../src/engine-adapter/collection-map';
@@ -20,8 +19,6 @@ describe('engine adapter collection map', () => {
 		expect(resolveLegacyField('customers', 'id').enginePath).toBe('wooCustomerId');
 		expect(resolveLegacyField('taxes', 'id').enginePath).toBe('wooTaxRateId');
 		expect(resolveLegacyField('products/categories', 'id').enginePath).toBe('wooId');
-		expect(legacyFieldForEnginePath('products', 'wooProductId')).toBe('id');
-		expect(legacyFieldForEnginePath('products', 'id')).toBe('uuid');
 	});
 
 	it('maps each legacy collection to its engine collection', () => {
@@ -67,7 +64,6 @@ describe('engine adapter collection map', () => {
 			legacy: 'custom_field',
 			kind: 'payload',
 			enginePath: 'payload.custom_field',
-			fallback: true,
 		});
 	});
 

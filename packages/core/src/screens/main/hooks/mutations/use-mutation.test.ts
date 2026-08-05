@@ -17,11 +17,8 @@ jest.mock('uuid', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine: { write: mockWrite, status: mockStatus } }),
+	useQueryRuntime: () => ({ engine: { write: mockWrite, status: mockStatus } }),
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
-}));
-
-jest.mock('@wcpos/query/engine-adapter/document-proxy', () => ({
 	wrapEngineDocument: (...args: unknown[]) => mockWrapEngineDocument(...args),
 }));
 

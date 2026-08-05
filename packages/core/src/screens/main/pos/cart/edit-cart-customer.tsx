@@ -12,8 +12,7 @@ import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryManager } from '@wcpos/query';
-import { wrapEngineDocument } from '@wcpos/query/engine-compat';
+import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -29,14 +28,13 @@ import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
-type QueryManager = ReturnType<typeof useQueryManager>;
+type QueryManager = ReturnType<typeof useQueryRuntime>;
 
 async function findCustomerByWooId(
-	manager: QueryManager,
+	runtime: QueryManager,
 	wooCustomerId: number
 ): Promise<CustomerDocument | null> {
-	const scope = manager.engine.active() ?? (await manager.engine.ready);
+	const scope = runtime.engine.active() ?? (await runtime.engine.ready);
 	const collection = scope.database.collections.customers;
 	if (!collection) return null;
 	const document = await collection.findOne({ selector: { wooCustomerId } }).exec();
@@ -74,7 +72,7 @@ export function EditCartCustomerForm() {
 	);
 	const { localPatch } = useLocalMutation();
 	const { patch } = useMutation({ collectionName: 'customers' });
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { onOpenChange } = useRootContext();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
@@ -113,7 +111,7 @@ export function EditCartCustomerForm() {
 		await handleSaveToOrder(data);
 		setLoading(true);
 		try {
-			const customer = await findCustomerByWooId(manager, wooCustomerId);
+			const customer = await findCustomerByWooId(runtime, wooCustomerId);
 			if (!customer) {
 				cartLogger.error(t('common.no_customer_found'), {
 					showToast: true,

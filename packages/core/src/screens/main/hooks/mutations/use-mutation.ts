@@ -9,9 +9,12 @@ import type {
 	ProductDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
-import { awaitWriteOutcome, useQueryManager } from '@wcpos/query';
-import type { LegacyCollectionName } from '@wcpos/query/engine-compat';
-import { wrapEngineDocument } from '@wcpos/query/engine-compat';
+import {
+	awaitWriteOutcome,
+	type LegacyCollectionName,
+	useQueryRuntime,
+	wrapEngineDocument,
+} from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -48,7 +51,7 @@ function isWriteableCollection(name: string): name is WriteableCollection {
  * remains visible through the engine conflict surface; failure before durable enqueue is rolled back.
  */
 export const useMutation = ({ collectionName, endpoint }: Props) => {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const t = useT();
 	const { collectionLabel } = useCollection(collectionName);
 	const { localPatch } = useLocalMutation();
@@ -124,12 +127,12 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					...(data.date_modified_gmt === undefined ? { date_modified_gmt: now } : {}),
 				};
 				let resident: Awaited<ReturnType<typeof insertEngineResident>> | undefined;
-				let receipt: Awaited<ReturnType<typeof manager.engine.write>> | undefined;
+				let receipt: Awaited<ReturnType<typeof runtime.engine.write>> | undefined;
 
 				for (let attempt = 0; attempt < 2; attempt += 1) {
-					const scopeId = manager.engine.status().activeScopeId;
+					const scopeId = runtime.engine.status().activeScopeId;
 					resident = await insertEngineResident({
-						manager,
+						manager: runtime,
 						collection: collectionName,
 						recordId,
 						payload,
@@ -137,7 +140,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					const residentPayload = resident.get('payload') as Record<string, unknown>;
 					let writeError: unknown;
 					try {
-						receipt = await manager.engine.write({
+						receipt = await runtime.engine.write({
 							collection: collectionName,
 							operation: 'create',
 							recordId,
@@ -148,7 +151,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 						writeError = error;
 					}
 
-					if (manager.engine.status().activeScopeId !== scopeId) {
+					if (runtime.engine.status().activeScopeId !== scopeId) {
 						await resident.remove();
 						if (attempt === 1) {
 							throw new ActiveScopeChangedTwiceError(collectionName);
@@ -169,8 +172,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 
 				let currentResident = resident;
 				if (awaitRemoteId) {
-					await awaitWriteOutcome(manager.engine, receipt.mutationId);
-					const refreshed = await findEngineResident(manager, collectionName, recordId);
+					await awaitWriteOutcome(runtime.engine, receipt.mutationId);
+					const refreshed = await findEngineResident(runtime, collectionName, recordId);
 					if (!refreshed) {
 						throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
 					}
@@ -189,7 +192,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				}
 			}
 		},
-		[collectionName, handleError, handleSuccess, manager]
+		[collectionName, handleError, handleSuccess, runtime]
 	);
 
 	return { patch, create };

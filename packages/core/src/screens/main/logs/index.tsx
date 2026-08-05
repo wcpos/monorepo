@@ -9,14 +9,14 @@ import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { isVerboseDiagnostics } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import {
 	QueryStateProvider,
-	useCollectionBinding,
+	useLogsBinding,
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
@@ -105,8 +105,8 @@ function LogsScreenContent() {
 	const t = useT();
 	const state = useQueryState<'logs'>();
 	const actions = useQueryStateActions<'logs'>();
-	const binding = useCollectionBinding('logs', state);
-	const manager = useQueryManager();
+	const binding = useLogsBinding(state);
+	const runtime = useQueryRuntime();
 	const status = useEngineStatus();
 	const stats = useLogStats();
 	const mutations = useMutationCounts();
@@ -114,7 +114,7 @@ function LogsScreenContent() {
 	const { verbose, setVerbose } = useVerboseDiagnostics();
 	const [preset, setPreset] = React.useState<LogPreset>('all');
 
-	const logsCollection = (manager.localDB as { collections?: Record<string, unknown> })?.collections
+	const logsCollection = (runtime.localDB as { collections?: Record<string, unknown> })?.collections
 		?.logs as LogsCollectionLike | undefined;
 
 	const applyFilters = React.useCallback(

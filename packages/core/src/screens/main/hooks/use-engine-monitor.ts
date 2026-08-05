@@ -3,7 +3,7 @@ import * as React from 'react';
 import {
 	observeEngineCollectionCounts,
 	observeEngineMutationCounts,
-	useQueryManager,
+	useQueryRuntime,
 } from '@wcpos/query';
 import type { EngineCollectionCounts, EngineMutationCounts, EngineStatus } from '@wcpos/query';
 
@@ -20,7 +20,7 @@ const EMPTY_COLLECTION_COUNTS: EngineCollectionCounts = {
 };
 
 export function useEngineStatus(): EngineStatus {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const [status, setStatus] = React.useState<EngineStatus>(() => engine.status());
 
 	React.useEffect(() => {
@@ -32,7 +32,7 @@ export function useEngineStatus(): EngineStatus {
 }
 
 export function useCollectionCounts(): EngineCollectionCounts {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const [counts, setCounts] = React.useState<EngineCollectionCounts>(EMPTY_COLLECTION_COUNTS);
 
 	React.useEffect(() => {
@@ -44,7 +44,7 @@ export function useCollectionCounts(): EngineCollectionCounts {
 }
 
 export function useMutationCounts(): EngineMutationCounts {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const [counts, setCounts] = React.useState<EngineMutationCounts>({
 		pending: 0,
 		pendingOrders: 0,

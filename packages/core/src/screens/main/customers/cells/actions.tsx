@@ -26,7 +26,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
@@ -49,12 +49,12 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 	const t = useT();
 	const { format } = useCustomerNameFormat();
 	const [force, setForce] = React.useState(!customer.id);
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 
 	const handleRefresh = React.useCallback(() => {
 		if (!customer.id) return;
-		const handle = manager.engine.require({
+		const handle = runtime.engine.require({
 			id: `customer-actions:refresh:${customer.id}`,
 			collection: 'customers',
 			kind: 'targeted-records',
@@ -73,18 +73,18 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 					},
 				});
 			});
-	}, [customer.id, manager]);
+	}, [customer.id, runtime]);
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		await manager.engine.write({
+		await runtime.engine.write({
 			collection: 'customers',
 			operation: 'delete',
 			recordId: customer.uuid!,
 		});
-	}, [customer.uuid, manager]);
+	}, [customer.uuid, runtime]);
 
 	if (readOnly) {
 		return null;

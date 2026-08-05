@@ -1,4 +1,4 @@
-type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryManager>;
+type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
 
 /** Re-anchor a missing selected filter label without writing through legacy storeDB. */
 export async function forceRefreshFilterCustomer(

@@ -73,7 +73,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	prepareCollectionResetRefill: jest.fn(),
-	useQueryManager: () => ({ engine: { active: jest.fn(), scope: {}, sync: jest.fn() } }),
+	useQueryRuntime: () => ({ engine: { active: jest.fn(), scope: {}, sync: jest.fn() } }),
 }));
 jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
 jest.mock('../../../contexts/translations', () => {

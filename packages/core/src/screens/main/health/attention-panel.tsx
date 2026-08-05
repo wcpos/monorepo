@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 import { Callout } from './components';
@@ -27,7 +27,7 @@ const FIX_ROUTES: Record<string, (uuid: string) => string> = {
  * `collection/id` — the record always stays identifiable.
  */
 function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	// Keyed by the stuck record's identity: a stale resolution simply stops
 	// matching instead of needing a synchronous reset in the effect.
 	const [resolved, setResolved] = React.useState<{ key: string; label: string } | null>(null);
@@ -88,7 +88,7 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 	const t = useT();
 	const router = useRouter();
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const first = stuck[0];
 	const label = useStuckRecordLabel(first);
 

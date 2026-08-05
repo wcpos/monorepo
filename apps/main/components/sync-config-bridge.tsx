@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useAppState } from '@wcpos/core/contexts/app-state';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 /**
  * Applies the store document's sync tuning (#559 knob contract) to the live
@@ -14,7 +14,7 @@ import { useQueryManager } from '@wcpos/query';
  * clamped again inside reconfigure(); this bridge just forwards.
  */
 export function SyncConfigBridge() {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const { store } = useAppState();
 	const checkIntervalMs = useObservableEagerState(store.sync_check_interval_ms$) as
 		number | undefined;

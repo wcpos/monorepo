@@ -19,7 +19,7 @@ const requireCustomer = jest.fn();
 const engine = { require: requireCustomer };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine }),
+	useQueryRuntime: () => ({ engine }),
 }));
 
 function resolvedHandle() {

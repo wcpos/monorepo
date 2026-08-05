@@ -7,7 +7,7 @@ import { ObservableResource } from 'observable-hooks';
 import { Card } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 import { forceRefreshFilterCustomer } from '../orders/force-refresh-filter-customer';
 import { useAppState } from '../../../contexts/app-state';
@@ -43,16 +43,16 @@ export function FilterBar() {
 		cashierID ?? 0
 	);
 	const { wpCredentials } = useAppState();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 
 	const refreshCustomer = React.useCallback(() => {
 		if (customerID === undefined || customerID === 0) return;
-		void forceRefreshFilterCustomer(manager, customerID, 'customer');
-	}, [customerID, manager]);
+		void forceRefreshFilterCustomer(runtime, customerID, 'customer');
+	}, [customerID, runtime]);
 	const refreshCashier = React.useCallback(() => {
 		if (cashierID === undefined || !Number.isFinite(cashierID)) return;
-		void forceRefreshFilterCustomer(manager, cashierID, 'cashier');
-	}, [cashierID, manager]);
+		void forceRefreshFilterCustomer(runtime, cashierID, 'cashier');
+	}, [cashierID, runtime]);
 
 	const storesResource = React.useMemo(
 		() => new ObservableResource(wpCredentials.populate$('stores'), (value) => !!value),

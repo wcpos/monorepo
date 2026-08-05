@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { Button } from '@wcpos/components/button';
-import { awaitWriteOutcome, useQueryManager, WriteOutcomeError } from '@wcpos/query';
+import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
@@ -33,7 +33,7 @@ const LATE_OUTCOME_TIMEOUT_MS = 120_000;
 export function VoidButton() {
 	const { currentOrder } = useCurrentOrder();
 	const router = useRouter();
-	const manager = useQueryManager();
+	const manager = useQueryRuntime();
 	const t = useT();
 
 	/**

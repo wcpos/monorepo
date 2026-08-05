@@ -2,8 +2,12 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useQueryManager } from '@wcpos/query';
-import { resolveLegacyField, wrapEngineDocument } from '@wcpos/query/engine-compat';
+import {
+	type EngineRxDocument,
+	resolveLegacyField,
+	useQueryRuntime,
+	wrapEngineDocument,
+} from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import {
@@ -16,8 +20,6 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
-
 type StockDocument = StockFields & {
 	id?: number;
 	name?: string;
@@ -72,12 +74,12 @@ function latest(document: StockDocument): StockDocument {
 export const useCartStockGuard = () => {
 	const { store } = useAppState();
 	const preventOverselling = useObservableEagerState(store.prevent_overselling$!);
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const t = useT();
 
 	const readStockDocument = React.useCallback(
 		async (collectionName: 'products' | 'variations', wooId: number) => {
-			const collection = manager.engine.active()?.database.collections[collectionName];
+			const collection = runtime.engine.active()?.database.collections[collectionName];
 			if (!collection) return null;
 			const field = resolveLegacyField(collectionName, 'id').enginePath;
 			const result = await collection.findOne({ selector: { [field]: wooId } }).exec();
@@ -92,7 +94,7 @@ export const useCartStockGuard = () => {
 			const payload = (deletedDocument as { payload?: unknown } | undefined)?.payload;
 			return payload !== null && typeof payload === 'object' ? (payload as StockDocument) : null;
 		},
-		[manager]
+		[runtime]
 	);
 
 	const checkCartStock = React.useCallback(

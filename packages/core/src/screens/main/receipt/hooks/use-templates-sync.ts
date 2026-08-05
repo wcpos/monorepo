@@ -10,9 +10,10 @@
 
 import * as React from 'react';
 
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { useQueryManager } from './provider';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 import type { RxCollection } from 'rxdb';
 
@@ -62,9 +63,10 @@ export function syncTemplates(collection: RxCollection, httpClient: any): Promis
 
 /** Keep the dedicated local templates collection fresh without creating a query manager. */
 export function useTemplatesSync(): void {
-	const runtime = useQueryManager();
+	const runtime = useQueryRuntime();
+	const httpClient = useRestHttpClient();
 	const collection = runtime.localDB.collections.templates;
 	React.useEffect(() => {
-		if (collection) void syncTemplates(collection, runtime.httpClient);
-	}, [collection, runtime.httpClient]);
+		if (collection) void syncTemplates(collection, httpClient);
+	}, [collection, httpClient]);
 }

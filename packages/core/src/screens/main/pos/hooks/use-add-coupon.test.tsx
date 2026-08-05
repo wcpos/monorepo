@@ -15,7 +15,8 @@ const localPatch = jest.fn();
 const recalculate = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine }),
+	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => ({ engine }),
 }));
 
 jest.mock('../../../../contexts/translations', () => ({

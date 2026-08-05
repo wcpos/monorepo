@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -58,7 +58,7 @@ export function createCheckoutIdempotencyKey(
 
 export function useCheckoutSession(order: OrderDocument) {
 	const http = useRestHttpClient();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
@@ -91,7 +91,7 @@ export function useCheckoutSession(order: OrderDocument) {
 		if (!order.id) {
 			throw new Error('checkout_refresh_requires_persisted_order');
 		}
-		const handle = manager.engine.require({
+		const handle = runtime.engine.require({
 			id: `checkout:order-refresh:${order.id}`,
 			collection: 'orders',
 			kind: 'targeted-records',
@@ -117,7 +117,7 @@ export function useCheckoutSession(order: OrderDocument) {
 		} else {
 			router.replace({ pathname: `cart` });
 		}
-	}, [manager, order, router, stockAdjustment, uiSettings.autoShowReceipt]);
+	}, [runtime, order, router, stockAdjustment, uiSettings.autoShowReceipt]);
 
 	const handleStockRejection = React.useCallback(
 		(error: unknown) => {
@@ -138,7 +138,7 @@ export function useCheckoutSession(order: OrderDocument) {
 				['variations', variationIds],
 			] as const) {
 				if (wooIds.length === 0) continue;
-				const handle = manager.engine.require({
+				const handle = runtime.engine.require({
 					id: `checkout:stock-rejection:${collection}:${order.id}`,
 					collection,
 					kind: 'targeted-records',
@@ -171,7 +171,7 @@ export function useCheckoutSession(order: OrderDocument) {
 				.catch(() => undefined);
 			return true;
 		},
-		[manager, order.id, order.uuid, resolveStockOwnerId]
+		[runtime, order.id, order.uuid, resolveStockOwnerId]
 	);
 
 	const startCheckout = React.useCallback(async () => {

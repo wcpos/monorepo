@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 import { useEngineStatus } from '../hooks/use-engine-monitor';
 import { type OtherScopesSummary, summarizeOtherScopes } from './database-logic';
@@ -32,7 +32,7 @@ async function measureDirectory(handle: OpfsDirectoryHandle): Promise<number> {
  * platform can't measure.
  */
 export function useOtherScopes(): OtherScopesSummary | null {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	// One engine hosts multiple scopes: a same-site store switch changes
 	// `activeScopeId` without changing the engine's identity, so the probe
 	// must key on the scope, not just the engine.

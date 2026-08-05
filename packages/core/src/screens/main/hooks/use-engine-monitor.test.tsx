@@ -24,7 +24,7 @@ engine.statusChanges.mockImplementation((cb) => {
 });
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine }),
+	useQueryRuntime: () => ({ engine }),
 	observeEngineCollectionCounts: (
 		_engine: unknown,
 		cb: (counts: Record<string, number>) => void

@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 import { combineLatest, of, timer } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 import {
 	type ClockSkewWarning,
@@ -112,8 +112,8 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
  * `[category, timestamp]` index and rules per record (spec §4).
  */
 export function useLogStats(): LogStats {
-	const manager = useQueryManager();
-	const logsCollection = (manager.localDB as { collections?: Record<string, unknown> })?.collections
+	const runtime = useQueryRuntime();
+	const logsCollection = (runtime.localDB as { collections?: Record<string, unknown> })?.collections
 		?.logs as LogsCollectionLike | undefined;
 
 	const stats$ = React.useMemo(

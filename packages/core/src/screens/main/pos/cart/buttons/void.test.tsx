@@ -74,7 +74,7 @@ jest.mock('@wcpos/query', () => {
 	}
 
 	return {
-		useQueryManager: () => mockManager,
+		useQueryRuntime: () => mockManager,
 		WriteOutcomeError,
 		awaitWriteOutcome: (
 			_engine: typeof mockEngine,

@@ -44,7 +44,7 @@ const engine = {
 
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
-	useQueryManager: () => ({ engine }),
+	useQueryRuntime: () => ({ engine }),
 }));
 
 function emitDatabase(database: FakeDatabase | null): void {

@@ -3,8 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useQueryManager } from '@wcpos/query';
-import { wrapEngineDocument } from '@wcpos/query/engine-compat';
+import { useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useCartStockGuard } from './use-cart-stock-guard';
@@ -66,7 +65,7 @@ function hasQueuedOrAcknowledgedCreate(resident: EngineResident): boolean {
  */
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
@@ -140,7 +139,7 @@ export const useAddItemToOrder = () => {
 					unknown
 				>;
 				resident = await patchEngineResident({
-					manager,
+					manager: runtime,
 					collection: 'orders',
 					recordId,
 					changes: {
@@ -164,7 +163,7 @@ export const useAddItemToOrder = () => {
 					[type]: [data],
 				};
 				resident = await insertEngineResident({
-					manager,
+					manager: runtime,
 					collection: 'orders',
 					recordId,
 					payload: orderJSON,
@@ -178,7 +177,7 @@ export const useAddItemToOrder = () => {
 			const billing = payload.billing as Record<string, unknown> | undefined;
 			if (billing?.email === '') delete billing.email;
 			try {
-				await manager.engine.write({
+				await runtime.engine.write({
 					collection: 'orders',
 					operation: 'create',
 					recordId,
@@ -207,7 +206,7 @@ export const useAddItemToOrder = () => {
 			setCurrentOrderID(recordId);
 			return savedOrder;
 		},
-		[buildCartLines, identity, manager, setCurrentOrderID]
+		[buildCartLines, identity, runtime, setCurrentOrderID]
 	);
 
 	/**
@@ -237,7 +236,7 @@ export const useAddItemToOrder = () => {
 				let isNew = Boolean((latest as unknown as { isNew?: boolean }).isNew);
 				let orphanedSkeleton: EngineResident | null = null;
 				if (isNew && !context.order) {
-					const resident = await findEngineResident(manager, 'orders', recordId);
+					const resident = await findEngineResident(runtime, 'orders', recordId);
 					if (resident) {
 						latest = wrapEngineDocument(
 							'orders',
@@ -294,7 +293,7 @@ export const useAddItemToOrder = () => {
 			checkCartStock,
 			currentOrder,
 			localPatch,
-			manager,
+			runtime,
 			saveNewOrder,
 			showBackorderWarning,
 			stockGuardEnabled,

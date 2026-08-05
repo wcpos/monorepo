@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 import { buildEnrichedProductCategories } from './coupon-helpers';
 import { recalculateCoupons, type RecalculateResult } from './coupon-recalculate';
@@ -34,7 +34,7 @@ export const useRecalculateCoupons = () => {
 	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
 	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { rates: taxRates, pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
 
 	const recalculate = React.useCallback(
@@ -45,7 +45,7 @@ export const useRecalculateCoupons = () => {
 				.map((cl) => cl.code.toLowerCase());
 
 			// Tier-0 coupons are resident in the engine; payload.code remains an exact scan.
-			const coupons = await readEngineCoupons(manager);
+			const coupons = await readEngineCoupons(runtime);
 			const couponConfigs = new Map<string, CouponDiscountConfig>();
 			for (const code of activeCodes) {
 				const couponDoc = coupons.find((document) => document.code === code);
@@ -76,8 +76,8 @@ export const useRecalculateCoupons = () => {
 				.filter((id): id is number => id != null);
 			if (productIds.length > 0) {
 				const [products, categories] = await Promise.all([
-					readEngineProductsByWooId(manager, productIds),
-					readEngineCategories(manager),
+					readEngineProductsByWooId(runtime, productIds),
+					readEngineCategories(runtime),
 				]);
 				for (const p of products) {
 					if (p.id != null) {
@@ -102,7 +102,7 @@ export const useRecalculateCoupons = () => {
 			});
 		},
 		[
-			manager,
+			runtime,
 			taxRates,
 			pricesIncludeTax,
 			calcDiscountsSequentially,

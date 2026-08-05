@@ -18,7 +18,7 @@ const mockUseEngineDocumentByWooId = jest.fn(
 	(_collection: string, _wooId: number) => new ObservableResource(of(null as unknown as object))
 );
 
-jest.mock('@wcpos/query', () => ({ useQueryManager: () => mockManager }));
+jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => mockManager }));
 jest.mock('./force-refresh-filter-customer', () => ({
 	forceRefreshFilterCustomer: (manager: unknown, wooId: number, role: string) =>
 		mockForceRefresh(manager, wooId, role),

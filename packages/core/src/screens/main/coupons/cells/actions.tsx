@@ -26,7 +26,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Label } from '@wcpos/components/label';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
@@ -45,11 +45,11 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 	const t = useT();
 	const initialForce = !coupon.id;
 	const [force, setForce] = React.useState(initialForce);
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 
 	const handleRefresh = React.useCallback(() => {
-		const handle = manager.engine.require({
+		const handle = runtime.engine.require({
 			id: 'coupon-actions:refresh',
 			collection: 'coupons',
 			kind: 'refresh',
@@ -66,15 +66,15 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 					},
 				});
 			});
-	}, [manager]);
+	}, [runtime]);
 
 	const handleDelete = React.useCallback(async () => {
-		await manager.engine.write({
+		await runtime.engine.write({
 			collection: 'coupons',
 			operation: 'delete',
 			recordId: coupon.uuid!,
 		});
-	}, [coupon.uuid, manager]);
+	}, [coupon.uuid, runtime]);
 
 	if (readOnly) {
 		return null;

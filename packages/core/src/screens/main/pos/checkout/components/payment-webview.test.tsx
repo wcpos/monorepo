@@ -33,7 +33,7 @@ jest.mock('observable-hooks', () => ({
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine: { require: mockEngineRequire } }),
+	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useAppState: () => ({

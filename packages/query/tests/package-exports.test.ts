@@ -53,16 +53,13 @@ const metroContext: ResolutionContext = {
 };
 
 describe('package exports', () => {
-	it.each(['engine-compat', 'requirements'])(
-		'resolves %s to the same source through Node exports and the Metro workspace resolver',
-		(subpath) => {
-			const nodeResolved = requireFromMain.resolve(`@wcpos/query/${subpath}`);
-			const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, subpath), 'ios');
+	it('resolves the root entry identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query');
+		const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, 'index'), 'ios');
 
-			expect(metroResolved).toEqual({
-				type: 'sourceFile',
-				filePath: fs.realpathSync(nodeResolved),
-			});
-		}
-	);
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
 });

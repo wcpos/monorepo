@@ -1,6 +1,6 @@
 import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
 
-export type AwaitedWriteOutcome = 'success' | 'success-local';
+type AwaitedWriteOutcome = 'success' | 'success-local';
 
 export class WriteOutcomeError extends Error {
 	eventType: 'write-rejected' | 'write-conflict';

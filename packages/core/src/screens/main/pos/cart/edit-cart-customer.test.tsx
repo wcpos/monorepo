@@ -46,10 +46,7 @@ jest.mock('react-hook-form', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => manager,
-}));
-
-jest.mock('@wcpos/query/engine-adapter/document-proxy', () => ({
+	useQueryRuntime: () => manager,
 	wrapEngineDocument: (_collection: string, document: unknown) => document,
 }));
 

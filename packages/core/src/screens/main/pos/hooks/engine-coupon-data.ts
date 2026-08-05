@@ -1,12 +1,12 @@
 import {
 	engineCollectionNameFor,
+	type EngineRxDocument,
 	type LegacyCollectionName,
 	resolveLegacyField,
-} from '@wcpos/query/engine-compat';
-import { wrapEngineDocument } from '@wcpos/query/engine-compat';
+	wrapEngineDocument,
+} from '@wcpos/query';
 
-type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
-type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryManager>;
+type QueryManager = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
 
 type EngineCollection = {
 	find(query?: { selector: Record<string, unknown> }): {

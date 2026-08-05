@@ -23,7 +23,7 @@ const mockUnsubscribe = jest.fn();
 const mockEngine = { id: 'engine' };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine: mockEngine }),
+	useQueryRuntime: () => ({ engine: mockEngine }),
 	observeEngineCensus: (_engine: unknown, cb: (totals: CensusTotals) => void) => {
 		mockSubscribers.add(cb);
 		cb(emptyTotals);

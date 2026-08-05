@@ -13,7 +13,7 @@ const mockFindDocumentsById = jest.fn();
 
 jest.mock('observable-hooks', () => ({ useObservableEagerState: () => true }));
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({
+	useQueryRuntime: () => ({
 		engine: {
 			active: () => ({
 				database: {
@@ -31,8 +31,6 @@ jest.mock('@wcpos/query', () => ({
 			}),
 		},
 	}),
-}));
-jest.mock('@wcpos/query/engine-compat', () => ({
 	resolveLegacyField: () => ({ enginePath: 'wooProductId' }),
 	wrapEngineDocument: (_collection: string, document: unknown) => document,
 }));

@@ -33,7 +33,7 @@ const manager = { engine };
 
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
-	useQueryManager: () => manager,
+	useQueryRuntime: () => manager,
 }));
 
 jest.mock('./use-customer-name-format', () => ({

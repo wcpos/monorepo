@@ -38,7 +38,8 @@ const engine = {
 const manager = { engine };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => manager,
+	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => manager,
 }));
 
 function order(

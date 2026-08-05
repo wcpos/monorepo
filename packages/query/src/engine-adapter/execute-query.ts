@@ -34,7 +34,6 @@ export type AdapterDatabase = {
 export type AdapterQueryResult = {
 	hits: EngineRxDocument[];
 	count: number;
-	elapsed: number;
 };
 
 export type ExecuteAdapterQueryOptions = {
@@ -151,7 +150,7 @@ export function executeAdapterQuery({
 		// a bound read stays constructible and renders; db$ rebinds it to
 		// the live collection once the engine opens (ADR 0023 increment 1b).
 		return new Observable<AdapterQueryResult>((subscriber) => {
-			subscriber.next({ hits: [], count: 0, elapsed: 0 });
+			subscriber.next({ hits: [], count: 0 });
 		});
 	}
 	if (complete && engineSort.pushable) {
@@ -164,13 +163,11 @@ export function executeAdapterQuery({
 		const count = engineCollection.count({ selector: prefilter });
 
 		return new Observable<AdapterQueryResult>((subscriber) => {
-			const startedAt = Date.now();
 			const subscription = combineLatest([query.$, count.$]).subscribe({
 				next: ([documents, total]) => {
 					subscriber.next({
 						hits: documents,
 						count: total,
-						elapsed: Date.now() - startedAt,
 					});
 				},
 				error: (error: unknown) => subscriber.error(error),
@@ -182,7 +179,6 @@ export function executeAdapterQuery({
 	const query = engineCollection.find({ selector: prefilter });
 
 	return new Observable<AdapterQueryResult>((subscriber) => {
-		const startedAt = Date.now();
 		const subscription = query.$.subscribe({
 			next: (documents) => {
 				const matching = complete
@@ -197,7 +193,6 @@ export function executeAdapterQuery({
 				subscriber.next({
 					hits,
 					count: matching.length,
-					elapsed: Date.now() - startedAt,
 				});
 			},
 			error: (error: unknown) => subscriber.error(error),

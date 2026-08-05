@@ -1,8 +1,8 @@
 /**
  * Construct the app's `RxdbSyncEngine` (ADR 0023 increment 1b).
  *
- * The engine is what `@wcpos/query` serves every fluent read from now. It is
- * bound to a single site; store/cashier are scopes within it. This helper wires
+ * The engine serves core's reads through `@wcpos/query`'s adapter. It is bound
+ * to a single site; store/cashier are scopes within it. This helper wires
  * the engine's ports to the host:
  *  - `site`     — derived through the single {@link deriveSyncSite} function,
  *  - `storage`  — the app's platform storage (the same one `createStoreDB` uses),

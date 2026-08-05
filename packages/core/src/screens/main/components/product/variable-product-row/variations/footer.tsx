@@ -4,7 +4,7 @@ import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import type { ProductDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -23,26 +23,26 @@ interface VariationTableFooterProps {
  *
  */
 export function VariationTableFooter({ binding, parent, count }: VariationTableFooterProps) {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const loading = useObservableEagerState(binding.active$);
 
 	/**
 	 *
 	 */
 	const handleClearVariations = React.useCallback(async () => {
-		const scope = manager.engine.active() ?? (await manager.engine.ready);
+		const scope = runtime.engine.active() ?? (await runtime.engine.ready);
 		const variations = await scope.database.collections.variations
 			.find({ selector: { parentId: parent.id } })
 			.exec();
 		for (const variation of variations) {
-			await manager.engine.write({
+			await runtime.engine.write({
 				collection: 'variations',
 				operation: 'delete',
 				recordId: String(variation.primary),
 			});
 		}
 		return binding.sync();
-	}, [binding, manager, parent.id]);
+	}, [binding, runtime, parent.id]);
 
 	/**
 	 * Get total from sync collection
