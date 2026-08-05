@@ -120,6 +120,47 @@ async function searchTaskRows(engine: RxdbSyncEngine): Promise<Record<string, un
 }
 
 describe('require() for search — the public search-demand verb', () => {
+	it('publishes refcounted collection activity across concurrent settle and release paths', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		let releaseFetch!: () => void;
+		const fetchGate = new Promise<void>((resolve) => {
+			releaseFetch = resolve;
+		});
+		let blockProducts = false;
+		const engine = engineWith(async (url) => {
+			const parsed = new URL(url);
+			if (blockProducts && parsed.pathname.endsWith('/products')) {
+				await fetchGate;
+			}
+			return json([]);
+		});
+		await engine.ready;
+		blockProducts = true;
+
+		const first = engine.require({
+			id: 'activity-1',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+		});
+		const second = engine.require({
+			id: 'activity-2',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+		});
+		expect(engine.status().collections.products.active).toBe(true);
+
+		second.release();
+		expect(engine.status().collections.products.active).toBe(true);
+		releaseFetch();
+		await first.ready;
+		expect(engine.status().collections.products.active).toBe(false);
+
+		await engine.dispose();
+	});
+
 	it('rounds a products search trip directly, lands the record, and persists no search task', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();

@@ -40,7 +40,10 @@ import type { FakeEngine } from '../../../query/tests/helpers/engine';
 import type { RxCollection, RxDatabase } from 'rxdb';
 
 Object.assign(globalThis, { TextDecoder, TextEncoder });
-Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
+Object.defineProperty(globalThis, 'crypto', {
+	configurable: true,
+	value: webcrypto,
+});
 
 type Resource = ReturnType<typeof useCollectionBinding<'products'>>['resource'];
 
@@ -49,7 +52,9 @@ function current(resource: Resource): QueryResult<RxCollection> | undefined {
 }
 
 function installResidentSearch(collection: RxCollection): void {
-	type SearchOptions = { documentSnapshot?: (document: unknown) => Record<string, unknown> };
+	type SearchOptions = {
+		documentSnapshot?: (document: unknown) => Record<string, unknown>;
+	};
 	(
 		collection as unknown as {
 			initSearch: (locale: string, options?: SearchOptions) => Promise<unknown>;
@@ -149,7 +154,13 @@ describe('query bindings', () => {
 				categories: [{ id: 7 }],
 				tags: [{ id: 5 }],
 			}),
-			engineProduct({ uuid: 'other', id: 3, name: 'Other', price: '30', categories: [{ id: 9 }] }),
+			engineProduct({
+				uuid: 'other',
+				id: 3,
+				name: 'Other',
+				price: '30',
+				categories: [{ id: 9 }],
+			}),
 		]);
 		const base: QueryStateOf<'products'> = {
 			search: '',
@@ -167,28 +178,40 @@ describe('query bindings', () => {
 		);
 
 		rerender({
-			state: { ...base, search: 'coffee', filters: { ...base.filters, tags: [] } },
+			state: {
+				...base,
+				search: 'coffee',
+				filters: { ...base.filters, tags: [] },
+			},
 		});
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['coffee'])
 		);
 	});
 
-	it('does not open a logs query for an engine collection binding', async () => {
-		const logsFind = jest.spyOn(localDB.collections.logs, 'find');
-		const logsCount = jest.spyOn(localDB.collections.logs, 'count');
-		const state: QueryStateOf<'products'> = {
+	it('re-declares the footer binding current descriptor after a reset generation bump', async () => {
+		const base: QueryStateOf<'products'> = {
 			search: '',
-			filters: { categories: [], tags: [], brands: [] },
+			filters: { categories: [7], tags: [], brands: [] },
 			sort: { field: 'name', direction: 'asc' },
 			limit: 10,
 		};
+		const { rerender } = renderHook(({ state }) => useCollectionBinding('products', state), {
+			wrapper: Provider,
+			initialProps: { state: base },
+		});
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(1));
 
-		renderHook(() => useCollectionBinding('products', state), { wrapper: Provider });
-		await act(async () => Promise.resolve());
+		rerender({
+			state: { ...base, filters: { ...base.filters, categories: [9] } },
+		});
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(2));
+		act(() => engine.setCollectionStatus('products', { coverageGeneration: 1 }));
 
-		expect(logsFind).not.toHaveBeenCalled();
-		expect(logsCount).not.toHaveBeenCalled();
+		await waitFor(() => expect(engine.requireCalls).toHaveLength(3));
+		expect(engine.requireCalls.at(-1)).toEqual(
+			expect.objectContaining({ kind: 'product-browse', category: [9] })
+		);
 	});
 
 	it('recovers from a query error when the descriptor changes', async () => {
@@ -287,7 +310,9 @@ describe('query bindings', () => {
 			limit: 50,
 		};
 
-		renderHook(() => useCollectionBinding('orders', state), { wrapper: Provider });
+		renderHook(() => useCollectionBinding('orders', state), {
+			wrapper: Provider,
+		});
 
 		await waitFor(() =>
 			expect(
@@ -348,7 +373,10 @@ describe('query bindings', () => {
 	it('uses coverage for an order status and date-range selector', async () => {
 		await expectCoverageTotalSource(
 			'orders:browser:status=processing:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25',
-			{ status: 'processing', dateRange: { from: '2026-07-01', to: '2026-07-14' } }
+			{
+				status: 'processing',
+				dateRange: { from: '2026-07-01', to: '2026-07-14' },
+			}
 		);
 	});
 
@@ -383,7 +411,10 @@ describe('query bindings', () => {
 			() =>
 				useCollectionBinding('orders', {
 					search: '',
-					filters: { status: 'processing', dateRange: { from: 'nope', to: 'nope' } },
+					filters: {
+						status: 'processing',
+						dateRange: { from: 'nope', to: 'nope' },
+					},
 					sort: { field: 'date_created_gmt', direction: 'desc' },
 					limit: 25,
 				}),
@@ -524,7 +555,13 @@ describe('query bindings', () => {
 
 		const posShaped: QueryStateOf<'products'> = {
 			search: '',
-			filters: { categories: [], tags: [], brands: [], status: 'publish', stock_status: 'instock' },
+			filters: {
+				categories: [],
+				tags: [],
+				brands: [],
+				status: 'publish',
+				stock_status: 'instock',
+			},
 			sort: { field: 'menu_order', direction: 'asc' },
 			limit: 1,
 		};
@@ -566,7 +603,13 @@ describe('query bindings', () => {
 
 		const partly: QueryStateOf<'products'> = {
 			search: '',
-			filters: { categories: [], tags: [], brands: [], stock_status: 'instock', status: 'draft' },
+			filters: {
+				categories: [],
+				tags: [],
+				brands: [],
+				stock_status: 'instock',
+				status: 'draft',
+			},
 			sort: { field: 'menu_order', direction: 'asc' },
 			limit: 1,
 		};
@@ -764,7 +807,9 @@ describe('query bindings', () => {
 			limit: 10,
 		};
 
-		renderHook(() => useCollectionBinding('customers', state), { wrapper: Provider });
+		renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
 		await act(async () => Promise.resolve());
 		expect(engine.searchRequireCalls).toHaveLength(1);
 
@@ -803,9 +848,30 @@ describe('query bindings', () => {
 
 	it('uses the full matching local logs count instead of the loaded window', async () => {
 		await localDB.collections.logs.bulkInsert([
-			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one', context: {} },
-			{ logId: '2', timestamp: 2, code: 'B', level: 'error', message: 'two', context: {} },
-			{ logId: '3', timestamp: 3, code: 'C', level: 'info', message: 'three', context: {} },
+			{
+				logId: '1',
+				timestamp: 1,
+				code: 'A',
+				level: 'error',
+				message: 'one',
+				context: {},
+			},
+			{
+				logId: '2',
+				timestamp: 2,
+				code: 'B',
+				level: 'error',
+				message: 'two',
+				context: {},
+			},
+			{
+				logId: '3',
+				timestamp: 3,
+				code: 'C',
+				level: 'info',
+				message: 'three',
+				context: {},
+			},
 		]);
 		const state: QueryStateOf<'logs'> = {
 			search: '',
@@ -845,8 +911,22 @@ describe('query bindings', () => {
 
 	it('keeps the current logs window while an extended limit loads instead of blanking', async () => {
 		await localDB.collections.logs.bulkInsert([
-			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one', context: {} },
-			{ logId: '2', timestamp: 2, code: 'B', level: 'error', message: 'two', context: {} },
+			{
+				logId: '1',
+				timestamp: 1,
+				code: 'A',
+				level: 'error',
+				message: 'one',
+				context: {},
+			},
+			{
+				logId: '2',
+				timestamp: 2,
+				code: 'B',
+				level: 'error',
+				message: 'two',
+				context: {},
+			},
 		]);
 		const state: QueryStateOf<'logs'> = {
 			search: '',
@@ -1135,30 +1215,46 @@ describe('query bindings', () => {
 
 		await waitFor(() =>
 			expect(engine.requireCalls).toContainEqual(
-				expect.objectContaining({ collection: 'coupons', kind: 'refresh', priority: 700 })
+				expect.objectContaining({
+					collection: 'coupons',
+					kind: 'refresh',
+					priority: 700,
+				})
 			)
 		);
 	});
 
 	it('declares coupon and category demand for a cart that carries applied coupon lines', async () => {
-		renderHook(() => useAppliedCouponReferenceDemand(true), { wrapper: Provider });
+		renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
 
 		// Replay resolves applied codes AND the category tree by scanning residents directly,
 		// so both collections have to be materialized by the cart's own demand (#952).
 		await waitFor(() =>
 			expect(engine.requireCalls).toContainEqual(
-				expect.objectContaining({ collection: 'coupons', kind: 'refresh', priority: 700 })
+				expect.objectContaining({
+					collection: 'coupons',
+					kind: 'refresh',
+					priority: 700,
+				})
 			)
 		);
 		await waitFor(() =>
 			expect(engine.requireCalls).toContainEqual(
-				expect.objectContaining({ collection: 'categories', kind: 'refresh', priority: 700 })
+				expect.objectContaining({
+					collection: 'categories',
+					kind: 'refresh',
+					priority: 700,
+				})
 			)
 		);
 	});
 
 	it('declares no reference demand for a cart with no applied coupon lines', async () => {
-		renderHook(() => useAppliedCouponReferenceDemand(false), { wrapper: Provider });
+		renderHook(() => useAppliedCouponReferenceDemand(false), {
+			wrapper: Provider,
+		});
 
 		await act(async () => Promise.resolve());
 		expect(
@@ -1168,25 +1264,81 @@ describe('query bindings', () => {
 		).toEqual([]);
 	});
 
+	it('waits for another owner mid-pull after its coupon reference handles are ready', async () => {
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+		engine.setCollectionStatus('coupons', { active: true });
+
+		let settled = false;
+		const barrier = result.current.whenSettled().then((value) => {
+			settled = value;
+			return value;
+		});
+		await act(async () => Promise.resolve());
+		expect(settled).toBe(false);
+
+		act(() => engine.setCollectionStatus('coupons', { active: false }));
+		await expect(barrier).resolves.toBe(true);
+	});
+
+	it('keeps whenSettled pending across a scheduled demand retry', async () => {
+		jest.useFakeTimers();
+		engine.refreshFailure = new Error('transient refresh failure');
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+
+		let settled: boolean | undefined;
+		const barrier = result.current.whenSettled().then((value) => {
+			settled = value;
+			return value;
+		});
+		// Every collection is quiet, so readiness is the only thing holding the barrier.
+		// The rejected first declaration must keep it PENDING while the retry is scheduled —
+		// settling here would let the coupon replay scan collections that are quiet only
+		// because the retry has not started.
+		await act(async () => jest.advanceTimersByTimeAsync(100));
+		expect(settled).toBeUndefined();
+
+		engine.refreshFailure = undefined;
+		await act(async () => jest.advanceTimersByTimeAsync(1_000));
+		await expect(barrier).resolves.toBe(true);
+	});
+
 	it('binds cashier search-select to eligible customer roles only', async () => {
 		await engineDB.collections.customers.bulkInsert([
 			{
 				id: 'cashier-grace',
 				wooCustomerId: 7,
-				payload: { id: 7, first_name: 'Grace', last_name: 'Hopper', role: 'cashier' },
+				payload: {
+					id: 7,
+					first_name: 'Grace',
+					last_name: 'Hopper',
+					role: 'cashier',
+				},
 				sync: { revision: '1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
 			},
 			{
 				id: 'customer-ada',
 				wooCustomerId: 42,
-				payload: { id: 42, first_name: 'Ada', last_name: 'Lovelace', role: 'customer' },
+				payload: {
+					id: 42,
+					first_name: 'Ada',
+					last_name: 'Lovelace',
+					role: 'customer',
+				},
 				sync: { revision: '1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
 			},
 		]);
 
-		const { result } = renderHook(() => useSearchSelect('cashier'), { wrapper: Provider });
+		const { result } = renderHook(() => useSearchSelect('cashier'), {
+			wrapper: Provider,
+		});
 
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['cashier-grace'])

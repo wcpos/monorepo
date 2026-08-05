@@ -1,4 +1,4 @@
-import { prepareCollectionResetRefill } from '../src/requirement-bridge';
+import { resetRefillRequirements, runResetRefill } from '../src/requirement-bridge';
 import { createEngineDatabase, createFakeEngine } from './helpers/engine';
 
 import type { RxDatabase } from 'rxdb';
@@ -9,7 +9,7 @@ import type { RxDatabase } from 'rxdb';
  * customers resume on-demand + idle trickle, and orders wait for view demand
  * or their periodic window lane.
  */
-describe('prepareCollectionResetRefill seeding', () => {
+describe('runResetRefill seeding', () => {
 	let database: RxDatabase;
 
 	beforeEach(async () => {
@@ -22,8 +22,7 @@ describe('prepareCollectionResetRefill seeding', () => {
 
 	async function refillSyncCalls(collectionNames: string[]): Promise<(string | undefined)[]> {
 		const engine = createFakeEngine(database);
-		const refill = prepareCollectionResetRefill(engine as never, collectionNames);
-		await refill();
+		await runResetRefill(engine as never, collectionNames);
 		return engine.syncCalls;
 	}
 
@@ -37,12 +36,19 @@ describe('prepareCollectionResetRefill seeding', () => {
 		expect(syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
 	});
 
+	it('seeds the product browse window for a standalone variations reset', async () => {
+		// The Health page can reset variations alone; without the seed the drain would
+		// have no work that re-downloads the cleared collection.
+		const syncCalls = await refillSyncCalls(['variations']);
+		expect(syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
+	});
+
 	// NOT the `reference-seed` maintenance lane: that lane gates on local residents (#952),
 	// and a reset has just emptied the collection, so the lane would skip the very refill it
 	// was asked for. The refill declares a forced refresh requirement instead.
 	it('refills a reset reference collection through a forced refresh, not the reference-seed lane', async () => {
 		const engine = createFakeEngine(database);
-		await prepareCollectionResetRefill(engine as never, ['products/categories'])();
+		await runResetRefill(engine as never, ['products/categories']);
 
 		expect(engine.syncCalls).toEqual(['scheduler-drain']);
 		expect(engine.requireCalls).toEqual([
@@ -59,5 +65,16 @@ describe('prepareCollectionResetRefill seeding', () => {
 	it('creates no eager lane demand when customers were reset', async () => {
 		const syncCalls = await refillSyncCalls(['customers']);
 		expect(syncCalls).toEqual(['scheduler-drain']);
+	});
+
+	it('keeps tax refill binding-independent and relies on reset-cleared engine dedupe', () => {
+		expect(resetRefillRequirements(['taxes'])).toEqual([
+			{
+				id: 'taxRates:collection-reset',
+				collection: 'taxRates',
+				kind: 'refresh',
+				priority: 1000,
+			},
+		]);
 	});
 });

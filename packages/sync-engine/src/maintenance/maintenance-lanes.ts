@@ -61,6 +61,7 @@ import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { SeedPersistedSchedulerTasksResult } from '../scheduler/rx-scheduler-task-seeder';
 import type { CensusTotal } from '../scheduler/census';
 import type { RxDatabase } from 'rxdb';
+import type { SyncCollectionName } from '../collections/engine-collections';
 
 export type MaintenanceLaneName =
 	| 'scheduler-drain'
@@ -122,6 +123,10 @@ type MaintenanceLaneDeps = {
 	fetcher: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
+	withCollectionActivity?: <T>(
+		collection: SyncCollectionName,
+		work: () => Promise<T>
+	) => Promise<T>;
 	/** Lease owner recorded on claimed rows — unique per engine instance. */
 	ownerId: () => string;
 	/** Current facade-configured record cap for scheduler data requests. */
@@ -329,6 +334,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			fetcher,
 			signal,
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
+			...(deps.withCollectionActivity !== undefined
+				? {
+						withCollectionActivity: <T>(collection: string, work: () => Promise<T>) =>
+							deps.withCollectionActivity!(collection as SyncCollectionName, work),
+					}
+				: {}),
 		});
 		const hasActivity =
 			result.totalRequests > 0 ||

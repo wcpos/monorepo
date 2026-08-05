@@ -98,6 +98,49 @@ afterEach(() => {
 });
 
 describe('RxdbSyncEngine facade timers and live configuration', () => {
+	it('publishes per-collection activity and monotonic reset/switch generations', async () => {
+		const engine = engineWith();
+		await engine.ready;
+
+		expect(Object.keys(engine.status().collections)).toEqual([
+			'orders',
+			'products',
+			'variations',
+			'customers',
+			'taxRates',
+			'categories',
+			'brands',
+			'tags',
+			'coupons',
+		]);
+		const initialGeneration = engine.status().collections.products.coverageGeneration;
+		expect(engine.status().collections.products).toEqual({
+			active: false,
+			coverageGeneration: initialGeneration,
+		});
+
+		await engine.scope.resetCollection('products').then(() => {
+			// The generation is already visible when resetCollection resolves.
+			expect(engine.status().collections.products.coverageGeneration).toBe(initialGeneration + 1);
+		});
+
+		await engine.scope.switch({
+			site: SITE,
+			storeId: 1,
+			cashierId: 'generation-switch',
+		});
+		for (const state of Object.values(engine.status().collections)) {
+			expect(state.coverageGeneration).toBeGreaterThanOrEqual(1);
+		}
+		expect(engine.status().collections.products.coverageGeneration).toBe(initialGeneration + 2);
+
+		await engine.dispose();
+		expect(engine.status().collections.products).toEqual({
+			active: false,
+			coverageGeneration: initialGeneration + 2,
+		});
+	});
+
 	it('publishes current and coalesced status changes, then unsubscribes', async () => {
 		const engine = engineWith();
 		const statuses: EngineStatus[] = [];
@@ -181,7 +224,11 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 	it('re-arms only the live change-signal timer, clamps its cadence, and is idempotent', async () => {
 		let nowMs = 5_000;
 		const captured = captureTimers();
-		const engine = engineWith({ mode: 'auto', now: () => nowMs, random: () => 0.5 });
+		const engine = engineWith({
+			mode: 'auto',
+			now: () => nowMs,
+			random: () => 0.5,
+		});
 
 		await engine.ready;
 		await waitForAutomaticIntervals(captured.intervals);
@@ -357,7 +404,9 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			await seedOrderSchedulerTasks({
 				perPage: 250,
 				nowMs: 1,
-				getRepository: async () => ({ getDatabase: () => scope.database.collections as never }),
+				getRepository: async () => ({
+					getDatabase: () => scope.database.collections as never,
+				}),
 			});
 			engine.reconfigure({ pullBatchSize: configured });
 			await engine.sync('scheduler-drain');

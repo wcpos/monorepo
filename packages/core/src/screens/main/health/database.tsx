@@ -33,7 +33,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
-import { prepareCollectionResetRefill, useQueryRuntime } from '@wcpos/query';
+import { runResetRefill, useQueryRuntime } from '@wcpos/query';
 
 import { AttentionPanel } from './attention-panel';
 import { useT } from '../../../contexts/translations';
@@ -134,7 +134,11 @@ type RowPhase = 'idle' | 'clearing';
 
 type RowCoverage =
 	| { kind: 'clearing' | 'checking' | 'empty' | 'none'; label: string }
-	| { kind: 'complete' | 'partial' | 'windowed'; percent: number; tooltip: string };
+	| {
+			kind: 'complete' | 'partial' | 'windowed';
+			percent: number;
+			tooltip: string;
+	  };
 
 type RowStory = { serverText: string; coverage: RowCoverage };
 
@@ -286,12 +290,11 @@ function CollectionRowView({
 			const legacyNames = engineNames.map((name) => ROW_TO_LEGACY[name]);
 			// Reseed + drain the dropped collections immediately (the merchant expects
 			// a re-download, not just a delete) — the established refill path.
-			const refill = prepareCollectionResetRefill(engine, legacyNames);
 			for (const name of engineNames) {
 				// The dialog IS the queue-destroy confirmation, so force past it.
 				await engine.scope.resetCollection(name, { confirmDestroyQueue: true });
 			}
-			await refill();
+			await runResetRefill(engine, legacyNames);
 			const successMessage =
 				row.key === 'products'
 					? t('health.database.redownload_done_products', {

@@ -38,6 +38,7 @@ import { type WriteAck, writeFacetFor } from '../collections/collection-descript
 import { queueFor, requeueBornTwiceSnapshot } from './write-intents';
 import { orderDocumentFromWooPayload } from '../scheduler/rx-scheduler-order-fetcher';
 
+import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
 import type { RxDatabase } from 'rxdb';
 
@@ -119,6 +120,7 @@ export type WriteDrainLaneDeps = {
 	syncBaseUrl: string;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
+	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	emitWriteEvent: (event: WriteOutcomeEvent) => void;
 	now?: () => number;
 };
@@ -213,6 +215,13 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 				// acknowledgement the queue does not yet agree with.
 				const ackCandidates: WriteOutcomeEvent[] = [];
 				let report: WriteDrainReport = { lane: 'write-drain', status: 'ran' };
+				let activeCollection: SyncCollectionName | null = null;
+				const activateCollection = (collection: SyncCollectionName): void => {
+					if (activeCollection === collection) return;
+					if (activeCollection !== null) deps.onActivityChange?.(activeCollection, -1);
+					activeCollection = collection;
+					deps.onActivityChange?.(collection, 1);
+				};
 				const wrote = await bound
 					.guardWrite(async () => {
 						const result = await drainMutationQueue({
@@ -270,8 +279,9 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}));
 								return revision;
 							},
-							push: (mutation) =>
-								pushRecordMutation({
+							push: (mutation) => {
+								activateCollection(mutation.collectionName as SyncCollectionName);
+								return pushRecordMutation({
 									mutation,
 									resolveEndpoint,
 									fetcher: (url, init) => {
@@ -284,7 +294,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									},
 									signal: tickAbort.signal,
 									observe: deps.diagnostics,
-								}),
+								});
+							},
 							applyAck: async (mutation, pushResult, signal) => {
 								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) {
@@ -433,6 +444,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 					.finally(() => {
 						bound.signal.removeEventListener('abort', abortTick);
 						signal?.removeEventListener('abort', abortTick);
+						if (activeCollection !== null) deps.onActivityChange?.(activeCollection, -1);
 					});
 				if (wrote === 'dropped') {
 					report = {

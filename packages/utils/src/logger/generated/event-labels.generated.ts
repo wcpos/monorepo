@@ -22,6 +22,7 @@ export const SYNC_EVENT_TYPES = [
 	'coverage.require.error',
 	'coverage.require.log',
 	'coverage.require.outcome',
+	'demand.activity-counter-underflow',
 	'engine.barcode-selector-hydrate-failed',
 	'engine.collection-reset',
 	'engine.connectivity-error',
@@ -189,6 +190,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.coverage_require_outcome',
 		label: 'Loaded the records this screen needs',
+		introducedIn: '1.10.0',
+	},
+	'demand.activity-counter-underflow': {
+		type: 'demand.activity-counter-underflow',
+		domain: 'SYNC',
+		key: 'health.logs.event.demand_activity_counter_underflow',
+		label: 'Sync activity tracking corrected itself',
 		introducedIn: '1.10.0',
 	},
 	'engine.barcode-selector-hydrate-failed': {

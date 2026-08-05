@@ -178,6 +178,10 @@ export type { StoreScopeIdentity } from '@wcpos/sync-core';
 /** ADR 0017's engine-owned three-state reachability gate. */
 export type EngineConnectivity = 'online' | 'offline' | 'degraded';
 
+export type EngineCollectionState = {
+	active: boolean;
+	coverageGeneration: number;
+};
 /** RAW transport, never pre-scoped — the engine binds scope tickets inside. */
 export type EngineFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -384,6 +388,7 @@ export type EngineStatus = {
 	bootstrapFailed: Record<string, string>;
 	/** Pending mutation count of the active scope (cached from the last enqueue/drain; null before either). */
 	queueDepth: number | null;
+	collections: Record<SyncCollectionName, EngineCollectionState>;
 };
 
 export type Unsubscribe = () => void;
@@ -541,6 +546,37 @@ export function createRxdbSyncEngine(
 		});
 	};
 	let disposed = false;
+	const collectionActivity = new Map<SyncCollectionName, number>(
+		SYNC_COLLECTION_NAMES.map((collection) => [collection, 0])
+	);
+	const collectionCoverageGeneration = new Map<SyncCollectionName, number>(
+		SYNC_COLLECTION_NAMES.map((collection) => [collection, 0])
+	);
+	const changeCollectionActivity = (collection: SyncCollectionName, delta: 1 | -1): void => {
+		const next = (collectionActivity.get(collection) ?? 0) + delta;
+		if (next < 0) {
+			collectionActivity.set(collection, 0);
+			diagnostics({
+				type: 'demand.activity-counter-underflow',
+				level: 'error',
+				collection,
+			});
+		} else {
+			collectionActivity.set(collection, next);
+		}
+		scheduleStatusChange();
+	};
+	const withCollectionActivity = async <T>(
+		collection: SyncCollectionName,
+		work: () => Promise<T>
+	): Promise<T> => {
+		changeCollectionActivity(collection, 1);
+		try {
+			return await work();
+		} finally {
+			changeCollectionActivity(collection, -1);
+		}
+	};
 	let announcedScopeId: string | null = null;
 	const bootstrappedScopes = new Set<string>();
 	// Process-local by design: a restart re-runs selector hydration before
@@ -1060,6 +1096,12 @@ export function createRxdbSyncEngine(
 	manager.onEvent((event: ScopeEvent) => {
 		switch (event.type) {
 			case 'switched': {
+				for (const collection of SYNC_COLLECTION_NAMES) {
+					collectionCoverageGeneration.set(
+						collection,
+						(collectionCoverageGeneration.get(collection) ?? 0) + 1
+					);
+				}
 				const from = announcedScopeId;
 				announcedScopeId = event.scopeId;
 				emitEngineEvent({ type: 'scope-switched', scopeId: event.scopeId, from });
@@ -1068,6 +1110,13 @@ export function createRxdbSyncEngine(
 				return;
 			}
 			case 'reset': {
+				if (SYNC_COLLECTION_NAMES.includes(event.detail as SyncCollectionName)) {
+					const collection = event.detail as SyncCollectionName;
+					collectionCoverageGeneration.set(
+						collection,
+						(collectionCoverageGeneration.get(collection) ?? 0) + 1
+					);
+				}
 				diagnostics({
 					type: 'engine.collection-reset',
 					level: 'info',
@@ -1273,6 +1322,7 @@ export function createRxdbSyncEngine(
 			}
 		},
 		diagnostics,
+		withCollectionActivity,
 		pullBatchSize: () => pullBatchSize,
 		forceConfigStaleCollections: (scopeId, snapshot) => {
 			selectorHydrationRecoveryScopes.delete(scopeId);
@@ -1298,6 +1348,7 @@ export function createRxdbSyncEngine(
 			}
 		},
 		diagnostics,
+		onActivityChange: changeCollectionActivity,
 		emitWriteEvent: (event: WriteOutcomeEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
@@ -1312,6 +1363,7 @@ export function createRxdbSyncEngine(
 		fetcher,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
+		onActivityChange: changeCollectionActivity,
 		pullBatchSize: () => pullBatchSize,
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
@@ -1332,6 +1384,7 @@ export function createRxdbSyncEngine(
 			}
 		},
 		diagnostics,
+		withCollectionActivity,
 		ownerId: () => (maintenanceOwnerId ??= `engine-${uuid()}`),
 		pullBatchSize: () => pullBatchSize,
 		...(ports.queryTotal !== undefined ? { queryTotal: ports.queryTotal } : {}),
@@ -1402,6 +1455,15 @@ export function createRxdbSyncEngine(
 		name: EngineLane,
 		signal?: AbortSignal
 	): Promise<SyncReport> => {
+		const ownedCollections: readonly SyncCollectionName[] =
+			name === 'reference-seed'
+				? ['categories', 'brands', 'tags', 'coupons']
+				: name === 'product-browse-window-seed'
+					? ['products']
+					: name === 'order-window-seed'
+						? ['orders']
+						: [];
+		for (const collection of ownedCollections) changeCollectionActivity(collection, 1);
 		emitEngineEvent({ type: 'lane-start', lane: name });
 		let report: SyncReport;
 		try {
@@ -1414,6 +1476,8 @@ export function createRxdbSyncEngine(
 				detail: error instanceof Error ? error.message : String(error),
 			});
 			throw error;
+		} finally {
+			for (const collection of ownedCollections) changeCollectionActivity(collection, -1);
 		}
 		emitEngineEvent({
 			type: 'lane-finish',
@@ -1775,6 +1839,15 @@ export function createRxdbSyncEngine(
 				),
 			},
 			queueDepth: writeDrainLane.lastKnownQueueDepth(),
+			collections: Object.fromEntries(
+				SYNC_COLLECTION_NAMES.map((collection) => [
+					collection,
+					{
+						active: (collectionActivity.get(collection) ?? 0) > 0,
+						coverageGeneration: collectionCoverageGeneration.get(collection) ?? 0,
+					},
+				])
+			) as Record<SyncCollectionName, EngineCollectionState>,
 		};
 	}
 
@@ -2353,6 +2426,7 @@ export function createRxdbSyncEngine(
 			// each sees the prior outcome), so dispose's turn sees every scope a
 			// pending switch opened.
 			disposed = true;
+			for (const collection of SYNC_COLLECTION_NAMES) collectionActivity.set(collection, 0);
 			if (changeSignalTimer !== null) {
 				clearTimeout(changeSignalTimer);
 				changeSignalTimer = null;

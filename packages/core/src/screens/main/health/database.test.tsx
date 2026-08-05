@@ -72,8 +72,10 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/query', () => ({
-	prepareCollectionResetRefill: jest.fn(),
-	useQueryRuntime: () => ({ engine: { active: jest.fn(), scope: {}, sync: jest.fn() } }),
+	runResetRefill: jest.fn(),
+	useQueryRuntime: () => ({
+		engine: { active: jest.fn(), scope: {}, sync: jest.fn() },
+	}),
 }));
 jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
 jest.mock('../../../contexts/translations', () => {
@@ -82,7 +84,9 @@ jest.mock('../../../contexts/translations', () => {
 	);
 	return { useT: () => createTestT() };
 });
-jest.mock('../logs/use-log-stats', () => ({ useLogStats: () => ({ stuck: [] }) }));
+jest.mock('../logs/use-log-stats', () => ({
+	useLogStats: () => ({ stuck: [] }),
+}));
 jest.mock('../hooks/use-census-totals', () => ({
 	useCensusTotals: () => ({
 		products: { total: 2, updatedAtMs: 100, freshUntilMs: 1_000, fresh: true },
