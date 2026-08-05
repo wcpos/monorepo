@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { authenticatedTest as test } from './fixtures';
+import { isRouteTeardownError, authenticatedTest as test } from './fixtures';
 
 /** Helper to add the first simple product to the cart. Works in both grid and table view. */
 async function addFirstProductToCart(page: Page) {
@@ -40,10 +40,28 @@ async function addFirstProductToCart(page: Page) {
 // Keep the server-omits-payment-link premise independent of woocommerce-pos#1352's ack shape.
 async function omitPaymentLinkFromPushAcks(page: Page) {
 	await page.route('**/wp-json/wcpos/v2/push/orders{,?*}', async (route) => {
-		const response = await route.fetch();
-		const body = await response.json();
-		delete body?.document?.links?.payment;
-		await route.fulfill({ response, json: body });
+		try {
+			const response = await route.fetch();
+			let body: { document?: { links?: { payment?: unknown } } };
+			try {
+				body = await response.json();
+			} catch {
+				// Not JSON (e.g. a transient wp-env error page). Pass the original
+				// response through so only this test sees the failure.
+				await route.fulfill({ response });
+				return;
+			}
+			delete body?.document?.links?.payment;
+			await route.fulfill({ response, json: body });
+		} catch (error) {
+			if (isRouteTeardownError(error)) {
+				return;
+			}
+			// Throwing from a route handler surfaces as an unhandled rejection and
+			// kills the whole worker process (every test in the shard fails).
+			console.warn('[omitPaymentLinkFromPushAcks] Route handler failed; continuing:', error);
+			await route.fallback().catch(() => {});
+		}
 	});
 }
 
