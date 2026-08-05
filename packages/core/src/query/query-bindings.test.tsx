@@ -21,6 +21,7 @@ import type { QueryResult } from '@wcpos/query';
 import {
 	createEngineDatabase,
 	createFakeEngine,
+	createPendingFakeEngine,
 	engineOrder,
 	engineProduct,
 	engineVariation,
@@ -28,6 +29,7 @@ import {
 import type { FakeEngine } from '@wcpos/query/testing';
 
 import {
+	useAllCategoriesBinding,
 	useAppliedCouponReferenceDemand,
 	useCollectionBinding,
 	useLogsBinding,
@@ -1366,5 +1368,226 @@ describe('query bindings', () => {
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['cashier-grace'])
 		);
+	});
+
+	/**
+	 * RESURRECTED 1.9 GUARD — the successor to
+	 * `packages/query/tests/provider.test.tsx` (~:118-170) on the 1.9 line,
+	 * "useQuery must never return undefined on initial render":
+	 *
+	 *   "Components access query.result$ immediately - undefined causes crashes.
+	 *    This test catches the bug where useObservableState returns undefined
+	 *    before the observable emits."
+	 *
+	 * `useQuery` no longer exists. The contract moved DOWN a layer into these
+	 * binding hooks: every screen that mounts a grid (products.tsx, orders,
+	 * customers, tax-rates, the logs viewer, every search-select pill) calls one
+	 * of them and immediately destructures `resource`/`result$`/`total$` into a
+	 * Suspense boundary on the very first render, before anything has emitted.
+	 * A hook that returns `undefined` — or an object with a hole in it — crashes
+	 * the screen exactly the way 1.9 did.
+	 *
+	 * The guard is deliberately at the HOOK level rather than at
+	 * `observeEngineQuery`/`useLocalQuery`: the low-level observables were never
+	 * what crashed, the value a component destructures was.
+	 */
+	describe('first render never yields an undefined binding (resurrected 1.9 guard)', () => {
+		const BINDING_FIELDS = ['resource', 'result$', 'active$', 'total$', 'totalSource$'] as const;
+
+		const productsState: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 10,
+		};
+
+		type Captured = {
+			binding: Record<string, unknown> | undefined;
+			/** Whether the resource already held a value during the first render pass. */
+			hadValueOnFirstRender: boolean;
+		};
+
+		/**
+		 * Render a binding hook and capture what it returned on the FIRST render
+		 * pass — recorded during the render phase, so the snapshot predates effects
+		 * and any emission. The probe destructures the way a real screen does, so an
+		 * `undefined` return throws inside render (the 1.9 crash, verbatim).
+		 */
+		function captureFirstRender(useBinding: () => unknown, value?: FakeEngine): Captured {
+			const captured: Captured = { binding: undefined, hadValueOnFirstRender: false };
+			let renders = 0;
+
+			function Probe() {
+				const binding = useBinding() as Record<string, unknown>;
+				renders += 1;
+				// What every consuming screen does immediately. If `binding` is
+				// undefined this line throws "Cannot destructure property ... of
+				// undefined", which is the bug this guard exists to catch.
+				const { resource, result$, active$, total$, totalSource$, sync } = binding;
+				if (renders === 1) {
+					captured.binding = binding;
+					captured.hadValueOnFirstRender =
+						(resource as Resource | undefined)?.valueRef$$?.value?.current !== undefined;
+				}
+				return (
+					<div>
+						{[resource, result$, active$, total$, totalSource$, sync].every(
+							(field) => field !== undefined && field !== null
+						)
+							? 'valid'
+							: 'invalid'}
+					</div>
+				);
+			}
+
+			expect(() =>
+				render(
+					<Provider value={value}>
+						<Probe />
+					</Provider>
+				)
+			).not.toThrow();
+
+			return captured;
+		}
+
+		function expectUsableBinding(captured: Captured) {
+			expect(captured.binding).toBeDefined();
+			expect(captured.binding).not.toBeNull();
+			for (const field of BINDING_FIELDS) {
+				expect(captured.binding?.[field]).toBeDefined();
+				expect(captured.binding?.[field]).not.toBeNull();
+			}
+			// The observables must be subscribable and `sync` callable straight away —
+			// "defined" is not enough if the field is a placeholder a consumer cannot use.
+			for (const field of ['result$', 'active$', 'total$', 'totalSource$'] as const) {
+				expect(typeof (captured.binding?.[field] as { subscribe?: unknown })?.subscribe).toBe(
+					'function'
+				);
+			}
+			expect(typeof captured.binding?.sync).toBe('function');
+		}
+
+		it.each([
+			['products grid', () => useCollectionBinding('products', productsState)],
+			[
+				'orders grid',
+				() =>
+					useCollectionBinding('orders', {
+						search: '',
+						filters: {},
+						sort: { field: 'date_created_gmt', direction: 'desc' },
+						limit: 10,
+					}),
+			],
+			[
+				'customers grid',
+				() =>
+					useCollectionBinding('customers', {
+						search: '',
+						filters: {},
+						sort: { field: 'last_name', direction: 'asc' },
+						limit: 10,
+					}),
+			],
+			[
+				'tax-rates',
+				() =>
+					useCollectionBinding('tax-rates', {
+						search: '',
+						filters: {},
+						sort: { field: 'id', direction: 'asc' },
+						limit: 10,
+					}),
+			],
+			['POS relational products grid', () => useRelationalCollectionBinding(productsState)],
+			[
+				'logs viewer',
+				() =>
+					useLogsBinding({
+						search: '',
+						filters: {},
+						sort: { field: 'timestamp', direction: 'desc' },
+						limit: 10,
+					}),
+			],
+			['customer search-select', () => useSearchSelect('customer')],
+			['category search-select', () => useSearchSelect('category')],
+			['category tree', () => useAllCategoriesBinding()],
+		])('%s is fully populated on its first render', async (_label, useBinding) => {
+			const captured = captureFirstRender(useBinding);
+
+			expectUsableBinding(captured);
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+		});
+
+		it('populates the products binding BEFORE the query emits', async () => {
+			const captured = captureFirstRender(() => useCollectionBinding('products', productsState));
+
+			// The 1.9 comment verbatim: the crash was the window between mount and the
+			// first emission. Assert the binding was usable while that window was open.
+			expect(captured.hadValueOnFirstRender).toBe(false);
+			expectUsableBinding(captured);
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+		});
+
+		/**
+		 * Cold start — the engine's database is still opening, so `active()` is null
+		 * and bootstrap demand rejects. This is the real-app window the 1.9 crash
+		 * lived in; the bindings must DEGRADE (constructible, empty) rather than
+		 * hand a screen `undefined`.
+		 */
+		it.each([
+			['products grid', () => useCollectionBinding('products', productsState)],
+			['POS relational products grid', () => useRelationalCollectionBinding(productsState)],
+			['customer search-select', () => useSearchSelect('customer')],
+		])('%s survives a first render against an unopened engine', async (_label, useBinding) => {
+			const pending = createPendingFakeEngine(engineDB);
+
+			const captured = captureFirstRender(useBinding, pending.engine);
+
+			expectUsableBinding(captured);
+
+			await act(async () => {
+				pending.open();
+				await Promise.resolve();
+			});
+		});
+
+		it('returns a callable coupon-reference barrier on its first render', async () => {
+			let captured: unknown = undefined;
+			let renders = 0;
+
+			function Probe() {
+				const demand = useAppliedCouponReferenceDemand(true);
+				renders += 1;
+				// The cart calls `whenSettled()` from an effect that can fire on the
+				// same commit as this render.
+				const { whenSettled } = demand;
+				if (renders === 1) captured = demand;
+				return <div>{typeof whenSettled}</div>;
+			}
+
+			expect(() =>
+				render(
+					<Provider>
+						<Probe />
+					</Provider>
+				)
+			).not.toThrow();
+
+			expect(captured).toBeDefined();
+			expect(typeof (captured as { whenSettled?: unknown })?.whenSettled).toBe('function');
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+		});
 	});
 });
