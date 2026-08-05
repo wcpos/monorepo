@@ -76,6 +76,13 @@ export type FetchTaskResult = {
 	prunedCount?: number;
 };
 
+export type SchedulerFetcherContext = { signal?: AbortSignal };
+
+export type SchedulerFetcher = (
+	task: FetchTask,
+	context?: SchedulerFetcherContext
+) => Promise<FetchTaskResult>;
+
 export type SchedulerRunResult = {
 	tasks: FetchTask[];
 	results: FetchTaskResult[];

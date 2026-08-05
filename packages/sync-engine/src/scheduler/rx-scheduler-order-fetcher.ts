@@ -17,14 +17,13 @@ import {
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
 import { assertReturnedRequestedIds, chunk, httpGet } from './rx-scheduler-collection-fetcher';
-import { pullRequestLimit } from './replication-policy';
+// prettier-ignore
+import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
-import type { SchedulerFetcher, SchedulerFetcherContext } from './replication-scheduler';
 import type {
 	BuildCoverageDocumentsFromQueryResultInput,
 	BuildCumulativeCoverageDocumentsFromQueryResultInput,
 } from './query-coverage-writes';
-import type { FetchTask, FetchTaskResult } from './replication-policy';
 
 type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 

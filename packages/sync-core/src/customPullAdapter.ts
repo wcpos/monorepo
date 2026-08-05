@@ -1,5 +1,4 @@
 import {
-	checkpointInstantMs,
 	normalizeCheckpoint,
 	type OrderDocument,
 	type PullResponse,
@@ -87,14 +86,6 @@ export type CustomPullCheckpointStore = {
 	/** Persist the server's journal epoch beside the checkpoint (F8). Optional. */
 	writeJournalEpoch?(epoch: string): Promise<void>;
 };
-
-export type CustomPullSyncProgress = {
-	batch: number;
-	documentCount: number;
-	totalDocuments: number;
-};
-
-const MAX_STALLED_BATCHES = 3;
 
 /**
  * A pull envelope that violates the journal contract in a way no faithful server can produce —
@@ -280,82 +271,4 @@ function deduplicateDocumentsById(documents: PullResponse['documents']): PullRes
 		byId.set(document.id, document);
 	}
 	return [...byId.values()];
-}
-
-export async function syncCustomPullIntoRepository(input: {
-	baseUrl: string;
-	limit: number;
-	repository: CustomPullRepository;
-	checkpoint?: Partial<SyncCheckpoint> | null;
-	checkpointStore?: CustomPullCheckpointStore;
-	/** The transport port — required; see `pullCustomBatch`. */
-	fetcher: Fetcher;
-	signal?: AbortSignal;
-	/** Order identifiers with queued local mutations; matching pulled documents are skipped. */
-	pendingMutationOrderIds?: ReadonlySet<string | number>;
-	/** Opt into the server delete channel (F6) — forwarded to each batch. */
-	includeDeletes?: boolean;
-	/**
-	 * Re-read pending mutations immediately before the destructive delete apply — forwarded to each
-	 * batch. Without this, a wrapper caller enabling includeDeletes would get the stale pre-pull
-	 * snapshot for the delete guard, reintroducing the mid-pull-mutation-clobbered risk the batch
-	 * helper fixes.
-	 */
-	refreshPendingMutationOrderIds?: () => Promise<ReadonlySet<string | number>>;
-	/** Client-assembly seam — see syncCustomPullBatchIntoRepository. */
-	assembleDocument?: (
-		document: PullResponse['documents'][number]
-	) => PullResponse['documents'][number];
-	onBatch?: (progress: CustomPullSyncProgress) => void;
-}): Promise<{ batches: number; documents: number }> {
-	let checkpoint: SyncCheckpoint =
-		input.checkpoint === undefined
-			? normalizeCheckpoint(await input.checkpointStore?.readCustomPullCheckpoint())
-			: normalizeCheckpoint(input.checkpoint);
-	let hasMore = true;
-	let batch = 1;
-	let totalDocuments = 0;
-	let stalledBatches = 0;
-
-	while (hasMore) {
-		const previousCheckpoint = checkpoint;
-		const result = await syncCustomPullBatchIntoRepository({
-			baseUrl: input.baseUrl,
-			limit: input.limit,
-			repository: input.repository,
-			checkpoint,
-			checkpointStore: input.checkpointStore,
-			fetcher: input.fetcher,
-			signal: input.signal,
-			pendingMutationOrderIds: input.pendingMutationOrderIds,
-			includeDeletes: input.includeDeletes,
-			refreshPendingMutationOrderIds: input.refreshPendingMutationOrderIds,
-			assembleDocument: input.assembleDocument,
-		});
-
-		totalDocuments += result.documents;
-		input.onBatch?.({ batch, documentCount: result.documents, totalDocuments });
-
-		const nextCheckpoint = result.checkpoint;
-		checkpoint = nextCheckpoint;
-		hasMore = result.hasMore;
-		// Compare `updatedAtGmt` as an INSTANT, not a raw string: Woo emits the same
-		// GMT time in inconsistent forms (bare / `Z` / `+00:00`), and treating two
-		// forms of one instant as "advanced" would defeat this stall guard and spin
-		// an infinite pull loop (1.9.x bug fa7b51add). orderId/revision/sequence are
-		// exact tokens, compared verbatim.
-		const checkpointAdvanced =
-			checkpointInstantMs(nextCheckpoint.updatedAtGmt) !==
-				checkpointInstantMs(previousCheckpoint.updatedAtGmt) ||
-			nextCheckpoint.orderId !== previousCheckpoint.orderId ||
-			nextCheckpoint.revision !== previousCheckpoint.revision ||
-			nextCheckpoint.sequence !== previousCheckpoint.sequence;
-		stalledBatches = checkpointAdvanced ? 0 : stalledBatches + 1;
-		if (hasMore && stalledBatches >= MAX_STALLED_BATCHES) {
-			throw new Error('Custom pull stalled: checkpoint did not advance while hasMore=true');
-		}
-		batch += 1;
-	}
-
-	return { batches: batch - 1, documents: totalDocuments };
 }

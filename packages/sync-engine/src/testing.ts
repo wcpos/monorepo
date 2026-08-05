@@ -18,12 +18,6 @@ import type { EngineConnectivity, EngineStringStore } from './create-rxdb-sync-e
 // recipe the engine opens, without exposing package-private descriptors.
 export { engineSyncCollectionCreators } from './collections/engine-collections';
 
-// Benchmark-facing production schema fixtures. These are deliberate named
-// exports: experiments can compare candidate shapes with the exact schemas
-// the engine opens without depending on the package-private `internal` entry.
-export { orderSchema, orderMigrationStrategies } from './collections/order-schema';
-export { productSchema, productMigrationStrategies } from './collections/product-schema';
-
 /**
  * Memory storage for the engine's `storage` port. z-schema-validated by
  * default — the same validator as the app's dev recipe (packages/database
@@ -70,225 +64,18 @@ export function scriptedConnectivity(initial: EngineConnectivity = 'online'): {
 	};
 }
 
-// Measurement/simulation surface: explicit lab instruments, scenarios, and fixtures.
-export {
-	CHANGE_SIGNAL_STATE_ID,
-	changeSignalStateSchema,
-	type ChangeSignalStateDocument,
-} from './change-signal/change-signal-state-schema';
-export {
-	coverageCompactionFailureMigrationStrategies,
-	coverageCompactionFailureSchema,
-	type CoverageCompactionFailureDocument,
-	type CoverageCompactionFailureV0Document,
-} from './local-coverage/coverage-compaction-failure-schema';
-export {
-	COVERAGE_COMPACTION_LEASE_KEY,
-	coverageCompactionLeaseMigrationStrategies,
-	coverageCompactionLeaseSchema,
-	type CoverageCompactionLeaseDocument,
-	type CoverageCompactionLeaseV0Document,
-} from './local-coverage/coverage-compaction-lease-schema';
-export {
-	coverageLaneMigrationStrategies,
-	coverageLaneSchema,
-	coverageRecordMigrationStrategies,
-	coverageRecordSchema,
-	type CoverageLaneDocument,
-	type CoverageLaneV0Document,
-	type CoverageRecordDocument,
-	type CoverageRecordV0Document,
-} from './local-coverage/coverage-schema';
-export { customerSchema, type LocalCustomerDocument } from './collections/customer-schema';
-export { EngineOrderRepository } from './write-path/engine-order-repository';
-export {
-	primeExistenceManifest,
-	primeExistenceManifestCustomers,
-	primeExistenceManifestOrders,
-	runManifestPrimePass,
-	runSingleLanePrimePass,
-} from './local-coverage/local-coverage';
+export { type LocalCustomerDocument } from './collections/customer-schema';
+export { coverageLaneSchema } from './local-coverage/coverage-schema';
 export {
 	existenceManifestDocument,
 	existenceManifestSchema,
 	type ExistenceManifestDocument,
 } from './local-coverage/existence-manifest-schema';
-export { reconcileExistence } from './local-coverage/local-coverage';
-export {
-	orderBrowserQueryKey,
-	parseOrderBrowserSchedulerDescriptor,
-} from './scheduler/order-browser-scheduler-descriptor';
+export { orderBrowserQueryKey } from './scheduler/order-browser-scheduler-descriptor';
 export { productBrowseWindowQueryKeyFromDimensions } from './scheduler/product-browse-window-descriptor';
-export { type LocalOrderDocument } from './collections/order-schema';
-export { type LocalProductDocument } from './collections/product-schema';
+export { queryTotalCacheSchema } from './scheduler/query-total-cache-schema';
 export {
-	queryTotalCacheMigrationStrategies,
-	queryTotalCacheSchema,
-	type QueryTotalCacheDocument,
-	type QueryTotalCacheV0Document,
-} from './scheduler/query-total-cache-schema';
-export {
-	createQueryTotalRequestRunner,
-	mergeQueryTotalCacheEntries,
-} from './scheduler/query-total-request-runner';
-export {
-	queryTotalRequestStateMigrationStrategies,
-	queryTotalRequestStateSchema,
-	type QueryTotalRequestStateDocument,
-	type QueryTotalRequestStateV0Document,
-} from './scheduler/query-total-request-state-schema';
-export { type ServerDigestEntry } from './reconcile-bucket-plan';
-export {
-	brandSchema,
-	type LocalReferenceDocument,
-} from './collections/reference-collection-schema';
-export { RxCoverageCompactionLeaseRepository } from './local-coverage/rx-coverage-compaction-lease-repository';
-export {
-	runCoverageCompactionMaintenance,
-	type CoverageCompactionFailureStore,
-	type CoverageCompactionMaintenanceRepository,
-	type CoverageCompactionMaintenanceResult,
-} from './local-coverage/local-coverage';
-export {
-	createLocalCoverage,
-	type CreateLocalCoverageOptions,
-	type LocalCoverage,
-	type LocalCoveragePrimeResult,
-	type LocalCoverageReconcilePort,
-} from './local-coverage/local-coverage';
-export {
-	RxCoverageRepository,
-	coverageLaneKey,
-	coverageRecordKey,
-} from './local-coverage/local-coverage';
-export {
-	readManifestRange,
-	removeManifestByWooIds,
-} from './local-coverage/rx-existence-manifest-repository';
-export { seedSchedulerTasksFromQueryDeclarations } from './scheduler/rx-query-requirement-scheduler-seeder';
-export { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
-export { RxQueryTotalRequestStateRepository } from './rx-query-total-request-state-repository';
-export {
-	runQueryTotalRetryRequests,
-	type QueryTotalRetryRunnerResult,
-} from './rx-query-total-retry-runner';
-export { referenceCollectionRepository } from './collections/rx-reference-collection-repository';
-export {
-	runPersistedSchedulerTasks,
-	type PersistedSchedulerTaskRunnerResult,
-} from './scheduler/rx-scheduler-task-runner';
-export { type SchedulerTaskSeederRepository } from './scheduler/rx-scheduler-task-seeder';
-export { RxSchedulerTaskStateRepository } from './scheduler/rx-scheduler-task-state-repository';
-export {
-	planCoverageCleanup,
-	type CoverageCleanupAction,
-	type CoverageCleanupDecision,
-} from './scheduler/coverage-cleanup';
-export { coverageCleanupScenarios } from './scheduler/coverage-cleanup-scenarios';
-export { type CoverageCompactionLease } from './scheduler/coverage-compaction-cadence';
-export {
-	coverageCompactionCadenceScenarios,
-	summarizeCoverageCompactionCadenceScenarios,
-	type CoverageCompactionCadenceScenarioSummary,
-} from './scheduler/coverage-compaction-cadence-scenarios';
-export {
-	coverageStrategies,
-	runCoverageComparison,
-	type CoverageComparisonResult,
-	type CoverageStrategy,
-} from './scheduler/coverage-model';
-export { coverageScenarios } from './scheduler/coverage-scenarios';
-export {
-	coverageWriteConflictScenarios,
-	summarizeCoverageWriteConflictScenarios,
-	type CoverageWriteConflictScenarioSummary,
-} from './scheduler/coverage-write-conflict-scenarios';
-export { runPersistedCoverageQueryRequirementFlow } from './scheduler/persisted-coverage-query-flow';
-export {
-	coverageSchemaIndexes,
-	type PersistedCoverageDocumentSet,
-} from './scheduler/persisted-coverage-schema';
-export {
-	persistedCoverageSchemaScenarios,
-	summarizePersistedCoverageSchemaScenarios,
-	type PersistedCoverageSchemaScenarioSummary,
-} from './scheduler/persisted-coverage-schema-scenarios';
-export { evaluatePersistedQueryCoverageGate } from './scheduler/persisted-query-coverage-gate';
-export { type PersistedSchedulerTaskState } from './scheduler/persisted-scheduler-state';
-export {
-	persistedSchedulerStateScenarios,
-	summarizePersistedSchedulerStateScenarios,
-	type PersistedSchedulerStateScenarioSummary,
-} from './scheduler/persisted-scheduler-state-scenarios';
-export { type QueryRequirementFlowResult } from './scheduler/query-requirement-library';
-export {
-	queryRequirementLibraryScenarios,
-	runQueryRequirementLibraryScenario,
-	summarizeQueryRequirementFlowResult,
-	type QueryRequirementLibraryScenario,
-} from './scheduler/query-requirement-library-scenarios';
-export {
-	planQueryTotalDiscovery,
-	type QueryTotalDiscoveryAction,
-} from './scheduler/query-total-discovery';
-export {
-	queryTotalDiscoveryScenarios,
-	summarizeQueryTotalDiscoveryScenarios,
-	type QueryTotalDiscoveryScenario,
-	type QueryTotalDiscoveryScenarioSummary,
-} from './scheduler/query-total-discovery-scenarios';
-export { type QueryTotalRequestState } from './scheduler/query-total-request-lifecycle';
-export {
-	queryTotalRequestLifecycleScenarios,
-	summarizeQueryTotalRequestLifecycleScenarios,
-	type QueryTotalRequestLifecycleScenarioSummary,
-} from './scheduler/query-total-request-lifecycle-scenarios';
-export {
-	queryTotalRequestScenarios,
-	summarizeQueryTotalRequestScenarios,
-	type QueryTotalRequestScenarioSummary,
-} from './scheduler/query-total-request-scenarios';
-export {
-	type QueryTotalCacheEntry,
-	type QueryTotalWooRequest,
-} from './scheduler/query-total-requests';
-export {
-	type FetchTask,
-	type FetchTaskResult,
-	type ReplicationPolicy,
-	type SchedulerRunResult,
-} from './scheduler/replication-policy';
-export { runSchedulerScenario, type SchedulerFetcher } from './scheduler/replication-scheduler';
-export {
-	summarizeSchedulerCoverageFlowResult,
-	type SchedulerCoverageFlowResult,
-} from './scheduler/scheduler-coverage-flow';
-export {
-	runSchedulerCoverageFlowScenario,
-	schedulerCoverageFlowScenarios,
-} from './scheduler/scheduler-coverage-flow-scenarios';
-export { schedulerScenarios } from './scheduler/scheduler-scenarios';
-export {
-	migrateSchedulerTaskStateV4,
 	schedulerTaskStateKey,
-	schedulerTaskStateMigrationStrategies,
 	schedulerTaskStateSchema,
 	type SchedulerTaskStateDocument,
-	type SchedulerTaskStateV0Document,
-	type SchedulerTaskStateV3Document,
 } from './scheduler/scheduler-task-state-schema';
-export {
-	syncCheckpointMigrationStrategies,
-	syncCheckpointSchema,
-	type SyncCheckpointDocument,
-} from './collections/sync-checkpoint-schema';
-export { type LocalTaxRateDocument } from './collections/tax-rate-schema';
-export {
-	promotedVariationColumns,
-	variationMigrationStrategies,
-	variationSchema,
-	withVariationColumns,
-	type LocalVariationDocument,
-	type StoredVariationDocument,
-	type WooVariationPayload,
-} from './collections/variation-schema';

@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
 	composeObservers,
-	createLineLogger,
 	createMetricsCollector,
-	formatSyncEventLine,
 	NOOP_OBSERVER,
 	type SyncEvent,
 } from './telemetry';
@@ -199,88 +197,6 @@ describe('createMetricsCollector', () => {
 		const m = createMetricsCollector({ additiveFields: ['widgets'] });
 		m.observe(ev('x', { fields: { widgets: 3, applied: 5 } }));
 		expect(m.snapshot().fieldSums.x).toEqual({ widgets: 3 }); // 'applied' not in the custom list
-	});
-});
-
-describe('formatSyncEventLine', () => {
-	it('renders level + type, then optional collection + message + fields in order', () => {
-		expect(formatSyncEventLine(ev('pull.batch'))).toBe('[info] pull.batch');
-		expect(formatSyncEventLine(ev('pull.batch', { collection: 'orders' }))).toBe(
-			'[info] pull.batch orders'
-		);
-		expect(
-			formatSyncEventLine(
-				ev('push.outcome', { level: 'warn', collection: 'products', message: 'partial' })
-			)
-		).toBe('[warn] push.outcome products partial');
-		expect(formatSyncEventLine(ev('x', { fields: { count: 50, ok: true, durationMs: 120 } }))).toBe(
-			'[info] x count=50 ok=true durationMs=120'
-		);
-	});
-
-	it('quotes field values that need it, and renders objects/null/undefined safely', () => {
-		expect(formatSyncEventLine(ev('x', { fields: { id: 'woo-order:1' } }))).toBe(
-			'[info] x id=woo-order:1'
-		);
-		expect(formatSyncEventLine(ev('x', { fields: { msg: 'two words' } }))).toBe(
-			'[info] x msg="two words"'
-		);
-		// an object whose JSON has internal whitespace is quoted as one token
-		expect(
-			formatSyncEventLine(ev('x', { fields: { obj: { m: 'a b' }, n: null, u: undefined } }))
-		).toBe('[info] x obj="{\\"m\\":\\"a b\\"}" n=null u=undefined');
-	});
-
-	it('quotes a multi-word collection/message so they stay single tokens', () => {
-		expect(
-			formatSyncEventLine(
-				ev('push.outcome', {
-					level: 'warn',
-					collection: 'products',
-					message: 'partial failure',
-					fields: { status: 'error' },
-				})
-			)
-		).toBe('[warn] push.outcome products "partial failure" status=error');
-	});
-});
-
-describe('createLineLogger', () => {
-	it('forwards a formatted line to the string sink', () => {
-		const sink = vi.fn();
-		createLineLogger(sink)(ev('pull.batch', { collection: 'orders', fields: { count: 3 } }));
-		expect(sink).toHaveBeenCalledWith('[info] pull.batch orders count=3');
-	});
-
-	it('drops events below minLevel, passes those at or above', () => {
-		const sink = vi.fn();
-		const logger = createLineLogger(sink, { minLevel: 'warn' });
-		logger(ev('a', { level: 'debug' }));
-		logger(ev('b', { level: 'info' }));
-		logger(ev('c', { level: 'warn' }));
-		logger(ev('d', { level: 'error' }));
-		expect(sink).toHaveBeenCalledTimes(2);
-		expect(sink).toHaveBeenNthCalledWith(1, '[warn] c');
-		expect(sink).toHaveBeenNthCalledWith(2, '[error] d');
-	});
-
-	it('composes with a metrics collector — one emit feeds both', () => {
-		const lines: string[] = [];
-		const metrics = createMetricsCollector();
-		const observe = composeObservers(
-			metrics.observe,
-			createLineLogger((l) => lines.push(l))
-		);
-		observe(ev('push.outcome', { collection: 'orders', fields: { status: 'created' } }));
-		expect(lines).toEqual(['[info] push.outcome orders status=created']);
-		expect(metrics.snapshot().events['push.outcome']).toBe(1);
-	});
-
-	it('isolates a throwing host sink even when used as the sole observer', () => {
-		const logger = createLineLogger(() => {
-			throw new Error('host log down');
-		});
-		expect(() => logger(ev('x'))).not.toThrow();
 	});
 });
 

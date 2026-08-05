@@ -30,11 +30,10 @@ import {
 	httpGet,
 	recordCoverage,
 } from './rx-scheduler-collection-fetcher';
-import { pullRequestLimit } from './replication-policy';
+// prettier-ignore
+import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
-import type { FetchTask, FetchTaskResult } from './replication-policy';
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
-import type { SchedulerFetcher, SchedulerFetcherContext } from './replication-scheduler';
 
 export type ProductSchedulerRepository = {
 	// Accepts the STORED shape (promoted filter/sort columns attached at the call sites via

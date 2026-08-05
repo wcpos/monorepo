@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRxdbSyncEngine, type EngineHostTransport } from './index';
+import { createRxdbSyncEngine } from './index';
 import { memoryEngineStorage } from './testing';
+
+import type { EngineHostTransport } from './create-rxdb-sync-engine';
 
 describe('RxdbSyncEngine host transport reflection', () => {
 	it('reflects the configured fetcher and sync base URL through a frozen read-only view', async () => {

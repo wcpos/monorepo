@@ -22,11 +22,12 @@ import {
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
-import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import {
+	RxSchedulerTaskStateRepository,
+	type SchedulerTaskStateDatabase,
+} from './rx-scheduler-task-state-repository';
 import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
-
-import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
 
 const SCHEDULER_TASK_KEY_MAX_LENGTH = schedulerTaskStateSchema.properties.queryKey.maxLength;
 
@@ -56,7 +57,7 @@ export type SeedTargetedLaneInput = {
 	batchSize?: number;
 	completedDedupeForMs?: number;
 	nowMs?: number;
-	getRepository: SchedulerScopeResolver;
+	database: SchedulerTaskStateDatabase;
 	/** Opt into in-flight coalescing (#318) — set by change-signal targeted seeders. */
 	coalesceInFlight?: boolean;
 };
@@ -138,18 +139,16 @@ export async function seedTargetedLane(
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	const ids = normalizedLaneIds(descriptor, input.ids);
 	const batchSize = laneBatchSize(descriptor, input.batchSize);
-	const repository = await input.getRepository();
-	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
 	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
 	// and the seed runs again against the fresh store (#956) — callers treat a
 	// resolved seed as a durable enqueue, so it must not resolve empty.
 	return withSchedulerSeedLedgerRecovery({
-		database,
+		database: input.database,
 		run: () =>
 			seedPersistedSchedulerTasks({
-				repository: new RxSchedulerTaskStateRepository(database),
+				repository: new RxSchedulerTaskStateRepository(input.database),
 				tasks: chunkLaneIds(descriptor, ids, batchSize).map((chunk) => {
 					const { idsPart, requirementId, queryKey } = laneKeyParts(descriptor, chunk);
 					return {

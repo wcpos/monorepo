@@ -1,10 +1,6 @@
 /**
- * Package-private live ChangeSignalSource (facade slice 3) — the ONE place the
- * hybrid engine's detection port meets HTTP inside the engine package. Ported
- * from the web host's adapter (apps/web/src/bench/hybridEngineLiveSource.ts,
- * which remains in place until host adoption #430 deletes it); the mapping is
- * pure request + project, and the ChangeSignalPoisonError guard means a WP
- * error/HTML/maintenance page can NEVER advance the cursor (ADR 0017 P2L-3d).
+ * Package-private live ChangeSignalSource: the apps/main HTTP detection port.
+ * Its pure projection never advances the cursor for poison responses.
  */
 import type {
 	ChangeSignalSource,

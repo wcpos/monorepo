@@ -89,17 +89,18 @@ function isRunnable(state: PersistedSchedulerTaskState, nowMs: number): boolean 
 	return false;
 }
 
-/** Structural: any database carrying the schedulerTaskStates collection (LabDatabase and engine scope dbs both satisfy it). */
-export type SchedulerTaskStateDatabase = {
-	schedulerTaskStates: RxKeyedCollection<SchedulerTaskStateDocument>;
-};
+/** A scope's collection map; the engine recipe guarantees schedulerTaskStates is present. */
+export type SchedulerTaskStateDatabase = object;
 
 export class RxSchedulerTaskStateRepository {
 	private readonly keyed;
 
 	constructor(db: SchedulerTaskStateDatabase) {
+		const { schedulerTaskStates } = db as {
+			schedulerTaskStates: RxKeyedCollection<SchedulerTaskStateDocument>;
+		};
 		this.keyed = createRxKeyedRepository({
-			collection: db.schedulerTaskStates,
+			collection: schedulerTaskStates,
 			keyOf: (state: PersistedSchedulerTaskState) => schedulerTaskStateKey(state.taskId),
 			toDocument,
 			fromDocument,

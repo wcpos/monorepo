@@ -132,9 +132,8 @@ describe('scope-open barcode selector hydration', () => {
 			stock_quantity: null,
 		};
 		seedPosBootstrapLanes.mockImplementationOnce(async (input: SeedPosBootstrapLanesInput) => {
-			const repository = await input.getRepository();
 			const product = materializeTargeted('products', remoteProduct).storedDocument;
-			const database = repository.getDatabase() as unknown as RxDatabase;
+			const database = input.database as RxDatabase;
 			await database.collections.products.bulkUpsert([product]);
 			return { inserted: 1, deduped: 0 };
 		});

@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { normalizeCheckpoint } from './protocol';
 import { pullCustomBatch, syncCustomPullBatchIntoRepository } from './customPullAdapter';
 import { createFakePullServer, fakeUuid } from './fakePullServer';
-import { classifyScopeError } from './scopeGuardedOperation';
 
 /**
  * Contract tests for the fake PULL server: every pinned shape below is copied from what the PHP
@@ -639,13 +638,13 @@ describe('fakePullServer fault injection', () => {
 			(thrown: unknown) => thrown
 		);
 
-		// Classified BY NAME everywhere in the engine (scopeGuardedOperation.ts:116).
+		// Abort failures retain the platform-standard name.
 		expect((error as { name?: string } | null)?.name).toBe('AbortError');
 		expect(server.received).toEqual([]);
 		expect(server.responseBodies).toEqual([]);
 	});
 
-	it('surfaces that abort through pullCustomBatch as the engine-wide "aborted" category', async () => {
+	it('surfaces that abort through pullCustomBatch as an AbortError', async () => {
 		const server = createFakePullServer();
 		server.seed({ uuid: UUID, wooOrderId: 1 });
 		const controller = new AbortController();
@@ -662,7 +661,7 @@ describe('fakePullServer fault injection', () => {
 			(thrown: unknown) => thrown
 		);
 
-		expect(classifyScopeError(error).category).toBe('aborted'); // not a transport 'error'
+		expect((error as { name?: string }).name).toBe('AbortError');
 		expect(server.received).toEqual([]);
 	});
 

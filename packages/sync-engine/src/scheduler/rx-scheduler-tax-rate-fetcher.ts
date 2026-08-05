@@ -16,7 +16,7 @@ import {
 } from './rx-scheduler-collection-fetcher';
 import { materializeUpsertRefresh } from '../materialization/record-materialization';
 
-import type { SchedulerFetcher } from './replication-scheduler';
+import type { SchedulerFetcher } from './replication-policy';
 
 export type TaxRateSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
 export type TaxRateSchedulerFetcherInput = CollectionSchedulerInput<LocalTaxRateDocument>;

@@ -240,7 +240,7 @@ describe('coverage ledger recovery', () => {
 			.mockRejectedValueOnce(refusalError('duplicate-primary-id:schedulerTaskStates::task-orders'));
 
 		const seeded = await seedPosBootstrapLanes({
-			getRepository: async () => ({ getDatabase: () => db as never }),
+			database: db,
 			nowMs: 1_000,
 		});
 
@@ -330,7 +330,7 @@ describe('coverage ledger recovery', () => {
 		const [snapshot, seeded] = await Promise.all([
 			coverage.readSnapshot(),
 			seedPosBootstrapLanes({
-				getRepository: async () => ({ getDatabase: () => db as never }),
+				database: db,
 				nowMs: 1_000,
 			}),
 		]);

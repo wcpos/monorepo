@@ -27,7 +27,10 @@ import {
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
-import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import {
+	RxSchedulerTaskStateRepository,
+	type SchedulerTaskStateDatabase,
+} from './rx-scheduler-task-state-repository';
 import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import {
 	BRAND_REFERENCE_CONFIG,
@@ -37,7 +40,6 @@ import {
 	TAG_REFERENCE_CONFIG,
 } from './rx-scheduler-reference-fetcher';
 
-import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
 import type { FetchTask } from './replication-policy';
 
 /** Canonical Tier-0 priority for the required greedy startup subset (tax rates). */
@@ -121,7 +123,7 @@ export type SeedPosBootstrapLanesInput = {
 	/** Change-signal seeds disable completed-dedupe; boot seeding wants a fresh pull. */
 	completedDedupeForMs?: number;
 	nowMs?: number;
-	getRepository: SchedulerScopeResolver;
+	database: SchedulerTaskStateDatabase;
 	/** Opt into in-flight coalescing (#318) — set only by the change-signal refresh lanes. */
 	coalesceInFlight?: boolean;
 };
@@ -135,16 +137,14 @@ async function seedTasks(
 	tasks: FetchTask[],
 	input: SeedPosBootstrapLanesInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-	const repository = await input.getRepository();
-	const database = repository.getDatabase();
 	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
 	// and the seed runs again against the fresh store (#956) — callers treat a
 	// resolved seed as a durable enqueue, so it must not resolve empty.
 	return withSchedulerSeedLedgerRecovery({
-		database,
+		database: input.database,
 		run: () =>
 			seedPersistedSchedulerTasks({
-				repository: new RxSchedulerTaskStateRepository(database),
+				repository: new RxSchedulerTaskStateRepository(input.database),
 				tasks,
 				nowMs: input.nowMs ?? Date.now(),
 				completedDedupeForMs: input.completedDedupeForMs ?? 0,

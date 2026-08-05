@@ -30,8 +30,10 @@ import {
 	resetDerivableMetadataCollection,
 } from '../collections/engine-collections';
 
-import type { PersistedCoverageDocumentSet } from '../scheduler/persisted-coverage-schema';
-import type { LocalRecordCoverage } from '../scheduler/coverage-model';
+import type {
+	LocalRecordCoverage,
+	PersistedCoverageDocumentSet,
+} from '../scheduler/persisted-coverage-schema';
 import type {
 	BuildCoverageDocumentsFromQueryResultInput,
 	BuildCumulativeCoverageDocumentsFromQueryResultInput,

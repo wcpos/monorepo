@@ -1,6 +1,5 @@
 import type { PersistedSchedulerTaskState } from './persisted-scheduler-state';
-import type { FetchTask, FetchTaskResult } from './replication-policy';
-import type { SchedulerFetcher } from './replication-scheduler';
+import type { FetchTask, FetchTaskResult, SchedulerFetcher } from './replication-policy';
 import type { CompleteOrRequeueOutcome } from './rx-scheduler-task-state-repository';
 
 export type PersistedSchedulerTaskRunnerRepository = {

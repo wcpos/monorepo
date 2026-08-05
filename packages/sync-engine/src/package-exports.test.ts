@@ -13,4 +13,22 @@ describe('package exports', () => {
 			['createRxdbSyncEngine', 'SYNC_COLLECTION_NAMES', 'MUTATION_QUEUE_RXDB_COLLECTION'].sort()
 		);
 	});
+
+	it("keeps the testing door's runtime values curated", async () => {
+		const testing = await import('./testing');
+		expect(Object.keys(testing).sort()).toEqual([
+			'coverageLaneSchema',
+			'engineSyncCollectionCreators',
+			'existenceManifestDocument',
+			'existenceManifestSchema',
+			'memoryEngineStorage',
+			'memoryStringStore',
+			'orderBrowserQueryKey',
+			'productBrowseWindowQueryKeyFromDimensions',
+			'queryTotalCacheSchema',
+			'schedulerTaskStateKey',
+			'schedulerTaskStateSchema',
+			'scriptedConnectivity',
+		]);
+	});
 });

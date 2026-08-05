@@ -8,8 +8,7 @@
  * host (web scheduler, playground LabController, the live conformance runner)
  * runs the SAME routing decision through this one function, so "what does a
  * change signal mean for the pull loop" is decided once, in sync-core, behind a
- * locked contract — the same upstream-engine move scopeGuardedPull and the
- * hybrid engine itself made.
+ * locked contract shared by the hybrid engine and its host adapters.
  *
  * The routing rules (LOCKED, see ADR 0005/0006 and the change-signal task):
  *   - targetedPulls — changed/missing ids to FETCH, grouped + deduped by

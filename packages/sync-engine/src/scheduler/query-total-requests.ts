@@ -1,4 +1,16 @@
-import type { QueryTotalDiscoveryDecision } from './query-total-discovery';
+export type QueryTotalDiscoveryDecision = {
+	queryKey: string;
+	action:
+		| 'wait-for-settled-query'
+		| 'wait-for-catalog-complete'
+		| 'request-query-total'
+		| 'record-incomplete-lane'
+		| 'record-complete-lane';
+	reason: string;
+	complete: boolean;
+	shouldRequestQueryTotal: boolean;
+	totalMatchingRecords: number | null;
+};
 
 /**
  * Query-total POLICY WINDOWS — one home, imported by every consumer (the

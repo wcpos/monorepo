@@ -1,11 +1,9 @@
 /**
  * The demand plane (facade slice 4): `require(requirement) → RequirementHandle`
  * — a component-declared data requirement as data (CONTEXT.md), resolved
- * coverage-aware. MINIMAL-BUT-HONEST scope (recorded in the PR): coverage
- * evidence is LOCAL RECORD PRESENCE (the only honest evidence the engine owns
- * — the persisted coverage store stays web-side until host adoption), and the
- * fetch queue is in-memory priority-ordered (the durable scheduler tier is
- * deferred with it). Concretely:
+ * coverage-aware for apps/main. The engine owns both local coverage evidence
+ * and its persisted scheduler tier; callers interact only through typed
+ * requirements and handles. Concretely:
  *
  *  - `targeted-records` (targeted-shape collections, wooIds required): missing
  *    ids are pulled directly through the descriptor machinery; all-present
@@ -316,7 +314,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					const seedResult = await seedOrderFilterSchedulerTask({
 						...decision.descriptor,
 						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
-						getRepository: async () => ({ getDatabase: () => database as never }),
+						database: database,
 					});
 					if (seedResult.skippedActive > 0) {
 						skippedActive = true;
@@ -395,7 +393,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						...browseWindow,
 						priority: item.priority,
 						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
-						getRepository: async () => ({ getDatabase: () => database as never }),
+						database: database,
 					});
 					if (seedResult.skippedActive > 0) {
 						skippedActive = true;
@@ -458,7 +456,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						perPage: refreshRequirement.limit ?? 250,
 						priority: item.priority,
 						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
-						getRepository: async () => ({ getDatabase: () => database as never }),
+						database: database,
 					});
 					if (seedResult.skippedActive > 0) {
 						skippedActive = true;
@@ -529,7 +527,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					const seedResult = await seedReferenceLanes({
 						collections: [descriptor.collection],
 						completedDedupeForMs: item.requirement.forceRefresh ? 0 : REFERENCE_REFRESH_DEDUPE_MS,
-						getRepository: async () => ({ getDatabase: () => database as never }),
+						database: database,
 						...(nowMs !== undefined ? { nowMs } : {}),
 					});
 					// `skippedActive` and `skippedCompleted` are NOT the same answer. An active
@@ -710,7 +708,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							priority: item.priority,
 							completedDedupeForMs: 0,
 							nowMs,
-							getRepository: async () => ({ getDatabase: () => database as never }),
+							database: database,
 						});
 						skippedActive = seedResult.skippedActive;
 						const drainResult = await runEngineSchedulerDrain({

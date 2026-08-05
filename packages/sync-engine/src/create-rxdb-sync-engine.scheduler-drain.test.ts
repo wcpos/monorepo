@@ -9,6 +9,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { customerDocumentId } from '@wcpos/sync-core';
+
 import {
 	createRxdbSyncEngine,
 	type RxdbSyncEngine,
@@ -16,8 +18,8 @@ import {
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
 import { memoryEngineStorage } from './testing';
-import { seedTargetedCustomerSchedulerTask } from './scheduler/rx-scheduler-customer-task-seeder';
 import { seedTargetedProductSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
+import { seedTargetedLane } from './scheduler/rx-targeted-lane-seeder';
 
 setPremiumFlag();
 
@@ -203,11 +205,19 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 
 		const scope = engine.active();
 		if (!scope) throw new Error('no active scope');
-		await seedTargetedCustomerSchedulerTask({
-			customerIds: [41],
-			nowMs: 1,
-			getRepository: async () => ({ getDatabase: () => scope.database.collections as never }),
-		});
+		await seedTargetedLane(
+			{
+				collection: 'customers',
+				idLabel: 'customer',
+				keyPrefix: 'customers',
+				requirementPrefix: 'customers',
+				documentId: customerDocumentId,
+				defaultPriority: 900,
+				defaultBatchSize: 100,
+				defaultCompletedDedupeForMs: 30_000,
+			},
+			{ ids: [41], nowMs: 1, database: scope.database }
+		);
 		await expect(engine.sync('scheduler-drain')).resolves.toMatchObject({ status: 'ran' });
 
 		const customer = await scope.database.collections.customers.findOne(customerUuid).exec();
@@ -332,7 +342,7 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		await seedTargetedProductSchedulerTask({
 			productIds: [77],
 			nowMs: 1,
-			getRepository: async () => ({ getDatabase: () => scope.database.collections as never }),
+			database: scope.database,
 		});
 
 		await expect(engine.sync('scheduler-drain')).resolves.toMatchObject({ status: 'ran' });

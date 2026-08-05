@@ -10,16 +10,17 @@ import {
 import {
 	compactPersistedCoverageDocuments,
 	expectedRecordIdsForLane,
+	type LocalCoverageState,
+	type LocalRecordCoverage,
 	type PersistedCoverageCompactionResult,
-	PersistedCoverageDocumentSet,
-	PersistedCoverageLane,
-	PersistedCoverageRecord,
-	PersistedCoverageRetentionDecision,
+	type PersistedCoverageDocumentSet,
+	type PersistedCoverageLane,
+	type PersistedCoverageRecord,
+	type PersistedCoverageRetentionDecision,
 	type PlanPersistedCoverageRetentionInput,
 	toLocalCoverageState,
 } from '../scheduler/persisted-coverage-schema';
 
-import type { LocalCoverageState, LocalRecordCoverage } from '../scheduler/coverage-model';
 import type { CoverageLaneDocument, CoverageRecordDocument } from './coverage-schema';
 
 export type RxCoverageDocument<T> = {

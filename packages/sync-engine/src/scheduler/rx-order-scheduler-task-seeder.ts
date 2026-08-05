@@ -2,13 +2,14 @@ import {
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
-import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import {
+	RxSchedulerTaskStateRepository,
+	type SchedulerTaskStateDatabase,
+} from './rx-scheduler-task-state-repository';
 import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
 import { parseOrderBrowserSchedulerDescriptor } from './order-browser-scheduler-descriptor';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
-
-import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
 
 const BACKGROUND_ORDER_SCHEDULER_PRIORITY = 100;
 const BACKGROUND_ORDER_SCHEDULER_COMPLETED_DEDUPE_FOR_MS = 5 * 60_000;
@@ -41,7 +42,7 @@ export type SeedOrderSchedulerTasksInput = {
 	priority?: number;
 	completedDedupeForMs?: number;
 	nowMs?: number;
-	getRepository: SchedulerScopeResolver;
+	database: SchedulerTaskStateDatabase;
 };
 
 export type SeedTargetedOrderSchedulerTaskInput = {
@@ -50,7 +51,7 @@ export type SeedTargetedOrderSchedulerTaskInput = {
 	batchSize?: number;
 	completedDedupeForMs?: number;
 	nowMs?: number;
-	getRepository: SchedulerScopeResolver;
+	database: SchedulerTaskStateDatabase;
 };
 
 export type SeedOrderFilterSchedulerTaskInput = {
@@ -68,24 +69,22 @@ export type SeedOrderFilterSchedulerTaskInput = {
 	priority?: number;
 	completedDedupeForMs?: number;
 	nowMs?: number;
-	getRepository: SchedulerScopeResolver;
+	database: SchedulerTaskStateDatabase;
 };
 
 export async function seedOrderSchedulerTasks(
 	input: SeedOrderSchedulerTasksInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-	const repository = await input.getRepository();
-	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
 	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
 	// and the seed runs again against the fresh store (#956) — callers treat a
 	// resolved seed as a durable enqueue, so it must not resolve empty.
 	return withSchedulerSeedLedgerRecovery({
-		database,
+		database: input.database,
 		run: () =>
 			seedPersistedSchedulerTasks({
-				repository: new RxSchedulerTaskStateRepository(database),
+				repository: new RxSchedulerTaskStateRepository(input.database),
 				tasks: [
 					{
 						id: 'orders:custom-pull:greedy',
@@ -165,18 +164,16 @@ export async function seedOrderFilterSchedulerTask(
 	input: SeedOrderFilterSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	const descriptor = orderFilterDescriptor(input);
-	const repository = await input.getRepository();
-	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
 	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
 	// and the seed runs again against the fresh store (#956) — callers treat a
 	// resolved seed as a durable enqueue, so it must not resolve empty.
 	return withSchedulerSeedLedgerRecovery({
-		database,
+		database: input.database,
 		run: () =>
 			seedPersistedSchedulerTasks({
-				repository: new RxSchedulerTaskStateRepository(database),
+				repository: new RxSchedulerTaskStateRepository(input.database),
 				tasks: [
 					{
 						id: `${descriptor.queryKey}:windowed`,
@@ -204,6 +201,6 @@ export async function seedTargetedOrderSchedulerTask(
 		batchSize: input.batchSize,
 		completedDedupeForMs: input.completedDedupeForMs,
 		nowMs: input.nowMs,
-		getRepository: input.getRepository,
+		database: input.database,
 	});
 }

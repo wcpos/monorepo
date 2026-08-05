@@ -4,10 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 
 const mocks = vi.hoisted(() => ({
-	getRepository: vi.fn(),
 	RxSchedulerTaskStateRepository: vi.fn(),
 	seedPersistedSchedulerTasks: vi.fn(),
 }));
+
+const MOCK_DATABASE = { name: 'mock-db' };
 
 vi.mock('./rx-scheduler-task-state-repository', () => ({
 	RxSchedulerTaskStateRepository: mocks.RxSchedulerTaskStateRepository,
@@ -36,7 +37,6 @@ const VARIATIONS_LANE: TargetedLaneDescriptor = {
 };
 
 function fakeWiring() {
-	const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 	const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 	const result = {
 		inserted: 1,
@@ -46,29 +46,27 @@ function fakeWiring() {
 		skippedRunnable: 0,
 		claimLost: 0,
 	};
-	mocks.getRepository.mockResolvedValue(orderRepository);
 	mocks.RxSchedulerTaskStateRepository.mockImplementation(
 		function RxSchedulerTaskStateRepositoryMock() {
 			return schedulerRepository;
 		}
 	);
 	mocks.seedPersistedSchedulerTasks.mockResolvedValue(result);
-	return { orderRepository, schedulerRepository, result };
+	return { schedulerRepository, result };
 }
 
 describe('seedTargetedLane', () => {
 	beforeEach(() => {
-		mocks.getRepository.mockReset();
 		mocks.RxSchedulerTaskStateRepository.mockReset();
 		mocks.seedPersistedSchedulerTasks.mockReset();
 	});
 
 	it('normalizes (dedup + ascending sort) and builds the descriptor task shape', async () => {
-		const { orderRepository, schedulerRepository, result } = fakeWiring();
+		const { schedulerRepository, result } = fakeWiring();
 
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				ids: [456, 123, 123],
 				priority: 950,
 				batchSize: 50,
@@ -77,7 +75,6 @@ describe('seedTargetedLane', () => {
 			})
 		).resolves.toBe(result);
 
-		expect(orderRepository.getDatabase).toHaveBeenCalledTimes(1);
 		expect(mocks.RxSchedulerTaskStateRepository).toHaveBeenCalledWith({ name: 'mock-db' });
 		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith({
 			repository: schedulerRepository,
@@ -107,7 +104,7 @@ describe('seedTargetedLane', () => {
 		fakeWiring();
 
 		await seedTargetedLane(VARIATIONS_LANE, {
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			ids: [7],
 			nowMs: 1_000,
 		});
@@ -133,7 +130,7 @@ describe('seedTargetedLane', () => {
 		fakeWiring();
 
 		await seedTargetedLane(VARIATIONS_LANE, {
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			ids: [7],
 			completedDedupeForMs: 0,
 			nowMs: 1_000,
@@ -150,7 +147,7 @@ describe('seedTargetedLane', () => {
 		fakeWiring();
 
 		await seedTargetedLane(VARIATIONS_LANE, {
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			ids: [7],
 		});
 
@@ -164,30 +161,30 @@ describe('seedTargetedLane', () => {
 
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				ids: [],
 			})
 		).rejects.toThrow('Targeted variation scheduler task requires at least one variation id');
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				ids: [0],
 			})
 		).rejects.toThrow('Targeted variation scheduler task requires positive integer variation ids');
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				ids: [1.5],
 			})
 		).rejects.toThrow('positive integer variation ids');
 		await expect(
 			seedTargetedLane(VARIATIONS_LANE, {
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				ids: [5],
 				batchSize: 0,
 			})
 		).rejects.toThrow('Targeted variation scheduler task batch size must be a positive integer');
-		expect(mocks.getRepository).not.toHaveBeenCalled();
+		expect(mocks.RxSchedulerTaskStateRepository).not.toHaveBeenCalled();
 		expect(mocks.seedPersistedSchedulerTasks).not.toHaveBeenCalled();
 	});
 
@@ -195,7 +192,7 @@ describe('seedTargetedLane', () => {
 		fakeWiring();
 
 		await seedTargetedLane(VARIATIONS_LANE, {
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			ids: [5, 4, 3, 2, 1],
 			batchSize: 2,
 			nowMs: 1_000,
@@ -216,7 +213,7 @@ describe('seedTargetedLane', () => {
 		fakeWiring();
 
 		await seedTargetedLane(VARIATIONS_LANE, {
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			ids: Array.from({ length: 100 }, (_, index) => index + 1),
 			batchSize: 100,
 			nowMs: 12_000,
@@ -264,7 +261,7 @@ describe('seedTargetedLane', () => {
 
 		fakeWiring();
 		await seedTargetedLane(productLane, {
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			ids: [456, 123, 123],
 			priority: 950,
 			batchSize: 50,
@@ -287,7 +284,7 @@ describe('seedTargetedLane', () => {
 
 		mocks.seedPersistedSchedulerTasks.mockClear();
 		await seedTargetedLane(orderLane, {
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			ids: [456, 123, 123],
 			priority: 950,
 			batchSize: 50,

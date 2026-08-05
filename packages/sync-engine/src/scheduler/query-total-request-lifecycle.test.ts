@@ -7,8 +7,7 @@ import {
 	type QueryTotalRequestState,
 } from './query-total-request-lifecycle';
 
-import type { QueryTotalCacheEntry } from './query-total-requests';
-import type { QueryTotalDiscoveryDecision } from './query-total-discovery';
+import type { QueryTotalCacheEntry, QueryTotalDiscoveryDecision } from './query-total-requests';
 
 const needsTotalDecision: QueryTotalDiscoveryDecision = {
 	queryKey: 'orders:browser:status=processing:search=:limit=50',

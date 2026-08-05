@@ -20,7 +20,7 @@ import {
 	createGreedyCollectionFetcher,
 } from './rx-scheduler-collection-fetcher';
 
-import type { SchedulerFetcher } from './replication-scheduler';
+import type { SchedulerFetcher } from './replication-policy';
 
 export type ReferenceSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
 export type ReferenceSchedulerFetcherInput = CollectionSchedulerInput<LocalReferenceDocument>;

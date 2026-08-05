@@ -7,10 +7,11 @@ import {
 } from './rx-scheduler-product-task-seeder';
 
 const mocks = vi.hoisted(() => ({
-	getRepository: vi.fn(),
 	RxSchedulerTaskStateRepository: vi.fn(),
 	seedPersistedSchedulerTasks: vi.fn(),
 }));
+
+const MOCK_DATABASE = { name: 'mock-db' };
 
 vi.mock('./rx-scheduler-task-state-repository', () => ({
 	RxSchedulerTaskStateRepository: mocks.RxSchedulerTaskStateRepository,
@@ -25,13 +26,11 @@ vi.mock('./rx-scheduler-task-seeder', async (importOriginal) => ({
 
 describe('seedTargetedProductSchedulerTask', () => {
 	beforeEach(() => {
-		mocks.getRepository.mockReset();
 		mocks.RxSchedulerTaskStateRepository.mockReset();
 		mocks.seedPersistedSchedulerTasks.mockReset();
 	});
 
 	it('seeds a deduped targeted product task on the products:ids: lane', async () => {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 1,
@@ -41,7 +40,6 @@ describe('seedTargetedProductSchedulerTask', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -51,7 +49,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 
 		await expect(
 			seedTargetedProductSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				productIds: [456, 123, 123],
 				priority: 950,
 				batchSize: 50,
@@ -60,7 +58,6 @@ describe('seedTargetedProductSchedulerTask', () => {
 			})
 		).resolves.toBe(result);
 
-		expect(orderRepository.getDatabase).toHaveBeenCalledTimes(1);
 		expect(mocks.RxSchedulerTaskStateRepository).toHaveBeenCalledWith({ name: 'mock-db' });
 		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith({
 			repository: schedulerRepository,
@@ -87,7 +84,6 @@ describe('seedTargetedProductSchedulerTask', () => {
 	});
 
 	it('defaults priority, batch size, and dedupe window', async () => {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 1,
@@ -97,7 +93,6 @@ describe('seedTargetedProductSchedulerTask', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -106,7 +101,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 		mocks.seedPersistedSchedulerTasks.mockResolvedValue(result);
 
 		await seedTargetedProductSchedulerTask({
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			productIds: [7],
 			nowMs: 1_000,
 		});
@@ -131,24 +126,23 @@ describe('seedTargetedProductSchedulerTask', () => {
 
 	it('rejects empty and invalid product ids before queuing work', async () => {
 		await expect(
-			seedTargetedProductSchedulerTask({ getRepository: mocks.getRepository, productIds: [] })
+			seedTargetedProductSchedulerTask({ database: MOCK_DATABASE, productIds: [] })
 		).rejects.toThrow('Targeted product scheduler task requires at least one product id');
 		await expect(
-			seedTargetedProductSchedulerTask({ getRepository: mocks.getRepository, productIds: [0] })
+			seedTargetedProductSchedulerTask({ database: MOCK_DATABASE, productIds: [0] })
 		).rejects.toThrow('positive integer product ids');
 		await expect(
 			seedTargetedProductSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				productIds: [5],
 				batchSize: 0,
 			})
 		).rejects.toThrow('batch size must be a positive integer');
-		expect(mocks.getRepository).not.toHaveBeenCalled();
+		expect(mocks.RxSchedulerTaskStateRepository).not.toHaveBeenCalled();
 		expect(mocks.seedPersistedSchedulerTasks).not.toHaveBeenCalled();
 	});
 
 	it('splits large targeted product sets into tasks with schema-safe keys', async () => {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 2,
@@ -158,7 +152,6 @@ describe('seedTargetedProductSchedulerTask', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -167,7 +160,7 @@ describe('seedTargetedProductSchedulerTask', () => {
 		mocks.seedPersistedSchedulerTasks.mockResolvedValue(result);
 
 		await seedTargetedProductSchedulerTask({
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			productIds: Array.from({ length: 100 }, (_, index) => index + 1),
 			nowMs: 12_000,
 		});
@@ -193,13 +186,11 @@ describe('seedTargetedProductSchedulerTask', () => {
 
 describe('seedProductBrowseWindowSchedulerTask', () => {
 	beforeEach(() => {
-		mocks.getRepository.mockReset();
 		mocks.RxSchedulerTaskStateRepository.mockReset();
 		mocks.seedPersistedSchedulerTasks.mockReset();
 	});
 
 	it('seeds a windowed browse-window task at the low browse priority without claiming it', async () => {
-		const productRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 1,
@@ -209,7 +200,6 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(productRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -219,14 +209,13 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 
 		await expect(
 			seedProductBrowseWindowSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				limit: 100,
 				priority: 500,
 				nowMs: 20_000,
 			})
 		).resolves.toBe(result);
 
-		expect(productRepository.getDatabase).toHaveBeenCalledTimes(1);
 		expect(mocks.RxSchedulerTaskStateRepository).toHaveBeenCalledWith({ name: 'mock-db' });
 		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith({
 			repository: schedulerRepository,
@@ -251,9 +240,7 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 	});
 
 	it('defaults the window limit, priority, and dedupe window', async () => {
-		const productRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
-		mocks.getRepository.mockResolvedValue(productRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -262,7 +249,7 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 		mocks.seedPersistedSchedulerTasks.mockResolvedValue({ inserted: 1 });
 
 		await seedProductBrowseWindowSchedulerTask({
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			nowMs: 1_000,
 		});
 
@@ -286,17 +273,16 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 		// A window may exceed one Woo page now (#909) — the fetcher walks it in dial-sized
 		// pages (#908) — but it is still bounded: browse is a seed, not a query engine.
 		await expect(
-			seedProductBrowseWindowSchedulerTask({ getRepository: mocks.getRepository, limit: 1001 })
+			seedProductBrowseWindowSchedulerTask({ database: MOCK_DATABASE, limit: 1001 })
 		).rejects.toThrow('Product browse-window scheduler limit must be a positive integer');
 		await expect(
-			seedProductBrowseWindowSchedulerTask({ getRepository: mocks.getRepository, limit: 0 })
+			seedProductBrowseWindowSchedulerTask({ database: MOCK_DATABASE, limit: 0 })
 		).rejects.toThrow('Product browse-window scheduler limit must be a positive integer');
-		expect(mocks.getRepository).not.toHaveBeenCalled();
+		expect(mocks.RxSchedulerTaskStateRepository).not.toHaveBeenCalled();
 		expect(mocks.seedPersistedSchedulerTasks).not.toHaveBeenCalled();
 	});
 
 	it('keys a non-default sort into the task id, queryKey and requirementId', async () => {
-		mocks.getRepository.mockResolvedValue({ getDatabase: vi.fn(() => ({ name: 'mock-db' })) });
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
@@ -312,7 +298,7 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 		});
 
 		await seedProductBrowseWindowSchedulerTask({
-			getRepository: mocks.getRepository,
+			database: MOCK_DATABASE,
 			limit: 200,
 			orderby: 'price',
 			order: 'desc',
