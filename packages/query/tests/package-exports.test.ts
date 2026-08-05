@@ -64,6 +64,20 @@ describe('package exports', () => {
 		});
 	});
 
+	it('resolves the collection-map subpath identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query/collection-map');
+		const metroResolved = metroResolve(
+			metroContext,
+			path.join(querySourceRoot, 'collection-map'),
+			'ios'
+		);
+
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
 	it('rejects the removed query subpaths', () => {
 		for (const specifier of ['@wcpos/query/engine-compat', '@wcpos/query/requirements']) {
 			const resolution = spawnSync(
