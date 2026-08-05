@@ -52,7 +52,7 @@ describe('pullTargetedByIds product publication filter', () => {
 
 		await expect(
 			pullTargetedByIds(context('products', [], urls), descriptor('products'), [1, 2])
-		).resolves.toBe(0);
+		).resolves.toBe(2);
 		expect(new URL(urls[0]!).searchParams.get('status')).toBe('publish');
 	});
 
@@ -70,7 +70,7 @@ describe('pullTargetedByIds product publication filter', () => {
 				descriptor('products'),
 				[1, 2]
 			)
-		).resolves.toBe(0);
+		).resolves.toBe(2);
 		// The dirty row keeps the local-work protection every removal path honours.
 		expect(removed).toEqual(['uuid-clean']);
 	});
@@ -84,7 +84,7 @@ describe('pullTargetedByIds product publication filter', () => {
 		const ctx = context(collection, body, urls);
 		ctx.observe = observe;
 
-		await expect(pullTargetedByIds(ctx, descriptor(collection), [1])).resolves.toBe(0);
+		await expect(pullTargetedByIds(ctx, descriptor(collection), [1])).resolves.toBe(1);
 		expect(new URL(urls[0]!).searchParams.has('status')).toBe(false);
 		expect(observe).toHaveBeenCalledWith({
 			type: 'targeted.pull.shortfall-prune',

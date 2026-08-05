@@ -320,6 +320,50 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.dispose();
 	});
 
+	it('removes a variation manifest row when the reconciliation pull omits it', async () => {
+		const fetcher = vi.fn(async (url: string) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/integrity/bucket')) {
+				return json({
+					ids: parsed.searchParams.has('collection')
+						? []
+						: [{ id: 88, digest: 'remote-88', object_type: 'variation' }],
+				});
+			}
+			if (parsed.pathname.endsWith('/variations')) {
+				expect(parsed.searchParams.get('include')).toBe('88');
+				return json({ documents: [] });
+			}
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		const e = engine(fetcher);
+		await e.ready;
+		const db = e.active()!.database.collections;
+		await seed(db.variations as never, {
+			id: 'v88',
+			wooId: 88,
+			parentId: 8,
+			price: 8,
+			stockStatus: 'instock',
+			attributes: [],
+			stockQuantity: null,
+			payload: { id: 88 },
+			sync: { revision: 'old', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		await seed(db.existenceManifest as never, {
+			id: '88',
+			wooId: 88,
+			digest: 'local-88',
+			objectType: 'variation',
+		});
+
+		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
+		expect(await db.variations.findOne('v88').exec()).toBeNull();
+		expect(await db.existenceManifest.findOne('88').exec()).toBeNull();
+		await e.dispose();
+	});
+
 	it('prunes unmanifested non-publish residents during prime without dropping local work', async () => {
 		const product = (id: number, status: string, dirty = false) => ({
 			id: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,

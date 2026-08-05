@@ -348,6 +348,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "targeted.pull.shortfall-prune",
+		"domain": "SYNC",
+		"label": "Removed records no longer returned by your store",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "transport.request",
 		"domain": "SYNC",
 		"label": "Request to your store",

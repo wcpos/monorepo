@@ -299,6 +299,23 @@ describe('createSyncLogObserver', () => {
 		]);
 	});
 
+	it('persists a targeted shortfall prune as recovered sync application work', () => {
+		observer.observe(
+			event({
+				type: 'targeted.pull.shortfall-prune',
+				level: 'warn',
+				collection: 'variations',
+				fields: { requested: 2, received: 1, missing: 1 },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			context: expect.objectContaining({ type: 'targeted.pull.shortfall-prune' }),
+			terminal: { operationType: 'sync.apply', outcome: 'recovered' },
+		});
+	});
+
 	it('persists only failed HTTP attempts, never successful ones', () => {
 		observer.observe(event({ type: 'transport.request', fields: { status: 200, bytes: 9_000 } }));
 		observer.observe(event({ type: 'transport.request', fields: { status: 304, bytes: 0 } }));

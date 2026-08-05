@@ -97,7 +97,6 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 			wooIds: number[],
 			request?: ReconcileRequest
 		) => {
-			const missingProductWooIds: number[] = [];
 			await pullTargetedByIds(
 				{ ...handlerContext, fetch: request?.fetcher ?? fetcher },
 				descriptor,
@@ -126,10 +125,11 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 						);
 					if (manifestRows.length > 0) await upsertManifestRows(manifest, manifestRows);
 				},
-				descriptor.collection === 'products' ? missingProductWooIds : undefined
+				async (missingWooIds) => {
+					await removeTargeted(descriptor.collection, descriptor.wooIdField, missingWooIds);
+					return missingWooIds.length;
+				}
 			);
-			if (missingProductWooIds.length > 0)
-				await removeTargeted('products', 'wooProductId', missingProductWooIds);
 		};
 		return {
 			bucketSize: 1000,
