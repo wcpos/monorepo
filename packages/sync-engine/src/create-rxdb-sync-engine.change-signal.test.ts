@@ -28,6 +28,7 @@ setPremiumFlag();
 const SITE = 'https://signal.example.test';
 const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const UUID_9 = '11111111-1111-4111-8111-111111111111';
+const variationUuid = (id: number) => `22222222-2222-4222-8222-${String(id).padStart(12, '0')}`;
 
 let uniqueScope = 0;
 
@@ -49,6 +50,7 @@ function scriptedServer() {
 		productPulls: 0,
 		productIncludes: [] as number[][],
 		variationPulls: 0,
+		elidedVariationIds: new Set<number>(),
 		customerPulls: 0,
 		referencePulls: { categories: 0, brands: 0, tags: 0, coupons: 0 },
 		sequenceLogFetches: 0,
@@ -133,21 +135,23 @@ function scriptedServer() {
 			state.variationPulls += 1;
 			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
 			return json({
-				documents: include.map((id) => ({
-					id,
-					parent_id: 9,
-					payload: {
-						meta_data: [
-							{
-								key: '_woocommerce_pos_uuid',
-								value: '22222222-2222-4222-8222-222222222222',
-							},
-						],
-						price: '4.00',
-						stock_status: 'instock',
-						attributes: [],
-					},
-				})),
+				documents: include
+					.filter((id) => !state.elidedVariationIds.has(id))
+					.map((id) => ({
+						id,
+						parent_id: 9,
+						payload: {
+							meta_data: [
+								{
+									key: '_woocommerce_pos_uuid',
+									value: variationUuid(id),
+								},
+							],
+							price: '4.00',
+							stock_status: 'instock',
+							attributes: [],
+						},
+					})),
 			});
 		}
 		if (path.endsWith('/customers')) {
@@ -240,6 +244,87 @@ async function productCount(engine: RxdbSyncEngine): Promise<number> {
 }
 
 describe('sync("change-signal") through the public handle', () => {
+	it('require targeted variations prunes a server-elided resident and resolves fetched', async () => {
+		const server = scriptedServer();
+		const diagnosticsEvents: SyncEvent[] = [];
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+			diagnostics: (event) => diagnosticsEvents.push(event),
+		});
+		await engine.ready;
+		await engine.require({
+			id: 'seed-variation-b',
+			collection: 'variations',
+			kind: 'targeted-records',
+			wooIds: [22],
+		}).ready;
+		server.state.elidedVariationIds.add(22);
+
+		await expect(
+			engine.require({
+				id: 'short-variation-pull',
+				collection: 'variations',
+				kind: 'targeted-records',
+				wooIds: [21, 22],
+				forceRefresh: true,
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		const variations = engine.active()!.database.collections.variations;
+		expect(await variations.findOne(variationUuid(21)).exec()).not.toBeNull();
+		expect(await variations.findOne(variationUuid(22)).exec()).toBeNull();
+		expect(diagnosticsEvents).toContainEqual(
+			expect.objectContaining({
+				type: 'targeted.pull.shortfall-prune',
+				collection: 'variations',
+				fields: { requested: 2, received: 1, missing: 1 },
+			})
+		);
+		await engine.dispose();
+	});
+
+	it('change-signal variation shortfall prunes instead of failing the tick', async () => {
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		await engine.ready;
+		await engine.require({
+			id: 'seed-variation-b-for-tick',
+			collection: 'variations',
+			kind: 'targeted-records',
+			wooIds: [32],
+		}).ready;
+		await engine.sync('change-signal');
+		server.state.elidedVariationIds.add(32);
+		server.state.head = 7;
+		server.state.rows.push(
+			{
+				sequence: 6,
+				id: 31,
+				type: 'update',
+				collection: 'variations',
+				modified_gmt: '2026-07-10T00:00:01',
+			},
+			{
+				sequence: 7,
+				id: 32,
+				type: 'update',
+				collection: 'variations',
+				modified_gmt: '2026-07-10T00:00:02',
+			}
+		);
+
+		await expect(engine.sync('change-signal')).resolves.toMatchObject({ status: 'ran' });
+		const variations = engine.active()!.database.collections.variations;
+		expect(await variations.findOne(variationUuid(31)).exec()).not.toBeNull();
+		expect(await variations.findOne(variationUuid(32)).exec()).toBeNull();
+		await engine.dispose();
+	});
+
 	it('refreshes changed references only after their lane has been materialized', async () => {
 		const server = scriptedServer();
 		const engine = engineWith({
