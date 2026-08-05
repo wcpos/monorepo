@@ -18,7 +18,7 @@ const mockManager = {
 
 jest.mock('@wcpos/query', () => ({
 	recoverLogsCollectionStorage: (...args: unknown[]) => mockRecoverLogsCollectionStorage(...args),
-	useQueryManager: () => mockManager,
+	useQueryRuntime: () => mockManager,
 }));
 
 jest.mock('@wcpos/components/badge', () => ({ Badge: () => null }));

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, resolveScan } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -72,7 +72,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	const { barcodeSearch, findProductById } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
@@ -148,7 +148,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		if (results.length === 0) {
 			// The online fallback needs a healthy sync engine; during an outage tell
 			// the cashier why scanning can't look the code up instead of timing out.
-			const engineStatus = manager.engine.status();
+			const engineStatus = runtime.engine.status();
 			if (engineStatus.connectivity === 'offline') {
 				scan.unavailable(barcodeStr);
 				barcodeLogger.warn(text1, {
@@ -163,7 +163,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				return;
 			}
 
-			const { fetcher, syncBaseUrl } = manager.engine.hostTransport();
+			const { fetcher, syncBaseUrl } = runtime.engine.hostTransport();
 			const resolution = await resolveScan({
 				code: barcodeStr,
 				index: new Map(),
@@ -226,7 +226,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					try {
 						if (productIds.length > 0) {
 							handles.push(
-								manager.engine.require({
+								runtime.engine.require({
 									id: `barcode:${barcodeStr}:ambiguous:products`,
 									collection: 'products',
 									kind: 'targeted-records',
@@ -237,7 +237,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						}
 						if (variationIds.length > 0) {
 							handles.push(
-								manager.engine.require({
+								runtime.engine.require({
 									id: `barcode:${barcodeStr}:ambiguous:variations`,
 									collection: 'variations',
 									kind: 'targeted-records',
@@ -290,7 +290,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				const handles = [];
 				try {
 					handles.push(
-						manager.engine.require({
+						runtime.engine.require({
 							id: `barcode:${barcodeStr}:${match.type}:${match.id}`,
 							collection: match.type === 'variation' ? 'variations' : 'products',
 							kind: 'targeted-records',
@@ -300,7 +300,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					);
 					if (match.type === 'variation') {
 						handles.push(
-							manager.engine.require({
+							runtime.engine.require({
 								id: `barcode:${barcodeStr}:product:${match.parent_id}`,
 								collection: 'products',
 								kind: 'targeted-records',
@@ -368,7 +368,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			let parent = await findProductById(parent_id);
 			if (!parent && !onlineParentRequired) {
 				try {
-					const handle = manager.engine.require({
+					const handle = runtime.engine.require({
 						id: `barcode:${barcodeStr}:product:${parent_id}`,
 						collection: 'products',
 						kind: 'targeted-records',

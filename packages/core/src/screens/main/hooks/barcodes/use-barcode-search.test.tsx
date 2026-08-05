@@ -30,7 +30,7 @@ function doc(id: string, payload: Payload, name: 'products' | 'variations' = 'pr
 }
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({
+	useQueryRuntime: () => ({
 		engine: {
 			active: () => ({
 				database: {
@@ -42,10 +42,7 @@ jest.mock('@wcpos/query', () => ({
 			}),
 		},
 	}),
-}));
-
-// wrapEngineDocument is identity-ish for the test — we assert on ids.
-jest.mock('@wcpos/query/engine-compat', () => ({
+	// wrapEngineDocument is identity-ish for the test — we assert on ids.
 	wrapEngineDocument: (_name: string, document: FakeDoc) => document,
 }));
 

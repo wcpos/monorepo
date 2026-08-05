@@ -11,7 +11,7 @@ import type {
 	ProductDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
-import { adapterDerivedFieldsFor, promotedColumnsFor, useQueryManager } from '@wcpos/query';
+import { adapterDerivedFieldsFor, promotedColumnsFor, useQueryRuntime } from '@wcpos/query';
 import {
 	deriveBarcodeFromPayload,
 	getActiveBarcodeSelectors,
@@ -40,7 +40,7 @@ const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>([
 	'coupons',
 ]);
 
-type QueryManager = ReturnType<typeof useQueryManager>;
+type QueryManager = ReturnType<typeof useQueryRuntime>;
 type EngineResident = RxDocument<Record<string, unknown>>;
 
 class ActiveScopeChangedTwiceError extends Error {
@@ -289,7 +289,7 @@ async function patchLocalResident<T extends Document>(
  */
 export const useLocalMutation = () => {
 	const t = useT();
-	const manager = useQueryManager();
+	const manager = useQueryRuntime();
 
 	const localPatch = React.useCallback(
 		async <T extends Document>({ document, data }: LocalPatchProps<T>) => {

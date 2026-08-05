@@ -25,7 +25,7 @@ jest.mock('@wcpos/query', () => ({
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},
-	useQueryManager: () => mockManager,
+	useQueryRuntime: () => mockManager,
 }));
 jest.mock('../orders/force-refresh-filter-customer', () => ({
 	forceRefreshFilterCustomer: (manager: unknown, wooId: number, role: string) =>

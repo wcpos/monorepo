@@ -17,12 +17,10 @@ jest.mock('@wcpos/query', () => ({
 	// The write-direction projections are the code under test here (parity with the
 	// old hand-written promotion switch) — pull the real implementations, mock the rest.
 	...(() => {
-		const { promotedColumnsFor, adapterDerivedFieldsFor } = jest.requireActual(
-			'@wcpos/query/engine-compat'
-		);
+		const { promotedColumnsFor, adapterDerivedFieldsFor } = jest.requireActual('@wcpos/query');
 		return { promotedColumnsFor, adapterDerivedFieldsFor };
 	})(),
-	useQueryManager: () => ({
+	useQueryRuntime: () => ({
 		engine: {
 			active: () => ({
 				database: {

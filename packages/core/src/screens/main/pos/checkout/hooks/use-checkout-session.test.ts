@@ -18,7 +18,7 @@ const mockResolveStockOwnerId = jest.fn((productId: number, variationId: number)
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine: { require: mockEngineRequire } }),
+	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt: false } }),

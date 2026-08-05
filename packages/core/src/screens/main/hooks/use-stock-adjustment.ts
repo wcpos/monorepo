@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 type LineItems = import('@wcpos/database').OrderDocument['line_items'];
@@ -8,7 +8,7 @@ type LineItems = import('@wcpos/database').OrderDocument['line_items'];
 const stockLogger = getLogger(['wcpos', 'stock-adjustment']);
 
 export const useStockAdjustment = () => {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 
 	const stockAdjustment = React.useCallback(
 		(lineItems: LineItems) => {
@@ -32,7 +32,7 @@ export const useStockAdjustment = () => {
 
 			for (const request of requests) {
 				if (request.wooIds.length === 0) continue;
-				const handle = manager.engine.require({
+				const handle = runtime.engine.require({
 					id: `stock-adjustment:${request.collection}:${request.wooIds.join(',')}`,
 					collection: request.collection,
 					kind: 'targeted-records',
@@ -53,7 +53,7 @@ export const useStockAdjustment = () => {
 				);
 			}
 		},
-		[manager]
+		[runtime]
 	);
 
 	return { stockAdjustment };

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 import { engineDocumentByWooId$ } from './use-engine-document';
 import { parseRemoteId } from '../../../utils/parse-remote-id';
@@ -29,15 +29,15 @@ interface CashierLabel {
  */
 export function useCashierLabel(value: unknown): CashierLabel {
 	const id = parseRemoteId(value);
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { format } = useCustomerNameFormat();
 
 	const cashier$ = React.useMemo(
 		() =>
 			id === undefined
 				? of(undefined)
-				: engineDocumentByWooId$<CustomerDocument>(manager, 'customers', id),
-		[id, manager]
+				: engineDocumentByWooId$<CustomerDocument>(runtime, 'customers', id),
+		[id, runtime]
 	);
 	const cashier = useObservableState(cashier$, undefined) as CashierDocument;
 

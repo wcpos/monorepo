@@ -61,10 +61,7 @@ const order: Record<string, unknown> & {
 };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine: { write: mockWrite } }),
-}));
-
-jest.mock('@wcpos/query/engine-compat', () => ({
+	useQueryRuntime: () => ({ engine: { write: mockWrite } }),
 	wrapEngineDocument: (...args: unknown[]) => mockWrapEngineDocument(...args),
 }));
 

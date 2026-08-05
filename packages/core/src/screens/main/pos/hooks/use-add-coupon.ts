@@ -3,7 +3,7 @@ import * as React from 'react';
 import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -35,7 +35,7 @@ export const useAddCoupon = () => {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const { currentOrder } = useCurrentOrder();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { recalculate } = useRecalculateCoupons();
 
 	const orderLogger = React.useMemo(
@@ -64,7 +64,7 @@ export const useAddCoupon = () => {
 			try {
 				// 1. Preserve the legacy selector semantics: normalize only the input value,
 				// then match payload.code exactly against the resident Tier-0 coupon scan.
-				const coupons = await readEngineCoupons(manager);
+				const coupons = await readEngineCoupons(runtime);
 				const coupon = coupons.find(
 					(document) => document.code === couponCode.toLowerCase().trim()
 				);
@@ -95,7 +95,7 @@ export const useAddCoupon = () => {
 				// 3. Look up products for category/on_sale info
 				const productIds = lineItems.map((item: any) => item.product_id).filter(Boolean);
 				const products =
-					productIds.length > 0 ? await readEngineProductsByWooId(manager, productIds) : [];
+					productIds.length > 0 ? await readEngineProductsByWooId(runtime, productIds) : [];
 				const productMap = new Map(products.map((p: any) => [p.id, p]));
 
 				// Build ancestor-enriched category map for coupon restriction matching.
@@ -106,7 +106,7 @@ export const useAddCoupon = () => {
 						productCategoriesMap.set(p.id as number, (p.categories || []) as { id: number }[]);
 					}
 				}
-				const categories = await readEngineCategories(manager);
+				const categories = await readEngineCategories(runtime);
 				productCategoriesMap = buildEnrichedProductCategories(productCategoriesMap, categories);
 
 				// 4. Build validation context
@@ -253,7 +253,7 @@ export const useAddCoupon = () => {
 				};
 			}
 		},
-		[manager, currentOrder, localPatch, t, orderLogger, recalculate]
+		[runtime, currentOrder, localPatch, t, orderLogger, recalculate]
 	);
 
 	return { addCoupon };

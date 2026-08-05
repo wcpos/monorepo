@@ -4,15 +4,15 @@ import { ObservableResource } from 'observable-hooks';
 import { EMPTY, Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { observeEngineDatabases, useQueryManager } from '@wcpos/query';
 import {
 	engineCollectionNameFor,
+	type EngineRxDocument,
 	type LegacyCollectionName,
+	observeEngineDatabases,
 	resolveLegacyField,
-} from '@wcpos/query/engine-compat';
-import { wrapEngineDocument } from '@wcpos/query/engine-compat';
-
-type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
+	useQueryRuntime,
+	wrapEngineDocument,
+} from '@wcpos/query';
 
 type EngineCollection = {
 	findOne(query: string | { selector: Record<string, unknown> }): {
@@ -30,11 +30,11 @@ type EngineDatabase = {
 type DocumentKey = { type: 'uuid'; value: string } | { type: 'woo-id'; value: number };
 
 function engineDocument$(
-	manager: ReturnType<typeof useQueryManager>,
+	runtime: ReturnType<typeof useQueryRuntime>,
 	collectionName: LegacyCollectionName,
 	key: DocumentKey
 ): Observable<EngineRxDocument | null> {
-	return observeEngineDatabases(manager.engine).pipe(
+	return observeEngineDatabases(runtime.engine).pipe(
 		map((database) => database as unknown as EngineDatabase | null),
 		switchMap((database) => {
 			if (!database) {
@@ -63,11 +63,11 @@ function engineDocument$(
 }
 
 export function engineDocumentByWooId$<TDocument extends object>(
-	manager: ReturnType<typeof useQueryManager>,
+	runtime: ReturnType<typeof useQueryRuntime>,
 	collectionName: LegacyCollectionName,
 	wooId: number
 ): Observable<TDocument | null> {
-	return engineDocument$(manager, collectionName, { type: 'woo-id', value: wooId }).pipe(
+	return engineDocument$(runtime, collectionName, { type: 'woo-id', value: wooId }).pipe(
 		map((document) => document && wrapEngineDocument<TDocument>(collectionName, document))
 	);
 }
@@ -76,15 +76,15 @@ function useEngineDocumentResource<TDocument extends object>(
 	collectionName: LegacyCollectionName,
 	key: DocumentKey
 ): ObservableResource<TDocument> {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const resource = React.useMemo(() => {
-		const document$ = engineDocument$(manager, collectionName, key).pipe(
+		const document$ = engineDocument$(runtime, collectionName, key).pipe(
 			map((document) =>
 				document === null ? null : wrapEngineDocument<TDocument>(collectionName, document)
 			)
 		);
 		return new ObservableResource(document$ as Observable<TDocument>);
-	}, [collectionName, key, manager]);
+	}, [collectionName, key, runtime]);
 
 	React.useEffect(() => {
 		// ObservableResource owns the db$/RxDB subscriptions and must release them on rebind/unmount.
@@ -117,14 +117,14 @@ export function useEngineDocumentsByWooId<TDocument extends object>(
 	collectionName: LegacyCollectionName,
 	wooIds: number[]
 ): ObservableResource<TDocument[]> {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const wooIdsKey = wooIds.join('\u0000');
 	const stableWooIds = React.useMemo(
 		() => (wooIdsKey === '' ? [] : [...new Set(wooIdsKey.split('\u0000').map(Number))]),
 		[wooIdsKey]
 	);
 	const resource = React.useMemo(() => {
-		const documents$ = observeEngineDatabases(manager.engine).pipe(
+		const documents$ = observeEngineDatabases(runtime.engine).pipe(
 			map((database) => database as unknown as EngineDatabase | null),
 			switchMap((database) => {
 				if (!database) {
@@ -158,7 +158,7 @@ export function useEngineDocumentsByWooId<TDocument extends object>(
 			)
 		);
 		return new ObservableResource(documents$);
-	}, [collectionName, manager, stableWooIds]);
+	}, [collectionName, runtime, stableWooIds]);
 
 	React.useEffect(() => {
 		// ObservableResource owns the db$/RxDB subscriptions and must release them on rebind/unmount.

@@ -37,7 +37,6 @@ export type FieldMapEntry = {
 	numeric?: boolean;
 	notes?: string;
 	compute?: (document: EngineDocument) => unknown;
-	fallback?: true;
 };
 
 type CollectionMapEntry = {
@@ -392,8 +391,6 @@ export const collectionMap = {
 	},
 } as const satisfies Record<LegacyCollectionName, CollectionMapEntry>;
 
-export const LEGACY_COLLECTION_NAMES = Object.keys(collectionMap) as LegacyCollectionName[];
-
 /** True when a legacy collection name is served by the engine adapter (everything
  * except the local-only `logs` and the dedicated `templates` path). */
 export function isMappedCollection(name: string): name is LegacyCollectionName {
@@ -410,7 +407,6 @@ export function resolveLegacyField(
 			legacy,
 			kind: 'payload',
 			enginePath: `payload.${legacy}`,
-			fallback: true,
 		}
 	);
 }
@@ -443,14 +439,6 @@ export function adapterDerivedFieldsFor(collection: LegacyCollectionName): reado
  * `taxRates`, `products/categories` → `categories`, …). */
 export function engineCollectionNameFor(collection: LegacyCollectionName): EngineCollectionName {
 	return collectionMap[collection].engineCollection;
-}
-
-export function legacyFieldForEnginePath(
-	collection: LegacyCollectionName,
-	enginePath: string
-): string | undefined {
-	const fields = Object.values(collectionMap[collection].fields as Record<string, FieldMapEntry>);
-	return fields.find((field) => field.enginePath === enginePath)?.legacy;
 }
 
 export function readLegacyField(

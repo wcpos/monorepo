@@ -2,9 +2,12 @@ import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
 
-import { awaitWriteOutcome, useQueryManager } from '@wcpos/query';
-import type { LegacyCollectionName } from '@wcpos/query/engine-compat';
-import { wrapEngineDocument } from '@wcpos/query/engine-compat';
+import {
+	awaitWriteOutcome,
+	type LegacyCollectionName,
+	useQueryRuntime,
+	wrapEngineDocument,
+} from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -39,7 +42,7 @@ function isWriteableCollection(name: string): name is WriteableCollection {
  * for a terminal outcome because checkout requires the rematerialized Woo id.
  */
 export const usePushDocument = () => {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const t = useT();
 
 	return React.useCallback(
@@ -53,7 +56,7 @@ export const usePushDocument = () => {
 			if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
 
 			try {
-				const resident = await findEngineResident(manager, collectionName, recordId);
+				const resident = await findEngineResident(runtime, collectionName, recordId);
 				if (!resident) {
 					throw new Error(`Engine resident "${recordId}" is missing from "${collectionName}"`);
 				}
@@ -70,7 +73,7 @@ export const usePushDocument = () => {
 					const billing = payload.billing as Record<string, unknown> | undefined;
 					if (billing?.email === '') delete billing.email;
 				}
-				const receipt = await manager.engine.write({
+				const receipt = await runtime.engine.write({
 					collection: collectionName,
 					operation: remoteId == null ? 'create' : 'update',
 					recordId,
@@ -80,8 +83,8 @@ export const usePushDocument = () => {
 
 				let currentResident = resident;
 				if (collectionName === 'orders') {
-					await awaitWriteOutcome(manager.engine, receipt.mutationId);
-					const refreshed = await findEngineResident(manager, collectionName, recordId);
+					await awaitWriteOutcome(runtime.engine, receipt.mutationId);
+					const refreshed = await findEngineResident(runtime, collectionName, recordId);
 					if (!refreshed) {
 						throw new Error(`Engine resident "${recordId}" is missing after its write outcome`);
 					}
@@ -104,6 +107,6 @@ export const usePushDocument = () => {
 				throw error;
 			}
 		},
-		[manager, t]
+		[runtime, t]
 	);
 };

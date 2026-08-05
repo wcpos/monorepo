@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { useQueryManager } from '@wcpos/query';
-import { wrapEngineDocument } from '@wcpos/query/engine-compat';
+import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
 import {
 	barcodeMatchCandidates,
 	buildLocalBarcodeIndex,
@@ -10,8 +9,6 @@ import {
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
-
 function isEngineRxDocument(value: unknown): value is EngineRxDocument {
 	if (value === null || typeof value !== 'object') {
 		return false;
@@ -77,7 +74,7 @@ function matchesEquivalentGlobalId(document: EngineRxDocument, barcode: string):
 }
 
 export const useBarcodeSearch = () => {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 
 	/**
 	 * Searches for a barcode in the product and variation collections.
@@ -93,7 +90,7 @@ export const useBarcodeSearch = () => {
 			}
 
 			// Resolve on every scan: a store-scope move replaces the active engine database.
-			const collections = manager.engine.active()?.database.collections;
+			const collections = runtime.engine.active()?.database.collections;
 			const productCollection = collections?.products;
 			const variationsCollection = collections?.variations;
 			if (!productCollection || !variationsCollection) {
@@ -156,13 +153,13 @@ export const useBarcodeSearch = () => {
 			}
 			return select((document) => matchesExactAnyField(document, normalizedBarcode));
 		},
-		[manager]
+		[runtime]
 	);
 
 	const findProductById = React.useCallback(
 		async (productId: number): Promise<ProductDocument | null> => {
 			// Resolve on every call so parent lookup follows a concurrent store-scope move.
-			const productCollection = manager.engine.active()?.database.collections.products;
+			const productCollection = runtime.engine.active()?.database.collections.products;
 			if (!productCollection) {
 				return null;
 			}
@@ -173,7 +170,7 @@ export const useBarcodeSearch = () => {
 				? wrapEngineDocument<ProductDocument>('products', result)
 				: null;
 		},
-		[manager]
+		[runtime]
 	);
 
 	return { barcodeSearch, findProductById };

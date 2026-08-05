@@ -11,7 +11,7 @@ const mockFind = jest.fn();
 const mockLogsCollection = { count: mockCount, find: mockFind };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({
+	useQueryRuntime: () => ({
 		localDB: { collections: { logs: mockLogsCollection } },
 	}),
 }));

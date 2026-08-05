@@ -1,22 +1,21 @@
-export { QueryProvider, useQueryManager, type QueryRuntime } from './provider';
-export { useLocalQuery, type LocalQueryOptions } from './use-local-query';
-export { useTemplatesSync } from './templates';
-export {
-	awaitWriteOutcome,
-	WriteOutcomeError,
-	type AwaitedWriteOutcome,
-} from './await-write-outcome';
+export { QueryProvider, useQueryRuntime, type QueryRuntime } from './provider';
+export { useLocalQuery } from './use-local-query';
+export { awaitWriteOutcome, WriteOutcomeError } from './await-write-outcome';
 export type { QueryResult } from './query-result';
+export { wrapEngineDocument } from './engine-adapter/document-proxy';
+export {
+	adapterDerivedFieldsFor,
+	engineCollectionNameFor,
+	promotedColumnsFor,
+	resolveLegacyField,
+	type LegacyCollectionName,
+} from './engine-adapter/collection-map';
+export type { EngineRxDocument } from './engine-adapter/execute-query';
 export {
 	observeEngineDatabases,
 	observeEngineQuery,
 	type EngineQueryDescriptor,
 } from './engine-query';
-export {
-	adapterDerivedFieldsFor,
-	engineCollectionNameFor,
-	promotedColumnsFor,
-} from './engine-adapter/collection-map';
 export {
 	observeEngineCensus,
 	observeEngineCollectionCounts,
@@ -33,10 +32,7 @@ export {
 	requirementsForQuery,
 	type RequirementSortPart,
 } from './requirement-bridge';
-export {
-	isRecoverableLogsStorageError,
-	recoverLogsCollectionStorage,
-} from './logs-storage-recovery';
+export { recoverLogsCollectionStorage } from './logs-storage-recovery';
 export type {
 	CoverageLaneDocument,
 	CensusTotal,

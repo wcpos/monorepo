@@ -6,14 +6,11 @@ type DocumentType<C> =
 		: RxDocument<Record<string, unknown>>;
 
 export interface QueryResult<TCollection = RxCollection> {
-	elapsed: number;
-	searchActive: boolean;
+	searchActive?: boolean;
 	count?: number;
 	hits: {
 		id: string;
-		score: number;
 		document: DocumentType<TCollection>;
-		positions?: Record<string, object>;
 		childrenSearchCount?: number;
 		parentSearchTerm?: string;
 	}[];

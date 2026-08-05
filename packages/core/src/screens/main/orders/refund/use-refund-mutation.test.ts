@@ -23,7 +23,7 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine: { require: mockEngineRequire } }),
+	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({

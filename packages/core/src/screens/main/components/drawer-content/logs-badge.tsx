@@ -6,7 +6,7 @@ import { from, of } from 'rxjs';
 import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { Badge } from '@wcpos/components/badge';
-import { recoverLogsCollectionStorage, useQueryManager } from '@wcpos/query';
+import { recoverLogsCollectionStorage, useQueryRuntime } from '@wcpos/query';
 
 import type { Observable } from 'rxjs';
 
@@ -34,8 +34,8 @@ type StoreDBLike = {
  * markAsRead() advances the watermark (the logs route calls it on focus).
  */
 export function useUnreadErrorCount() {
-	const manager = useQueryManager();
-	const storeDB = manager.localDB as unknown as StoreDBLike;
+	const runtime = useQueryRuntime();
+	const storeDB = runtime.localDB as unknown as StoreDBLike;
 	const logsCollection = storeDB?.collections?.logs as
 		| {
 				count(query: { selector: Record<string, unknown> }): { $: Observable<number> };

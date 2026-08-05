@@ -5,10 +5,10 @@ import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import type { TemplateDocument } from '@wcpos/database';
-import { useTemplatesSync } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useAppInfo } from '../../../../hooks/use-app-info';
+import { useTemplatesSync } from './use-templates-sync';
 
 /**
  * Returns active receipt templates for the current store.

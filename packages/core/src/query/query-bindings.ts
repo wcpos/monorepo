@@ -41,7 +41,7 @@ import {
 	type RxdbSyncEngine,
 	type SyncCollectionName,
 	useLocalQuery,
-	useQueryManager,
+	useQueryRuntime,
 } from '@wcpos/query';
 
 import { translateQueryState } from './query-state-translator';
@@ -536,14 +536,14 @@ function searchFieldsFor(
 }
 
 function emptyResult(): QueryResult<RxCollection> {
-	return { elapsed: 0, searchActive: false, count: 0, hits: [] };
+	return { searchActive: false, count: 0, hits: [] };
 }
 
 function useEngineBinding(
 	descriptorInput: EngineQueryDescriptor,
 	enabled = true
 ): QueryBinding & { result$: Observable<QueryResult<RxCollection>> } {
-	const runtime = useQueryManager();
+	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
 	const descriptor = useStableDescriptor({
 		...descriptorInput,
@@ -590,7 +590,7 @@ function useEngineBinding(
 	};
 }
 
-export function useCollectionBinding<C extends CollectionKey>(
+export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	collection: C,
 	state: QueryStateOf<C>,
 	options: { wooIds?: readonly number[] } = {}
@@ -601,31 +601,32 @@ export function useCollectionBinding<C extends CollectionKey>(
 			? translated.selector
 			: { ...translated.selector, id: { $in: [...options.wooIds] } };
 	const engineDescriptor: EngineQueryDescriptor = {
-		collection:
-			collection === 'logs' ? 'products' : (translated.collectionName as LegacyCollectionName),
+		collection: translated.collectionName as LegacyCollectionName,
 		selector,
 		sort: translated.sort as MangoQuerySortPart<Record<string, unknown>>[],
 		limit: translated.limit,
 		search: translated.search,
 	};
-	const engineBinding = useEngineBinding(engineDescriptor, collection !== 'logs');
+	return useEngineBinding(engineDescriptor);
+}
+
+export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
+	const translated = translateQueryState('logs', state);
 	const local = useLocalQuery({
 		collectionName: 'logs',
-		selector,
+		selector: translated.selector,
 		sort: translated.sort,
 		limit: translated.limit,
 		search: translated.search,
 	});
-	return collection === 'logs'
-		? {
-				resource: local.resource as unknown as ObservableResource<QueryResult<RxCollection>>,
-				result$: local.result$ as unknown as Observable<QueryResult<RxCollection>>,
-				total$: local.total$,
-				totalSource$: LOCAL_TOTAL_SOURCE$,
-				active$: INACTIVE$,
-				sync: async () => undefined,
-			}
-		: engineBinding;
+	return {
+		resource: local.resource as unknown as ObservableResource<QueryResult<RxCollection>>,
+		result$: local.result$ as unknown as Observable<QueryResult<RxCollection>>,
+		total$: local.total$,
+		totalSource$: LOCAL_TOTAL_SOURCE$,
+		active$: INACTIVE$,
+		sync: async () => undefined,
+	};
 }
 
 function andSelector(
@@ -676,7 +677,7 @@ function observeParentLookup(
 }
 
 export function useRelationalCollectionBinding(state: QueryStateOf<'products'>): QueryBinding {
-	const runtime = useQueryManager();
+	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
 	const translated = translateQueryState('products', state);
 	const descriptor = useStableDescriptor({

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { prepareCollectionResetRefill, useQueryManager } from '@wcpos/query';
+import { prepareCollectionResetRefill, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { CollectionKey } from './use-collection';
@@ -38,7 +38,7 @@ export interface CollectionResetResult {
 /** Engine-owned reset funnel. A pending mutation queue is never destroyed implicitly: the
  * engine's `needs-confirmation` value is preserved and returned to the caller unchanged. */
 export const useCollectionReset = (key: CollectionKey) => {
-	const runtime = useQueryManager();
+	const runtime = useQueryRuntime();
 	const collectionNames = React.useMemo<CollectionKey[]>(
 		() => (key === 'products' ? ['variations', 'products'] : [key]),
 		[key]

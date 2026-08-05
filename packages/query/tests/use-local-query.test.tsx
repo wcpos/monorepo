@@ -73,4 +73,20 @@ describe('useLocalQuery', () => {
 		);
 		await expect(firstValueFrom(result.current.total$)).resolves.toBe(1);
 	});
+
+	it('returns an empty result when the logs collection is unavailable', async () => {
+		const engine = createFakeEngine(engineDB);
+		const wrapper = ({ children }: { children: React.ReactNode }) => (
+			<QueryProvider localDB={engineDB} engine={engine} locale="en">
+				{children}
+			</QueryProvider>
+		);
+		const { result } = renderHook(() => useLocalQuery({ collectionName: 'logs' }), { wrapper });
+
+		await expect(firstValueFrom(result.current.result$)).resolves.toEqual({
+			searchActive: false,
+			count: 0,
+			hits: [],
+		});
+	});
 });

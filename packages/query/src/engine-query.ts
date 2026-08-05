@@ -121,7 +121,7 @@ function matchingSelectors$(
 }
 
 function emptyResult(): QueryResult<RxCollection> {
-	return { elapsed: 0, searchActive: false, count: 0, hits: [] };
+	return { count: 0, hits: [] };
 }
 
 /** Direct reactive read against the current engine database through the adapter execute path. */
@@ -156,12 +156,9 @@ export function observeEngineQuery(
 					})
 				),
 				map((result): QueryResult<RxCollection> => ({
-					elapsed: result.elapsed,
-					searchActive: Boolean(descriptor.search?.trim()),
 					count: result.count,
 					hits: result.hits.map((document) => ({
 						id: document.primary,
-						score: 0,
 						document: wrapEngineDocument(descriptor.collection, document),
 					})),
 				})),

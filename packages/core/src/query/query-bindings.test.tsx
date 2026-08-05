@@ -11,7 +11,7 @@ import { act, cleanup, render, renderHook, waitFor } from '@testing-library/reac
 import { useObservableSuspense } from 'observable-hooks';
 import { filter, firstValueFrom } from 'rxjs';
 
-import { QueryProvider, useQueryManager } from '@wcpos/query';
+import { QueryProvider, useQueryRuntime } from '@wcpos/query';
 import type { QueryResult } from '@wcpos/query';
 
 import {
@@ -22,6 +22,7 @@ import {
 import {
 	useAppliedCouponReferenceDemand,
 	useCollectionBinding,
+	useLogsBinding,
 	useRelationalCollectionBinding,
 	useSearchSelect,
 } from './query-bindings';
@@ -70,10 +71,10 @@ describe('query bindings', () => {
 	let localDB: RxDatabase;
 	let engineDB: RxDatabase;
 	let engine: FakeEngine;
-	let manager: ReturnType<typeof useQueryManager> | undefined;
+	let manager: ReturnType<typeof useQueryRuntime> | undefined;
 
 	function ManagerCapture() {
-		manager = useQueryManager();
+		manager = useQueryRuntime();
 		return null;
 	}
 
@@ -123,7 +124,7 @@ describe('query bindings', () => {
 	}
 
 	it('uses the provider runtime without a fluent query manager surface', () => {
-		renderHook(() => useQueryManager(), { wrapper: Provider });
+		renderHook(() => useQueryRuntime(), { wrapper: Provider });
 
 		expect(manager).toBeDefined();
 		expect(manager).not.toHaveProperty('registerQuery');
@@ -171,6 +172,23 @@ describe('query bindings', () => {
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['coffee'])
 		);
+	});
+
+	it('does not open a logs query for an engine collection binding', async () => {
+		const logsFind = jest.spyOn(localDB.collections.logs, 'find');
+		const logsCount = jest.spyOn(localDB.collections.logs, 'count');
+		const state: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 10,
+		};
+
+		renderHook(() => useCollectionBinding('products', state), { wrapper: Provider });
+		await act(async () => Promise.resolve());
+
+		expect(logsFind).not.toHaveBeenCalled();
+		expect(logsCount).not.toHaveBeenCalled();
 	});
 
 	it('recovers from a query error when the descriptor changes', async () => {
@@ -788,10 +806,10 @@ describe('query bindings', () => {
 			sort: { field: 'timestamp', direction: 'desc' },
 			limit: 1,
 		};
-		const { result, rerender } = renderHook(
-			({ currentState }) => useCollectionBinding('logs', currentState),
-			{ wrapper: Provider, initialProps: { currentState: state } }
-		);
+		const { result, rerender } = renderHook(({ currentState }) => useLogsBinding(currentState), {
+			wrapper: Provider,
+			initialProps: { currentState: state },
+		});
 		await waitFor(() =>
 			expect(
 				(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits
@@ -829,10 +847,10 @@ describe('query bindings', () => {
 			sort: { field: 'timestamp', direction: 'desc' },
 			limit: 1,
 		};
-		const { result, rerender } = renderHook(
-			({ currentState }) => useCollectionBinding('logs', currentState),
-			{ wrapper: Provider, initialProps: { currentState: state } }
-		);
+		const { result, rerender } = renderHook(({ currentState }) => useLogsBinding(currentState), {
+			wrapper: Provider,
+			initialProps: { currentState: state },
+		});
 		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
 		const initialResource = result.current.resource;
 

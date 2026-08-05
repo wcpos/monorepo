@@ -7,7 +7,7 @@ import { map } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -46,7 +46,7 @@ export function PaymentWebview({
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const http = useRestHttpClient();
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,7 +77,7 @@ export function PaymentWebview({
 		if (!order.id) {
 			throw new Error('payment_refresh_requires_persisted_order');
 		}
-		const handle = manager.engine.require({
+		const handle = runtime.engine.require({
 			id: `checkout:order-refresh:${order.id}`,
 			collection: 'orders',
 			kind: 'targeted-records',
@@ -89,7 +89,7 @@ export function PaymentWebview({
 		} finally {
 			handle.release();
 		}
-	}, [manager, order.id]);
+	}, [runtime, order.id]);
 
 	/**
 	 *

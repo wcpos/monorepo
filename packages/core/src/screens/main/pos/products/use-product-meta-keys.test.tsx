@@ -27,7 +27,7 @@ const engine = {
 const manager = { engine };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => manager,
+	useQueryRuntime: () => manager,
 }));
 
 jest.mock('../../hooks/use-collection', () => ({

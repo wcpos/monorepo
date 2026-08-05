@@ -68,7 +68,8 @@ jest.mock('observable-hooks', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({
+	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => ({
 		engine: {
 			active: mockEngineActive,
 			status: mockEngineStatus,

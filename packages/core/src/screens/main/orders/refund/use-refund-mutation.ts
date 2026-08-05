@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
@@ -70,7 +70,7 @@ export function createRefundIdempotencyKey(orderId: number) {
  */
 export function useRefundMutation() {
 	const http = useRestHttpClient();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 
 	return React.useCallback(
 		async ({ order, amount, reason, lineItems, refundDestination }: RefundMutationArgs) => {
@@ -93,7 +93,7 @@ export function useRefundMutation() {
 
 			let handle;
 			try {
-				handle = manager.engine.require({
+				handle = runtime.engine.require({
 					id: `refund:order-refresh:${order.id}`,
 					collection: 'orders',
 					kind: 'targeted-records',
@@ -120,6 +120,6 @@ export function useRefundMutation() {
 
 			return response?.data;
 		},
-		[http, manager]
+		[http, runtime]
 	);
 }

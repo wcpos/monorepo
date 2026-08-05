@@ -22,7 +22,7 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
@@ -39,12 +39,12 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 	const product = row.original.document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 
 	const handleRefresh = React.useCallback(() => {
 		if (!product.id) return;
-		const handle = manager.engine.require({
+		const handle = runtime.engine.require({
 			id: `product-actions:refresh:${product.id}`,
 			collection: 'products',
 			kind: 'targeted-records',
@@ -63,18 +63,18 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 					},
 				});
 			});
-	}, [manager, product.id]);
+	}, [runtime, product.id]);
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		await manager.engine.write({
+		await runtime.engine.write({
 			collection: 'products',
 			operation: 'delete',
 			recordId: product.uuid!,
 		});
-	}, [manager, product.uuid]);
+	}, [runtime, product.uuid]);
 
 	if (readOnly) {
 		return null;

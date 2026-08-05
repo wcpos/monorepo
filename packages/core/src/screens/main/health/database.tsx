@@ -33,7 +33,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
-import { prepareCollectionResetRefill, useQueryManager } from '@wcpos/query';
+import { prepareCollectionResetRefill, useQueryRuntime } from '@wcpos/query';
 
 import { AttentionPanel } from './attention-panel';
 import { useT } from '../../../contexts/translations';
@@ -262,7 +262,7 @@ function CollectionRowView({
 	stuckCount?: number;
 }) {
 	const t = useT();
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const [confirming, setConfirming] = React.useState(false);
 	const [phase, setPhase] = React.useState<RowPhase>('idle');
 	const story = useRowStory(row, phase);
@@ -523,7 +523,7 @@ function HowSyncingWorksDialog() {
  */
 export function DatabaseScreen() {
 	const t = useT();
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const status = useEngineStatus();
 	const counts = useCollectionCounts();
 	const census = useCensusTotals();

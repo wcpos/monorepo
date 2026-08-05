@@ -69,13 +69,18 @@ describe('observeEngineQuery', () => {
 		const firstDatabase = { collections: database.collections } as RxDatabase;
 		const secondDatabase = { collections: database.collections } as RxDatabase;
 		const counts: number[] = [];
+		const results: unknown[] = [];
 		const subscription = observeEngineQuery(pending.engine, 'en', {
 			collection: 'products',
 			selector: { stock_status: 'instock' },
-		}).subscribe((result) => counts.push(result.count));
+		}).subscribe((result) => {
+			counts.push(result.count);
+			results.push(result);
+		});
 
 		try {
 			expect(counts).toEqual([0]);
+			expect(results[0]).toEqual({ count: 0, hits: [] });
 			listeners.forEach((listener) => listener(firstDatabase));
 			await waitFor(() => expect(counts.filter((count) => count === 1)).toHaveLength(1));
 

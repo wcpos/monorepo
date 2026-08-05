@@ -2,10 +2,9 @@ import * as React from 'react';
 
 import { cleanup, render } from '@testing-library/react';
 
-import { httpClientMock } from './__mocks__/http';
 import { createStoreDatabase } from './helpers/db';
 import { createEngineDatabase, createFakeEngine } from './helpers/engine';
-import { QueryProvider, useQueryManager } from '../src/provider';
+import { QueryProvider, useQueryRuntime } from '../src/provider';
 
 import type { FakeEngine } from './helpers/engine';
 import type { RxDatabase } from 'rxdb';
@@ -29,19 +28,18 @@ describe('QueryProvider', () => {
 
 	it('provides the direct runtime dependencies without a fluent manager surface', () => {
 		function Consumer() {
-			const runtime = useQueryManager();
+			const runtime = useQueryRuntime();
 			expect(runtime).toEqual({
 				localDB,
 				engine,
 				locale: 'en',
-				httpClient: httpClientMock,
 			});
 			expect(runtime).not.toHaveProperty('registerQuery');
 			return null;
 		}
 
 		render(
-			<QueryProvider localDB={localDB} engine={engine} http={httpClientMock} locale="en">
+			<QueryProvider localDB={localDB} engine={engine} locale="en">
 				<Consumer />
 			</QueryProvider>
 		);
@@ -49,11 +47,11 @@ describe('QueryProvider', () => {
 
 	it('rejects consumers outside the provider', () => {
 		function Consumer() {
-			useQueryManager();
+			useQueryRuntime();
 			return null;
 		}
 		expect(() => render(<Consumer />)).toThrow(
-			'useQueryManager must be used within a QueryProvider'
+			'useQueryRuntime must be used within a QueryProvider'
 		);
 	});
 });

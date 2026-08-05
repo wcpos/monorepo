@@ -4,7 +4,7 @@ import { useSubscription } from 'observable-hooks';
 import { Observable } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { parseRemoteId } from '../../../utils/parse-remote-id';
@@ -26,7 +26,7 @@ function referencedIds(result: OrdersResult): number[] {
 	return [...ids].sort((a, b) => a - b);
 }
 export function useReferencedCustomerDemand(result$: Observable<OrdersResult>): void {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	// useState initializer (not useRef): the set is read inside the pipe's
 	// callbacks, and react-compiler forbids ref reads in render scope.
 	const [attemptedIds] = React.useState(() => new Set<number>());

@@ -31,7 +31,8 @@ const mockTranslate = jest.fn((_key: string, options?: Record<string, unknown>) 
 );
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({
+	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => ({
 		engine: {
 			active: () => ({
 				database: {

@@ -12,7 +12,8 @@ const engine = {
 };
 
 jest.mock('@wcpos/query', () => ({
-	useQueryManager: () => ({ engine }),
+	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => ({ engine }),
 }));
 
 jest.mock('../../../../contexts/app-state', () => ({

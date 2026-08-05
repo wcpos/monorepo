@@ -4,7 +4,7 @@ import { ObservableResource } from 'observable-hooks';
 import { combineLatest, defer, from, of, throwError } from 'rxjs';
 import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
-import { useQueryManager } from './provider';
+import { useQueryRuntime } from './provider';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
 import type { QueryResult } from './query-result';
@@ -20,7 +20,7 @@ type LocalSearch = {
 	find(term: string): Promise<LocalDocument[]>;
 };
 
-export interface LocalQueryOptions {
+interface LocalQueryOptions {
 	collectionName: 'logs';
 	selector?: MangoQuerySelector<LocalDocumentData>;
 	sort?: MangoQuerySortPart<LocalDocumentData>[];
@@ -81,7 +81,6 @@ function localQueryResult$(
 
 	return selectors$.pipe(
 		switchMap((matchingSelector) => {
-			const startedAt = performance.now();
 			// No startWith(empty) on these: the first emission must be the real query
 			// result, so a descriptor swap in useLocalQuery keeps the previous window
 			// on screen instead of flashing an empty table.
@@ -97,12 +96,10 @@ function localQueryResult$(
 				.$.pipe(recoverAsEmpty<number>(collection, 0));
 			return combineLatest([documents$, total$]).pipe(
 				map(([documents, count]): QueryResult<LocalCollection> => ({
-					elapsed: performance.now() - startedAt,
 					searchActive: search.length > 0,
 					count,
 					hits: documents.map((document) => ({
 						id: String(document.primary),
-						score: 0,
 						document,
 					})),
 				}))
@@ -114,12 +111,16 @@ function localQueryResult$(
 
 /** Direct local-only query binding. It never registers engine demand. */
 export const useLocalQuery = (options: LocalQueryOptions) => {
-	const runtime = useQueryManager();
-	const collection = runtime.localDB.collections[options.collectionName] as LocalCollection;
+	const runtime = useQueryRuntime();
+	const collection = runtime.localDB.collections[options.collectionName] as
+		LocalCollection | undefined;
 	const key = JSON.stringify(options);
 	const stableOptions = React.useMemo(() => JSON.parse(key) as LocalQueryOptions, [key]);
 	const result$ = React.useMemo(
-		() => localQueryResult$(collection, runtime.locale, stableOptions),
+		() =>
+			collection
+				? localQueryResult$(collection, runtime.locale, stableOptions)
+				: of<QueryResult<LocalCollection>>({ searchActive: false, count: 0, hits: [] }),
 		[collection, runtime.locale, stableOptions]
 	);
 	// One resource for the hook's lifetime (mirrors useObservableResource in

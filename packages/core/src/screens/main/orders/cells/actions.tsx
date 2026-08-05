@@ -23,7 +23,7 @@ import {
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { awaitWriteOutcome, useQueryManager, WriteOutcomeError } from '@wcpos/query';
+import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -68,13 +68,13 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
 	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 	const canRefund = orderHasID && !!status && REFUNDABLE_STATUSES.includes(status);
 
 	const handleRefresh = React.useCallback(() => {
 		if (!orderHasID) return;
-		const handle = manager.engine.require({
+		const handle = runtime.engine.require({
 			id: `order-actions:refresh:${orderHasID}`,
 			collection: 'orders',
 			kind: 'targeted-records',
@@ -93,7 +93,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 					},
 				});
 			});
-	}, [manager, orderHasID]);
+	}, [runtime, orderHasID]);
 
 	/**
 	 * To re-open an order, we need to:
@@ -120,13 +120,13 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		const receipt = await manager.engine.write({
+		const receipt = await runtime.engine.write({
 			collection: 'orders',
 			operation: 'delete',
 			recordId: order.uuid!,
 		});
 		if (!receipt.annihilated) {
-			void awaitWriteOutcome(manager.engine, receipt.mutationId).catch((error) => {
+			void awaitWriteOutcome(runtime.engine, receipt.mutationId).catch((error) => {
 				if (error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE) {
 					syncLogger.error(t('orders.delete_not_permitted'), {
 						showToast: true,
@@ -136,7 +136,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 				}
 			});
 		}
-	}, [manager, order.uuid, t]);
+	}, [runtime, order.uuid, t]);
 
 	if (readOnly) {
 		return null;

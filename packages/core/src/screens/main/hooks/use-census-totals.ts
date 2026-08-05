@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { observeEngineCensus, useQueryManager } from '@wcpos/query';
+import { observeEngineCensus, useQueryRuntime } from '@wcpos/query';
 import type { CensusTotals } from '@wcpos/query';
 
 const EMPTY_CENSUS_TOTALS: CensusTotals = {
@@ -16,7 +16,7 @@ const EMPTY_CENSUS_TOTALS: CensusTotals = {
 };
 
 export function useCensusTotals(): CensusTotals {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const [totals, setTotals] = React.useState<CensusTotals>(EMPTY_CENSUS_TOTALS);
 
 	React.useEffect(() => {

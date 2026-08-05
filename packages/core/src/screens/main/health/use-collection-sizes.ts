@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 import { type CollectionKey, estimateCollectionBytes } from './database-logic';
 
@@ -20,7 +20,7 @@ export function useCollectionSizes(
 	counts: Partial<Record<CollectionKey, number>>,
 	keys: readonly CollectionKey[]
 ): CollectionSizes {
-	const { engine } = useQueryManager();
+	const { engine } = useQueryRuntime();
 	const [sizes, setSizes] = React.useState<CollectionSizes>({});
 
 	// The counts snapshot the last estimate ran against — string key keeps the

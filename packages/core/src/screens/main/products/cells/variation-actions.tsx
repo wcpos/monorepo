@@ -21,7 +21,7 @@ import {
 } from '@wcpos/components/dropdown-menu';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
@@ -45,12 +45,12 @@ export function VariationActions({
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const router = useRouter();
 	const t = useT();
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
 
 	const handleRefresh = React.useCallback(() => {
 		if (!variation.id) return;
-		const handle = manager.engine.require({
+		const handle = runtime.engine.require({
 			id: `variation-actions:refresh:${variation.id}`,
 			collection: 'variations',
 			kind: 'targeted-records',
@@ -69,18 +69,18 @@ export function VariationActions({
 					},
 				});
 			});
-	}, [manager, variation.id]);
+	}, [runtime, variation.id]);
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		await manager.engine.write({
+		await runtime.engine.write({
 			collection: 'variations',
 			operation: 'delete',
 			recordId: variation.uuid!,
 		});
-	}, [manager, variation.uuid]);
+	}, [runtime, variation.uuid]);
 
 	if (readOnly) {
 		return null;

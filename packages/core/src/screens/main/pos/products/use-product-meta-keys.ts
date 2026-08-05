@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 import { NEVER, Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { useQueryManager } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 
 import { collectMetaKeys, type MetaProduct } from './meta-keys';
 
@@ -24,11 +24,11 @@ type EngineDatabase = {
  * list stays current as products sync in and survives collection resets.
  */
 export function useProductMetaKeys(): string[] {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const products$ = React.useMemo(
 		() =>
 			new Observable<EngineDatabase | null>((subscriber) =>
-				manager.engine.db$((database) =>
+				runtime.engine.db$((database) =>
 					subscriber.next(database as unknown as EngineDatabase | null)
 				)
 			).pipe(
@@ -53,7 +53,7 @@ export function useProductMetaKeys(): string[] {
 					);
 				})
 			),
-		[manager]
+		[runtime]
 	);
 	const products = useObservableState(products$, []);
 

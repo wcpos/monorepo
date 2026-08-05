@@ -4,16 +4,17 @@ import { ObservableResource } from 'observable-hooks';
 import { Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { useQueryManager } from '@wcpos/query';
 import {
+	declareRequirements,
 	engineCollectionNameFor,
+	type EngineRxDocument,
+	requirementsForQuery,
 	resolveLegacyField,
+	useQueryRuntime,
 	wrapEngineDocument,
-} from '@wcpos/query/engine-compat';
-import { declareRequirements, requirementsForQuery } from '@wcpos/query/requirements';
+} from '@wcpos/query';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
 type OpenOrderHit = { id: string; document: OrderDocument };
 
 type EngineDatabase = {
@@ -42,10 +43,10 @@ export function useOpenOrdersResource(
 	cashierID: number,
 	storeID: number
 ): ObservableResource<OpenOrderHit[]> {
-	const manager = useQueryManager();
+	const runtime = useQueryRuntime();
 	const resource = React.useMemo(() => {
 		const openOrders$ = new Observable<EngineDatabase | null>((subscriber) => {
-			return manager.engine.db$((database) =>
+			return runtime.engine.db$((database) =>
 				subscriber.next(database as unknown as EngineDatabase | null)
 			);
 		}).pipe(
@@ -71,12 +72,12 @@ export function useOpenOrdersResource(
 			)
 		);
 		return new ObservableResource(openOrders$);
-	}, [cashierID, manager, storeID]);
+	}, [cashierID, runtime, storeID]);
 
 	React.useEffect(() => {
 		// Keep remote demand and the resident subscription bound to the same resource lifetime.
 		const handles = declareRequirements(
-			manager.engine,
+			runtime.engine,
 			requirementsForQuery({
 				id: 'pos:open-orders',
 				collectionName: 'orders',
@@ -88,7 +89,7 @@ export function useOpenOrdersResource(
 			for (const handle of handles) handle.release();
 			resource.destroy();
 		};
-	}, [manager, resource]);
+	}, [runtime, resource]);
 
 	return resource;
 }

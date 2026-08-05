@@ -19,7 +19,6 @@ import { DeviceScanProvider } from '@wcpos/core/screens/main/hooks/barcodes/devi
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
-import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
 import type { StoreDatabase } from '@wcpos/database';
 import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-token';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -79,11 +78,6 @@ function AppStack() {
 	}, []);
 
 	/**
-	 * The http client now has access to online status context
-	 */
-	const http = useRestHttpClient();
-
-	/**
 	 * The sync engine every fluent read is served from (ADR 0023 increment 1b).
 	 * Bound to the site; store/cashier are scopes within it. Memoized on the
 	 * site + scope identity — store switching via `scope.switch()` is a
@@ -135,7 +129,7 @@ function AppStack() {
 	);
 
 	return (
-		<QueryProvider localDB={storeDB} engine={engine} http={http} locale={locale}>
+		<QueryProvider localDB={storeDB} engine={engine} locale={locale}>
 			<SyncConfigBridge />
 			<UISettingsProvider>
 				<CompatGate>

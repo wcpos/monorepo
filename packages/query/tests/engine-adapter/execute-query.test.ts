@@ -287,7 +287,6 @@ describe('executeAdapterQuery', () => {
 
 		expect(result.count).toBe(3);
 		expect(result.hits.map((document) => document.id)).toEqual(['product-b']);
-		expect(result.elapsed).toBeGreaterThanOrEqual(0);
 		await database.close();
 	});
 

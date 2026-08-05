@@ -10,19 +10,14 @@ templates remain dedicated local-only paths.
 
 The package root exports:
 
-- `QueryProvider`, `useQueryManager`, and `QueryRuntime` — the shared runtime dependencies. The
-  historical hook name returns a plain `{ localDB, engine, locale, httpClient }` value.
+- `QueryProvider`, `useQueryRuntime`, and `QueryRuntime` — the shared runtime dependencies
+  `{ localDB, engine, locale }`.
 - `observeEngineQuery` and `observeEngineDatabases` — direct engine-resident reads through the
   adapter execution path.
 - requirement declaration/reset-refill helpers used by core bindings.
+- legacy-document boundary functions used by core.
 - `useLocalQuery` and logs-storage recovery for the standalone logs collection.
-- `useTemplatesSync` for the dedicated local receipt-template fetch target.
 - `awaitWriteOutcome` for engine mutation acknowledgements.
-
-Two explicit subpaths exist:
-
-- `@wcpos/query/engine-compat` exposes the legacy-document boundary functions needed by core.
-- `@wcpos/query/requirements` exposes the declarative demand bridge to isolated direct readers.
 
 All other engine-adapter modules are package-private.
 

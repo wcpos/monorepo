@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -53,16 +54,29 @@ const metroContext: ResolutionContext = {
 };
 
 describe('package exports', () => {
-	it.each(['engine-compat', 'requirements'])(
-		'resolves %s to the same source through Node exports and the Metro workspace resolver',
-		(subpath) => {
-			const nodeResolved = requireFromMain.resolve(`@wcpos/query/${subpath}`);
-			const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, subpath), 'ios');
+	it('resolves the root entry identically through Node exports and Metro', () => {
+		const nodeResolved = requireFromMain.resolve('@wcpos/query');
+		const metroResolved = metroResolve(metroContext, path.join(querySourceRoot, 'index'), 'ios');
 
-			expect(metroResolved).toEqual({
-				type: 'sourceFile',
-				filePath: fs.realpathSync(nodeResolved),
-			});
+		expect(metroResolved).toEqual({
+			type: 'sourceFile',
+			filePath: fs.realpathSync(nodeResolved),
+		});
+	});
+
+	it('rejects the removed query subpaths', () => {
+		for (const specifier of ['@wcpos/query/engine-compat', '@wcpos/query/requirements']) {
+			const resolution = spawnSync(
+				process.execPath,
+				['-e', `require.resolve(${JSON.stringify(specifier)})`],
+				{
+					cwd: path.join(repoRoot, 'apps/main'),
+					encoding: 'utf8',
+				}
+			);
+
+			expect(resolution.status).toBe(1);
+			expect(resolution.stderr).toContain('ERR_PACKAGE_PATH_NOT_EXPORTED');
 		}
-	);
+	});
 });
