@@ -26,7 +26,8 @@
 		"rxdb": "17.4.0",
 		"rxjs": "7.8.2",
 		"uuid": "^14.0.0",
-		"@wcpos/sync-engine": "workspace:*"
+		"@wcpos/sync-engine": "workspace:*",
+		"@wcpos/utils": "workspace:*"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.2",

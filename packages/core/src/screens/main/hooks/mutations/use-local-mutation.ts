@@ -11,7 +11,13 @@ import type {
 	ProductDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
-import { adapterDerivedFieldsFor, promotedColumnsFor, useQueryRuntime } from '@wcpos/query';
+import {
+	adapterDerivedFieldsFor,
+	COLLECTION_VOCABULARY,
+	promotedColumnsFor,
+	useQueryRuntime,
+	type WriteableCollection,
+} from '@wcpos/query';
 import {
 	deriveBarcodeFromPayload,
 	getActiveBarcodeSelectors,
@@ -30,15 +36,11 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 type Document =
 	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
 
-type WriteableCollection = 'orders' | 'products' | 'variations' | 'customers' | 'coupons';
-
-const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>([
-	'orders',
-	'products',
-	'variations',
-	'customers',
-	'coupons',
-]);
+const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>(
+	Object.entries(COLLECTION_VOCABULARY)
+		.filter(([, row]) => row.writeable)
+		.map(([name]) => name as WriteableCollection)
+);
 
 type QueryManager = ReturnType<typeof useQueryRuntime>;
 type EngineResident = RxDocument<Record<string, unknown>>;

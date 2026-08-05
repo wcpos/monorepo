@@ -11,9 +11,11 @@ import type {
 } from '@wcpos/database';
 import {
 	awaitWriteOutcome,
+	COLLECTION_VOCABULARY,
 	type LegacyCollectionName,
 	useQueryRuntime,
 	wrapEngineDocument,
+	type WriteableCollection,
 } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
@@ -27,7 +29,6 @@ const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 
 type Document =
 	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
-type WriteableCollection = 'orders' | 'products' | 'variations' | 'customers' | 'coupons';
 
 interface Props {
 	collectionName: CollectionKey;
@@ -42,7 +43,10 @@ class ActiveScopeChangedTwiceError extends Error {
 }
 
 function isWriteableCollection(name: string): name is WriteableCollection {
-	return ['orders', 'products', 'variations', 'customers', 'coupons'].includes(name);
+	return (
+		Object.prototype.hasOwnProperty.call(COLLECTION_VOCABULARY, name) &&
+		COLLECTION_VOCABULARY[name as keyof typeof COLLECTION_VOCABULARY].writeable
+	);
 }
 
 /**

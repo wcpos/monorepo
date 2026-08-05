@@ -33,7 +33,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
-import { runResetRefill, useQueryRuntime } from '@wcpos/query';
+import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 
 import { AttentionPanel } from './attention-panel';
 import { useT } from '../../../contexts/translations';
@@ -71,7 +71,13 @@ import { useCollectionSizes } from './use-collection-sizes';
 import { useOtherScopes } from './use-other-scopes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
 
-const ROW_ORDER: CollectionKey[] = [
+function exhaustiveCollectionOrder<const Order extends readonly CollectionKey[]>(
+	order: Exclude<CollectionKey, Order[number]> extends never ? Order : never
+): Order {
+	return order;
+}
+
+const ROW_ORDER = exhaustiveCollectionOrder([
 	'products',
 	'variations',
 	'orders',
@@ -81,32 +87,16 @@ const ROW_ORDER: CollectionKey[] = [
 	'tags',
 	'coupons',
 	'taxRates',
-];
+]);
 
 /** Engine row key → the legacy collection key the reset funnel speaks. */
-const ROW_TO_LEGACY: Record<CollectionKey, string> = {
-	products: 'products',
-	variations: 'variations',
-	orders: 'orders',
-	customers: 'customers',
-	categories: 'products/categories',
-	brands: 'products/brands',
-	tags: 'products/tags',
-	coupons: 'coupons',
-	taxRates: 'taxes',
-};
+const ROW_TO_LEGACY = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.legacyName])
+) as Record<CollectionKey, string>;
 
-const ROW_LABEL_KEYS: Record<CollectionKey, string> = {
-	products: 'common.products',
-	variations: 'common.variations',
-	orders: 'common.orders',
-	customers: 'common.customers',
-	categories: 'common.categories',
-	brands: 'common.brands',
-	tags: 'common.tags',
-	coupons: 'common.coupons',
-	taxRates: 'common.tax_rates',
-};
+const ROW_LABEL_KEYS = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.labelKey])
+) as Record<CollectionKey, string>;
 
 function useStorageEstimate(): number | null {
 	const [bytes, setBytes] = React.useState<number | null>(null);

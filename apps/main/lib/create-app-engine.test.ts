@@ -168,6 +168,31 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
+	it('reports an unknown census collection as unsupported without making a request', async () => {
+		const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response(null, {
+				status: 200,
+				headers: { 'X-WP-Total': '17', 'content-length': '0' },
+			})
+		);
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const queryTotal = createRxdbSyncEngine.mock.calls[0]?.[0].queryTotal;
+
+		const total = await queryTotal?.fetchWooQueryTotal({
+			request: {
+				queryKey: 'census:unknown',
+				endpoint: 'unknown',
+				params: { page: 1, per_page: 1 },
+				totalHeader: 'X-WP-Total',
+			},
+		});
+
+		expect(total).toBeNull();
+		expect(fetch).not.toHaveBeenCalled();
+		fetch.mockRestore();
+	});
+
 	it.each([null, '', '3.5', '-1', 'not-a-number'])(
 		'rejects an invalid X-WP-Total value %p',
 		async (header) => {

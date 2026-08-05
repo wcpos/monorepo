@@ -1,34 +1,16 @@
 import * as React from 'react';
 
-import { runResetRefill, useQueryRuntime } from '@wcpos/query';
+import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
+import type { SyncCollectionName } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { CollectionKey } from './use-collection';
 
 const logger = getLogger(['wcpos', 'hooks', 'useCollectionReset']);
 
-type EngineCollection =
-	| 'products'
-	| 'variations'
-	| 'orders'
-	| 'customers'
-	| 'taxRates'
-	| 'categories'
-	| 'tags'
-	| 'brands'
-	| 'coupons';
-
-const ENGINE_COLLECTIONS: Partial<Record<CollectionKey, EngineCollection>> = {
-	products: 'products',
-	variations: 'variations',
-	orders: 'orders',
-	customers: 'customers',
-	taxes: 'taxRates',
-	'products/categories': 'categories',
-	'products/tags': 'tags',
-	'products/brands': 'brands',
-	coupons: 'coupons',
-};
+const ENGINE_COLLECTIONS = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [row.legacyName, name])
+) as Partial<Record<CollectionKey, SyncCollectionName>>;
 
 export interface CollectionResetResult {
 	collectionName: CollectionKey;

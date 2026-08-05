@@ -12,7 +12,10 @@ const mockEngine = {
 	statusChanges: jest.fn(() => () => undefined),
 };
 
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: mockEngine }) }));
+jest.mock('@wcpos/query', () => ({
+	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
+	useQueryRuntime: () => ({ engine: mockEngine }),
+}));
 
 type TestFileHandle = { kind: 'file'; getFile(): Promise<{ size: number }> };
 type TestDirectoryHandle = {

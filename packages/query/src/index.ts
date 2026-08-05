@@ -5,10 +5,12 @@ export type { QueryResult } from './query-result';
 export { wrapEngineDocument } from './engine-adapter/document-proxy';
 export {
 	adapterDerivedFieldsFor,
+	COLLECTION_VOCABULARY,
 	engineCollectionNameFor,
 	promotedColumnsFor,
 	resolveLegacyField,
 	type LegacyCollectionName,
+	type WriteableCollection,
 } from './engine-adapter/collection-map';
 export type { EngineRxDocument } from './engine-adapter/execute-query';
 export {

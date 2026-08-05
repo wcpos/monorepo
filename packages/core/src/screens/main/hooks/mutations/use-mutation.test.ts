@@ -17,6 +17,7 @@ jest.mock('uuid', () => ({
 }));
 
 jest.mock('@wcpos/query', () => ({
+	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	useQueryRuntime: () => ({ engine: { write: mockWrite, status: mockStatus } }),
 	awaitWriteOutcome: (...args: unknown[]) => mockAwaitWriteOutcome(...args),
 	wrapEngineDocument: (...args: unknown[]) => mockWrapEngineDocument(...args),

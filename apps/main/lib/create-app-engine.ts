@@ -18,9 +18,15 @@
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { COLLECTION_VOCABULARY } from '@wcpos/query';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
-import type { QueryTotalWooRequest, RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
+import type {
+	QueryTotalWooRequest,
+	RxdbSyncEngine,
+	StoreScopeIdentity,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
@@ -98,22 +104,9 @@ type CachedEngine = {
 let cachedEngine: CachedEngine | null = null;
 const pendingDisposals = new Map<string, Promise<void>>();
 
-const CENSUS_WC_ROUTES: Record<string, string | null> = {
-	orders: 'wc/v3/orders',
-	products: 'wc/v3/products',
-	// Woo exposes variations only beneath a specific product, so there is no
-	// honest cheap collection-wide census request. The engine leaves it unknown.
-	variations: null,
-	customers: 'wcpos/v2/customers',
-	// Raw wc/v3/taxes requires `manage_woocommerce`, which cashier-tier POS users
-	// (e.g. the demo role) don't have — every census probe 403s and spams the error
-	// log. The POS proxy serves the same rows + X-WP-Total under the POS grant.
-	taxRates: 'wcpos/v2/taxes',
-	categories: 'wc/v3/products/categories',
-	brands: 'wc/v3/products/brands',
-	tags: 'wc/v3/products/tags',
-	coupons: 'wc/v3/coupons',
-};
+function isSyncCollectionName(name: string): name is SyncCollectionName {
+	return Object.prototype.hasOwnProperty.call(COLLECTION_VOCABULARY, name);
+}
 
 function canonicalSite(site: string): string {
 	let canonical = site.trim().toLowerCase();
@@ -582,9 +575,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		request: QueryTotalWooRequest;
 		signal?: AbortSignal;
 	}): Promise<number | null> => {
-		const mappedRoute = CENSUS_WC_ROUTES[input.request.endpoint];
+		if (!isSyncCollectionName(input.request.endpoint)) return null;
+		const mappedRoute = COLLECTION_VOCABULARY[input.request.endpoint].censusRoute;
 		if (mappedRoute === null) return null;
-		const url = new URL(mappedRoute ?? input.request.endpoint, site.wpJsonRoot);
+		const url = new URL(mappedRoute, site.wpJsonRoot);
 		for (const [key, value] of Object.entries(input.request.params)) {
 			url.searchParams.set(key, String(value));
 		}

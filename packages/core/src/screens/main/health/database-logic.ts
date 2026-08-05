@@ -1,15 +1,7 @@
-import type { CensusTotal, CensusTotals } from '@wcpos/sync-engine';
+import { COLLECTION_VOCABULARY } from '@wcpos/query';
+import type { CensusTotal, CensusTotals, SyncCollectionName } from '@wcpos/sync-engine';
 
-export type CollectionKey =
-	| 'products'
-	| 'variations'
-	| 'orders'
-	| 'customers'
-	| 'categories'
-	| 'brands'
-	| 'tags'
-	| 'coupons'
-	| 'taxRates';
+export type CollectionKey = SyncCollectionName;
 
 /**
  * A single row's derived display state. `percentLocal` is populated ONLY when
@@ -191,17 +183,9 @@ export function relativeTimeParts(
  * Telemetry (snake_case) collection names carried by log rows → engine row
  * keys. Unknown names are dropped rather than guessed.
  */
-const TELEMETRY_TO_ROW_KEY: Record<string, CollectionKey> = {
-	products: 'products',
-	variations: 'variations',
-	orders: 'orders',
-	customers: 'customers',
-	categories: 'categories',
-	brands: 'brands',
-	tags: 'tags',
-	coupons: 'coupons',
-	tax_rates: 'taxRates',
-};
+const TELEMETRY_TO_ROW_KEY = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [row.telemetryName, name])
+) as Record<string, CollectionKey>;
 
 export function rowKeyForTelemetryCollection(name: string): CollectionKey | null {
 	return TELEMETRY_TO_ROW_KEY[name] ?? null;
