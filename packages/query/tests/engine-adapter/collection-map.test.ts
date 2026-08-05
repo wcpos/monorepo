@@ -77,6 +77,17 @@ describe('engine adapter collection map', () => {
 			tags: 'wc/v3/products/tags',
 			coupons: 'wc/v3/coupons',
 		});
+		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.writeable]))).toEqual({
+			orders: true,
+			products: true,
+			variations: true,
+			customers: true,
+			taxRates: false,
+			categories: false,
+			brands: false,
+			tags: false,
+			coupons: true,
+		});
 	});
 
 	it('reverses legacy and engine identifiers per collection', () => {
