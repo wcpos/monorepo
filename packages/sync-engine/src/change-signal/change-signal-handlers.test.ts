@@ -12,14 +12,29 @@ function descriptor(collection: 'products' | 'variations' | 'customers'): Target
 	return found;
 }
 
+type ResidentRow = { primary: string; json: Record<string, unknown> };
+
 function context(
 	collection: 'products' | 'variations' | 'customers',
 	body: unknown,
-	urls: string[]
+	urls: string[],
+	residents: ResidentRow[] = [],
+	removedPrimaries: string[] = []
 ): HandlerContext {
 	return {
 		database: {
-			collections: { [collection]: {} },
+			collections: {
+				[collection]: {
+					find: () => ({
+						exec: async () =>
+							residents.map((row) => ({ primary: row.primary, toJSON: () => row.json })),
+					}),
+					bulkRemove: async (primaries: string[]) => {
+						removedPrimaries.push(...primaries);
+						return { error: [] };
+					},
+				},
+			},
 		} as never,
 		fetch: vi.fn(async (url: string) => {
 			urls.push(url);
@@ -39,6 +54,23 @@ describe('pullTargetedByIds product publication filter', () => {
 			pullTargetedByIds(context('products', [], urls), descriptor('products'), [1, 2])
 		).resolves.toBe(0);
 		expect(new URL(urls[0]!).searchParams.get('status')).toBe('publish');
+	});
+
+	it('tombstones clean resident products omitted by a publish-filtered pull', async () => {
+		const urls: string[] = [];
+		const removed: string[] = [];
+		const residents: ResidentRow[] = [
+			{ primary: 'uuid-clean', json: { wooProductId: 1 } },
+			{ primary: 'uuid-dirty', json: { wooProductId: 2, local: { dirty: true } } },
+		];
+
+		await pullTargetedByIds(
+			context('products', [], urls, residents, removed),
+			descriptor('products'),
+			[1, 2]
+		);
+		// The dirty row keeps the local-work protection every removal path honours.
+		expect(removed).toEqual(['uuid-clean']);
 	});
 
 	it.each([
