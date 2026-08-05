@@ -93,7 +93,7 @@ function parseBareArray(body: unknown): WooPayload[] {
  * the wrapper (not the inner payload), and the wrapper-level `_rxdb_digest`
  * (a transport-only Leg-3 digest) is deliberately dropped.
  */
-function parseVariationsEnvelope(body: unknown): WooPayload[] {
+export function parseVariationsEnvelope(body: unknown): WooPayload[] {
 	const documents = (body as { documents?: unknown })?.documents;
 	if (!Array.isArray(documents)) {
 		throw new Error('variations pull returned no documents array');
@@ -277,7 +277,7 @@ function productDocument(rawPayload: WooPayload): Record<string, unknown> {
 	return materializeTargeted('products', rawPayload).storedDocument;
 }
 
-function variationDocument(rawPayload: WooPayload): Record<string, unknown> {
+export function variationDocument(rawPayload: WooPayload): Record<string, unknown> {
 	return materializeTargeted('variations', rawPayload).storedDocument;
 }
 

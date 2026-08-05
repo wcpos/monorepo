@@ -267,6 +267,10 @@ export function productDocumentId(productId: number): string {
 	return `woo-product:${productId}`;
 }
 
+export function variationDocumentId(variationId: number): string {
+	return `woo-variation:${variationId}`;
+}
+
 export function customerDocumentId(customerId: number): string {
 	return `woo-customer:${customerId}`;
 }

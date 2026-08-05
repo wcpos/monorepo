@@ -598,13 +598,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			}
 
 			if (item.requirement.kind === 'search') {
-				// Products/customers search is UI-anchored (#473): construct the same FetchTask shape
+				// Products/customers/variations search is UI-anchored (#473): construct the same FetchTask shape
 				// in memory and invoke only its registered fetcher. It never enters durable scheduler
 				// state, so a periodic drain cannot reclaim it after the declarers release it.
 				const searchCollection = item.requirement.collection;
-				if (searchCollection !== 'products' && searchCollection !== 'customers') {
+				if (!['products', 'customers', 'variations'].includes(searchCollection)) {
 					throw new Error(
-						`require: 'search' supports products/customers; "${searchCollection}" is unsupported`
+						`require: 'search' supports products/customers/variations; "${searchCollection}" is unsupported`
 					);
 				}
 				const term = (item.requirement.term ?? '').trim();
@@ -617,9 +617,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				}
 				const encodedTerm = encodeURIComponent(term);
 				const queryKey =
-					searchCollection === 'products'
-						? `products:search:${encodedTerm}`
-						: `customers:search=${encodedTerm}:limit=${limit}`;
+					searchCollection === 'customers'
+						? `customers:search=${encodedTerm}:limit=${limit}`
+						: `${searchCollection}:search:${encodedTerm}`;
 				if (!item.requirement.forceRefresh) {
 					const lane = await coverage.readLane(searchCollection, queryKey);
 					if (lane?.complete && lane.fresh) {
@@ -647,7 +647,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								reason: 'products catalogue is fully resident locally',
 							};
 						}
-					} else if (await deps.customerSearchCatalogComplete?.()) {
+					} else if (
+						searchCollection === 'customers' &&
+						(await deps.customerSearchCatalogComplete?.())
+					) {
 						return {
 							action: 'serve-local',
 							missingRecordIds: [],

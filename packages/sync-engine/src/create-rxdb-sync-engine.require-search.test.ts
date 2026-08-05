@@ -1,6 +1,6 @@
 /**
  * The public SEARCH-demand verb: `engine.require({ collection, kind: 'search', term })`.
- * A products/customers search declaration executes the existing scheduler fetcher directly,
+ * A products/customers/variations search declaration executes the existing scheduler fetcher directly,
  * lands the records, and resolves `ready` from that search's own outcome. UI-anchored
  * (re-declared per render → the MEMORY path, never durable); concurrent identical
  * declarations share one in-memory execution and `release()` abandons the last declaration.
@@ -27,6 +27,8 @@ let uniqueStore = 0;
 const productUuid = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const customerUuid = (n: number): string =>
 	`5b8e1a3c-2f4d-4a6b-9c8e-${String(n).padStart(12, '0')}`;
+const variationUuid = (n: number): string =>
+	`70000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const posMeta = (uuid: string) => [{ key: '_woocommerce_pos_uuid', value: uuid }];
 
 afterEach(() => {
@@ -63,6 +65,28 @@ function productPayload(id: number, name: string): Record<string, unknown> {
 	};
 }
 
+function variationEnvelopeDocument(
+	id: number,
+	parentId: number,
+	name: string
+): Record<string, unknown> {
+	return {
+		id,
+		parent_id: parentId,
+		payload: {
+			id,
+			name,
+			sku: `VAR-${id}`,
+			date_modified_gmt: '2026-07-10T00:00:00',
+			price: '5.00',
+			stock_status: 'instock',
+			attributes: [],
+			stock_quantity: null,
+			meta_data: posMeta(variationUuid(id)),
+		},
+	};
+}
+
 /** Answers a `products:search:` lane: the fetcher issues a `search=` GET and a `sku=` GET. */
 function scriptedProductSearchProxy(products: Record<string, unknown>[]) {
 	const state = { searchPulls: 0, skuPulls: 0 };
@@ -77,6 +101,26 @@ function scriptedProductSearchProxy(products: Record<string, unknown>[]) {
 			return json(products);
 		}
 		return json([]);
+	};
+	return { state, fetch };
+}
+
+/** Answers a `variations:search:` lane using the plugin's envelope contract. */
+function scriptedVariationSearchProxy(documents: Record<string, unknown>[]) {
+	const state = { urls: [] as string[] };
+	const fetch = async (url: string): Promise<Response> => {
+		const parsed = new URL(url);
+		if (!parsed.pathname.endsWith('/variations')) return json([]);
+		state.urls.push(url);
+		const hits = parsed.searchParams.has('search') ? documents : [];
+		return json({
+			documents: hits,
+			meta: {
+				total: hits.length,
+				page: Number(parsed.searchParams.get('page')),
+				per_page: Number(parsed.searchParams.get('per_page')),
+			},
+		});
 	};
 	return { state, fetch };
 }
@@ -393,6 +437,114 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('rounds a variations search trip over both legs, preserves parent_id, and persists no search task', async () => {
+		const server = scriptedVariationSearchProxy([
+			variationEnvelopeDocument(654, 321, 'Blue keyboard'),
+		]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+
+		await expect(
+			engine.require({
+				id: 'variation-search',
+				collection: 'variations',
+				kind: 'search',
+				term: 'blue keyboard',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched', documents: 1, requests: 2 });
+		expect(server.state.urls).toEqual([
+			`${SYNC_BASE}/variations?search=blue+keyboard&per_page=25&page=1`,
+			`${SYNC_BASE}/variations?sku=blue+keyboard&per_page=25&page=1`,
+		]);
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const rows = (
+			await (
+				scope.database.collections.variations as {
+					find(): { exec(): Promise<{ toJSON(): Record<string, unknown> }[]> };
+				}
+			)
+				.find()
+				.exec()
+		).map((doc) => doc.toJSON());
+		expect(rows).toEqual([
+			expect.objectContaining({ id: variationUuid(654), wooId: 654, parentId: 321 }),
+		]);
+		expect(await searchTaskRows(engine)).toEqual([]);
+		await engine.dispose();
+	});
+
+	it('serves a repeated variations search from fresh coverage without another request', async () => {
+		const server = scriptedVariationSearchProxy([]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		await engine.require({
+			id: 'variation-coverage-seed',
+			collection: 'variations',
+			kind: 'search',
+			term: 'empty',
+		}).ready;
+		const requestsBefore = server.state.urls.length;
+
+		await expect(
+			engine.require({
+				id: 'variation-coverage-repeat',
+				collection: 'variations',
+				kind: 'search',
+				term: 'empty',
+			}).ready
+		).resolves.toMatchObject({
+			action: 'serve-local',
+			reason: 'variations search fetched within the coverage window',
+			requests: 0,
+		});
+		expect(server.state.urls).toHaveLength(requestsBefore);
+		await engine.dispose();
+	});
+
+	it('forceRefresh refetches a variations search despite fresh coverage', async () => {
+		const server = scriptedVariationSearchProxy([]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		await engine.require({
+			id: 'variation-force-seed',
+			collection: 'variations',
+			kind: 'search',
+			term: 'blue',
+		}).ready;
+
+		await expect(
+			engine.require({
+				id: 'variation-force-refresh',
+				collection: 'variations',
+				kind: 'search',
+				term: 'blue',
+				forceRefresh: true,
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.urls).toHaveLength(4);
+		await engine.dispose();
+	});
+
+	it('runs only the variations sku leg for a two-character term', async () => {
+		const server = scriptedVariationSearchProxy([]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+
+		await expect(
+			engine.require({
+				id: 'variation-short-search',
+				collection: 'variations',
+				kind: 'search',
+				term: '42',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched', requests: 1 });
+		expect(server.state.urls).toEqual([`${SYNC_BASE}/variations?sku=42&per_page=25&page=1`]);
+		expect(await searchTaskRows(engine)).toEqual([]);
+		await engine.dispose();
+	});
+
 	it('rounds a customers search trip through the search=…:limit= lane', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();
@@ -674,7 +826,7 @@ describe('require() for search — the public search-demand verb', () => {
 				kind: 'search',
 				term: 'anything',
 			}).ready
-		).rejects.toThrow(/'search' supports products\/customers/i);
+		).rejects.toThrow(/'search' supports products\/customers\/variations/i);
 		await engine.dispose();
 	});
 

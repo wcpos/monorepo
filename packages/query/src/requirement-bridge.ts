@@ -50,7 +50,11 @@ const TARGETED_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
 	'orders',
 ]);
 
-const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>(['products', 'customers']);
+const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
+	'products',
+	'customers',
+	'variations',
+]);
 const REFERENCE_ENGINE_COLLECTIONS: EngineCollectionName[] = [
 	'categories',
 	'tags',
@@ -473,6 +477,7 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	if (
 		trimmedSearchTerm &&
 		SEARCH_ENGINE_COLLECTIONS.has(engineCollection) &&
+		(engineCollection !== 'variations' || !wooIds) &&
 		(engineCollection !== 'customers' || trimmedSearchTerm.length >= FLEXSEARCH_MIN_TERM_LENGTH)
 	) {
 		requirements.push({

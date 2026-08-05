@@ -36,7 +36,7 @@ export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeD
 export {
 	checkpointInstantMs, customerDocumentId, finiteOrNull, normalizeCheckpoint,
 	orderDocumentId, productDocumentId, promotedOrderColumns, promotedProductColumns,
-	withOrderColumns, type OrderDocument, type ProductDocument, type PullResponse,
+	variationDocumentId, withOrderColumns, type OrderDocument, type ProductDocument, type PullResponse,
 	type StoredOrderDocument, type StoredProductDocument, type SyncCheckpoint,
 	type WooOrderPayload, type WooProductPayload,
 } from './protocol';
