@@ -3,6 +3,11 @@ import * as path from 'path';
 
 import { chromium } from '@playwright/test';
 
+import {
+	COLD_START_ENABLED,
+	COLD_START_STATE_NAME,
+	installThinCatalogueRoutes,
+} from './cold-start';
 import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
 import { exportOPFS } from './opfs-helpers';
 
@@ -108,9 +113,14 @@ async function exportLocalStorage(
 async function setupVariant(
 	variant: StoreVariant,
 	storeUrl: string,
-	baseURL: string
+	baseURL: string,
+	options: { stateName?: string; coldStart?: boolean } = {}
 ): Promise<void> {
-	console.log(`[global-setup] Authenticating with ${variant} store: ${storeUrl}`);
+	const stateName = options.stateName ?? variant;
+	console.log(
+		`[global-setup] Authenticating with ${variant} store: ${storeUrl}` +
+			(options.coldStart ? ' (cold start — bulk catalogue sync blocked)' : '')
+	);
 
 	const browser = await chromium.launch();
 	const context = await browser.newContext({
@@ -141,6 +151,9 @@ async function setupVariant(
 	}
 	await stubStoreVersionForE2E(context, storeUrl, variant);
 	const authPage = await context.newPage();
+	if (options.coldStart) {
+		await installThinCatalogueRoutes(authPage);
+	}
 	authPage.on('response', (response) => {
 		if (response.status() >= 400) {
 			console.log(
@@ -170,9 +183,11 @@ async function setupVariant(
 	};
 
 	try {
-		await authenticateWithStore(authPage, testInfo as any);
+		await authenticateWithStore(authPage, testInfo as any, {
+			waitForCatalogue: !options.coldStart,
+		});
 
-		console.log(`[global-setup] Auth complete for ${variant}, exporting state...`);
+		console.log(`[global-setup] Auth complete for ${stateName}, exporting state...`);
 
 		// Close the auth page so the OPFS worker terminates and releases all
 		// exclusive file handles (createSyncAccessHandle). We keep the browser
@@ -191,15 +206,15 @@ async function setupVariant(
 		const localStorage = await exportLocalStorage(exportPage);
 
 		const state = { opfs, localStorage };
-		const statePath = path.join(AUTH_STATE_DIR, `${variant}.json`);
+		const statePath = path.join(AUTH_STATE_DIR, `${stateName}.json`);
 		fs.writeFileSync(statePath, JSON.stringify(state));
 
-		console.log(`[global-setup] Saved ${variant} state (${Object.keys(opfs).length} OPFS files)`);
+		console.log(`[global-setup] Saved ${stateName} state (${Object.keys(opfs).length} OPFS files)`);
 	} catch (error) {
 		// Capture screenshot for debugging — use the auth page if still open
 		const screenshotPage = context.pages().at(-1);
 		if (screenshotPage) {
-			const screenshotPath = path.join(AUTH_STATE_DIR, `${variant}-failure.png`);
+			const screenshotPath = path.join(AUTH_STATE_DIR, `${stateName}-failure.png`);
 			await screenshotPage.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
 			console.log(`[global-setup] Screenshot saved to ${screenshotPath}`);
 			console.log(`[global-setup] Page URL at failure: ${screenshotPage.url()}`);
@@ -232,6 +247,16 @@ async function globalSetup() {
 		await setupVariant('free', FREE_STORE_URL, baseURL);
 	}
 	await setupVariant('pro', PRO_STORE_URL, baseURL);
+
+	// The cold-start profile (#991) needs its own bootstrap: the same login, but
+	// captured BEFORE steady-state sync fills the catalogue. Opt-in — it costs a
+	// second full OAuth round.
+	if (COLD_START_ENABLED) {
+		await setupVariant('pro', PRO_STORE_URL, baseURL, {
+			stateName: COLD_START_STATE_NAME,
+			coldStart: true,
+		});
+	}
 
 	console.log('[global-setup] All variants authenticated and saved.');
 }
