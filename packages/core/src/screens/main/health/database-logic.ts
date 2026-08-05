@@ -1,4 +1,4 @@
-import type { CensusTotal, CensusTotals } from '@wcpos/query';
+import type { CensusTotal, CensusTotals } from '@wcpos/sync-engine';
 
 export type CollectionKey =
 	| 'products'

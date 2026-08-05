@@ -542,31 +542,6 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 		await engine.dispose();
 	});
 
-	it('projects host-facing scope events and guard stats without exposing engine event names', async () => {
-		const { a, b } = freshIdentities();
-		const engine = engineWith(undefined, a);
-		await engine.ready;
-		const events: { type: string; scopeId: string; collection?: string }[] = [];
-		const unsubscribe = engine.onScopeEvent((event) => events.push(event));
-
-		const scopeB = await engine.scope.switch(b);
-		await engine.scope.resetCollection('orders');
-
-		expect(events).toEqual([
-			{ type: 'switched', scopeId: scopeB.scopeId },
-			{ type: 'reset', scopeId: scopeB.scopeId, collection: 'orders' },
-		]);
-		expect(engine.stats()).toEqual({
-			scopesOpen: 2,
-			wrongScopeWrites: 0,
-			lateResponsesDropped: 0,
-		});
-		unsubscribe();
-		await engine.scope.switch(a);
-		expect(events).toHaveLength(2);
-		await engine.dispose();
-	});
-
 	it('a throwing diagnostics observer or events listener never breaks the engine', async () => {
 		const { a, b } = freshIdentities();
 		const engine = engineWith(

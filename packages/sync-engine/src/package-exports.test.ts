@@ -7,8 +7,10 @@ describe('package exports', () => {
 		expect(Object.keys(packageJson.exports)).toEqual(['.', './testing']);
 	});
 
-	it("keeps createRxdbSyncEngine as the production door's only runtime value", async () => {
+	it("keeps the production door's runtime values curated", async () => {
 		const production = await import('./index');
-		expect(Object.keys(production)).toEqual(['createRxdbSyncEngine']);
+		expect(Object.keys(production).sort()).toEqual(
+			['createRxdbSyncEngine', 'SYNC_COLLECTION_NAMES', 'MUTATION_QUEUE_RXDB_COLLECTION'].sort()
+		);
 	});
 });

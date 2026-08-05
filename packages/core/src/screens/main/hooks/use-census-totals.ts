@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { observeEngineCensus, useQueryRuntime } from '@wcpos/query';
-import type { CensusTotals } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
+import type { CensusTotals } from '@wcpos/sync-engine';
 
 const EMPTY_CENSUS_TOTALS: CensusTotals = {
 	orders: null,
@@ -21,7 +21,7 @@ export function useCensusTotals(): CensusTotals {
 
 	React.useEffect(() => {
 		// The engine census is an external subscription and must follow the active engine lifecycle.
-		return observeEngineCensus(engine, setTotals);
+		return engine.censusChanges(setTotals);
 	}, [engine]);
 
 	return totals;

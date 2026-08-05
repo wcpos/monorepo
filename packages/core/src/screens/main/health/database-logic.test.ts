@@ -1,4 +1,4 @@
-import type { CensusTotals } from '@wcpos/query';
+import type { CensusTotals } from '@wcpos/sync-engine';
 
 import {
 	censusFreshnessWindow,

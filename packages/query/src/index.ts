@@ -17,13 +17,6 @@ export {
 	type EngineQueryDescriptor,
 } from './engine-query';
 export {
-	observeEngineCensus,
-	observeEngineCollectionCounts,
-	observeEngineMutationCounts,
-	type EngineCollectionCounts,
-	type EngineMutationCounts,
-} from './engine-monitor';
-export {
 	declareRequirements,
 	isFullyRepresentedProductSelector,
 	orderRangeBoundSeconds,
@@ -33,16 +26,3 @@ export {
 	type RequirementSortPart,
 } from './requirement-bridge';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';
-export type {
-	CoverageLaneDocument,
-	CensusTotal,
-	CensusTotals,
-	EngineEvent,
-	EngineLane,
-	EngineRequirement,
-	EngineStatus,
-	QueryTotalCacheDocument,
-	RequirementHandle,
-	RxdbSyncEngine,
-	SyncCollectionName,
-} from '@wcpos/sync-engine';

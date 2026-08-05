@@ -3,7 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
-import type { CensusTotals } from '@wcpos/query';
+import type { CensusTotals } from '@wcpos/sync-engine';
 
 import { useCensusTotals } from './use-census-totals';
 
@@ -20,11 +20,8 @@ const emptyTotals: CensusTotals = {
 };
 const mockSubscribers = new Set<(totals: CensusTotals) => void>();
 const mockUnsubscribe = jest.fn();
-const mockEngine = { id: 'engine' };
-
-jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({ engine: mockEngine }),
-	observeEngineCensus: (_engine: unknown, cb: (totals: CensusTotals) => void) => {
+const mockEngine = {
+	censusChanges: (cb: (totals: CensusTotals) => void) => {
 		mockSubscribers.add(cb);
 		cb(emptyTotals);
 		return () => {
@@ -32,6 +29,10 @@ jest.mock('@wcpos/query', () => ({
 			mockUnsubscribe();
 		};
 	},
+};
+
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine: mockEngine }),
 }));
 
 describe('useCensusTotals', () => {
