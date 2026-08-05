@@ -72,13 +72,9 @@ const DEMAND_RETRY_BACKOFF_MS = 250;
 const LOCAL_TOTAL_SOURCE$ = of('local' as const);
 const INACTIVE$ = of(false);
 
-function stableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDescriptor {
-	return descriptor;
-}
-
 function useStableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDescriptor {
 	const key = JSON.stringify(descriptor);
-	return React.useMemo(() => stableDescriptor(JSON.parse(key) as EngineQueryDescriptor), [key]);
+	return React.useMemo(() => JSON.parse(key) as EngineQueryDescriptor, [key]);
 }
 
 function selectorWithSearch(descriptor: EngineQueryDescriptor): Record<string, unknown> {

@@ -18,11 +18,9 @@ export {
 } from './engine-query';
 export {
 	declareRequirements,
-	resetRefillRequirements,
 	runResetRefill,
 	requirementsForQuery,
-	type RequirementPlan,
 	type RequirementSortPart,
 } from './requirement-bridge';
-export { observeCollectionActive, observeEngineCollections } from './engine-status';
+export { observeCollectionActive } from './engine-status';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';

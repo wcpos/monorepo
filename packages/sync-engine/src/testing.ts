@@ -114,7 +114,11 @@ export {
 	type ExistenceManifestDocument,
 } from './local-coverage/existence-manifest-schema';
 export { reconcileExistence } from './local-coverage/local-coverage';
-export { parseOrderBrowserSchedulerDescriptor } from './scheduler/order-browser-scheduler-descriptor';
+export {
+	orderBrowserQueryKey,
+	parseOrderBrowserSchedulerDescriptor,
+} from './scheduler/order-browser-scheduler-descriptor';
+export { productBrowseWindowQueryKeyFromDimensions } from './scheduler/product-browse-window-descriptor';
 export { type LocalOrderDocument } from './collections/order-schema';
 export { type LocalProductDocument } from './collections/product-schema';
 export {
