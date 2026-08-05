@@ -10,6 +10,24 @@ import {
 
 import type { RxDocument } from 'rxdb';
 
+export function isEngineRxDocument(value: unknown): value is RxDocument<EngineDocument> {
+	if (value === null || typeof value !== 'object') return false;
+	const candidate = value as {
+		id?: unknown;
+		payload?: unknown;
+		getLatest?: unknown;
+		collection?: unknown;
+	};
+	return (
+		typeof candidate.id === 'string' &&
+		candidate.payload !== null &&
+		typeof candidate.payload === 'object' &&
+		typeof candidate.getLatest === 'function' &&
+		candidate.collection !== null &&
+		typeof candidate.collection === 'object'
+	);
+}
+
 const MUTATION_METHODS = new Set([
 	'patch',
 	'incrementalPatch',

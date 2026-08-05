@@ -4,6 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { engineDocumentIdFor } from '@wcpos/sync-engine';
 
 import { aggregateExistingCartQuantity, evaluateStockForCartChange } from './stock-guard';
 import { useCartStockGuard } from './use-cart-stock-guard';
@@ -31,6 +32,7 @@ jest.mock('@wcpos/query', () => ({
 			}),
 		},
 	}),
+	isEngineRxDocument: () => false,
 	resolveLegacyField: () => ({ enginePath: 'wooProductId' }),
 	wrapEngineDocument: (_collection: string, document: unknown) => document,
 }));
@@ -252,7 +254,7 @@ describe('useCartStockGuard', () => {
 			requestedQuantity: 1,
 		});
 
-		expect(mockFindDocumentsById).toHaveBeenCalledWith(['woo-product:10'], true);
+		expect(mockFindDocumentsById).toHaveBeenCalledWith([engineDocumentIdFor('product', 10)], true);
 		expect(stockResult).toEqual({
 			allowed: false,
 			warning: null,

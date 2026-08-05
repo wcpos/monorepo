@@ -1,6 +1,11 @@
 import * as React from 'react';
 
-import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
+import {
+	type EngineRxDocument,
+	isEngineRxDocument,
+	useQueryRuntime,
+	wrapEngineDocument,
+} from '@wcpos/query';
 import {
 	barcodeMatchCandidates,
 	buildLocalBarcodeIndex,
@@ -9,25 +14,6 @@ import {
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-function isEngineRxDocument(value: unknown): value is EngineRxDocument {
-	if (value === null || typeof value !== 'object') {
-		return false;
-	}
-	const candidate = value as {
-		id?: unknown;
-		payload?: unknown;
-		getLatest?: unknown;
-		collection?: unknown;
-	};
-	return (
-		typeof candidate.id === 'string' &&
-		candidate.payload !== null &&
-		typeof candidate.payload === 'object' &&
-		typeof candidate.getLatest === 'function' &&
-		candidate.collection !== null &&
-		typeof candidate.collection === 'object'
-	);
-}
 
 function engineDocuments(value: unknown): EngineRxDocument[] {
 	return Array.isArray(value) ? value.filter(isEngineRxDocument) : [];

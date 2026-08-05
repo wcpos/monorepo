@@ -14,6 +14,7 @@ export {
 	type StoreScopeIdentity,
 	type SyncCollectionName,
 } from './create-rxdb-sync-engine';
+export { engineDocumentIdFor } from './engine-document-id';
 
 // prettier-ignore
 export { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from './collections/engine-collections';

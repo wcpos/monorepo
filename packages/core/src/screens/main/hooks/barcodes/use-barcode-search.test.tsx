@@ -42,6 +42,7 @@ jest.mock('@wcpos/query', () => ({
 			}),
 		},
 	}),
+	isEngineRxDocument: () => true,
 	// wrapEngineDocument is identity-ish for the test — we assert on ids.
 	wrapEngineDocument: (_name: string, document: FakeDoc) => document,
 }));

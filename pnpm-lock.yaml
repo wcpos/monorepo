@@ -991,6 +991,9 @@ importers:
       '@types/lodash':
         specifier: ^4.17.24
         version: 4.17.24
+      '@wcpos/sync-core':
+        specifier: workspace:*
+        version: link:../sync-core
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@25.9.3)

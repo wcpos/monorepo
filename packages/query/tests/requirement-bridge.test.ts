@@ -1,7 +1,7 @@
 import type { EngineRequirement } from '@wcpos/sync-engine';
 
 import { declareRequirements, requirementsForQuery } from '../src/requirement-bridge';
-import { createEngineDatabase, createFakeEngine } from './helpers/engine';
+import { createEngineDatabase, createFakeEngine } from '../src/testing';
 
 import type { RequirementInput, RequirementPlan } from '../src/requirement-bridge';
 import type { RxDatabase } from 'rxdb';

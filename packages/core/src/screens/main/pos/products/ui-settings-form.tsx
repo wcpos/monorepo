@@ -55,10 +55,8 @@ export const schema = z.object({
 
 /**
  * Sortable product fields, stored as the underlying DB field name.
- * Each value must be sortable locally (products RxDB schema) and remotely — the
- * REST `orderby` mapping lives in @wcpos/query hooks/products, and the server
- * enum is WooCommerce core plus the WCPOS plugin additions (sku, barcode,
- * stock_quantity, stock_status).
+ * These choices order the locally synced window. Server-side ordering applies
+ * only to fields that have a wire `orderby` mapping.
  */
 const SORT_FIELD_VALUES = [
 	'name',

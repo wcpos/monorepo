@@ -3,11 +3,12 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import {
-	type EngineRxDocument,
+	isEngineRxDocument,
 	resolveLegacyField,
 	useQueryRuntime,
 	wrapEngineDocument,
 } from '@wcpos/query';
+import { engineDocumentIdFor } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 
 import {
@@ -49,24 +50,6 @@ const ALLOWED_RESULT: CartStockGuardResult = {
 	name: '',
 };
 
-function isEngineRxDocument(value: unknown): value is EngineRxDocument {
-	if (value === null || typeof value !== 'object') return false;
-	const candidate = value as {
-		id?: unknown;
-		payload?: unknown;
-		getLatest?: unknown;
-		collection?: unknown;
-	};
-	return (
-		typeof candidate.id === 'string' &&
-		candidate.payload !== null &&
-		typeof candidate.payload === 'object' &&
-		typeof candidate.getLatest === 'function' &&
-		candidate.collection !== null &&
-		typeof candidate.collection === 'object'
-	);
-}
-
 function latest(document: StockDocument): StockDocument {
 	return document.getLatest ? document.getLatest() : document;
 }
@@ -86,7 +69,10 @@ export const useCartStockGuard = () => {
 			if (isEngineRxDocument(result)) {
 				return wrapEngineDocument(collectionName, result) as unknown as StockDocument;
 			}
-			const documentId = `${collectionName === 'products' ? 'woo-product' : 'woo-variation'}:${wooId}`;
+			const documentId = engineDocumentIdFor(
+				collectionName === 'products' ? 'product' : 'variation',
+				wooId
+			);
 			const [deletedDocument] = await collection.storageInstance.findDocumentsById(
 				[documentId],
 				true
