@@ -182,22 +182,25 @@ function LedgerRow({
 			</HStack>
 
 			{/* below md — two-line pressable row */}
-			<Pressable
-				testID={`logs-row-sm-${row.logId}`}
-				accessibilityRole="button"
-				onPress={onToggle}
-				className="gap-0.5 py-2 md:hidden"
-			>
-				<HStack className="items-center gap-2">
-					<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
-					{/* Dot-only for space, but the kind still reads to assistive tech. */}
-					<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
-					<View className="flex-1" />
+			<HStack className="items-start gap-2 py-2 md:hidden">
+				<Pressable
+					testID={`logs-row-sm-${row.logId}`}
+					accessibilityRole="button"
+					onPress={onToggle}
+					className="min-w-0 flex-1 gap-0.5"
+				>
+					<HStack className="items-center gap-2">
+						<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
+						{/* Dot-only for space, but the kind still reads to assistive tech. */}
+						<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
+					</HStack>
+					<Text className="text-sm">{title}</Text>
+					<Subline row={row} />
+				</Pressable>
+				<View className="items-end">
 					<CodeCell row={row} kind={kind} onPress={onToggle} />
-				</HStack>
-				<Text className="text-sm">{title}</Text>
-				<Subline row={row} />
-			</Pressable>
+				</View>
+			</HStack>
 
 			{expanded ? <RowDetail row={row} kind={kind} title={title} /> : null}
 		</View>
