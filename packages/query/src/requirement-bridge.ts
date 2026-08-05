@@ -657,7 +657,12 @@ export async function runResetRefill(
 			.filter(isMappedCollection)
 			.map((collectionName) => engineCollectionNameFor(collectionName))
 	);
-	const seedProductBrowse = engineCollections.has('products');
+	// Variations count as a browse-seed trigger: the funnel usually resets
+	// ['variations', 'products'] together, but a standalone variations reset (the Health
+	// page's per-collection row) would otherwise declare no refill work at all. The seed
+	// re-materializes the catalog surface; per-parent variation fetch stays on-demand.
+	const seedProductBrowse =
+		engineCollections.has('products') || engineCollections.has('variations');
 	// Re-arm normal policy: the product/variation browse seed now, and the reference
 	// collections through the forced refresh requirements built above — NOT through the
 	// `reference-seed` maintenance lane, which gates on local residents and would skip a

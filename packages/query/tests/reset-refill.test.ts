@@ -36,6 +36,13 @@ describe('runResetRefill seeding', () => {
 		expect(syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
 	});
 
+	it('seeds the product browse window for a standalone variations reset', async () => {
+		// The Health page can reset variations alone; without the seed the drain would
+		// have no work that re-downloads the cleared collection.
+		const syncCalls = await refillSyncCalls(['variations']);
+		expect(syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
+	});
+
 	// NOT the `reference-seed` maintenance lane: that lane gates on local residents (#952),
 	// and a reset has just emptied the collection, so the lane would skip the very refill it
 	// was asked for. The refill declares a forced refresh requirement instead.
