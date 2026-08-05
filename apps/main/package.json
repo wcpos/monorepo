@@ -7,7 +7,9 @@
 		"android": "expo run:android",
 		"ios": "expo run:ios",
 		"web": "expo start --web",
-		"test": "jest --watchAll",
+		"test": "jest",
+		"test:watch": "jest --watchAll",
+		"test:plugins": "node --test plugins/*.test.js",
 		"test:e2e": "playwright test",
 		"test:e2e:native": "maestro test .maestro",
 		"test:e2e:native:check": "node ../../scripts/check-maestro-testids.mjs",
@@ -23,7 +25,12 @@
 		"lint:fix": "eslint app components --ext .js,.jsx,.ts,.tsx --fix"
 	},
 	"jest": {
-		"preset": "jest-expo"
+		"preset": "jest-expo",
+		"testPathIgnorePatterns": [
+			"/node_modules/",
+			"<rootDir>/e2e/",
+			"<rootDir>/plugins/"
+		]
 	},
 	"expo": {
 		"install": {

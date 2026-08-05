@@ -24,6 +24,9 @@
 		"src/**",
 		"ipc-channels.d.ts"
 	],
+	"scripts": {
+		"test": "vitest run"
+	},
 	"dependencies": {
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
 		"@point-of-sale/webbluetooth-receipt-printer": "2.0.0",

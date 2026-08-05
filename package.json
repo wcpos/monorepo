@@ -42,6 +42,7 @@
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "4.1.10",
     "esbuild": "0.28.1",
     "eslint": "^9.39.4",
     "expo": "~57.0.8",
