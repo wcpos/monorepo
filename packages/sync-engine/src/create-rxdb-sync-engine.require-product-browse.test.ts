@@ -1,6 +1,6 @@
 /**
  * The public PRODUCTS BROWSE-WINDOW demand verb:
- * `engine.require({ collection: 'products', kind: 'query', queryKey: 'products:browse-window:…' })`.
+ * `engine.require({ collection: 'products', kind: 'product-browse', ...dimensions })`.
  *
  * Before #909 an unfiltered products browse declared NO remote demand at all: the cold
  * 100-row seed was the whole catalog the grid would ever see, so infinite scroll fetched
@@ -135,8 +135,8 @@ describe('require() for the products browse window', () => {
 		const grownHandle = engine.require({
 			id: 'browse-grown',
 			collection: 'products',
-			kind: 'query',
-			queryKey: 'products:browse-window:limit=200',
+			kind: 'product-browse',
+			limit: 110,
 		});
 		expect(grownHandle.queryKey).toBe('products:browse-window:limit=200');
 		const grown = await grownHandle.ready;
@@ -185,15 +185,17 @@ describe('require() for the products browse window', () => {
 		await engine.require({
 			id: 'browse-seed',
 			collection: 'products',
-			kind: 'query',
-			queryKey: 'products:browse-window:limit=100',
+			kind: 'product-browse',
+			limit: 100,
 		}).ready;
 
 		const sorted = await engine.require({
 			id: 'browse-price-desc',
 			collection: 'products',
-			kind: 'query',
-			queryKey: 'products:browse-window:limit=100:orderby=price:order=desc',
+			kind: 'product-browse',
+			limit: 100,
+			orderby: 'price',
+			order: 'desc',
 		}).ready;
 
 		expect(sorted).toMatchObject({ action: 'fetched' });
@@ -219,8 +221,8 @@ describe('require() for the products browse window', () => {
 		await engine.require({
 			id: 'browse-seed',
 			collection: 'products',
-			kind: 'query',
-			queryKey: 'products:browse-window:limit=100',
+			kind: 'product-browse',
+			limit: 100,
 		}).ready;
 
 		// The #908 acceptance case, at the engine's public door: a clean DB seeding the
@@ -294,8 +296,8 @@ describe('require() for the products browse window', () => {
 		await engine.require({
 			id: 'browse-unfiltered',
 			collection: 'products',
-			kind: 'query',
-			queryKey: 'products:browse-window:limit=100',
+			kind: 'product-browse',
+			limit: 100,
 		}).ready;
 		const afterUnfiltered = requested.length;
 
@@ -304,32 +306,14 @@ describe('require() for the products browse window', () => {
 		await engine.require({
 			id: 'browse-instock',
 			collection: 'products',
-			kind: 'query',
-			queryKey: 'products:browse-window:limit=100:stock_status=outofstock',
+			kind: 'product-browse',
+			limit: 100,
+			stock_status: 'outofstock',
 		}).ready;
 
 		expect(requested.length).toBeGreaterThan(afterUnfiltered);
 		expect(requested[afterUnfiltered]?.get('stock_status')).toBe('outofstock');
 		expect(requested[0]?.get('stock_status')).toBeNull();
-
-		await engine.dispose();
-	});
-
-	it('rejects a query requirement that is not a browse-window descriptor', async () => {
-		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
-		setPremiumFlag();
-		const server = scriptedCatalog(10);
-		const engine = engineWith(server.fetch);
-		await engine.ready;
-
-		await expect(
-			engine.require({
-				id: 'browse-bogus',
-				collection: 'products',
-				kind: 'query',
-				queryKey: 'products:everything',
-			}).ready
-		).rejects.toThrow('require: unsupported product query');
 
 		await engine.dispose();
 	});

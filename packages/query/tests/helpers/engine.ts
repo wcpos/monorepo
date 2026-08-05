@@ -11,6 +11,8 @@ import type {
 	RxdbSyncEngine,
 } from '@wcpos/sync-engine';
 
+import { orderBrowserQueryKey } from '../../../sync-engine/src/scheduler/order-browser-scheduler-descriptor';
+import { productBrowseWindowQueryKeyFromDimensions } from '../../../sync-engine/src/scheduler/product-browse-window-descriptor';
 import { searchPlugin } from './search';
 
 import type { RxDatabase } from 'rxdb';
@@ -82,6 +84,14 @@ export interface RecordedSearchRequirement {
 	requirement: EngineRequirement;
 	released: boolean;
 }
+
+const requirementQueryKey = (requirement: EngineRequirement): string | null => {
+	if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
+	if (requirement.kind === 'product-browse') {
+		return productBrowseWindowQueryKeyFromDimensions(requirement);
+	}
+	return null;
+};
 
 const num = (value: unknown): number => {
 	const n = Number(value);
@@ -268,6 +278,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 						recordedSearch.released = true;
 					}
 				},
+				queryKey: requirementQueryKey(requirement),
 			};
 		},
 		sync: async (lane?: string) => {
@@ -349,6 +360,7 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 			return {
 				ready: Promise.reject(new Error('404: sync endpoint not found')),
 				release: () => undefined,
+				queryKey: requirementQueryKey(requirement),
 			};
 		},
 		sync: async (lane?: string) => {

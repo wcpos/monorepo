@@ -149,10 +149,10 @@ describe('useOpenOrdersResource', () => {
 		const { result, unmount } = renderHook(() => useOpenOrdersResource(7, 2));
 
 		expect(requireOrders).toHaveBeenCalledWith({
-			id: 'pos:open-orders:orders-query',
+			id: 'pos:open-orders:orders-browse',
 			collection: 'orders',
-			kind: 'query',
-			queryKey: 'orders:browser:status=pos-open:search=:limit=10',
+			kind: 'orders-browse',
+			status: 'pos-open',
 		});
 
 		await act(async () => {

@@ -28,10 +28,8 @@ import {
 	type EngineEvent,
 	type EngineLane,
 	type EngineQueryDescriptor,
-	isFullyRepresentedProductSelector,
 	observeEngineDatabases,
 	observeEngineQuery,
-	orderRangeBoundSeconds,
 	type QueryResult,
 	type QueryTotalCacheDocument,
 	registerActiveBinding,
@@ -174,6 +172,7 @@ function useLaneActivity(
 type DemandProjection = {
 	active$: Observable<boolean>;
 	searchActive$: Observable<boolean>;
+	queryKey$: Observable<string | null>;
 	sync(): Promise<void>;
 };
 
@@ -185,6 +184,7 @@ function useDemand(
 ): DemandProjection {
 	const active$ = React.useMemo(() => new BehaviorSubject(false), [engine, id]);
 	const searchActive$ = React.useMemo(() => new BehaviorSubject(false), [engine, id]);
+	const queryKey$ = React.useMemo(() => new BehaviorSubject<string | null>(null), [engine, id]);
 	const generation = React.useRef(0);
 	const demandPending = React.useRef(0);
 	const syncPending = React.useRef(0);
@@ -219,13 +219,23 @@ function useDemand(
 			sort: JSON.parse(sortKey) as RequirementSortPart[],
 		};
 		const unregister = registerActiveBinding(engine, binding);
-		const requirements = requirementsForQuery(binding);
+		const plan = requirementsForQuery(binding);
+		const requirements = plan.requirements;
 		const isSearch = Boolean(descriptor.search?.trim());
 		let handles: RequirementHandle[] = [];
 		let retryTimer: ReturnType<typeof setTimeout> | undefined;
 		const declare = (retryOnReject: boolean) => {
 			const declarationGeneration = (generation.current += 1);
 			handles = declareRequirements(engine, requirements);
+			const browseIndex = requirements.findIndex(
+				(requirement) =>
+					requirement.kind === 'orders-browse' || requirement.kind === 'product-browse'
+			);
+			const fixedKey =
+				Object.keys(stableSelector).length === 0
+					? (COMPLETE_COLLECTION_LANES[descriptor.collection] ?? null)
+					: null;
+			queryKey$.next(plan.represented ? (handles[browseIndex]?.queryKey ?? fixedKey) : fixedKey);
 			demandPending.current = handles.length;
 			searchDemandPending.current = isSearch ? handles.length : 0;
 			publish();
@@ -272,6 +282,7 @@ function useDemand(
 		engine,
 		id,
 		publish,
+		queryKey$,
 		selectorKey,
 		sortKey,
 	]);
@@ -280,8 +291,9 @@ function useDemand(
 		() => () => {
 			active$.complete();
 			searchActive$.complete();
+			queryKey$.complete();
 		},
-		[active$, searchActive$]
+		[active$, queryKey$, searchActive$]
 	);
 
 	const sync = React.useCallback(async () => {
@@ -294,7 +306,7 @@ function useDemand(
 			sort: descriptor.sort as RequirementSortPart[] | undefined,
 			priority: 1000,
 			forceRefresh: true,
-		});
+		}).requirements;
 		const handles = declareRequirements(engine, requirements);
 		syncPending.current += 1;
 		if (descriptor.search?.trim()) searchSyncPending.current += 1;
@@ -312,119 +324,7 @@ function useDemand(
 		}
 	}, [descriptor, enabled, engine, id, publish]);
 
-	return { active$: active$.pipe(distinctUntilChanged()), searchActive$, sync };
-}
-
-/**
- * A `created_via` slug the descriptor grammar can carry, in either the bare or `$eq` shape
- * the translator can produce. Mirrors `orderBrowseDescriptor`'s `/^[a-z0-9_-]+$/` rule.
- */
-function representedCreatedVia(value: unknown): boolean {
-	const slug =
-		typeof value === 'string'
-			? value
-			: value !== null && typeof value === 'object' && Object.keys(value).length === 1
-				? (value as Record<string, unknown>).$eq
-				: undefined;
-	return typeof slug === 'string' && /^[a-z0-9_-]+$/.test(slug);
-}
-
-/**
- * Whether the coverage lane for this selector's descriptor covers exactly the selector.
- *
- * The rules below have to match `orderBrowseDescriptor` in `@wcpos/query`, which is the
- * thing that decides what actually reaches the wire. Anything this predicate accepts but
- * the encoder drops widens the lane relative to the selector, and `projectTotal` then
- * reports that wider lane's size as the grid's total.
- */
-function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boolean {
-	return Object.entries(selector).every(([field, value]) => {
-		if (field === 'search') return typeof value === 'string';
-		if (field === 'created_via') return representedCreatedVia(value);
-		if (field === '$and') {
-			if (!Array.isArray(value) || value.length === 0) return false;
-			return value.every((condition) => {
-				if (condition === null || typeof condition !== 'object') return false;
-				if ('created_via' in (condition as Record<string, unknown>)) {
-					return representedCreatedVia((condition as Record<string, unknown>).created_via);
-				}
-				const metaData = (condition as Record<string, unknown>).meta_data;
-				if (metaData === null || typeof metaData !== 'object') return false;
-				const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
-				if (elemMatch === null || typeof elemMatch !== 'object') return false;
-				const { key, value: metaValue } = elemMatch as Record<string, unknown>;
-				// The encoder only emits `:cashier=`/`:store=` for an all-digits meta value.
-				return (
-					(key === '_pos_user' || key === '_pos_store') &&
-					typeof metaValue === 'string' &&
-					/^\d+$/.test(metaValue)
-				);
-			});
-		}
-		if (field === 'customer_id') {
-			if (typeof value === 'number') return true;
-			const customer = value as Record<string, unknown> | null;
-			return (
-				customer !== null &&
-				typeof customer === 'object' &&
-				Object.keys(customer).length === 1 &&
-				typeof customer.$eq === 'number'
-			);
-		}
-		if (field === 'date_created_gmt') {
-			if (value === null || typeof value !== 'object') return false;
-			const entries = Object.entries(value as Record<string, unknown>);
-			const valid = entries.every(
-				([operator, boundary]) =>
-					(operator === '$gte' || operator === '$lte') &&
-					// A bound the encoder cannot resolve to epoch seconds is dropped from the key,
-					// which would leave the lane unbounded relative to the selector — so ask the
-					// encoder's own parser rather than restating its rule here.
-					// A bound the encoder cannot resolve to epoch seconds is dropped from the key,
-					// which would leave the lane unbounded relative to the selector — so ask the
-					// encoder's own parser rather than restating its rule here.
-					orderRangeBoundSeconds(boundary) !== undefined
-			);
-			return entries.length > 0 && valid;
-		}
-		if (field !== 'status') return false;
-		if (typeof value === 'string') return value.length > 0;
-		const status = value as Record<string, unknown> | null;
-		return (
-			status !== null &&
-			typeof status === 'object' &&
-			Object.keys(status).length === 1 &&
-			typeof status.$eq === 'string'
-		);
-	});
-}
-
-function coverageQueryKey(id: string, descriptor: EngineQueryDescriptor): string | null {
-	const selector = selectorWithSearch(descriptor);
-	if (descriptor.collection === 'orders' && !isFullyRepresentedOrderSelector(selector)) return null;
-	// Products browses became wired+windowed when filters went on the wire (2026-08-04
-	// ruling), and the bridge deliberately emits only the REPRESENTABLE subset of the
-	// selector — an attribute match or a mixed `$or` keeps narrowing locally. That superset
-	// is right for demand and wrong for a total: a browse filtered on something the grammar
-	// cannot carry would otherwise report the wider window's size as its own count. Unlike
-	// the orders predicate above this asks the encoder itself, so the two cannot drift.
-	if (descriptor.collection === 'products' && !isFullyRepresentedProductSelector(selector)) {
-		return null;
-	}
-	const requirement = requirementsForQuery({
-		id,
-		collectionName: descriptor.collection,
-		selector,
-		limit: descriptor.limit,
-		sort: descriptor.sort as RequirementSortPart[] | undefined,
-	}).find((candidate) => candidate.kind === 'query' && candidate.queryKey);
-	// The products browse-window key used to be hardcoded here at limit=100 regardless of
-	// the descriptor (#909): the coverage lane the grid reported against was never the one
-	// its own limit/sort demanded. It now comes from requirementsForQuery like every other
-	// query key, so the projected total tracks the window the grid actually asked for.
-	if (requirement?.queryKey) return requirement.queryKey;
-	if (Object.keys(selector).length > 0) return null;
-	return COMPLETE_COLLECTION_LANES[descriptor.collection] ?? null;
+	return { active$: active$.pipe(distinctUntilChanged()), searchActive$, queryKey$, sync };
 }
 
 function coverageFreshnessTicks(
@@ -488,9 +388,9 @@ function coverageDocuments$<T>(
 
 function coverageProjection$(
 	engine: RxdbSyncEngine,
-	id: string,
 	descriptor: EngineQueryDescriptor,
-	result$: Observable<QueryResult<RxCollection>>
+	result$: Observable<QueryResult<RxCollection>>,
+	queryKey$: Observable<string | null>
 ): Observable<{ total: number; source: TotalSource }> {
 	const database$ = observeEngineDatabases(engine).pipe(
 		shareReplay({ bufferSize: 1, refCount: true })
@@ -510,11 +410,12 @@ function coverageProjection$(
 	return combineLatest([
 		result$.pipe(map((result) => result.count ?? result.hits.length)),
 		coverage$,
+		queryKey$,
 	]).pipe(
-		map(([localCount, { lanes, queryTotals, nowMs }]) =>
+		map(([localCount, { lanes, queryTotals, nowMs }, queryKey]) =>
 			projectTotal({
 				localCount,
-				queryKey: coverageQueryKey(id, descriptor),
+				queryKey,
 				lanes,
 				queryTotals,
 				nowMs,
@@ -571,8 +472,8 @@ function useEngineBinding(
 		);
 	}, [demand.searchActive$, descriptor, enabled, runtime.engine, runtime.locale]);
 	const projection$ = React.useMemo(
-		() => coverageProjection$(runtime.engine, bindingId, descriptor, result$),
-		[bindingId, descriptor, result$, runtime.engine]
+		() => coverageProjection$(runtime.engine, descriptor, result$, demand.queryKey$),
+		[demand.queryKey$, descriptor, result$, runtime.engine]
 	);
 	const resource = useObservableResource(result$);
 	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
@@ -660,7 +561,7 @@ function observeParentLookup(
 			collectionName: 'products',
 			selector: descriptor.selector,
 			limit: undefined,
-		});
+		}).requirements;
 		const handles = declareRequirements(engine, requirements);
 		lookupActive$.next(handles.length > 0);
 		void Promise.all(handles.map((handle) => handle.ready.catch(() => undefined))).finally(() =>
@@ -770,8 +671,8 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	]);
 	const resource = useObservableResource(result$);
 	const projection$ = React.useMemo(
-		() => coverageProjection$(runtime.engine, bindingId, descriptor, result$),
-		[bindingId, descriptor, result$, runtime.engine]
+		() => coverageProjection$(runtime.engine, descriptor, result$, parentDemand.queryKey$),
+		[descriptor, parentDemand.queryKey$, result$, runtime.engine]
 	);
 	const active$ = React.useMemo(
 		() =>

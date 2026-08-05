@@ -335,7 +335,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		expect(drain).toHaveBeenCalledWith(expect.objectContaining({ fetcher: expect.any(Function) }));
 	});
 
-	it('routes typed and transitional order browse requirements through the same query path', async () => {
+	it('routes a typed order browse requirement through the persisted query path', async () => {
 		const harness = orchestrationHarness();
 		const seed = vi
 			.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask')
@@ -345,37 +345,24 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			succeeded: 1,
 		});
 
-		const transitional = harness.plane.require({
+		const handle = harness.plane.require({
 			id: 'processing-orders',
-			collection: 'orders',
-			kind: 'query',
-			queryKey: 'orders:browser:status=processing:search=:limit=50',
-		});
-		expect(transitional.queryKey).toBe('orders:browser:status=processing:search=:limit=50');
-		const transitionalOutcome = await transitional.ready;
-
-		const typed = harness.plane.require({
-			id: 'processing-orders-typed',
 			collection: 'orders',
 			kind: 'orders-browse',
 			status: 'processing',
 			limit: 50,
 		});
-		expect(typed.queryKey).toBe('orders:browser:status=processing:search=:limit=50');
-		const typedOutcome = await typed.ready;
+		expect(handle.queryKey).toBe('orders:browser:status=processing:search=:limit=50');
+		await handle.ready;
 
-		expect(seed).toHaveBeenCalledTimes(2);
-		for (const [call] of seed.mock.calls) {
-			expect(call).toEqual(
-				expect.objectContaining({
-					queryKey: 'orders:browser:status=processing:search=:limit=50',
-					status: 'processing',
-					search: '',
-					limit: 50,
-				})
-			);
-		}
-		expect(typedOutcome).toEqual(transitionalOutcome);
+		expect(seed).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey: 'orders:browser:status=processing:search=:limit=50',
+				status: 'processing',
+				search: '',
+				limit: 50,
+			})
+		);
 	});
 
 	it('throws typed order browse misuse synchronously', () => {
@@ -470,12 +457,13 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 
 	it.each([
 		{
-			label: 'query',
+			label: 'browse',
 			requirement: {
-				id: 'active-query',
+				id: 'active-browse',
 				collection: 'orders' as const,
-				kind: 'query' as const,
-				queryKey: 'orders:browser:status=processing:search=:limit=50',
+				kind: 'orders-browse' as const,
+				status: 'processing',
+				limit: 50,
 			},
 			seed: () => vi.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask'),
 		},
@@ -512,17 +500,17 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 	);
 
 	it.each([
-		['claimLost', 'query'],
-		['completionLost', 'query'],
-		['failureLost', 'query'],
-		['renewalLost', 'query'],
+		['claimLost', 'browse'],
+		['completionLost', 'browse'],
+		['failureLost', 'browse'],
+		['renewalLost', 'browse'],
 		['claimLost', 'refresh'],
 		['completionLost', 'refresh'],
 		['failureLost', 'refresh'],
 		['renewalLost', 'refresh'],
 	] as const)('releases an order %s drain loss for a %s requirement', async (lossCounter, kind) => {
 		const harness = orchestrationHarness();
-		if (kind === 'query') {
+		if (kind === 'browse') {
 			vi.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask').mockResolvedValue({
 				...EMPTY_SEED_RESULT,
 				inserted: 1,
@@ -539,12 +527,13 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		});
 
 		const requirement =
-			kind === 'query'
+			kind === 'browse'
 				? {
 						id: `lost-${lossCounter}`,
 						collection: 'orders' as const,
-						kind,
-						queryKey: 'orders:browser:status=processing:search=:limit=50',
+						kind: 'orders-browse' as const,
+						status: 'processing',
+						limit: 50,
 					}
 				: { id: `lost-${lossCounter}`, collection: 'orders' as const, kind };
 		await expect(harness.plane.require(requirement).ready).resolves.toMatchObject({
@@ -555,11 +544,11 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		});
 	});
 
-	it.each(['query', 'refresh'] as const)(
+	it.each(['browse', 'refresh'] as const)(
 		'releases an order %s requirement when a ledger rebuild aborted the drain tick',
 		async (kind) => {
 			const harness = orchestrationHarness();
-			if (kind === 'query') {
+			if (kind === 'browse') {
 				vi.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask').mockResolvedValue({
 					...EMPTY_SEED_RESULT,
 					inserted: 1,
@@ -578,12 +567,13 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			});
 
 			const requirement =
-				kind === 'query'
+				kind === 'browse'
 					? {
-							id: 'ledger-rebuilt-query',
+							id: 'ledger-rebuilt-browse',
 							collection: 'orders' as const,
-							kind,
-							queryKey: 'orders:browser:status=processing:search=:limit=50',
+							kind: 'orders-browse' as const,
+							status: 'processing',
+							limit: 50,
 						}
 					: { id: 'ledger-rebuilt-refresh', collection: 'orders' as const, kind };
 			await expect(harness.plane.require(requirement).ready).resolves.toMatchObject({
@@ -593,11 +583,11 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		}
 	);
 
-	it.each(['query', 'refresh'] as const)(
+	it.each(['browse', 'refresh'] as const)(
 		'releases an order %s drain loss after partial progress with its aggregates',
 		async (kind) => {
 			const harness = orchestrationHarness();
-			if (kind === 'query') {
+			if (kind === 'browse') {
 				vi.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask').mockResolvedValue({
 					...EMPTY_SEED_RESULT,
 					inserted: 1,
@@ -617,12 +607,13 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			});
 
 			const requirement =
-				kind === 'query'
+				kind === 'browse'
 					? {
-							id: 'partial-lost-query',
+							id: 'partial-lost-browse',
 							collection: 'orders' as const,
-							kind,
-							queryKey: 'orders:browser:status=processing:search=:limit=50',
+							kind: 'orders-browse' as const,
+							status: 'processing',
+							limit: 50,
 						}
 					: { id: 'partial-lost-refresh', collection: 'orders' as const, kind };
 			await expect(harness.plane.require(requirement).ready).resolves.toMatchObject({
@@ -633,9 +624,9 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		}
 	);
 
-	it.each(['query', 'refresh'] as const)('rejects a failed order %s drain', async (kind) => {
+	it.each(['browse', 'refresh'] as const)('rejects a failed order %s drain', async (kind) => {
 		const harness = orchestrationHarness();
-		if (kind === 'query') {
+		if (kind === 'browse') {
 			vi.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask').mockResolvedValue({
 				...EMPTY_SEED_RESULT,
 				inserted: 1,
@@ -652,12 +643,13 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		});
 
 		const requirement =
-			kind === 'query'
+			kind === 'browse'
 				? {
-						id: 'failed-query',
+						id: 'failed-browse',
 						collection: 'orders' as const,
-						kind,
-						queryKey: 'orders:browser:status=processing:search=:limit=50',
+						kind: 'orders-browse' as const,
+						status: 'processing',
+						limit: 50,
 					}
 				: { id: 'failed-refresh', collection: 'orders' as const, kind };
 		await expect(harness.plane.require(requirement).ready).rejects.toThrow(

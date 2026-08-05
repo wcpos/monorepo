@@ -18,10 +18,8 @@
  *  - `release()` removes queued work or aborts an active foreground execution;
  *    either way `ready` resolves `{ action: 'released' }`.
  *
- * The two bounded browse windows accept typed dimensions and encode their persisted
- * scheduler descriptors inside the engine. Transitional `query` requirements still
- * take caller-built keys until the requirement bridge cuts over. Both forms seed and
- * drain the same durable windowed tasks.
+ * The two bounded browse windows accept typed dimensions. Their persisted scheduler
+ * descriptors are an internal encoding, derived behind this interface.
  */
 
 /**
@@ -85,8 +83,6 @@ type EngineRequirementCommon = {
 	/** Re-fetch targeted records even when they are already resident. Used by
 	 * explicit refresh/re-anchor flows; ordinary requirements stay coverage-aware. */
 	forceRefresh?: boolean;
-	/** Transitional compatibility for callers that inspect a mixed requirement list. */
-	queryKey?: string;
 };
 
 export type OrderBrowseDimensions = {
@@ -124,8 +120,7 @@ export type ProductBrowseDimensions = {
 
 /**
  * Dedicated search and browse kinds accept typed caller dimensions; callers never
- * construct their wire query keys. `query` remains transitional until the follow-up
- * bridge cutover removes it.
+ * construct their lane keys.
  */
 export type EngineRequirement = EngineRequirementCommon &
 	(
@@ -133,7 +128,6 @@ export type EngineRequirement = EngineRequirementCommon &
 		// The current bridge narrows this with a runtime Set that TypeScript cannot follow.
 		| { kind: 'search'; collection: SyncCollectionName; term: string; limit?: number }
 		| { kind: 'refresh'; collection: SyncCollectionName; limit?: number }
-		| { kind: 'query'; collection: 'orders' | 'products'; queryKey: string }
 		| ({ kind: 'orders-browse'; collection: 'orders' } & OrderBrowseDimensions)
 		| ({ kind: 'product-browse'; collection: 'products' } & ProductBrowseDimensions)
 	);
@@ -149,9 +143,8 @@ export type CoverageOutcome = {
 export type RequirementHandle = {
 	ready: Promise<CoverageOutcome>;
 	release(): void;
-	/** Canonical persisted lane identity for browse/query kinds; null otherwise.
-	 * Optional only so pre-cutover test doubles remain structurally compatible. */
-	readonly queryKey?: string | null;
+	/** Canonical persisted lane identity for browse kinds; null otherwise. */
+	readonly queryKey: string | null;
 };
 
 export type RequirePlaneDeps = {
@@ -168,8 +161,16 @@ export type RequirePlaneDeps = {
 	now?: () => number;
 };
 
+type InternalRequirement =
+	| EngineRequirement
+	| (EngineRequirementCommon & {
+			kind: 'query';
+			collection: 'orders' | 'products';
+			queryKey: string;
+	  });
+
 type QueuedRequirement = {
-	requirement: EngineRequirement;
+	requirement: InternalRequirement;
 	priority: number;
 	seq: number;
 	subscribers: Set<RequirementSubscriber>;
@@ -196,7 +197,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	let seq = 0;
 	let running = false;
 	const defaultSearchLimit = 25;
-	const searchDedupeKey = (requirement: EngineRequirement): string | null =>
+	const searchDedupeKey = (requirement: InternalRequirement): string | null =>
 		requirement.kind === 'search'
 			? `${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.limit ?? defaultSearchLimit}`
 			: null;
@@ -205,7 +206,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			activeSearches.delete(item.searchDedupeKey);
 		}
 	};
-	const progressObserver = (requirement: EngineRequirement) => {
+	const progressObserver = (requirement: InternalRequirement) => {
 		let documents = 0;
 		let requests = 0;
 		return (progress: { collection: string; documents: number; requests: number }): void => {
@@ -908,16 +909,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		hasPendingWork: () => running || queue.length > 0,
 		require: (requirement) => {
 			const queryKey = (() => {
-				if (requirement.kind === 'query') return requirement.queryKey;
 				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
 					return productBrowseWindowQueryKeyFromDimensions(requirement);
 				}
 				return null;
 			})();
-			// Typed browse requirements synchronously derive their lane identity, then
-			// delegate to the unchanged parser-based transitional query path.
-			const queuedRequirement: EngineRequirement =
+			// Browse requirements synchronously derive their lane identity, then delegate to
+			// the parser-based internal queued path used by the durable scheduler.
+			const queuedRequirement: InternalRequirement =
 				requirement.kind === 'orders-browse' || requirement.kind === 'product-browse'
 					? {
 							id: requirement.id,

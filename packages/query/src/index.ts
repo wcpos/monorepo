@@ -26,11 +26,10 @@ export {
 } from './engine-monitor';
 export {
 	declareRequirements,
-	isFullyRepresentedProductSelector,
-	orderRangeBoundSeconds,
 	prepareCollectionResetRefill,
 	registerActiveBinding,
 	requirementsForQuery,
+	type RequirementPlan,
 	type RequirementSortPart,
 } from './requirement-bridge';
 export {
