@@ -392,6 +392,48 @@ describe('write facets beyond orders', () => {
 	});
 
 	it.each(FACETS)(
+		'$collection write drain attributes activity to the mutation collection',
+		async (spec) => {
+			const route = routedServer(spec, () => null);
+			let pushStarted: (() => void) | undefined;
+			let releasePush: (() => void) | undefined;
+			const started = new Promise<void>((resolve) => {
+				pushStarted = resolve;
+			});
+			const release = new Promise<void>((resolve) => {
+				releasePush = resolve;
+			});
+			const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+				if (url.includes('/push/')) {
+					pushStarted?.();
+					await release;
+				}
+				return route.fetch(url, init);
+			};
+			const subject = engine(fetch);
+			await subject.ready;
+			await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'activity' }));
+			await subject.write({
+				collection: spec.collection,
+				operation: 'create',
+				recordId: UUID_A,
+				payload: payload(spec, UUID_A, 'activity'),
+			});
+
+			const drain = subject.sync('write-drain');
+			await started;
+			const statusDuringPush = subject.status();
+			releasePush?.();
+
+			expect(await drain).toMatchObject({ pushed: 1 });
+			expect(statusDuringPush.collections[spec.collection].active).toBe(true);
+			expect(statusDuringPush.collections.orders.active).toBe(false);
+			expect(subject.status().collections[spec.collection].active).toBe(false);
+			await subject.dispose();
+		}
+	);
+
+	it.each(FACETS)(
 		'$collection create/update/delete round trip reconciles id, revision, and bookkeeping',
 		async (spec) => {
 			const route = routedServer(spec, () => null);

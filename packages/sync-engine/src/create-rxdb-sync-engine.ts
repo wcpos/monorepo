@@ -1348,7 +1348,7 @@ export function createRxdbSyncEngine(
 			}
 		},
 		diagnostics,
-		onActivityChange: (delta) => changeCollectionActivity('orders', delta),
+		onActivityChange: changeCollectionActivity,
 		emitWriteEvent: (event: WriteOutcomeEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
