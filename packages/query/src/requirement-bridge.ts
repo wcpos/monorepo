@@ -193,7 +193,9 @@ function orderBrowseDimensions(
 	// into `$and` conditions instead, because both meta filters land on the same `meta_data`
 	// key and would otherwise overwrite each other. Every dimension below therefore has to
 	// look in both places.
-	const metaValue = (key: '_pos_user' | '_pos_store'): string | undefined => {
+	const metaValue = (
+		key: '_pos_user' | '_pos_store'
+	): { value: string; index: number; exact: boolean } | undefined => {
 		for (const [index, condition] of conditions.entries()) {
 			if (condition === null || typeof condition !== 'object') continue;
 			const record = condition as Record<string, unknown>;
@@ -206,16 +208,24 @@ function orderBrowseDimensions(
 				(elemMatch as Record<string, unknown>).key === key &&
 				typeof (elemMatch as Record<string, unknown>).value === 'string'
 			) {
-				if (Object.keys(record).length === 1) consumed[index]?.add('meta_data');
-				return (elemMatch as Record<string, unknown>).value as string;
+				return {
+					value: (elemMatch as Record<string, unknown>).value as string,
+					index,
+					exact: Object.keys(record).length === 1,
+				};
 			}
 		}
 		return undefined;
 	};
-	const cashier = metaValue('_pos_user');
+	const cashierMeta = metaValue('_pos_user');
+	const cashier = cashierMeta?.value;
 	const cashierId = cashier !== undefined && /^\d+$/.test(cashier) ? Number(cashier) : undefined;
-	if (cashierId !== undefined && Number.isSafeInteger(cashierId)) dimensions.cashierId = cashierId;
-	const metaStore = metaValue('_pos_store');
+	if (cashierId !== undefined && Number.isSafeInteger(cashierId)) {
+		dimensions.cashierId = cashierId;
+		if (cashierMeta?.exact) consumed[cashierMeta.index]?.add('meta_data');
+	}
+	const storeMeta = metaValue('_pos_store');
+	const metaStore = storeMeta?.value;
 	// A store-less install selects its store by slug, which the translator compiles to
 	// `created_via` — a nested `$and` condition, not a root field (see the note above). A
 	// root-only read silently dropped `:store=` for exactly that case, leaving the ranged
@@ -248,7 +258,10 @@ function orderBrowseDimensions(
 			: createdVia && /^[a-z0-9_-]+$/.test(createdVia.value)
 				? createdVia.value
 				: undefined;
-	if (store !== undefined) dimensions.store = store;
+	if (store !== undefined) {
+		dimensions.store = store;
+		if (storeMeta?.exact && store === metaStore) consumed[storeMeta.index]?.add('meta_data');
+	}
 	if (metaStore === undefined && createdVia?.exact && store === createdVia.value) {
 		consumed[createdVia.index]?.add('created_via');
 	}

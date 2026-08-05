@@ -238,6 +238,21 @@ describe('requirementsForQuery extraction', () => {
 		});
 
 		it.each([
+			['_pos_user', 'cashierId'],
+			['_pos_store', 'store'],
+		] as const)('keeps non-numeric %s metadata residual', (key, dimension) => {
+			const result = orderPlan({
+				selector: {
+					$and: [{ meta_data: { $elemMatch: { key, value: 'not-numeric' } } }],
+				},
+				limit: 25,
+			});
+
+			expect(result.represented).toBe(false);
+			expect(result.requirements[0]).not.toHaveProperty(dimension);
+		});
+
+		it.each([
 			{ created_via: 'woocommerce-pos' },
 			{ created_via: { $eq: 'woocommerce-pos' } },
 			{ $and: [{ created_via: 'woocommerce-pos' }] },
