@@ -101,7 +101,10 @@ import {
 	type QueryTotalCacheEvent,
 	type QueryTotalPort,
 } from './maintenance/maintenance-lanes';
-import { CUSTOMER_TRICKLE_STATE_KEY } from './maintenance/customer-trickle';
+import {
+	CUSTOMER_TRICKLE_STATE_KEY,
+	decodeCustomerTrickleState,
+} from './maintenance/customer-trickle';
 import { ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS } from './scheduler/engine-scheduler-drain';
 import {
 	createLocalCoverage,
@@ -722,8 +725,9 @@ export function createRxdbSyncEngine(
 					descriptor: (typeof targeted)[keyof typeof targeted],
 					wooIds: number[],
 					request?: ReconcileRequest
-				) =>
-					pullTargetedByIds(
+				) => {
+					const missingProductWooIds: number[] = [];
+					await pullTargetedByIds(
 						{ ...handlerContext, fetch: request?.fetcher ?? fetcher },
 						descriptor,
 						wooIds,
@@ -752,8 +756,12 @@ export function createRxdbSyncEngine(
 									'create-rxdb-sync-engine upsert'
 								);
 							if (manifestRows.length > 0) await upsertManifestRows(manifest, manifestRows);
-						}
+						},
+						descriptor.collection === 'products' ? missingProductWooIds : undefined
 					);
+					if (missingProductWooIds.length > 0)
+						await removeTargeted('products', 'wooProductId', missingProductWooIds);
+				};
 				return {
 					bucketSize: 1000,
 					maxWooId: async () => {
@@ -1361,6 +1369,25 @@ export function createRxdbSyncEngine(
 		diagnostics,
 		onActivityChange: changeCollectionActivity,
 		pullBatchSize: () => pullBatchSize,
+		customerSearchCatalogComplete: async () => {
+			const scopeId = manager.activeScope;
+			const database = scopeId === null ? null : databaseByScopeId.get(scopeId);
+			if (!scopeId || !database) return false;
+			const state = decodeCustomerTrickleState(await readBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY));
+			if (!state.walkComplete) return false;
+			const [entry] = await new RxQueryTotalCacheRepository(database as never).readForQueryKeys([
+				censusQueryKey('customers'),
+			]);
+			if (!entry || entry.freshUntilMs <= nowMs()) return false;
+			// The born-local customer:default sentinel is not part of the server census — counting
+			// it would let a walk that is one real customer short read as complete and suppress
+			// the remote search for exactly that customer. Exclude it by its literal storage id.
+			const [count, sentinel] = await Promise.all([
+				database.collections.customers.count().exec(),
+				database.collections.customers.findByIds(['customer:default']).exec(),
+			]);
+			return count - sentinel.size >= entry.totalMatchingRecords;
+		},
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 

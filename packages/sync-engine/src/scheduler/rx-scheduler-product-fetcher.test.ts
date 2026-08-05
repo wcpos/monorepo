@@ -41,6 +41,31 @@ const uuidFor = (n: number): string => `00000000-0000-4000-8000-${String(n).padS
 const posMeta = (n: number) => [{ key: '_woocommerce_pos_uuid', value: uuidFor(n) }];
 
 describe('createProductsSchedulerFetcher', () => {
+	it('runs only the exact SKU leg for a two-character search', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async (_url: string) => response([]));
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:search:42:windowed',
+				queryKey: 'products:search:42',
+			})
+		);
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
+		]);
+		expect(result).toMatchObject({ requestCount: 1, completed: true });
+	});
+
 	it('walks each product search leg in Performance-dial pages, not one task-limit request', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
@@ -824,6 +849,64 @@ describe('createProductsSchedulerFetcher', () => {
 			expect.objectContaining({ id: uuidFor(101), wooProductId: 101 }),
 			expect.objectContaining({ id: uuidFor(201), wooProductId: 201 }),
 		]);
+	});
+
+	it('withholds lane completion when cross-leg dedupe overflows the persisted window', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		// Both legs exhaust (short pages), but their union (3) exceeds limit (2): the
+		// persisted set is truncated, so the lane must not read back as complete.
+		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=KEY-101')) {
+				return response([
+					{
+						id: 101,
+						sku: 'KEY-101',
+						name: 'Keyboard Stand',
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: posMeta(101),
+					},
+				]);
+			}
+			return response([
+				{
+					id: 201,
+					name: 'Keyboard A',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(201),
+				},
+				{
+					id: 202,
+					name: 'Keyboard B',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(202),
+				},
+			]);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:search:KEY-101:windowed',
+				queryKey: 'products:search:KEY-101',
+				limit: 2,
+			})
+		);
+
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ complete: false })
+		);
+		expect(result.completed).toBe(false);
 	});
 
 	it('records incomplete product search coverage when the first page is full', async () => {

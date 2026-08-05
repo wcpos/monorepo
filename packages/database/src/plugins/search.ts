@@ -163,6 +163,7 @@ async function createSearchInstance(
 			// do NOT enable `suggest` on queries: WooCommerce search is not fuzzy, and
 			// best-effort partial results would return matches Woo would not. See #679.
 			tokenize: 'full',
+			// Keep equal to FLEXSEARCH_MIN_TERM_LENGTH in packages/query/src/engine-query.ts.
 			minlength: 3,
 			language: locale,
 		},
