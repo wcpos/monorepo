@@ -31,6 +31,7 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
 
@@ -139,25 +140,32 @@ export async function seedProductBrowseWindowSchedulerTask(
 		);
 	}
 	const repository = await input.getRepository();
-	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
+	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
-	return seedPersistedSchedulerTasks({
-		repository: schedulerRepository,
-		tasks: [
-			{
-				id: `${queryKey}:windowed`,
-				requirementId,
-				collection: 'products',
-				queryKey,
-				limit,
-				priority: input.priority ?? PRODUCT_BROWSE_WINDOW_SCHEDULER_PRIORITY,
-				mode: 'windowed',
-			},
-		],
-		nowMs,
-		completedDedupeForMs:
-			input.completedDedupeForMs ?? PRODUCT_BROWSE_WINDOW_COMPLETED_DEDUPE_FOR_MS,
+	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
+	// and the seed runs again against the fresh store (#956) — callers treat a
+	// resolved seed as a durable enqueue, so it must not resolve empty.
+	return withSchedulerSeedLedgerRecovery({
+		database,
+		run: () =>
+			seedPersistedSchedulerTasks({
+				repository: new RxSchedulerTaskStateRepository(database),
+				tasks: [
+					{
+						id: `${queryKey}:windowed`,
+						requirementId,
+						collection: 'products',
+						queryKey,
+						limit,
+						priority: input.priority ?? PRODUCT_BROWSE_WINDOW_SCHEDULER_PRIORITY,
+						mode: 'windowed',
+					},
+				],
+				nowMs,
+				completedDedupeForMs:
+					input.completedDedupeForMs ?? PRODUCT_BROWSE_WINDOW_COMPLETED_DEDUPE_FOR_MS,
+			}),
 	});
 }
 

@@ -52,6 +52,23 @@ export type SeedPersistedSchedulerTasksResult = {
 	rerunRequested: number;
 };
 
+/**
+ * A seed that did nothing. Also the neutral result a seed returns when a ledger
+ * rebuild aborts it mid-flight (#956) — the tasks are re-seedable, so the next
+ * cadence enqueues them again against the rebuilt store.
+ */
+export function emptySeedPersistedSchedulerTasksResult(): SeedPersistedSchedulerTasksResult {
+	return {
+		inserted: 0,
+		requeued: 0,
+		skippedActive: 0,
+		skippedCompleted: 0,
+		skippedRunnable: 0,
+		claimLost: 0,
+		rerunRequested: 0,
+	};
+}
+
 function queuedStateFromTask(
 	task: FetchTask,
 	nowMs: number,
@@ -94,15 +111,7 @@ export async function seedPersistedSchedulerTasks(
 	const tasks = uniqueOrderedTasks(input.tasks);
 	const existingStates = await input.repository.readForTaskIds(tasks.map((task) => task.id));
 	const existingByTaskId = new Map(existingStates.map((state) => [state.taskId, state] as const));
-	const result: SeedPersistedSchedulerTasksResult = {
-		inserted: 0,
-		requeued: 0,
-		skippedActive: 0,
-		skippedCompleted: 0,
-		skippedRunnable: 0,
-		claimLost: 0,
-		rerunRequested: 0,
-	};
+	const result = emptySeedPersistedSchedulerTasksResult();
 
 	for (const task of tasks) {
 		const existing = existingByTaskId.get(task.id);

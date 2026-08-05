@@ -28,6 +28,7 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import {
 	BRAND_REFERENCE_CONFIG,
 	CATEGORY_REFERENCE_CONFIG,
@@ -135,13 +136,20 @@ async function seedTasks(
 	input: SeedPosBootstrapLanesInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	const repository = await input.getRepository();
-	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
-	return seedPersistedSchedulerTasks({
-		repository: schedulerRepository,
-		tasks,
-		nowMs: input.nowMs ?? Date.now(),
-		completedDedupeForMs: input.completedDedupeForMs ?? 0,
-		coalesceInFlight: input.coalesceInFlight ?? false,
+	const database = repository.getDatabase();
+	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
+	// and the seed runs again against the fresh store (#956) — callers treat a
+	// resolved seed as a durable enqueue, so it must not resolve empty.
+	return withSchedulerSeedLedgerRecovery({
+		database,
+		run: () =>
+			seedPersistedSchedulerTasks({
+				repository: new RxSchedulerTaskStateRepository(database),
+				tasks,
+				nowMs: input.nowMs ?? Date.now(),
+				completedDedupeForMs: input.completedDedupeForMs ?? 0,
+				coalesceInFlight: input.coalesceInFlight ?? false,
+			}),
 	});
 }
 

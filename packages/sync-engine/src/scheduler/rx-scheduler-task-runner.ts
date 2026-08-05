@@ -48,7 +48,35 @@ export type PersistedSchedulerTaskRunnerResult = {
 	renewalLost: number;
 	totalDocuments: number;
 	totalRequests: number;
+	/**
+	 * The tick was ABORTED by a derivable-ledger rebuild (#956), not drained: the
+	 * scheduler store was dropped mid-tick, so nothing was claimed or fetched. A
+	 * demand-driven caller must release rather than report the requirement fetched.
+	 */
+	ledgerRebuilt: boolean;
 };
+
+/** A drain tick that did nothing. */
+export function emptyPersistedSchedulerTaskRunnerResult(): PersistedSchedulerTaskRunnerResult {
+	return {
+		scanned: 0,
+		claimLost: 0,
+		completionLost: 0,
+		succeeded: 0,
+		coalescedReruns: 0,
+		failed: 0,
+		failureLost: 0,
+		renewalLost: 0,
+		totalDocuments: 0,
+		totalRequests: 0,
+		ledgerRebuilt: false,
+	};
+}
+
+/** The neutral result a drain tick returns when a ledger rebuild aborted it (#956). */
+export function ledgerRebuiltSchedulerTaskRunnerResult(): PersistedSchedulerTaskRunnerResult {
+	return { ...emptyPersistedSchedulerTaskRunnerResult(), ledgerRebuilt: true };
+}
 
 function throwIfAborted(signal?: AbortSignal): void {
 	if (!signal?.aborted) return;
@@ -197,16 +225,8 @@ export async function runPersistedSchedulerTasks(
 		(left, right) => right.priority - left.priority || left.taskId.localeCompare(right.taskId)
 	);
 	const result: PersistedSchedulerTaskRunnerResult = {
+		...emptyPersistedSchedulerTaskRunnerResult(),
 		scanned: taskStates.length,
-		claimLost: 0,
-		completionLost: 0,
-		succeeded: 0,
-		coalescedReruns: 0,
-		failed: 0,
-		failureLost: 0,
-		renewalLost: 0,
-		totalDocuments: 0,
-		totalRequests: 0,
 	};
 
 	for (const runnableState of taskStates) {

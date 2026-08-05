@@ -42,6 +42,7 @@ const EMPTY_DRAIN_RESULT = {
 	renewalLost: 0,
 	totalDocuments: 0,
 	totalRequests: 0,
+	ledgerRebuilt: false,
 };
 
 afterEach(() => {
@@ -502,6 +503,44 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			requests: 0,
 		});
 	});
+
+	it.each(['query', 'refresh'] as const)(
+		'releases an order %s requirement when a ledger rebuild aborted the drain tick',
+		async (kind) => {
+			const harness = orchestrationHarness();
+			if (kind === 'query') {
+				vi.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask').mockResolvedValue({
+					...EMPTY_SEED_RESULT,
+					inserted: 1,
+				});
+			} else {
+				vi.spyOn(orderTaskSeeder, 'seedOrderSchedulerTasks').mockResolvedValue({
+					...EMPTY_SEED_RESULT,
+					inserted: 1,
+				});
+			}
+			// #956: the tick was dropped mid-flight by the derivable-ledger rebuild, so
+			// nothing was claimed or fetched — the caller must not be told it was fetched.
+			vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockResolvedValue({
+				...EMPTY_DRAIN_RESULT,
+				ledgerRebuilt: true,
+			});
+
+			const requirement =
+				kind === 'query'
+					? {
+							id: 'ledger-rebuilt-query',
+							collection: 'orders' as const,
+							kind,
+							queryKey: 'orders:browser:status=processing:search=:limit=50',
+						}
+					: { id: 'ledger-rebuilt-refresh', collection: 'orders' as const, kind };
+			await expect(harness.plane.require(requirement).ready).resolves.toMatchObject({
+				action: 'released',
+				reason: expect.stringMatching(/local sync bookkeeping was rebuilt/i),
+			});
+		}
+	);
 
 	it.each(['query', 'refresh'] as const)(
 		'releases an order %s drain loss after partial progress with its aggregates',

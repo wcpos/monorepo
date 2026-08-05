@@ -17,7 +17,10 @@ vi.mock('./rx-scheduler-task-state-repository', () => ({
 	RxSchedulerTaskStateRepository: mocks.RxSchedulerTaskStateRepository,
 }));
 
-vi.mock('./rx-scheduler-task-seeder', () => ({
+// Keep the real module's other exports (the neutral empty-seed result the ledger
+// recovery seam hands back on an aborted tick) and mock only the seed call.
+vi.mock('./rx-scheduler-task-seeder', async (importOriginal) => ({
+	...(await importOriginal<typeof import('./rx-scheduler-task-seeder')>()),
 	seedPersistedSchedulerTasks: mocks.seedPersistedSchedulerTasks,
 }));
 
