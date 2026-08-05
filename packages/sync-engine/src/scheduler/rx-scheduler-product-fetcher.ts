@@ -462,7 +462,11 @@ async function fetchProductSearch(
 	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
 	// A skipped short-term search leg counts as exhausted; otherwise both legs must exhaust.
-	const complete = (searchLeg?.exhausted ?? true) && skuLeg.exhausted;
+	// The slice above can drop deduped cross-leg hits past the window, and the products
+	// lane key carries no limit — a truncated persist must not record a complete lane,
+	// or the serve-local gate would answer a later, larger-limit search from the
+	// truncated set.
+	const complete = (searchLeg?.exhausted ?? true) && skuLeg.exhausted && payloads.length <= limit;
 	await recordCoverage(
 		'products',
 		input,

@@ -851,6 +851,64 @@ describe('createProductsSchedulerFetcher', () => {
 		]);
 	});
 
+	it('withholds lane completion when cross-leg dedupe overflows the persisted window', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		// Both legs exhaust (short pages), but their union (3) exceeds limit (2): the
+		// persisted set is truncated, so the lane must not read back as complete.
+		const fetcher = vi.fn(async (url: string) => {
+			if (url.includes('sku=KEY-101')) {
+				return response([
+					{
+						id: 101,
+						sku: 'KEY-101',
+						name: 'Keyboard Stand',
+						date_modified_gmt: '2026-05-20T10:10:00',
+						meta_data: posMeta(101),
+					},
+				]);
+			}
+			return response([
+				{
+					id: 201,
+					name: 'Keyboard A',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(201),
+				},
+				{
+					id: 202,
+					name: 'Keyboard B',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(202),
+				},
+			]);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:search:KEY-101:windowed',
+				queryKey: 'products:search:KEY-101',
+				limit: 2,
+			})
+		);
+
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ complete: false })
+		);
+		expect(result.completed).toBe(false);
+	});
+
 	it('records incomplete product search coverage when the first page is full', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
