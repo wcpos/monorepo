@@ -106,6 +106,26 @@ describe('requirementsForQuery extraction', () => {
 		});
 	});
 
+	it('does not search variations globally when finite ids already scope the query', () => {
+		expect(
+			plan({
+				collectionName: 'variations',
+				selector: { id: { $in: [11, 12] }, search: 'blue' },
+				limit: 25,
+			})
+		).toEqual({
+			requirements: [
+				{
+					id: 'q:targeted',
+					collection: 'variations',
+					kind: 'targeted-records',
+					wooIds: [11, 12],
+				},
+			],
+			represented: false,
+		});
+	});
+
 	it.each([{ id: { $in: ['junk'] } }, { id: 'junk' }])(
 		'emits a residual product superset for unusable ids',
 		(selector) => {

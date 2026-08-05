@@ -508,6 +508,7 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	if (
 		trimmedSearchTerm &&
 		SEARCH_ENGINE_COLLECTIONS.has(engineCollection) &&
+		(engineCollection !== 'variations' || !wooIds) &&
 		(engineCollection !== 'customers' || trimmedSearchTerm.length >= FLEXSEARCH_MIN_TERM_LENGTH)
 	) {
 		requirements.push({
