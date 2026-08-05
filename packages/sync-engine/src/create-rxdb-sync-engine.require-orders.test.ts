@@ -335,7 +335,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		expect(drain).toHaveBeenCalledWith(expect.objectContaining({ fetcher: expect.any(Function) }));
 	});
 
-	it('routes an order query requirement through the persisted filter seeder and drain', async () => {
+	it('routes typed and transitional order browse requirements through the same query path', async () => {
 		const harness = orchestrationHarness();
 		const seed = vi
 			.spyOn(orderTaskSeeder, 'seedOrderFilterSchedulerTask')
@@ -345,16 +345,65 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			succeeded: 1,
 		});
 
-		await harness.plane.require({
+		const transitional = harness.plane.require({
 			id: 'processing-orders',
 			collection: 'orders',
 			kind: 'query',
 			queryKey: 'orders:browser:status=processing:search=:limit=50',
-		}).ready;
+		});
+		expect(transitional.queryKey).toBe('orders:browser:status=processing:search=:limit=50');
+		const transitionalOutcome = await transitional.ready;
 
-		expect(seed).toHaveBeenCalledWith(
-			expect.objectContaining({ status: 'processing', search: '', limit: 50 })
-		);
+		const typed = harness.plane.require({
+			id: 'processing-orders-typed',
+			collection: 'orders',
+			kind: 'orders-browse',
+			status: 'processing',
+			limit: 50,
+		});
+		expect(typed.queryKey).toBe('orders:browser:status=processing:search=:limit=50');
+		const typedOutcome = await typed.ready;
+
+		expect(seed).toHaveBeenCalledTimes(2);
+		for (const [call] of seed.mock.calls) {
+			expect(call).toEqual(
+				expect.objectContaining({
+					queryKey: 'orders:browser:status=processing:search=:limit=50',
+					status: 'processing',
+					search: '',
+					limit: 50,
+				})
+			);
+		}
+		expect(typedOutcome).toEqual(transitionalOutcome);
+	});
+
+	it('throws typed order browse misuse synchronously', () => {
+		const harness = orchestrationHarness();
+		expect(() =>
+			harness.plane.require({
+				id: 'invalid-status',
+				collection: 'orders',
+				kind: 'orders-browse',
+				status: '',
+			})
+		).toThrow(TypeError);
+		expect(() =>
+			harness.plane.require({
+				id: 'invalid-complete',
+				collection: 'orders',
+				kind: 'orders-browse',
+				limit: 'all',
+			})
+		).toThrow(TypeError);
+		expect(() =>
+			harness.plane.require({
+				id: 'invalid-sort',
+				collection: 'orders',
+				kind: 'orders-browse',
+				orderby: 'date',
+			})
+		).toThrow(TypeError);
 	});
 
 	it('routes a full order refresh through the persisted greedy seeder and drain', async () => {
@@ -369,13 +418,15 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			totalRequests: 2,
 		});
 
-		const outcome = await harness.plane.require({
+		const handle = harness.plane.require({
 			id: 'manual-order-sync',
 			collection: 'orders',
 			kind: 'refresh',
 			limit: 250,
 			forceRefresh: true,
-		}).ready;
+		});
+		expect(handle.queryKey).toBeNull();
+		const outcome = await handle.ready;
 
 		expect(seed).toHaveBeenCalledWith(
 			expect.objectContaining({ perPage: 250, completedDedupeForMs: 0 })

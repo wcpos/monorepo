@@ -136,7 +136,13 @@ import {
 } from './scheduler/census';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 
-export type { CoverageOutcome, EngineRequirement, RequirementHandle } from './require-plane';
+export type {
+	CoverageOutcome,
+	EngineRequirement,
+	OrderBrowseDimensions,
+	ProductBrowseDimensions,
+	RequirementHandle,
+} from './require-plane';
 export type {
 	MaintenanceLaneName,
 	MaintenanceLaneReport,

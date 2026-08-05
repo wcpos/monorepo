@@ -4,8 +4,134 @@ import { describe, expect, it } from 'vitest';
 import {
 	browserOrderSchedulerDescriptorLimitError,
 	ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS,
+	orderBrowserQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
 } from './order-browser-scheduler-descriptor';
+
+import type { OrderBrowseDimensions } from '../require-plane';
+
+describe('orderBrowserQueryKey', () => {
+	const fixtures: {
+		dims: OrderBrowseDimensions;
+		queryKey: string;
+		parsed: Record<string, unknown>;
+	}[] = [
+		{
+			dims: {},
+			queryKey: 'orders:browser:status=all:search=:limit=10',
+			parsed: { status: 'all', search: '', limit: 10, complete: false },
+		},
+		{
+			dims: { status: 'processing' },
+			queryKey: 'orders:browser:status=processing:search=:limit=10',
+			parsed: { status: 'processing' },
+		},
+		{
+			dims: { search: 'invoice:after=123' },
+			queryKey: 'orders:browser:status=all:search=invoice:after=123:limit=10',
+			parsed: { search: 'invoice:after=123' },
+		},
+		{
+			dims: { customerId: 42 },
+			queryKey: 'orders:browser:status=all:customer=42:search=:limit=10',
+			parsed: { customerId: 42 },
+		},
+		{
+			dims: { cashierId: 7 },
+			queryKey: 'orders:browser:status=all:cashier=7:search=:limit=10',
+			parsed: { cashierId: 7 },
+		},
+		{
+			dims: { store: 'woocommerce-pos' },
+			queryKey: 'orders:browser:status=all:store=woocommerce-pos:search=:limit=10',
+			parsed: { store: 'woocommerce-pos' },
+		},
+		{
+			dims: { afterSeconds: 1782864000 },
+			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=10',
+			parsed: { afterSeconds: 1782864000 },
+		},
+		{
+			dims: { beforeSeconds: 1784073599 },
+			queryKey: 'orders:browser:status=all:before=1784073599:search=:limit=10',
+			parsed: { beforeSeconds: 1784073599 },
+		},
+		{
+			dims: { afterSeconds: 1782864000, beforeSeconds: 1784073599, limit: 'all' },
+			queryKey: 'orders:browser:status=all:after=1782864000:before=1784073599:search=:limit=all',
+			parsed: { afterSeconds: 1782864000, beforeSeconds: 1784073599, complete: true },
+		},
+		{
+			dims: { orderby: 'id', order: 'desc', limit: 999 },
+			queryKey: 'orders:browser:status=all:search=:limit=200',
+			parsed: { limit: 200 },
+		},
+		{
+			dims: { orderby: 'date', order: 'desc', limit: 25 },
+			queryKey: 'orders:browser:status=all:orderby=date:order=desc:search=:limit=25',
+			parsed: { orderby: 'date', order: 'desc', limit: 25 },
+		},
+		{
+			dims: {
+				status: 'completed',
+				search: 'jane',
+				limit: 25,
+				customerId: 42,
+				cashierId: 7,
+				store: '12',
+				afterSeconds: 1782864000,
+				beforeSeconds: 1784073599,
+				orderby: 'modified',
+				order: 'asc',
+			},
+			queryKey:
+				'orders:browser:status=completed:customer=42:cashier=7:store=12:after=1782864000:before=1784073599:orderby=modified:order=asc:search=jane:limit=25',
+			parsed: {
+				status: 'completed',
+				search: 'jane',
+				customerId: 42,
+				cashierId: 7,
+				store: '12',
+				afterSeconds: 1782864000,
+				beforeSeconds: 1784073599,
+				orderby: 'modified',
+				order: 'asc',
+			},
+		},
+	];
+
+	it.each(fixtures)(
+		'encodes $queryKey byte-for-byte and parses it back',
+		({ dims, queryKey, parsed }) => {
+			expect(orderBrowserQueryKey(dims)).toBe(queryKey);
+			const decision = parseOrderBrowserSchedulerDescriptor(queryKey);
+			expect(decision).toEqual({ descriptor: expect.objectContaining(parsed) });
+		}
+	);
+
+	it('matches bridge normalization and rejects invalid door invariants', () => {
+		expect(orderBrowserQueryKey({ limit: Number.NaN, store: 'NOT VALID' })).toBe(
+			'orders:browser:status=all:search=:limit=10'
+		);
+		expect(() => orderBrowserQueryKey({ status: '' })).toThrow(TypeError);
+		expect(() => orderBrowserQueryKey({ status: 'on:hold' })).toThrow(TypeError);
+		expect(() => orderBrowserQueryKey({ orderby: 'date' })).toThrow(TypeError);
+		expect(() => orderBrowserQueryKey({ order: 'desc' })).toThrow(TypeError);
+		expect(() => orderBrowserQueryKey({ orderby: 'total', order: 'desc' } as never)).toThrow(
+			TypeError
+		);
+		expect(() => orderBrowserQueryKey({ orderby: 'date', order: 'sideways' } as never)).toThrow(
+			TypeError
+		);
+		expect(() => orderBrowserQueryKey({ limit: 'all' })).toThrow(TypeError);
+	});
+
+	it('trims status and search before returning the persisted lane key', () => {
+		expect(orderBrowserQueryKey({ status: ' processing ', search: ' jane ' })).toBe(
+			'orders:browser:status=processing:search=jane:limit=10'
+		);
+	});
+});
 
 describe('parseOrderBrowserSchedulerDescriptor', () => {
 	it('classifies supported status-only descriptors with normalized Woo REST status', () => {

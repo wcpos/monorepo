@@ -18,11 +18,10 @@
  *  - `release()` removes queued work or aborts an active foreground execution;
  *    either way `ready` resolves `{ action: 'released' }`.
  *
- * Query-shaped requirements over TARGETED collections without ids are caller
- * misuse here (exception), EXCEPT the two bounded windows that own a persisted
- * scheduler descriptor: the orders browser window and the products browse window
- * (ADR 0027 §2). Both seed a durable windowed task and drain it; anything else
- * query-shaped still needs coverage machinery this slice defers.
+ * The two bounded browse windows accept typed dimensions and encode their persisted
+ * scheduler descriptors inside the engine. Transitional `query` requirements still
+ * take caller-built keys until the requirement bridge cuts over. Both forms seed and
+ * drain the same durable windowed tasks.
  */
 
 /**
@@ -47,8 +46,14 @@ import {
 	seedOrderSchedulerTasks,
 	seedTargetedOrderSchedulerTask,
 } from './scheduler/rx-order-scheduler-task-seeder';
-import { parseOrderBrowserSchedulerDescriptor } from './scheduler/order-browser-scheduler-descriptor';
-import { parseProductBrowseWindowDescriptor } from './scheduler/product-browse-window-descriptor';
+import {
+	orderBrowserQueryKey,
+	parseOrderBrowserSchedulerDescriptor,
+} from './scheduler/order-browser-scheduler-descriptor';
+import {
+	parseProductBrowseWindowDescriptor,
+	productBrowseWindowQueryKeyFromDimensions,
+} from './scheduler/product-browse-window-descriptor';
 import { seedProductBrowseWindowSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
 import { seedReferenceLanes } from './scheduler/rx-pos-bootstrap-seeder';
 import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
@@ -68,38 +73,70 @@ import type { EngineSourceFetcher } from './change-signal/change-signal-source';
 import type { RxCollection, RxDatabase } from 'rxdb';
 import type { LocalCoverage } from './local-coverage/local-coverage';
 import type { FetchTask } from './scheduler/replication-policy';
+import type { ProductBrowseWindowOrderby } from './scheduler/product-browse-window-descriptor';
 
 const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
 
-export type EngineRequirement = {
+type EngineRequirementCommon = {
 	/** Caller-chosen id (diagnostics only; concurrent identical searches coalesce regardless of id). */
 	id: string;
-	collection: SyncCollectionName;
-	/**
-	 * `search` is a DEDICATED kind rather than an overload of `query`: the orders
-	 * `query` path carries an OPAQUE `queryKey` descriptor (the order-browser
-	 * grammar), whereas search takes a RAW, user-typed `term` and lets the engine
-	 * own the wire grammar (`products:search:<enc>` vs `customers:search=<enc>:limit=<n>`,
-	 * which diverge per collection). Keeping it a separate kind holds that grammar
-	 * behind the public door — the caller declares `{ collection, kind:'search', term }`
-	 * and never constructs a queryKey. The engine constructs the SAME in-memory task
-	 * shape while invoking the registered scheduler fetcher directly.
-	 */
-	kind: 'targeted-records' | 'query' | 'refresh' | 'search';
-	/** Required for 'targeted-records'. */
-	wooIds?: number[];
-	/** Raw user search term for kind:'search' (products/customers only). */
-	term?: string;
 	/** Higher runs first. Default 500 (the web scheduler's browse-lane band). */
 	priority?: number;
 	/** Re-fetch targeted records even when they are already resident. Used by
 	 * explicit refresh/re-anchor flows; ordinary requirements stay coverage-aware. */
 	forceRefresh?: boolean;
-	/** Query descriptor for kind:'query'. */
+	/** Transitional compatibility for callers that inspect a mixed requirement list. */
 	queryKey?: string;
-	/** Page size for an orders refresh. */
-	limit?: number;
 };
+
+export type OrderBrowseDimensions = {
+	/** WooCommerce order status, or 'all'. Default 'all'. */
+	status?: string;
+	/** Raw cashier search text. Default ''. */
+	search?: string;
+	/** Result-window size. 'all' = ranged fetch-to-completion (Reports). Default 10. */
+	limit?: number | 'all';
+	customerId?: number;
+	cashierId?: number;
+	/** Numeric store id or created_via slug (/^[a-z0-9_-]+$/). */
+	store?: string;
+	/** date_created_gmt range bounds, epoch seconds. */
+	afterSeconds?: number;
+	beforeSeconds?: number;
+	/** WC REST orders orderby enum. Both orderby and order, or neither. */
+	orderby?: 'date' | 'modified' | 'id';
+	order?: 'asc' | 'desc';
+};
+
+export type ProductBrowseDimensions = {
+	/** Requested window size, raw — the engine quantizes (steps of 100, cap 1000). Default 100. */
+	limit?: number;
+	/** WC REST products orderby enum. Both orderby and order, or neither. */
+	orderby?: ProductBrowseWindowOrderby;
+	order?: 'asc' | 'desc';
+	category?: number[];
+	tag?: number[];
+	brand?: number[];
+	featured?: boolean;
+	on_sale?: boolean;
+	stock_status?: 'instock' | 'outofstock' | 'onbackorder';
+};
+
+/**
+ * Dedicated search and browse kinds accept typed caller dimensions; callers never
+ * construct their wire query keys. `query` remains transitional until the follow-up
+ * bridge cutover removes it.
+ */
+export type EngineRequirement = EngineRequirementCommon &
+	(
+		| { kind: 'targeted-records'; collection: SyncCollectionName; wooIds: number[] }
+		// The current bridge narrows this with a runtime Set that TypeScript cannot follow.
+		| { kind: 'search'; collection: SyncCollectionName; term: string; limit?: number }
+		| { kind: 'refresh'; collection: SyncCollectionName; limit?: number }
+		| { kind: 'query'; collection: 'orders' | 'products'; queryKey: string }
+		| ({ kind: 'orders-browse'; collection: 'orders' } & OrderBrowseDimensions)
+		| ({ kind: 'product-browse'; collection: 'products' } & ProductBrowseDimensions)
+	);
 
 export type CoverageOutcome = {
 	action: 'serve-local' | 'fetched' | 'released';
@@ -112,6 +149,9 @@ export type CoverageOutcome = {
 export type RequirementHandle = {
 	ready: Promise<CoverageOutcome>;
 	release(): void;
+	/** Canonical persisted lane identity for browse/query kinds; null otherwise.
+	 * Optional only so pre-cutover test doubles remain structurally compatible. */
+	readonly queryKey?: string | null;
 };
 
 export type RequirePlaneDeps = {
@@ -408,11 +448,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			}
 
 			if (item.requirement.collection === 'orders' && item.requirement.kind === 'refresh') {
+				const refreshRequirement = item.requirement;
 				let drainResult = emptyDrainResult();
 				let skippedActive = false;
 				const applied = await bound.guardWrite(async () => {
 					const seedResult = await seedOrderSchedulerTasks({
-						perPage: item.requirement.limit ?? 250,
+						perPage: refreshRequirement.limit ?? 250,
 						priority: item.priority,
 						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
 						getRepository: async () => ({ getDatabase: () => database as never }),
@@ -866,7 +907,30 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	return {
 		hasPendingWork: () => running || queue.length > 0,
 		require: (requirement) => {
-			const dedupeKey = searchDedupeKey(requirement);
+			const queryKey = (() => {
+				if (requirement.kind === 'query') return requirement.queryKey;
+				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
+				if (requirement.kind === 'product-browse') {
+					return productBrowseWindowQueryKeyFromDimensions(requirement);
+				}
+				return null;
+			})();
+			// Typed browse requirements synchronously derive their lane identity, then
+			// delegate to the unchanged parser-based transitional query path.
+			const queuedRequirement: EngineRequirement =
+				requirement.kind === 'orders-browse' || requirement.kind === 'product-browse'
+					? {
+							id: requirement.id,
+							collection: requirement.collection,
+							kind: 'query',
+							queryKey: queryKey!,
+							...(requirement.priority !== undefined ? { priority: requirement.priority } : {}),
+							...(requirement.forceRefresh !== undefined
+								? { forceRefresh: requirement.forceRefresh }
+								: {}),
+						}
+					: requirement;
+			const dedupeKey = searchDedupeKey(queuedRequirement);
 			let entry = dedupeKey ? activeSearches.get(dedupeKey) : undefined;
 			let subscriber: RequirementSubscriber;
 			const ready = new Promise<CoverageOutcome>((resolve, reject) => {
@@ -881,7 +945,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				entry.priority = Math.max(entry.priority, requirement.priority ?? 500);
 			} else {
 				entry = {
-					requirement,
+					requirement: queuedRequirement,
 					priority: requirement.priority ?? 500,
 					seq: (seq += 1),
 					subscribers: new Set([subscriber!]),
@@ -896,6 +960,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			}
 			return {
 				ready,
+				queryKey,
 				release: () => {
 					if (subscriber.released) return;
 					subscriber.released = true;

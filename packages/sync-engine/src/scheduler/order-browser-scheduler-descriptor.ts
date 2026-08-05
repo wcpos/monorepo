@@ -1,3 +1,5 @@
+import type { OrderBrowseDimensions } from '../require-plane';
+
 export const WOO_REST_MAX_PER_PAGE = 100;
 export const ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS = WOO_REST_MAX_PER_PAGE * 2;
 export const ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON = 'descriptor is not supported';
@@ -21,6 +23,54 @@ export type OrderBrowserSchedulerDescriptor = {
 export type OrderBrowserSchedulerDescriptorDecision =
 	| { descriptor: OrderBrowserSchedulerDescriptor; skipReason?: never }
 	| { descriptor?: never; skipReason: string };
+
+/** Build the canonical persisted lane identity for an orders browse window. */
+export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
+	const status = (dims.status ?? 'all').trim();
+	const search = (dims.search ?? '').trim();
+	const safeNonNegativeInteger = (value: number | undefined): number | undefined =>
+		value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+	const afterSeconds = safeNonNegativeInteger(dims.afterSeconds);
+	const beforeSeconds = safeNonNegativeInteger(dims.beforeSeconds);
+	if (status === '') throw new TypeError('orders browse status must not be empty');
+	if (status.includes(':')) throw new TypeError('orders browse status must not contain ":"');
+	if ((dims.orderby === undefined) !== (dims.order === undefined)) {
+		throw new TypeError('orders browse orderby and order must be provided together');
+	}
+	if (
+		dims.orderby !== undefined &&
+		dims.orderby !== 'date' &&
+		dims.orderby !== 'modified' &&
+		dims.orderby !== 'id'
+	) {
+		throw new TypeError(`unsupported orders browse orderby "${dims.orderby}"`);
+	}
+	if (dims.order !== undefined && dims.order !== 'asc' && dims.order !== 'desc') {
+		throw new TypeError(`unsupported orders browse order "${dims.order}"`);
+	}
+	if (dims.limit === 'all' && afterSeconds === undefined && beforeSeconds === undefined) {
+		throw new TypeError("orders browse limit 'all' requires a date range bound");
+	}
+
+	const dimension = (name: string, value: number | string | undefined): string =>
+		value === undefined ? '' : `:${name}=${value}`;
+	const store = dims.store && /^(?:\d+|[a-z0-9_-]+)$/.test(dims.store) ? dims.store : undefined;
+	const sortPart =
+		dims.orderby === undefined || (dims.orderby === 'id' && dims.order === 'desc')
+			? ''
+			: `:orderby=${dims.orderby}:order=${dims.order}`;
+	const limit =
+		dims.limit === 'all'
+			? 'all'
+			: Number.isFinite(dims.limit)
+				? Math.min(
+						Math.max(1, Math.trunc(dims.limit as number)),
+						ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS
+					)
+				: 10;
+
+	return `orders:browser:status=${status}${dimension('customer', safeNonNegativeInteger(dims.customerId))}${dimension('cashier', safeNonNegativeInteger(dims.cashierId))}${dimension('store', store)}${dimension('after', afterSeconds)}${dimension('before', beforeSeconds)}${sortPart}:search=${search}:limit=${limit}`;
+}
 
 export function browserOrderSchedulerDescriptorLimit(limitText: string): number | null {
 	const limit = Number(limitText);

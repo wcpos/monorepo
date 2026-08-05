@@ -120,26 +120,57 @@ describe('require() for the products browse window', () => {
 		const engine = engineWith(server.fetch);
 		await engine.ready;
 
-		const seeded = await engine.require({
+		const typedHandle = engine.require({
 			id: 'browse-seed',
 			collection: 'products',
-			kind: 'query',
-			queryKey: 'products:browse-window:limit=100',
-		}).ready;
+			kind: 'product-browse',
+			limit: 10,
+		});
+		expect(typedHandle.queryKey).toBe('products:browse-window:limit=100');
+		const seeded = await typedHandle.ready;
 		expect(seeded).toMatchObject({ action: 'fetched' });
 		expect(await productIds(engine)).toHaveLength(100);
 
 		// onEndReached grows the grid's limit → a WIDER window key → genuinely new rows.
-		const grown = await engine.require({
+		const grownHandle = engine.require({
 			id: 'browse-grown',
 			collection: 'products',
 			kind: 'query',
 			queryKey: 'products:browse-window:limit=200',
-		}).ready;
+		});
+		expect(grownHandle.queryKey).toBe('products:browse-window:limit=200');
+		const grown = await grownHandle.ready;
 		expect(grown).toMatchObject({ action: 'fetched' });
 		const ids = await productIds(engine);
 		expect(ids).toHaveLength(200);
 		expect(ids[199]).toBe(200);
+
+		await engine.dispose();
+	});
+
+	it('throws typed product browse sort misuse synchronously', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const engine = engineWith(scriptedCatalog(10).fetch);
+		await engine.ready;
+
+		expect(() =>
+			engine.require({
+				id: 'missing-order',
+				collection: 'products',
+				kind: 'product-browse',
+				orderby: 'price',
+			})
+		).toThrow(TypeError);
+		expect(() =>
+			engine.require({
+				id: 'bad-orderby',
+				collection: 'products',
+				kind: 'product-browse',
+				orderby: 'sku',
+				order: 'asc',
+			} as never)
+		).toThrow(TypeError);
 
 		await engine.dispose();
 	});
@@ -217,13 +248,21 @@ describe('require() for the products browse window', () => {
 		});
 		await engine.ready;
 
-		const fetched = await engine.require({
+		const handle = engine.require({
 			id: 'browse-filtered',
 			collection: 'products',
-			kind: 'query',
-			queryKey:
-				'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
-		}).ready;
+			kind: 'product-browse',
+			category: [7, 2],
+			tag: [3],
+			brand: [5],
+			featured: true,
+			on_sale: false,
+			stock_status: 'instock',
+		});
+		expect(handle.queryKey).toBe(
+			'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock'
+		);
+		const fetched = await handle.ready;
 
 		expect(fetched).toMatchObject({ action: 'fetched' });
 		expect(requested.length).toBeGreaterThan(0);
