@@ -39,6 +39,7 @@ module.exports = {
 		// Fallback for other @wcpos/utils imports
 		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
 		'^@wcpos/database$': '<rootDir>/../database/src',
+		'^@wcpos/database/(.*)$': '<rootDir>/../database/src/$1',
 		'^@wcpos/hooks/(.*)$': '<rootDir>/../hooks/src/$1',
 	},
 };

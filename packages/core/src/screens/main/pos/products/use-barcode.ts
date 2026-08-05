@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
+import { isStorageWorkerFailure } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { useQueryRuntime } from '@wcpos/query';
 import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, resolveScan } from '@wcpos/sync-core';
@@ -16,6 +17,8 @@ import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 import { resolveVariationStock } from './cells/variations-popover/variation-stock';
 import { useScanFeedback } from './use-scan-feedback';
+
+import type { ScanFeedbackHandle } from './use-scan-feedback';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
 const BARCODE_LOOKUP_TIMEOUT_MS = 10_000;
@@ -82,12 +85,40 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	const scanTicketRef = React.useRef(0);
 
 	/**
-	 *
+	 * #163: every local barcode lookup runs through the RxDB storage worker, so a
+	 * lost worker rejects the scan from inside `barcodeSearch`/`findProductById`
+	 * with nothing user-facing attached. Catching the whole scan here means the
+	 * cashier gets terminal feedback for the one failure class that silently
+	 * killed scanning for an hour in a live store, while every other failure keeps
+	 * falling through to the subscription's last-resort logger.
 	 */
 	const handleScan = async (event: ScanEvent) => {
 		const barcodeStr = event.code;
-		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
 		const scan = begin();
+		try {
+			await runScan(event, scan);
+		} catch (error) {
+			if (!isStorageWorkerFailure(error)) {
+				throw error;
+			}
+			scan.storageUnavailable(barcodeStr);
+			barcodeLogger.error(t('common.barcode_scanned', { barcode: barcodeStr }), {
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+					barcode: barcodeStr,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		}
+	};
+
+	/**
+	 *
+	 */
+	const runScan = async (event: ScanEvent, scan: ScanFeedbackHandle) => {
+		const barcodeStr = event.code;
+		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
 		scanTicketRef.current += 1;
 		const scanTicket = scanTicketRef.current;
 		const guardedSetSearch = (value: string) => {
@@ -138,6 +169,22 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				},
 			});
 			guardedSetSearch(barcodeStr);
+		};
+
+		/**
+		 * Hydration failures are reported as connection errors, but a lost storage
+		 * worker is not a connection problem and needs the reload-the-app message —
+		 * rethrow so the outer handler owns it. Note the `finally` blocks at these
+		 * call sites still release their engine handles.
+		 */
+		const reportHydrationFailure = (error: unknown): never | void => {
+			if (isStorageWorkerFailure(error)) {
+				throw error;
+			}
+			showLookupError(
+				ERROR_CODES.CONNECTION_REFUSED,
+				error instanceof Error ? error.message : String(error)
+			);
 		};
 
 		if (results.length > 1) {
@@ -248,10 +295,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						}
 						await Promise.all(handles.map((handle) => handle.ready));
 					} catch (error) {
-						showLookupError(
-							ERROR_CODES.CONNECTION_REFUSED,
-							error instanceof Error ? error.message : String(error)
-						);
+						reportHydrationFailure(error);
 						return;
 					} finally {
 						for (const handle of handles) {
@@ -312,10 +356,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 					}
 					await Promise.all(handles.map((handle) => handle.ready));
 				} catch (error) {
-					showLookupError(
-						ERROR_CODES.CONNECTION_REFUSED,
-						error instanceof Error ? error.message : String(error)
-					);
+					reportHydrationFailure(error);
 					return;
 				} finally {
 					for (const handle of handles) {
@@ -382,10 +423,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						handle.release();
 					}
 				} catch (error) {
-					showLookupError(
-						ERROR_CODES.CONNECTION_REFUSED,
-						error instanceof Error ? error.message : String(error)
-					);
+					reportHydrationFailure(error);
 					return;
 				}
 			}

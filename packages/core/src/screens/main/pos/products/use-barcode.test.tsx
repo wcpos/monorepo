@@ -886,6 +886,105 @@ describe('useBarcode online escalation', () => {
 		});
 	});
 
+	// #163: the storage worker died mid-checkout and the whole scan path went
+	// silent. Every local barcode lookup runs through the same wrapped storage, so
+	// a worker loss must produce terminal feedback rather than a swallowed
+	// rejection.
+	const workerLoss = () =>
+		new Error(
+			'could not requestRemote: {"methodName":"query","error":{"message":"worker connection lost"}}'
+		);
+
+	it.each([
+		['the local barcode lookup', () => mockFindEngineProducts.mockRejectedValue(workerLoss())],
+		[
+			'the variation parent lookup',
+			() => {
+				engineProducts.push(productDocument(41, 'PARENT'));
+				engineVariations.push(variationDocument());
+				mockFindEngineProductById.mockRejectedValue(workerLoss());
+			},
+		],
+	])('reports a storage worker loss during %s', async (_name, arrange) => {
+		arrange();
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockToastShow).toHaveBeenLastCalledWith({
+			id: expect.stringMatching(/^scan:\d+$/),
+			type: 'error',
+			title: 'pos_products.scan_unavailable',
+			description: 'pos_products.scan_storage_unavailable_description:{"code":"ABC"}',
+			duration: 6000,
+		});
+		expect(mockAddProduct).not.toHaveBeenCalled();
+		expect(mockAddVariation).not.toHaveBeenCalled();
+		expect(mockClearSearch).not.toHaveBeenCalled();
+		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ errorCode: 'DB01005', barcode: 'ABC' }),
+			})
+		);
+	});
+
+	// The hydration catches report CONNECTION_REFUSED; a lost storage worker is not
+	// a connection problem and must not be disguised as one.
+	it('reports a storage worker loss during online hydration as a storage failure', async () => {
+		mockFetcher.mockResolvedValue(onlineResponse({ match: { id: 41, type: 'product' } }));
+		mockEngineRequire.mockImplementation(() => ({
+			ready: Promise.reject(workerLoss()),
+			release: jest.fn(),
+		}));
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				type: 'error',
+				title: 'pos_products.scan_unavailable',
+				description: 'pos_products.scan_storage_unavailable_description:{"code":"ABC"}',
+			})
+		);
+		expect(mockBarcodeLogger.error).not.toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ errorCode: 'API01002' }),
+			})
+		);
+	});
+
+	it('still reports a genuine hydration connection failure as a lookup error', async () => {
+		mockFetcher.mockResolvedValue(onlineResponse({ match: { id: 41, type: 'product' } }));
+		mockEngineRequire.mockImplementation(() => ({
+			ready: Promise.reject(new Error('network down')),
+			release: jest.fn(),
+		}));
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockToastShow).toHaveBeenLastCalledWith(
+			expect.objectContaining({ type: 'error', title: 'pos_products.scan_lookup_failed' })
+		);
+	});
+
+	it('leaves unrelated scan failures to the subscription guard', async () => {
+		mockFindEngineProducts.mockRejectedValue(new Error('something else entirely'));
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		// Unhandled by design: only the worker-loss class gets terminal scan feedback,
+		// everything else keeps falling through to the last-resort logger.
+		expect(mockToastShow).not.toHaveBeenCalled();
+		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
+			expect.stringContaining('something else entirely')
+		);
+	});
+
 	it.each(['lifecycle', 'bootstrap-failed'] as const)(
 		'resolves online instead of reporting an offline outage when gated by %s',
 		async (gatedBy) => {

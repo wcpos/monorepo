@@ -33,6 +33,8 @@ export interface ScanFeedbackHandle {
 	error: (code: string) => void;
 	outOfStock: (name: string, code: string) => void;
 	unavailable: (code: string) => void;
+	/** The local database lost its storage worker — nothing can be looked up (#163). */
+	storageUnavailable: (code: string) => void;
 }
 
 export const useScanFeedback = () => {
@@ -144,6 +146,20 @@ export const useScanFeedback = () => {
 					type: 'error',
 					title: t('pos_products.scan_unavailable'),
 					description: t('pos_products.scan_unavailable_description', {
+						code,
+					}),
+					duration: ALERT_DURATION,
+				});
+			},
+			// Same surface as `unavailable` (#725) with the honest cause: the sync
+			// engine is beside the point when the local database itself is gone.
+			storageUnavailable: (code) => {
+				failure();
+				Toast.show({
+					id,
+					type: 'error',
+					title: t('pos_products.scan_unavailable'),
+					description: t('pos_products.scan_storage_unavailable_description', {
 						code,
 					}),
 					duration: ALERT_DURATION,

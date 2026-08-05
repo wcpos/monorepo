@@ -4,8 +4,15 @@
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { wrappedErrorHandlerStorage } from './wrapped-error-handler-storage';
+import {
+	clearStorageDegradation,
+	degradedStorage$,
+	isStorageDegraded,
+	isStorageWorkerFailure,
+	wrappedErrorHandlerStorage,
+} from './wrapped-error-handler-storage';
 
+import type { StorageDegradation } from './wrapped-error-handler-storage';
 import type { RxStorage, RxStorageInstance } from 'rxdb';
 
 const terminalFailureApi = jest.requireActual<typeof import('./wrapped-error-handler-storage')>(
@@ -624,6 +631,227 @@ describe('wrappedErrorHandlerStorage', () => {
 
 		it('returns false for an unknown database name', () => {
 			expect(markTerminalFailure('unknown-database')).toBe(false);
+		});
+	});
+
+	describe('degraded storage signal (#163)', () => {
+		const workerLoss = () =>
+			new Error(
+				'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
+			);
+
+		function latest(): readonly StorageDegradation[] {
+			let value: readonly StorageDegradation[] = [];
+			degradedStorage$.subscribe((next) => (value = next)).unsubscribe();
+			return value;
+		}
+
+		beforeEach(() => {
+			clearStorageDegradation();
+		});
+
+		afterEach(() => {
+			clearStorageDegradation();
+		});
+
+		it('latches when a bulkWrite loses the storage worker', async () => {
+			const emissions: StorageDegradation[][] = [];
+			const subscription = degradedStorage$.subscribe((next) => {
+				emissions.push([...next]);
+			});
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(workerLoss()),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'degraded-db' } as any);
+
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test')
+			).rejects.toThrow('could not requestRemote');
+
+			expect(isStorageDegraded('degraded-db')).toBe(true);
+			expect(isStorageDegraded()).toBe(true);
+			expect(latest()).toEqual([
+				expect.objectContaining({ databaseName: 'degraded-db', methodName: 'bulkWrite' }),
+			]);
+			expect(emissions[emissions.length - 1]).toHaveLength(1);
+			subscription.unsubscribe();
+		});
+
+		it('latches on a read path that loses the worker (barcode lookups run through query)', async () => {
+			const instance = createMockStorageInstance({
+				query: jest.fn().mockRejectedValue(workerLoss()),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'degraded-read-db' } as any);
+
+			await expect(wrappedInstance.query({} as any)).rejects.toThrow('could not requestRemote');
+
+			expect(latest()).toEqual([
+				expect.objectContaining({ databaseName: 'degraded-read-db', methodName: 'query' }),
+			]);
+		});
+
+		it('stays quiet for handled write conflicts and ordinary errors', async () => {
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
+				query: jest.fn().mockRejectedValue(new Error('boom')),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'healthy-db' } as any);
+
+			await wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test');
+			await expect(wrappedInstance.query({} as any)).rejects.toThrow('boom');
+
+			expect(isStorageDegraded('healthy-db')).toBe(false);
+			expect(latest()).toEqual([]);
+		});
+
+		it('stays quiet when teardown RPCs fail (store switch / Clear & Sync / logs recovery)', async () => {
+			const instance = createMockStorageInstance({
+				close: jest.fn().mockRejectedValue(workerLoss()),
+				remove: jest.fn().mockRejectedValue(workerLoss()),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'teardown-db' } as any);
+
+			await expect(wrappedInstance.remove()).rejects.toThrow('could not requestRemote');
+			await expect(wrappedInstance.close()).rejects.toThrow('could not requestRemote');
+
+			expect(isStorageDegraded('teardown-db')).toBe(false);
+		});
+
+		it('stays quiet for reads still in flight when the scope starts closing', async () => {
+			let rejectQuery: ((error: Error) => void) | undefined;
+			const instance = createMockStorageInstance({
+				query: jest.fn(() => new Promise((_resolve, reject) => (rejectQuery = reject))),
+				close: jest.fn().mockResolvedValue(undefined),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'switching-db' } as any);
+
+			// A replication read is mid-flight when the store switch begins.
+			const inFlight = wrappedInstance.query({} as any);
+			const closed = wrappedInstance.close();
+			rejectQuery!(workerLoss());
+
+			await expect(inFlight).rejects.toThrow('could not requestRemote');
+			await closed;
+
+			expect(isStorageDegraded('switching-db')).toBe(false);
+		});
+
+		it('stays quiet for rejections caused by the disposal deadline latch (#875)', async () => {
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn(() => new Promise(() => undefined)),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'disposing-db' } as any);
+			const write = wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test');
+
+			expect(terminalFailureApi.markStorageTerminallyFailed!('disposing-db', 'disposal')).toBe(
+				true
+			);
+			await expect(write).rejects.toHaveProperty('name', 'StorageTerminallyFailedError');
+
+			expect(isStorageDegraded('disposing-db')).toBe(false);
+		});
+
+		it('latches once per database and keeps other databases healthy', async () => {
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(workerLoss()),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'noisy-db' } as any);
+
+			const emissions: unknown[] = [];
+			const subscription = degradedStorage$.subscribe((next) => emissions.push(next));
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test')
+			).rejects.toThrow();
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '2' } }] as any, 'test')
+			).rejects.toThrow();
+
+			// One replay + exactly one change emission: the latch never re-fires.
+			expect(emissions).toHaveLength(2);
+			expect(isStorageDegraded('other-db')).toBe(false);
+			subscription.unsubscribe();
+		});
+
+		it('drops the latch when the database scope closes (store switch reopens clean)', async () => {
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(workerLoss()),
+				close: jest.fn().mockResolvedValue(undefined),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'closing-db' } as any);
+
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test')
+			).rejects.toThrow();
+			expect(isStorageDegraded('closing-db')).toBe(true);
+
+			await wrappedInstance.close();
+
+			expect(isStorageDegraded('closing-db')).toBe(false);
+			expect(latest()).toEqual([]);
+		});
+
+		it('recognises worker-loss errors for callers that must fail loudly', () => {
+			expect(isStorageWorkerFailure(workerLoss())).toBe(true);
+			expect(isStorageWorkerFailure(new Error('CONFLICT'))).toBe(false);
+			expect(isStorageWorkerFailure('could not requestRemote: string form')).toBe(true);
+			expect(isStorageWorkerFailure(undefined)).toBe(false);
+		});
+
+		// OPFS JSON corruption arrives with the same requestRemote prefix but has its
+		// own owner (packages/query logs-storage-recovery) and its own remedy.
+		it('excludes the self-healing OPFS corruption class', async () => {
+			const corruption = new Error(
+				'could not requestRemote: {"methodName":"query","error":{"name":"SyntaxError","message":"Expected \':\' after property name in JSON at position 1263252"}}'
+			);
+			expect(isStorageWorkerFailure(corruption)).toBe(false);
+
+			const instance = createMockStorageInstance({
+				query: jest.fn().mockRejectedValue(corruption),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'corrupt-db' } as any);
+
+			await expect(wrappedInstance.query({} as any)).rejects.toThrow('could not requestRemote');
+
+			expect(isStorageDegraded('corrupt-db')).toBe(false);
+		});
+
+		// A collection reset removes and recreates the instance; without unregistering
+		// on remove the state would be stranded and the latch pinned forever.
+		it('drops the latch when a collection reset removes the instance', async () => {
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(workerLoss()),
+				remove: jest.fn().mockResolvedValue(undefined),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'reset-db' } as any);
+
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test')
+			).rejects.toThrow();
+			expect(isStorageDegraded('reset-db')).toBe(true);
+
+			await wrappedInstance.remove();
+
+			expect(isStorageDegraded('reset-db')).toBe(false);
 		});
 	});
 });

@@ -1,6 +1,9 @@
+import { BehaviorSubject } from 'rxjs';
+
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import type { Observable } from 'rxjs';
 import type { RxStorage, RxStorageInstance, RxStorageInstanceCreationParams } from 'rxdb';
 
 const storageLogger = getLogger(['wcpos', 'db', 'storage']);
@@ -22,8 +25,146 @@ type InstanceLatchState = {
 	databaseName: string;
 	failureReason: string | null;
 	inFlight: Set<InFlightCall>;
+	/**
+	 * Set the moment `close`/`remove` is invoked. Reads and writes already in
+	 * flight when a store switch or Clear & Sync starts can reject as the worker
+	 * tears its side down; that is teardown noise, not a live-store outage.
+	 */
+	closing: boolean;
 };
 const instancesByDatabaseName = new Map<string, Set<InstanceLatchState>>();
+
+// ---------------------------------------------------------------------------
+// Degraded storage signal (#163)
+// ---------------------------------------------------------------------------
+
+/**
+ * requestRemote only throws this when the RPC round-trip to the storage worker
+ * failed; every wrapped read and write funnels through it, which is why one lost
+ * worker takes barcode lookups down together with order writes.
+ */
+const WORKER_LOSS_MARKER = 'could not requestRemote';
+
+/**
+ * RPCs whose failure must NOT raise the signal. `close`/`remove` run only while
+ * an instance is being torn down on purpose — engine disposal, a store-scope
+ * switch, Clear & Sync, and the OPFS logs-collection recovery all destroy
+ * instances deliberately — so a worker error there is nothing a cashier can act
+ * on, and raising a banner mid-teardown would be a false alarm.
+ */
+const NON_DEGRADING_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageRpcMethod>([
+	'close',
+	'remove',
+]);
+
+export interface StorageDegradation {
+	databaseName: string;
+	/** The RPC that first lost the worker. */
+	methodName: StorageRpcMethod;
+	message: string;
+	at: number;
+}
+
+const degradedByDatabaseName = new Map<string, StorageDegradation>();
+const degradedStorageSubject = new BehaviorSubject<readonly StorageDegradation[]>([]);
+
+/**
+ * Databases whose storage worker stopped answering; empty while storage is healthy.
+ *
+ * Latch semantics: one-shot per database, and it can never be cleared by a later
+ * successful call. A worker that answered with an error envelope is still alive
+ * (see the requestRemote branch below) and a half-dead worker keeps serving some
+ * collections while failing others — so a subsequent success proves nothing about
+ * recovery. The latch therefore lives exactly as long as the database scope that
+ * lost the worker: it is dropped when that scope's last storage instance
+ * unregisters (store switch / Clear & Sync / engine restart), and otherwise
+ * persists until the app reloads.
+ */
+export const degradedStorage$: Observable<readonly StorageDegradation[]> =
+	degradedStorageSubject.asObservable();
+
+function publishDegradedStorage(): void {
+	degradedStorageSubject.next([...degradedByDatabaseName.values()]);
+}
+
+/** True while the named database (or any database) has lost its storage worker. */
+export function isStorageDegraded(databaseName?: string): boolean {
+	return databaseName === undefined
+		? degradedByDatabaseName.size > 0
+		: degradedByDatabaseName.has(databaseName);
+}
+
+/**
+ * Drops the latch. Called when a database's last storage instance unregisters so
+ * a reopened scope starts clean; also used by tests to reset module state.
+ */
+export function clearStorageDegradation(databaseName?: string): void {
+	if (databaseName === undefined) {
+		if (degradedByDatabaseName.size === 0) return;
+		degradedByDatabaseName.clear();
+	} else if (!degradedByDatabaseName.delete(databaseName)) {
+		return;
+	}
+	publishDegradedStorage();
+}
+
+/**
+ * The worker wraps a corrupt-file SyntaxError in a requestRemote envelope, so
+ * OPFS JSON corruption shares the requestRemote prefix without being worker loss.
+ * That class has its own owner and its own remedy — `logs-storage-recovery` drops
+ * the affected collection and reloads once — so it must not raise a
+ * reload-the-app banner the cashier can't clear. Kept in sync with
+ * `isRecoverableLogsStorageError` in packages/query.
+ */
+function isRecoverableCorruption(message: string): boolean {
+	return (
+		message.includes('SyntaxError') &&
+		(message.includes('Expected') || message.includes('JSON') || message.includes('property name'))
+	);
+}
+
+/**
+ * True for the storage-worker failure class from the #163 incident. Callers on
+ * user-facing paths (barcode scanning) use this to fail loudly instead of
+ * letting the rejection escape unhandled.
+ */
+export function isStorageWorkerFailure(error: unknown): boolean {
+	if (error == null) return false;
+	const message = error instanceof Error ? error.message : String(error);
+	return message.includes(WORKER_LOSS_MARKER) && !isRecoverableCorruption(message);
+}
+
+function noteStorageWorkerFailure(
+	state: InstanceLatchState,
+	methodName: StorageRpcMethod,
+	error: unknown
+): void {
+	if (NON_DEGRADING_METHODS.has(methodName)) return;
+	// This instance is being torn down on purpose — see `closing`.
+	if (state.closing) return;
+	// Already declared terminally failed by the disposal deadline: the rejection
+	// is ours, not the worker's, and disposal is not a live-store outage.
+	if (state.failureReason !== null) return;
+	if (!isStorageWorkerFailure(error)) return;
+	if (degradedByDatabaseName.has(state.databaseName)) return;
+
+	const message = error instanceof Error ? error.message : String(error);
+	degradedByDatabaseName.set(state.databaseName, {
+		databaseName: state.databaseName,
+		methodName,
+		message,
+		at: Date.now(),
+	});
+	storageLogger.error(`Storage degraded for database "${state.databaseName}" in ${methodName}`, {
+		saveToDb: true,
+		context: {
+			errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+			databaseName: state.databaseName,
+			method: methodName,
+		},
+	});
+	publishDegradedStorage();
+}
 
 const TARGETED_RECOVERY =
 	/targeted recovery failed for (.+): (missing-primary-row|missing-index-row|no-valid-document|index-mismatch|recovered-document-too-large)/;
@@ -179,9 +320,10 @@ async function raceStorageCall<T>(
 	} catch (error) {
 		state.inFlight.delete(callState!);
 		void killed.catch(() => undefined);
+		noteStorageWorkerFailure(state, methodName, error);
 		throw error;
 	}
-	void underlying.catch(() => undefined);
+	void underlying.catch((error) => noteStorageWorkerFailure(state, methodName, error));
 	void underlying.then(
 		() => state.inFlight.delete(callState),
 		() => state.inFlight.delete(callState)
@@ -193,7 +335,12 @@ function unregisterInstance(state: InstanceLatchState): void {
 	const instances = instancesByDatabaseName.get(state.databaseName);
 	if (!instances) return;
 	instances.delete(state);
-	if (instances.size === 0) instancesByDatabaseName.delete(state.databaseName);
+	if (instances.size === 0) {
+		instancesByDatabaseName.delete(state.databaseName);
+		// The scope that lost the worker is gone; a reopened scope gets a fresh
+		// worker and must not inherit a stale banner.
+		clearStorageDegradation(state.databaseName);
+	}
 }
 
 export function markStorageTerminallyFailed(databaseName: string, reason: string): boolean {
@@ -280,6 +427,7 @@ function wrapStorageInstance<RxDocType>(
 		databaseName,
 		failureReason: null,
 		inFlight: new Set(),
+		closing: false,
 	};
 	const instances = instancesByDatabaseName.get(databaseName) ?? new Set();
 	instances.add(state);
@@ -305,10 +453,23 @@ function wrapStorageInstance<RxDocType>(
 	const cleanup = instance.cleanup.bind(instance);
 	instance.cleanup = (...args) => raceStorageCall(state, 'cleanup', () => cleanup(...args));
 	const remove = instance.remove.bind(instance);
-	instance.remove = (...args) => raceStorageCall(state, 'remove', () => remove(...args));
+	instance.remove = (...args) => {
+		state.closing = true;
+		// rxdb's remote storage closes the connection after `remove` just as it does
+		// after `close`, and a collection reset removes then recreates the instance
+		// (sync-engine's resetEngineCollection). Without unregistering here, every
+		// Clear & Sync would strand a state in the map and pin the latch forever.
+		return raceStorageCall(state, 'remove', () => remove(...args)).finally(() =>
+			unregisterInstance(state)
+		);
+	};
 	const close = instance.close.bind(instance);
-	instance.close = (...args) =>
-		raceStorageCall(state, 'close', () => close(...args)).finally(() => unregisterInstance(state));
+	instance.close = (...args) => {
+		state.closing = true;
+		return raceStorageCall(state, 'close', () => close(...args)).finally(() =>
+			unregisterInstance(state)
+		);
+	};
 
 	return instance;
 }
