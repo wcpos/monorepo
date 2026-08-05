@@ -9,7 +9,7 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./testing": "./src/testing.ts",
-		"./collection-map": "./src/engine-adapter/collection-map.ts"
+		"./collection-map": "./src/collection-map.ts"
 	},
 	"type": "module",
 	"files": [
