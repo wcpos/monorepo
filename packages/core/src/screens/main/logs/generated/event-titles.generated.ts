@@ -48,6 +48,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.coverage_require_log');
 		case 'coverage.require.outcome':
 			return t('health.logs.event.coverage_require_outcome');
+		case 'demand.activity-counter-underflow':
+			return t('health.logs.event.demand_activity_counter_underflow');
 		case 'engine.barcode-selector-hydrate-failed':
 			return t('health.logs.event.engine_barcode_selector_hydrate_failed');
 		case 'engine.collection-reset':

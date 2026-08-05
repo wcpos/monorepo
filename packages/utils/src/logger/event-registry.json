@@ -96,6 +96,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "demand.activity-counter-underflow",
+		"domain": "SYNC",
+		"label": "Sync activity tracking corrected itself",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "engine.barcode-selector-hydrate-failed",
 		"domain": "SYNC",
 		"label": "Barcode settings could not be loaded",

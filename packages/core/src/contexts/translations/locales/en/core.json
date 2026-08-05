@@ -1055,6 +1055,7 @@
 	"health.logs.event.coverage_require_error": "Could not load the records this screen needs",
 	"health.logs.event.coverage_require_log": "Record loading detail",
 	"health.logs.event.coverage_require_outcome": "Loaded the records this screen needs",
+	"health.logs.event.demand_activity_counter_underflow": "Sync activity tracking corrected itself",
 	"health.logs.event.engine_barcode_selector_hydrate_failed": "Barcode settings could not be loaded",
 	"health.logs.event.engine_collection_reset": "Local data was reset",
 	"health.logs.event.engine_connectivity_error": "Lost the connection to your store",
