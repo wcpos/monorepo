@@ -32,6 +32,8 @@ export {
 	type EngineConflict,
 	type EngineLane,
 	type EngineRequirement,
+	type OrderBrowseDimensions,
+	type ProductBrowseDimensions,
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 	type RequirementHandle,

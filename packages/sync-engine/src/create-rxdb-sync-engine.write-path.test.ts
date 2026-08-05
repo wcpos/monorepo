@@ -2751,7 +2751,7 @@ describe('require() through the public handle', () => {
 		const engine = engineWith({ fetch: server.fetch });
 		await engine.ready;
 		await expect(
-			engine.require({ id: 'x', collection: 'products', kind: 'targeted-records' }).ready
+			engine.require({ id: 'x', collection: 'products', kind: 'targeted-records' } as never).ready
 		).rejects.toThrow(/needs wooIds/i);
 		await expect(
 			engine.require({ id: 'y', collection: 'categories', kind: 'targeted-records', wooIds: [1] })

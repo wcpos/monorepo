@@ -1,5 +1,7 @@
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 
+import type { ProductBrowseDimensions } from '../require-plane';
+
 /**
  * The products BROWSE-WINDOW descriptor (ADR 0027 §2) — the products mirror of the
  * orders open-recent window (orderBrowserSchedulerDescriptor.ts): one bounded result
@@ -131,6 +133,21 @@ export function productBrowseWindowQueryKey(
 	const base = `${PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX}limit=${limit}`;
 	const sortPart = isDefaultSort(orderby, order) ? '' : `:orderby=${orderby}:order=${order}`;
 	return `${base}${sortPart}${productBrowseWindowFilterPart(filters)}`;
+}
+
+/** Adapt public typed browse dimensions to the canonical product window key. */
+export function productBrowseWindowQueryKeyFromDimensions(dims: ProductBrowseDimensions): string {
+	if ((dims.orderby === undefined) !== (dims.order === undefined)) {
+		throw new TypeError('product browse orderby and order must be provided together');
+	}
+	if (dims.orderby !== undefined && !isProductBrowseWindowOrderby(dims.orderby)) {
+		throw new TypeError(`unsupported product browse orderby "${dims.orderby}"`);
+	}
+	return productBrowseWindowQueryKey(
+		normalizeProductBrowseWindowLimit(dims.limit),
+		dims.orderby === undefined ? undefined : { orderby: dims.orderby, order: dims.order! },
+		dims
+	);
 }
 
 /** The `:category=…:tag=…:…` tail of the key; `''` when no dimension is set. */
