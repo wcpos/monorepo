@@ -181,23 +181,27 @@ function LedgerRow({
 				</Pressable>
 			</HStack>
 
-			{/* below md — two-line pressable row */}
-			<Pressable
-				testID={`logs-row-sm-${row.logId}`}
-				accessibilityRole="button"
-				onPress={onToggle}
-				className="gap-0.5 py-2 md:hidden"
-			>
-				<HStack className="items-center gap-2">
-					<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
-					{/* Dot-only for space, but the kind still reads to assistive tech. */}
-					<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
-					<View className="flex-1" />
+			{/* below md — two-line pressable row; the code badge overlays the first
+			    line as a sibling button, since a nested <button> is invalid DOM on web */}
+			<View className="relative md:hidden">
+				<Pressable
+					testID={`logs-row-sm-${row.logId}`}
+					accessibilityRole="button"
+					onPress={onToggle}
+					className="gap-0.5 py-2"
+				>
+					<HStack className="items-center gap-2 pr-24">
+						<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
+						{/* Dot-only for space, but the kind still reads to assistive tech. */}
+						<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
+					</HStack>
+					<Text className="text-sm">{title}</Text>
+					<Subline row={row} />
+				</Pressable>
+				<View className="absolute top-2 right-0">
 					<CodeCell row={row} kind={kind} onPress={onToggle} />
-				</HStack>
-				<Text className="text-sm">{title}</Text>
-				<Subline row={row} />
-			</Pressable>
+				</View>
+			</View>
 
 			{expanded ? <RowDetail row={row} kind={kind} title={title} /> : null}
 		</View>
