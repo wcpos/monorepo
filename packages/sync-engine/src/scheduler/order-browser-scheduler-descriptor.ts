@@ -33,8 +33,20 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 	const afterSeconds = safeNonNegativeInteger(dims.afterSeconds);
 	const beforeSeconds = safeNonNegativeInteger(dims.beforeSeconds);
 	if (status === '') throw new TypeError('orders browse status must not be empty');
+	if (status.includes(':')) throw new TypeError('orders browse status must not contain ":"');
 	if ((dims.orderby === undefined) !== (dims.order === undefined)) {
 		throw new TypeError('orders browse orderby and order must be provided together');
+	}
+	if (
+		dims.orderby !== undefined &&
+		dims.orderby !== 'date' &&
+		dims.orderby !== 'modified' &&
+		dims.orderby !== 'id'
+	) {
+		throw new TypeError(`unsupported orders browse orderby "${dims.orderby}"`);
+	}
+	if (dims.order !== undefined && dims.order !== 'asc' && dims.order !== 'desc') {
+		throw new TypeError(`unsupported orders browse order "${dims.order}"`);
 	}
 	if (dims.limit === 'all' && afterSeconds === undefined && beforeSeconds === undefined) {
 		throw new TypeError("orders browse limit 'all' requires a date range bound");

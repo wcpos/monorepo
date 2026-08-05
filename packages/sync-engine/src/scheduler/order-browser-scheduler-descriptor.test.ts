@@ -114,8 +114,15 @@ describe('orderBrowserQueryKey', () => {
 			'orders:browser:status=all:search=:limit=10'
 		);
 		expect(() => orderBrowserQueryKey({ status: '' })).toThrow(TypeError);
+		expect(() => orderBrowserQueryKey({ status: 'on:hold' })).toThrow(TypeError);
 		expect(() => orderBrowserQueryKey({ orderby: 'date' })).toThrow(TypeError);
 		expect(() => orderBrowserQueryKey({ order: 'desc' })).toThrow(TypeError);
+		expect(() => orderBrowserQueryKey({ orderby: 'total', order: 'desc' } as never)).toThrow(
+			TypeError
+		);
+		expect(() => orderBrowserQueryKey({ orderby: 'date', order: 'sideways' } as never)).toThrow(
+			TypeError
+		);
 		expect(() => orderBrowserQueryKey({ limit: 'all' })).toThrow(TypeError);
 	});
 

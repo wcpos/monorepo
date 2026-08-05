@@ -45,6 +45,12 @@ describe('productBrowseWindowQueryKeyFromDimensions', () => {
 		expect(() =>
 			productBrowseWindowQueryKeyFromDimensions({ orderby: 'sku', order: 'asc' } as never)
 		).toThrow(TypeError);
+		expect(() =>
+			productBrowseWindowQueryKeyFromDimensions({ orderby: 'price', order: 'sideways' } as never)
+		).toThrow(TypeError);
+		expect(() =>
+			productBrowseWindowQueryKeyFromDimensions({ stock_status: 'lowstock' } as never)
+		).toThrow(TypeError);
 	});
 
 	it('filters unsupported taxonomy ids before encoding', () => {

@@ -143,6 +143,17 @@ export function productBrowseWindowQueryKeyFromDimensions(dims: ProductBrowseDim
 	if (dims.orderby !== undefined && !isProductBrowseWindowOrderby(dims.orderby)) {
 		throw new TypeError(`unsupported product browse orderby "${dims.orderby}"`);
 	}
+	if (dims.order !== undefined && dims.order !== 'asc' && dims.order !== 'desc') {
+		throw new TypeError(`unsupported product browse order "${dims.order}"`);
+	}
+	if (
+		dims.stock_status !== undefined &&
+		dims.stock_status !== 'instock' &&
+		dims.stock_status !== 'outofstock' &&
+		dims.stock_status !== 'onbackorder'
+	) {
+		throw new TypeError(`unsupported product browse stock_status "${dims.stock_status}"`);
+	}
 	return productBrowseWindowQueryKey(
 		normalizeProductBrowseWindowLimit(dims.limit),
 		dims.orderby === undefined ? undefined : { orderby: dims.orderby, order: dims.order! },
