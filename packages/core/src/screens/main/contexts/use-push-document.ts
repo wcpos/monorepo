@@ -4,9 +4,12 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import {
 	awaitWriteOutcome,
+	COLLECTION_VOCABULARY,
 	type LegacyCollectionName,
+	resolveLegacyField,
 	useQueryRuntime,
 	wrapEngineDocument,
+	type WriteableCollection,
 } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
@@ -16,7 +19,6 @@ import { documentRecordId, findEngineResident } from '../hooks/mutations/use-loc
 
 const syncLogger = getLogger(['wcpos', 'sync', 'push']);
 
-type WriteableCollection = 'orders' | 'products' | 'variations' | 'customers' | 'coupons';
 type AnyRxDocument = {
 	id?: unknown;
 	uuid?: string;
@@ -24,13 +26,11 @@ type AnyRxDocument = {
 	getLatest(): AnyRxDocument;
 };
 
-const REMOTE_ID_FIELD: Record<WriteableCollection, string> = {
-	orders: 'wooOrderId',
-	products: 'wooProductId',
-	variations: 'wooId',
-	customers: 'wooCustomerId',
-	coupons: 'wooId',
-};
+const REMOTE_ID_FIELD = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY)
+		.filter(([, row]) => row.writeable)
+		.map(([name, row]) => [name, resolveLegacyField(row.legacyName, 'id').enginePath])
+) as Record<WriteableCollection, string>;
 
 function isWriteableCollection(name: string): name is WriteableCollection {
 	return Object.prototype.hasOwnProperty.call(REMOTE_ID_FIELD, name);

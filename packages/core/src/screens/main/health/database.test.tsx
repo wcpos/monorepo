@@ -72,6 +72,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/query', () => ({
+	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	runResetRefill: jest.fn(),
 	useQueryRuntime: () => ({
 		engine: { active: jest.fn(), scope: {}, sync: jest.fn() },

@@ -1,3 +1,5 @@
+import type { SyncCollectionName } from '@wcpos/sync-engine';
+
 export type LegacyCollectionName =
 	| 'products'
 	| 'variations'
@@ -9,16 +11,92 @@ export type LegacyCollectionName =
 	| 'products/brands'
 	| 'coupons';
 
-export type EngineCollectionName =
-	| 'products'
-	| 'variations'
-	| 'orders'
-	| 'customers'
-	| 'taxRates'
-	| 'categories'
-	| 'tags'
-	| 'brands'
-	| 'coupons';
+export type EngineCollectionName = SyncCollectionName;
+
+type CollectionVocabularyEntry = {
+	legacyName: LegacyCollectionName;
+	telemetryName: string;
+	labelKey: string;
+	censusRoute: string | null;
+	writeable: boolean;
+};
+
+export const COLLECTION_VOCABULARY = {
+	orders: {
+		legacyName: 'orders',
+		telemetryName: 'orders',
+		labelKey: 'common.orders',
+		censusRoute: 'wc/v3/orders',
+		writeable: true,
+	},
+	products: {
+		legacyName: 'products',
+		telemetryName: 'products',
+		labelKey: 'common.products',
+		censusRoute: 'wc/v3/products',
+		writeable: true,
+	},
+	variations: {
+		legacyName: 'variations',
+		telemetryName: 'variations',
+		labelKey: 'common.variations',
+		// Woo exposes variations only beneath a specific product, so there is no
+		// honest cheap collection-wide census request. The engine leaves it unknown.
+		censusRoute: null,
+		writeable: true,
+	},
+	customers: {
+		legacyName: 'customers',
+		telemetryName: 'customers',
+		labelKey: 'common.customers',
+		censusRoute: 'wcpos/v2/customers',
+		writeable: true,
+	},
+	taxRates: {
+		legacyName: 'taxes',
+		telemetryName: 'tax_rates',
+		labelKey: 'common.tax_rates',
+		// Raw wc/v3/taxes requires `manage_woocommerce`, which cashier-tier POS users
+		// (e.g. the demo role) don't have — every census probe 403s and spams the error
+		// log. The POS proxy serves the same rows + X-WP-Total under the POS grant.
+		censusRoute: 'wcpos/v2/taxes',
+		writeable: false,
+	},
+	categories: {
+		legacyName: 'products/categories',
+		telemetryName: 'categories',
+		labelKey: 'common.categories',
+		censusRoute: 'wc/v3/products/categories',
+		writeable: false,
+	},
+	brands: {
+		legacyName: 'products/brands',
+		telemetryName: 'brands',
+		labelKey: 'common.brands',
+		censusRoute: 'wc/v3/products/brands',
+		writeable: false,
+	},
+	tags: {
+		legacyName: 'products/tags',
+		telemetryName: 'tags',
+		labelKey: 'common.tags',
+		censusRoute: 'wc/v3/products/tags',
+		writeable: false,
+	},
+	coupons: {
+		legacyName: 'coupons',
+		telemetryName: 'coupons',
+		labelKey: 'common.coupons',
+		censusRoute: 'wc/v3/coupons',
+		writeable: true,
+	},
+} as const satisfies Record<SyncCollectionName, CollectionVocabularyEntry>;
+
+export type WriteableCollection = {
+	[Name in SyncCollectionName]: (typeof COLLECTION_VOCABULARY)[Name]['writeable'] extends true
+		? Name
+		: never;
+}[SyncCollectionName];
 
 export type EngineDocument = Record<string, unknown> & {
 	id: string;

@@ -370,15 +370,9 @@ function productBrowseDimensions(
 }
 
 /**
- * Split a products selector into the dimensions the browse-window grammar can carry and
- * whether anything was left over.
- *
- * `residual` is true when some part of the selector could NOT be encoded — an attribute or
- * variation match, a status, a bare uuid, a mixed `$or`. Those predicates keep narrowing
- * locally, which is exactly right for DEMAND (the wire window is a deliberate superset) but
- * makes the coverage lane wider than the selector it would be reported for. Callers that
- * project a total off the lane must consult this rather than restating these rules
- * elsewhere — a rule stated twice is a rule that drifts.
+ * Split the products selector for `requirementsForQuery` into browse-window filters and
+ * residual local predicates. A residual keeps the wire window as a deliberate superset and
+ * makes `requirementsForQuery` report that the selector was not fully represented.
  */
 /** A condition value in either the bare or single-key `$eq` shape the translator can emit. */
 function eqValue(value: unknown): string | undefined {

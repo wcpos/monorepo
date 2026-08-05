@@ -1,11 +1,84 @@
+import { SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
+
 import {
 	adapterDerivedFieldsFor,
+	COLLECTION_VOCABULARY,
 	collectionMap,
 	promotedColumnsFor,
 	resolveLegacyField,
 } from '../../src/engine-adapter/collection-map';
 
 describe('engine adapter collection map', () => {
+	it('pins collection-name facts to the previous hand-written maps', () => {
+		const entries = Object.entries(COLLECTION_VOCABULARY);
+		expect(Object.fromEntries(entries.map(([name, row]) => [row.telemetryName, name]))).toEqual({
+			products: 'products',
+			variations: 'variations',
+			orders: 'orders',
+			customers: 'customers',
+			categories: 'categories',
+			brands: 'brands',
+			tags: 'tags',
+			coupons: 'coupons',
+			tax_rates: 'taxRates',
+		});
+		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.legacyName]))).toEqual({
+			products: 'products',
+			variations: 'variations',
+			orders: 'orders',
+			customers: 'customers',
+			categories: 'products/categories',
+			brands: 'products/brands',
+			tags: 'products/tags',
+			coupons: 'coupons',
+			taxRates: 'taxes',
+		});
+		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.labelKey]))).toEqual({
+			products: 'common.products',
+			variations: 'common.variations',
+			orders: 'common.orders',
+			customers: 'common.customers',
+			categories: 'common.categories',
+			brands: 'common.brands',
+			tags: 'common.tags',
+			coupons: 'common.coupons',
+			taxRates: 'common.tax_rates',
+		});
+		expect(Object.fromEntries(entries.map(([name, row]) => [row.legacyName, name]))).toEqual({
+			products: 'products',
+			variations: 'variations',
+			orders: 'orders',
+			customers: 'customers',
+			taxes: 'taxRates',
+			'products/categories': 'categories',
+			'products/tags': 'tags',
+			'products/brands': 'brands',
+			coupons: 'coupons',
+		});
+		expect(Object.fromEntries(SYNC_COLLECTION_NAMES.map((name) => [name, null]))).toEqual({
+			orders: null,
+			products: null,
+			variations: null,
+			customers: null,
+			taxRates: null,
+			categories: null,
+			brands: null,
+			tags: null,
+			coupons: null,
+		});
+		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.censusRoute]))).toEqual({
+			orders: 'wc/v3/orders',
+			products: 'wc/v3/products',
+			variations: null,
+			customers: 'wcpos/v2/customers',
+			taxRates: 'wcpos/v2/taxes',
+			categories: 'wc/v3/products/categories',
+			brands: 'wc/v3/products/brands',
+			tags: 'wc/v3/products/tags',
+			coupons: 'wc/v3/coupons',
+		});
+	});
+
 	it('reverses legacy and engine identifiers per collection', () => {
 		expect(resolveLegacyField('products', 'uuid')).toMatchObject({
 			kind: 'identifier',

@@ -26,7 +26,10 @@ const mockEngine = {
 };
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine: mockEngine }) }));
+jest.mock('@wcpos/query', () => ({
+	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
+	useQueryRuntime: () => ({ engine: mockEngine }),
+}));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
 		'../../../../jest/translate'
