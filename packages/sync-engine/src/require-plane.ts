@@ -92,15 +92,15 @@ export type OrderBrowseDimensions = {
 	/** date_created_gmt range bounds, epoch seconds. */
 	afterSeconds?: number;
 	beforeSeconds?: number;
-	/** WC REST orders orderby enum. Both orderby and order, or neither. */
-	orderby?: 'date' | 'modified' | 'id';
+	/** Supported orders orderby values. Both orderby and order, or neither. */
+	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
 };
 
 export type ProductBrowseDimensions = {
 	/** Requested window size, raw — the engine quantizes (steps of 100, cap 1000). Default 100. */
 	limit?: number;
-	/** WC REST products orderby enum. Both orderby and order, or neither. */
+	/** Supported products orderby values. Both orderby and order, or neither. */
 	orderby?: ProductBrowseWindowOrderby;
 	order?: 'asc' | 'desc';
 	category?: number[];

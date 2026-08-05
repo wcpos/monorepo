@@ -312,11 +312,6 @@ function orderBrowseDimensions(
 
 export type RequirementSortPart = Record<string, 'asc' | 'desc'>;
 
-/**
- * Wire sorting is currently limited to WooCommerce-core orderby values. The wcpos plugin
- * supports additional product and order values; extending the wire grammar to those values
- * is planned and tracked separately.
- */
 function productBrowseDimensions(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,

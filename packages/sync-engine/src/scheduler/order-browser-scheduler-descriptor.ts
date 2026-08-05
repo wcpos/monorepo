@@ -14,7 +14,7 @@ export type OrderBrowserSchedulerDescriptor = {
 	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
-	orderby?: 'date' | 'modified' | 'id';
+	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
 	complete: boolean;
 	wooStatus: string;
@@ -41,7 +41,11 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		dims.orderby !== undefined &&
 		dims.orderby !== 'date' &&
 		dims.orderby !== 'modified' &&
-		dims.orderby !== 'id'
+		dims.orderby !== 'id' &&
+		dims.orderby !== 'status' &&
+		dims.orderby !== 'customer_id' &&
+		dims.orderby !== 'payment_method' &&
+		dims.orderby !== 'total'
 	) {
 		throw new TypeError(`unsupported orders browse orderby "${dims.orderby}"`);
 	}
@@ -99,7 +103,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 	// BETWEEN the colon-free `status` and `:search=` — appending them after `search`
 	// would let a literal search term like `invoice:after=1` be read as a date bound.
 	const match =
-		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
 			queryKey
 		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };

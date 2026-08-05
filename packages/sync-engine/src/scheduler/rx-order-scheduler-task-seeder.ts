@@ -63,7 +63,7 @@ export type SeedOrderFilterSchedulerTaskInput = {
 	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
-	orderby?: 'date' | 'modified' | 'id';
+	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
 	complete?: boolean;
 	priority?: number;
