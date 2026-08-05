@@ -177,6 +177,18 @@ export const collectionMap = {
 		engineCollection: 'products',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			sku: {
+				legacy: 'sku',
+				kind: 'payload',
+				enginePath: 'payload.sku',
+				sort: { wooOrderby: 'sku' },
+			},
+			barcode: {
+				legacy: 'barcode',
+				kind: 'payload',
+				enginePath: 'payload.barcode',
+				sort: { wooOrderby: 'barcode' },
+			},
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
@@ -221,6 +233,7 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'stockStatus',
 				write: (value) => String(value ?? ''),
+				sort: { wooOrderby: 'stock_status' },
 			},
 			featured: {
 				legacy: 'featured',
@@ -287,6 +300,7 @@ export const collectionMap = {
 					const numeric = Number(value);
 					return Number.isFinite(numeric) ? numeric : null;
 				},
+				sort: { wooOrderby: 'stock_quantity' },
 			},
 			sortable_price: {
 				legacy: 'sortable_price',
@@ -395,12 +409,14 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'status',
 				write: (value) => String(value ?? ''),
+				sort: { wooOrderby: 'status' },
 			},
 			customer_id: {
 				legacy: 'customer_id',
 				kind: 'promoted',
 				enginePath: 'customerId',
 				write: (value) => Number(value ?? 0),
+				sort: { wooOrderby: 'customer_id' },
 			},
 			date_created_gmt: {
 				legacy: 'date_created_gmt',
@@ -435,7 +451,13 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'total',
 				write: (value) => String(value ?? ''),
-				sort: { uiAlias: 'sortable_total' },
+				sort: { uiAlias: 'sortable_total', wooOrderby: 'total' },
+			},
+			payment_method: {
+				legacy: 'payment_method',
+				kind: 'payload',
+				enginePath: 'payload.payment_method',
+				sort: { wooOrderby: 'payment_method' },
 			},
 			cashier: {
 				legacy: 'cashier',

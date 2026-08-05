@@ -71,6 +71,11 @@ describe('orderBrowserQueryKey', () => {
 			queryKey: 'orders:browser:status=all:orderby=date:order=desc:search=:limit=25',
 			parsed: { orderby: 'date', order: 'desc', limit: 25 },
 		},
+		...(['status', 'customer_id', 'payment_method', 'total'] as const).map((orderby) => ({
+			dims: { orderby, order: 'asc' as const, limit: 25 },
+			queryKey: `orders:browser:status=all:orderby=${orderby}:order=asc:search=:limit=25`,
+			parsed: { orderby, order: 'asc', limit: 25 },
+		})),
 		{
 			dims: {
 				status: 'completed',
@@ -117,9 +122,9 @@ describe('orderBrowserQueryKey', () => {
 		expect(() => orderBrowserQueryKey({ status: 'on:hold' })).toThrow(TypeError);
 		expect(() => orderBrowserQueryKey({ orderby: 'date' })).toThrow(TypeError);
 		expect(() => orderBrowserQueryKey({ order: 'desc' })).toThrow(TypeError);
-		expect(() => orderBrowserQueryKey({ orderby: 'total', order: 'desc' } as never)).toThrow(
-			TypeError
-		);
+		expect(() =>
+			orderBrowserQueryKey({ orderby: 'date_completed_gmt', order: 'desc' } as never)
+		).toThrow(TypeError);
 		expect(() => orderBrowserQueryKey({ orderby: 'date', order: 'sideways' } as never)).toThrow(
 			TypeError
 		);
@@ -385,7 +390,7 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 			'store=bad=value',
 			'orderby=date',
 			'order=desc',
-			'orderby=total:order=desc',
+			'orderby=date_completed_gmt:order=desc',
 		]) {
 			expect(
 				parseOrderBrowserSchedulerDescriptor(

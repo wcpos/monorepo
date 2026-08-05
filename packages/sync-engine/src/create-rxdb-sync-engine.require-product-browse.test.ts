@@ -167,7 +167,7 @@ describe('require() for the products browse window', () => {
 				id: 'bad-orderby',
 				collection: 'products',
 				kind: 'product-browse',
-				orderby: 'sku',
+				orderby: 'regular_price',
 				order: 'asc',
 			} as never)
 		).toThrow(TypeError);

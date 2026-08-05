@@ -146,7 +146,7 @@ describe('engine adapter collection map', () => {
 		});
 	});
 
-	it('pins sort declarations to the hand-written behavior they replace', () => {
+	it('pins the declared sort vocabulary', () => {
 		const declaredValues = (
 			collection: 'products' | 'variations' | 'orders',
 			accessor: (collection: 'products' | 'variations' | 'orders', field: string) => unknown
@@ -171,6 +171,8 @@ describe('engine adapter collection map', () => {
 		});
 		expect(declaredValues('orders', sortTiebreakFor)).toEqual({});
 		expect(declaredValues('products', wooOrderbyFor)).toEqual({
+			sku: 'sku',
+			barcode: 'barcode',
 			menu_order: 'menu_order',
 			id: 'id',
 			name: 'title',
@@ -179,12 +181,18 @@ describe('engine adapter collection map', () => {
 			total_sales: 'popularity',
 			date_created_gmt: 'date',
 			date_modified_gmt: 'modified',
+			stock_status: 'stock_status',
+			stock_quantity: 'stock_quantity',
 		});
 		expect(declaredValues('orders', wooOrderbyFor)).toEqual({
+			status: 'status',
+			customer_id: 'customer_id',
 			date_created_gmt: 'date',
 			date_modified_gmt: 'modified',
 			number: 'id',
 			id: 'id',
+			total: 'total',
+			payment_method: 'payment_method',
 		});
 	});
 
