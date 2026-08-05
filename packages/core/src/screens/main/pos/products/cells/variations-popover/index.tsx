@@ -26,6 +26,11 @@ function VariationsPopoverContent({ parent, addToCart }: VariationsPopoverProps)
 	const binding = useCollectionBinding('variations', state, {
 		wooIds: parent.variations ?? [],
 	});
+	const initialBinding = React.useRef(binding);
+	React.useEffect(() => {
+		// Refresh once per popover open without blocking locally resident variations.
+		void initialBinding.current.sync().catch(() => undefined);
+	}, []);
 	const allVariationsState = React.useMemo(
 		() => ({
 			...state,
