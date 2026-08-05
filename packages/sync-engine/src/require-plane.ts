@@ -41,6 +41,7 @@ import {
 	censusQueryKey,
 	emptyPersistedSchedulerTaskRunnerResult,
 	type FetchTask,
+	laneKeyFor,
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	orderBrowserQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
@@ -135,7 +136,7 @@ export type CoverageOutcome = {
 export type RequirementHandle = {
 	ready: Promise<CoverageOutcome>;
 	release(): void;
-	/** Canonical persisted lane identity for browse kinds; null otherwise. */
+	/** Canonical persisted lane identity when the requirement maps to one; null otherwise. */
 	readonly queryKey: string | null;
 };
 
@@ -945,6 +946,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				if (requirement.kind === 'product-browse') {
 					return productBrowseWindowQueryKeyFromDimensions(requirement);
 				}
+				if (requirement.kind === 'refresh') return laneKeyFor(requirement.collection);
 				return null;
 			})();
 			deps.onActivityChange?.(requirement.collection, 1);
