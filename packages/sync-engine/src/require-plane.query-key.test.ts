@@ -35,20 +35,20 @@ describe('RequirementHandle.queryKey', () => {
 	});
 
 	it('keeps deriving browse lane keys from their descriptor helpers', () => {
-		const orders = {
+		const orders: Extract<EngineRequirement, { kind: 'orders-browse' }> = {
 			id: 'orders-browse',
 			collection: 'orders',
 			kind: 'orders-browse',
 			status: 'processing',
 			limit: 50,
-		} as const;
-		const products = {
+		};
+		const products: Extract<EngineRequirement, { kind: 'product-browse' }> = {
 			id: 'products-browse',
 			collection: 'products',
 			kind: 'product-browse',
 			limit: 110,
 			category: [7, 2],
-		} as const;
+		};
 
 		expect(queryKeyFor(orders)).toBe(orderBrowserQueryKey(orders));
 		expect(queryKeyFor(products)).toBe(productBrowseWindowQueryKeyFromDimensions(products));
