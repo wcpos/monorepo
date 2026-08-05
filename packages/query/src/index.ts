@@ -18,11 +18,10 @@ export {
 } from './engine-query';
 export {
 	declareRequirements,
-	isFullyRepresentedProductSelector,
-	orderRangeBoundSeconds,
 	prepareCollectionResetRefill,
 	registerActiveBinding,
 	requirementsForQuery,
+	type RequirementPlan,
 	type RequirementSortPart,
 } from './requirement-bridge';
 export { recoverLogsCollectionStorage } from './logs-storage-recovery';

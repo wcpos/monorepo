@@ -51,3 +51,23 @@ A WooCommerce-parity behavior preserved deliberately, bug-for-bug, marked
 
 **Net payment**:
 Order total minus the absolute refunded amounts (`abs(amount ?? total)` per refund).
+
+## Language — Sync demand
+
+**Requirement**:
+Component-declared demand expressed as data. The four kinds are targeted records,
+search, orders browse, and product browse.
+
+**Browse window**:
+A bounded, seeded result window over the servable set: the orders browser or the
+products browse window.
+
+**Lane key**:
+The engine-internal persisted identity of a demand lane. It is derived behind the
+engine interface and surfaced read-only as `handle.queryKey`; callers never construct it.
+
+**Represented**:
+The extractor's verdict that a selector was fully expressed as wire dimensions, which
+is the precondition for trusting coverage totals.
+
+_Avoid_: queryKey grammar, descriptor string (in caller-facing documentation)

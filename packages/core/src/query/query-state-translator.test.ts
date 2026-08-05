@@ -244,16 +244,25 @@ describe('query-state translator', () => {
 				limit: translated.limit,
 				sort: translated.sort,
 			})
-		).toEqual([
-			{
-				id: 'reports-orders-binding:orders-query',
-				collection: 'orders',
-				kind: 'query',
-				queryKey:
-					'orders:browser:status=completed:cashier=7:store=12:after=1784073600:before=1784159999:orderby=date:order=desc:search=:limit=all',
-				priority: 700,
-			},
-		]);
+		).toEqual({
+			requirements: [
+				{
+					id: 'reports-orders-binding:orders-browse',
+					collection: 'orders',
+					kind: 'orders-browse',
+					status: 'completed',
+					cashierId: 7,
+					store: '12',
+					afterSeconds: 1784073600,
+					beforeSeconds: 1784159999,
+					orderby: 'date',
+					order: 'desc',
+					limit: 'all',
+					priority: 700,
+				},
+			],
+			represented: true,
+		});
 	});
 });
 

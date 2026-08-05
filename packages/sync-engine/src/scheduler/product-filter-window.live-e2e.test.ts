@@ -63,8 +63,9 @@ liveDescribe('LIVE product filter browse window', () => {
 		await engine.require({
 			id: 'live-product-filter-window',
 			collection: 'products',
-			kind: 'query',
-			queryKey: 'products:browse-window:limit=100:stock_status=instock',
+			kind: 'product-browse',
+			limit: 100,
+			stock_status: 'instock',
 			forceRefresh: true,
 			priority: 700,
 		}).ready;

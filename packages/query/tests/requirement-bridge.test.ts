@@ -1,24 +1,48 @@
+import type { EngineRequirement } from '@wcpos/sync-engine';
+
 import {
 	declareRequirements,
-	isFullyRepresentedProductSelector,
 	prepareCollectionResetRefill,
 	registerActiveBinding,
 	requirementsForQuery,
 } from '../src/requirement-bridge';
 import { createEngineDatabase, createFakeEngine } from './helpers/engine';
 
+import type { RequirementInput, RequirementPlan } from '../src/requirement-bridge';
 import type { RxDatabase } from 'rxdb';
 
-/**
- * The requirement bridge translates legacy Mango params into the engine's
- * three demand shapes (targeted-records / search / order query) — ADR 0027.
- * These tests pin the translation rules the POS relies on.
- */
-describe('requirementsForQuery', () => {
-	it('returns no demand for unmapped collections', () => {
-		expect(
-			requirementsForQuery({ id: 'q', collectionName: 'nope', selector: undefined, limit: 10 })
-		).toEqual([]);
+const input = (overrides: Partial<RequirementInput> = {}): RequirementInput => ({
+	id: 'q',
+	collectionName: 'products',
+	selector: {},
+	limit: 10,
+	...overrides,
+});
+
+const plan = (overrides: Partial<RequirementInput> = {}): RequirementPlan =>
+	requirementsForQuery(input(overrides));
+
+const onlyRequirement = (overrides: Partial<RequirementInput> = {}): EngineRequirement => {
+	const result = plan(overrides);
+	expect(result.requirements).toHaveLength(1);
+	return result.requirements[0] as EngineRequirement;
+};
+
+/** Selector dissection belongs here; lane-key encoding is pinned by sync-engine tests. */
+describe('requirementsForQuery extraction', () => {
+	it('returns no demand for unmapped and local-only collections', () => {
+		expect(plan({ collectionName: 'nope', selector: undefined })).toEqual({
+			requirements: [],
+			represented: false,
+		});
+		expect(plan({ collectionName: 'taxes', selector: { search: 'GST' } })).toEqual({
+			requirements: [],
+			represented: false,
+		});
+		expect(plan({ collectionName: 'customers', limit: undefined })).toEqual({
+			requirements: [],
+			represented: false,
+		});
 	});
 
 	it.each([
@@ -27,584 +51,446 @@ describe('requirementsForQuery', () => {
 		['products/brands', 'brands'],
 		['coupons', 'coupons'],
 	] as const)('maps a %s browse to an on-demand %s refresh', (collectionName, collection) => {
-		expect(
-			requirementsForQuery({
-				id: 'picker',
-				collectionName,
-				selector: {},
-				limit: 10,
-				forceRefresh: true,
-			})
-		).toEqual([
-			{
-				id: 'picker:reference-refresh',
-				collection,
-				kind: 'refresh',
-				priority: 700,
-			},
-		]);
+		expect(plan({ collectionName, forceRefresh: true })).toEqual({
+			requirements: [
+				{
+					id: 'q:reference-refresh',
+					collection,
+					kind: 'refresh',
+					priority: 700,
+				},
+			],
+			represented: false,
+		});
 	});
 
-	it('carries an explicit reference browse priority without forcing the refresh', () => {
+	it('carries an explicit reference priority without forcing the refresh', () => {
 		expect(
-			requirementsForQuery({
-				id: 'picker',
+			plan({
 				collectionName: 'products/categories',
-				selector: {},
-				limit: 10,
 				priority: 725,
 				forceRefresh: true,
 			})
-		).toEqual([
-			{
-				id: 'picker:reference-refresh',
-				collection: 'categories',
-				kind: 'refresh',
-				priority: 725,
-			},
-		]);
+		).toEqual({
+			requirements: [
+				{
+					id: 'q:reference-refresh',
+					collection: 'categories',
+					kind: 'refresh',
+					priority: 725,
+				},
+			],
+			represented: false,
+		});
 	});
 
 	it('maps finite id selectors to targeted-records', () => {
-		const inSelector = requirementsForQuery({
-			id: 'q',
-			collectionName: 'products',
-			selector: { id: { $in: [1, '2', 'junk'] } },
-			limit: 10,
+		expect(onlyRequirement({ selector: { id: { $in: [1, '2', 'junk'] } } })).toEqual({
+			id: 'q:targeted',
+			collection: 'products',
+			kind: 'targeted-records',
+			wooIds: [1, 2],
 		});
-		expect(inSelector).toEqual([
-			{ id: 'q:targeted', collection: 'products', kind: 'targeted-records', wooIds: [1, 2] },
-		]);
-
-		const eqSelector = requirementsForQuery({
-			id: 'q',
-			collectionName: 'customers',
-			selector: { id: { $eq: 7 } },
-			limit: undefined,
+		expect(
+			onlyRequirement({
+				collectionName: 'customers',
+				selector: { id: { $eq: 7 } },
+				limit: undefined,
+			})
+		).toMatchObject({ kind: 'targeted-records', wooIds: [7] });
+		expect(
+			onlyRequirement({
+				collectionName: 'variations',
+				selector: { id: '42' },
+				limit: undefined,
+			})
+		).toMatchObject({ kind: 'targeted-records', wooIds: [42] });
+		expect(plan({ collectionName: 'customers', selector: { id: { $in: [] } } })).toEqual({
+			requirements: [],
+			represented: false,
 		});
-		expect(eqSelector[0]).toMatchObject({ kind: 'targeted-records', wooIds: [7] });
-
-		const bareId = requirementsForQuery({
-			id: 'q',
-			collectionName: 'variations',
-			selector: { id: '42' },
-			limit: undefined,
-		});
-		expect(bareId[0]).toMatchObject({ wooIds: [42] });
 	});
 
-	it('keeps unusable product id selectors local while emitting a superset window', () => {
-		expect(
-			requirementsForQuery({
-				id: 'q',
-				collectionName: 'products',
-				selector: { id: { $in: ['junk'] } },
-				limit: 10,
-			})
-		).toEqual([
-			{
-				id: 'q:products-browse-window',
-				collection: 'products',
-				kind: 'query',
-				queryKey: 'products:browse-window:limit=100',
-			},
-		]);
-		expect(
-			requirementsForQuery({
-				id: 'q',
-				collectionName: 'products',
-				selector: { id: 'junk' },
-				limit: 10,
-			})
-		).toEqual([
-			{
-				id: 'q:products-browse-window',
-				collection: 'products',
-				kind: 'query',
-				queryKey: 'products:browse-window:limit=100',
-			},
-		]);
-	});
+	it.each([{ id: { $in: ['junk'] } }, { id: 'junk' }])(
+		'emits a residual product superset for unusable ids',
+		(selector) => {
+			expect(plan({ selector })).toEqual({
+				requirements: [
+					{
+						id: 'q:products-browse-window',
+						collection: 'products',
+						kind: 'product-browse',
+						limit: 10,
+					},
+				],
+				represented: false,
+			});
+		}
+	);
 
 	it('maps search terms for searchable collections only', () => {
-		const products = requirementsForQuery({
-			id: 'q',
-			collectionName: 'products',
-			selector: { search: 'mug' },
-			limit: 25,
-			priority: 5,
-			forceRefresh: true,
-		});
-		expect(products).toEqual([
-			{
-				id: 'q:search',
-				collection: 'products',
-				kind: 'search',
-				term: 'mug',
+		expect(
+			plan({
+				selector: { search: 'mug' },
 				limit: 25,
 				priority: 5,
 				forceRefresh: true,
-			},
-		]);
-
-		// taxes are not a search collection — a search term creates no remote demand
-		expect(
-			requirementsForQuery({
-				id: 'q',
-				collectionName: 'taxes',
-				selector: { search: 'GST' },
-				limit: 10,
 			})
-		).toEqual([]);
-	});
-
-	it('maps unbounded orders browse to a bounded query descriptor', () => {
-		const plain = requirementsForQuery({
-			id: 'q',
-			collectionName: 'orders',
-			selector: undefined,
-			limit: undefined,
+		).toEqual({
+			requirements: [
+				{
+					id: 'q:search',
+					collection: 'products',
+					kind: 'search',
+					term: 'mug',
+					limit: 25,
+					priority: 5,
+					forceRefresh: true,
+				},
+			],
+			represented: false,
 		});
-		expect(plain).toEqual([
-			{
-				id: 'q:orders-query',
-				collection: 'orders',
-				kind: 'query',
-				queryKey: 'orders:browser:status=all:search=:limit=10',
-			},
-		]);
-
-		const filtered = requirementsForQuery({
-			id: 'q',
-			collectionName: 'orders',
-			selector: { status: { $eq: 'processing' }, search: 'jane' },
-			limit: 9999,
-		});
-		// status comes from $eq, the limit is capped at the browse-lane max (200)
-		expect(filtered[0]).toMatchObject({
-			queryKey: 'orders:browser:status=processing:search=jane:limit=200',
+		expect(plan({ collectionName: 'customers', selector: { search: 'ada' }, limit: 25 })).toEqual({
+			requirements: [
+				{
+					id: 'q:search',
+					collection: 'customers',
+					kind: 'search',
+					term: 'ada',
+					limit: 25,
+				},
+			],
+			represented: false,
 		});
 	});
 
-	it('maps customer order filters to interactive windowed descriptors', () => {
-		for (const customer_id of [42, { $eq: 0 }]) {
+	describe('orders browse dimensions', () => {
+		const orderPlan = (overrides: Partial<RequirementInput> = {}) =>
+			plan({ collectionName: 'orders', selector: {}, ...overrides });
+		const orderRequirement = (overrides: Partial<RequirementInput> = {}) =>
+			onlyRequirement({ collectionName: 'orders', selector: {}, ...overrides });
+
+		it('extracts empty, bare-status and $eq-status browses', () => {
+			expect(orderPlan({ selector: undefined, limit: undefined })).toEqual({
+				requirements: [{ id: 'q:orders-browse', collection: 'orders', kind: 'orders-browse' }],
+				represented: true,
+			});
 			expect(
-				requirementsForQuery({
-					id: 'customer-orders',
-					collectionName: 'orders',
-					selector: { status: 'processing', customer_id },
+				orderRequirement({
+					selector: { status: { $eq: 'processing' }, search: 'jane' },
+					limit: 9999,
+				})
+			).toEqual({
+				id: 'q:orders-browse',
+				collection: 'orders',
+				kind: 'orders-browse',
+				status: 'processing',
+				search: 'jane',
+				limit: 9999,
+			});
+			expect(orderRequirement({ selector: { status: 'completed' } })).toMatchObject({
+				status: 'completed',
+			});
+		});
+
+		it.each([42, { $eq: 0 }])('extracts customer %p at interactive priority', (customer_id) => {
+			expect(orderPlan({ selector: { status: 'processing', customer_id }, limit: 25 })).toEqual({
+				requirements: [
+					{
+						id: 'q:orders-browse',
+						collection: 'orders',
+						kind: 'orders-browse',
+						status: 'processing',
+						customerId: typeof customer_id === 'number' ? customer_id : customer_id.$eq,
+						limit: 25,
+						priority: 700,
+					},
+				],
+				represented: true,
+			});
+		});
+
+		it('scans $and metadata for cashier and store', () => {
+			expect(
+				orderPlan({
+					selector: {
+						$and: [
+							{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
+							{ meta_data: { $elemMatch: { key: '_pos_store', value: '12' } } },
+						],
+					},
 					limit: 25,
 				})
-			).toEqual([
-				{
-					id: 'customer-orders:orders-query',
-					collection: 'orders',
-					kind: 'query',
-					queryKey: `orders:browser:status=processing:customer=${
-						typeof customer_id === 'number' ? customer_id : customer_id.$eq
-					}:search=:limit=25`,
-					priority: 700,
-				},
-			]);
-		}
-	});
+			).toEqual({
+				requirements: [
+					{
+						id: 'q:orders-browse',
+						collection: 'orders',
+						kind: 'orders-browse',
+						cashierId: 7,
+						store: '12',
+						limit: 25,
+						priority: 700,
+					},
+				],
+				represented: true,
+			});
+		});
 
-	it('maps cashier and store metadata filters to interactive order dimensions', () => {
-		expect(
-			requirementsForQuery({
-				id: 'orders',
-				collectionName: 'orders',
+		it.each([
+			['_pos_user', 'cashierId'],
+			['_pos_store', 'store'],
+		] as const)('keeps non-numeric %s metadata residual', (key, dimension) => {
+			const result = orderPlan({
 				selector: {
-					$and: [
-						{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
-						{ meta_data: { $elemMatch: { key: '_pos_store', value: '12' } } },
-					],
+					$and: [{ meta_data: { $elemMatch: { key, value: 'not-numeric' } } }],
 				},
 				limit: 25,
-			})
-		).toEqual([
-			{
-				id: 'orders:orders-query',
-				collection: 'orders',
-				kind: 'query',
-				queryKey: 'orders:browser:status=all:cashier=7:store=12:search=:limit=25',
-				priority: 700,
-			},
-		]);
-	});
+			});
 
-	// The translator only promotes status/customer_id/dateRange to the selector root, so a
-	// slug store arrives as an `$and` condition — both shapes must reach the wire.
-	it('maps root and nested created_via selectors to the store dimension', () => {
-		const selectors: Record<string, unknown>[] = [
+			expect(result.represented).toBe(false);
+			expect(result.requirements[0]).not.toHaveProperty(dimension);
+		});
+
+		it.each([
 			{ created_via: 'woocommerce-pos' },
 			{ created_via: { $eq: 'woocommerce-pos' } },
 			{ $and: [{ created_via: 'woocommerce-pos' }] },
 			{ $and: [{ created_via: { $eq: 'woocommerce-pos' } }] },
-		];
-		for (const selector of selectors) {
-			expect(
-				requirementsForQuery({ id: 'orders', collectionName: 'orders', selector, limit: 25 })[0]
-			).toMatchObject({
-				queryKey: 'orders:browser:status=all:store=woocommerce-pos:search=:limit=25',
-				priority: 700,
-			});
-		}
-	});
-
-	it('carries only mapped non-default order sorts', () => {
-		const keyFor = (sort: Record<string, 'asc' | 'desc'>[]) =>
-			requirementsForQuery({
-				id: 'orders',
-				collectionName: 'orders',
-				selector: {},
-				limit: 25,
-				sort,
-			})[0];
-		expect(keyFor([{ date_created_gmt: 'desc' }])).toEqual({
-			id: 'orders:orders-query',
-			collection: 'orders',
-			kind: 'query',
-			queryKey: 'orders:browser:status=all:orderby=date:order=desc:search=:limit=25',
-		});
-		expect(keyFor([{ total: 'asc' }])?.queryKey).toBe('orders:browser:status=all:search=:limit=25');
-		expect(keyFor([{ number: 'desc' }])?.queryKey).toBe(
-			'orders:browser:status=all:search=:limit=25'
-		);
-	});
-
-	it('maps reports date ranges to ranged complete order descriptors', () => {
-		expect(
-			requirementsForQuery({
-				id: 'reports',
-				collectionName: 'orders',
-				selector: {
-					status: { $eq: 'completed' },
-					date_created_gmt: {
-						$gte: '2026-07-01T00:00:00',
-						$lte: '2026-07-14T23:59:59',
+		])('extracts root and nested created_via slug %#', (selector) => {
+			expect(orderPlan({ selector, limit: 25 })).toEqual({
+				requirements: [
+					{
+						id: 'q:orders-browse',
+						collection: 'orders',
+						kind: 'orders-browse',
+						store: 'woocommerce-pos',
+						limit: 25,
+						priority: 700,
 					},
-				},
-				limit: Number.MAX_SAFE_INTEGER,
-			})
-		).toEqual([
-			{
-				id: 'reports:orders-query',
-				collection: 'orders',
-				kind: 'query',
-				queryKey:
-					'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all',
-				priority: 700,
-			},
-		]);
-	});
+				],
+				represented: true,
+			});
+		});
 
-	it('keeps ranged order descriptors bounded for small limits', () => {
-		const [requirement] = requirementsForQuery({
-			id: 'reports',
-			collectionName: 'orders',
-			selector: { date_created_gmt: { $gte: '2026-07-01T00:00:00' } },
-			limit: 25,
+		it('maps supported sorts, strips sortable_, and omits unmapped sorts', () => {
+			expect(orderRequirement({ sort: [{ date_created_gmt: 'desc' }] })).toMatchObject({
+				orderby: 'date',
+				order: 'desc',
+			});
+			expect(orderRequirement({ sort: [{ sortable_number: 'desc' }] })).toMatchObject({
+				orderby: 'id',
+				order: 'desc',
+			});
+			expect(orderRequirement({ sort: [{ total: 'asc' }] })).not.toHaveProperty('orderby');
 		});
-		expect(requirement).toMatchObject({
-			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=25',
-			priority: 700,
-		});
-	});
 
-	// `2026-07-01Z` is not a Date Time String Format production; leaving date-only values
-	// untouched keeps the bound identical across V8, Hermes and JSC.
-	it('reads date-only range bounds as UTC midnight', () => {
-		const [requirement] = requirementsForQuery({
-			id: 'reports',
-			collectionName: 'orders',
-			selector: { date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
-			limit: Number.MAX_SAFE_INTEGER,
-		});
-		// 2026-07-01T00:00:00Z and 2026-07-14T00:00:00Z — UTC midnight, not local midnight.
-		expect(requirement).toMatchObject({
-			queryKey: 'orders:browser:status=all:after=1782864000:before=1783987200:search=:limit=all',
-		});
-	});
-
-	// Fetch-to-completion is reserved for the all-results sentinel Reports passes. An
-	// ordinary ranged grid that scrolls past the browse cap (limit 210) must stay windowed.
-	it('does not promote a scrolled ranged browse to fetch-to-completion', () => {
-		const [requirement] = requirementsForQuery({
-			id: 'orders',
-			collectionName: 'orders',
-			selector: { date_created_gmt: { $gte: '2026-07-01T00:00:00' } },
-			limit: 210,
-		});
-		expect(requirement).toMatchObject({
-			queryKey: 'orders:browser:status=all:after=1782864000:search=:limit=200',
-			// Priority and completion are independent axes: a cashier-applied dimension is
-			// interactive demand (700) whether or not it is allowed to run to completion.
-			// Only `:limit=all` — the sentinel Reports passes — authorises completion.
-			priority: 700,
-		});
-		expect(requirement.queryKey).not.toContain(':limit=all');
-	});
-
-	// A cashier search containing literal range tokens must round-trip as search text.
-	it('keeps literal range tokens in the search component of the descriptor', () => {
-		const [requirement] = requirementsForQuery({
-			id: 'orders',
-			collectionName: 'orders',
-			selector: { search: 'invoice:after=123' },
-			limit: 25,
-		});
-		expect(requirement).toMatchObject({
-			queryKey: 'orders:browser:status=all:search=invoice:after=123:limit=25',
-		});
-	});
-
-	// Priority comes from the computed dimensions, never from sniffing the key text —
-	// otherwise a cashier searching for `note:customer=42` would promote an unfiltered
-	// browse to the interactive band.
-	it('does not promote an unfiltered browse whose search text looks like a dimension', () => {
-		const [requirement] = requirementsForQuery({
-			id: 'orders',
-			collectionName: 'orders',
-			selector: { search: 'note:customer=42' },
-			limit: 25,
-		});
-		expect(requirement).toEqual({
-			id: 'orders:orders-query',
-			collection: 'orders',
-			kind: 'query',
-			queryKey: 'orders:browser:status=all:search=note:customer=42:limit=25',
-		});
-		expect(requirement).not.toHaveProperty('priority');
-	});
-
-	it('maps a filtered products browse to an interactive browse-window descriptor', () => {
-		expect(
-			requirementsForQuery({
-				id: 'q',
-				collectionName: 'products',
-				selector: {
-					$and: [
-						{
-							$or: [
-								{ categories: { $elemMatch: { id: 7 } } },
-								{ categories: { $elemMatch: { id: 2 } } },
-								{ categories: { $elemMatch: { id: 7 } } },
-							],
+		it('extracts reports ranges and reserves all-results for a representable bound', () => {
+			expect(
+				orderPlan({
+					id: 'reports',
+					selector: {
+						status: { $eq: 'completed' },
+						date_created_gmt: {
+							$gte: '2026-07-01T00:00:00',
+							$lte: '2026-07-14T23:59:59',
 						},
-						{ $or: [{ tags: { $elemMatch: { id: 3 } } }] },
-						{ $or: [{ brands: { $elemMatch: { id: 5 } } }] },
-						{ featured: true },
-						{ on_sale: false },
-						{ stock_status: { $eq: 'instock' } },
-					],
-				},
-				limit: 10,
-			})
-		).toEqual([
-			{
+					},
+					limit: Number.MAX_SAFE_INTEGER,
+				})
+			).toEqual({
+				requirements: [
+					{
+						id: 'reports:orders-browse',
+						collection: 'orders',
+						kind: 'orders-browse',
+						status: 'completed',
+						afterSeconds: 1782864000,
+						beforeSeconds: 1784073599,
+						limit: 'all',
+						priority: 700,
+					},
+				],
+				represented: true,
+			});
+			expect(
+				orderRequirement({
+					selector: { date_created_gmt: { $gte: 'nope' } },
+					limit: Number.MAX_SAFE_INTEGER,
+				})
+			).toMatchObject({ limit: Number.MAX_SAFE_INTEGER });
+			expect(
+				orderPlan({ selector: { date_created_gmt: { $gte: 'nope' } }, limit: 25 }).represented
+			).toBe(false);
+		});
+
+		it('keeps small and scrolled ranged limits raw', () => {
+			expect(
+				orderRequirement({
+					selector: { date_created_gmt: { $gte: '2026-07-01T00:00:00' } },
+					limit: 25,
+				})
+			).toMatchObject({ afterSeconds: 1782864000, limit: 25, priority: 700 });
+			expect(
+				orderRequirement({
+					selector: { date_created_gmt: { $gte: '2026-07-01T00:00:00' } },
+					limit: 210,
+				})
+			).toMatchObject({ afterSeconds: 1782864000, limit: 210, priority: 700 });
+		});
+
+		it('reads date-only bounds as UTC midnight', () => {
+			expect(
+				orderRequirement({
+					selector: { date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
+					limit: Number.MAX_SAFE_INTEGER,
+				})
+			).toMatchObject({
+				afterSeconds: 1782864000,
+				beforeSeconds: 1783987200,
+				limit: 'all',
+			});
+		});
+
+		it.each(['invoice:after=123', 'note:customer=42'])(
+			'keeps literal dimension text in search without scoping: %s',
+			(search) => {
+				expect(orderRequirement({ selector: { search }, limit: 25 })).toEqual({
+					id: 'q:orders-browse',
+					collection: 'orders',
+					kind: 'orders-browse',
+					search,
+					limit: 25,
+				});
+			}
+		);
+	});
+
+	describe('product browse dimensions', () => {
+		it('extracts every supported filter and interactive priority', () => {
+			expect(
+				plan({
+					selector: {
+						$and: [
+							{
+								$or: [
+									{ categories: { $elemMatch: { id: 7 } } },
+									{ categories: { $elemMatch: { id: 2 } } },
+									{ categories: { $elemMatch: { id: 7 } } },
+								],
+							},
+							{ $or: [{ tags: { $elemMatch: { id: 3 } } }] },
+							{ $or: [{ brands: { $elemMatch: { id: 5 } } }] },
+							{ featured: true },
+							{ on_sale: false },
+							{ stock_status: { $eq: 'instock' } },
+						],
+					},
+				})
+			).toEqual({
+				requirements: [
+					{
+						id: 'q:products-browse-window',
+						collection: 'products',
+						kind: 'product-browse',
+						limit: 10,
+						category: [2, 7],
+						tag: [3],
+						brand: [5],
+						featured: true,
+						on_sale: false,
+						stock_status: 'instock',
+						priority: 700,
+					},
+				],
+				represented: true,
+			});
+		});
+
+		it('emits representable dimensions and a false verdict for residual filters', () => {
+			expect(
+				plan({
+					selector: {
+						featured: false,
+						$and: [
+							{ stock_status: 'onbackorder' },
+							{ status: 'publish' },
+							{ attributes: { $allMatch: [{ id: 1, option: 'Large' }] } },
+							{ uuid: 'local-only' },
+						],
+					},
+					limit: 110,
+					sort: [{ sortable_price: 'desc' }],
+				})
+			).toEqual({
+				requirements: [
+					{
+						id: 'q:products-browse-window',
+						collection: 'products',
+						kind: 'product-browse',
+						limit: 110,
+						orderby: 'price',
+						order: 'desc',
+						featured: false,
+						stock_status: 'onbackorder',
+						priority: 700,
+					},
+				],
+				represented: false,
+			});
+		});
+
+		it.each([10, 90, 110, 210, 99_999])('passes raw grid limit %i to the engine', (limit) => {
+			expect(onlyRequirement({ limit })).toEqual({
 				id: 'q:products-browse-window',
 				collection: 'products',
-				kind: 'query',
-				queryKey:
-					'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
-				priority: 700,
-			},
-		]);
-	});
+				kind: 'product-browse',
+				limit,
+			});
+		});
 
-	it('emits only the representable subset of mixed product filters', () => {
-		expect(
-			requirementsForQuery({
-				id: 'q',
-				collectionName: 'products',
-				selector: {
-					featured: false,
-					$and: [
-						{ stock_status: 'onbackorder' },
-						{ status: 'publish' },
-						{ attributes: { $allMatch: [{ id: 1, option: 'Large' }] } },
-						{ uuid: 'local-only' },
-					],
-				},
-				limit: 110,
-				sort: [{ sortable_price: 'desc' }],
-			})
-		).toEqual([
-			{
-				id: 'q:products-browse-window',
-				collection: 'products',
-				kind: 'query',
-				queryKey:
-					'products:browse-window:limit=200:orderby=price:order=desc:featured=0:stock_status=onbackorder',
-				priority: 700,
-			},
-		]);
-	});
-
-	// #909 — the browse window carries the grid's own limit …
-	it('maps an unfiltered products browse to a browse-window descriptor', () => {
-		expect(
-			requirementsForQuery({
-				id: 'q',
-				collectionName: 'products',
-				selector: {},
-				limit: 10,
-			})
-		).toEqual([
-			{
-				id: 'q:products-browse-window',
-				collection: 'products',
-				kind: 'query',
-				queryKey: 'products:browse-window:limit=100',
-			},
-		]);
-	});
-
-	it('grows the window key as the grid scrolls, quantized to the window step', () => {
-		const keyFor = (limit: number) =>
-			requirementsForQuery({ id: 'q', collectionName: 'products', selector: {}, limit })[0]
-				?.queryKey;
-		// A 10-row scroll tick must NOT mint a new coverage lane every time…
-		expect(keyFor(10)).toBe('products:browse-window:limit=100');
-		expect(keyFor(90)).toBe('products:browse-window:limit=100');
-		// …but crossing the window edge must, or scrolling fetches nothing (the #909 bug).
-		expect(keyFor(110)).toBe('products:browse-window:limit=200');
-		expect(keyFor(210)).toBe('products:browse-window:limit=300');
-		// Browse is a seed, not a query engine: the window is capped.
-		expect(keyFor(99_999)).toBe('products:browse-window:limit=1000');
-	});
-
-	// … and the grid's own sort (Paul's ruling: sort-aware seed).
-	it('carries a Woo-expressible sort into the browse-window key', () => {
-		const keyFor = (sort: Record<string, 'asc' | 'desc'>[]) =>
-			requirementsForQuery({
-				id: 'q',
-				collectionName: 'products',
-				selector: {},
+		it.each([
+			['sortable_price', 'desc', 'price'],
+			['name', 'asc', 'title'],
+			['date_modified_gmt', 'desc', 'modified'],
+			['total_sales', 'desc', 'popularity'],
+			['menu_order', 'asc', 'menu_order'],
+		] as const)('maps %s %s to %s', (field, order, orderby) => {
+			expect(onlyRequirement({ limit: 100, sort: [{ [field]: order }] })).toMatchObject({
 				limit: 100,
-				sort,
-			})[0]?.queryKey;
-		expect(keyFor([{ sortable_price: 'desc' }])).toBe(
-			'products:browse-window:limit=100:orderby=price:order=desc'
-		);
-		expect(keyFor([{ name: 'asc' }])).toBe(
-			'products:browse-window:limit=100:orderby=title:order=asc'
-		);
-		expect(keyFor([{ date_modified_gmt: 'desc' }])).toBe(
-			'products:browse-window:limit=100:orderby=modified:order=desc'
-		);
-		expect(keyFor([{ total_sales: 'desc' }])).toBe(
-			'products:browse-window:limit=100:orderby=popularity:order=desc'
-		);
-		// The POS catalog default keeps the bare key — one identity for the cold seed.
-		expect(keyFor([{ menu_order: 'asc' }, { id: 'asc' }])).toBe('products:browse-window:limit=100');
-		// Sorts Woo REST cannot express fall back to the default window rather than
-		// pretending a server-sorted slice exists.
-		expect(keyFor([{ sku: 'asc' }])).toBe('products:browse-window:limit=100');
-		expect(keyFor([{ stock_quantity: 'desc' }])).toBe('products:browse-window:limit=100');
-	});
-
-	// The wire window is a deliberate SUPERSET whenever a predicate cannot be encoded. That
-	// is right for demand and wrong for a total, so the lane's own encoder reports whether
-	// anything was left over — query-bindings suppresses the coverage total when it was.
-	describe('isFullyRepresentedProductSelector', () => {
-		it('accepts selectors whose every predicate reaches the wire', () => {
-			expect(isFullyRepresentedProductSelector({})).toBe(true);
-			expect(isFullyRepresentedProductSelector(undefined)).toBe(true);
-			expect(
-				isFullyRepresentedProductSelector({
-					$and: [
-						{ $or: [{ categories: { $elemMatch: { id: 7 } } }] },
-						{ $or: [{ tags: { $elemMatch: { id: 3 } } }] },
-						{ $or: [{ brands: { $elemMatch: { id: 5 } } }] },
-						{ featured: true },
-						{ on_sale: false },
-						{ stock_status: { $eq: 'instock' } },
-					],
-				})
-			).toBe(true);
+				orderby,
+				order,
+			});
 		});
 
-		// The POS products grid sets this on EVERY browse. It carries no key dimension, but
-		// the fetcher hardcodes `status=publish` on the wire, so the lane holds exactly it.
-		it('accepts the published-only status the wire window already implies', () => {
-			expect(
-				isFullyRepresentedProductSelector({ status: 'publish', stock_status: 'instock' })
-			).toBe(true);
-			expect(isFullyRepresentedProductSelector({ status: { $eq: 'publish' } })).toBe(true);
-			// Any other status has an empty intersection with a published-only window.
-			expect(isFullyRepresentedProductSelector({ status: 'draft' })).toBe(false);
+		it.each(['sku', 'stock_quantity'])('omits unmapped sort %s', (field) => {
+			expect(onlyRequirement({ limit: 100, sort: [{ [field]: 'asc' }] })).not.toHaveProperty(
+				'orderby'
+			);
 		});
 
-		it('rejects selectors the browse-window grammar only partly carries', () => {
-			// Exactly the mixed selector the encoder test above narrows to two dimensions.
+		it('reports represented only when every product predicate reaches the wire', () => {
+			expect(plan({ selector: undefined }).represented).toBe(true);
+			expect(plan({ selector: {} }).represented).toBe(true);
+			expect(plan({ selector: { status: 'publish', stock_status: 'instock' } }).represented).toBe(
+				true
+			);
+			expect(plan({ selector: { status: { $eq: 'publish' } } }).represented).toBe(true);
+			expect(plan({ selector: { status: 'draft' } }).represented).toBe(false);
 			expect(
-				isFullyRepresentedProductSelector({
-					featured: false,
-					$and: [
-						{ stock_status: 'onbackorder' },
-						{ status: 'publish' },
-						{ attributes: { $allMatch: [{ id: 1, option: 'Large' }] } },
-						{ uuid: 'local-only' },
-					],
-				})
+				plan({
+					selector: {
+						$or: [{ categories: { $elemMatch: { id: 7 } } }, { name: 'Hat' }],
+					},
+				}).represented
 			).toBe(false);
-			// The variation matcher's mixed `$or` — the encoder emits nothing for it.
 			expect(
-				isFullyRepresentedProductSelector({
-					$or: [{ categories: { $elemMatch: { id: 7 } } }, { name: 'Hat' }],
-				})
+				plan({
+					selector: { $or: [{ categories: { $elemMatch: { id: 7, name: 'Hats' } } }] },
+				}).represented
 			).toBe(false);
-			// An `$elemMatch` that narrows past a bare id is not `?category=7`.
-			expect(
-				isFullyRepresentedProductSelector({
-					$or: [{ categories: { $elemMatch: { id: 7, name: 'Hats' } } }],
-				})
-			).toBe(false);
-			expect(isFullyRepresentedProductSelector({ stock_status: 'sold' })).toBe(false);
+			expect(plan({ selector: { stock_status: 'sold' } }).represented).toBe(false);
 		});
-	});
-
-	it('creates no demand for unbounded customer browse', () => {
-		expect(
-			requirementsForQuery({
-				id: 'customers',
-				collectionName: 'customers',
-				selector: {},
-				limit: undefined,
-			})
-		).toEqual([]);
-	});
-
-	it('maps a bounded customer search to exactly one search requirement', () => {
-		expect(
-			requirementsForQuery({
-				id: 'customers',
-				collectionName: 'customers',
-				selector: { search: 'ada' },
-				limit: 25,
-			})
-		).toEqual([
-			{
-				id: 'customers:search',
-				collection: 'customers',
-				kind: 'search',
-				term: 'ada',
-				limit: 25,
-			},
-		]);
-	});
-
-	it('creates no demand for the empty customer id list', () => {
-		expect(
-			requirementsForQuery({
-				id: 'customers',
-				collectionName: 'customers',
-				selector: { id: { $in: [] } },
-				limit: 10,
-			})
-		).toEqual([]);
 	});
 });
 
@@ -619,20 +505,20 @@ describe('declareRequirements / registerActiveBinding / reset refill', () => {
 		await database.close();
 	});
 
-	it('declares requirements and swallows search rejections', async () => {
+	it('declares requirement objects and swallows search rejections', async () => {
 		const engine = createFakeEngine(database);
 		engine.searchFailure = new Error('offline');
-		const handles = declareRequirements(engine as never, [
+		const requirements: EngineRequirement[] = [
 			{ id: 'a', collection: 'products', kind: 'search', term: 'mug' },
 			{ id: 'b', collection: 'products', kind: 'targeted-records', wooIds: [1] },
-		]);
+		];
+		const handles = declareRequirements(engine as never, requirements);
 		expect(handles).toHaveLength(2);
-		expect(engine.requireCalls.map((r) => r.kind)).toEqual(['search', 'targeted-records']);
-		// the rejected search handle must not produce an unhandled rejection
+		expect(engine.requireCalls).toEqual(requirements);
 		await expect(handles[1].ready).resolves.toMatchObject({ action: 'serve-local' });
 	});
 
-	it('re-declares registered bindings (force-refreshed) after a reset', async () => {
+	it('re-declares a registered binding as a forced requirement object after reset', async () => {
 		const engine = createFakeEngine(database);
 		const unregister = registerActiveBinding(engine as never, {
 			id: 'grid',
@@ -641,26 +527,42 @@ describe('declareRequirements / registerActiveBinding / reset refill', () => {
 			limit: 10,
 		});
 
-		const refill = prepareCollectionResetRefill(engine as never, ['products']);
-		await refill();
-
-		const targeted = engine.requireCalls.find((r) => r.kind === 'targeted-records');
-		expect(targeted).toMatchObject({
+		await prepareCollectionResetRefill(engine as never, ['products'])();
+		expect(engine.requireCalls).toContainEqual({
 			id: 'grid:collection-reset:targeted',
 			collection: 'products',
+			kind: 'targeted-records',
 			forceRefresh: true,
 			priority: 1000,
 			wooIds: [1, 2],
 		});
 
-		// once unregistered, a later reset re-declares nothing for the binding
 		unregister();
 		const engine2 = createFakeEngine(database);
 		await prepareCollectionResetRefill(engine2 as never, ['products'])();
-		expect(engine2.requireCalls.filter((r) => r.kind === 'targeted-records')).toEqual([]);
+		expect(engine2.requireCalls).not.toContainEqual(
+			expect.objectContaining({ kind: 'targeted-records' })
+		);
 	});
 
-	it('force-refreshes a reset reference collection exactly once, binding or no binding', async () => {
+	it.each([
+		['coupons', 'coupons'],
+		['taxes', 'taxRates'],
+	] as const)('force-refreshes reset %s as one %s requirement object', async (name, collection) => {
+		const engine = createFakeEngine(database);
+		await prepareCollectionResetRefill(engine as never, [name])();
+		expect(engine.requireCalls).toEqual([
+			{
+				id: `${collection}:collection-reset`,
+				collection,
+				kind: 'refresh',
+				forceRefresh: true,
+				priority: 1000,
+			},
+		]);
+	});
+
+	it('emits one reset refresh requirement for a reference collection with an active binding', async () => {
 		const engine = createFakeEngine(database);
 		const unregister = registerActiveBinding(engine as never, {
 			id: 'coupon-picker',
@@ -670,51 +572,15 @@ describe('declareRequirements / registerActiveBinding / reset refill', () => {
 		});
 
 		await prepareCollectionResetRefill(engine as never, ['coupons'])();
-
-		// One forced refresh per COLLECTION, not one per binding: a second surface over the
-		// same collection must not double the reset pull.
 		expect(engine.requireCalls).toEqual([
 			{
 				id: 'coupons:collection-reset',
 				collection: 'coupons',
 				kind: 'refresh',
-				priority: 1000,
 				forceRefresh: true,
+				priority: 1000,
 			},
 		]);
 		unregister();
-	});
-
-	// The reset can be triggered from the Health → Database row or a collection footer, where
-	// nothing is mounted over coupons. Keying the refill on active bindings left that reset
-	// with no demand at all, and the materialized gate then skipped the seed lane too (#952).
-	it('force-refreshes a reset reference collection that has no active binding', async () => {
-		const engine = createFakeEngine(database);
-
-		await prepareCollectionResetRefill(engine as never, ['coupons'])();
-
-		expect(engine.requireCalls).toEqual([
-			{
-				id: 'coupons:collection-reset',
-				collection: 'coupons',
-				kind: 'refresh',
-				priority: 1000,
-				forceRefresh: true,
-			},
-		]);
-	});
-
-	it('synthesizes the taxRates refresh on a taxes reset', async () => {
-		const engine = createFakeEngine(database);
-		await prepareCollectionResetRefill(engine as never, ['taxes'])();
-		expect(engine.requireCalls).toEqual([
-			{
-				id: 'taxRates:collection-reset',
-				collection: 'taxRates',
-				kind: 'refresh',
-				forceRefresh: true,
-				priority: 1000,
-			},
-		]);
 	});
 });

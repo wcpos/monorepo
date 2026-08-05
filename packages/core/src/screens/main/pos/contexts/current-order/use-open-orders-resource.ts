@@ -83,7 +83,7 @@ export function useOpenOrdersResource(
 				collectionName: 'orders',
 				selector: { status: 'pos-open' },
 				limit: undefined,
-			})
+			}).requirements
 		);
 		return () => {
 			for (const handle of handles) handle.release();

@@ -1,7 +1,7 @@
 /**
- * The requirement bridge (ADR 0027, the catalog demand plane) — increment 1b.
+ * The requirement bridge (ADR 0027, the catalog demand plane).
  *
- * Translates a fluent {@link Query}'s legacy Mango params into the ONLY remote
+ * Translates legacy Mango params into the ONLY remote
  * demand shapes the engine's public `require()` facade actually speaks:
  *
  *  - **finite-ID selectors** (`id: {$in: [...]}` or single-id equality) over the
@@ -10,31 +10,25 @@
  *    variations, grouped products and the default-customer lookup.
  *  - **search demand** (products/customers with a non-empty search term) →
  *    `engine.require({collection, kind: 'search', term, limit})`.
- *  - **order query descriptors** (unbounded orders browse) →
- *    `engine.require({collection: 'orders', kind: 'query', queryKey})` with the
- *    `orders:browser:status=…[:customer=…][:cashier=…][:store=…][:after=…][:before=…]`
- *    `[:orderby=…:order=…]:search=…:limit=…` descriptor the engine parses. Structured
- *    dimensions precede `:search=`, which stays the last free-text field; `orderby`
- *    and `order` only ever appear as a pair, and the `id`/`desc` default is omitted.
+ *  - **orders browse** → `engine.require({kind: 'orders-browse', ...dimensions})`.
  *  - **the products browse window** (products browse — ADR 0027 §2, #909) →
 
- *    `engine.require({collection: 'products', kind: 'query', queryKey})` with the
- *    `products:browse-window:limit=…[:orderby=…:order=…]` descriptor plus optional native
- *    filter dimensions. It carries the grid's own limit, sort, and representable filters.
+ *    `engine.require({kind: 'product-browse', ...dimensions})`. It carries the grid's own
+ *    raw limit, sort, and representable filters.
  *  - **reference browse** (categories/tags/brands/coupons — #952) →
  *    `engine.require({collection, kind: 'refresh'})`. These lanes are no longer seeded at
  *    boot, so mounting a picker/screen over one is what fetches it, deduped by the engine's
  *    `REFERENCE_REFRESH_DEDUPE_MS` window.
  *
- * Unbounded browse over every other collection creates NO remote demand (local residents
- * only). The `greedy`/`endpoint` keys no longer create remote work; they are accepted and
- * ignored (deleted at convergence).
+ * Unbounded browse over every other collection creates NO remote demand (local residents only).
  *
  */
 
 import { getLogger } from '@wcpos/utils/logger';
 import type {
 	EngineRequirement,
+	OrderBrowseDimensions,
+	ProductBrowseDimensions,
 	RequirementHandle,
 	RxdbSyncEngine,
 	SyncCollectionName,
@@ -63,9 +57,6 @@ const REFERENCE_ENGINE_COLLECTIONS: EngineCollectionName[] = [
 ];
 
 const requirementLogger = getLogger(['wcpos', 'query', 'requirement-bridge']);
-
-/** The web scheduler's browse-lane cap; the engine rejects larger order descriptors. */
-const ORDER_BROWSE_MAX_LIMIT = 200;
 
 /**
  * Interactive priority for a browse the cashier has actually narrowed (customer, cashier,
@@ -130,10 +121,8 @@ function finiteWooIds(selector: Record<string, unknown> | undefined): number[] |
 }
 
 /**
- * A `date_created_gmt` range bound as epoch SECONDS, or `undefined` when the bound cannot be
- * represented in the descriptor grammar. Exported because coverage eligibility in
- * `@wcpos/core` has to accept exactly the bounds this encodes — a bound one side accepts and
- * the other drops makes the coverage lane wider than the selector it reports for.
+ * A `date_created_gmt` range bound as epoch seconds, or `undefined` when the bound cannot be
+ * represented as a wire dimension.
  *
  * `YYYY-MM-DD` is already UTC-anchored by the Date Time String Format; `YYYY-MM-DDZ` is NOT a
  * production of that format, so appending `Z` would drop it into each engine's
@@ -141,7 +130,7 @@ function finiteWooIds(selector: Record<string, unknown> | undefined): number[] |
  * time-of-day with no offset needs the explicit UTC designator — the shape
  * `convertLocalDateToUTCString` emits (`yyyy-MM-dd'T'HH:mm:ss`).
  */
-export function orderRangeBoundSeconds(value: unknown): number | undefined {
+function orderRangeBoundSeconds(value: unknown): number | undefined {
 	if (typeof value !== 'string') return undefined;
 	const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
 	const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
@@ -151,27 +140,38 @@ export function orderRangeBoundSeconds(value: unknown): number | undefined {
 	return Math.floor(milliseconds / 1_000);
 }
 
-/**
- * `scoped` is the cashier-applied-dimension flag that earns interactive priority. It is
- * returned alongside the key rather than re-derived by sniffing the key text: `search` is
- * arbitrary cashier input, so a term like `note:customer=42` would match a
- * `queryKey.includes(':customer=')` test and promote an entirely unfiltered browse. Sort is
- * deliberately NOT scoping — a sort change reshapes the window, it does not narrow it.
- */
-function orderBrowseDescriptor(
+function orderBrowseDimensions(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
 	sort: readonly RequirementSortPart[] | undefined
-): { queryKey: string; scoped: boolean } {
+): { dimensions: OrderBrowseDimensions; scoped: boolean; residual: boolean } {
+	const dimensions: OrderBrowseDimensions = {};
+	const conditions = [
+		...(selector ? [selector] : []),
+		...(Array.isArray(selector?.$and) ? selector.$and : []),
+	];
+	const consumed = conditions.map(() => new Set<string>());
+	if (selector && Array.isArray(selector.$and)) consumed[0]?.add('$and');
 	const statusValue = (() => {
 		const status = selector?.status as unknown;
-		if (typeof status === 'string' && status.length > 0) return status;
-		if (status && typeof status === 'object' && typeof (status as any).$eq === 'string') {
-			return (status as any).$eq as string;
+		if (typeof status === 'string' && status.length > 0) {
+			consumed[0]?.add('status');
+			return status;
 		}
-		return 'all';
+		if (status && typeof status === 'object') {
+			const record = status as Record<string, unknown>;
+			if (Object.keys(record).length === 1 && typeof record.$eq === 'string' && record.$eq) {
+				consumed[0]?.add('status');
+				return record.$eq;
+			}
+		}
+		return undefined;
 	})();
-	const searchValue = typeof selector?.search === 'string' ? (selector.search as string) : '';
+	if (statusValue !== undefined) dimensions.status = statusValue;
+	if (typeof selector?.search === 'string') {
+		dimensions.search = selector.search;
+		consumed[0]?.add('search');
+	}
 	const customerValue = selector?.customer_id;
 	const customerId = (() => {
 		if (typeof customerValue === 'number') return customerValue;
@@ -184,24 +184,22 @@ function orderBrowseDescriptor(
 		}
 		return undefined;
 	})();
-	const customerPart =
-		Number.isSafeInteger(customerId) && (customerId as number) >= 0
-			? `:customer=${customerId}`
-			: '';
+	if (Number.isSafeInteger(customerId) && (customerId as number) >= 0) {
+		dimensions.customerId = customerId as number;
+		consumed[0]?.add('customer_id');
+	}
 	// Only `status`, `customer_id` and `dateRange` are promoted to the selector ROOT
 	// (`REQUIREMENT_TOP_LEVEL_FIELDS` in query-state-translator); cashier and store compile
 	// into `$and` conditions instead, because both meta filters land on the same `meta_data`
 	// key and would otherwise overwrite each other. Every dimension below therefore has to
 	// look in both places.
-	const conditionsToScan = () => [
-		selector,
-		...(Array.isArray(selector?.$and) ? selector.$and : []),
-	];
-	const metaValue = (key: '_pos_user' | '_pos_store'): string | undefined => {
-		const conditions = conditionsToScan();
-		for (const condition of conditions) {
+	const metaValue = (
+		key: '_pos_user' | '_pos_store'
+	): { value: string; index: number; exact: boolean } | undefined => {
+		for (const [index, condition] of conditions.entries()) {
 			if (condition === null || typeof condition !== 'object') continue;
-			const metaData = (condition as Record<string, unknown>).meta_data;
+			const record = condition as Record<string, unknown>;
+			const metaData = record.meta_data;
 			if (metaData === null || typeof metaData !== 'object') continue;
 			const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
 			if (
@@ -210,28 +208,46 @@ function orderBrowseDescriptor(
 				(elemMatch as Record<string, unknown>).key === key &&
 				typeof (elemMatch as Record<string, unknown>).value === 'string'
 			) {
-				return (elemMatch as Record<string, unknown>).value as string;
+				return {
+					value: (elemMatch as Record<string, unknown>).value as string,
+					index,
+					exact: Object.keys(record).length === 1,
+				};
 			}
 		}
 		return undefined;
 	};
-	const cashier = metaValue('_pos_user');
+	const cashierMeta = metaValue('_pos_user');
+	const cashier = cashierMeta?.value;
 	const cashierId = cashier !== undefined && /^\d+$/.test(cashier) ? Number(cashier) : undefined;
-	const cashierPart =
-		cashierId !== undefined && Number.isSafeInteger(cashierId) ? `:cashier=${cashierId}` : '';
-	const metaStore = metaValue('_pos_store');
+	if (cashierId !== undefined && Number.isSafeInteger(cashierId)) {
+		dimensions.cashierId = cashierId;
+		if (cashierMeta?.exact) consumed[cashierMeta.index]?.add('meta_data');
+	}
+	const storeMeta = metaValue('_pos_store');
+	const metaStore = storeMeta?.value;
 	// A store-less install selects its store by slug, which the translator compiles to
 	// `created_via` — a nested `$and` condition, not a root field (see the note above). A
 	// root-only read silently dropped `:store=` for exactly that case, leaving the ranged
 	// reports fetch unscoped and letting other stores' orders consume its record backstop.
 	const createdVia = (() => {
-		for (const condition of conditionsToScan()) {
+		for (const [index, condition] of conditions.entries()) {
 			if (condition === null || typeof condition !== 'object') continue;
-			const value = (condition as Record<string, unknown>).created_via;
-			if (typeof value === 'string') return value;
+			const record = condition as Record<string, unknown>;
+			const value = record.created_via;
+			if (typeof value === 'string') {
+				return { value, index, exact: Object.keys(record).length === 1 };
+			}
 			if (value !== null && typeof value === 'object') {
-				const eq = (value as Record<string, unknown>).$eq;
-				if (typeof eq === 'string') return eq;
+				const valueRecord = value as Record<string, unknown>;
+				const eq = valueRecord.$eq;
+				if (typeof eq === 'string') {
+					return {
+						value: eq,
+						index,
+						exact: Object.keys(record).length === 1 && Object.keys(valueRecord).length === 1,
+					};
+				}
 			}
 		}
 		return undefined;
@@ -239,18 +255,36 @@ function orderBrowseDescriptor(
 	const store =
 		typeof metaStore === 'string' && /^\d+$/.test(metaStore)
 			? metaStore
-			: typeof createdVia === 'string' && /^[a-z0-9_-]+$/.test(createdVia)
-				? createdVia
+			: createdVia && /^[a-z0-9_-]+$/.test(createdVia.value)
+				? createdVia.value
 				: undefined;
-	const storePart = store === undefined ? '' : `:store=${store}`;
+	if (store !== undefined) {
+		dimensions.store = store;
+		if (storeMeta?.exact && store === metaStore) consumed[storeMeta.index]?.add('meta_data');
+	}
+	if (metaStore === undefined && createdVia?.exact && store === createdVia.value) {
+		consumed[createdVia.index]?.add('created_via');
+	}
 	const range = selector?.date_created_gmt as Record<string, unknown> | null | undefined;
 	const afterSeconds =
 		range && typeof range === 'object' ? orderRangeBoundSeconds(range.$gte) : undefined;
 	const beforeSeconds =
 		range && typeof range === 'object' ? orderRangeBoundSeconds(range.$lte) : undefined;
-	const rangePart = `${afterSeconds === undefined ? '' : `:after=${afterSeconds}`}${
-		beforeSeconds === undefined ? '' : `:before=${beforeSeconds}`
-	}`;
+	if (afterSeconds !== undefined) dimensions.afterSeconds = afterSeconds;
+	if (beforeSeconds !== undefined) dimensions.beforeSeconds = beforeSeconds;
+	if (range && typeof range === 'object') {
+		const entries = Object.entries(range);
+		if (
+			entries.length > 0 &&
+			entries.every(
+				([operator, boundary]) =>
+					(operator === '$gte' || operator === '$lte') &&
+					orderRangeBoundSeconds(boundary) !== undefined
+			)
+		) {
+			consumed[0]?.add('date_created_gmt');
+		}
+	}
 	const [primarySort] = sort ?? [];
 	const [rawSortField, direction] = Object.entries(primarySort ?? {})[0] ?? [];
 	const sortField = rawSortField?.replace(/^sortable_/, '');
@@ -259,49 +293,44 @@ function orderBrowseDescriptor(
 				sortField as keyof typeof ORDER_BROWSE_ORDERBY_BY_SORT_FIELD
 			]
 		: undefined;
-	const sortPart =
-		orderby === undefined || (orderby === 'id' && direction === 'desc')
-			? ''
-			: `:orderby=${orderby}:order=${direction}`;
-	// Structured dimensions (customer, cashier, store, the range bounds, then the sort pair)
-	// precede `:search=` so arbitrary search text can never be read back as a filter or sort —
-	// see the grammar note in order-browser-scheduler-descriptor.ts.
-	const dimensionParts = `${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}`;
-	const filtered = Boolean(customerPart || cashierPart || storePart || rangePart);
-	if (rangePart && typeof limit === 'number' && limit >= ORDER_COMPLETE_REQUEST_LIMIT) {
-		return {
-			queryKey: `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=all`,
-			scoped: true,
-		};
+	if (orderby !== undefined && direction !== undefined) {
+		dimensions.orderby = orderby;
+		dimensions.order = direction;
 	}
-	const boundedLimit = Math.min(
-		Math.max(1, typeof limit === 'number' && Number.isFinite(limit) ? limit : 10),
-		ORDER_BROWSE_MAX_LIMIT
-	);
+	const ranged = afterSeconds !== undefined || beforeSeconds !== undefined;
+	if (ranged && typeof limit === 'number' && limit >= ORDER_COMPLETE_REQUEST_LIMIT) {
+		dimensions.limit = 'all';
+	} else if (limit !== undefined) {
+		dimensions.limit = limit;
+	}
+	const scoped =
+		dimensions.customerId !== undefined ||
+		dimensions.cashierId !== undefined ||
+		dimensions.store !== undefined ||
+		dimensions.afterSeconds !== undefined ||
+		dimensions.beforeSeconds !== undefined;
+	const residual = conditions.some((condition, index) => {
+		if (condition === null || typeof condition !== 'object') return true;
+		return Object.keys(condition as Record<string, unknown>).some(
+			(key) => !consumed[index]?.has(key)
+		);
+	});
 	return {
-		queryKey: `orders:browser:status=${statusValue}${dimensionParts}:search=${searchValue}:limit=${boundedLimit}`,
-		scoped: filtered,
+		dimensions,
+		scoped,
+		residual,
 	};
 }
-
-/**
- * The products browse-window grammar (ADR 0027 §2), the products mirror of
- * `orderBrowseDescriptor` above. The engine owns the authoritative parser
- * (`parseProductBrowseWindowDescriptor`); this builds the same string, as the orders
- * descriptor already does, rather than widening the engine's two-door surface.
- */
-const PRODUCT_BROWSE_WINDOW_STEP = 100;
-const PRODUCT_BROWSE_WINDOW_MAX_LIMIT = 1_000;
-const PRODUCT_BROWSE_DEFAULT_ORDERBY = 'menu_order';
-const PRODUCT_BROWSE_DEFAULT_ORDER = 'asc';
-const PRODUCT_STOCK_STATUSES = new Set(['instock', 'outofstock', 'onbackorder']);
 
 /**
  * UI sort field → WC core products `orderby`. Fields NOT in this map (sku, barcode,
  * stock, regular/sale price) have no Woo REST equivalent: those browses fall back to the
  * DEFAULT window rather than pretending a server-sorted slice exists.
  */
-const PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD: Record<string, string> = {
+const PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD: Record<
+	string,
+	NonNullable<ProductBrowseDimensions['orderby']>
+> = {
 	menu_order: 'menu_order',
 	id: 'id',
 	name: 'title',
@@ -314,39 +343,24 @@ const PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD: Record<string, string> = {
 
 export type RequirementSortPart = Record<string, 'asc' | 'desc'>;
 
-function productBrowseWindowDescriptor(
+function productBrowseDimensions(
 	selector: Record<string, unknown> | undefined,
 	limit: number | undefined,
 	sort: readonly RequirementSortPart[] | undefined
-): { queryKey: string; filtered: boolean; residual: boolean } {
-	// The grid extends its limit 10 rows at a time; quantizing to the window step keeps
-	// the coverage-lane space small (limit=100, 200, 300 …) instead of one lane per tick.
-	const requested =
-		typeof limit === 'number' && Number.isFinite(limit) && limit > 0
-			? limit
-			: PRODUCT_BROWSE_WINDOW_STEP;
-	const boundedLimit = Math.min(
-		Math.ceil(requested / PRODUCT_BROWSE_WINDOW_STEP) * PRODUCT_BROWSE_WINDOW_STEP,
-		PRODUCT_BROWSE_WINDOW_MAX_LIMIT
-	);
+): { dimensions: ProductBrowseDimensions; filtered: boolean; residual: boolean } {
+	const dimensions: ProductBrowseDimensions = {};
+	if (limit !== undefined) dimensions.limit = limit;
 	const [primary] = sort ?? [];
 	const [field, direction] = Object.entries(primary ?? {})[0] ?? [];
 	const orderby = field ? PRODUCT_BROWSE_ORDERBY_BY_SORT_FIELD[field] : undefined;
-	const order = direction === 'desc' ? 'desc' : 'asc';
-	const base = `products:browse-window:limit=${boundedLimit}`;
-	const sortPart =
-		orderby === undefined ||
-		(orderby === PRODUCT_BROWSE_DEFAULT_ORDERBY && order === PRODUCT_BROWSE_DEFAULT_ORDER)
-			? ''
-			: `:orderby=${orderby}:order=${order}`;
+	if (orderby !== undefined && direction !== undefined) {
+		dimensions.orderby = orderby;
+		dimensions.order = direction;
+	}
 	const { filters, residual } = productBrowseWindowFilters(selector);
-	const filterPart = ['category', 'tag', 'brand', 'featured', 'on_sale', 'stock_status']
-		.filter((field) => filters[field] !== undefined)
-		.map((field) => `:${field}=${filters[field]}`)
-		.join('');
 	return {
-		queryKey: `${base}${sortPart}${filterPart}`,
-		filtered: filterPart.length > 0,
+		dimensions: { ...dimensions, ...filters },
+		filtered: Object.keys(filters).length > 0,
 		residual,
 	};
 }
@@ -373,10 +387,16 @@ function eqValue(value: unknown): string | undefined {
 }
 
 export function productBrowseWindowFilters(selector: Record<string, unknown> | undefined): {
-	filters: Record<string, string>;
+	filters: Pick<
+		ProductBrowseDimensions,
+		'category' | 'tag' | 'brand' | 'featured' | 'on_sale' | 'stock_status'
+	>;
 	residual: boolean;
 } {
-	const filters: Record<string, string> = {};
+	const filters: Pick<
+		ProductBrowseDimensions,
+		'category' | 'tag' | 'brand' | 'featured' | 'on_sale' | 'stock_status'
+	> = {};
 	let residual = false;
 	// An absent selector is the UNFILTERED browse — nothing to represent, nothing left over.
 	// A nullish entry inside `$and` is a different thing: a predicate that cannot be encoded.
@@ -413,20 +433,20 @@ export function productBrowseWindowFilters(selector: Record<string, unknown> | u
 				return Number.isSafeInteger(id) && (id as number) > 0 ? (id as number) : null;
 			});
 			if (ids.length > 0 && ids.every((id): id is number => id !== null)) {
-				const previous = filters[remote]?.split(',').map(Number) ?? [];
-				filters[remote] = [...new Set([...previous, ...ids])].sort((a, b) => a - b).join(',');
+				const previous = filters[remote] ?? [];
+				filters[remote] = [...new Set([...previous, ...ids])].sort((a, b) => a - b);
 				consumed.add('$or');
 			}
 		}
 		for (const field of ['featured', 'on_sale'] as const) {
 			if (typeof record[field] === 'boolean') {
-				filters[field] = record[field] ? '1' : '0';
+				filters[field] = record[field];
 				consumed.add(field);
 			}
 		}
 		const stockValue = eqValue(record.stock_status);
-		if (PRODUCT_STOCK_STATUSES.has(stockValue as string)) {
-			filters.stock_status = stockValue as string;
+		if (stockValue === 'instock' || stockValue === 'outofstock' || stockValue === 'onbackorder') {
+			filters.stock_status = stockValue;
 			consumed.add('stock_status');
 		}
 		// `status` carries NO dimension on the key, yet `status: 'publish'` is still fully
@@ -440,18 +460,6 @@ export function productBrowseWindowFilters(selector: Record<string, unknown> | u
 	return { filters, residual };
 }
 
-/**
- * Whether the browse-window coverage lane for this products selector covers EXACTLY the
- * selector — i.e. every predicate reached the wire. The products mirror of
- * `isFullyRepresentedOrderSelector` in `@wcpos/core`, but kept here beside the encoder so
- * the two can never disagree.
- */
-export function isFullyRepresentedProductSelector(
-	selector: Record<string, unknown> | undefined
-): boolean {
-	return !productBrowseWindowFilters(selector).residual;
-}
-
 export interface RequirementInput {
 	id: string;
 	collectionName: string;
@@ -462,14 +470,20 @@ export interface RequirementInput {
 	forceRefresh?: boolean;
 }
 
+export type RequirementPlan = {
+	requirements: EngineRequirement[];
+	/** The browse selector was fully expressed as wire dimensions. */
+	represented: boolean;
+};
+
 /**
- * Build the engine requirements a query implies. Returns `[]` (no remote demand)
- * for the accepted local-residents-only cases.
+ * Build the engine requirements a query implies. An empty requirements array means the
+ * accepted local-residents-only case.
  */
-export function requirementsForQuery(input: RequirementInput): EngineRequirement[] {
+export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	const { collectionName, selector, limit } = input;
 	if (!isMappedCollection(collectionName)) {
-		return [];
+		return { requirements: [], represented: false };
 	}
 	const engineCollection = engineCollectionNameFor(collectionName);
 	const requirements: EngineRequirement[] = [];
@@ -500,22 +514,25 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 	}
 
 	if (requirements.length > 0) {
-		return requirements;
+		return { requirements, represented: false };
 	}
 
 	if (engineCollection === 'orders') {
-		const { queryKey, scoped } = orderBrowseDescriptor(selector, limit, input.sort);
+		const { dimensions, scoped, residual } = orderBrowseDimensions(selector, limit, input.sort);
 		const priority = input.priority ?? (scoped ? ORDER_SCOPED_QUERY_PRIORITY : undefined);
-		return [
-			{
-				id: `${input.id}:orders-query`,
-				collection: 'orders',
-				kind: 'query',
-				queryKey,
-				...(priority !== undefined ? { priority } : {}),
-				...(input.forceRefresh ? { forceRefresh: true } : {}),
-			},
-		];
+		return {
+			requirements: [
+				{
+					id: `${input.id}:orders-browse`,
+					collection: 'orders',
+					kind: 'orders-browse',
+					...dimensions,
+					...(priority !== undefined ? { priority } : {}),
+					...(input.forceRefresh ? { forceRefresh: true } : {}),
+				},
+			],
+			represented: !residual,
+		};
 	}
 
 	// Products browse → the browse window (ADR 0027 §2, #909). The window
@@ -524,18 +541,21 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 	// re-sorting the wrong slice of the catalog. Representable filters travel on the key;
 	// every other predicate keeps narrowing the resulting superset locally.
 	if (engineCollection === 'products') {
-		const descriptor = productBrowseWindowDescriptor(selector, limit, input.sort);
-		const priority = input.priority ?? (descriptor.filtered ? 700 : undefined);
-		return [
-			{
-				id: `${input.id}:products-browse-window`,
-				collection: 'products',
-				kind: 'query',
-				queryKey: descriptor.queryKey,
-				...(priority !== undefined ? { priority } : {}),
-				...(input.forceRefresh ? { forceRefresh: true } : {}),
-			},
-		];
+		const extraction = productBrowseDimensions(selector, limit, input.sort);
+		const priority = input.priority ?? (extraction.filtered ? 700 : undefined);
+		return {
+			requirements: [
+				{
+					id: `${input.id}:products-browse-window`,
+					collection: 'products',
+					kind: 'product-browse',
+					...extraction.dimensions,
+					...(priority !== undefined ? { priority } : {}),
+					...(input.forceRefresh ? { forceRefresh: true } : {}),
+				},
+			],
+			represented: !extraction.residual,
+		};
 	}
 
 	// Reference browse → an on-demand greedy pull at open (#952). These collections are no
@@ -545,18 +565,21 @@ export function requirementsForQuery(input: RequirementInput): EngineRequirement
 	// collection per mount — the boot-time server hammering this issue set out to remove.
 	// The one caller that legitimately forces (Clear & Sync refill) re-applies it below.
 	if (REFERENCE_ENGINE_COLLECTIONS.includes(engineCollection)) {
-		return [
-			{
-				id: `${input.id}:reference-refresh`,
-				collection: engineCollection,
-				kind: 'refresh',
-				priority: input.priority ?? 700,
-			},
-		];
+		return {
+			requirements: [
+				{
+					id: `${input.id}:reference-refresh`,
+					collection: engineCollection,
+					kind: 'refresh',
+					priority: input.priority ?? 700,
+				},
+			],
+			represented: false,
+		};
 	}
 
 	// Every other collection: unbounded browse → local residents only (ADR 0027).
-	return [];
+	return { requirements: [], represented: false };
 }
 
 /**
@@ -631,7 +654,7 @@ function requirementsForReset(
 				id: `${binding.id}:collection-reset`,
 				priority: 1000,
 				forceRefresh: true,
-			})
+			}).requirements
 		);
 	}
 	// Reset refill is the one path that must beat the dedupe window: the local collection was

@@ -292,14 +292,21 @@ describe('query bindings', () => {
 		await waitFor(() =>
 			expect(
 				engine.requireCalls.find(
-					(requirement) =>
-						requirement.kind === 'query' && requirement.queryKey?.includes('search=smith')
+					(requirement) => requirement.kind === 'orders-browse' && requirement.search === 'smith'
 				)
 			).toMatchObject({
 				collection: 'orders',
-				kind: 'query',
-				queryKey:
-					'orders:browser:status=processing:customer=42:cashier=7:store=12:after=1782864000:before=1783987200:orderby=date:order=desc:search=smith:limit=50',
+				kind: 'orders-browse',
+				status: 'processing',
+				customerId: 42,
+				cashierId: 7,
+				store: '12',
+				afterSeconds: 1782864000,
+				beforeSeconds: 1783987200,
+				orderby: 'date',
+				order: 'desc',
+				search: 'smith',
+				limit: 50,
 			})
 		);
 	});
