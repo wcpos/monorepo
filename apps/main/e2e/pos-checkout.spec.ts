@@ -59,8 +59,8 @@ async function omitPaymentLinkFromPushAcks(page: Page) {
 			}
 			// Throwing from a route handler surfaces as an unhandled rejection and
 			// kills the whole worker process (every test in the shard fails).
-			console.warn('[omitPaymentLinkFromPushAcks] Route handler failed; continuing:', error);
-			await route.fallback().catch(() => {});
+			console.warn('[omitPaymentLinkFromPushAcks] Route handler failed; aborting request:', error);
+			await route.abort().catch(() => {});
 		}
 	});
 }
