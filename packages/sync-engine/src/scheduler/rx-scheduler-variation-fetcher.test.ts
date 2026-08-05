@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -76,6 +77,33 @@ describe('createVariationsSchedulerFetcher', () => {
 			requestCount: 3,
 			completed: true,
 		});
+	});
+
+	it('paginates beyond the REST page cap to fulfill the task limit', async () => {
+		const repo = repository();
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (params.has('sku')) return response([]);
+			const page = Number(params.get('page'));
+			const start = (page - 1) * WOO_REST_MAX_PER_PAGE + 1;
+			const count = page === 1 ? WOO_REST_MAX_PER_PAGE : 1;
+			return response(Array.from({ length: count }, (_, index) => wrapper(start + index)));
+		});
+		const schedulerFetcher = createVariationsSchedulerFetcher({
+			baseUrl: BASE_URL,
+			repository: repo,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(variationTask({ limit: WOO_REST_MAX_PER_PAGE + 1 }));
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			`${BASE_URL}/variations?search=keyboard&per_page=${WOO_REST_MAX_PER_PAGE}&page=1`,
+			`${BASE_URL}/variations?search=keyboard&per_page=${WOO_REST_MAX_PER_PAGE}&page=2`,
+			`${BASE_URL}/variations?sku=keyboard&per_page=${WOO_REST_MAX_PER_PAGE}&page=1`,
+		]);
+		expect(repo.upsertMany.mock.calls[0]?.[0]).toHaveLength(WOO_REST_MAX_PER_PAGE + 1);
+		expect(result).toMatchObject({ documentCount: WOO_REST_MAX_PER_PAGE + 1, completed: true });
 	});
 
 	it('runs only the exact SKU leg for a two-character search', async () => {

@@ -106,7 +106,7 @@ export function createVariationsSchedulerFetcher(
 ): SchedulerFetcher {
 	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
 		const search = assertVariationSearchTask(task).trim();
-		const limit = taskLimit(task);
+		const limit = task.limit;
 		const pageSize = taskLimit(task, input.pullBatchSize);
 		const searchLeg =
 			search.length < FLEXSEARCH_MIN_TERM_LENGTH
