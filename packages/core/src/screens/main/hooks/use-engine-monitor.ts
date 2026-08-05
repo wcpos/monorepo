@@ -1,13 +1,11 @@
 import * as React from 'react';
 
-import { combineLatest, of } from 'rxjs';
+import { combineLatest, Observable, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { observeEngineDatabases, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
 import type { EngineStatus, RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
-
-import type { Observable } from 'rxjs';
 
 export type EngineCollectionCounts = Record<string, number>;
 export type EngineMutationCounts = {
@@ -18,6 +16,7 @@ export type EngineMutationCounts = {
 };
 
 type CountCollection = { count(): { $: Observable<number> } };
+type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
 type MutationCollection = {
 	find(query: { selector: { status: { $in: string[] }; collectionName?: { $eq: string } } }): {
 		$: Observable<readonly unknown[]>;
@@ -32,7 +31,9 @@ function subscribeToCollectionCounts(
 	engine: RxdbSyncEngine,
 	cb: (counts: EngineCollectionCounts) => void
 ): () => void {
-	const subscription = observeEngineDatabases(engine)
+	const subscription = new Observable<EngineDatabase | null>((subscriber) =>
+		engine.db$((database) => subscriber.next(database))
+	)
 		.pipe(
 			switchMap((database) => {
 				if (!database) return of(EMPTY_COLLECTION_COUNTS);
@@ -57,7 +58,9 @@ function subscribeToMutationCounts(
 	engine: RxdbSyncEngine,
 	cb: (counts: EngineMutationCounts) => void
 ): () => void {
-	const subscription = observeEngineDatabases(engine)
+	const subscription = new Observable<EngineDatabase | null>((subscriber) =>
+		engine.db$((database) => subscriber.next(database))
+	)
 		.pipe(
 			switchMap((database) => {
 				if (!database) return of({ pending: 0, pendingOrders: 0, conflicts: 0 });

@@ -331,7 +331,9 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 
 		const emissions: CensusTotals[] = [];
 		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
-		expect(Object.values(emissions.at(-1) ?? {}).every((entry) => entry === null)).toBe(true);
+		await vi.waitFor(() => expect(emissions.at(-1)).toBeDefined());
+		const latest = emissions.at(-1);
+		expect(Object.values(latest!).every((entry) => entry === null)).toBe(true);
 		const report = await engine.sync('query-total-retry');
 
 		expect(report.status).toBe('ran');

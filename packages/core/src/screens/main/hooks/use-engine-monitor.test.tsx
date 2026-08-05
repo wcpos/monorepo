@@ -3,6 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
+import { distinctUntilChanged } from 'rxjs/operators';
 
 import { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from '@wcpos/sync-engine';
 
@@ -11,11 +12,17 @@ import { useCollectionCounts, useMutationCounts } from './use-engine-monitor';
 type FakeDatabase = { collections: Record<string, unknown> };
 
 const mockDatabase$ = new BehaviorSubject<FakeDatabase | null>(null);
-const mockEngine = { database$: mockDatabase$ };
+const mockEngine = {
+	db$: (cb: (database: FakeDatabase | null) => void) => {
+		const subscription = mockDatabase$.subscribe(cb);
+		return () => subscription.unsubscribe();
+	},
+};
+const mockObserveEngineDatabases = () => mockDatabase$.pipe(distinctUntilChanged());
 
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: mockEngine }),
-	observeEngineDatabases: () => mockDatabase$,
+	observeEngineDatabases: () => mockObserveEngineDatabases(),
 }));
 
 function countDatabase(offset: number) {
@@ -57,22 +64,25 @@ function mutationDatabase(pending: number, conflicts: number, pendingOrders = pe
 describe('engine monitor hooks', () => {
 	afterEach(() => mockDatabase$.next(null));
 
-	it('re-subscribes collection counts when the engine database changes', () => {
+	it('re-subscribes collection counts after a same-database reset', () => {
 		const first = countDatabase(1);
-		const second = countDatabase(11);
+		const reset = countDatabase(11);
 		mockDatabase$.next(first.database);
 		const { result, unmount } = renderHook(() => useCollectionCounts());
 
 		expect(result.current).toEqual(
 			Object.fromEntries(SYNC_COLLECTION_NAMES.map((name, index) => [name, index + 1]))
 		);
-		act(() => mockDatabase$.next(second.database));
+		act(() => {
+			first.database.collections = reset.database.collections;
+			mockDatabase$.next(first.database);
+		});
 		expect(result.current).toEqual(
 			Object.fromEntries(SYNC_COLLECTION_NAMES.map((name, index) => [name, index + 11]))
 		);
 		act(() => first.counts.orders.next(99));
 		expect(result.current.orders).toBe(11);
-		act(() => second.counts.orders.next(50));
+		act(() => reset.counts.orders.next(50));
 		expect(result.current.orders).toBe(50);
 
 		unmount();
@@ -92,6 +102,24 @@ describe('engine monitor hooks', () => {
 		expect(result.current).toEqual({ pending: 3, pendingOrders: 1, conflicts: 0 });
 		act(() => mutations.pendingOrders$.next([]));
 		expect(result.current).toEqual({ pending: 3, pendingOrders: 0, conflicts: 0 });
+
+		unmount();
+	});
+
+	it('re-runs mutation queries after a same-database reset', () => {
+		const first = mutationDatabase(3, 0, 1);
+		const reset = mutationDatabase(5, 1, 2);
+		mockDatabase$.next(first.database);
+		const { result, unmount } = renderHook(() => useMutationCounts());
+
+		expect(result.current).toEqual({ pending: 3, pendingOrders: 1, conflicts: 0 });
+		act(() => {
+			first.database.collections = reset.database.collections;
+			mockDatabase$.next(first.database);
+		});
+		expect(result.current).toEqual({ pending: 5, pendingOrders: 2, conflicts: 1 });
+		act(() => first.pendingOrders$.next([]));
+		expect(result.current).toEqual({ pending: 5, pendingOrders: 2, conflicts: 1 });
 
 		unmount();
 	});
