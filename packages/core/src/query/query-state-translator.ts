@@ -2,7 +2,6 @@ import { parseRemoteId } from '../utils/parse-remote-id';
 
 import type { CollectionKey, FiltersOf, QueryStateOf, SortFieldOf } from './query-state-types';
 
-type Storage = 'promoted' | 'payload' | 'local';
 type Operator =
 	| 'taxonomy-many'
 	| 'value'
@@ -15,136 +14,53 @@ type Operator =
 	| 'exists';
 type FilterTranslator = {
 	legacyPath: string;
-	enginePath: string;
-	storage: Storage;
 	operator: Operator;
 };
 
-const entry = (
-	legacyPath: string,
-	enginePath: string,
-	storage: Storage,
-	operator: Operator = 'value'
-): FilterTranslator => ({ legacyPath, enginePath, storage, operator });
+const entry = (legacyPath: string, operator: Operator = 'value'): FilterTranslator => ({
+	legacyPath,
+	operator,
+});
 
 // requirementsForQuery reads these predicates directly from the selector root.
 const REQUIREMENT_TOP_LEVEL_FIELDS = new Set(['status', 'customer_id', 'dateRange']);
 
 export const FILTER_TRANSLATORS = {
 	products: {
-		categories: entry('categories', 'categoryIds', 'promoted', 'taxonomy-many'),
-		tags: entry('tags', 'payload.tags', 'payload', 'taxonomy-many'),
-		brands: entry('brands', 'brandIds', 'promoted', 'taxonomy-many'),
-		featured: entry('featured', 'featured', 'promoted'),
-		on_sale: entry('on_sale', 'onSale', 'promoted'),
-		stock_status: entry('stock_status', 'stockStatus', 'promoted'),
-		status: entry('status', 'payload.status', 'payload'),
+		categories: entry('categories', 'taxonomy-many'),
+		tags: entry('tags', 'taxonomy-many'),
+		brands: entry('brands', 'taxonomy-many'),
+		featured: entry('featured'),
+		on_sale: entry('on_sale'),
+		stock_status: entry('stock_status'),
+		status: entry('status'),
 	},
 	orders: {
-		status: entry('status', 'status', 'promoted'),
-		customer_id: entry('customer_id', 'customerId', 'promoted'),
-		cashier: entry('meta_data', 'payload.meta_data[_pos_user]', 'payload', 'metadata'),
-		store: entry(
-			'created_via',
-			'payload.created_via|payload.meta_data[_pos_store]',
-			'payload',
-			'store'
-		),
-		dateRange: entry('date_created_gmt', 'dateCreatedGmt', 'promoted', 'date-range'),
+		status: entry('status'),
+		customer_id: entry('customer_id'),
+		cashier: entry('meta_data', 'metadata'),
+		store: entry('created_via', 'store'),
+		dateRange: entry('date_created_gmt', 'date-range'),
 	},
 	coupons: {
-		discount_type: entry('discount_type', 'payload.discount_type', 'payload'),
-		status: entry('status', 'payload.status', 'payload'),
-		dateRange: entry('date_expires_gmt', 'payload.date_expires_gmt', 'payload', 'date-range'),
+		discount_type: entry('discount_type'),
+		status: entry('status'),
+		dateRange: entry('date_expires_gmt', 'date-range'),
 	},
 	variations: {
-		attributeMatches: entry('attributes', 'attributes', 'promoted', 'all-match'),
-		status: entry('status', 'payload.status', 'payload'),
+		attributeMatches: entry('attributes', 'all-match'),
+		status: entry('status'),
 	},
 	customers: {},
 	'tax-rates': {},
 	logs: {
-		level: entry('level', 'level', 'local', 'in'),
-		category_prefix: entry('category', 'category', 'local', 'prefix-range'),
-		has_actor: entry('actor', 'actor', 'local', 'exists'),
+		level: entry('level', 'in'),
+		category_prefix: entry('category', 'prefix-range'),
+		has_actor: entry('actor', 'exists'),
 	},
 } as const satisfies {
 	[C in CollectionKey]: { [F in keyof FiltersOf<C>]-?: FilterTranslator };
 };
-
-const sortPaths = {
-	products: {
-		id: 'wooProductId',
-		name: 'payload.name',
-		sku: 'payload.sku',
-		barcode: 'payload.barcode',
-		sortable_price: 'payload.price',
-		total_sales: 'payload.total_sales',
-		menu_order: 'payload.menu_order',
-		stock_quantity: 'stockQuantity',
-		stock_status: 'stockStatus',
-		price: 'price',
-		regular_price: 'payload.regular_price',
-		sale_price: 'payload.sale_price',
-		date_created_gmt: 'payload.date_created_gmt',
-		date_modified_gmt: 'payload.date_modified_gmt',
-	},
-	orders: {
-		status: 'status',
-		number: 'number',
-		customer_id: 'customerId',
-		total: 'sortable_total',
-		date_created_gmt: 'dateCreatedGmt',
-		date_modified_gmt: 'payload.date_modified_gmt',
-		date_completed_gmt: 'payload.date_completed_gmt',
-		date_paid_gmt: 'payload.date_paid_gmt',
-		payment_method: 'payload.payment_method',
-	},
-	coupons: {
-		code: 'payload.code',
-		amount: 'payload.amount',
-		discount_type: 'payload.discount_type',
-		status: 'payload.status',
-		usage_count: 'payload.usage_count',
-		date_expires_gmt: 'payload.date_expires_gmt',
-		date_created_gmt: 'payload.date_created_gmt',
-		date_modified_gmt: 'payload.date_modified_gmt',
-	},
-	variations: {
-		id: 'wooId',
-		name: 'payload.name',
-		sku: 'payload.sku',
-		menu_order: 'payload.menu_order',
-		price: 'price',
-		regular_price: 'payload.regular_price',
-		sale_price: 'payload.sale_price',
-		stock_quantity: 'stockQuantity',
-		stock_status: 'stockStatus',
-		date_created_gmt: 'payload.date_created_gmt',
-		date_modified_gmt: 'payload.date_modified_gmt',
-	},
-	customers: {
-		id: 'wooCustomerId',
-		first_name: 'payload.first_name',
-		last_name: 'payload.last_name',
-		email: 'payload.email',
-		role: 'payload.role',
-		username: 'payload.username',
-		date_created_gmt: 'payload.date_created_gmt',
-		date_modified_gmt: 'payload.date_modified_gmt',
-	},
-	'tax-rates': {
-		id: 'wooTaxRateId',
-		name: 'payload.name',
-		country: 'payload.country',
-		state: 'payload.state',
-		priority: 'payload.priority',
-		rate: 'payload.rate',
-		class: 'payload.class',
-		order: 'payload.order',
-	},
-	logs: { timestamp: 'timestamp', level: 'level', code: 'code' },
-} as const satisfies { [C in CollectionKey]: Record<SortFieldOf<C>, string> };
 
 const UI_SORT_FIELD_ALIASES = {
 	products: { price: 'sortable_price' },
@@ -236,7 +152,7 @@ export function translateQueryState<C extends CollectionKey>(
 	};
 	const sortField = normalizeQuerySortField(collection, state.sort.field)!;
 	const adapterSortField =
-		collection === 'orders' && sortField === 'total' ? sortPaths.orders.total : sortField;
+		collection === 'orders' && sortField === 'total' ? 'sortable_total' : sortField;
 	const sort: Record<string, 'asc' | 'desc'>[] = [{ [adapterSortField]: state.sort.direction }];
 	if ((collection === 'products' || collection === 'variations') && sortField === 'menu_order') {
 		// 1.9 catalog-order contract (#810, variations #871): equal menu_order values (usually 0)
@@ -247,7 +163,6 @@ export function translateQueryState<C extends CollectionKey>(
 		collectionName: collection === 'tax-rates' ? 'taxes' : collection,
 		selector,
 		sort,
-		sortEnginePath: (sortPaths[collection] as Record<string, string>)[sortField],
 		limit: state.limit,
 		search: state.search.trim(),
 	};

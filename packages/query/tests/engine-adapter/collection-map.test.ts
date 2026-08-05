@@ -1,6 +1,8 @@
 import {
+	adapterDerivedFieldsFor,
 	collectionMap,
 	legacyFieldForEnginePath,
+	promotedColumnsFor,
 	resolveLegacyField,
 } from '../../src/engine-adapter/collection-map';
 
@@ -69,167 +71,90 @@ describe('engine adapter collection map', () => {
 		});
 	});
 
-	it.each([
-		[
-			'products',
-			[
-				'uuid',
-				'id',
-				'stock_status',
-				'featured',
-				'on_sale',
-				'categories',
-				'brands',
-				'tags',
-				'meta_data',
-				'name',
-				'status',
-				'category',
-				'sku',
-				'barcode',
-				'type',
-				'stock_quantity',
-				'date_created_gmt',
-				'sortable_price',
-				'date_modified_gmt',
-				'total_sales',
-				'menu_order',
-				'price',
-				'regular_price',
-				'sale_price',
-				'tax_status',
-				'tax_class',
-				'manage_stock',
-				'attributes',
-				'images',
-				'grouped_products',
-				'variations',
-				'cost_of_goods_sold',
-				'slug',
-			],
-		],
-		[
-			'variations',
-			[
-				'uuid',
-				'id',
-				'attributes',
-				'name',
-				'sku',
-				'barcode',
-				'menu_order',
-				'price',
-				'regular_price',
-				'sale_price',
-				'on_sale',
-				'tax_status',
-				'tax_class',
-				'stock_quantity',
-				'manage_stock',
-				'stock_status',
-				'image',
-				'cost_of_goods_sold',
-				'date_created_gmt',
-				'date_modified_gmt',
-				'parent_id',
-			],
-		],
-		[
-			'orders',
-			[
-				'uuid',
-				'id',
-				'status',
-				'customer_id',
-				'date_created_gmt',
-				'meta_data',
-				'created_via',
-				'number',
-				'payment_method',
-				'sortable_total',
-				'billing',
-				'shipping',
-				'payment_method_title',
-				'total',
-				'currency_symbol',
-				'refunds',
-				'customer_note',
-				'date_modified_gmt',
-				'date_completed_gmt',
-				'date_paid_gmt',
-				'discount_total',
-				'total_tax',
-				'needs_payment',
-				'tax_lines',
-				'shipping_lines',
-				'line_items',
-				'links',
-				'slug',
-				'cashier',
-				'select',
-			],
-		],
-		[
-			'customers',
-			[
-				'uuid',
-				'id',
-				'role',
-				'last_name',
-				'first_name',
-				'email',
-				'username',
-				'date_created_gmt',
-				'date_modified_gmt',
-				'avatar_url',
-				'billing',
-				'shipping',
-				'slug',
-			],
-		],
-		[
-			'taxes',
-			[
-				'uuid',
-				'id',
-				'country',
-				'state',
-				'postcodes',
-				'cities',
-				'rate',
-				'name',
-				'priority',
-				'compound',
-				'shipping',
-				'class',
-				'order',
-			],
-		],
-		['products/categories', ['uuid', 'id', 'name', 'parent']],
-		['products/tags', ['uuid', 'id', 'name']],
-		['products/brands', ['uuid', 'id', 'name', 'parent']],
-		[
-			'coupons',
-			[
-				'uuid',
-				'id',
-				'status',
-				'discount_type',
-				'date_expires_gmt',
-				'code',
-				'date_created_gmt',
-				'date_modified_gmt',
-				'amount',
-				'description',
-				'usage_count',
-				'usage_limit',
-				'slug',
-				'active',
-			],
-		],
-	] as const)('contains every census field for %s', (collection, expectedFields) => {
-		expect(Object.keys(collectionMap[collection].fields).sort()).toEqual(
-			[...expectedFields].sort()
-		);
+	it('reproduces promoted order columns from the legacy payload', () => {
+		expect(
+			promotedColumnsFor('orders', {
+				number: 17,
+				date_created_gmt: null,
+				status: undefined,
+				total: '12.34',
+				customer_id: '42',
+			})
+		).toEqual({
+			number: '17',
+			dateCreatedGmt: '',
+			status: '',
+			total: '12.34',
+			customerId: 42,
+		});
+	});
+
+	it('reproduces promoted product and variation coercions', () => {
+		expect(
+			promotedColumnsFor('products', {
+				price: '12.345',
+				stock_status: null,
+				type: 7,
+				categories: [{ id: '3' }, 5, { id: 0 }, null],
+				brands: undefined,
+				on_sale: 0,
+				featured: 'yes',
+				stock_quantity: '',
+			})
+		).toEqual({
+			price: 12.35,
+			stockStatus: '',
+			type: '7',
+			categoryIds: [3, 5],
+			brandIds: [],
+			onSale: false,
+			featured: true,
+			stockQuantity: null,
+		});
+
+		expect(
+			promotedColumnsFor('variations', {
+				parent_id: 'bad',
+				price: '-4.25',
+				stock_status: 'instock',
+				attributes: [
+					{ id: '2', name: 'Size', option: 'Large' },
+					{ id: null, name: '', option: 'ignored' },
+				],
+				stock_quantity: '8',
+			})
+		).toEqual({
+			parentId: null,
+			price: -4.25,
+			stockStatus: 'instock',
+			attributes: [{ id: 2, name: 'Size', option: 'Large' }],
+			stockQuantity: 8,
+		});
+	});
+
+	it('derives only adapter-owned identity and computed legacy fields', () => {
+		expect(adapterDerivedFieldsFor('products')).toEqual(['uuid', 'sortable_price']);
+		expect(adapterDerivedFieldsFor('variations')).toEqual(['uuid']);
+		expect(adapterDerivedFieldsFor('orders')).toEqual([
+			'uuid',
+			'sortable_total',
+			'cashier',
+			'select',
+		]);
+		expect(adapterDerivedFieldsFor('customers')).toEqual(['uuid']);
+		expect(adapterDerivedFieldsFor('coupons')).toEqual(['uuid', 'active']);
+	});
+
+	it('keeps explicit rows only when payload fallback cannot reproduce the entry', () => {
+		for (const entry of Object.values(collectionMap)) {
+			for (const field of Object.values(entry.fields)) {
+				const fallbackKeys = ['enginePath', 'kind', 'legacy'];
+				const isPayloadIdentity =
+					field.kind === 'payload' && field.enginePath === `payload.${field.legacy}`;
+				expect(
+					isPayloadIdentity && Object.keys(field).every((key) => fallbackKeys.includes(key))
+				).toBe(false);
+			}
+		}
 	});
 });

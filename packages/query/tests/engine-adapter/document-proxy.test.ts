@@ -114,17 +114,12 @@ describe('wrapEngineDocument', () => {
 		};
 		const initialOrder: Record<string, unknown> = {
 			id: 'order-uuid',
-			payload: {},
+			payload: { links: initialLinks },
 		};
 		const updatedOrder: Record<string, unknown> = {
 			id: 'order-uuid',
-			payload: {},
+			payload: { links: updatedLinks },
 		};
-		const linksField = (collectionMap.orders.fields as Record<string, FieldMapEntry>).links;
-		if (linksField) {
-			setPath(initialOrder, linksField.enginePath, initialLinks);
-			setPath(updatedOrder, linksField.enginePath, updatedLinks);
-		}
 		const source = fakeRxDocument(initialOrder as EngineDocument);
 		const proxy = wrapEngineDocument('orders', source.document) as {
 			links: unknown;

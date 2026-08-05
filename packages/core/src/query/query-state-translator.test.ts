@@ -37,7 +37,6 @@ describe('query-state translator', () => {
 
 		expect(translateQueryState('products', state)).toMatchObject({
 			sort: [{ total_sales: 'desc' }],
-			sortEnginePath: 'payload.total_sales',
 		});
 	});
 
@@ -53,7 +52,6 @@ describe('query-state translator', () => {
 
 			expect(translateQueryState('products', state)).toMatchObject({
 				sort: [{ menu_order: direction }, { id: 'asc' }],
-				sortEnginePath: 'payload.menu_order',
 			});
 		}
 	);
@@ -68,7 +66,6 @@ describe('query-state translator', () => {
 
 		expect(translateQueryState('variations', state)).toMatchObject({
 			sort: [{ menu_order: 'asc' }, { id: 'asc' }],
-			sortEnginePath: 'payload.menu_order',
 		});
 	});
 
@@ -86,19 +83,6 @@ describe('query-state translator', () => {
 	});
 
 	it('preserves every legacy products filter selector shape', () => {
-		expect(FILTER_TRANSLATORS.products.categories).toMatchObject({
-			storage: 'promoted',
-			enginePath: 'categoryIds',
-		});
-		expect(FILTER_TRANSLATORS.products.tags).toMatchObject({
-			storage: 'payload',
-			enginePath: 'payload.tags',
-		});
-		expect(FILTER_TRANSLATORS.products.brands).toMatchObject({
-			storage: 'promoted',
-			enginePath: 'brandIds',
-		});
-
 		const products = translateQueryState('products', {
 			search: '',
 			filters: {

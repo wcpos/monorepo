@@ -11,7 +11,7 @@ import type {
 	ProductDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
-import { useQueryManager } from '@wcpos/query';
+import { adapterDerivedFieldsFor, promotedColumnsFor, useQueryManager } from '@wcpos/query';
 import {
 	deriveBarcodeFromPayload,
 	getActiveBarcodeSelectors,
@@ -38,15 +38,6 @@ const WRITEABLE_COLLECTIONS = new Set<WriteableCollection>([
 	'variations',
 	'customers',
 	'coupons',
-]);
-
-const ADAPTER_DERIVED_FIELDS = new Set([
-	'uuid',
-	'sortable_price',
-	'sortable_total',
-	'active',
-	'cashier',
-	'select',
 ]);
 
 type QueryManager = ReturnType<typeof useQueryManager>;
@@ -77,74 +68,21 @@ export function documentRecordId(document: unknown): string | null {
 	return typeof identity === 'string' && identity.length > 0 ? identity : null;
 }
 
-function finiteOrNull(value: unknown): number | null {
-	if (value === null || value === undefined || value === '') return null;
-	const numeric = Number(value);
-	return Number.isFinite(numeric) ? numeric : null;
-}
-
-function taxonomyIds(value: unknown): number[] {
-	if (!Array.isArray(value)) return [];
-	return value
-		.map((entry) => Number((entry as { id?: unknown } | null)?.id ?? entry))
-		.filter((id) => Number.isFinite(id) && id > 0);
-}
-
-function variationAttributes(value: unknown): { id: number; name: string; option: string }[] {
-	if (!Array.isArray(value)) return [];
-	return value
-		.map((entry) => ({
-			id: Number((entry as { id?: unknown } | null)?.id) || 0,
-			name: String((entry as { name?: unknown } | null)?.name ?? ''),
-			option: String((entry as { option?: unknown } | null)?.option ?? ''),
-		}))
-		.filter(({ name, option }) => name !== '' && option !== '');
-}
-
 function withPromotedFields(
 	collection: WriteableCollection,
 	resident: Record<string, unknown>
 ): Record<string, unknown> {
 	const payload = (resident.payload ?? {}) as Record<string, unknown>;
-	switch (collection) {
-		case 'orders':
-			return {
-				...resident,
-				number: String(payload.number ?? ''),
-				dateCreatedGmt: String(payload.date_created_gmt ?? ''),
-				status: String(payload.status ?? ''),
-				total: String(payload.total ?? ''),
-				customerId: Number(payload.customer_id ?? 0),
-			};
-		case 'products':
-			return {
-				...resident,
-				price: Math.max(0, Math.round((Number(payload.price) || 0) * 100) / 100),
-				stockStatus: String(payload.stock_status ?? ''),
-				type: String(payload.type ?? ''),
-				categoryIds: taxonomyIds(payload.categories),
-				brandIds: taxonomyIds(payload.brands),
-				onSale: Boolean(payload.on_sale),
-				featured: Boolean(payload.featured),
-				stockQuantity: finiteOrNull(payload.stock_quantity),
-			};
-		case 'variations':
-			return {
-				...resident,
-				parentId: finiteOrNull(payload.parent_id),
-				price: Number(payload.price) || 0,
-				stockStatus: String(payload.stock_status ?? ''),
-				attributes: variationAttributes(payload.attributes),
-				stockQuantity: finiteOrNull(payload.stock_quantity),
-			};
-		default:
-			return resident;
-	}
+	return { ...resident, ...promotedColumnsFor(collection, payload) };
 }
 
-function syncableChanges(changes: Record<string, unknown>): Record<string, unknown> {
+function syncableChanges(
+	collection: WriteableCollection,
+	changes: Record<string, unknown>
+): Record<string, unknown> {
+	const adapterDerivedFields = new Set(adapterDerivedFieldsFor(collection));
 	return Object.fromEntries(
-		Object.entries(changes).filter(([field]) => !ADAPTER_DERIVED_FIELDS.has(field))
+		Object.entries(changes).filter(([field]) => !adapterDerivedFields.has(field))
 	);
 }
 
@@ -201,7 +139,7 @@ async function applyEngineResidentChanges(
 	return (await resident.incrementalModify((old) => {
 		const priorPayload = (old.payload ?? {}) as Record<string, unknown>;
 		let payload = cloneDeep(priorPayload);
-		for (const [field, value] of Object.entries(syncableChanges(changes))) {
+		for (const [field, value] of Object.entries(syncableChanges(collection, changes))) {
 			set(payload, field, value);
 		}
 		if (collection === 'products' || collection === 'variations') {
@@ -304,7 +242,10 @@ export async function insertEngineResident(input: {
 	payload: Record<string, unknown>;
 }): Promise<EngineResident> {
 	const residentCollection = await activeCollection(input.manager, input.collection);
-	const payload = ensureRecordMetadata(syncableChanges(input.payload), input.recordId);
+	const payload = ensureRecordMetadata(
+		syncableChanges(input.collection, input.payload),
+		input.recordId
+	);
 	const common: Record<string, unknown> = {
 		id: input.recordId,
 		payload,
@@ -392,7 +333,7 @@ export const useLocalMutation = () => {
 				if (engineCollection && !isTemporaryOrder) {
 					const recordId = documentRecordId(document);
 					if (!recordId) throw new Error(`Missing uuid for ${engineCollection} mutation`);
-					const syncChanges = syncableChanges(changes);
+					const syncChanges = syncableChanges(engineCollection, changes);
 					if (Object.keys(syncChanges).length > 0) {
 						await patchAndEnqueueEngineResident({
 							manager,
