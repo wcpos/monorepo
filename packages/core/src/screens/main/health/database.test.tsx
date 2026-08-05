@@ -101,7 +101,7 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 		gatedBy: null,
 		lanes: {},
 	}),
-	useMutationCounts: () => ({ conflicts: 0, pending: 0 }),
+	useMutationCounts: () => ({ conflicts: 0, pending: 0, rejected: 0 }),
 }));
 jest.mock('./components', () => ({
 	Callout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

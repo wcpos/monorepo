@@ -259,6 +259,14 @@ describe('RecordMutationQueue', () => {
 		const row = { ...mut({ mutationId: 'durable-v2' }), seq: 7, status: 'conflicted' as const };
 		expect(recordMutationQueueMigrationStrategies[3](row)).toEqual(row);
 	});
+
+	it('#832: the v3 → v4 migration passes a dead letter through untouched (additive fields only)', () => {
+		// A pre-#832 dead letter has no recorded reason and no requeue provenance —
+		// it must still arrive intact and requeue-able, because these are exactly the
+		// stranded sales the recovery path exists to rescue.
+		const row = { ...mut({ mutationId: 'stranded-v3' }), seq: 7, status: 'rejected' as const };
+		expect(recordMutationQueueMigrationStrategies[4](row)).toEqual(row);
+	});
 });
 
 describe('RecordMutationQueue — conditional (CAS) transitions (#507 P1-2)', () => {

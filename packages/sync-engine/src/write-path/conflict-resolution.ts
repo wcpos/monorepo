@@ -3,10 +3,21 @@ import type { StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { seedTargetedOrderSchedulerTask } from '../scheduler';
 import { fetchOrderServerRevision } from './write-drain-lane';
-import { queueFor } from './write-intents';
+import { queueFor, requeueRejectedMutation } from './write-intents';
 
 import type { EngineRequirement, RequirementHandle } from '../require-plane';
 import type { RxDatabase } from 'rxdb';
+
+/**
+ * How a caller settles one terminal queue row.
+ *  - 'retry-with-server-base' — 'conflicted' / 'needs-revision' only: re-stamp
+ *    the base to the server's current revision and re-pend the SAME intent.
+ *  - 'requeue-rebuilt' — 'rejected' only (#832): rebuild the payload from the
+ *    current resident through the normal enqueue pipeline and queue THAT. The
+ *    rejected payload is never re-sent; see `requeueRejectedMutation`.
+ *  - 'discard' — any terminal row: drop the local intent, restore server truth.
+ */
+export type ConflictResolutionChoice = 'retry-with-server-base' | 'requeue-rebuilt' | 'discard';
 
 type ConflictResolutionDeps = {
 	assertNotDisposed: () => void;
@@ -16,6 +27,8 @@ type ConflictResolutionDeps = {
 	activeDatabase: () => RxDatabase | null;
 	fetcher: (url: string, init?: RequestInit) => Promise<Response>;
 	ports: { site: { syncBaseUrl: string }; now?: () => number };
+	/** Mints the fresh mutationId a rebuilt requeue must carry (#832). */
+	mintUuid: () => string;
 	requirePlane: { require: (requirement: EngineRequirement) => RequirementHandle };
 	diagnostics: SyncObserver;
 	writeDrainLane: { noteQueueDepth: (depth: number) => void };
@@ -24,7 +37,7 @@ type ConflictResolutionDeps = {
 
 export function createConflictResolution(deps: ConflictResolutionDeps) {
 	// prettier-ignore
-	const { assertNotDisposed, readySettledForSync, manager, databaseByScopeId, activeDatabase, fetcher, ports, requirePlane, diagnostics, writeDrainLane, scheduleStatusChange } = deps;
+	const { assertNotDisposed, readySettledForSync, manager, databaseByScopeId, activeDatabase, fetcher, ports, mintUuid, requirePlane, diagnostics, writeDrainLane, scheduleStatusChange } = deps;
 
 	return {
 		conflicts: async () => {
@@ -39,10 +52,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 					entry.status === 'rejected'
 			);
 		},
-		resolveConflict: async (
-			mutationId: string,
-			resolution: 'retry-with-server-base' | 'discard'
-		) => {
+		resolveConflict: async (mutationId: string, resolution: ConflictResolutionChoice) => {
 			assertNotDisposed();
 			await readySettledForSync;
 			// Scope-guarded like write(): the resolution writes into the captured
@@ -62,8 +72,19 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 				) {
 					throw new Error(`resolveConflict: terminal mutation "${mutationId}" not found`);
 				}
+				// A dead letter carries a payload the server has ALREADY permanently
+				// refused. Re-pending that exact intent against a fresher base cannot
+				// change the verdict — only a rebuild can (#832), so the two paths stay
+				// strictly separated by status.
 				if (resolution === 'retry-with-server-base' && entry.status === 'rejected') {
-					throw new Error('resolveConflict: rejected mutations can only be discarded');
+					throw new Error(
+						'resolveConflict: rejected mutations can only be discarded or requeued (requeue-rebuilt)'
+					);
+				}
+				if (resolution === 'requeue-rebuilt' && entry.status !== 'rejected') {
+					throw new Error(
+						`resolveConflict: requeue-rebuilt applies only to rejected mutations — "${mutationId}" is ${entry.status}`
+					);
 				}
 				// The retry's base: a 'conflicted' row carries the 409's server
 				// revision; a 'needs-revision' row (or a conflicted row whose 409
@@ -178,6 +199,19 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 								sync: { ...((data.sync ?? {}) as object), revision },
 							}));
 						}
+					} else if (resolution === 'requeue-rebuilt') {
+						// Rebuild from the CURRENT resident through the normal enqueue
+						// pipeline, then retire the dead letter (see requeueRejectedMutation
+						// for why rebuild and not replay). Nothing else in this method
+						// applies: a rejected write never reached the server, so there is no
+						// server truth to adopt and no revision to re-anchor.
+						await requeueRejectedMutation({
+							db: database,
+							entry,
+							mintUuid,
+							now: () => new Date(ports.now !== undefined ? ports.now() : Date.now()).toISOString(),
+							observe: diagnostics,
+						});
 					} else {
 						const doc = (await database.collections[entry.collectionName]
 							?.findOne(entry.recordId)

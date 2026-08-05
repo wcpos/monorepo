@@ -67,7 +67,7 @@ import {
 	MUTATION_QUEUE_RXDB_COLLECTION,
 	type SyncCollectionName,
 } from '../collections/engine-collections';
-import { stripNonStringMetaDisplayFields } from '../materialization/strip-order-meta-display';
+import { sanitizeOutboundOrderPayload } from '../materialization/sanitize-outbound-order-payload';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
 
@@ -128,6 +128,11 @@ export function queueFor(db: RxDatabase): RecordMutationQueue {
  * pull-apply guard and the reset confirmation both key off it). Update/delete
  * require the record resident; update's baseRevision defaults to the record's
  * stored `sync.revision` (the same sourcing as the web host).
+ *
+ * `provenance` (#832) rides onto whatever row this call produces — a plain
+ * enqueue or a coalesced replacement — so a dead letter's rebuilt requeue is
+ * traceable back to the row it replaces without duplicating any of the build,
+ * sanitize, coalesce, or dirty-mark logic below.
  */
 export async function enqueueWriteIntent(input: {
 	db: RxDatabase;
@@ -135,12 +140,13 @@ export async function enqueueWriteIntent(input: {
 	mintUuid: () => string;
 	now: () => string;
 	observe?: SyncObserver;
+	provenance?: { requeuedFrom: string; requeueCount: number };
 }): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }> {
 	const intent =
 		input.intent.collection === 'orders' && input.intent.operation !== 'delete'
 			? {
 					...input.intent,
-					payload: stripNonStringMetaDisplayFields(input.intent.payload),
+					payload: sanitizeOutboundOrderPayload(input.intent.payload),
 				}
 			: input.intent;
 	const deps = { mintUuid: input.mintUuid, now: input.now };
@@ -309,6 +315,16 @@ export async function enqueueWriteIntent(input: {
 			}
 		}
 
+		// Requeue provenance (#832) rides on the row this iteration produces, whether
+		// it is enqueued plainly or swapped into a coalesce replacement below.
+		if (input.provenance) {
+			mutation = {
+				...mutation,
+				requeuedFrom: input.provenance.requeuedFrom,
+				requeueCount: input.provenance.requeueCount,
+			};
+		}
+
 		if (prior) {
 			const operation = prior.operation === 'create' ? ('create' as const) : mutation.operation;
 			// Re-materialize the coalesced SNAPSHOT (intent payloads are partial):
@@ -327,7 +343,7 @@ export async function enqueueWriteIntent(input: {
 				operation === 'delete'
 					? mutation.payload
 					: mutation.collectionName === 'orders'
-						? stripNonStringMetaDisplayFields(mergedPayload)
+						? sanitizeOutboundOrderPayload(mergedPayload)
 						: mergedPayload;
 			const replacement = {
 				...mutation,
@@ -393,6 +409,173 @@ export async function enqueueWriteIntent(input: {
 	throw new Error(
 		`write(${intent.operation}): the mutation queue kept changing under "${intent.recordId}" — retry the intent`
 	);
+}
+
+/**
+ * DEAD-LETTER RECOVERY (#832): turn one permanently-rejected row back into
+ * pushable work by REBUILDING its payload from the record as it stands NOW, and
+ * enqueueing that through the pipeline above.
+ *
+ * Rebuild, not replay. The mutation that dead-lettered is a frozen snapshot of a
+ * payload the server has already refused; re-sending it earns the same 4xx
+ * forever. The incident this exists for is exactly that: a guest checkout pushed
+ * `billing.email: ''`, wc/v3 answered 400, the CREATE dead-lettered, and the sale
+ * has lived only on the cashier's device ever since. The client no longer sends
+ * that field — but only because the ENQUEUE path sanitizes it
+ * (`sanitizeOutboundOrderPayload`). So recovery routes through
+ * `enqueueWriteIntent`: the resident record's stored `payload` is the local
+ * truth, and running it through the normal build → sanitize → coalesce → dirty-
+ * mark path means every sanitizer that has landed since the rejection applies,
+ * without this function knowing what any of them are.
+ *
+ * Consequences of that choice, deliberately:
+ *  - a FRESH `mutationId`. The payload differs from the rejected one, and the
+ *    server replays by mutationId — reusing it would let a server-side dedupe
+ *    answer with the old verdict or the old document.
+ *  - the row lands at the queue TAIL (or coalesces into the record's last
+ *    pending row, which for a rejected CREATE correctly yields one create
+ *    carrying the merged snapshot). A dead letter has no queue position to
+ *    defend: nothing is ordered behind a mutation the server refused.
+ *  - the dead letter is removed only AFTER the replacement is durably enqueued.
+ *    A crash in between leaves the dead letter listed and requeue-able — visible
+ *    and recoverable — where the reverse order could drop a completed sale that
+ *    exists nowhere else.
+ *  - `requeueCount` increments per recovery and SURVIVES a second dead-lettering
+ *    (the drain preserves it), so "requeued twice, still refused" is visible
+ *    instead of reading as a fresh failure. There is no automatic retry: this
+ *    runs only from an explicit `resolveConflict` call.
+ *
+ * Throws — leaving the dead letter untouched and still listed — in every case
+ * where recovery would do harm rather than good:
+ *  - the row is no longer 'rejected' (a concurrent resolution already settled
+ *    it), so this call would produce a second live row for one dead letter;
+ *  - the record is not resident: nothing to rebuild from, and inventing a
+ *    payload from the rejected snapshot is the replay this exists to avoid;
+ *  - the record has a DELETE queued, before or during the rebuild: the dead
+ *    letter is an OLD intent, and recovering it would cancel a deletion the
+ *    cashier asked for more recently;
+ *  - a same-record push is in flight ('claimed'): the replacement could only
+ *    append behind it, which for a rejected CREATE means an update reaching the
+ *    server before the record exists.
+ * Discard — or, for the in-flight case, a retry a moment later — is the honest
+ * resolution.
+ */
+export async function requeueRejectedMutation(input: {
+	db: RxDatabase;
+	/** The dead letter to recover. Must still be status 'rejected'. */
+	entry: QueuedMutation;
+	mintUuid: () => string;
+	now: () => string;
+	observe?: SyncObserver;
+}): Promise<{ mutationId: string; recordId: string }> {
+	const { entry } = input;
+	const queue = queueFor(input.db);
+	const collection = collectionOf(input.db, entry.collectionName);
+	// Re-read the dead letter INSIDE this operation. The caller matched it from an
+	// earlier snapshot, and two resolutions racing (two windows, a double-tap that
+	// beat the button's disabled state) would otherwise each rebuild and each
+	// remove, leaving two live rows for one dead letter.
+	const current = (await queue.all()).find((item) => item.mutationId === entry.mutationId);
+	if (!current || current.status !== 'rejected') {
+		throw new Error(
+			`requeue: dead letter "${entry.mutationId}" was already settled — refresh the list`
+		);
+	}
+	const doc = (await collection.findOne(entry.recordId).exec()) as MutationDoc | null;
+	if (!doc) {
+		throw new Error(
+			`requeue: ${entry.collectionName}/${entry.recordId} is no longer on this device — there is nothing to rebuild the payload from; discard instead`
+		);
+	}
+	const sameRecord = (rows: readonly QueuedMutation[]): QueuedMutation[] =>
+		rows.filter(
+			(item) => item.collectionName === entry.collectionName && item.recordId === entry.recordId
+		);
+	// Two rows the rebuild must never step around:
+	//  - a queued DELETE supersedes the dead letter (the same rule the born-twice
+	//    snapshot follows below). The rebuilt intent would COALESCE INTO it — the
+	//    coalescer takes the INCOMING operation, so delete∘update = update — and
+	//    silently cancel a deletion the cashier asked for more recently. A dead
+	//    letter is an OLD intent being recovered; an old intent never wins.
+	//  - a CLAIMED successor is a push already in flight. It cannot coalesce, so
+	//    the rebuild would append BEHIND it — and for a rejected CREATE that means
+	//    an update reaching the server before the record exists. Refusing and
+	//    asking for a retry costs a second; guessing costs a spurious 404 dead
+	//    letter on top of the one being recovered.
+	const queued = sameRecord(await queue.pending());
+	if (queued.some((item) => item.operation === 'delete')) {
+		throw new Error(
+			`requeue: ${entry.collectionName}/${entry.recordId} is queued for deletion — sending the refused change again would undo that; discard instead`
+		);
+	}
+	if (queued.some((item) => item.status === 'claimed')) {
+		throw new Error(
+			`requeue: another change to ${entry.collectionName}/${entry.recordId} is being sent right now — try again in a moment`
+		);
+	}
+	const resident = doc.toJSON() as { payload?: Record<string, unknown> };
+	const residentPayload = resident.payload ?? {};
+	const intent: WriteIntent =
+		entry.operation === 'delete'
+			? {
+					collection: entry.collectionName as SyncCollectionName,
+					operation: 'delete',
+					recordId: entry.recordId,
+				}
+			: {
+					collection: entry.collectionName as SyncCollectionName,
+					operation: entry.operation,
+					recordId: entry.recordId,
+					payload: residentPayload,
+					...(entry.explicit === true ? { explicit: true } : {}),
+				};
+	const receipt = await enqueueWriteIntent({
+		db: input.db,
+		intent,
+		mintUuid: input.mintUuid,
+		now: input.now,
+		...(input.observe ? { observe: input.observe } : {}),
+		provenance: {
+			requeuedFrom: entry.mutationId,
+			requeueCount: (entry.requeueCount ?? 0) + 1,
+		},
+	});
+	// TOCTOU compensation: a delete for this record can enqueue in the window
+	// between the check above and this enqueue, and it would now sit AHEAD of the
+	// replacement — a rebuilt create would then recreate a record the cashier just
+	// deleted. Unwind (the row is still pending; removePending refuses if a drain
+	// claimed it, in which case the push is already in flight and cancelling it
+	// would be worse) and refuse, leaving the dead letter listed and recoverable.
+	const raced = sameRecord(await queue.pending()).find(
+		(item) => item.operation === 'delete' && item.mutationId !== receipt.mutationId
+	);
+	if (raced) {
+		await queue.removePending(receipt.mutationId);
+		throw new Error(
+			`requeue: ${entry.collectionName}/${entry.recordId} was queued for deletion while it was being rebuilt — discard instead`
+		);
+	}
+	// The replacement is durable; retire the dead letter. If this remove fails the
+	// dead letter simply stays listed — a duplicate the cashier can discard — which
+	// is the failure direction that never loses a sale.
+	await queue.remove([entry.mutationId]);
+	// The dead-letter cleanup dropped this id from the record's pendingMutationIds
+	// when it was rejected; enqueueWriteIntent has already re-marked the record
+	// dirty under the replacement's id, so no extra bookkeeping is owed here.
+	input.observe?.({
+		type: 'queue.write.requeue-rebuilt',
+		level: 'warn',
+		collection: entry.collectionName,
+		fields: {
+			recordId: entry.recordId,
+			mutationId: entry.mutationId,
+			requeuedMutationId: receipt.mutationId,
+			requeueCount: (entry.requeueCount ?? 0) + 1,
+			rejectedStatus: entry.rejectedStatus,
+			rejectedReason: entry.rejectedReason,
+		},
+	});
+	return { mutationId: receipt.mutationId, recordId: receipt.recordId };
 }
 
 /**
@@ -467,7 +650,7 @@ export async function requeueBornTwiceSnapshot(input: {
 				mutationId: followUpId,
 				payload:
 					mutation.collectionName === 'orders'
-						? stripNonStringMetaDisplayFields({ ...mutation.payload, ...last.payload })
+						? sanitizeOutboundOrderPayload({ ...mutation.payload, ...last.payload })
 						: { ...mutation.payload, ...last.payload },
 				coalesced: (last.coalesced ?? 0) + 1,
 				...(last.explicit || mutation.explicit ? { explicit: true } : {}),
@@ -493,7 +676,7 @@ export async function requeueBornTwiceSnapshot(input: {
 		);
 		const payload =
 			mutation.collectionName === 'orders'
-				? stripNonStringMetaDisplayFields(mergedPayload)
+				? sanitizeOutboundOrderPayload(mergedPayload)
 				: mergedPayload;
 		// CONDITIONAL tail append (#516 review P1): the placement decision was made
 		// on the `rows` read above — prove it still holds INSIDE the queue's

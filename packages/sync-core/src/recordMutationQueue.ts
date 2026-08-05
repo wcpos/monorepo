@@ -14,7 +14,9 @@ import type { RecordMutation } from './recordMutation';
  *      ▲                          │ 409 stale-revision / unrecoverable 428
  *      │  resolveConflict retry   ▼
  *      └──────────────────── conflicted | needs-revision ──(discard)──▶ removed
- *                              rejected ──(discard)──▶ removed
+ *      ▲                       rejected ──(discard)──▶ removed
+ *      │ requeue-rebuilt (#832): a FRESH row carrying the payload rebuilt from
+ *      └ the current resident; the dead letter is removed once it is enqueued.
  *
  * Coalescing contract (enforced by the write-intent layer, honored here):
  * only an UNCLAIMED (`pending`) same-record entry THAT HAS NEVER BEEN PUSHED
@@ -69,6 +71,32 @@ export type QueuedMutation = RecordMutation & {
 	readonly attempts?: number;
 	/** ISO time before which the drain must NOT re-push this mutation (the backoff gate). */
 	readonly nextAttemptAt?: string;
+	/**
+	 * The dead letter's WHY (#832), written once at dead-letter time. Without it a
+	 * 'rejected' row is an unexplained disappearance: a completed sale that exists
+	 * only on this device with no way for anyone — cashier or support — to see what
+	 * the server objected to. `rejectedStatus` is the HTTP status, `rejectedReason`
+	 * the machine code (`rest_invalid_param`), `rejectedMessage` the server's own
+	 * sentence, `rejectedAt` when the drain gave up. Nothing branches on these; they
+	 * exist to be shown.
+	 */
+	readonly rejectedStatus?: number;
+	readonly rejectedReason?: string;
+	readonly rejectedMessage?: string;
+	readonly rejectedAt?: string;
+	/**
+	 * Requeue provenance (#832). A dead letter is recovered by REBUILDING the
+	 * outbound payload from the current resident and enqueueing it under a FRESH
+	 * mutationId — the server replays by mutationId, so the rebuilt payload can
+	 * never reuse the rejected one's. `requeuedFrom` is the dead letter this row
+	 * replaces; `requeueCount` is how many times this chain has been requeued (1 on
+	 * the first recovery). Both survive a SECOND dead-lettering, so the surface can
+	 * show "requeued twice, still refused" instead of pretending it is a fresh
+	 * failure. Requeue happens ONLY through an explicit `resolveConflict` call —
+	 * there is no automatic loop.
+	 */
+	readonly requeuedFrom?: string;
+	readonly requeueCount?: number;
 };
 
 /** Storage port — an append-only set keyed by `mutationId`. RxDB (durable) or memory (tests). */
@@ -400,7 +428,7 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 /** RxDB collection schema for the durable queue — one row per mutation (`mutationId` PK). */
 export const recordMutationQueueSchema = {
 	title: 'record mutation queue schema',
-	version: 3,
+	version: 4,
 	primaryKey: 'mutationId',
 	type: 'object',
 	properties: {
@@ -426,6 +454,14 @@ export const recordMutationQueueSchema = {
 		// v0 note always planned). Optional: a v0 row simply has no attempts yet.
 		attempts: { type: 'number', minimum: 0, maximum: 1_000_000, multipleOf: 1 },
 		nextAttemptAt: { type: 'string', maxLength: 32 },
+		// The dead letter's reason + requeue provenance (#832) — optional, so every
+		// row that never dead-lettered simply has none.
+		rejectedStatus: { type: 'number', minimum: 0, maximum: 1_000, multipleOf: 1 },
+		rejectedReason: { type: 'string' },
+		rejectedMessage: { type: 'string' },
+		rejectedAt: { type: 'string', maxLength: 32 },
+		requeuedFrom: { type: 'string', maxLength: 64 },
+		requeueCount: { type: 'number', minimum: 0, maximum: 1_000_000, multipleOf: 1 },
 	},
 	required: ['mutationId', 'recordId', 'collectionName', 'operation', 'payload', 'queuedAt'],
 } as const;
@@ -440,6 +476,20 @@ export const recordMutationQueueSchema = {
  * large synthesized values stay monotonic with new work.
  * v2 → v3: the `status` enum gains 'needs-revision' (gate2 #516 item 4) — a
  * pure widening, rows pass through.
+ * v3 → v4: the dead-letter reason + requeue provenance fields (#832) — all
+ * OPTIONAL additive properties, so rows pass through untouched.
+ *
+ * WHY v4 AND NOT AN IN-PLACE AMEND OF v3. The house rule for an UNRELEASED
+ * schema on `next` is to amend in place, because dev installs can just reset.
+ * That reasoning does not hold for THIS collection. RxDB keys its internal
+ * collection document by `name-version` (rx-database-internal-store.js:268), so
+ * an amended v3 keeps the same key with a different schema hash and
+ * `addCollections` throws DB6 (rx-database.js:323) — the engine fails to open
+ * the scope database at all, not just this collection. Every existing next
+ * profile would need wiping, and wiping the mutation queue DESTROYS the
+ * dead-lettered sales this very feature exists to recover (dev-next still
+ * carries stranded orders from the #786 incident). A one-line passthrough at v4
+ * costs nothing and keeps them. Flagged for ruling in the #832 PR.
  */
 export const recordMutationQueueMigrationStrategies = {
 	1: (doc: QueuedMutation): QueuedMutation => doc,
@@ -453,4 +503,5 @@ export const recordMutationQueueMigrationStrategies = {
 		status: doc.status ?? 'pending',
 	}),
 	3: (doc: QueuedMutation): QueuedMutation => doc,
+	4: (doc: QueuedMutation): QueuedMutation => doc,
 };

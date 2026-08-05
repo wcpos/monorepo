@@ -48,7 +48,12 @@ import type { PushResult } from './recordPushAdapter';
  *    post-refresh retry still returns 428, it is dead-lettered rather than
  *    looped or parked on a revision already proven ineffective;
  *  - permanent 4xx → dead-lettered as durable status 'rejected' (persists for
- *    the conflicts() surface; leaves pending() so the record is syncable again);
+ *    the conflicts() surface; leaves pending() so the record is syncable again).
+ *    The server's verdict — status, code, message, and when — is written ONTO
+ *    the row (#832) so the recovery surface can state WHY. The drain still never
+ *    retries a dead letter: recovery is an explicit `resolveConflict` call that
+ *    enqueues a FRESH row with the payload rebuilt from the current resident;
+ *
  *  - error → back to 'pending' with backoff; left queued to retry next drain;
  *  - abort (scope switch) → the row STAYS durably 'claimed' (gate2 #516 item
  *    1): the push may have reached the server, so the intent is
@@ -214,7 +219,11 @@ export async function drainMutationQueue(input: {
 	};
 
 	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void> => {
-		const { status, reason } = error as { status?: number; reason?: string };
+		const { status, reason, serverMessage } = error as {
+			status?: number;
+			reason?: string;
+			serverMessage?: string;
+		};
 		rejected.push({ mutation, status, reason });
 		emit({
 			type: 'push.rejected',
@@ -228,7 +237,20 @@ export async function drainMutationQueue(input: {
 			},
 		});
 		try {
-			await input.queue.replace({ ...mutation, status: 'rejected' });
+			// Persist the WHY ON the row (#832), not just in the event: the event is
+			// long gone by the time anyone looks, and a dead letter with no stated
+			// cause is a completed sale that vanished for no reason anyone can see.
+			// `requeuedFrom` / `requeueCount` ride along untouched (the spread), so a
+			// row that dead-letters AGAIN after a recovery still reports how many
+			// recoveries it has already survived.
+			await input.queue.replace({
+				...mutation,
+				status: 'rejected',
+				...(status !== undefined ? { rejectedStatus: status } : {}),
+				...(reason !== undefined ? { rejectedReason: reason } : {}),
+				...(serverMessage !== undefined ? { rejectedMessage: serverMessage } : {}),
+				rejectedAt: new Date(now()).toISOString(),
+			});
 		} catch {
 			// couldn't mark it now — the next drain re-dead-letters it harmlessly.
 		}

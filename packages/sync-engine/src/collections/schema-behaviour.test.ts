@@ -574,6 +574,77 @@ describe('stored documents migrate through every schema version', () => {
 		const late = rows.find((row) => row.mutationId === 'aa-late')!;
 		expect(early.seq!).toBeLessThan(late.seq!); // queuedAt order preserved despite adversarial ids
 	});
+
+	it('mutation queue v3 → v4 keeps dead letters — the rows #832 exists to recover survive the upgrade', async () => {
+		// v3 is what every existing `next` profile already created. The #832 fields
+		// are additive and optional, but they still change the schema HASH — and RxDB
+		// keys its internal collection doc by `name-version`, so amending v3 in place
+		// would throw DB6 and the scope database would not open at all. A dead letter
+		// that cannot be opened is a sale that cannot be recovered, which is the whole
+		// point of the feature; hence the version bump this test pins.
+		const v3FixtureSchema = {
+			...recordMutationQueueSchema,
+			title: 'record mutation queue v3 fixture',
+			version: 3,
+			properties: Object.fromEntries(
+				Object.entries(recordMutationQueueSchema.properties).filter(
+					([key]) =>
+						![
+							'rejectedStatus',
+							'rejectedReason',
+							'rejectedMessage',
+							'rejectedAt',
+							'requeuedFrom',
+							'requeueCount',
+						].includes(key)
+				)
+			),
+		};
+
+		const storage = memoryEngineStorage();
+		const dbName = `schema-migration-${(dbSeq += 1)}`;
+		const old = await openCollection({
+			schema: v3FixtureSchema,
+			migrationStrategies: recordMutationQueueMigrationStrategies as unknown as MigrationStrategies,
+			storage,
+			dbName,
+		});
+		await old.collection.insert({
+			mutationId: 'stranded-create',
+			recordId: 'rec-A',
+			collectionName: 'orders',
+			operation: 'create',
+			origin: 'minted',
+			payload: { status: 'pos-paid', total: '25.00' },
+			baseRevision: null,
+			queuedAt: '2026-01-05T00:00:00.000Z',
+			seq: 1,
+			status: 'rejected',
+		});
+		await old.db.close();
+
+		const current = await openCollection({
+			schema: recordMutationQueueSchema,
+			migrationStrategies: recordMutationQueueMigrationStrategies as unknown as MigrationStrategies,
+			storage,
+			dbName,
+		});
+		const rows = (await current.collection.find().exec()).map(
+			(doc) => doc.toJSON() as unknown as QueuedMutation
+		);
+		await current.db.close();
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({
+			mutationId: 'stranded-create',
+			status: 'rejected',
+			payload: { status: 'pos-paid', total: '25.00' },
+		});
+		// A pre-#832 dead letter simply has no recorded reason; the UI says so
+		// rather than inventing one, and the row stays requeue-able.
+		expect(rows[0]?.rejectedReason).toBeUndefined();
+		expect(rows[0]?.requeueCount).toBeUndefined();
+	});
 });
 
 describe('reference schema identity — a recorded decision, not an accident (ADR 0019)', () => {
