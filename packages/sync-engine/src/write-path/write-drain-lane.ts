@@ -32,7 +32,7 @@ import {
 	pushRecordMutation,
 	reconcileCreateAck,
 } from '@wcpos/sync-core';
-import type { Fetcher, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
+import type { Fetcher, QueuedMutation, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 
 import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-intents';
@@ -41,6 +41,46 @@ import { orderDocumentFromWooPayload } from '../scheduler';
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
 import type { RxDatabase } from 'rxdb';
+
+/**
+ * The OUTGOING half of the #818 identity graft: re-stamp the record's known
+ * server line ids onto the envelope about to be pushed.
+ *
+ * Queue payloads are FROZEN at enqueue, so a mutation enqueued before its
+ * record had server identity — the classic case, an edit made while the create
+ * was still in flight — carries ID-LESS `line_items`, and WooCommerce APPENDS
+ * those as new items (duplicated cart, multiplied total, real money). The
+ * resident learned that identity when the create was acked (`reconcile`'s
+ * graft), so the resident is the authority here: whatever ids it holds are
+ * stamped onto the outgoing payload, and nothing else about it is read.
+ *
+ * Doing this at PUSH time rather than rewriting the queue rows is deliberate.
+ * The durable row stays the honest record of what the cashier intended; no
+ * mutationId is re-minted (a swap would strand `awaitWriteOutcome` callers
+ * holding a receipt that could then never settle) and no row is deferred a
+ * tick. It also closes the race by construction: the graft reads the freshest
+ * resident at the moment of the push, so no ack landing in between can outrun
+ * it — including one that rewrote the queue row through coalescing.
+ *
+ * @param database - The active scope database.
+ * @param mutation - The claimed mutation the drain is about to push.
+ * @returns The mutation, payload grafted when the resident knows more.
+ */
+async function withGraftedLineIdentity<T extends QueuedMutation>(
+	database: RxDatabase,
+	mutation: T
+): Promise<T> {
+	const facet = writeFacetFor(mutation.collectionName);
+	if (!facet?.graftAckIdentity || mutation.operation === 'delete') return mutation;
+	const resident = await database.collections[mutation.collectionName]
+		?.findOne(mutation.recordId)
+		.exec();
+	const residentPayload = (resident?.toJSON() as { payload?: unknown } | undefined)?.payload;
+	if (typeof residentPayload !== 'object' || residentPayload === null) return mutation;
+	const payload = (mutation.payload ?? {}) as Record<string, unknown>;
+	const grafted = facet.graftAckIdentity(payload, residentPayload as Record<string, unknown>);
+	return grafted === payload ? mutation : { ...mutation, payload: grafted };
+}
 
 /**
  * One targeted, read-only fetch of an order's CURRENT server revision (the
@@ -279,10 +319,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								}));
 								return revision;
 							},
-							push: (mutation) => {
+							push: async (mutation) => {
 								activateCollection(mutation.collectionName as SyncCollectionName);
 								return pushRecordMutation({
-									mutation,
+									mutation: await withGraftedLineIdentity(database, mutation),
 									resolveEndpoint,
 									fetcher: (url, init) => {
 										// Absorb the adapter's signal — tickFetcher already merged
@@ -350,6 +390,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										// overwrite the resident's local edit before the follow-up
 										// below re-lands it. Withhold it from the payload adoption.
 										document: bornTwiceCreate ? null : (pushResult.document ?? null),
+										// …but NEVER withhold it from the IDENTITY graft (#818): the server's
+										// line ids are facts about the record, safe to learn from any ack —
+										// only its VALUES are unsafe to adopt over a local edit. The
+										// born-twice follow-up must carry them or Woo appends the re-landed
+										// snapshot as new lines.
+										identityDocument: pushResult.document ?? null,
 									};
 									await facet.reconcile(database, ack, signal);
 									// BORN-TWICE honest reconcile (gate2 #516 item 1): a create the

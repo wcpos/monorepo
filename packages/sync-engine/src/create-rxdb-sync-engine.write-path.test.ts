@@ -679,18 +679,26 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
-	it('does not merge an order ack payload over a queued local successor', async () => {
+	// #818 flipped the second half of this contract: local VALUES still win over a
+	// queued successor (that part is #815 and unchanged), but the server's line
+	// IDENTITY must now land on the resident — leaving it id-less is what made the
+	// next update append duplicates.
+	it('keeps local values but grafts server line ids when a successor is queued', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_102 });
+		const LINE_UUID = '55555555-5555-4555-8555-555555555555';
+		const lineMeta = [{ key: '_woocommerce_pos_uuid', value: LINE_UUID }];
 		const localPayload = {
 			status: 'pos-open',
 			total: '52.00',
-			line_items: [{ product_id: 123, quantity: 1, total: '52.00' }],
+			line_items: [{ product_id: 123, quantity: 1, total: '52.00', meta_data: lineMeta }],
 			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
 		};
 		const mappedFetch = withAckDocument(server, (document) => ({
 			...document,
 			total: '104.00',
-			line_items: [{ product_id: 123, quantity: 1, id: 7002, total: '104.00' }],
+			line_items: [
+				{ product_id: 123, quantity: 1, id: 7002, total: '104.00', meta_data: lineMeta },
+			],
 		}));
 		let releaseAck: (() => void) | undefined;
 		let ackReceived: (() => void) | undefined;
@@ -731,12 +739,132 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			releaseAck?.();
 
 			expect(await firstDrain).toMatchObject({ pushed: 1, rejected: 0 });
-			expect(await orderJson(engine, UUID_A)).toMatchObject({
+			const order = await orderJson(engine, UUID_A);
+			expect(order).toMatchObject({
 				wooOrderId: 900_000_102,
-				payload: localPayload,
+				// The ack's `total: '104.00'` is NOT adopted — the queued successor owns
+				// the record's values (#815).
+				payload: { status: 'pos-open', total: '52.00' },
 				sync: { revision: server.applied.get(UUID_A)?.revision },
-				local: { dirty: true, pendingMutationIds: [successor.mutationId] },
+				local: { dirty: true },
 			});
+			// …but the line now carries the server's identity alongside its local
+			// values (#818), which is what every later push is built from.
+			expect((order?.payload as { line_items: Record<string, unknown>[] }).line_items).toEqual([
+				{ product_id: 123, quantity: 1, total: '52.00', meta_data: lineMeta, id: 7002 },
+			]);
+			// The queued successor is NOT rewritten: its durable row stays the honest
+			// record of what the cashier intended, under its ORIGINAL mutationId (a
+			// swap would strand the `awaitWriteOutcome` caller holding that receipt).
+			// The id is stamped on at PUSH time instead — see the drain test below.
+			expect((order?.local as { pendingMutationIds: string[] }).pendingMutationIds).toEqual([
+				successor.mutationId,
+			]);
+			const queued = (await queueRows(engine)).filter((row) => row.operation === 'update');
+			expect(queued).toHaveLength(1);
+			expect(queued[0]).toMatchObject({ mutationId: successor.mutationId });
+		} finally {
+			releaseAck?.();
+			await engine.dispose();
+		}
+	});
+
+	it('grafts server line identity onto a successor queued behind an IN-FLIGHT create (#818)', async () => {
+		const server = createFakeWriteServer({ firstId: 900_000_106 });
+		const LINE_UUID = '44444444-4444-4444-8444-444444444444';
+		const line = (over: Record<string, unknown>): Record<string, unknown> => ({
+			product_id: 123,
+			quantity: 1,
+			total: '52.00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: LINE_UUID }],
+			...over,
+		});
+		const localPayload = {
+			status: 'pos-open',
+			total: '52.00',
+			line_items: [line({})],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+		};
+		// Woo assigns every CREATED line an id and echoes the POS line uuid meta back.
+		const mappedFetch = withAckDocument(server, (document) => ({
+			...document,
+			line_items: (((document ?? {}).line_items ?? []) as Record<string, unknown>[]).map(
+				(item, index) => ({ ...item, id: 7100 + index })
+			),
+		}));
+		let releaseAck: (() => void) | undefined;
+		let ackReceived: (() => void) | undefined;
+		const release = new Promise<void>((resolve) => {
+			releaseAck = resolve;
+		});
+		const received = new Promise<void>((resolve) => {
+			ackReceived = resolve;
+		});
+		let firstPush = true;
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			const response = await mappedFetch(url, init);
+			if (firstPush && url.includes('/push/')) {
+				firstPush = false;
+				ackReceived?.();
+				await release;
+			}
+			return response;
+		};
+		const engine = engineWith({ fetch });
+		const events: EngineEvent[] = [];
+		try {
+			await engine.ready;
+			engine.events((event) => events.push(event));
+			await insertBornLocalOrder(engine, UUID_A, localPayload);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: localPayload,
+			});
+			const firstDrain = engine.sync('write-drain');
+			await received;
+			// The cashier bumps the quantity while the create is STILL IN FLIGHT: the
+			// successor's frozen snapshot carries the pre-create, id-less line item.
+			const successor = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: {
+					...localPayload,
+					total: '104.00',
+					line_items: [line({ quantity: 2, total: '104.00' })],
+				},
+			});
+			releaseAck?.();
+			expect(await firstDrain).toMatchObject({ pushed: 1, rejected: 0 });
+
+			// The resident keeps its LOCAL field values (adoption is still skipped — a
+			// successor is pending) but gains the server's line identity.
+			const resident = (await orderJson(engine, UUID_A))?.payload as {
+				total?: string;
+				line_items?: Record<string, unknown>[];
+			};
+			expect(resident.total).toBe('52.00');
+			expect(resident.line_items).toHaveLength(1);
+			expect(resident.line_items?.[0]).toMatchObject({ id: 7100, quantity: 1 });
+
+			// …and the queued successor pushes WITH that identity, so Woo updates the
+			// existing line instead of APPENDING a second one (duplicated money).
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const update = server.received.find((envelope) => envelope.operation === 'update');
+			const pushedLines = (update?.payload as { line_items?: Record<string, unknown>[] })
+				?.line_items;
+			expect(pushedLines).toHaveLength(1);
+			expect(pushedLines?.[0]).toMatchObject({ id: 7100, product_id: 123, quantity: 2 });
+			// The successor keeps its receipt identity end to end, so a caller sitting
+			// in `awaitWriteOutcome(receipt.mutationId)` still settles.
+			expect(events).toContainEqual(
+				expect.objectContaining({
+					type: 'write-acknowledged',
+					mutationId: successor.mutationId,
+				})
+			);
 		} finally {
 			releaseAck?.();
 			await engine.dispose();
@@ -869,6 +997,57 @@ describe('write() + sync("write-drain") through the public handle', () => {
 				sync: { revision: server.applied.get(UUID_A)?.revision },
 				local: { dirty: false, pendingMutationIds: [] },
 			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('grafts server line ids onto the BORN-TWICE follow-up snapshot (#818)', async () => {
+		const server = createFakeWriteServer();
+		const LINE_UUID = '66666666-6666-4666-8666-666666666666';
+		const lineMeta = [{ key: '_woocommerce_pos_uuid', value: LINE_UUID }];
+		// The EXISTING server record the born-twice guard matches — its line already
+		// has a server id, and carries the uuid this client minted for it.
+		server.seed(UUID_A, {
+			id: 42,
+			revision: 'sha256:existing-r1',
+			payload: {
+				status: 'processing',
+				total: '10.00',
+				line_items: [
+					{ id: 501, product_id: 123, quantity: 1, total: '10.00', meta_data: lineMeta },
+				],
+			},
+		});
+		const localPayload = {
+			status: 'pos-open',
+			total: '52.00',
+			// The DISCARDED create snapshot: same line, no server id.
+			line_items: [{ product_id: 123, quantity: 2, total: '52.00', meta_data: lineMeta }],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+		};
+		const engine = engineWith({ fetch: server.fetch });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, localPayload);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: localPayload,
+			});
+
+			// First drain: HTTP 200 — the payload was discarded and re-landed as a
+			// follow-up update. That follow-up is rebuilt from the ID-LESS create
+			// snapshot, so without the graft it would APPEND a duplicate line.
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+
+			const update = server.received.find((envelope) => envelope.operation === 'update');
+			const pushedLines = (update?.payload as { line_items?: Record<string, unknown>[] })
+				?.line_items;
+			expect(pushedLines).toHaveLength(1);
+			expect(pushedLines?.[0]).toMatchObject({ id: 501, quantity: 2, total: '52.00' });
 		} finally {
 			await engine.dispose();
 		}
