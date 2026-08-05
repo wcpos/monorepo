@@ -1383,8 +1383,14 @@ export function createRxdbSyncEngine(
 				censusQueryKey('customers'),
 			]);
 			if (!entry || entry.freshUntilMs <= nowMs()) return false;
-			// Count includes customer:default; accept the sentinel's +1 in the safe >= direction.
-			return (await database.collections.customers.count().exec()) >= entry.totalMatchingRecords;
+			// The born-local customer:default sentinel is not part of the server census — counting
+			// it would let a walk that is one real customer short read as complete and suppress
+			// the remote search for exactly that customer. Exclude it by its literal storage id.
+			const [count, sentinel] = await Promise.all([
+				database.collections.customers.count().exec(),
+				database.collections.customers.findByIds(['customer:default']).exec(),
+			]);
+			return count - sentinel.size >= entry.totalMatchingRecords;
 		},
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});

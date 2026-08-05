@@ -282,6 +282,43 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('does not let the customer:default sentinel satisfy the customers completeness count', async () => {
+		const server = scriptedCustomerSearchProxy([]);
+		const engine = engineWith(server.fetch);
+		const scope = await engine.ready;
+		await scope.database.collections.engineKv.upsert({
+			id: 'customer-trickle:state',
+			value: JSON.stringify({ page: 1, walkComplete: true }),
+		});
+		// One real customer exists server-side (census 1) but only the born-local
+		// sentinel is resident: the gate must fetch, not mask the missing customer.
+		await scope.database.collections.customers.upsert({
+			id: 'customer:default',
+			wooCustomerId: null,
+			payload: {},
+			sync: { revision: '', partial: true, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 1,
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 1,
+		});
+
+		await expect(
+			engine.require({
+				id: 'customer-sentinel',
+				collection: 'customers',
+				kind: 'search',
+				term: 'ada',
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state.pulls).toBe(1);
+		await engine.dispose();
+	});
+
 	it('publishes refcounted collection activity across concurrent settle and release paths', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();
