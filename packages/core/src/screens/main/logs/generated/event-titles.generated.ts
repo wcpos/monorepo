@@ -132,6 +132,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.signal_log');
 		case 'signal.tick.error':
 			return t('health.logs.event.signal_tick_error');
+		case 'targeted.pull.shortfall-prune':
+			return t('health.logs.event.targeted_pull_shortfall_prune');
 		case 'transport.request':
 			return t('health.logs.event.transport_request');
 		default: {

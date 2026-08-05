@@ -71,7 +71,7 @@ import {
 	SYNC_COLLECTION_NAMES,
 	type SyncCollectionName,
 } from './collections/engine-collections';
-import { COLLECTION_DESCRIPTORS, writeFacetFor } from './collections/collection-descriptors';
+import { writeFacetFor } from './collections/collection-descriptors';
 import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
@@ -82,11 +82,7 @@ import {
 	nextChangeSignalDecayLevel,
 } from './change-signal/tick-cadence';
 import { hydrateActiveBarcodeSelectors } from './change-signal/config-fingerprint-source';
-import {
-	createWriteDrainLane,
-	fetchOrderServerRevision,
-	type WriteOutcomeEvent,
-} from './write-path/write-drain-lane';
+import { createWriteDrainLane, type WriteOutcomeEvent } from './write-path/write-drain-lane';
 import {
 	createRequirePlane,
 	type EngineRequirement,
@@ -97,17 +93,12 @@ import {
 	censusQueryKey,
 	type CensusTotals,
 	censusTotalsFromCache,
-	chunk,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
-	orderDocumentFromWooPayload,
 	seedPosBootstrapLanes,
-	seedTargetedOrderSchedulerTask,
-	WOO_REST_MAX_PER_PAGE,
 } from './scheduler';
 import {
 	COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS,
 	createMaintenanceLanes,
-	type MaintenanceLaneName,
 	type QueryTotalCacheEvent,
 	type QueryTotalPort,
 } from './maintenance/maintenance-lanes';
@@ -115,23 +106,25 @@ import {
 	CUSTOMER_TRICKLE_STATE_KEY,
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
-import {
-	createLocalCoverage,
-	type LocalCoverage,
-	type ReconcileRequest,
-} from './local-coverage/local-coverage';
+import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
+import { createReconcilePorts } from './local-coverage/reconcile-port';
 import { enqueueWriteIntent, queueFor, type WriteIntent } from './write-path/write-intents';
+import { createConflictResolution } from './write-path/conflict-resolution';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
-import { hasPendingLocalWork } from './write-path/local-work-guard';
 import { CHANGE_SIGNAL_STATE_ID } from './change-signal/change-signal-state-schema';
-import { pullTargetedByIds } from './change-signal/change-signal-handlers';
-import {
-	readManifestRange,
-	removeManifestByWooIds,
-	upsertManifestRows,
-} from './local-coverage/rx-existence-manifest-repository';
-import { manifestRowOf } from './materialization/record-materialization';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
+import {
+	DEFAULT_LANE_INTERVALS,
+	type EngineLaneName,
+	INTERVAL_LANES,
+	LANE_REGISTRY,
+	type LaneIntervalKey,
+	laneRegistryEntry,
+	type LaneTargetKey,
+	MANUAL_SYNC_LANES,
+	REBASELINE_RETICK_LANES,
+	SEED_RETICK_LANES,
+} from './maintenance/lane-registry';
 
 export type {
 	CoverageOutcome,
@@ -149,7 +142,7 @@ export type {
 export type { WriteIntent } from './write-path/write-intents';
 export type { CensusTotal, CensusTotals } from './scheduler';
 
-export type EngineLane = 'change-signal' | 'write-drain' | MaintenanceLaneName;
+export type EngineLane = EngineLaneName;
 
 /** One deterministic tick's outcome. A full sync() (no lane) runs the ten
  * foreground/manual lanes in dependency order; the idle-only customer trickle
@@ -165,6 +158,7 @@ export type SyncReport = {
 	deferred?: number;
 	failed?: number;
 	rejected?: number;
+	rebaselined?: boolean;
 };
 
 // Versioned sync schemas need the migration
@@ -251,31 +245,9 @@ export type RxdbSyncEnginePorts = {
 	now?: () => number;
 };
 
-export type EngineIntervals = {
-	/** Change-signal poll cadence under mode:'auto'. apps/main defaults to 10s. */
-	changeSignalPollMs: number;
-	/** Write-drain cadence under mode:'auto'. apps/main defaults to 10s. */
-	writeDrainPollMs: number;
-	/** Persisted scheduler drain cadence. apps/main defaults to 30s. */
-	schedulerDrainMs: number;
-	/** Orders open-recent window re-seed cadence. apps/main defaults to 5min. */
-	orderWindowSeedMs: number;
-	/** Products browse-window (ADR 0027) re-seed cadence. Default 5min (matches the order window). */
-	productBrowseWindowSeedMs: number;
-	/** Reference-lane (F11) re-seed cadence. apps/main defaults to 5min. */
-	referenceSeedMs: number;
-	/** Idle customer trickle cadence. Default 5min. */
-	customerTrickleMs: number;
-	/** Query-total retry scan cadence (armed only with ports.queryTotal). Default 30s. */
-	queryTotalRetryScanMs: number;
+export type EngineIntervals = Record<LaneIntervalKey, number> & {
 	/** Collection census cache freshness window. Default 15min. */
 	censusFreshForMs: number;
-	/** Coverage compaction scan cadence. apps/main defaults to 60s. */
-	coverageCompactionScanMs: number;
-	/** Existence-manifest prime cadence. Conservative backstop; default 15min. */
-	existencePrimeMs: number;
-	/** Existence anti-entropy reconcile cadence. Staggered from prime; default 17min. */
-	existenceReconcileMs: number;
 };
 
 /** First stall report for a still-unsettled initial open, then repeats. */
@@ -283,18 +255,8 @@ const READY_STALL_FIRST_MS = 15_000;
 const READY_STALL_REPEAT_MS = 60_000;
 
 const DEFAULT_INTERVALS: EngineIntervals = {
-	changeSignalPollMs: 10_000,
-	writeDrainPollMs: 10_000,
-	schedulerDrainMs: 30_000,
-	orderWindowSeedMs: 5 * 60_000,
-	productBrowseWindowSeedMs: 5 * 60_000,
-	referenceSeedMs: 5 * 60_000,
-	customerTrickleMs: 5 * 60_000,
-	queryTotalRetryScanMs: 30_000,
+	...DEFAULT_LANE_INTERVALS,
 	censusFreshForMs: 15 * 60_000,
-	coverageCompactionScanMs: 60_000,
-	existencePrimeMs: 15 * 60_000,
-	existenceReconcileMs: 17 * 60_000,
 };
 
 export type ActiveScope = {
@@ -649,205 +611,17 @@ export function createRxdbSyncEngine(
 			throw error;
 		}
 		try {
-			const targeted = Object.fromEntries(
-				COLLECTION_DESCRIPTORS.filter((descriptor) => descriptor.shape === 'targeted').map(
-					(descriptor) => [descriptor.collection, descriptor]
-				)
-			) as Record<
-				'products' | 'variations' | 'customers',
-				Extract<(typeof COLLECTION_DESCRIPTORS)[number], { shape: 'targeted' }>
-			>;
-			const handlerContext = {
-				database: db,
-				fetch: fetcher,
-				syncBaseUrl: ports.site.syncBaseUrl,
-				persistState: async () => undefined,
-				log: () => undefined,
-			};
-			const reconcilePort = (
-				manifestName:
-					'existenceManifest' | 'existenceManifestCustomers' | 'existenceManifestOrders',
-				collection: 'products' | 'customers' | 'orders'
-			) => {
-				const manifest = db.collections[manifestName] as never;
-				const collectionParam =
-					collection === 'products' ? '&status=publish' : `&collection=${collection}`;
-				const sourceCollections =
-					collection === 'products'
-						? (['products', 'variations'] as const)
-						: ([collection] as const);
-				const dirtyWooIds = async (): Promise<Set<number>> => {
-					const ids = new Set<number>();
-					for (const name of sourceCollections) {
-						const docs = await db.collections[name].find().exec();
-						for (const doc of docs) {
-							const row = doc.toJSON() as {
-								wooProductId?: number;
-								wooId?: number;
-								wooCustomerId?: number;
-								wooOrderId?: number;
-								local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
-							};
-							if (!row.local?.dirty && !row.local?.pendingMutationIds?.length) continue;
-							const wooId = row.wooProductId ?? row.wooId ?? row.wooCustomerId ?? row.wooOrderId;
-							if (typeof wooId === 'number') ids.add(wooId);
-						}
-					}
-					return ids;
-				};
-				const removeTargeted = async (
-					name: 'products' | 'variations' | 'customers',
-					field: string,
-					wooIds: number[]
-				) => {
-					const docs = await db.collections[name]
-						.find({ selector: { [field]: { $in: wooIds } } as never })
-						.exec();
-					const protectedWooIds = new Set<number>();
-					const removable = docs.filter((doc) => {
-						const row = doc.toJSON() as Record<string, unknown>;
-						if (!hasPendingLocalWork(row)) return true;
-						const wooId = row[field];
-						if (typeof wooId === 'number') protectedWooIds.add(wooId);
-						return false;
-					});
-					if (removable.length > 0)
-						assertBulkSuccess(
-							await db.collections[name].bulkRemove(removable.map((doc) => doc.primary)),
-							'create-rxdb-sync-engine remove'
-						);
-					await removeManifestByWooIds(
-						manifest,
-						wooIds.filter((wooId) => !protectedWooIds.has(wooId))
-					);
-				};
-				const pullTargetedAndPopulateManifest = async (
-					descriptor: (typeof targeted)[keyof typeof targeted],
-					wooIds: number[],
-					request?: ReconcileRequest
-				) => {
-					const missingProductWooIds: number[] = [];
-					await pullTargetedByIds(
-						{ ...handlerContext, fetch: request?.fetcher ?? fetcher },
-						descriptor,
-						wooIds,
-						async (documents) => {
-							let publishable = documents;
-							if (descriptor.collection === 'products') {
-								const unpublishedWooIds: number[] = [];
-								publishable = documents.filter((document) => {
-									if (
-										(document as { payload?: { status?: unknown } }).payload?.status === 'publish'
-									)
-										return true;
-									const wooId = (document as { wooProductId?: unknown }).wooProductId;
-									if (typeof wooId === 'number') unpublishedWooIds.push(wooId);
-									return false;
-								});
-								if (unpublishedWooIds.length > 0)
-									await removeTargeted('products', 'wooProductId', unpublishedWooIds);
-							}
-							const manifestRows = publishable.flatMap((document) =>
-								manifestRowOf(document) ? [manifestRowOf(document)!] : []
-							);
-							if (publishable.length > 0)
-								assertBulkSuccess(
-									await db.collections[descriptor.collection].bulkUpsert(publishable as never[]),
-									'create-rxdb-sync-engine upsert'
-								);
-							if (manifestRows.length > 0) await upsertManifestRows(manifest, manifestRows);
-						},
-						descriptor.collection === 'products' ? missingProductWooIds : undefined
-					);
-					if (missingProductWooIds.length > 0)
-						await removeTargeted('products', 'wooProductId', missingProductWooIds);
-				};
-				return {
-					bucketSize: 1000,
-					maxWooId: async () => {
-						const docs = await db.collections[manifestName].find().exec();
-						return docs.reduce(
-							(max, doc) => Math.max(max, Number((doc.toJSON() as { wooId?: unknown }).wooId) || 0),
-							0
-						);
-					},
-					readManifestRange: (lo: number, hi: number) => readManifestRange(manifest, lo, hi),
-					dirtyWooIds,
-					fetchServerBucket: async (
-						bucket: number,
-						bucketSize: number,
-						request?: ReconcileRequest
-					) => {
-						const response = await (request?.fetcher ?? fetcher)(
-							`${ports.site.syncBaseUrl}/integrity/bucket?bucket=${bucket}&bucket_size=${bucketSize}${collectionParam}`,
-							request?.signal ? { signal: request.signal } : undefined
-						);
-						if (!response.ok) throw new Error(`existence bucket fetch failed: ${response.status}`);
-						const body = (await response.json()) as {
-							ids?: { id: number; digest: string; object_type?: string }[];
-						};
-						return (body.ids ?? []).map((row) => ({
-							id: row.id,
-							digest: row.digest,
-							objectType: (row.object_type ??
-								(collection === 'orders'
-									? 'order'
-									: collection === 'customers'
-										? 'customer'
-										: 'product')) as 'product' | 'variation' | 'customer' | 'order',
-						}));
-					},
-					deleteProducts: async (wooIds: number[]) => {
-						if (collection === 'orders')
-							return new EngineOrderRepository(db.collections as never).removeDeletedOrders(wooIds);
-						return removeTargeted(
-							collection,
-							collection === 'products' ? 'wooProductId' : 'wooCustomerId',
-							wooIds
-						);
-					},
-					deleteVariations: (wooIds: number[]) => removeTargeted('variations', 'wooId', wooIds),
-					pullProducts: async (wooIds: number[], request?: ReconcileRequest) => {
-						if (collection === 'orders') {
-							for (const batch of chunk(wooIds, WOO_REST_MAX_PER_PAGE)) {
-								const response = await (request?.fetcher ?? fetcher)(
-									`${ports.site.syncBaseUrl}/orders?include=${batch.join(',')}&per_page=${batch.length}&orderby=include`,
-									request?.signal ? { signal: request.signal } : undefined
-								);
-								if (!response.ok)
-									throw new Error(`order existence pull failed: ${response.status}`);
-								const payloads = (await response.json()) as Record<string, unknown>[];
-								const payloadByWooId = new Map(
-									payloads.map((payload) => [Number(payload.id), payload])
-								);
-								const existingPayloads = batch.flatMap((wooId) => {
-									const payload = payloadByWooId.get(wooId);
-									return payload ? [payload] : [];
-								});
-								await new EngineOrderRepository(db.collections as never).upsertMany(
-									existingPayloads.map((payload) => orderDocumentFromWooPayload(payload))
-								);
-							}
-							return;
-						}
-						await pullTargetedAndPopulateManifest(targeted[collection], wooIds, request);
-					},
-					pullVariations: async (wooIds: number[], request?: ReconcileRequest) => {
-						await pullTargetedAndPopulateManifest(targeted.variations, wooIds, request);
-					},
-				};
-			};
 			const coverage = createLocalCoverage({
 				database: db as never,
 				manifest: {
 					fetcher: (url, init) => fetcher(url, init?.signal ? { signal: init.signal } : undefined),
 					syncBaseUrl: ports.site.syncBaseUrl,
 				},
-				reconcile: [
-					reconcilePort('existenceManifest', 'products'),
-					reconcilePort('existenceManifestCustomers', 'customers'),
-					reconcilePort('existenceManifestOrders', 'orders'),
-				],
+				reconcile: createReconcilePorts({
+					database: db,
+					fetcher,
+					ports,
+				}),
 				freshForMs: ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 				retainStaleForMs: COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS,
 				diagnostics,
@@ -1425,29 +1199,26 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 
-	// The lane dispatch table (name → tick), shared by manual sync() and the auto
-	// timers so every lane runs through ONE runner — the choke point where the
-	// lane-start/lane-finish lifecycle pair is emitted.
-	const MAINTENANCE_LANES: Record<
-		MaintenanceLaneName,
-		(signal?: AbortSignal) => Promise<SyncReport>
-	> = {
-		'scheduler-drain': (signal) => maintenanceLanes.schedulerDrain.tick(signal),
-		'order-window-seed': (signal) => maintenanceLanes.orderWindowSeed.tick(signal),
-		'product-browse-window-seed': (signal) => maintenanceLanes.productBrowseWindowSeed.tick(signal),
-		'reference-seed': (signal) => maintenanceLanes.referenceSeed.tick(signal),
-		'query-total-retry': async (signal) =>
-			maintenanceLanes.queryTotalRetry !== null
-				? maintenanceLanes.queryTotalRetry.tick(signal)
-				: { lane: 'query-total-retry', status: 'skipped', reason: 'no queryTotal port provided' },
-		'customer-trickle': (signal) => maintenanceLanes.customerTrickle.tick(signal),
-		'coverage-compaction': (signal) => maintenanceLanes.coverageCompaction.tick(signal),
-		'existence-prime': (signal) => maintenanceLanes.existencePrime.tick(signal),
-		'existence-reconcile': (signal) => maintenanceLanes.existenceReconcile.tick(signal),
+	type LaneTarget = {
+		tick(signal?: AbortSignal): Promise<SyncReport>;
+		lastError(): string | null;
+	};
+	const laneTargets: Record<LaneTargetKey, LaneTarget | null> = {
+		changeSignal: changeSignalLane,
+		writeDrain: writeDrainLane,
+		...maintenanceLanes,
 	};
 	const dispatchLaneTick = (name: EngineLane, signal?: AbortSignal): Promise<SyncReport> => {
+		const target = laneTargets[laneRegistryEntry(name).targetKey];
+		if (target === null) {
+			return Promise.resolve({
+				lane: name,
+				status: 'skipped',
+				reason: 'no queryTotal port provided',
+			});
+		}
 		if (name === 'change-signal') {
-			return changeSignalLane.tick(signal).then((report) => {
+			return target.tick(signal).then((report) => {
 				// A rebaseline consumed the skipped sequence-log history; whatever
 				// those rows would have delivered that the targeted re-pull cannot
 				// (server-side CREATES, a reset collection's refill) converges through
@@ -1458,17 +1229,17 @@ export function createRxdbSyncEngine(
 				// lanes after change-signal in the same ordered pass, and a targeted
 				// manual tick stays exactly one lane (deterministic tests).
 				if (report.rebaselined === true && mode === 'auto' && !disposed) {
-					void runAutomaticTick(() => tickLaneWithEvents('existence-prime'))
-						.then(() => runAutomaticTick(() => tickLaneWithEvents('existence-reconcile')))
-						.then(() => runAutomaticTick(() => tickLaneWithEvents('product-browse-window-seed')))
-						.then(() => runAutomaticTick(() => tickLaneWithEvents('scheduler-drain')))
+					void REBASELINE_RETICK_LANES.slice(1)
+						.reduce(
+							(chain, lane) => chain.then(() => runAutomaticTick(() => tickLaneWithEvents(lane))),
+							runAutomaticTick(() => tickLaneWithEvents(REBASELINE_RETICK_LANES[0]!))
+						)
 						.catch(() => undefined);
 				}
 				return report;
 			});
 		}
-		if (name === 'write-drain') return writeDrainLane.tick(signal);
-		return MAINTENANCE_LANES[name](signal);
+		return target.tick(signal);
 	};
 	// Every lane runs through here: emit lane-start before the work begins (before any
 	// network), run the tick, then emit lane-finish carrying the outcome. Lanes are
@@ -1478,14 +1249,7 @@ export function createRxdbSyncEngine(
 		name: EngineLane,
 		signal?: AbortSignal
 	): Promise<SyncReport> => {
-		const ownedCollections: readonly SyncCollectionName[] =
-			name === 'reference-seed'
-				? ['categories', 'brands', 'tags', 'coupons']
-				: name === 'product-browse-window-seed'
-					? ['products']
-					: name === 'order-window-seed'
-						? ['orders']
-						: [];
+		const ownedCollections = laneRegistryEntry(name).collections;
 		for (const collection of ownedCollections) changeCollectionActivity(collection, 1);
 		emitEngineEvent({ type: 'lane-start', lane: name });
 		let report: SyncReport;
@@ -1538,6 +1302,19 @@ export function createRxdbSyncEngine(
 		() => undefined,
 		() => undefined
 	);
+	const conflictResolution = createConflictResolution({
+		assertNotDisposed,
+		readySettledForSync,
+		manager,
+		databaseByScopeId,
+		activeDatabase,
+		fetcher,
+		ports,
+		requirePlane,
+		diagnostics,
+		writeDrainLane,
+		scheduleStatusChange,
+	});
 
 	// The readiness watchdog: while `ready` is unsettled, periodically name the
 	// exact phase the open chain is waiting on, and report a rejection the same
@@ -1601,11 +1378,6 @@ export function createRxdbSyncEngine(
 	const maintenanceTimers: ReturnType<typeof setInterval>[] = [];
 	let lastAutomaticConnectivity: EngineConnectivity | undefined;
 	let reconnectRetick: Promise<void> | null = null;
-	const reconnectRetickSeedLanes: EngineLane[] = [
-		'reference-seed',
-		'product-browse-window-seed',
-		'order-window-seed',
-	];
 	const readConnectivity = (): EngineConnectivity => {
 		try {
 			return connectivity();
@@ -1627,7 +1399,7 @@ export function createRxdbSyncEngine(
 			// runnable tasks, or the sweep seeds work the drain won't see until
 			// its regular interval.
 			reconnectRetick = Promise.all(
-				reconnectRetickSeedLanes.map((lane) => runAutomaticTick(() => tickLaneWithEvents(lane)))
+				SEED_RETICK_LANES.map((lane) => runAutomaticTick(() => tickLaneWithEvents(lane)))
 			)
 				.then(() => runAutomaticTick(() => tickLaneWithEvents('scheduler-drain')))
 				.then(() => runAutomaticTick(() => tickLaneWithEvents('write-drain')))
@@ -1740,11 +1512,9 @@ export function createRxdbSyncEngine(
 		void ready.then(
 			async () => {
 				if (disposed) return;
-				await Promise.all([
-					runAutomaticTick(() => tickLaneWithEvents('reference-seed')),
-					runAutomaticTick(() => tickLaneWithEvents('product-browse-window-seed')),
-					runAutomaticTick(() => tickLaneWithEvents('order-window-seed')),
-				]);
+				await Promise.all(
+					SEED_RETICK_LANES.map((lane) => runAutomaticTick(() => tickLaneWithEvents(lane)))
+				);
 				await runAutomaticTick(() => tickLaneWithEvents('scheduler-drain'));
 				// dispose() may have run during the awaited seeds above — arming now
 				// would repopulate laneNextDueAtMs on a disposed engine.
@@ -1759,27 +1529,15 @@ export function createRxdbSyncEngine(
 						void runAutomaticTick(() => tickLaneWithEvents('change-signal'));
 					});
 				}
-				writeDrainTimer = armLaneInterval('write-drain', intervals.writeDrainPollMs);
-				maintenanceTimers.push(armLaneInterval('scheduler-drain', intervals.schedulerDrainMs));
-				maintenanceTimers.push(armLaneInterval('order-window-seed', intervals.orderWindowSeedMs));
-				maintenanceTimers.push(
-					armLaneInterval('product-browse-window-seed', intervals.productBrowseWindowSeedMs)
-				);
-				maintenanceTimers.push(armLaneInterval('reference-seed', intervals.referenceSeedMs));
-				maintenanceTimers.push(armLaneInterval('customer-trickle', intervals.customerTrickleMs));
-				if (maintenanceLanes.queryTotalRetry !== null) {
-					void runAutomaticTick(() => tickLaneWithEvents('query-total-retry'));
-					maintenanceTimers.push(
-						armLaneInterval('query-total-retry', intervals.queryTotalRetryScanMs)
-					);
+				for (const lane of INTERVAL_LANES) {
+					if (lane === 'query-total-retry') {
+						if (maintenanceLanes.queryTotalRetry === null) continue;
+						void runAutomaticTick(() => tickLaneWithEvents(lane));
+					}
+					const timer = armLaneInterval(lane, intervals[laneRegistryEntry(lane).intervalKey]);
+					if (lane === 'write-drain') writeDrainTimer = timer;
+					else maintenanceTimers.push(timer);
 				}
-				maintenanceTimers.push(
-					armLaneInterval('coverage-compaction', intervals.coverageCompactionScanMs)
-				);
-				maintenanceTimers.push(armLaneInterval('existence-prime', intervals.existencePrimeMs));
-				maintenanceTimers.push(
-					armLaneInterval('existence-reconcile', intervals.existenceReconcileMs)
-				);
 			},
 			() => undefined
 		);
@@ -1822,45 +1580,12 @@ export function createRxdbSyncEngine(
 				wrongScopeWrites: stats.wrongScopeWrites,
 				lateResponsesDropped: stats.lateResponsesDropped,
 			},
-			lanes: {
-				// Key order mirrors the documented all-lane sync() order (seeds
-				// before the scheduler drain — #516 item 6).
-				'change-signal': laneStatus('change-signal', changeSignalLane.lastError()),
-				'write-drain': laneStatus('write-drain', writeDrainLane.lastError()),
-				'order-window-seed': laneStatus(
-					'order-window-seed',
-					maintenanceLanes.orderWindowSeed.lastError()
-				),
-				'product-browse-window-seed': laneStatus(
-					'product-browse-window-seed',
-					maintenanceLanes.productBrowseWindowSeed.lastError()
-				),
-				'reference-seed': laneStatus('reference-seed', maintenanceLanes.referenceSeed.lastError()),
-				'scheduler-drain': laneStatus(
-					'scheduler-drain',
-					maintenanceLanes.schedulerDrain.lastError()
-				),
-				'query-total-retry': laneStatus(
-					'query-total-retry',
-					maintenanceLanes.queryTotalRetry?.lastError() ?? null
-				),
-				'customer-trickle': laneStatus(
-					'customer-trickle',
-					maintenanceLanes.customerTrickle.lastError()
-				),
-				'coverage-compaction': laneStatus(
-					'coverage-compaction',
-					maintenanceLanes.coverageCompaction.lastError()
-				),
-				'existence-prime': laneStatus(
-					'existence-prime',
-					maintenanceLanes.existencePrime.lastError()
-				),
-				'existence-reconcile': laneStatus(
-					'existence-reconcile',
-					maintenanceLanes.existenceReconcile.lastError()
-				),
-			},
+			lanes: Object.fromEntries(
+				LANE_REGISTRY.map(({ laneName, targetKey }) => [
+					laneName,
+					laneStatus(laneName, laneTargets[targetKey]?.lastError() ?? null),
+				])
+			) as EngineStatus['lanes'],
 			queueDepth: writeDrainLane.lastKnownQueueDepth(),
 			collections: Object.fromEntries(
 				SYNC_COLLECTION_NAMES.map((collection) => [
@@ -2001,307 +1726,9 @@ export function createRxdbSyncEngine(
 				return enqueueResult;
 			});
 		},
-		conflicts: async () => {
-			assertNotDisposed();
-			await readySettledForSync;
-			const database = activeDatabase();
-			if (!database) return [];
-			return (await queueFor(database).all()).filter(
-				(entry) =>
-					entry.status === 'conflicted' ||
-					entry.status === 'needs-revision' ||
-					entry.status === 'rejected'
-			);
-		},
-		resolveConflict: async (mutationId, resolution) => {
-			assertNotDisposed();
-			await readySettledForSync;
-			// Scope-guarded like write(): the resolution writes into the captured
-			// scope's queue + record, and a switch/reset mid-resolution drops them.
-			let needsRepull: number | null = null;
-			let resolved: { collectionName: string; recordId: string } | null = null;
-			await manager.runGuarded(async (bound) => {
-				const database = databaseByScopeId.get(bound.scopeId);
-				if (!database) throw new Error('resolveConflict: scope database not open');
-				const queue = queueFor(database);
-				const entry = (await queue.all()).find((item) => item.mutationId === mutationId);
-				if (
-					!entry ||
-					(entry.status !== 'conflicted' &&
-						entry.status !== 'needs-revision' &&
-						entry.status !== 'rejected')
-				) {
-					throw new Error(`resolveConflict: terminal mutation "${mutationId}" not found`);
-				}
-				if (resolution === 'retry-with-server-base' && entry.status === 'rejected') {
-					throw new Error('resolveConflict: rejected mutations can only be discarded');
-				}
-				// The retry's base: a 'conflicted' row carries the 409's server
-				// revision; a 'needs-revision' row (or a conflicted row whose 409
-				// carried none — never a same-base retry loop, #516 item 4) FIRST
-				// refreshes it from the server. The refresh is read-only and throws
-				// on failure, leaving the row parked and re-runnable.
-				let serverBase: string | null = null;
-				if (resolution === 'retry-with-server-base') {
-					serverBase = entry.conflictRevision ?? null;
-					if (!serverBase) {
-						const facet = writeFacetFor(entry.collectionName);
-						if (!facet) {
-							throw new Error(
-								`resolveConflict: no server revision on "${mutationId}" and no refresh seam for "${entry.collectionName}" — discard instead`
-							);
-						}
-						const row = (
-							await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
-						)?.toJSON() as Record<string, unknown> | undefined;
-						const remoteId = row?.[facet.remoteIdField];
-						if (typeof remoteId !== 'number') {
-							throw new Error(
-								`resolveConflict: cannot refresh the server revision for "${mutationId}" — the record has no server identity; discard instead`
-							);
-						}
-						if (entry.collectionName === 'orders') {
-							serverBase = await fetchOrderServerRevision({
-								fetch: bound.bindFetch(fetcher as never) as never,
-								syncBaseUrl: ports.site.syncBaseUrl,
-								wooOrderId: remoteId,
-							});
-						} else {
-							const serverDocument = await facet.fetchServerDocument({
-								fetch: bound.bindFetch(fetcher as never),
-								syncBaseUrl: ports.site.syncBaseUrl,
-								remoteId,
-							});
-							const refreshedRevision = (serverDocument?.sync as { revision?: unknown } | undefined)
-								?.revision;
-							serverBase =
-								typeof refreshedRevision === 'string' && refreshedRevision !== ''
-									? refreshedRevision
-									: null;
-						}
-						if (!serverBase) {
-							throw new Error(
-								`resolveConflict: the server no longer returns record ${remoteId} — the row stays parked; retry later or discard`
-							);
-						}
-					}
-				}
-				let discardServerDocument: Record<string, unknown> | null = null;
-				let discardRemovesResident = false;
-				if (resolution === 'discard' && entry.collectionName !== 'orders') {
-					const facet = writeFacetFor(entry.collectionName);
-					if (!facet) {
-						throw new Error(
-							`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
-						);
-					}
-					const row = (
-						await database.collections[entry.collectionName]?.findOne(entry.recordId).exec()
-					)?.toJSON() as Record<string, unknown> | undefined;
-					const remoteId =
-						row?.[facet.remoteIdField] ??
-						(entry.payload as Record<string, unknown>).id ??
-						(entry.conflictDocument as Record<string, unknown> | undefined)?.id;
-					if (typeof remoteId === 'number') {
-						discardServerDocument = await facet.fetchServerDocument({
-							fetch: bound.bindFetch(fetcher as never),
-							syncBaseUrl: ports.site.syncBaseUrl,
-							remoteId,
-						});
-						discardRemovesResident = discardServerDocument === null;
-					} else if (entry.operation === 'create') {
-						// A rejected born-local create has no remote identity because it
-						// never existed server-side. Discard therefore means tombstone.
-						discardRemovesResident = true;
-					}
-				}
-				const applied = await bound.guardWrite(async () => {
-					if (resolution === 'retry-with-server-base') {
-						// Back to pending on the SERVER's base (same mutationId — the intent
-						// is unchanged, so the server-side replay key stays valid). Strip the
-						// stored conflict + backoff bookkeeping: this is a fresh decision.
-						const {
-							conflictDocument: _document,
-							conflictRevision: _revision,
-							attempts: _attempts,
-							nextAttemptAt: _gate,
-							...intact
-						} = entry;
-						await queue.replace({
-							...intact,
-							baseRevision: serverBase ?? entry.baseRevision,
-							status: 'pending',
-						});
-						// Re-anchor the resident record's sync.revision too — the drain
-						// re-stamps from it at push time, and leaving the stale value there
-						// would immediately clobber the base we just chose (a 409 loop).
-						const doc = (await database.collections[entry.collectionName]
-							?.findOne(entry.recordId)
-							.exec()) as {
-							incrementalModify(
-								fn: (data: Record<string, unknown>) => Record<string, unknown>
-							): Promise<unknown>;
-						} | null;
-						if (doc && serverBase) {
-							const revision = serverBase;
-							await doc.incrementalModify((data) => ({
-								...data,
-								sync: { ...((data.sync ?? {}) as object), revision },
-							}));
-						}
-					} else {
-						const doc = (await database.collections[entry.collectionName]
-							?.findOne(entry.recordId)
-							.exec()) as {
-							toJSON(): Record<string, unknown>;
-							incrementalModify(
-								fn: (data: Record<string, unknown>) => Record<string, unknown>
-							): Promise<unknown>;
-							remove(): Promise<unknown>;
-						} | null;
-						const row = doc?.toJSON() as { wooOrderId?: number | null } | undefined;
-						// #516 item 5: queue the server-truth re-pull DURABLY *before*
-						// clearing local state. A persisted targeted scheduler task
-						// survives crashes and failed fetches (a failed task re-runs once
-						// its retry gate elapses), so discard can never strand the record
-						// silently posing as synced with the re-pull lost in memory.
-						if (entry.collectionName === 'orders' && typeof row?.wooOrderId === 'number') {
-							needsRepull = row.wooOrderId;
-							await seedTargetedOrderSchedulerTask({
-								orderIds: [row.wooOrderId],
-								priority: 1_000,
-								completedDedupeForMs: 0,
-								...(ports.now !== undefined ? { nowMs: ports.now() } : {}),
-								database: database,
-							});
-						}
-						if (entry.collectionName !== 'orders' && discardServerDocument) {
-							const facet = writeFacetFor(entry.collectionName);
-							if (!facet) {
-								throw new Error(
-									`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
-								);
-							}
-							let documentToApply = discardServerDocument;
-							const successors = (await queue.pending()).filter(
-								(mutation) =>
-									mutation.collectionName === entry.collectionName &&
-									mutation.recordId === entry.recordId &&
-									mutation.mutationId !== mutationId
-							);
-							if (successors.length > 0) {
-								const resident = doc?.toJSON();
-								const serverPayload = (discardServerDocument.payload ?? {}) as Record<
-									string,
-									unknown
-								>;
-								const optimistic =
-									resident ??
-									facet.documentFromServerPayload(
-										successors.reduce<Record<string, unknown>>(
-											(payload, mutation) =>
-												mutation.operation === 'delete'
-													? payload
-													: { ...payload, ...mutation.payload },
-											serverPayload
-										)
-									);
-								const local = (optimistic.local ?? {}) as {
-									dirty?: boolean;
-									pendingMutationIds?: string[];
-								};
-								const pendingMutationIds = [
-									...new Set([
-										...(Array.isArray(local.pendingMutationIds)
-											? local.pendingMutationIds.filter((id) => id !== mutationId)
-											: []),
-										...successors.map((mutation) => mutation.mutationId),
-									]),
-								];
-								documentToApply = {
-									...discardServerDocument,
-									...optimistic,
-									[facet.remoteIdField]: discardServerDocument[facet.remoteIdField],
-									payload: optimistic.payload,
-									sync: {
-										...((optimistic.sync ?? {}) as object),
-										...((discardServerDocument.sync ?? {}) as object),
-									},
-									local: { ...local, pendingMutationIds, dirty: true },
-								};
-							}
-							// Apply server truth BEFORE removing the terminal queue row. If
-							// storage fails or the process stops, the durable conflict remains
-							// retryable; there is no state where discard reports success while
-							// the local row still poses as synced stale truth.
-							await facet.upsertServerDocument(database, documentToApply);
-						}
-						if (discardRemovesResident && doc) await doc.remove();
-						await queue.remove([mutationId]);
-						if (doc && !discardRemovesResident) {
-							await doc.incrementalModify((data) => {
-								const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
-								const pendingMutationIds = (local.pendingMutationIds ?? []).filter(
-									(id) => id !== mutationId
-								);
-								return {
-									...data,
-									local: { ...local, pendingMutationIds, dirty: pendingMutationIds.length > 0 },
-								};
-							});
-						}
-					}
-				});
-				if (applied === 'dropped') {
-					throw new Error(
-						'resolveConflict: scope moved during resolution — retry against the settled scope'
-					);
-				}
-				resolved = { collectionName: entry.collectionName, recordId: entry.recordId };
-			});
-			// Discard chose server truth — attempt the re-pull's IMMEDIATE
-			// completion (its own scope guard; outside ours). The durable task
-			// seeded above is the guarantee: if this attempt cannot complete now, a
-			// later scheduler-drain tick finishes it (#516 item 5). Born-local
-			// creates have no Woo id and nothing server-side to restore.
-			if (needsRepull !== null) {
-				try {
-					await requirePlane.require({
-						id: `conflict-discard:${mutationId}`,
-						collection: 'orders',
-						kind: 'targeted-records',
-						wooIds: [needsRepull],
-						forceRefresh: true,
-						priority: 1_000,
-					}).ready;
-				} catch (error) {
-					diagnostics({
-						type: 'queue.write.discard-repull-deferred',
-						level: 'warn',
-						collection: 'orders',
-						message: `discard re-pull deferred to the durable scheduler task: ${error instanceof Error ? error.message : String(error)}`,
-						fields: { mutationId, wooOrderId: needsRepull },
-					});
-				}
-			}
-			const settled = resolved as { collectionName: string; recordId: string } | null;
-			if (settled) {
-				diagnostics({
-					type: 'queue.write.resolve',
-					level: 'info',
-					collection: settled.collectionName,
-					fields: { recordId: settled.recordId, mutationId, resolution },
-				});
-				// The resolution changed queue state outside the drain path — refresh
-				// the cached depth and tell status subscribers, or an idle engine
-				// keeps showing the pre-resolution depth.
-				const database = activeDatabase();
-				if (database) {
-					writeDrainLane.noteQueueDepth((await queueFor(database).pending()).length);
-				}
-				scheduleStatusChange();
-			}
-		},
+		conflicts: () => conflictResolution.conflicts(),
+		resolveConflict: (mutationId, resolution) =>
+			conflictResolution.resolveConflict(mutationId, resolution),
 		require: (requirement) => {
 			assertNotDisposed();
 			return requirePlane.require(requirement);
@@ -2338,12 +1765,7 @@ export function createRxdbSyncEngine(
 				});
 				return report;
 			};
-			if (
-				lane !== undefined &&
-				lane !== 'change-signal' &&
-				lane !== 'write-drain' &&
-				!(lane in MAINTENANCE_LANES)
-			) {
+			if (lane !== undefined && !LANE_REGISTRY.some((entry) => entry.laneName === lane)) {
 				throw new Error(`Unknown engine lane "${String(lane)}"`);
 			}
 			await readySettledForSync;
@@ -2365,20 +1787,8 @@ export function createRxdbSyncEngine(
 			// just-seeded work still pending until some later tick.
 			// customer-trickle is idle-only by design: a manual full sync must
 			// not imply a trickle tick. Its explicit single-lane form remains valid.
-			const ordered: EngineLane[] = [
-				'change-signal',
-				'write-drain',
-				'order-window-seed',
-				'product-browse-window-seed',
-				'reference-seed',
-				'scheduler-drain',
-				'query-total-retry',
-				'coverage-compaction',
-				'existence-prime',
-				'existence-reconcile',
-			];
 			const reports: SyncReport[] = [];
-			for (const name of ordered) {
+			for (const name of MANUAL_SYNC_LANES) {
 				const report = await tickLaneWithEvents(name, options?.signal);
 				laneLastTick.set(name, {
 					atMs: ports.now !== undefined ? ports.now() : Date.now(),

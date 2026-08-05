@@ -14,8 +14,8 @@ import type { ProductBrowseDimensions } from '../require-plane';
  *    re-sorted that slice for every other column — which is the WRONG slice of the catalog
  *    for the new sort (the local rows are the first N by menu_order, not by the chosen
  *    sort): plausible-looking, silently wrong data. The window now carries `orderby`/
- *    `order`, so a non-default sort RE-SEEDS a server-sorted window. Only sorts inside WC
- *    core's products `orderby` enum are expressible; the rest fall back to the default
+ *    `order`, so a non-default sort RE-SEEDS a server-sorted window. Only sorts inside the
+ *    supported products `orderby` enum are expressible; the rest fall back to the default
  *    window (the caller maps them — see requirementsForQuery). The window remains bounded
  *    and travels with the sort the grid is actually showing.
  *  - **Size.** The window grows with the grid's limit (infinite scroll) in
@@ -39,7 +39,7 @@ import type { ProductBrowseDimensions } from '../require-plane';
 export const PRODUCT_BROWSE_WINDOW_ORDERBY = 'menu_order';
 export const PRODUCT_BROWSE_WINDOW_ORDER = 'asc';
 
-/** WC core's products `orderby` enum, minus `include` (meaningless for a browse window). */
+/** Supported products `orderby` values, including the WCPOS plugin extensions. */
 export const PRODUCT_BROWSE_WINDOW_ORDERBY_VALUES = [
 	'date',
 	'modified',
@@ -50,6 +50,10 @@ export const PRODUCT_BROWSE_WINDOW_ORDERBY_VALUES = [
 	'popularity',
 	'rating',
 	'menu_order',
+	'sku',
+	'barcode',
+	'stock_quantity',
+	'stock_status',
 ] as const;
 
 export type ProductBrowseWindowOrderby = (typeof PRODUCT_BROWSE_WINDOW_ORDERBY_VALUES)[number];
@@ -201,8 +205,8 @@ function parseCanonicalIds(value: string | undefined): number[] | null | undefin
 
 /**
  * Parse a browse-window queryKey. The limit is a positive integer within
- * {@link PRODUCT_BROWSE_WINDOW_MAX_LIMIT}; the sort, when present, must be inside WC
- * core's products orderby enum and must not restate the default (one key per window).
+ * {@link PRODUCT_BROWSE_WINDOW_MAX_LIMIT}; the sort, when present, must be inside the
+ * supported products orderby enum and must not restate the default (one key per window).
  * Returns null when the queryKey is not a supported browse-window descriptor.
  */
 export function parseProductBrowseWindowDescriptor(

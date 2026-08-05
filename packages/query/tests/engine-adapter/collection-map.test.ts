@@ -6,6 +6,9 @@ import {
 	collectionMap,
 	promotedColumnsFor,
 	resolveLegacyField,
+	sortAliasFor,
+	sortTiebreakFor,
+	wooOrderbyFor,
 } from '../../src/engine-adapter/collection-map';
 
 describe('engine adapter collection map', () => {
@@ -140,6 +143,56 @@ describe('engine adapter collection map', () => {
 			kind: 'computed',
 			enginePath: 'payload.total',
 			numeric: true,
+		});
+	});
+
+	it('pins the declared sort vocabulary', () => {
+		const declaredValues = (
+			collection: 'products' | 'variations' | 'orders',
+			accessor: (collection: 'products' | 'variations' | 'orders', field: string) => unknown
+		) =>
+			Object.fromEntries(
+				Object.keys(collectionMap[collection].fields)
+					.map((field) => [field, accessor(collection, field)] as const)
+					.filter((entry) => entry[1] !== undefined)
+			);
+
+		expect(declaredValues('products', sortAliasFor)).toEqual({
+			price: 'sortable_price',
+		});
+		expect(declaredValues('orders', sortAliasFor)).toEqual({
+			total: 'sortable_total',
+		});
+		expect(declaredValues('products', sortTiebreakFor)).toEqual({
+			menu_order: ['id'],
+		});
+		expect(declaredValues('variations', sortTiebreakFor)).toEqual({
+			menu_order: ['id'],
+		});
+		expect(declaredValues('orders', sortTiebreakFor)).toEqual({});
+		expect(declaredValues('products', wooOrderbyFor)).toEqual({
+			sku: 'sku',
+			barcode: 'barcode',
+			menu_order: 'menu_order',
+			id: 'id',
+			name: 'title',
+			price: 'price',
+			sortable_price: 'price',
+			total_sales: 'popularity',
+			date_created_gmt: 'date',
+			date_modified_gmt: 'modified',
+			stock_status: 'stock_status',
+			stock_quantity: 'stock_quantity',
+		});
+		expect(declaredValues('orders', wooOrderbyFor)).toEqual({
+			status: 'status',
+			customer_id: 'customer_id',
+			date_created_gmt: 'date',
+			date_modified_gmt: 'modified',
+			number: 'id',
+			id: 'id',
+			total: 'total',
+			payment_method: 'payment_method',
 		});
 	});
 

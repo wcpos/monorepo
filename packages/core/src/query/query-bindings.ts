@@ -60,12 +60,13 @@ export interface QueryBinding {
 	sync(): Promise<void>;
 }
 
-const COMPLETE_COLLECTION_LANES: Partial<Record<LegacyCollectionName, string>> = {
+/**
+ * Tax rates are seeded by the engine's boot lane, but requirementsForQuery declares no
+ * requirement for them, so there is no handle to carry the key. The engine-side declaration
+ * lives in rx-pos-bootstrap-seeder.ts.
+ */
+const BOOT_LANE_QUERY_KEYS: Partial<Record<LegacyCollectionName, string>> = {
 	taxes: 'taxRates:all',
-	'products/categories': 'categories:all',
-	'products/tags': 'tags:all',
-	'products/brands': 'brands:all',
-	coupons: 'coupons:all',
 };
 
 const DEMAND_RETRY_BACKOFF_MS = 250;
@@ -159,15 +160,10 @@ function useDemand(
 		const declare = (retryOnReject: boolean) => {
 			if (cancelled) return;
 			handles = declareRequirements(engine, requirements);
-			const browseIndex = requirements.findIndex(
-				(requirement) =>
-					requirement.kind === 'orders-browse' || requirement.kind === 'product-browse'
-			);
-			const fixedKey =
-				Object.keys(stableSelector).length === 0
-					? (COMPLETE_COLLECTION_LANES[descriptor.collection] ?? null)
-					: null;
-			queryKey$.next(plan.represented ? (handles[browseIndex]?.queryKey ?? fixedKey) : fixedKey);
+			const handleQueryKey = handles.find((handle) => handle.queryKey !== null)?.queryKey ?? null;
+			const isUnfiltered = Object.keys(stableSelector).length === 0;
+			const fixedKey = isUnfiltered ? (BOOT_LANE_QUERY_KEYS[descriptor.collection] ?? null) : null;
+			queryKey$.next(plan.represented || isUnfiltered ? (handleQueryKey ?? fixedKey) : null);
 			const settled = Promise.all(handles.map((handle) => handle.ready)).then(() => undefined);
 			// The readiness barrier must stay PENDING across the scheduled retry: settling
 			// through the rejection would let whenReady() complete while nothing is in

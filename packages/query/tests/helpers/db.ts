@@ -16,7 +16,7 @@ import { logsLiteral } from './schemas/logs';
 import { productsLiteral } from './schemas/products';
 import { syncLiteral } from './schemas/sync';
 import { variationsLiteral } from './schemas/variations';
-import { searchPlugin } from './search';
+import { searchPlugin } from '../../src/search';
 
 import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
 

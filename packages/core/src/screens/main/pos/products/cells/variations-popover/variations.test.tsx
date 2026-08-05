@@ -22,6 +22,7 @@ const mockVariationDocuments = [
 		attributes: [{ id: 1, name: 'Color', option: 'Blue' }],
 	},
 ];
+const mockSync = jest.fn().mockResolvedValue(undefined);
 const mockUseCollectionBinding = jest.fn(
 	(_collection: string, state: { filters: { status?: string } }) => {
 		const hits = mockVariationDocuments
@@ -30,6 +31,7 @@ const mockUseCollectionBinding = jest.fn(
 		return {
 			resource: { value: { count: hits.length, hits } },
 			active$: of(false),
+			sync: mockSync,
 		};
 	}
 );
@@ -121,6 +123,27 @@ function StateProbe() {
 }
 
 describe('Variations popover query state', () => {
+	beforeEach(() => {
+		mockSync.mockClear();
+	});
+
+	it('refreshes variations once when opened, not when re-rendered', () => {
+		const props = {
+			parent: {
+				variations: [11, 12],
+				attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+			} as never,
+			addToCart: jest.fn(),
+		};
+		const { rerender } = render(<VariationsPopover {...props} />);
+
+		expect(mockSync).toHaveBeenCalledTimes(1);
+
+		rerender(<VariationsPopover {...props} />);
+
+		expect(mockSync).toHaveBeenCalledTimes(1);
+	});
+
 	it('does not show draft variations', () => {
 		render(
 			<VariationsPopover

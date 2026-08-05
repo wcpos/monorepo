@@ -18,6 +18,14 @@ import {
 } from '@wcpos/sync-engine/testing';
 import { QueryProvider, useQueryRuntime } from '@wcpos/query';
 import type { QueryResult } from '@wcpos/query';
+import {
+	createEngineDatabase,
+	createFakeEngine,
+	engineOrder,
+	engineProduct,
+	engineVariation,
+} from '@wcpos/query/testing';
+import type { FakeEngine } from '@wcpos/query/testing';
 
 import {
 	useAppliedCouponReferenceDemand,
@@ -27,16 +35,8 @@ import {
 	useSearchSelect,
 } from './query-bindings';
 import { createStoreDatabase } from '../../../query/tests/helpers/db';
-import {
-	createEngineDatabase,
-	createFakeEngine,
-	engineOrder,
-	engineProduct,
-	engineVariation,
-} from '../../../query/tests/helpers/engine';
 
 import type { QueryStateOf } from './query-state-types';
-import type { FakeEngine } from '../../../query/tests/helpers/engine';
 import type { RxCollection, RxDatabase } from 'rxdb';
 
 Object.assign(globalThis, { TextDecoder, TextEncoder });
@@ -1306,6 +1306,29 @@ describe('query bindings', () => {
 		engine.refreshFailure = undefined;
 		await act(async () => jest.advanceTimersByTimeAsync(1_000));
 		await expect(barrier).resolves.toBe(true);
+	});
+
+	it('settles whenSettled and abandons a scheduled retry on unmount', async () => {
+		jest.useFakeTimers();
+		engine.refreshFailure = new Error('permanent refresh failure');
+		const { result, unmount } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+		const barrier = result.current.whenSettled();
+
+		await act(async () => jest.advanceTimersByTimeAsync(100));
+		unmount();
+
+		await expect(barrier).resolves.toBe(true);
+		await act(async () => jest.advanceTimersByTimeAsync(1_000));
+		for (const collection of ['coupons', 'categories']) {
+			expect(
+				engine.requireCalls.filter(
+					(call) => call.kind === 'refresh' && call.collection === collection
+				)
+			).toHaveLength(1);
+		}
 	});
 
 	it('binds cashier search-select to eligible customer roles only', async () => {

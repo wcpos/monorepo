@@ -41,6 +41,7 @@ import {
 	censusQueryKey,
 	emptyPersistedSchedulerTaskRunnerResult,
 	type FetchTask,
+	laneKeyFor,
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	orderBrowserQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
@@ -91,15 +92,15 @@ export type OrderBrowseDimensions = {
 	/** date_created_gmt range bounds, epoch seconds. */
 	afterSeconds?: number;
 	beforeSeconds?: number;
-	/** WC REST orders orderby enum. Both orderby and order, or neither. */
-	orderby?: 'date' | 'modified' | 'id';
+	/** Supported orders orderby values. Both orderby and order, or neither. */
+	orderby?: 'date' | 'modified' | 'id' | 'status' | 'customer_id' | 'payment_method' | 'total';
 	order?: 'asc' | 'desc';
 };
 
 export type ProductBrowseDimensions = {
 	/** Requested window size, raw — the engine quantizes (steps of 100, cap 1000). Default 100. */
 	limit?: number;
-	/** WC REST products orderby enum. Both orderby and order, or neither. */
+	/** Supported products orderby values. Both orderby and order, or neither. */
 	orderby?: ProductBrowseWindowOrderby;
 	order?: 'asc' | 'desc';
 	category?: number[];
@@ -135,7 +136,7 @@ export type CoverageOutcome = {
 export type RequirementHandle = {
 	ready: Promise<CoverageOutcome>;
 	release(): void;
-	/** Canonical persisted lane identity for browse kinds; null otherwise. */
+	/** Canonical persisted lane identity when the requirement maps to one; null otherwise. */
 	readonly queryKey: string | null;
 };
 
@@ -598,13 +599,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			}
 
 			if (item.requirement.kind === 'search') {
-				// Products/customers search is UI-anchored (#473): construct the same FetchTask shape
+				// Products/customers/variations search is UI-anchored (#473): construct the same FetchTask shape
 				// in memory and invoke only its registered fetcher. It never enters durable scheduler
 				// state, so a periodic drain cannot reclaim it after the declarers release it.
 				const searchCollection = item.requirement.collection;
-				if (searchCollection !== 'products' && searchCollection !== 'customers') {
+				if (!['products', 'customers', 'variations'].includes(searchCollection)) {
 					throw new Error(
-						`require: 'search' supports products/customers; "${searchCollection}" is unsupported`
+						`require: 'search' supports products/customers/variations; "${searchCollection}" is unsupported`
 					);
 				}
 				const term = (item.requirement.term ?? '').trim();
@@ -617,9 +618,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				}
 				const encodedTerm = encodeURIComponent(term);
 				const queryKey =
-					searchCollection === 'products'
-						? `products:search:${encodedTerm}`
-						: `customers:search=${encodedTerm}:limit=${limit}`;
+					searchCollection === 'customers'
+						? `customers:search=${encodedTerm}:limit=${limit}`
+						: `${searchCollection}:search:${encodedTerm}`;
 				if (!item.requirement.forceRefresh) {
 					const lane = await coverage.readLane(searchCollection, queryKey);
 					if (lane?.complete && lane.fresh) {
@@ -647,7 +648,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								reason: 'products catalogue is fully resident locally',
 							};
 						}
-					} else if (await deps.customerSearchCatalogComplete?.()) {
+					} else if (
+						searchCollection === 'customers' &&
+						(await deps.customerSearchCatalogComplete?.())
+					) {
 						return {
 							action: 'serve-local',
 							missingRecordIds: [],
@@ -942,6 +946,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				if (requirement.kind === 'product-browse') {
 					return productBrowseWindowQueryKeyFromDimensions(requirement);
 				}
+				if (requirement.kind === 'refresh') return laneKeyFor(requirement.collection);
 				return null;
 			})();
 			deps.onActivityChange?.(requirement.collection, 1);

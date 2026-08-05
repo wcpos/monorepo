@@ -1,4 +1,8 @@
-import type { SyncCollectionName } from '@wcpos/sync-engine';
+import type {
+	OrderBrowseDimensions,
+	ProductBrowseDimensions,
+	SyncCollectionName,
+} from '@wcpos/sync-engine';
 
 export type LegacyCollectionName =
 	| 'products'
@@ -105,6 +109,10 @@ export type EngineDocument = Record<string, unknown> & {
 
 export type FieldKind = 'promoted' | 'payload' | 'computed' | 'identifier';
 
+type WooOrderby = NonNullable<
+	OrderBrowseDimensions['orderby'] | ProductBrowseDimensions['orderby']
+>;
+
 export type FieldMapEntry = {
 	legacy: string;
 	kind: FieldKind;
@@ -115,6 +123,11 @@ export type FieldMapEntry = {
 	numeric?: boolean;
 	notes?: string;
 	compute?: (document: EngineDocument) => unknown;
+	sort?: {
+		uiAlias?: string; // Canonical sort field for this persisted UI column key.
+		wooOrderby?: WooOrderby; // Wire orderby; absent when server sorting is unsupported today.
+		tiebreak?: readonly string[]; // Extra sort fields appended by the UI contract.
+	};
 };
 
 type CollectionMapEntry = {
@@ -164,17 +177,63 @@ export const collectionMap = {
 		engineCollection: 'products',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			sku: {
+				legacy: 'sku',
+				kind: 'payload',
+				enginePath: 'payload.sku',
+				sort: { wooOrderby: 'sku' },
+			},
+			barcode: {
+				legacy: 'barcode',
+				kind: 'payload',
+				enginePath: 'payload.barcode',
+				sort: { wooOrderby: 'barcode' },
+			},
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
 				enginePath: 'wooProductId',
 				adapterDerived: false,
+				sort: { wooOrderby: 'id' },
+			},
+			name: {
+				legacy: 'name',
+				kind: 'payload',
+				enginePath: 'payload.name',
+				sort: { wooOrderby: 'title' },
+			},
+			// 1.9 catalog-order contract (#810): equal menu_order values (usually 0) are
+			// common, so the Woo id tiebreak is part of the sort rather than an engine detail.
+			menu_order: {
+				legacy: 'menu_order',
+				kind: 'payload',
+				enginePath: 'payload.menu_order',
+				sort: { wooOrderby: 'menu_order', tiebreak: ['id'] },
+			},
+			total_sales: {
+				legacy: 'total_sales',
+				kind: 'payload',
+				enginePath: 'payload.total_sales',
+				sort: { wooOrderby: 'popularity' },
+			},
+			date_created_gmt: {
+				legacy: 'date_created_gmt',
+				kind: 'payload',
+				enginePath: 'payload.date_created_gmt',
+				sort: { wooOrderby: 'date' },
+			},
+			date_modified_gmt: {
+				legacy: 'date_modified_gmt',
+				kind: 'payload',
+				enginePath: 'payload.date_modified_gmt',
+				sort: { wooOrderby: 'modified' },
 			},
 			stock_status: {
 				legacy: 'stock_status',
 				kind: 'promoted',
 				enginePath: 'stockStatus',
 				write: (value) => String(value ?? ''),
+				sort: { wooOrderby: 'stock_status' },
 			},
 			featured: {
 				legacy: 'featured',
@@ -241,6 +300,7 @@ export const collectionMap = {
 					const numeric = Number(value);
 					return Number.isFinite(numeric) ? numeric : null;
 				},
+				sort: { wooOrderby: 'stock_quantity' },
 			},
 			sortable_price: {
 				legacy: 'sortable_price',
@@ -249,6 +309,7 @@ export const collectionMap = {
 				numeric: true,
 				notes: 'Numeric JS sort over the source string; never the cents-rounded promoted price.',
 				compute: (document) => Number(valueAtPath(document, 'payload.price')),
+				sort: { wooOrderby: 'price' },
 			},
 			price: {
 				legacy: 'price',
@@ -258,6 +319,7 @@ export const collectionMap = {
 				write: (value) => Math.max(0, Math.round((Number(value) || 0) * 100) / 100),
 				numeric: true,
 				notes: 'Promoted price is numeric cents precision; reads preserve the Woo string.',
+				sort: { uiAlias: 'sortable_price', wooOrderby: 'price' },
 			},
 		},
 	},
@@ -265,6 +327,13 @@ export const collectionMap = {
 		engineCollection: 'variations',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
+			// Variations share the product catalog-order contract (#871).
+			menu_order: {
+				legacy: 'menu_order',
+				kind: 'payload',
+				enginePath: 'payload.menu_order',
+				sort: { tiebreak: ['id'] },
+			},
 			id: {
 				legacy: 'id',
 				kind: 'identifier',
@@ -333,30 +402,41 @@ export const collectionMap = {
 				kind: 'identifier',
 				enginePath: 'wooOrderId',
 				adapterDerived: false,
+				sort: { wooOrderby: 'id' },
 			},
 			status: {
 				legacy: 'status',
 				kind: 'promoted',
 				enginePath: 'status',
 				write: (value) => String(value ?? ''),
+				sort: { wooOrderby: 'status' },
 			},
 			customer_id: {
 				legacy: 'customer_id',
 				kind: 'promoted',
 				enginePath: 'customerId',
 				write: (value) => Number(value ?? 0),
+				sort: { wooOrderby: 'customer_id' },
 			},
 			date_created_gmt: {
 				legacy: 'date_created_gmt',
 				kind: 'promoted',
 				enginePath: 'dateCreatedGmt',
 				write: (value) => String(value ?? ''),
+				sort: { wooOrderby: 'date' },
+			},
+			date_modified_gmt: {
+				legacy: 'date_modified_gmt',
+				kind: 'payload',
+				enginePath: 'payload.date_modified_gmt',
+				sort: { wooOrderby: 'modified' },
 			},
 			number: {
 				legacy: 'number',
 				kind: 'promoted',
 				enginePath: 'number',
 				write: (value) => String(value ?? ''),
+				sort: { wooOrderby: 'id' },
 			},
 			sortable_total: {
 				legacy: 'sortable_total',
@@ -371,6 +451,13 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'total',
 				write: (value) => String(value ?? ''),
+				sort: { uiAlias: 'sortable_total', wooOrderby: 'total' },
+			},
+			payment_method: {
+				legacy: 'payment_method',
+				kind: 'payload',
+				enginePath: 'payload.payment_method',
+				sort: { wooOrderby: 'payment_method' },
 			},
 			cashier: {
 				legacy: 'cashier',
@@ -487,6 +574,30 @@ export function resolveLegacyField(
 			enginePath: `payload.${legacy}`,
 		}
 	);
+}
+
+export function sortAliasFor(collection: LegacyCollectionName, field: string): string | undefined {
+	return resolveLegacyField(collection, field).sort?.uiAlias;
+}
+
+type WooOrderbyFor<C extends LegacyCollectionName> = C extends 'products'
+	? NonNullable<ProductBrowseDimensions['orderby']>
+	: C extends 'orders'
+		? NonNullable<OrderBrowseDimensions['orderby']>
+		: WooOrderby;
+
+export function wooOrderbyFor<C extends LegacyCollectionName>(
+	collection: C,
+	field: string
+): WooOrderbyFor<C> | undefined {
+	return resolveLegacyField(collection, field).sort?.wooOrderby as WooOrderbyFor<C> | undefined;
+}
+
+export function sortTiebreakFor(
+	collection: LegacyCollectionName,
+	field: string
+): readonly string[] | undefined {
+	return resolveLegacyField(collection, field).sort?.tiebreak;
 }
 
 export function promotedColumnsFor(

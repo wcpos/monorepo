@@ -3,10 +3,10 @@ import * as React from 'react';
 import { cleanup, render } from '@testing-library/react';
 
 import { createStoreDatabase } from './helpers/db';
-import { createEngineDatabase, createFakeEngine } from './helpers/engine';
+import { createEngineDatabase, createFakeEngine } from '../src/testing';
 import { QueryProvider, useQueryRuntime } from '../src/provider';
 
-import type { FakeEngine } from './helpers/engine';
+import type { FakeEngine } from '../src/testing';
 import type { RxDatabase } from 'rxdb';
 
 describe('QueryProvider', () => {

@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useObservableEagerState } from 'observable-hooks';
+
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
@@ -25,9 +27,16 @@ export function Variations({ row, hideOutOfStock }: Props) {
 	const parent = row.original.document;
 	const state = useQueryState<'variations'>();
 	const actions = useQueryStateActions<'variations'>();
+	const variationIds = useObservableEagerState(parent.variations$!) ?? [];
 	const binding = useCollectionBinding('variations', state, {
-		wooIds: parent.variations ?? [],
+		wooIds: variationIds,
 	});
+	const initialBinding = React.useRef(binding);
+
+	React.useEffect(() => {
+		// Refresh once per row expansion without blocking locally resident variations.
+		void initialBinding.current.sync().catch(() => undefined);
+	}, []);
 
 	React.useEffect(() => {
 		// Collapsing unmounts this table; legacy behavior cleared its row-scoped search and matches.

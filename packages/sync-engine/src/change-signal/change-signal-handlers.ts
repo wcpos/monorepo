@@ -75,6 +75,7 @@ export type HandlerContext = {
 
 const INCLUDE_CHUNK = 50;
 const REFRESH_PAGE_SIZE = 100;
+type PruneByIds = (ids: number[]) => Promise<number>;
 
 function collectionOf(ctx: HandlerContext, name: string): RxCollection {
 	const collection = ctx.database.collections[name];
@@ -112,32 +113,19 @@ async function fetchPayloadPage(
 
 /**
  * Targeted pull: include-chunked fetch (through the descriptor's envelope
- * parser), project, bulkUpsert. A SHORT response normally THROWS — the same assertion
- * the web scheduler fetchers make: a hidden/missing record or a bad partial
- * page must fail the tick (cursor stays put, commit-only-after-all-arms) so
- * the next poll re-detects it; silently lowering the applied count would let
- * the cursor advance past a record that was never applied. The self-healing
- * delete case is covered upstream: a record deleted between signal and pull
- * re-polls as a DELETE row, and the router makes delete win over pull.
- * Products are the exception because status=publish can legitimately exclude
- * requested draft ids: an absent product id means unpublished (or deleted), so
- * the stale resident row is tombstoned immediately rather than left sellable
- * until the next existence-prime pass.
- *
- * `missingSink` flips the shortfall contract for the ONE caller with no
- * upstream delete row to lean on — the rebaseline pull, whose ids come from
- * the local replica, not from sequence-log rows. There a short response is the
- * EXPECTED signature of a record deleted during the skipped window: the
- * missing ids are collected into the sink (for the caller to tombstone)
- * instead of failing the tick, which would wedge the backlog guard in a
- * permanent retry loop. Transport/parse errors still throw in both modes.
+ * parser), project, bulkUpsert. A SHORT response means the server deliberately
+ * omitted or no longer has the absent requested ids, so every targeted
+ * collection prunes those local residents. A caller can provide a custom prune
+ * implementation when deletion also needs to update companion state, such as
+ * the existence manifest. Transport and parse errors still throw before the
+ * prune can run.
  */
 async function pullByIds(
 	ctx: HandlerContext,
 	d: TargetedDescriptor,
 	ids: number[],
 	persist?: (documents: Record<string, unknown>[]) => Promise<void>,
-	missingSink?: number[]
+	pruneByIds?: PruneByIds
 ): Promise<number> {
 	if (ids.length === 0) return 0;
 	const collection = collectionOf(ctx, d.collection);
@@ -152,18 +140,24 @@ async function pullByIds(
 				...(d.collection === 'products' ? { status: 'publish' } : {}),
 			})
 		);
+		let pruned = 0;
 		if (payloads.length < chunk.length) {
-			if (missingSink === undefined && d.collection !== 'products') {
-				throw new Error(
-					`${d.pullPath} include pull returned ${payloads.length}/${chunk.length} records — failing the tick so the cursor cannot advance past an unapplied record`
-				);
-			}
 			const present = new Set(payloads.map((payload) => Number((payload as { id?: unknown }).id)));
 			const absent = chunk.filter((id) => !present.has(id));
-			if (missingSink !== undefined) {
-				missingSink.push(...absent);
-			} else {
-				await removeByWooIds(ctx, d.collection, d.wooIdField, absent);
+			pruned = pruneByIds
+				? await pruneByIds(absent)
+				: await removeByWooIds(ctx, d.collection, d.wooIdField, absent);
+			if (pruned > 0) {
+				ctx.observe?.({
+					type: 'targeted.pull.shortfall-prune',
+					level: 'warn',
+					collection: d.collection,
+					fields: {
+						requested: chunk.length,
+						received: payloads.length,
+						missing: absent.length,
+					},
+				});
 			}
 		}
 		const documents = payloads.map((payload) => d.project(payload));
@@ -187,7 +181,7 @@ async function pullByIds(
 				await upsertManifestRows(ctx.database.collections[manifestName] as never, rows);
 			}
 		}
-		applied += documents.length;
+		applied += documents.length + pruned;
 	}
 	return applied;
 }
@@ -390,7 +384,10 @@ async function rebaselineTargeted(
 	}
 	const requested = [...wooIds].sort((left, right) => left - right);
 	const missingIds: number[] = [];
-	const applied = await pullByIds(ctx, descriptor, requested, undefined, missingIds);
+	const applied = await pullByIds(ctx, descriptor, requested, undefined, async (ids) => {
+		missingIds.push(...ids);
+		return 0;
+	});
 	const pruned =
 		missingIds.length > 0
 			? await removeByWooIds(ctx, descriptor.collection, descriptor.wooIdField, missingIds)

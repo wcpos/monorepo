@@ -43,7 +43,7 @@ describe('productBrowseWindowQueryKeyFromDimensions', () => {
 		);
 		expect(() => productBrowseWindowQueryKeyFromDimensions({ order: 'desc' })).toThrow(TypeError);
 		expect(() =>
-			productBrowseWindowQueryKeyFromDimensions({ orderby: 'sku', order: 'asc' } as never)
+			productBrowseWindowQueryKeyFromDimensions({ orderby: 'regular_price', order: 'asc' } as never)
 		).toThrow(TypeError);
 		expect(() =>
 			productBrowseWindowQueryKeyFromDimensions({ orderby: 'price', order: 'sideways' } as never)
@@ -102,6 +102,19 @@ describe('product browse-window descriptor', () => {
 			order: 'desc',
 		});
 	});
+
+	it.each(['sku', 'barcode', 'stock_quantity', 'stock_status'] as const)(
+		'round-trips the WCPOS plugin %s sort through the query key',
+		(orderby) => {
+			const queryKey = productBrowseWindowQueryKeyFromDimensions({ orderby, order: 'asc' });
+			expect(queryKey).toBe(`products:browse-window:limit=100:orderby=${orderby}:order=asc`);
+			expect(parseProductBrowseWindowDescriptor(queryKey)).toEqual({
+				limit: 100,
+				orderby,
+				order: 'asc',
+			});
+		}
+	);
 
 	it.each([
 		['category=2,7', { category: [2, 7] }],
@@ -165,9 +178,11 @@ describe('product browse-window descriptor', () => {
 		).toBeNull();
 	});
 
-	it('rejects sorts outside WC core’s products orderby enum', () => {
+	it('rejects sorts outside the supported products orderby enum', () => {
 		expect(
-			parseProductBrowseWindowDescriptor('products:browse-window:limit=100:orderby=sku:order=asc')
+			parseProductBrowseWindowDescriptor(
+				'products:browse-window:limit=100:orderby=regular_price:order=asc'
+			)
 		).toBeNull();
 		expect(
 			parseProductBrowseWindowDescriptor(

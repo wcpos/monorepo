@@ -7,7 +7,7 @@ import { engineSyncCollectionCreators, memoryEngineStorage } from '@wcpos/sync-e
 
 import { executeAdapterQuery } from '../../src/engine-adapter/execute-query';
 import { wrapEngineDocument } from '../../src/engine-adapter/document-proxy';
-import { engineVariation } from '../helpers/engine';
+import { engineVariation } from '../../src/testing';
 
 import type { EngineDocument } from '../../src/engine-adapter/collection-map';
 import type { AdapterDatabase, AdapterQueryResult } from '../../src/engine-adapter/execute-query';

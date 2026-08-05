@@ -64,6 +64,7 @@ export const SYNC_EVENT_TYPES = [
 	'signal.cycle',
 	'signal.log',
 	'signal.tick.error',
+	'targeted.pull.shortfall-prune',
 	'transport.request',
 ] as const;
 
@@ -484,6 +485,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.signal_tick_error',
 		label: 'Checking your store for changes failed',
+		introducedIn: '1.10.0',
+	},
+	'targeted.pull.shortfall-prune': {
+		type: 'targeted.pull.shortfall-prune',
+		domain: 'SYNC',
+		key: 'health.logs.event.targeted_pull_shortfall_prune',
+		label: 'Removed records no longer returned by your store',
 		introducedIn: '1.10.0',
 	},
 	'transport.request': {
