@@ -165,6 +165,21 @@ describe('requirementsForQuery extraction', () => {
 		});
 	});
 
+	it('keeps short product SKU demand but suppresses short customer remote search', () => {
+		expect(onlyRequirement({ selector: { search: '42' } })).toMatchObject({
+			collection: 'products',
+			kind: 'search',
+			term: '42',
+		});
+		expect(plan({ collectionName: 'customers', selector: { search: '42' }, limit: 25 })).toEqual({
+			requirements: [],
+			represented: false,
+		});
+		expect(
+			onlyRequirement({ collectionName: 'customers', selector: { search: 'ada' }, limit: 25 })
+		).toMatchObject({ collection: 'customers', kind: 'search', term: 'ada' });
+	});
+
 	describe('orders browse dimensions', () => {
 		const orderPlan = (overrides: Partial<RequirementInput> = {}) =>
 			plan({ collectionName: 'orders', selector: {}, ...overrides });

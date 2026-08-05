@@ -112,13 +112,15 @@ async function fetchPayloadPage(
 
 /**
  * Targeted pull: include-chunked fetch (through the descriptor's envelope
- * parser), project, bulkUpsert. A SHORT response THROWS — the same assertion
+ * parser), project, bulkUpsert. A SHORT response normally THROWS — the same assertion
  * the web scheduler fetchers make: a hidden/missing record or a bad partial
  * page must fail the tick (cursor stays put, commit-only-after-all-arms) so
  * the next poll re-detects it; silently lowering the applied count would let
  * the cursor advance past a record that was never applied. The self-healing
  * delete case is covered upstream: a record deleted between signal and pull
  * re-polls as a DELETE row, and the router makes delete win over pull.
+ * Products are the exception because status=publish can legitimately exclude
+ * requested draft ids; they are simply absent from the POS catalogue.
  *
  * `missingSink` flips the shortfall contract for the ONE caller with no
  * upstream delete row to lean on — the rebaseline pull, whose ids come from
@@ -145,17 +147,22 @@ async function pullByIds(
 			await fetchBody(ctx, d.pullPath, {
 				include: chunk.join(','),
 				per_page: String(chunk.length),
+				...(d.collection === 'products' ? { status: 'publish' } : {}),
 			})
 		);
 		if (payloads.length < chunk.length) {
-			if (missingSink === undefined) {
+			if (missingSink === undefined && d.collection !== 'products') {
 				throw new Error(
 					`${d.pullPath} include pull returned ${payloads.length}/${chunk.length} records — failing the tick so the cursor cannot advance past an unapplied record`
 				);
 			}
-			const present = new Set(payloads.map((payload) => Number((payload as { id?: unknown }).id)));
-			for (const id of chunk) {
-				if (!present.has(id)) missingSink.push(id);
+			if (missingSink !== undefined) {
+				const present = new Set(
+					payloads.map((payload) => Number((payload as { id?: unknown }).id))
+				);
+				for (const id of chunk) {
+					if (!present.has(id)) missingSink.push(id);
+				}
 			}
 		}
 		const documents = payloads.map((payload) => d.project(payload));

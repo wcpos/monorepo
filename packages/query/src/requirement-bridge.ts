@@ -39,6 +39,7 @@ import {
 	engineCollectionNameFor,
 	isMappedCollection,
 } from './engine-adapter/collection-map';
+import { FLEXSEARCH_MIN_TERM_LENGTH } from './engine-query';
 
 /** Engine collections with a `targeted` shape — the only ones `targeted-records` serves. */
 const TARGETED_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
@@ -505,7 +506,12 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	}
 
 	const rawSearchTerm = typeof selector?.search === 'string' ? selector.search : '';
-	if (rawSearchTerm.trim() && SEARCH_ENGINE_COLLECTIONS.has(engineCollection)) {
+	const trimmedSearchTerm = rawSearchTerm.trim();
+	if (
+		trimmedSearchTerm &&
+		SEARCH_ENGINE_COLLECTIONS.has(engineCollection) &&
+		(engineCollection !== 'customers' || trimmedSearchTerm.length >= FLEXSEARCH_MIN_TERM_LENGTH)
+	) {
 		requirements.push({
 			id: `${input.id}:search`,
 			collection: engineCollection,

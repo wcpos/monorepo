@@ -41,6 +41,31 @@ const uuidFor = (n: number): string => `00000000-0000-4000-8000-${String(n).padS
 const posMeta = (n: number) => [{ key: '_woocommerce_pos_uuid', value: uuidFor(n) }];
 
 describe('createProductsSchedulerFetcher', () => {
+	it('runs only the exact SKU leg for a two-character search', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async (_url: string) => response([]));
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			productTask({
+				id: 'products:search:42:windowed',
+				queryKey: 'products:search:42',
+			})
+		);
+
+		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
+		]);
+		expect(result).toMatchObject({ requestCount: 1, completed: true });
+	});
+
 	it('walks each product search leg in Performance-dial pages, not one task-limit request', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),

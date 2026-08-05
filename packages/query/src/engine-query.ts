@@ -1,5 +1,6 @@
 import { defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
 import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
+import get from 'lodash/get';
 
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
@@ -27,6 +28,7 @@ type SearchInstance = {
 
 type SearchableCollection = {
 	$: Observable<unknown>;
+	find(): { exec(): Promise<EngineRxDocument[]> };
 	initSearch(
 		locale: string,
 		options: {
@@ -37,6 +39,8 @@ type SearchableCollection = {
 };
 
 const SEARCH_INDEX_ERROR = Symbol('search-index-error');
+/** Must equal FlexSearch `minlength` in packages/database/src/plugins/search.ts. */
+export const FLEXSEARCH_MIN_TERM_LENGTH = 3;
 
 export interface EngineQueryDescriptor {
 	collection: LegacyCollectionName;
@@ -89,18 +93,38 @@ function matchingSelectors$(
 	const collection = database.collections[collectionName] as unknown as
 		SearchableCollection | undefined;
 	if (!collection?.initSearch) return of(withSearchSelector(selector, []));
+	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
+		(wrapEngineDocument(descriptor.collection, document).toJSON as () => Record<string, unknown>)();
+
+	if (search.length < FLEXSEARCH_MIN_TERM_LENGTH) {
+		const prefix = search.toLowerCase();
+		return collection.$.pipe(
+			startWith(null),
+			switchMap(() => from(collection.find().exec())),
+			map((documents) =>
+				withSearchSelector(
+					selector,
+					documents
+						.filter((document) => {
+							const snapshot = documentSnapshot(document);
+							return (descriptor.searchFields ?? []).some((field) =>
+								String(get(snapshot, field) ?? '')
+									.split(/\s+/)
+									.some((token) => token.toLowerCase().startsWith(prefix))
+							);
+						})
+						.map((document) => document.primary)
+				)
+			),
+			catchError((error) => throwError(() => ({ [SEARCH_INDEX_ERROR]: error })))
+		);
+	}
 
 	return defer(() =>
 		from(
 			collection.initSearch(locale, {
 				searchFields: descriptor.searchFields,
-				documentSnapshot: (document) =>
-					(
-						wrapEngineDocument(descriptor.collection, document).toJSON as () => Record<
-							string,
-							unknown
-						>
-					)(),
+				documentSnapshot,
 			})
 		)
 	).pipe(

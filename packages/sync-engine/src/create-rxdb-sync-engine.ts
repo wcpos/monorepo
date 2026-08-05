@@ -102,7 +102,10 @@ import {
 	type QueryTotalCacheEvent,
 	type QueryTotalPort,
 } from './maintenance/maintenance-lanes';
-import { CUSTOMER_TRICKLE_STATE_KEY } from './maintenance/customer-trickle';
+import {
+	CUSTOMER_TRICKLE_STATE_KEY,
+	decodeCustomerTrickleState,
+} from './maintenance/customer-trickle';
 import { ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS } from './scheduler/engine-scheduler-drain';
 import {
 	createLocalCoverage,
@@ -726,8 +729,9 @@ export function createRxdbSyncEngine(
 					descriptor: (typeof targeted)[keyof typeof targeted],
 					wooIds: number[],
 					request?: ReconcileRequest
-				) =>
-					pullTargetedByIds(
+				) => {
+					const missingProductWooIds: number[] = [];
+					await pullTargetedByIds(
 						{ ...handlerContext, fetch: request?.fetcher ?? fetcher },
 						descriptor,
 						wooIds,
@@ -756,8 +760,12 @@ export function createRxdbSyncEngine(
 									'create-rxdb-sync-engine upsert'
 								);
 							if (manifestRows.length > 0) await upsertManifestRows(manifest, manifestRows);
-						}
+						},
+						descriptor.collection === 'products' ? missingProductWooIds : undefined
 					);
+					if (missingProductWooIds.length > 0)
+						await removeTargeted('products', 'wooProductId', missingProductWooIds);
+				};
 				return {
 					bucketSize: 1000,
 					maxWooId: async () => {
@@ -1365,6 +1373,19 @@ export function createRxdbSyncEngine(
 		diagnostics,
 		onActivityChange: changeCollectionActivity,
 		pullBatchSize: () => pullBatchSize,
+		customerSearchCatalogComplete: async () => {
+			const scopeId = manager.activeScope;
+			const database = scopeId === null ? null : databaseByScopeId.get(scopeId);
+			if (!scopeId || !database) return false;
+			const state = decodeCustomerTrickleState(await readBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY));
+			if (!state.walkComplete) return false;
+			const [entry] = await new RxQueryTotalCacheRepository(database as never).readForQueryKeys([
+				censusQueryKey('customers'),
+			]);
+			if (!entry || entry.freshUntilMs <= nowMs()) return false;
+			// Count includes customer:default; accept the sentinel's +1 in the safe >= direction.
+			return (await database.collections.customers.count().exec()) >= entry.totalMatchingRecords;
+		},
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 

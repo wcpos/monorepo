@@ -69,6 +69,8 @@ export type ProductsSchedulerFetcherInput = {
  * boundary reports `product.browse-window.approximate` rather than paging forever.
  */
 export const PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES = 19;
+/** Keep equal to FLEXSEARCH_MIN_TERM_LENGTH in packages/query/src/engine-query.ts. */
+const FLEXSEARCH_MIN_TERM_LENGTH = 3;
 
 /** Store a pulled product batch: extract the Leg-3 manifest rows, strip `_rxdb_digest`, upsert both. */
 async function persistProductDocuments(
@@ -438,25 +440,29 @@ async function fetchProductSearch(
 	// search results, which is why this used to opt out of the dial entirely.
 	const limit = taskLimit(task);
 	const pageSize = taskLimit(task, input.pullBatchSize);
-	const searchLeg = await fetchProductSearchLeg(
-		input,
-		(perPage, page) => productSearchParams(search, perPage, page),
-		limit,
-		pageSize,
-		context
-	);
+	const term = search.trim();
+	const searchLeg =
+		term.length < FLEXSEARCH_MIN_TERM_LENGTH
+			? null
+			: await fetchProductSearchLeg(
+					input,
+					(perPage, page) => productSearchParams(term, perPage, page),
+					limit,
+					pageSize,
+					context
+				);
 	const skuLeg = await fetchProductSearchLeg(
 		input,
-		(perPage, page) => productSkuParams(search, perPage, page),
+		(perPage, page) => productSkuParams(term, perPage, page),
 		limit,
 		pageSize,
 		context
 	);
-	const payloads = uniqueProductPayloads([...skuLeg.payloads, ...searchLeg.payloads]);
+	const payloads = uniqueProductPayloads([...skuLeg.payloads, ...(searchLeg?.payloads ?? [])]);
 	const documents = payloads.slice(0, limit).map(productDocumentFromWooPayload);
 	await persistProductDocuments(input, documents);
-	// Complete only when BOTH legs ran out of server-side results before the limit did.
-	const complete = searchLeg.exhausted && skuLeg.exhausted;
+	// A skipped short-term search leg counts as exhausted; otherwise both legs must exhaust.
+	const complete = (searchLeg?.exhausted ?? true) && skuLeg.exhausted;
 	await recordCoverage(
 		'products',
 		input,
@@ -468,7 +474,7 @@ async function fetchProductSearch(
 	return {
 		taskId: task.id,
 		documentCount: documents.length,
-		requestCount: searchLeg.requestCount + skuLeg.requestCount,
+		requestCount: (searchLeg?.requestCount ?? 0) + skuLeg.requestCount,
 		completed: complete,
 	};
 }

@@ -271,7 +271,7 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.dispose();
 	});
 
-	it('removes a non-publish product returned by an unfiltered reconciliation pull', async () => {
+	it('removes a resident product omitted by a publish-filtered reconciliation pull', async () => {
 		const productId = '77777777-7777-4777-8777-777777777777';
 		const fetcher = vi.fn(async (url: string) => {
 			const parsed = new URL(url);
@@ -284,23 +284,8 @@ describe('existence maintenance lanes through the public facade', () => {
 			}
 			if (parsed.pathname.endsWith('/products')) {
 				expect(parsed.searchParams.get('include')).toBe('77');
-				expect(parsed.searchParams.has('status')).toBe(false);
-				return json([
-					{
-						id: 77,
-						status: 'draft',
-						_rxdb_digest: 'draft-77',
-						price: '7',
-						stock_status: 'instock',
-						type: 'simple',
-						categories: [],
-						brands: [],
-						on_sale: false,
-						featured: false,
-						stock_quantity: null,
-						meta_data: [{ key: '_woocommerce_pos_uuid', value: productId }],
-					},
-				]);
+				expect(parsed.searchParams.get('status')).toBe('publish');
+				return json([]);
 			}
 			throw new Error(`unexpected fetch ${url}`);
 		});

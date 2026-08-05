@@ -65,6 +65,8 @@ import {
 	emptyPersistedSchedulerTaskRunnerResult,
 	type PersistedSchedulerTaskRunnerResult,
 } from './scheduler/rx-scheduler-task-runner';
+import { censusQueryKey } from './scheduler/census';
+import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 
 import type { SyncCollectionName } from './collections/engine-collections';
 import type { EngineSourceFetcher } from './change-signal/change-signal-source';
@@ -160,6 +162,7 @@ export type RequirePlaneDeps = {
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	pullBatchSize?: () => number | undefined;
 	now?: () => number;
+	customerSearchCatalogComplete?: () => Promise<boolean>;
 };
 
 type InternalRequirement =
@@ -627,6 +630,41 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					searchCollection === 'products'
 						? `products:search:${encodedTerm}`
 						: `customers:search=${encodedTerm}:limit=${limit}`;
+				if (!item.requirement.forceRefresh) {
+					const lane = await coverage.readLane(searchCollection, queryKey);
+					if (lane?.complete && lane.fresh) {
+						return {
+							action: 'serve-local',
+							missingRecordIds: [],
+							reason: `${searchCollection} search fetched within the coverage window`,
+							documents: 0,
+							requests: 0,
+						};
+					}
+					if (searchCollection === 'products') {
+						const now = deps.now ?? Date.now;
+						const [entry] = await new RxQueryTotalCacheRepository(
+							database as never
+						).readForQueryKeys([censusQueryKey('products')]);
+						if (
+							entry &&
+							entry.freshUntilMs > now() &&
+							(await database.collections.products.count().exec()) >= entry.totalMatchingRecords
+						) {
+							return {
+								action: 'serve-local',
+								missingRecordIds: [],
+								reason: 'products catalogue is fully resident locally',
+							};
+						}
+					} else if (await deps.customerSearchCatalogComplete?.()) {
+						return {
+							action: 'serve-local',
+							missingRecordIds: [],
+							reason: 'customers catalogue is fully resident locally',
+						};
+					}
+				}
 				const task: FetchTask = {
 					id: `${queryKey}:windowed`,
 					requirementId: item.requirement.id,

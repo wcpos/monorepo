@@ -1,5 +1,5 @@
 import { waitFor } from '@testing-library/react';
-import { of } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
@@ -14,6 +14,93 @@ import {
 import type { RxDatabase } from 'rxdb';
 
 describe('observeEngineQuery', () => {
+	it('matches one- and two-character word prefixes without mid-token fallthrough', async () => {
+		const database = await createEngineDatabase(['products']);
+		const engine = createFakeEngine(database);
+		await database.collections.products.bulkInsert([
+			engineProduct({ uuid: 'sku-prefix', id: 1, name: 'Plain', sku: '42' }),
+			engineProduct({ uuid: 'name-prefix', id: 2, name: 'Nails 42mm', sku: 'X' }),
+			engineProduct({ uuid: 'mid-token', id: 3, name: 'Box', sku: 'AB-400' }),
+		]);
+
+		try {
+			for (const term of ['4', '42']) {
+				const result = await firstValueFrom(
+					observeEngineQuery(engine, 'en', {
+						collection: 'products',
+						search: term,
+						searchFields: ['name', 'sku'],
+					})
+				);
+				expect(result.hits.map((hit) => hit.id)).toEqual(['name-prefix', 'sku-prefix']);
+				expect(result.hits.map((hit) => hit.id)).not.toContain('mid-token');
+			}
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('reacts to source writes for short searches and keeps an explicit empty id selector', async () => {
+		const database = await createEngineDatabase(['products']);
+		const engine = createFakeEngine(database);
+		await database.collections.products.insert(
+			engineProduct({ uuid: 'unrelated', id: 1, name: 'Hammer', sku: 'ABC' })
+		);
+		const collection = database.collections.products;
+		const find = jest.spyOn(collection, 'find');
+		let ids: string[] = [];
+		const subscription = observeEngineQuery(engine, 'en', {
+			collection: 'products',
+			search: '4',
+			searchFields: ['name', 'sku'],
+		}).subscribe((result) => {
+			ids = result.hits.map((hit) => hit.id);
+		});
+
+		try {
+			await waitFor(() => expect(ids).toEqual([]));
+			expect(find.mock.calls).toContainEqual([
+				expect.objectContaining({ selector: { id: { $in: [] } } }),
+			]);
+			await collection.insert(
+				engineProduct({ uuid: 'reactive-prefix', id: 2, name: 'Nails 42mm' })
+			);
+			await waitFor(() => expect(ids).toEqual(['reactive-prefix']));
+		} finally {
+			subscription.unsubscribe();
+			await database.close();
+		}
+	});
+
+	it('uses the FlexSearch instance for three-character terms', async () => {
+		const database = await createEngineDatabase(['products']);
+		const engine = createFakeEngine(database);
+		await database.collections.products.insert(
+			engineProduct({ uuid: 'flex-hit', id: 1, name: 'Abc product' })
+		);
+		const document = await database.collections.products.findOne('flex-hit').exec();
+		if (!document) throw new Error('missing flex fixture');
+		const search = jest.fn(async () => [document]);
+		const initSearch = jest
+			.spyOn(database.collections.products, 'initSearch')
+			.mockResolvedValue({ collection: { $: of(null) }, find: search } as never);
+
+		try {
+			const result = await firstValueFrom(
+				observeEngineQuery(engine, 'en', {
+					collection: 'products',
+					search: 'abc',
+					searchFields: ['name'],
+				})
+			);
+			expect(initSearch).toHaveBeenCalledTimes(1);
+			expect(search).toHaveBeenCalledWith('abc');
+			expect(result.hits.map((hit) => hit.id)).toEqual(['flex-hit']);
+		} finally {
+			await database.close();
+		}
+	});
+
 	it('does not reset the data collection when only the search index is corrupt', async () => {
 		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
 		const resetCollection = jest.fn().mockRejectedValue(error);

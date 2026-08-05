@@ -7,6 +7,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import {
 	createRxdbSyncEngine,
@@ -14,6 +15,8 @@ import {
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
 import { memoryEngineStorage } from './testing';
+
+setPremiumFlag();
 
 const SITE = 'https://lab.example.test';
 const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
@@ -104,6 +107,42 @@ function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response
 	);
 }
 
+async function seedProductsCensus(
+	engine: RxdbSyncEngine,
+	totalMatchingRecords: number,
+	freshUntilMs: number
+): Promise<void> {
+	const scope = engine.active();
+	if (!scope) throw new Error('no active scope');
+	await scope.database.collections.queryTotalCacheEntries.upsert({
+		queryKey: 'census:products',
+		totalMatchingRecords,
+		freshUntilMs,
+		updatedAtMs: Date.now(),
+		schemaVersion: 1,
+	});
+}
+
+async function insertResidentProduct(engine: RxdbSyncEngine, id: number): Promise<void> {
+	const scope = engine.active();
+	if (!scope) throw new Error('no active scope');
+	await scope.database.collections.products.insert({
+		id: productUuid(id),
+		wooProductId: id,
+		price: 5,
+		stockStatus: 'instock',
+		type: 'simple',
+		categoryIds: [],
+		brandIds: [],
+		onSale: false,
+		featured: false,
+		stockQuantity: null,
+		payload: productPayload(id, `Product ${id}`),
+		sync: { revision: 'r', partial: false, source: 'woo-rest' },
+		local: { dirty: false, pendingMutationIds: [] },
+	});
+}
+
 async function searchTaskRows(engine: RxdbSyncEngine): Promise<Record<string, unknown>[]> {
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
@@ -120,6 +159,129 @@ async function searchTaskRows(engine: RxdbSyncEngine): Promise<Record<string, un
 }
 
 describe('require() for search — the public search-demand verb', () => {
+	it('serves repeated product and customer searches from fresh complete coverage lanes', async () => {
+		const products = scriptedProductSearchProxy([]);
+		const customers = scriptedCustomerSearchProxy([]);
+		const engine = engineWith(async (url) =>
+			new URL(url).pathname.endsWith('/products') ? products.fetch(url) : customers.fetch(url)
+		);
+		await engine.ready;
+
+		for (const collection of ['products', 'customers'] as const) {
+			await engine.require({ id: `${collection}-first`, collection, kind: 'search', term: 'empty' })
+				.ready;
+			const requestsBefore =
+				collection === 'products'
+					? products.state.searchPulls + products.state.skuPulls
+					: customers.state.pulls;
+			await expect(
+				engine.require({ id: `${collection}-second`, collection, kind: 'search', term: 'empty' })
+					.ready
+			).resolves.toMatchObject({
+				action: 'serve-local',
+				reason: `${collection} search fetched within the coverage window`,
+				requests: 0,
+			});
+			const requestsAfter =
+				collection === 'products'
+					? products.state.searchPulls + products.state.skuPulls
+					: customers.state.pulls;
+			expect(requestsAfter).toBe(requestsBefore);
+		}
+		await engine.dispose();
+	});
+
+	it('serves a product search locally when a fresh census is fully resident', async () => {
+		const server = scriptedProductSearchProxy([]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		await insertResidentProduct(engine, 1);
+		await seedProductsCensus(engine, 1, Date.now() + 60_000);
+
+		await expect(
+			engine.require({ id: 'resident-census', collection: 'products', kind: 'search', term: 'hat' })
+				.ready
+		).resolves.toMatchObject({
+			action: 'serve-local',
+			reason: 'products catalogue is fully resident locally',
+		});
+		expect(server.state).toEqual({ searchPulls: 0, skuPulls: 0 });
+		await engine.dispose();
+	});
+
+	it.each([
+		['stale census', async (engine: RxdbSyncEngine) => seedProductsCensus(engine, 0, 1)],
+		['no census row', async () => undefined],
+		[
+			'local count below census',
+			async (engine: RxdbSyncEngine) => seedProductsCensus(engine, 1, Date.now() + 60_000),
+		],
+	] as const)('fetches with %s', async (_case, arrange) => {
+		const server = scriptedProductSearchProxy([]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		await arrange(engine);
+
+		await expect(
+			engine.require({ id: `fetch-${_case}`, collection: 'products', kind: 'search', term: 'hat' })
+				.ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		await engine.dispose();
+	});
+
+	it('forceRefresh bypasses both the coverage and catalogue-complete gates', async () => {
+		const server = scriptedProductSearchProxy([]);
+		const engine = engineWith(server.fetch);
+		await engine.ready;
+		await engine.require({ id: 'force-seed', collection: 'products', kind: 'search', term: 'hat' })
+			.ready;
+		await seedProductsCensus(engine, 0, Date.now() + 60_000);
+
+		await expect(
+			engine.require({
+				id: 'force-refresh',
+				collection: 'products',
+				kind: 'search',
+				term: 'hat',
+				forceRefresh: true,
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.state).toEqual({ searchPulls: 2, skuPulls: 2 });
+		await engine.dispose();
+	});
+
+	it('serves customer search locally only after trickle completion and a fresh resident census', async () => {
+		const server = scriptedCustomerSearchProxy([]);
+		const engine = engineWith(server.fetch);
+		const scope = await engine.ready;
+		await scope.database.collections.engineKv.upsert({
+			id: 'customer-trickle:state',
+			value: JSON.stringify({ page: 1, walkComplete: true }),
+		});
+		await scope.database.collections.queryTotalCacheEntries.upsert({
+			queryKey: 'census:customers',
+			totalMatchingRecords: 0,
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 1,
+		});
+
+		await expect(
+			engine.require({
+				id: 'customer-catalogue',
+				collection: 'customers',
+				kind: 'search',
+				term: 'ada',
+			}).ready
+		).resolves.toMatchObject({
+			action: 'serve-local',
+			reason: 'customers catalogue is fully resident locally',
+		});
+		expect(server.state.pulls).toBe(0);
+		await engine.dispose();
+	});
+
 	it('publishes refcounted collection activity across concurrent settle and release paths', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();
