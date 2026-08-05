@@ -32,6 +32,8 @@ export type FieldMapEntry = {
 	kind: FieldKind;
 	enginePath: string;
 	readEnginePath?: string;
+	write?: (value: unknown) => unknown;
+	adapterDerived?: boolean;
 	numeric?: boolean;
 	notes?: string;
 	compute?: (document: EngineDocument) => unknown;
@@ -85,23 +87,41 @@ export const collectionMap = {
 		engineCollection: 'products',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooProductId' },
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooProductId',
+				adapterDerived: false,
+			},
 			stock_status: {
 				legacy: 'stock_status',
 				kind: 'promoted',
 				enginePath: 'stockStatus',
+				write: (value) => String(value ?? ''),
 			},
 			featured: {
 				legacy: 'featured',
 				kind: 'promoted',
 				enginePath: 'featured',
+				write: Boolean,
 			},
-			on_sale: { legacy: 'on_sale', kind: 'promoted', enginePath: 'onSale' },
+			on_sale: {
+				legacy: 'on_sale',
+				kind: 'promoted',
+				enginePath: 'onSale',
+				write: Boolean,
+			},
 			categories: {
 				legacy: 'categories',
 				kind: 'promoted',
 				enginePath: 'categoryIds',
 				readEnginePath: 'payload.categories',
+				write: (value) =>
+					Array.isArray(value)
+						? value
+								.map((entry) => Number((entry as { id?: unknown } | null)?.id ?? entry))
+								.filter((id) => Number.isFinite(id) && id > 0)
+						: [],
 				notes: 'Selectors use numeric membership; reads preserve Woo category objects.',
 			},
 			brands: {
@@ -109,15 +129,14 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'brandIds',
 				readEnginePath: 'payload.brands',
+				write: (value) =>
+					Array.isArray(value)
+						? value
+								.map((entry) => Number((entry as { id?: unknown } | null)?.id ?? entry))
+								.filter((id) => Number.isFinite(id) && id > 0)
+						: [],
 				notes: 'Selectors use numeric membership; reads preserve Woo brand objects.',
 			},
-			tags: { legacy: 'tags', kind: 'payload', enginePath: 'payload.tags' },
-			meta_data: {
-				legacy: 'meta_data',
-				kind: 'payload',
-				enginePath: 'payload.meta_data',
-			},
-			name: { legacy: 'name', kind: 'payload', enginePath: 'payload.name' },
 			status: {
 				legacy: 'status',
 				kind: 'payload',
@@ -130,22 +149,21 @@ export const collectionMap = {
 				enginePath: 'payload.category',
 				notes: 'Synthetic Manager-test selector with no demonstrated product payload contract.',
 			},
-			sku: { legacy: 'sku', kind: 'payload', enginePath: 'payload.sku' },
-			barcode: {
-				legacy: 'barcode',
-				kind: 'payload',
-				enginePath: 'payload.barcode',
+			type: {
+				legacy: 'type',
+				kind: 'promoted',
+				enginePath: 'type',
+				write: (value) => String(value ?? ''),
 			},
-			type: { legacy: 'type', kind: 'promoted', enginePath: 'type' },
 			stock_quantity: {
 				legacy: 'stock_quantity',
 				kind: 'promoted',
 				enginePath: 'stockQuantity',
-			},
-			date_created_gmt: {
-				legacy: 'date_created_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_created_gmt',
+				write: (value) => {
+					if (value === null || value === undefined || value === '') return null;
+					const numeric = Number(value);
+					return Number.isFinite(numeric) ? numeric : null;
+				},
 			},
 			sortable_price: {
 				legacy: 'sortable_price',
@@ -155,173 +173,77 @@ export const collectionMap = {
 				notes: 'Numeric JS sort over the source string; never the cents-rounded promoted price.',
 				compute: (document) => Number(valueAtPath(document, 'payload.price')),
 			},
-			date_modified_gmt: {
-				legacy: 'date_modified_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_modified_gmt',
-			},
-			total_sales: {
-				legacy: 'total_sales',
-				kind: 'payload',
-				enginePath: 'payload.total_sales',
-			},
-			menu_order: {
-				legacy: 'menu_order',
-				kind: 'payload',
-				enginePath: 'payload.menu_order',
-			},
 			price: {
 				legacy: 'price',
 				kind: 'promoted',
 				enginePath: 'price',
 				readEnginePath: 'payload.price',
+				write: (value) => Math.max(0, Math.round((Number(value) || 0) * 100) / 100),
 				numeric: true,
 				notes: 'Promoted price is numeric cents precision; reads preserve the Woo string.',
 			},
-			regular_price: {
-				legacy: 'regular_price',
-				kind: 'payload',
-				enginePath: 'payload.regular_price',
-			},
-			sale_price: {
-				legacy: 'sale_price',
-				kind: 'payload',
-				enginePath: 'payload.sale_price',
-			},
-			tax_status: {
-				legacy: 'tax_status',
-				kind: 'payload',
-				enginePath: 'payload.tax_status',
-			},
-			tax_class: {
-				legacy: 'tax_class',
-				kind: 'payload',
-				enginePath: 'payload.tax_class',
-			},
-			manage_stock: {
-				legacy: 'manage_stock',
-				kind: 'payload',
-				enginePath: 'payload.manage_stock',
-			},
-			attributes: {
-				legacy: 'attributes',
-				kind: 'payload',
-				enginePath: 'payload.attributes',
-			},
-			images: {
-				legacy: 'images',
-				kind: 'payload',
-				enginePath: 'payload.images',
-			},
-			grouped_products: {
-				legacy: 'grouped_products',
-				kind: 'payload',
-				enginePath: 'payload.grouped_products',
-			},
-			variations: {
-				legacy: 'variations',
-				kind: 'payload',
-				enginePath: 'payload.variations',
-			},
-			cost_of_goods_sold: {
-				legacy: 'cost_of_goods_sold',
-				kind: 'payload',
-				enginePath: 'payload.cost_of_goods_sold',
-			},
-			slug: { legacy: 'slug', kind: 'payload', enginePath: 'payload.slug' },
 		},
 	},
 	variations: {
 		engineCollection: 'variations',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooId' },
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooId',
+				adapterDerived: false,
+			},
 			attributes: {
 				legacy: 'attributes',
 				kind: 'promoted',
 				enginePath: 'attributes',
 				readEnginePath: 'payload.attributes',
+				write: (value) =>
+					Array.isArray(value)
+						? value
+								.map((entry) => ({
+									id: Number((entry as { id?: unknown } | null)?.id) || 0,
+									name: String((entry as { name?: unknown } | null)?.name ?? ''),
+									option: String((entry as { option?: unknown } | null)?.option ?? ''),
+								}))
+								.filter(({ name, option }) => name !== '' && option !== '')
+						: [],
 				notes: 'Selectors use normalized attributes; reads retain the source payload.',
-			},
-			name: { legacy: 'name', kind: 'payload', enginePath: 'payload.name' },
-			sku: { legacy: 'sku', kind: 'payload', enginePath: 'payload.sku' },
-			barcode: {
-				legacy: 'barcode',
-				kind: 'payload',
-				enginePath: 'payload.barcode',
-			},
-			menu_order: {
-				legacy: 'menu_order',
-				kind: 'payload',
-				enginePath: 'payload.menu_order',
 			},
 			price: {
 				legacy: 'price',
 				kind: 'promoted',
 				enginePath: 'price',
 				readEnginePath: 'payload.price',
+				write: (value) => Number(value) || 0,
 				numeric: true,
-			},
-			regular_price: {
-				legacy: 'regular_price',
-				kind: 'payload',
-				enginePath: 'payload.regular_price',
-			},
-			sale_price: {
-				legacy: 'sale_price',
-				kind: 'payload',
-				enginePath: 'payload.sale_price',
-			},
-			on_sale: {
-				legacy: 'on_sale',
-				kind: 'payload',
-				enginePath: 'payload.on_sale',
-			},
-			tax_status: {
-				legacy: 'tax_status',
-				kind: 'payload',
-				enginePath: 'payload.tax_status',
-			},
-			tax_class: {
-				legacy: 'tax_class',
-				kind: 'payload',
-				enginePath: 'payload.tax_class',
 			},
 			stock_quantity: {
 				legacy: 'stock_quantity',
 				kind: 'promoted',
 				enginePath: 'stockQuantity',
-			},
-			manage_stock: {
-				legacy: 'manage_stock',
-				kind: 'payload',
-				enginePath: 'payload.manage_stock',
+				write: (value) => {
+					if (value === null || value === undefined || value === '') return null;
+					const numeric = Number(value);
+					return Number.isFinite(numeric) ? numeric : null;
+				},
 			},
 			stock_status: {
 				legacy: 'stock_status',
 				kind: 'promoted',
 				enginePath: 'stockStatus',
-			},
-			image: { legacy: 'image', kind: 'payload', enginePath: 'payload.image' },
-			cost_of_goods_sold: {
-				legacy: 'cost_of_goods_sold',
-				kind: 'payload',
-				enginePath: 'payload.cost_of_goods_sold',
-			},
-			date_created_gmt: {
-				legacy: 'date_created_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_created_gmt',
-			},
-			date_modified_gmt: {
-				legacy: 'date_modified_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_modified_gmt',
+				write: (value) => String(value ?? ''),
 			},
 			parent_id: {
 				legacy: 'parent_id',
 				kind: 'promoted',
 				enginePath: 'parentId',
+				write: (value) => {
+					if (value === null || value === undefined || value === '') return null;
+					const numeric = Number(value);
+					return Number.isFinite(numeric) ? numeric : null;
+				},
 			},
 		},
 	},
@@ -329,33 +251,35 @@ export const collectionMap = {
 		engineCollection: 'orders',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooOrderId' },
-			status: { legacy: 'status', kind: 'promoted', enginePath: 'status' },
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooOrderId',
+				adapterDerived: false,
+			},
+			status: {
+				legacy: 'status',
+				kind: 'promoted',
+				enginePath: 'status',
+				write: (value) => String(value ?? ''),
+			},
 			customer_id: {
 				legacy: 'customer_id',
 				kind: 'promoted',
 				enginePath: 'customerId',
+				write: (value) => Number(value ?? 0),
 			},
 			date_created_gmt: {
 				legacy: 'date_created_gmt',
 				kind: 'promoted',
 				enginePath: 'dateCreatedGmt',
+				write: (value) => String(value ?? ''),
 			},
-			meta_data: {
-				legacy: 'meta_data',
-				kind: 'payload',
-				enginePath: 'payload.meta_data',
-			},
-			created_via: {
-				legacy: 'created_via',
-				kind: 'payload',
-				enginePath: 'payload.created_via',
-			},
-			number: { legacy: 'number', kind: 'promoted', enginePath: 'number' },
-			payment_method: {
-				legacy: 'payment_method',
-				kind: 'payload',
-				enginePath: 'payload.payment_method',
+			number: {
+				legacy: 'number',
+				kind: 'promoted',
+				enginePath: 'number',
+				write: (value) => String(value ?? ''),
 			},
 			sortable_total: {
 				legacy: 'sortable_total',
@@ -365,84 +289,12 @@ export const collectionMap = {
 				notes: 'Numeric JS sort over the source string; no engine numeric total exists.',
 				compute: (document) => Number(valueAtPath(document, 'payload.total')),
 			},
-			billing: {
-				legacy: 'billing',
-				kind: 'payload',
-				enginePath: 'payload.billing',
+			total: {
+				legacy: 'total',
+				kind: 'promoted',
+				enginePath: 'total',
+				write: (value) => String(value ?? ''),
 			},
-			shipping: {
-				legacy: 'shipping',
-				kind: 'payload',
-				enginePath: 'payload.shipping',
-			},
-			payment_method_title: {
-				legacy: 'payment_method_title',
-				kind: 'payload',
-				enginePath: 'payload.payment_method_title',
-			},
-			total: { legacy: 'total', kind: 'promoted', enginePath: 'total' },
-			currency_symbol: {
-				legacy: 'currency_symbol',
-				kind: 'payload',
-				enginePath: 'payload.currency_symbol',
-			},
-			refunds: {
-				legacy: 'refunds',
-				kind: 'payload',
-				enginePath: 'payload.refunds',
-			},
-			customer_note: {
-				legacy: 'customer_note',
-				kind: 'payload',
-				enginePath: 'payload.customer_note',
-			},
-			date_modified_gmt: {
-				legacy: 'date_modified_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_modified_gmt',
-			},
-			date_completed_gmt: {
-				legacy: 'date_completed_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_completed_gmt',
-			},
-			date_paid_gmt: {
-				legacy: 'date_paid_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_paid_gmt',
-			},
-			discount_total: {
-				legacy: 'discount_total',
-				kind: 'payload',
-				enginePath: 'payload.discount_total',
-			},
-			total_tax: {
-				legacy: 'total_tax',
-				kind: 'payload',
-				enginePath: 'payload.total_tax',
-			},
-			needs_payment: {
-				legacy: 'needs_payment',
-				kind: 'payload',
-				enginePath: 'payload.needs_payment',
-			},
-			tax_lines: {
-				legacy: 'tax_lines',
-				kind: 'payload',
-				enginePath: 'payload.tax_lines',
-			},
-			shipping_lines: {
-				legacy: 'shipping_lines',
-				kind: 'payload',
-				enginePath: 'payload.shipping_lines',
-			},
-			line_items: {
-				legacy: 'line_items',
-				kind: 'payload',
-				enginePath: 'payload.line_items',
-			},
-			links: { legacy: 'links', kind: 'payload', enginePath: 'payload.links' },
-			slug: { legacy: 'slug', kind: 'payload', enginePath: 'payload.slug' },
 			cashier: {
 				legacy: 'cashier',
 				kind: 'computed',
@@ -463,104 +315,35 @@ export const collectionMap = {
 		engineCollection: 'customers',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooCustomerId' },
-			role: { legacy: 'role', kind: 'payload', enginePath: 'payload.role' },
-			last_name: {
-				legacy: 'last_name',
-				kind: 'payload',
-				enginePath: 'payload.last_name',
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooCustomerId',
+				adapterDerived: false,
 			},
-			first_name: {
-				legacy: 'first_name',
-				kind: 'payload',
-				enginePath: 'payload.first_name',
-			},
-			email: { legacy: 'email', kind: 'payload', enginePath: 'payload.email' },
-			username: {
-				legacy: 'username',
-				kind: 'payload',
-				enginePath: 'payload.username',
-			},
-			date_created_gmt: {
-				legacy: 'date_created_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_created_gmt',
-			},
-			date_modified_gmt: {
-				legacy: 'date_modified_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_modified_gmt',
-			},
-			avatar_url: {
-				legacy: 'avatar_url',
-				kind: 'payload',
-				enginePath: 'payload.avatar_url',
-			},
-			billing: {
-				legacy: 'billing',
-				kind: 'payload',
-				enginePath: 'payload.billing',
-			},
-			shipping: {
-				legacy: 'shipping',
-				kind: 'payload',
-				enginePath: 'payload.shipping',
-			},
-			slug: { legacy: 'slug', kind: 'payload', enginePath: 'payload.slug' },
 		},
 	},
 	taxes: {
 		engineCollection: 'taxRates',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooTaxRateId' },
-			country: {
-				legacy: 'country',
-				kind: 'payload',
-				enginePath: 'payload.country',
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooTaxRateId',
+				adapterDerived: false,
 			},
-			state: { legacy: 'state', kind: 'payload', enginePath: 'payload.state' },
-			postcodes: {
-				legacy: 'postcodes',
-				kind: 'payload',
-				enginePath: 'payload.postcodes',
-			},
-			cities: {
-				legacy: 'cities',
-				kind: 'payload',
-				enginePath: 'payload.cities',
-			},
-			rate: { legacy: 'rate', kind: 'payload', enginePath: 'payload.rate' },
-			name: { legacy: 'name', kind: 'payload', enginePath: 'payload.name' },
-			priority: {
-				legacy: 'priority',
-				kind: 'payload',
-				enginePath: 'payload.priority',
-			},
-			compound: {
-				legacy: 'compound',
-				kind: 'payload',
-				enginePath: 'payload.compound',
-			},
-			shipping: {
-				legacy: 'shipping',
-				kind: 'payload',
-				enginePath: 'payload.shipping',
-			},
-			class: { legacy: 'class', kind: 'payload', enginePath: 'payload.class' },
-			order: { legacy: 'order', kind: 'payload', enginePath: 'payload.order' },
 		},
 	},
 	'products/categories': {
 		engineCollection: 'categories',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooId' },
-			name: { legacy: 'name', kind: 'payload', enginePath: 'payload.name' },
-			parent: {
-				legacy: 'parent',
-				kind: 'payload',
-				enginePath: 'payload.parent',
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooId',
+				adapterDerived: false,
 			},
 		},
 	},
@@ -568,20 +351,23 @@ export const collectionMap = {
 		engineCollection: 'tags',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooId' },
-			name: { legacy: 'name', kind: 'payload', enginePath: 'payload.name' },
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooId',
+				adapterDerived: false,
+			},
 		},
 	},
 	'products/brands': {
 		engineCollection: 'brands',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooId' },
-			name: { legacy: 'name', kind: 'payload', enginePath: 'payload.name' },
-			parent: {
-				legacy: 'parent',
-				kind: 'payload',
-				enginePath: 'payload.parent',
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooId',
+				adapterDerived: false,
 			},
 		},
 	},
@@ -589,54 +375,12 @@ export const collectionMap = {
 		engineCollection: 'coupons',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'id' },
-			id: { legacy: 'id', kind: 'identifier', enginePath: 'wooId' },
-			status: {
-				legacy: 'status',
-				kind: 'payload',
-				enginePath: 'payload.status',
+			id: {
+				legacy: 'id',
+				kind: 'identifier',
+				enginePath: 'wooId',
+				adapterDerived: false,
 			},
-			discount_type: {
-				legacy: 'discount_type',
-				kind: 'payload',
-				enginePath: 'payload.discount_type',
-			},
-			date_expires_gmt: {
-				legacy: 'date_expires_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_expires_gmt',
-			},
-			code: { legacy: 'code', kind: 'payload', enginePath: 'payload.code' },
-			date_created_gmt: {
-				legacy: 'date_created_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_created_gmt',
-			},
-			date_modified_gmt: {
-				legacy: 'date_modified_gmt',
-				kind: 'payload',
-				enginePath: 'payload.date_modified_gmt',
-			},
-			amount: {
-				legacy: 'amount',
-				kind: 'payload',
-				enginePath: 'payload.amount',
-			},
-			description: {
-				legacy: 'description',
-				kind: 'payload',
-				enginePath: 'payload.description',
-			},
-			usage_count: {
-				legacy: 'usage_count',
-				kind: 'payload',
-				enginePath: 'payload.usage_count',
-			},
-			usage_limit: {
-				legacy: 'usage_limit',
-				kind: 'payload',
-				enginePath: 'payload.usage_limit',
-			},
-			slug: { legacy: 'slug', kind: 'payload', enginePath: 'payload.slug' },
 			active: {
 				legacy: 'active',
 				kind: 'computed',
@@ -669,6 +413,30 @@ export function resolveLegacyField(
 			fallback: true,
 		}
 	);
+}
+
+export function promotedColumnsFor(
+	collection: LegacyCollectionName,
+	legacyPayload: Record<string, unknown>
+): Record<string, unknown> {
+	const fields = Object.values(collectionMap[collection].fields as Record<string, FieldMapEntry>);
+	return Object.fromEntries(
+		fields
+			.filter((field) => field.kind === 'promoted')
+			.map((field) => [
+				field.enginePath,
+				field.write ? field.write(legacyPayload[field.legacy]) : legacyPayload[field.legacy],
+			])
+	);
+}
+
+export function adapterDerivedFieldsFor(collection: LegacyCollectionName): readonly string[] {
+	const fields = Object.values(collectionMap[collection].fields as Record<string, FieldMapEntry>);
+	return fields
+		.filter(
+			(field) => field.adapterDerived ?? (field.kind === 'identifier' || field.kind === 'computed')
+		)
+		.map((field) => field.legacy);
 }
 
 /** The engine RxDB collection name backing a legacy collection (`taxes` →

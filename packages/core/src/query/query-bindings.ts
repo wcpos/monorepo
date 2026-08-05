@@ -24,6 +24,7 @@ import {
 import {
 	type CoverageLaneDocument,
 	declareRequirements,
+	engineCollectionNameFor,
 	type EngineEvent,
 	type EngineLane,
 	type EngineQueryDescriptor,
@@ -74,18 +75,6 @@ const FIXED_COLLECTIONS_BY_LANE: Partial<Record<EngineLane, readonly SyncCollect
 	'order-window-seed': ['orders'],
 };
 
-const ENGINE_COLLECTION_BY_LEGACY: Record<LegacyCollectionName, SyncCollectionName> = {
-	products: 'products',
-	variations: 'variations',
-	orders: 'orders',
-	customers: 'customers',
-	taxes: 'taxRates',
-	'products/categories': 'categories',
-	'products/tags': 'tags',
-	'products/brands': 'brands',
-	coupons: 'coupons',
-};
-
 const LANE_ACTIVITY_SAFETY_MS = 60_000;
 const DEMAND_RETRY_BACKOFF_MS = 250;
 const LOCAL_TOTAL_SOURCE$ = of('local' as const);
@@ -128,7 +117,7 @@ function useLaneActivity(
 	const activity$ = React.useMemo(() => new BehaviorSubject(false), [engine, collection]);
 	React.useEffect(() => {
 		if (!enabled) return undefined;
-		const engineCollection = ENGINE_COLLECTION_BY_LEGACY[collection];
+		const engineCollection = engineCollectionNameFor(collection);
 		const starts = new Map<EngineLane, number[]>();
 		let safetyTimer: ReturnType<typeof setTimeout> | undefined;
 		const publish = () => {

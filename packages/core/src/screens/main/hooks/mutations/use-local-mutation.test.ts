@@ -14,6 +14,14 @@ const mockFindOneExec = jest.fn();
 const mockStatus = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
+	// The write-direction projections are the code under test here (parity with the
+	// old hand-written promotion switch) — pull the real implementations, mock the rest.
+	...(() => {
+		const { promotedColumnsFor, adapterDerivedFieldsFor } = jest.requireActual(
+			'@wcpos/query/engine-compat'
+		);
+		return { promotedColumnsFor, adapterDerivedFieldsFor };
+	})(),
 	useQueryManager: () => ({
 		engine: {
 			active: () => ({

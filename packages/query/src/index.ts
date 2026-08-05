@@ -13,6 +13,11 @@ export {
 	type EngineQueryDescriptor,
 } from './engine-query';
 export {
+	adapterDerivedFieldsFor,
+	engineCollectionNameFor,
+	promotedColumnsFor,
+} from './engine-adapter/collection-map';
+export {
 	observeEngineCensus,
 	observeEngineCollectionCounts,
 	observeEngineMutationCounts,
