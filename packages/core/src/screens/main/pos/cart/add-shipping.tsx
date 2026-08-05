@@ -68,10 +68,10 @@ export function AddShipping() {
 	 * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
 	 */
 	const handleAdd = React.useCallback(
-		(data: FormValues) => {
+		async (data: FormValues) => {
 			const { method_title, method_id, amount, tax_status, tax_class, prices_include_tax } = data;
 
-			addShipping({
+			await addShipping({
 				method_title: isEmpty(method_title) ? t('common.shipping') : (method_title ?? ''),
 				method_id: isEmpty(method_id) ? 'local_pickup' : (method_id ?? ''),
 				amount: isEmpty(amount) ? '0' : (amount ?? '0'),

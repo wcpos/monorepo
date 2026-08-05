@@ -3,6 +3,8 @@ import * as React from 'react';
 import { useObservable, useObservableEagerState, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { calculateOrderTotals } from './calculate-order-totals';
 import { useFeeLineData } from './use-fee-line-data';
@@ -14,6 +16,8 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
 
 /**
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
@@ -79,7 +83,7 @@ export const useCartLines = () => {
 		[lineItems, priceNumDecimals]
 	);
 
-	useSubscription(cartTotal$, async () => {
+	const handleCartTotalChange = async () => {
 		// Recalculate percentage-based fee lines
 		const percentageFeeLines = (feeLines || []).filter((item: FeeLine) => {
 			const { percent } = getFeeLineData(item);
@@ -148,7 +152,12 @@ export const useCartLines = () => {
 				},
 			});
 		}
-	});
+	};
+
+	useSubscription(
+		cartTotal$,
+		() => void handleCartTotalChange().catch((error) => cartLogger.error(String(error)))
+	);
 
 	return cartLines;
 };

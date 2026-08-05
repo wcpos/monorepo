@@ -130,8 +130,8 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 		gridFields.cost_of_goods_sold;
 
 	const addToCart = React.useCallback(
-		(variation: ProductVariationDocument | ProductDocument, metaData: MetaData[]) => {
-			addVariation(variation as ProductVariationDocument, product, metaData);
+		async (variation: ProductVariationDocument | ProductDocument, metaData: MetaData[]) => {
+			await addVariation(variation as ProductVariationDocument, product, metaData);
 			if (triggerRef.current) {
 				triggerRef.current.close();
 			}

@@ -11,6 +11,7 @@ import {
 	PrinterService,
 	probeVendor,
 } from '@wcpos/printer';
+import { getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
@@ -19,6 +20,8 @@ import { useT } from '../../../../../contexts/translations';
 
 import type * as z from 'zod';
 import type { PrinterFormValues } from '../schema';
+
+const printerLogger = getLogger(['wcpos', 'printer', 'dialog']);
 
 export interface VendorDefaults {
 	language: PrinterFormValues['language'];
@@ -241,6 +244,9 @@ export function usePrinterDialogForm({
 					} else {
 						setDetectedVendor(null);
 					}
+				})
+				.catch((error) => {
+					printerLogger.warn('Printer vendor probe failed', { context: { error: String(error) } });
 				})
 				.finally(() => {
 					if (probeRequestIdRef.current === requestId) setProbing(false);

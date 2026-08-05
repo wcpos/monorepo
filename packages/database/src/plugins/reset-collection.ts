@@ -17,6 +17,12 @@ import '../types.d';
 
 const resetLogger = getLogger(['wcpos', 'db', 'reset']);
 
+const runResetHook =
+	(hook: (collection: RxCollection) => Promise<void>) => (collection: RxCollection) =>
+		void hook(collection).catch((error) =>
+			resetLogger.error('Unhandled collection reset hook failure', { context: { error } })
+		);
+
 // Track removal counts for debugging
 const removalCounts: Record<string, number> = {};
 
@@ -120,7 +126,7 @@ export const resetCollectionPlugin: RxPlugin = {
 			 * Automatically re-add the collection after it's destroyed.
 			 * Only handles collections we manage - ignores plugin-created collections.
 			 */
-			after: async (collection) => {
+			after: runResetHook(async (collection) => {
 				const database = collection.database;
 				const collectionName = collection.name;
 
@@ -279,7 +285,7 @@ export const resetCollectionPlugin: RxPlugin = {
 					});
 					pendingReAdditions.delete(reAddKey);
 				}
-			},
+			}),
 		},
 	},
 };

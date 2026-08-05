@@ -3,10 +3,14 @@ import * as React from 'react';
 import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { RxDBBackend } from './rxdb-backend';
 import en from './locales/en/core.json';
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
+
+const translationLogger = getLogger(['wcpos', 'translations']);
 
 export function TranslationProvider({ children }: { children: React.ReactNode }) {
 	const { translationsState } = useAppState();
@@ -37,7 +41,10 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 				backend: {
 					translationsState,
 				},
-			});
+			})
+			.catch((error) =>
+				translationLogger.error('Failed to initialize translations', { context: { error } })
+			);
 		return instance;
 	}, [locale, translationsState]);
 
@@ -46,7 +53,11 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 	 */
 	React.useEffect(() => {
 		if (i18nInstance.language !== locale) {
-			i18nInstance.changeLanguage(locale);
+			void i18nInstance
+				.changeLanguage(locale)
+				.catch((error) =>
+					translationLogger.error('Failed to change language', { context: { error } })
+				);
 		}
 	}, [locale, i18nInstance]);
 

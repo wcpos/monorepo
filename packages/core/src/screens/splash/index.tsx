@@ -12,7 +12,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useSplashProgress } from './progress-provider';
 
 // Keep the splash screen visible while we get the js SplashScreen ready
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
 
 /**
  * Splash component that automatically uses the global progress context

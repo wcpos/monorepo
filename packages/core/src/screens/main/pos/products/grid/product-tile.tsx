@@ -59,8 +59,8 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 		gridFields.stock_quantity ||
 		gridFields.cost_of_goods_sold;
 
-	const handlePress = React.useCallback(() => {
-		addProduct(product);
+	const handlePress = React.useCallback(async () => {
+		await addProduct(product);
 	}, [addProduct, product]);
 
 	return (

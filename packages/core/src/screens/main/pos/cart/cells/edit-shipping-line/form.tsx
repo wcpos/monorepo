@@ -80,8 +80,8 @@ export function EditShippingLineForm({ uuid, item }: Props) {
 	 *
 	 */
 	const handleSave = React.useCallback(
-		(data: FormValues) => {
-			updateShippingLine(uuid, {
+		async (data: FormValues) => {
+			await updateShippingLine(uuid, {
 				method_title: data.method_title,
 				method_id: data.method_id,
 				instance_id: data.instance_id,

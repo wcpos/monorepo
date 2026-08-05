@@ -46,7 +46,7 @@ export function UISettingsForm() {
 	}, [resetUI, form, uiSettings]);
 
 	React.useEffect(() => {
-		setButtonPressHandler(handleReset);
+		setButtonPressHandler(() => void handleReset());
 	}, [setButtonPressHandler, handleReset]);
 
 	/**
@@ -54,7 +54,7 @@ export function UISettingsForm() {
 	 * The form is the source of truth during editing.
 	 * Changes are saved to RxDB but we don't re-sync back to avoid loops.
 	 */
-	useFormChangeHandler({ form: form as never, onChange: patchUI });
+	useFormChangeHandler({ form: form as never, onChange: (changes) => void patchUI(changes) });
 
 	/**
 	 *

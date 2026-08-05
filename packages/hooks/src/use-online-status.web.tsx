@@ -104,7 +104,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 
 		const handleOnline = () => {
 			// Browser says we're online - verify with reachability check
-			checkConnectivity();
+			void checkConnectivity();
 		};
 
 		const handleOffline = () => {
@@ -132,7 +132,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 			if (document.visibilityState === 'visible') {
 				// Page became visible (e.g., wake from sleep, tab switch)
 				// Re-check connectivity
-				checkConnectivity();
+				void checkConnectivity();
 			}
 		};
 
@@ -157,7 +157,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 		const intervalId = setInterval(() => {
 			// Only check if the page is visible
 			if (document.visibilityState === 'visible') {
-				checkConnectivity();
+				void checkConnectivity();
 			}
 		}, 30000); // 30 seconds
 
@@ -169,7 +169,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	 * Legitimate useEffect for fetching initial data on mount.
 	 */
 	React.useEffect(() => {
-		checkConnectivity();
+		void checkConnectivity();
 	}, [checkConnectivity]);
 
 	const value = React.useMemo(() => ({ status }), [status]);

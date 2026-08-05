@@ -67,7 +67,7 @@ export const useRemoveLineItem = () => {
 	 * If quantity is 0, then the line item is also removed, but we will stick with product_id for now
 	 */
 	const removeLineItem = React.useCallback(
-		(uuid: string, type: Line) => {
+		async (uuid: string, type: Line) => {
 			const order = currentOrder.getLatest();
 			let itemToRestore: LineItem | undefined;
 
@@ -101,7 +101,7 @@ export const useRemoveLineItem = () => {
 				.filter((item) => item !== null);
 
 			// update the order with the item removed
-			localPatch({
+			await localPatch({
 				document: order,
 				data: {
 					[type]: updatedLines,
@@ -123,7 +123,7 @@ export const useRemoveLineItem = () => {
 							dismissable: true,
 							action: {
 								label: t('common.undo'),
-								onClick: () => undoRemove(uuid, type, itemToRestore!),
+								onClick: () => void undoRemove(uuid, type, itemToRestore!),
 							},
 						},
 						context: {

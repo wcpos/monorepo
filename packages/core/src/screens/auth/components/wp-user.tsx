@@ -121,7 +121,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			variant="outline-warning"
 			onPress={(e) => {
 				e.stopPropagation();
-				promptAsync();
+				void promptAsync();
 			}}
 		>
 			<ButtonText>{t('auth.re_authenticate', { _tags: 'core' })}</ButtonText>

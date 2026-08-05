@@ -66,7 +66,7 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 		// may surface the same error / token) is not silently swallowed by the
 		// guard in the effect above.
 		processedResponseRef.current = null;
-		promptAsync();
+		void promptAsync();
 	}, [promptAsync]);
 
 	return (

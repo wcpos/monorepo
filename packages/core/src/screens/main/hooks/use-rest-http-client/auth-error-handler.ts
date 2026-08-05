@@ -228,7 +228,7 @@ export const useAuthErrorHandler = (
 		};
 
 		if (response.type === 'success') {
-			processSuccessfulLogin();
+			void processSuccessfulLogin();
 		} else if (response.type === 'error') {
 			// OAuth returned an error (e.g., invalid credentials)
 			// authFailed stays true - user needs to try again

@@ -84,7 +84,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 	/**
 	 *
 	 */
-	useSubscription(scanEvents$, async (event: ScanEvent) => {
+	const handleScan = async (event: ScanEvent) => {
 		const barcodeStr = event.code;
 		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
 		const scan = begin();
@@ -439,7 +439,12 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		// Successful scans clear both committed search and any pending input draft.
 		guardedClearSearch();
-	});
+	};
+
+	useSubscription(
+		scanEvents$,
+		(event) => void handleScan(event).catch((error) => barcodeLogger.error(String(error)))
+	);
 
 	return { onKeyPress };
 };

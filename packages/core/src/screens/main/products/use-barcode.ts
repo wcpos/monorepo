@@ -16,7 +16,7 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 	/**
 	 *
 	 */
-	useSubscription(barcode$, async (rawBarcode) => {
+	const handleBarcode = async (rawBarcode: unknown) => {
 		const barcode = rawBarcode as string;
 		const text1 = t('common.barcode_scanned', { barcode });
 		const results = await barcodeSearch(barcode);
@@ -54,7 +54,13 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 			});
 		}
 		setSearch(barcode);
-	});
+	};
+
+	useSubscription(
+		barcode$,
+		(rawBarcode) =>
+			void handleBarcode(rawBarcode).catch((error) => barcodeLogger.error(String(error)))
+	);
 
 	return { onKeyPress };
 };

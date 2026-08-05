@@ -137,7 +137,9 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
 			sessionListenerUnsubscribe = null;
 		}
 		// Disconnect the WebSocket before releasing the reference
-		novuClient.socket.disconnect();
+		void novuClient.socket.disconnect().catch((error) => {
+			novuLogger.warn('Novu: Failed to disconnect previous client', { context: { error } });
+		});
 		novuClient = null;
 	}
 
@@ -468,7 +470,9 @@ export function disconnectNovuClient(): void {
 			sessionListenerUnsubscribe = null;
 		}
 		// Disconnect the WebSocket before releasing the reference
-		novuClient.socket.disconnect();
+		void novuClient.socket.disconnect().catch((error) => {
+			novuLogger.warn('Novu: Failed to disconnect client', { context: { error } });
+		});
 		novuClient = null;
 		currentSubscriberId = null;
 	}

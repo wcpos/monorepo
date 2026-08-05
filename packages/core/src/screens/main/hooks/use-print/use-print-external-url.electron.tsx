@@ -49,7 +49,9 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 			ipc.once(`onBeforePrint-${printJobId}`, () => {
 				setIsPrinting(true);
 				if (onBeforePrint) {
-					onBeforePrint();
+					void Promise.resolve(onBeforePrint()).catch((error) =>
+						onPrintError?.('onBeforePrint', error as Error)
+					);
 				}
 			});
 

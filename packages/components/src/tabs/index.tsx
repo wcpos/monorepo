@@ -274,7 +274,7 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
 	const handlePress = React.useCallback(
 		(e: any) => {
 			if (Platform.OS !== 'web' && !props.disabled) {
-				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 			}
 			onPress?.(e);
 		},

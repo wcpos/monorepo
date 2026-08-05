@@ -100,7 +100,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 			}
 		};
 
-		fetchSiteInfo();
+		void fetchSiteInfo();
 	}, [http, wpApiUrl, siteUrl, site]);
 
 	return { isLoading, error };

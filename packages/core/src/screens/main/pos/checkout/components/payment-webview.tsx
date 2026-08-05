@@ -192,7 +192,7 @@ export function PaymentWebview({
 				clearTimeout(fallbackTimerRef.current);
 			}
 
-			fallbackTimerRef.current = setTimeout(async () => {
+			const checkFallback = async () => {
 				if (paymentReceivedRef.current) return;
 
 				// Check local status first - if it's no longer pos-open,
@@ -274,7 +274,8 @@ export function PaymentWebview({
 				} finally {
 					setLoading(false);
 				}
-			}, 1000);
+			};
+			fallbackTimerRef.current = setTimeout(() => void checkFallback(), 1000);
 		},
 		[
 			order,
@@ -320,7 +321,7 @@ export function PaymentWebview({
 								},
 							});
 						} else {
-							handlePaymentReceived({ data } as unknown as MessageEvent);
+							void handlePaymentReceived({ data } as unknown as MessageEvent);
 						}
 					}}
 					className="h-full flex-1"

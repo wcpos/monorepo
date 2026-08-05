@@ -122,7 +122,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 
 	// Trigger haptic feedback
 	const triggerHaptic = React.useCallback(() => {
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+		void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 	}, []);
 
 	// Debug logging function (called from worklet via scheduleOnRN)

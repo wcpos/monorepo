@@ -73,9 +73,9 @@ export function AddMiscProduct() {
 	 * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
 	 */
 	const handleAdd = React.useCallback(
-		(data: FormValues) => {
+		async (data: FormValues) => {
 			const { name, price, sku, tax_status, tax_class, virtual, downloadable, categories } = data;
-			addProduct({
+			await addProduct({
 				id: 0,
 				name: isEmpty(name) ? t('common.product') : name,
 				price: isEmpty(price) ? '0' : price,

@@ -38,8 +38,8 @@ export function CustomerNote() {
 	/**
 	 *
 	 */
-	const handleSaveNote = React.useCallback(() => {
-		localPatch({
+	const handleSaveNote = React.useCallback(async () => {
+		await localPatch({
 			document: currentOrder,
 			data: { customer_note: (value ?? '').replace(/^\s+|\s+$/g, '').trim() },
 		});

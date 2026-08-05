@@ -245,9 +245,9 @@ export function Products() {
 					changes: Record<string, unknown>;
 				}) => {
 					if (document.type === 'variation') {
-						variationsPatch({ document, data: changes });
+						void variationsPatch({ document, data: changes });
 					} else {
-						productsPatch({ document, data: changes });
+						void productsPatch({ document, data: changes });
 					}
 				},
 				variationRenderCell,

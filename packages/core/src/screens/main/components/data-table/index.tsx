@@ -126,7 +126,7 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }: SortingChange) => {
-			patchUI({ sortBy, sortDirection });
+			void patchUI({ sortBy, sortDirection });
 			props.actions.setSort(sortBy as TSortField, sortDirection);
 		},
 		[patchUI, props.actions]

@@ -66,7 +66,7 @@ export function startDecodeLoop<Frame>(options: DecodeLoopOptions<Frame>): () =>
 			}
 		} finally {
 			if (!stopped) {
-				timer = setTimeout(tick, intervalMs);
+				timer = setTimeout(() => void tick(), intervalMs);
 			}
 		}
 	};

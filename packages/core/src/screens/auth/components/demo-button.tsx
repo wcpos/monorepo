@@ -54,7 +54,7 @@ export function DemoButton() {
 		if (response.type === 'success') {
 			authLogger.debug('Demo login successful');
 			processedResponseRef.current = responseKey;
-			handleLoginSuccess({ params: response.params } as any);
+			void handleLoginSuccess({ params: response.params } as any);
 		} else if (response.type === 'error') {
 			authLogger.error(`Demo login failed: ${response.error}`, {
 				showToast: true,
@@ -103,7 +103,7 @@ export function DemoButton() {
 		if (connectedSite && isReady && !isProcessing) {
 			authLogger.debug('Triggering OAuth flow for demo site');
 			authTriggeredRef.current = true; // Set immediately before async call
-			promptAsync();
+			void promptAsync();
 		}
 	}, [connectedSite, isReady, isProcessing, promptAsync]);
 
