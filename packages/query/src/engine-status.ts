@@ -3,9 +3,7 @@ import { distinctUntilChanged, map, Observable, shareReplay } from 'rxjs';
 import type { EngineStatus, RxdbSyncEngine, SyncCollectionName } from '@wcpos/sync-engine';
 
 const snapshots = new WeakMap<RxdbSyncEngine, Observable<EngineStatus['collections']>>();
-export function observeEngineCollections(
-	engine: RxdbSyncEngine
-): Observable<EngineStatus['collections']> {
+function observeEngineCollections(engine: RxdbSyncEngine): Observable<EngineStatus['collections']> {
 	const existing = snapshots.get(engine);
 	if (existing) return existing;
 	const created = new Observable<EngineStatus['collections']>((subscriber) =>

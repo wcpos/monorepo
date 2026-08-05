@@ -11,14 +11,14 @@ import { act, cleanup, render, renderHook, waitFor } from '@testing-library/reac
 import { useObservableSuspense } from 'observable-hooks';
 import { filter, firstValueFrom } from 'rxjs';
 
-import { QueryProvider, useQueryRuntime } from '@wcpos/query';
-import type { QueryResult } from '@wcpos/query';
-
 import {
 	coverageLaneSchema,
 	engineSyncCollectionCreators,
 	queryTotalCacheSchema,
-} from '../../../sync-engine/src/testing';
+} from '@wcpos/sync-engine/testing';
+import { QueryProvider, useQueryRuntime } from '@wcpos/query';
+import type { QueryResult } from '@wcpos/query';
+
 import {
 	useAppliedCouponReferenceDemand,
 	useCollectionBinding,

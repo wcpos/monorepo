@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { SyncStatusPersistenceBridge } from '../app/(app)/_layout';
+import { SyncStatusPersistenceBridge } from './sync-status-persistence-bridge';
 import {
 	getSyncStatusState,
 	hydrateSyncStatus,

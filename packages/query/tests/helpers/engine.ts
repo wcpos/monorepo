@@ -3,7 +3,12 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { Subject } from 'rxjs';
 
-import { engineSyncCollectionCreators, memoryEngineStorage } from '@wcpos/sync-engine/testing';
+import {
+	engineSyncCollectionCreators,
+	memoryEngineStorage,
+	orderBrowserQueryKey,
+	productBrowseWindowQueryKeyFromDimensions,
+} from '@wcpos/sync-engine/testing';
 import type {
 	EngineRequirement,
 	EngineStatus,
@@ -12,8 +17,6 @@ import type {
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
 
-import { orderBrowserQueryKey } from '../../../sync-engine/src/scheduler/order-browser-scheduler-descriptor';
-import { productBrowseWindowQueryKeyFromDimensions } from '../../../sync-engine/src/scheduler/product-browse-window-descriptor';
 import { searchPlugin } from './search';
 
 import type { RxDatabase } from 'rxdb';
