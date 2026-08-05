@@ -30,12 +30,13 @@ import {
 	seedPersistedSchedulerTasks,
 	type SeedPersistedSchedulerTasksResult,
 } from './rx-scheduler-task-seeder';
-import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
+import {
+	RxSchedulerTaskStateRepository,
+	type SchedulerTaskStateDatabase,
+} from './rx-scheduler-task-state-repository';
 import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
-
-import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
 
 const SCHEDULER_TASK_KEY_MAX_LENGTH = schedulerTaskStateSchema.properties.queryKey.maxLength;
 const SCHEDULER_REQUIREMENT_ID_MAX_LENGTH =
@@ -63,7 +64,7 @@ export type SeedTargetedProductSchedulerTaskInput = {
 	batchSize?: number;
 	completedDedupeForMs?: number;
 	nowMs?: number;
-	getRepository: SchedulerScopeResolver;
+	database: SchedulerTaskStateDatabase;
 };
 
 export type SeedProductBrowseWindowSchedulerTaskInput = ProductBrowseWindowFilters & {
@@ -75,7 +76,7 @@ export type SeedProductBrowseWindowSchedulerTaskInput = ProductBrowseWindowFilte
 	priority?: number;
 	completedDedupeForMs?: number;
 	nowMs?: number;
-	getRepository: SchedulerScopeResolver;
+	database: SchedulerTaskStateDatabase;
 };
 
 /**
@@ -139,18 +140,16 @@ export async function seedProductBrowseWindowSchedulerTask(
 			`Product browse-window scheduler requirementId exceeds schema limit: ${requirementId.length} > ${SCHEDULER_REQUIREMENT_ID_MAX_LENGTH}`
 		);
 	}
-	const repository = await input.getRepository();
-	const database = repository.getDatabase();
 	const nowMs = input.nowMs ?? Date.now();
 
 	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
 	// and the seed runs again against the fresh store (#956) — callers treat a
 	// resolved seed as a durable enqueue, so it must not resolve empty.
 	return withSchedulerSeedLedgerRecovery({
-		database,
+		database: input.database,
 		run: () =>
 			seedPersistedSchedulerTasks({
-				repository: new RxSchedulerTaskStateRepository(database),
+				repository: new RxSchedulerTaskStateRepository(input.database),
 				tasks: [
 					{
 						id: `${queryKey}:windowed`,
@@ -178,7 +177,7 @@ export async function seedTargetedProductSchedulerTask(
 		batchSize: input.batchSize,
 		completedDedupeForMs: input.completedDedupeForMs,
 		nowMs: input.nowMs,
-		getRepository: input.getRepository,
+		database: input.database,
 		// This seeder IS the change-signal targeted product entry point, so an in-flight pull
 		// re-seeded by a newer mutation must re-run rather than drop the change (#318).
 		coalesceInFlight: true,

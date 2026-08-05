@@ -304,11 +304,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	}
 
-	const scopeResolverFor = (db: RxDatabase) => async () => ({
-		// The engine scope database carries the scheduler tier (slice 5a recipe).
-		getDatabase: () => db as never,
-	});
-
 	const seedSummary = (
 		label: string,
 		result: SeedPersistedSchedulerTasksResult
@@ -389,7 +384,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			search: '',
 			limit: ORDER_OPEN_RECENT_LIMIT,
 			priority: ORDER_OPEN_RECENT_PRIORITY,
-			getRepository: scopeResolverFor(db),
+			database: db,
 			// The injected clock reaches the SEED's dedupe check too — the drain
 			// already ticked on deps.now; a seed on Date.now() would judge the
 			// completed-dedupe window on a different clock (host adoption #430:
@@ -403,7 +398,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		const result = await seedProductBrowseWindowSchedulerTask({
 			limit: PRODUCT_BROWSE_WINDOW_LIMIT,
 			priority: PRODUCT_BROWSE_WINDOW_PRIORITY,
-			getRepository: scopeResolverFor(db),
+			database: db,
 			// Same one-clock rule as the order window seed above.
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 		});
@@ -421,7 +416,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		const result = await seedReferenceLanes({
 			collections: materialized,
 			completedDedupeForMs: REFERENCE_REFRESH_DEDUPE_MS,
-			getRepository: scopeResolverFor(db),
+			database: db,
 			// Same one-clock rule as the order window seed above.
 			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 		});

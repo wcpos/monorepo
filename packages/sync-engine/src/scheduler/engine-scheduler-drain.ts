@@ -1,13 +1,7 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
 import type { SyncObserver } from '@wcpos/sync-core';
-/**
- * The engine's persisted scheduler DRAIN composition (slice 5e, #430
- * phase 1): the web host's rxOrderSchedulerTick + syncCollectionRegistry
- * scheduler entries, engine-side. ONE context, N collections — each
- * per-collection fetcher builds from the same inputs, and WHICH collections
- * participate is this table's decision. The task-support predicates moved
- * here verbatim; the web registry imports them until phase 2 deletes it.
- */
+/** The persisted scheduler drain for apps/main. One context serves every supported
+ * collection; this module owns the registry and its task-support predicates. */
 
 import {
 	ledgerRebuiltSchedulerTaskRunnerResult,
@@ -84,7 +78,7 @@ function isSupportedBrowserOrderQueryKey(queryKey: string): boolean {
 	return !!decision && 'descriptor' in decision;
 }
 
-export function isSupportedOrderSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
+function isSupportedOrderSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
 	if (task.collection !== 'orders') return false;
 	if (task.queryKey === SUPPORTED_ORDER_QUERY_KEY && hasNoTargetedIds(task)) return true;
 	if (task.queryKey.startsWith(SUPPORTED_TARGETED_ORDER_QUERY_KEY_PREFIX)) {
@@ -93,7 +87,7 @@ export function isSupportedOrderSchedulerTask(task: SchedulerTaskSupportCandidat
 	return isSupportedBrowserOrderQueryKey(task.queryKey) && hasNoTargetedIds(task);
 }
 
-export function isSupportedProductSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
+function isSupportedProductSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
 	if (task.collection !== 'products') return false;
 	if (task.queryKey.startsWith(SUPPORTED_TARGETED_PRODUCT_QUERY_KEY_PREFIX)) {
 		return hasTargetedIds(task);
@@ -111,7 +105,7 @@ function isSupportedCustomerSearchTask(task: SchedulerTaskSupportCandidate): boo
 	return task.limit === queryLimit && hasNoTargetedIds(task);
 }
 
-export function isSupportedCustomerSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
+function isSupportedCustomerSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
 	if (task.collection !== 'customers') return false;
 	if (task.queryKey.startsWith(SUPPORTED_TARGETED_CUSTOMER_QUERY_KEY_PREFIX)) {
 		return hasTargetedIds(task);
@@ -119,7 +113,7 @@ export function isSupportedCustomerSchedulerTask(task: SchedulerTaskSupportCandi
 	return isSupportedCustomerSearchTask(task);
 }
 
-export function isSupportedTaxRateSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
+function isSupportedTaxRateSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
 	return (
 		task.collection === 'taxRates' &&
 		task.queryKey === SUPPORTED_TAX_RATE_QUERY_KEY &&
@@ -128,7 +122,7 @@ export function isSupportedTaxRateSchedulerTask(task: SchedulerTaskSupportCandid
 	);
 }
 
-export function isSupportedReferenceSchedulerTask(
+function isSupportedReferenceSchedulerTask(
 	task: SchedulerTaskSupportCandidate,
 	collection: string,
 	queryKey: string
@@ -154,7 +148,7 @@ type BulkUpsertCollection<T extends { id: string }> = {
 };
 
 /** The generic pull-apply adapter every non-order fetcher writes through. */
-export function collectionSchedulerRepository<T extends { id: string }>(
+function collectionSchedulerRepository<T extends { id: string }>(
 	collection: BulkUpsertCollection<T>
 ): {
 	upsertMany(documents: T[]): Promise<void>;

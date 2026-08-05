@@ -8,10 +8,11 @@ import {
 } from './rx-order-scheduler-task-seeder';
 
 const mocks = vi.hoisted(() => ({
-	getRepository: vi.fn(),
 	RxSchedulerTaskStateRepository: vi.fn(),
 	seedPersistedSchedulerTasks: vi.fn(),
 }));
+
+const MOCK_DATABASE = { name: 'mock-db' };
 
 vi.mock('./rx-scheduler-task-state-repository', () => ({
 	RxSchedulerTaskStateRepository: mocks.RxSchedulerTaskStateRepository,
@@ -26,13 +27,11 @@ vi.mock('./rx-scheduler-task-seeder', async (importOriginal) => ({
 
 describe('seedOrderSchedulerTasks', () => {
 	beforeEach(() => {
-		mocks.getRepository.mockReset();
 		mocks.RxSchedulerTaskStateRepository.mockReset();
 		mocks.seedPersistedSchedulerTasks.mockReset();
 	});
 
 	it('seeds the supported background order custom-pull task without claiming it', async () => {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 1,
@@ -42,7 +41,6 @@ describe('seedOrderSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -51,10 +49,9 @@ describe('seedOrderSchedulerTasks', () => {
 		mocks.seedPersistedSchedulerTasks.mockResolvedValue(result);
 
 		await expect(
-			seedOrderSchedulerTasks({ getRepository: mocks.getRepository, perPage: 100, nowMs: 10_000 })
+			seedOrderSchedulerTasks({ database: MOCK_DATABASE, perPage: 100, nowMs: 10_000 })
 		).resolves.toBe(result);
 
-		expect(orderRepository.getDatabase).toHaveBeenCalledTimes(1);
 		expect(mocks.RxSchedulerTaskStateRepository).toHaveBeenCalledWith({ name: 'mock-db' });
 		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith({
 			repository: schedulerRepository,
@@ -79,7 +76,6 @@ describe('seedOrderSchedulerTasks', () => {
 	});
 
 	it('seeds a deduped targeted order task without claiming it', async () => {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 1,
@@ -89,7 +85,6 @@ describe('seedOrderSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -99,7 +94,7 @@ describe('seedOrderSchedulerTasks', () => {
 
 		await expect(
 			seedTargetedOrderSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				orderIds: [456, 123, 123],
 				priority: 950,
 				batchSize: 50,
@@ -108,7 +103,6 @@ describe('seedOrderSchedulerTasks', () => {
 			})
 		).resolves.toBe(result);
 
-		expect(orderRepository.getDatabase).toHaveBeenCalledTimes(1);
 		expect(mocks.RxSchedulerTaskStateRepository).toHaveBeenCalledWith({ name: 'mock-db' });
 		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith({
 			repository: schedulerRepository,
@@ -136,7 +130,6 @@ describe('seedOrderSchedulerTasks', () => {
 	});
 
 	it('seeds a status-only browser order filter descriptor without claiming it', async () => {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 1,
@@ -146,7 +139,6 @@ describe('seedOrderSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -156,7 +148,7 @@ describe('seedOrderSchedulerTasks', () => {
 
 		await expect(
 			seedOrderFilterSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				status: 'processing',
 				search: '',
 				limit: 50,
@@ -166,7 +158,6 @@ describe('seedOrderSchedulerTasks', () => {
 			})
 		).resolves.toBe(result);
 
-		expect(orderRepository.getDatabase).toHaveBeenCalledTimes(1);
 		expect(mocks.RxSchedulerTaskStateRepository).toHaveBeenCalledWith({ name: 'mock-db' });
 		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith({
 			repository: schedulerRepository,
@@ -191,7 +182,6 @@ describe('seedOrderSchedulerTasks', () => {
 	});
 
 	function arrangeBrowserOrderSeed() {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 1,
@@ -201,7 +191,6 @@ describe('seedOrderSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -216,7 +205,7 @@ describe('seedOrderSchedulerTasks', () => {
 
 		await expect(
 			seedOrderFilterSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				status: 'processing',
 				search: 'hat',
 				customerId: 42,
@@ -249,7 +238,7 @@ describe('seedOrderSchedulerTasks', () => {
 
 		await expect(
 			seedOrderFilterSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				status: 'processing',
 				search: 'hat',
 				customerId: 42,
@@ -284,7 +273,6 @@ describe('seedOrderSchedulerTasks', () => {
 	});
 
 	it('seeds a bounded multi-page status-only browser order filter descriptor without claiming it', async () => {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 1,
@@ -294,7 +282,6 @@ describe('seedOrderSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -304,7 +291,7 @@ describe('seedOrderSchedulerTasks', () => {
 
 		await expect(
 			seedOrderFilterSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				status: 'processing',
 				search: '',
 				limit: 150,
@@ -334,7 +321,7 @@ describe('seedOrderSchedulerTasks', () => {
 	it('rejects unsupported browser order filter descriptors before queuing work', async () => {
 		await expect(
 			seedOrderFilterSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				status: 'processing',
 				search: '',
 				limit: 201,
@@ -342,32 +329,31 @@ describe('seedOrderSchedulerTasks', () => {
 		).rejects.toThrow('Browser order scheduler descriptors cannot exceed 200 records');
 		await expect(
 			seedOrderFilterSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				status: 'x'.repeat(240),
 				search: '',
 				limit: 50,
 			})
 		).rejects.toThrow('Browser order scheduler descriptor queryKey exceeds schema limit');
 
-		expect(mocks.getRepository).not.toHaveBeenCalled();
+		expect(mocks.RxSchedulerTaskStateRepository).not.toHaveBeenCalled();
 		expect(mocks.seedPersistedSchedulerTasks).not.toHaveBeenCalled();
 	});
 
 	it('rejects invalid targeted batch sizes before queuing work', async () => {
 		await expect(
 			seedTargetedOrderSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				orderIds: [123],
 				batchSize: 0,
 			})
 		).rejects.toThrow('Targeted order scheduler task batch size must be a positive integer');
 
-		expect(mocks.getRepository).not.toHaveBeenCalled();
+		expect(mocks.RxSchedulerTaskStateRepository).not.toHaveBeenCalled();
 		expect(mocks.seedPersistedSchedulerTasks).not.toHaveBeenCalled();
 	});
 
 	it('splits large targeted order sets into tasks with schema-safe keys', async () => {
-		const orderRepository = { getDatabase: vi.fn(() => ({ name: 'mock-db' })) };
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {
 			inserted: 2,
@@ -377,7 +363,6 @@ describe('seedOrderSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 		};
-		mocks.getRepository.mockResolvedValue(orderRepository);
 		mocks.RxSchedulerTaskStateRepository.mockImplementation(
 			function RxSchedulerTaskStateRepositoryMock() {
 				return schedulerRepository;
@@ -387,7 +372,7 @@ describe('seedOrderSchedulerTasks', () => {
 
 		await expect(
 			seedTargetedOrderSchedulerTask({
-				getRepository: mocks.getRepository,
+				database: MOCK_DATABASE,
 				orderIds: Array.from({ length: 100 }, (_, index) => index + 1),
 				nowMs: 12_000,
 			})

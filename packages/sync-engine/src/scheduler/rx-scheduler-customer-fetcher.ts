@@ -19,8 +19,7 @@ import {
 	createTargetedSearchCollectionFetcher,
 } from './rx-scheduler-collection-fetcher';
 
-import type { FetchTask } from './replication-policy';
-import type { SchedulerFetcher } from './replication-scheduler';
+import type { FetchTask, SchedulerFetcher } from './replication-policy';
 
 export type CustomerSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
 export type CustomerSchedulerFetcherInput = CollectionSchedulerInput<LocalCustomerDocument>;

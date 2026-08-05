@@ -2,8 +2,7 @@
  * The apply decision tree — the SINGLE place a routed `ReplicationActions` plan
  * (from `planReplicationActions`) is turned into concrete replication work. The
  * engine DETECTS, `planReplicationActions` ROUTES, and THIS module APPLIES, the
- * same upstream-into-sync-core move the hybrid engine and `scopeGuardedPull`
- * made.
+ * same upstream-into-sync-core move used by the hybrid engine.
  *
  * Before this module, the "apply" tree was re-implemented on two hosts and they
  * DRIFTED: the web tick handled tax-rate updates/deletes and barcode re-derive;

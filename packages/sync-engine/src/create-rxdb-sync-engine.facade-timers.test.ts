@@ -404,9 +404,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			await seedOrderSchedulerTasks({
 				perPage: 250,
 				nowMs: 1,
-				getRepository: async () => ({
-					getDatabase: () => scope.database.collections as never,
-				}),
+				database: scope.database,
 			});
 			engine.reconfigure({ pullBatchSize: configured });
 			await engine.sync('scheduler-drain');

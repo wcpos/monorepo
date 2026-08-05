@@ -19,7 +19,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
  * contract: hosts that can mount multiple instances must leader-elect before
  * allowing `write()` or arming write/drain lanes. The engine's transact chain
  * is intentionally process-local; cross-instance election belongs to the
- * host boundary (Web Locks in the web host, host-native coordination elsewhere).
+ * host boundary in apps/main, using the coordination primitive for each platform.
  *
  * Invariants carried here:
  *  1. Scope safety is unrepresentable — no ticket, epoch, or guarded-write
@@ -88,7 +88,6 @@ import {
 	type WriteOutcomeEvent,
 } from './write-path/write-drain-lane';
 import {
-	type CoverageOutcome,
 	createRequirePlane,
 	type EngineRequirement,
 	type RequirementHandle,
@@ -229,16 +228,13 @@ export type RxdbSyncEnginePorts = {
 	/** 'auto' (default): all periodic lanes arm after `ready`. 'manual': no
 	 * timers — callers drive deterministic ticks via sync(). */
 	mode?: 'auto' | 'manual';
-	/** RxDB multiInstance for the engine's scope databases (cross-tab change
-	 * propagation via BroadcastChannel). Default false; a multi-tab host (the
-	 * web app) passes true. Host adoption (#430): the create call is engine-
-	 * internal, so this cannot be adapted outside the port. */
+	/** RxDB multiInstance for the engine's scope databases (cross-instance change
+	 * propagation via BroadcastChannel). Default false; apps/main selects the
+	 * value for its current platform. */
 	multiInstance?: boolean;
 	/** RxDB hashFunction for the engine's scope databases. Default: RxDB's
-	 * (WebCrypto-based) sha256. Host adoption (#430 phase 3): Hermes/RN hosts
-	 * have no crypto.subtle and back this with expo-crypto — the create call is
-	 * engine-internal, so (like multiInstance) this cannot be adapted outside
-	 * the port. */
+	 * WebCrypto-based sha256. apps/main injects its platform hash implementation
+	 * where WebCrypto is unavailable. */
 	hashFunction?: HashFunction;
 	intervals?: Partial<EngineIntervals>;
 	/** Host-executed query-total fetch. The query-total retry lane arms ONLY
@@ -253,17 +249,17 @@ export type RxdbSyncEnginePorts = {
 };
 
 export type EngineIntervals = {
-	/** Change-signal poll cadence under mode:'auto'. Default 10s (the web host's). */
+	/** Change-signal poll cadence under mode:'auto'. apps/main defaults to 10s. */
 	changeSignalPollMs: number;
-	/** Write-drain cadence under mode:'auto'. Default 10s (the web host's). */
+	/** Write-drain cadence under mode:'auto'. apps/main defaults to 10s. */
 	writeDrainPollMs: number;
-	/** Persisted scheduler drain cadence. Default 30s (the web host's). */
+	/** Persisted scheduler drain cadence. apps/main defaults to 30s. */
 	schedulerDrainMs: number;
-	/** Orders open-recent window re-seed cadence. Default 5min (the web host's). */
+	/** Orders open-recent window re-seed cadence. apps/main defaults to 5min. */
 	orderWindowSeedMs: number;
 	/** Products browse-window (ADR 0027) re-seed cadence. Default 5min (matches the order window). */
 	productBrowseWindowSeedMs: number;
-	/** Reference-lane (F11) re-seed cadence. Default 5min (the web host's). */
+	/** Reference-lane (F11) re-seed cadence. apps/main defaults to 5min. */
 	referenceSeedMs: number;
 	/** Idle customer trickle cadence. Default 5min. */
 	customerTrickleMs: number;
@@ -271,7 +267,7 @@ export type EngineIntervals = {
 	queryTotalRetryScanMs: number;
 	/** Collection census cache freshness window. Default 15min. */
 	censusFreshForMs: number;
-	/** Coverage compaction scan cadence. Default 60s (the web host's). */
+	/** Coverage compaction scan cadence. apps/main defaults to 60s. */
 	coverageCompactionScanMs: number;
 	/** Existence-manifest prime cadence. Conservative backstop; default 15min. */
 	existencePrimeMs: number;
@@ -622,7 +618,7 @@ export function createRxdbSyncEngine(
 			// Storage executes them worker-side in production, matching the legacy 1.9 configuration.
 			allowSlowCount: true,
 			// Cross-tab change propagation is the HOST's call (ports.multiInstance,
-			// #430): the web app runs multi-tab and passes true; harnesses and
+			// apps/main enables this where it runs multiple instances; harnesses and
 			// single-window hosts keep the single-instance default.
 			multiInstance: ports.multiInstance ?? false,
 			...(ports.hashFunction !== undefined ? { hashFunction: ports.hashFunction } : {}),
@@ -1271,7 +1267,7 @@ export function createRxdbSyncEngine(
 				setLifecyclePhase('pos-bootstrap-seed');
 				try {
 					await seedPosBootstrapLanes({
-						getRepository: async () => ({ getDatabase: () => database as never }),
+						database: database,
 						...(ports.now !== undefined ? { nowMs: ports.now() } : {}),
 					});
 					bootstrappedScopes.add(scopeId);
@@ -1496,7 +1492,7 @@ export function createRxdbSyncEngine(
 	// The orders scheduler fetcher's custom-pull checkpoint (+ F8 epoch) lives
 	// in the scope's syncCheckpoints collection (slice 5e), NOT the engine kv
 	// store — an orders reset must rewind it too, or the persisted drain
-	// resumes a stale cursor over the emptied collection (the web host's
+	// resumes a stale cursor over the emptied collection (the apps/main host's
 	// increment-2 contract, engine-owned per invariant 2). Rewind-to-zero via
 	// the same repository write the F8 epoch flow uses; the stored epoch is
 	// preserved by that write.
@@ -2149,7 +2145,7 @@ export function createRxdbSyncEngine(
 								priority: 1_000,
 								completedDedupeForMs: 0,
 								...(ports.now !== undefined ? { nowMs: ports.now() } : {}),
-								getRepository: async () => ({ getDatabase: () => database as never }),
+								database: database,
 							});
 						}
 						if (entry.collectionName !== 'orders' && discardServerDocument) {

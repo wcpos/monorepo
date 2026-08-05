@@ -1,9 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { planQueryTotalRequest, type QueryTotalCacheEntry } from './query-total-requests';
-
-import type { QueryTotalDiscoveryDecision } from './query-total-discovery';
+import {
+	planQueryTotalRequest,
+	type QueryTotalCacheEntry,
+	type QueryTotalDiscoveryDecision,
+} from './query-total-requests';
 
 const needsTotalDecision: QueryTotalDiscoveryDecision = {
 	queryKey: 'orders:browser:status=processing:search=:limit=50',

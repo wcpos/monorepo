@@ -1,15 +1,5 @@
-/**
- * The order repository CORE (slice 5e, #430 phase 1): upsert with the
- * offline-first local-work guard, the F6 delete channel, the F8 resync
- * reconcile, and the custom-pull checkpoint/epoch store — everything the
- * orders scheduler fetcher needs, engine-side. The web host subclasses this
- * as RxOrderRepository to add its FlexSearch teardown on close() and the
- * exclusive-ownership resolver frames (host concerns, not engine ones).
- *
- * Structurally typed: LabDatabase and engine scope databases both satisfy
- * OrderRepositoryDatabase, so the same class serves the pre-adoption web
- * assembly and the engine's own scheduler drain.
- */
+/** The apps/main order repository: local-work guards, delete/resync reconciliation,
+ * and the custom-pull checkpoint and epoch store used by the scheduler fetcher. */
 
 import {
 	assertBulkSuccess,

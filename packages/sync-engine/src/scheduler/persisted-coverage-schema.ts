@@ -1,5 +1,3 @@
-import type { LocalCoverageState } from './coverage-model';
-
 export type PersistedCoverageRecord = {
 	collection: string;
 	id: string;
@@ -15,6 +13,20 @@ export type PersistedCoverageLane = {
 	expectedRecordIds: string[];
 	freshUntilMs: number;
 	updatedAtMs: number;
+};
+
+export type LocalRecordCoverage = Pick<PersistedCoverageRecord, 'collection' | 'id'> & {
+	fresh: boolean;
+};
+
+export type LocalLaneCoverage = Pick<
+	PersistedCoverageLane,
+	'collection' | 'queryKey' | 'complete'
+> & { fresh: boolean };
+
+export type LocalCoverageState = {
+	records: LocalRecordCoverage[];
+	lanes: LocalLaneCoverage[];
 };
 
 export type PersistedCoverageDocumentSet = {

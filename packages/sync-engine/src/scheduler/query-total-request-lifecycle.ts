@@ -2,11 +2,10 @@ import {
 	planQueryTotalRequest,
 	type QueryTotalCacheEntry,
 	type QueryTotalConnectivity,
+	type QueryTotalDiscoveryDecision,
 	type QueryTotalRequestParams,
 	type QueryTotalWooRequest,
 } from './query-total-requests';
-
-import type { QueryTotalDiscoveryDecision } from './query-total-discovery';
 
 export type QueryTotalRequestLifecycleAction =
 	| 'skip-not-needed'

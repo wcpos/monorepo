@@ -1,6 +1,5 @@
 import type { PersistedSchedulerTaskState } from './persisted-scheduler-state';
-import type { FetchTask } from './replication-policy';
-import type { SchedulerFetcher } from './replication-scheduler';
+import type { FetchTask, SchedulerFetcher } from './replication-policy';
 import type { PersistedSchedulerTaskRunnerRepository } from './rx-scheduler-task-runner';
 
 export type SchedulerTaskSupportCandidate = Pick<

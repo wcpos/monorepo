@@ -2,7 +2,7 @@
  * Hybrid change-signal engine — the composition the change-signal matrix
  * nominated (docs/experiments/change-signal-matrix-2026-06-10.md, "Emerging
  * hybrid hypothesis"). It graduates the playground's measured tiers into a
- * sync-core module behind a clean port, the same move scopeGuardedPull made.
+ * sync-core module behind a clean port shared by its host adapters.
  *
  * The engine does NOT re-implement endpoint plumbing — that lives in the bench
  * instrument (apps/web/src/bench/changeSignalMatrix.ts), which MEASURED the

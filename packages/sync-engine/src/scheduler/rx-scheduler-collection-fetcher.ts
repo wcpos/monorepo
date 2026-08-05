@@ -16,11 +16,10 @@
 
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
-import { pullRequestLimit } from './replication-policy';
+// prettier-ignore
+import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
 import type { BuildCoverageDocumentsFromQueryResultInput } from './query-coverage-writes';
-import type { FetchTask, FetchTaskResult } from './replication-policy';
-import type { SchedulerFetcher, SchedulerFetcherContext } from './replication-scheduler';
 
 export const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
 
