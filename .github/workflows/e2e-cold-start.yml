@@ -1,0 +1,78 @@
+name: E2E Cold Start
+
+# Nightly thin-local-DB E2E profile (#991 / PR #996). Scheduled workflows only
+# fire from the default branch, so this file lives on main — but the profile
+# and specs live on the next lane, so the job checks out `next` (or the
+# dispatch input) and runs the opt-in `pro-cold-start` Playwright project.
+# Without BASE_URL the Playwright config builds and serves the web app itself.
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to test
+        type: string
+        default: next
+
+permissions:
+  contents: read
+
+env:
+  EXPO_USE_FAST_RESOLVER: true
+
+jobs:
+  cold-start:
+    name: 🥶 Cold-start E2E (thin local catalogue)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: 🏗 Setup repository (next lane)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.inputs.ref || 'next' }}
+          fetch-depth: 0
+          submodules: false
+
+      - name: 🔒 Validate trusted ref
+        run: |
+          git fetch origin next
+          if ! git merge-base --is-ancestor HEAD origin/next; then
+            echo "::error::ref must resolve to a commit on the next branch"
+            exit 1
+          fi
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+
+      - name: 💾 Cache Playwright browsers
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: 🎭 Install Playwright browsers
+        run: cd apps/main && npx playwright install --with-deps chromium
+
+      - name: 🥶 Run cold-start E2E
+        run: cd apps/main && npx playwright test --project=pro-cold-start
+        env:
+          E2E_COLD_START: '1'
+          CI: true
+
+      - name: 📸 Upload results on failure
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: failure()
+        with:
+          name: cold-start-results-${{ github.run_id }}
+          path: |
+            apps/main/test-results/
+            apps/main/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
