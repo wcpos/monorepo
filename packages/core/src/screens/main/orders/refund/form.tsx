@@ -112,6 +112,7 @@ function createRefundFormSchema(dp: number) {
 
 type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
+/** Renders the form used to calculate and submit an order refund. */
 export function RefundOrderForm({ order }: Props) {
 	const t = useT();
 	const { store } = useAppState();

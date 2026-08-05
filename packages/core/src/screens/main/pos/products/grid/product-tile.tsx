@@ -31,6 +31,7 @@ interface ProductTileProps {
 	gridFields: GridFields;
 }
 
+/** Renders a product tile with the fields enabled for the product grid. */
 export function ProductTile({ product, gridFields }: ProductTileProps) {
 	const t = useT();
 	const { addProduct } = useAddProduct();

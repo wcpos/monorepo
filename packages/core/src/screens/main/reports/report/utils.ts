@@ -8,6 +8,7 @@ interface CalculateTotalsProps {
 	num_decimals?: number;
 }
 
+/** Aggregates order values into the totals used by the POS report. */
 export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsProps) => {
 	const paymentMethodTotals: Record<string, { total: number; title: string }> = {};
 	const taxTotals: Record<number, { label: string; total: number }> = {};

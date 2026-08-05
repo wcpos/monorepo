@@ -95,6 +95,7 @@ function VariablePriceRange({
 	);
 }
 
+/** Renders a variable product tile with the fields enabled for the product grid. */
 export function VariableProductTile({ product, gridFields }: VariableProductTileProps) {
 	const t = useT();
 	const { addVariation } = useAddVariation();
