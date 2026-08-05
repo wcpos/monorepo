@@ -140,6 +140,48 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		await engine.dispose();
 	});
 
+	it('one drain attributes activity per claimed task collection, not per declaring lane', async () => {
+		// Ruled 2026-08-05: scheduler-drain activity follows the executing unit's
+		// collection — a drain claiming both an orders task and a products task must
+		// light BOTH collections while their units run, never one lane-wide collection.
+		const orderServer = scriptedOrderServer();
+		const productServer = scriptedProductServer([
+			{
+				id: 55,
+				name: 'Cold Grid Product',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: PRODUCT_UUID_55 }],
+			},
+		]);
+		const engine = engineWith(async (url) => {
+			const u = new URL(url);
+			if (u.pathname.endsWith('/products')) return productServer.fetch(url);
+			return orderServer.fetch(url);
+		});
+		await engine.ready;
+
+		expect((await engine.sync('order-window-seed')).status).toBe('ran');
+		expect((await engine.sync('product-browse-window-seed')).status).toBe('ran');
+
+		const activeSeen = new Set<string>();
+		const unsubscribe = engine.statusChanges((status) => {
+			for (const [collection, state] of Object.entries(status.collections)) {
+				if (state.active) activeSeen.add(collection);
+			}
+		});
+		const drained = await engine.sync('scheduler-drain');
+		unsubscribe();
+
+		expect(drained.status).toBe('ran');
+		expect(orderServer.state.pulls).toBeGreaterThan(0);
+		expect(productServer.state.productPulls).toBeGreaterThan(0);
+		expect(activeSeen).toContain('orders');
+		expect(activeSeen).toContain('products');
+		// The drain is quiet again once it settles.
+		expect(engine.status().collections.orders.active).toBe(false);
+		expect(engine.status().collections.products.active).toBe(false);
+		await engine.dispose();
+	});
+
 	it('scheduler-fetched customers land both the stripped document and customer manifest row', async () => {
 		const customerUuid = '41414141-4141-4141-8141-414141414141';
 		const engine = engineWith(async (url) => {
