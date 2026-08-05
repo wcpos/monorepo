@@ -1,3 +1,5 @@
+/** @jest-environment node */
+
 import { BehaviorSubject, type Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
@@ -25,7 +27,17 @@ type LegacyProxy = Record<string, unknown> & {
 	getLatest(): LegacyProxy;
 };
 
-function fakeRxDocument(initial: EngineDocument) {
+function proxyNestedObjects(value: unknown): unknown {
+	if (value === null || typeof value !== 'object') {
+		return value;
+	}
+	return new Proxy(value, {
+		get: (target, property, receiver) =>
+			proxyNestedObjects(Reflect.get(target, property, receiver)),
+	});
+}
+
+function fakeRxDocument(initial: EngineDocument, proxyPayload = false) {
 	const state = new BehaviorSubject(initial);
 	let latest = initial;
 	state.subscribe((document) => {
@@ -33,14 +45,21 @@ function fakeRxDocument(initial: EngineDocument) {
 	});
 	const collection = { name: 'products' };
 	let revisions$: Observable<RxDocument<EngineDocument>>;
-	const makeDocument = (document: EngineDocument): RxDocument<EngineDocument> =>
-		({
+	const makeDocument = (document: EngineDocument): RxDocument<EngineDocument> => {
+		const rxDocument = {
 			...document,
 			$: revisions$,
 			collection,
 			getLatest: () => makeDocument(latest),
 			toJSON: () => document,
-		}) as unknown as RxDocument<EngineDocument>;
+		};
+		if (proxyPayload) {
+			Object.defineProperty(rxDocument, 'payload', {
+				get: () => proxyNestedObjects(document.payload),
+			});
+		}
+		return rxDocument as unknown as RxDocument<EngineDocument>;
+	};
 	revisions$ = state.pipe(map((document) => makeDocument(document)));
 	return { document: makeDocument(initial), state, collection };
 }
@@ -180,6 +199,34 @@ describe('wrapEngineDocument', () => {
 		const mutable = proxy.toMutableJSON();
 		(mutable.images as { src: string }[])[0].src = 'changed.jpg';
 		expect((proxy.toJSON().images as { src: string }[])[0].src).toBe('coffee.jpg');
+	});
+
+	it('creates cloneable snapshots without RxDB property proxies', () => {
+		const source = fakeRxDocument(
+			{
+				id: 'product-uuid',
+				wooProductId: 42,
+				payload: {
+					dimensions: { length: '10' },
+					_links: { self: [{ href: 'https://example.com/products/42' }] },
+					cost_of_goods_sold: { value: '5.00' },
+				},
+			},
+			true
+		);
+		expect(() => structuredClone(source.document.payload)).toThrow();
+
+		const proxy = wrapEngineDocument('products', source.document) as LegacyProxy;
+		const snapshot = proxy.toJSON();
+		expect(snapshot).toMatchObject({ uuid: 'product-uuid', id: 42 });
+		expect(() => structuredClone(snapshot)).not.toThrow();
+
+		const mutable = proxy.toMutableJSON();
+		expect(mutable).toEqual(snapshot);
+		expect(Object.getPrototypeOf(mutable)).toBe(Object.prototype);
+		expect(() => structuredClone(mutable)).not.toThrow();
+		(mutable.dimensions as { length: string }).length = '20';
+		expect((snapshot.dimensions as { length: string }).length).toBe('10');
 	});
 
 	it('wraps the latest underlying document', () => {

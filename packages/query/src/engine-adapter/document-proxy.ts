@@ -37,7 +37,7 @@ function legacySnapshot(
 	collection: LegacyCollectionName,
 	rxDocument: RxDocument<EngineDocument>
 ): Record<string, unknown> {
-	const document = engineDocument(rxDocument);
+	const document = rxDocument.toJSON() as EngineDocument;
 	const payload = document.payload ?? {};
 	return {
 		...payload,
