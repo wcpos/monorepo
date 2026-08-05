@@ -92,8 +92,18 @@ import {
 	type EngineRequirement,
 	type RequirementHandle,
 } from './require-plane';
-import { seedPosBootstrapLanes } from './scheduler/rx-pos-bootstrap-seeder';
-import { seedTargetedOrderSchedulerTask } from './scheduler/rx-order-scheduler-task-seeder';
+import {
+	CENSUS_COLLECTIONS,
+	censusQueryKey,
+	type CensusTotals,
+	censusTotalsFromCache,
+	chunk,
+	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
+	orderDocumentFromWooPayload,
+	seedPosBootstrapLanes,
+	seedTargetedOrderSchedulerTask,
+	WOO_REST_MAX_PER_PAGE,
+} from './scheduler';
 import {
 	COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS,
 	createMaintenanceLanes,
@@ -105,7 +115,6 @@ import {
 	CUSTOMER_TRICKLE_STATE_KEY,
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
-import { ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS } from './scheduler/engine-scheduler-drain';
 import {
 	createLocalCoverage,
 	type LocalCoverage,
@@ -121,16 +130,7 @@ import {
 	removeManifestByWooIds,
 	upsertManifestRows,
 } from './local-coverage/rx-existence-manifest-repository';
-import { orderDocumentFromWooPayload } from './scheduler/rx-scheduler-order-fetcher';
 import { manifestRowOf } from './materialization/record-materialization';
-import { WOO_REST_MAX_PER_PAGE } from './scheduler/order-browser-scheduler-descriptor';
-import { chunk } from './scheduler/chunk';
-import {
-	CENSUS_COLLECTIONS,
-	censusQueryKey,
-	type CensusTotals,
-	censusTotalsFromCache,
-} from './scheduler/census';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 
 export type {
@@ -147,7 +147,7 @@ export type {
 	QueryTotalCacheEvent,
 } from './maintenance/maintenance-lanes';
 export type { WriteIntent } from './write-path/write-intents';
-export type { CensusTotal, CensusTotals } from './scheduler/census';
+export type { CensusTotal, CensusTotals } from './scheduler';
 
 export type EngineLane = 'change-signal' | 'write-drain' | MaintenanceLaneName;
 

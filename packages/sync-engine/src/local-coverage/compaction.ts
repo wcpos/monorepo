@@ -2,13 +2,10 @@ import {
 	type CoverageCompactionCadenceDecision,
 	type CoverageCompactionFailure,
 	type CoverageCompactionLease,
+	type PersistedCoverageCompactionResult,
+	type PersistedCoverageDocumentSet,
 	planCoverageCompactionCadence,
-} from '../scheduler/coverage-compaction-cadence';
-
-import type {
-	PersistedCoverageCompactionResult,
-	PersistedCoverageDocumentSet,
-} from '../scheduler/persisted-coverage-schema';
+} from '../scheduler';
 
 export type CoverageCompactionMaintenanceRepository = {
 	readCoverageDocuments(): Promise<PersistedCoverageDocumentSet>;

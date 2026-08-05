@@ -32,34 +32,30 @@
 import { REFERENCE_COLLECTIONS } from '@wcpos/sync-core';
 import type { StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 
-import { seedOrderFilterSchedulerTask } from '../scheduler/rx-order-scheduler-task-seeder';
-import { seedProductBrowseWindowSchedulerTask } from '../scheduler/rx-scheduler-product-task-seeder';
-import { PRODUCT_BROWSE_WINDOW_LIMIT } from '../scheduler/product-browse-window-descriptor';
-import { seedReferenceLanes } from '../scheduler/rx-pos-bootstrap-seeder';
-import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
-import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
-import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import {
-	runEngineSchedulerDrain,
-	type SchedulerDrainDatabase,
-} from '../scheduler/engine-scheduler-drain';
-import {
+	censusCollectionFromQueryKey,
+	censusQueryKey,
+	type CensusTotal,
+	PRODUCT_BROWSE_WINDOW_LIMIT,
 	QUERY_TOTAL_FRESH_FOR_MS,
 	QUERY_TOTAL_LEASE_FOR_MS,
 	QUERY_TOTAL_RETRY_AFTER_MS,
 	type QueryTotalCacheEntry,
 	type QueryTotalWooRequest,
-} from '../scheduler/query-total-requests';
-import {
-	censusCollectionFromQueryKey,
-	censusQueryKey,
+	runEngineSchedulerDrain,
+	type SchedulerDrainDatabase,
+	seedOrderFilterSchedulerTask,
+	type SeedPersistedSchedulerTasksResult,
+	seedProductBrowseWindowSchedulerTask,
+	seedReferenceLanes,
 	SUPPORTED_CENSUS_COLLECTIONS,
-} from '../scheduler/census';
+} from '../scheduler';
+import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
+import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
+import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
 
 import type { LocalCoverage } from '../local-coverage/local-coverage';
-import type { SeedPersistedSchedulerTasksResult } from '../scheduler/rx-scheduler-task-seeder';
-import type { CensusTotal } from '../scheduler/census';
 import type { RxDatabase } from 'rxdb';
 import type { SyncCollectionName } from '../collections/engine-collections';
 

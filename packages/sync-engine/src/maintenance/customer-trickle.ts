@@ -5,7 +5,7 @@ import { upsertManifestRows } from '../local-coverage/rx-existence-manifest-repo
 import { manifestRowOf, materializeTargeted } from '../materialization/record-materialization';
 import { withoutLocallyProtected } from '../write-path/local-work-guard';
 
-import type { CensusTotal } from '../scheduler/census';
+import type { CensusTotal } from '../scheduler';
 import type { RxDatabase } from 'rxdb';
 
 export const CUSTOMER_TRICKLE_BATCH_SIZE = 10;

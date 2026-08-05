@@ -1,7 +1,6 @@
 import { createRxKeyedRepository, type RxKeyedCollection } from './rx-keyed-repository';
 
-import type { QueryTotalCacheEntry } from '../scheduler/query-total-requests';
-import type { QueryTotalCacheDocument } from '../scheduler/query-total-cache-schema';
+import type { QueryTotalCacheDocument, QueryTotalCacheEntry } from '../scheduler';
 
 function toDocument(entry: QueryTotalCacheEntry): QueryTotalCacheDocument {
 	return { ...entry, schemaVersion: 1 };

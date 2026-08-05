@@ -36,7 +36,7 @@ import type { Fetcher, StoreScopeManager, SyncObserver } from '@wcpos/sync-core'
 
 import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-intents';
-import { orderDocumentFromWooPayload } from '../scheduler/rx-scheduler-order-fetcher';
+import { orderDocumentFromWooPayload } from '../scheduler';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineSourceFetcher } from '../change-signal/change-signal-source';

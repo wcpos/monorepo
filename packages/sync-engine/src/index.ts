@@ -19,5 +19,5 @@ export {
 export { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from './collections/engine-collections';
 
 export type { CoverageLaneDocument } from './local-coverage/coverage-schema';
-export type { QueryTotalCacheDocument } from './scheduler/query-total-cache-schema';
-export type { QueryTotalWooRequest } from './scheduler/query-total-requests';
+export type { QueryTotalCacheDocument } from './scheduler';
+export type { QueryTotalWooRequest } from './scheduler';

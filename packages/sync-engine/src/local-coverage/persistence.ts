@@ -1,25 +1,23 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
-import { mergePersistedCoverageWrites } from '../scheduler/coverage-write-conflicts';
 import {
 	buildCoverageDocumentsFromQueryResult,
 	type BuildCoverageDocumentsFromQueryResultInput,
 	type BuildCumulativeCoverageDocumentsFromQueryResultInput,
-	type QueryCoverageResultRecord,
-} from '../scheduler/query-coverage-writes';
-import {
 	compactPersistedCoverageDocuments,
 	expectedRecordIdsForLane,
 	type LocalCoverageState,
 	type LocalRecordCoverage,
+	mergePersistedCoverageWrites,
 	type PersistedCoverageCompactionResult,
 	type PersistedCoverageDocumentSet,
 	type PersistedCoverageLane,
 	type PersistedCoverageRecord,
 	type PersistedCoverageRetentionDecision,
 	type PlanPersistedCoverageRetentionInput,
+	type QueryCoverageResultRecord,
 	toLocalCoverageState,
-} from '../scheduler/persisted-coverage-schema';
+} from '../scheduler';
 
 import type { CoverageLaneDocument, CoverageRecordDocument } from './coverage-schema';
 

@@ -1,6 +1,6 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
-import { chunk } from '../scheduler/chunk';
+import { chunk } from '../scheduler';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import {
 	existenceManifestDocument,

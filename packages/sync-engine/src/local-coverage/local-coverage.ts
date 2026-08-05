@@ -31,14 +31,12 @@ import {
 } from '../collections/engine-collections';
 
 import type {
-	LocalRecordCoverage,
-	PersistedCoverageDocumentSet,
-} from '../scheduler/persisted-coverage-schema';
-import type {
 	BuildCoverageDocumentsFromQueryResultInput,
 	BuildCumulativeCoverageDocumentsFromQueryResultInput,
+	LocalRecordCoverage,
+	PersistedCoverageDocumentSet,
 	QueryCoverageResultRecord,
-} from '../scheduler/query-coverage-writes';
+} from '../scheduler';
 import type { ReconcileSummary } from './reconcile-existence-pass';
 import type { ExistenceManifestDocument } from './existence-manifest-schema';
 import type { ServerDigestEntry } from '../reconcile-bucket-plan';

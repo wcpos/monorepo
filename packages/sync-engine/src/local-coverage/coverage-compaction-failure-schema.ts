@@ -4,7 +4,7 @@ import {
 } from '../collections/schema-version';
 import { timestampMsSchemaField } from '../collections/timestamp-schema-field';
 
-import type { CoverageCompactionFailure } from '../scheduler/coverage-compaction-cadence';
+import type { CoverageCompactionFailure } from '../scheduler';
 
 export type CoverageCompactionFailureDocument = PersistedSchedulerSchemaVersionMarker<1> & {
 	stateKey: 'coverage-compaction';

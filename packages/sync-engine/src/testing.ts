@@ -71,11 +71,11 @@ export {
 	existenceManifestSchema,
 	type ExistenceManifestDocument,
 } from './local-coverage/existence-manifest-schema';
-export { orderBrowserQueryKey } from './scheduler/order-browser-scheduler-descriptor';
-export { productBrowseWindowQueryKeyFromDimensions } from './scheduler/product-browse-window-descriptor';
-export { queryTotalCacheSchema } from './scheduler/query-total-cache-schema';
+export { orderBrowserQueryKey } from './scheduler';
+export { productBrowseWindowQueryKeyFromDimensions } from './scheduler';
+export { queryTotalCacheSchema } from './scheduler';
 export {
 	schedulerTaskStateKey,
 	schedulerTaskStateSchema,
 	type SchedulerTaskStateDocument,
-} from './scheduler/scheduler-task-state-schema';
+} from './scheduler';

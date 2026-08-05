@@ -5,7 +5,7 @@ import {
 	type CoverageCompactionFailureDocument,
 } from './coverage-compaction-failure-schema';
 
-import type { CoverageCompactionFailure } from '../scheduler/coverage-compaction-cadence';
+import type { CoverageCompactionFailure } from '../scheduler';
 
 type RxCoverageCompactionFailureDocument<T> = {
 	toJSON(withRevAndAttachments?: boolean): unknown;
