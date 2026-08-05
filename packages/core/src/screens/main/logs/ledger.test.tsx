@@ -18,14 +18,17 @@ const row = {
 jest.mock('react-native', () => ({
 	Pressable: ({
 		children,
+		className,
 		testID,
 		onPress,
-	}: React.PropsWithChildren<{ testID?: string; onPress?: () => void }>) => (
-		<button data-testid={testID} onClick={onPress}>
+	}: React.PropsWithChildren<{ className?: string; testID?: string; onPress?: () => void }>) => (
+		<button className={className} data-testid={testID} onClick={onPress}>
 			{children}
 		</button>
 	),
-	View: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+	View: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<div className={className}>{children}</div>
+	),
 }));
 jest.mock('observable-hooks', () => ({
 	useObservableState: () => 1,
@@ -85,5 +88,20 @@ describe('Ledger mobile row', () => {
 		const codeBadges = screen.getAllByTestId('logs-code-log-1');
 		fireEvent.click(codeBadges[codeBadges.length - 1]);
 		expect(screen.queryByTestId('logs-row-detail')).toBeNull();
+	});
+
+	it('keeps the vertical padding inside the row press target', () => {
+		render(<Ledger resource={null as never} total$={null as never} onShowMore={jest.fn()} />);
+
+		expect(screen.getByTestId('logs-row-sm-log-1').className.split(/\s+/)).toContain('py-2');
+	});
+
+	it('keeps the code badge out of the title layout flow', () => {
+		render(<Ledger resource={null as never} total$={null as never} onShowMore={jest.fn()} />);
+
+		const codeBadges = screen.getAllByTestId('logs-code-log-1');
+		expect(codeBadges[codeBadges.length - 1].parentElement?.className.split(/\s+/)).toContain(
+			'absolute'
+		);
 	});
 });
