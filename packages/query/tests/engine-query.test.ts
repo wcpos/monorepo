@@ -72,6 +72,67 @@ describe('observeEngineQuery', () => {
 		}
 	});
 
+	it('falls back to the collection searchFields when the descriptor omits them', async () => {
+		const database = await createEngineDatabase(['products']);
+		const engine = createFakeEngine(database);
+		await database.collections.products.insert(
+			engineProduct({ uuid: 'fallback-hit', id: 1, name: 'Plain', sku: '42' })
+		);
+		// Mirror initSearch's fallback source: collection.options.searchFields.
+		(database.collections.products as { options?: { searchFields?: string[] } }).options = {
+			searchFields: ['name', 'sku'],
+		};
+
+		try {
+			const result = await firstValueFrom(
+				observeEngineQuery(engine, 'en', { collection: 'products', search: '4' })
+			);
+			expect(result.hits.map((hit) => hit.id)).toEqual(['fallback-hit']);
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('keeps short-search collection read failures eligible for storage recovery', async () => {
+		const error = new Error('could not requestRemote: SyntaxError: value is not valid JSON');
+		const resetCollection = jest.fn().mockRejectedValue(error);
+		const database = {
+			collections: {
+				products: {
+					$: of(null),
+					initSearch: async () => ({ collection: { $: of(null) }, find: async () => [] }),
+					find: () => ({ exec: () => Promise.reject(error) }),
+				},
+			},
+		};
+		const engine = {
+			active: () => ({ database, scopeId: 'store-short-search' }),
+			db$: (listener) => {
+				listener(database);
+				return () => undefined;
+			},
+			ready: Promise.resolve({ database }),
+			scope: { resetCollection },
+		};
+
+		await new Promise<void>((resolve) => {
+			observeEngineQuery(engine as never, 'en', {
+				collection: 'products',
+				search: '4',
+				searchFields: ['name'],
+			}).subscribe({
+				error: (received) => {
+					expect(received).toBe(error);
+					resolve();
+				},
+			});
+		});
+
+		// Unlike a FlexSearch index failure, a short-search read error is a genuine
+		// storage error, so the recovery path must attempt the collection reset.
+		expect(resetCollection).toHaveBeenCalled();
+	});
+
 	it('uses the FlexSearch instance for three-character terms', async () => {
 		const database = await createEngineDatabase(['products']);
 		const engine = createFakeEngine(database);

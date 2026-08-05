@@ -28,6 +28,7 @@ type SearchInstance = {
 
 type SearchableCollection = {
 	$: Observable<unknown>;
+	options?: { searchFields?: string[] };
 	find(): { exec(): Promise<EngineRxDocument[]> };
 	initSearch(
 		locale: string,
@@ -98,6 +99,10 @@ function matchingSelectors$(
 
 	if (search.length < FLEXSEARCH_MIN_TERM_LENGTH) {
 		const prefix = search.toLowerCase();
+		// Mirror initSearch's fallback so short and indexed terms search the same fields.
+		const searchFields = descriptor.searchFields ?? collection.options?.searchFields ?? [];
+		// No SEARCH_INDEX_ERROR tagging here: this path has no search index, so a failure
+		// is a genuine collection read error and must stay eligible for storage recovery.
 		return collection.$.pipe(
 			startWith(null),
 			switchMap(() => from(collection.find().exec())),
@@ -107,7 +112,7 @@ function matchingSelectors$(
 					documents
 						.filter((document) => {
 							const snapshot = documentSnapshot(document);
-							return (descriptor.searchFields ?? []).some((field) =>
+							return searchFields.some((field) =>
 								String(get(snapshot, field) ?? '')
 									.split(/\s+/)
 									.some((token) => token.toLowerCase().startsWith(prefix))
@@ -115,8 +120,7 @@ function matchingSelectors$(
 						})
 						.map((document) => document.primary)
 				)
-			),
-			catchError((error) => throwError(() => ({ [SEARCH_INDEX_ERROR]: error })))
+			)
 		);
 	}
 
