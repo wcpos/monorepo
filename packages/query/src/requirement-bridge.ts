@@ -49,7 +49,11 @@ const TARGETED_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
 	'orders',
 ]);
 
-const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>(['products', 'customers']);
+const SEARCH_ENGINE_COLLECTIONS = new Set<EngineCollectionName>([
+	'products',
+	'customers',
+	'variations',
+]);
 const REFERENCE_ENGINE_COLLECTIONS: EngineCollectionName[] = [
 	'categories',
 	'tags',

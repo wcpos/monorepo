@@ -163,11 +163,40 @@ describe('requirementsForQuery extraction', () => {
 			],
 			represented: false,
 		});
+		expect(
+			plan({
+				collectionName: 'variations',
+				selector: { search: 'blue' },
+				limit: 25,
+			})
+		).toEqual({
+			requirements: [
+				{
+					id: 'q:search',
+					collection: 'variations',
+					kind: 'search',
+					term: 'blue',
+					limit: 25,
+				},
+			],
+			represented: false,
+		});
+		expect(plan({ collectionName: 'taxes', selector: { search: 'GST' } })).toEqual({
+			requirements: [],
+			represented: false,
+		});
 	});
 
 	it('keeps short product SKU demand but suppresses short customer remote search', () => {
 		expect(onlyRequirement({ selector: { search: '42' } })).toMatchObject({
 			collection: 'products',
+			kind: 'search',
+			term: '42',
+		});
+		expect(
+			onlyRequirement({ collectionName: 'variations', selector: { search: '42' } })
+		).toMatchObject({
+			collection: 'variations',
 			kind: 'search',
 			term: '42',
 		});
