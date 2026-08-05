@@ -201,6 +201,81 @@ describe('require() for the products browse window', () => {
 		await engine.dispose();
 	});
 
+	// The seam Codex flagged on #945: the descriptor is parsed at the engine door but the
+	// task is seeded from a REBUILT key. Cherry-picking limit/orderby/order there dropped
+	// every filter dimension, so the whole filtered-browse feature stopped one hop short of
+	// the wire while every unit test upstream stayed green. Assert at the public door.
+	it('carries the filter dimensions from the requirement all the way to the wire', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const requested: URLSearchParams[] = [];
+		const engine = engineWith(async (url) => {
+			const u = new URL(url);
+			if (!u.pathname.endsWith('/products')) return json([]);
+			requested.push(u.searchParams);
+			return json([productPayload(7, 0, '10')], 1);
+		});
+		await engine.ready;
+
+		const fetched = await engine.require({
+			id: 'browse-filtered',
+			collection: 'products',
+			kind: 'query',
+			queryKey:
+				'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
+		}).ready;
+
+		expect(fetched).toMatchObject({ action: 'fetched' });
+		expect(requested.length).toBeGreaterThan(0);
+		for (const params of requested) {
+			expect(params.get('category')).toBe('2,7');
+			expect(params.get('tag')).toBe('3');
+			expect(params.get('brand')).toBe('5');
+			expect(params.get('featured')).toBe('true');
+			expect(params.get('on_sale')).toBe('false');
+			expect(params.get('stock_status')).toBe('instock');
+		}
+
+		await engine.dispose();
+	});
+
+	// A filtered window must not be served by — or overwrite — the UNFILTERED window's lane.
+	it('keeps the filtered window on its own task identity', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const requested: URLSearchParams[] = [];
+		const engine = engineWith(async (url) => {
+			const u = new URL(url);
+			if (!u.pathname.endsWith('/products')) return json([]);
+			requested.push(u.searchParams);
+			return json([productPayload(7, 0, '10')], 1);
+		});
+		await engine.ready;
+
+		await engine.require({
+			id: 'browse-unfiltered',
+			collection: 'products',
+			kind: 'query',
+			queryKey: 'products:browse-window:limit=100',
+		}).ready;
+		const afterUnfiltered = requested.length;
+
+		// Same limit and sort, different filter set: this must reach the wire on its own,
+		// not be deduped away as "the browse window at limit=100 already ran".
+		await engine.require({
+			id: 'browse-instock',
+			collection: 'products',
+			kind: 'query',
+			queryKey: 'products:browse-window:limit=100:stock_status=outofstock',
+		}).ready;
+
+		expect(requested.length).toBeGreaterThan(afterUnfiltered);
+		expect(requested[afterUnfiltered]?.get('stock_status')).toBe('outofstock');
+		expect(requested[0]?.get('stock_status')).toBeNull();
+
+		await engine.dispose();
+	});
+
 	it('rejects a query requirement that is not a browse-window descriptor', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();

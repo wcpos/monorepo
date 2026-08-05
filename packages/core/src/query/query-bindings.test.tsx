@@ -20,6 +20,7 @@ import {
 	queryTotalCacheSchema,
 } from '../../../sync-engine/src/testing';
 import {
+	useAppliedCouponReferenceDemand,
 	useCollectionBinding,
 	useRelationalCollectionBinding,
 	useSearchSelect,
@@ -472,6 +473,87 @@ describe('query bindings', () => {
 		await expect(firstValueFrom(result.current.active$)).resolves.toBe(false);
 		await act(async () => result.current.sync());
 		expect(engine.syncCalls).toContain('scheduler-drain');
+	});
+
+	// The POS products grid's own filter shape — `status: 'publish'` on every browse, plus
+	// the out-of-stock toggle. `status` carries no key dimension but the fetcher hardcodes
+	// `status=publish` on the wire, so this grid must keep its coverage total.
+	it('projects browse-window coverage for the POS grid filter shape', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'resident', id: 1, name: 'Resident' })
+		);
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: 'products::products:browse-window:limit=100:stock_status=instock',
+			collectionName: 'products',
+			queryKey: 'products:browse-window:limit=100:stock_status=instock',
+			complete: true,
+			expectedRecordIds: ['p1', 'p2', 'p3', 'p4', 'p5'],
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 2,
+		});
+
+		const posShaped: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [], status: 'publish', stock_status: 'instock' },
+			sort: { field: 'menu_order', direction: 'asc' },
+			limit: 1,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', posShaped), {
+			wrapper: Provider,
+		});
+		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
+		).resolves.toBe('coverage');
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 5)))
+		).resolves.toBe(5);
+	});
+
+	// The browse-window grammar carries category/tag/brand/featured/on_sale/stock_status and
+	// nothing else, so a browse ALSO filtered on `status` gets a lane that is a deliberate
+	// superset of what the grid shows. Right for demand, wrong for a total — the lane's
+	// encoder reports the leftover and the projection falls back to the local count.
+	it('ignores browse-window coverage when the products filter is only partly on the wire', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'resident', id: 1, name: 'Resident' })
+		);
+		// The lane the wire window would fill: stock_status only — `status` never gets there.
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: 'products::products:browse-window:limit=100:stock_status=instock',
+			collectionName: 'products',
+			queryKey: 'products:browse-window:limit=100:stock_status=instock',
+			complete: true,
+			expectedRecordIds: ['p1', 'p2', 'p3', 'p4'],
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 2,
+		});
+
+		const partly: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [], stock_status: 'instock', status: 'draft' },
+			sort: { field: 'menu_order', direction: 'asc' },
+			limit: 1,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', partly), {
+			wrapper: Provider,
+		});
+		await waitFor(() => expect(current(result.current.resource)).toBeTruthy());
+		const sources: string[] = [];
+		const subscription = result.current.totalSource$.subscribe((source) => sources.push(source));
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		subscription.unsubscribe();
+		expect(sources).not.toContain('coverage');
 	});
 
 	it('uses coupons:all coverage only for the unfiltered reference lane', async () => {
@@ -1021,6 +1103,44 @@ describe('query bindings', () => {
 		expect(
 			(result.current.resource.valueRef$$.value?.current as QueryResult<RxCollection>)?.hits.length
 		).toBeLessThanOrEqual(2);
+	});
+
+	it('declares coupon refresh demand when the cart coupon picker binding mounts', async () => {
+		renderHook(() => useSearchSelect('coupon'), { wrapper: Provider });
+
+		await waitFor(() =>
+			expect(engine.requireCalls).toContainEqual(
+				expect.objectContaining({ collection: 'coupons', kind: 'refresh', priority: 700 })
+			)
+		);
+	});
+
+	it('declares coupon and category demand for a cart that carries applied coupon lines', async () => {
+		renderHook(() => useAppliedCouponReferenceDemand(true), { wrapper: Provider });
+
+		// Replay resolves applied codes AND the category tree by scanning residents directly,
+		// so both collections have to be materialized by the cart's own demand (#952).
+		await waitFor(() =>
+			expect(engine.requireCalls).toContainEqual(
+				expect.objectContaining({ collection: 'coupons', kind: 'refresh', priority: 700 })
+			)
+		);
+		await waitFor(() =>
+			expect(engine.requireCalls).toContainEqual(
+				expect.objectContaining({ collection: 'categories', kind: 'refresh', priority: 700 })
+			)
+		);
+	});
+
+	it('declares no reference demand for a cart with no applied coupon lines', async () => {
+		renderHook(() => useAppliedCouponReferenceDemand(false), { wrapper: Provider });
+
+		await act(async () => Promise.resolve());
+		expect(
+			engine.requireCalls.filter(
+				(call) => call.collection === 'coupons' || call.collection === 'categories'
+			)
+		).toEqual([]);
 	});
 
 	it('binds cashier search-select to eligible customer roles only', async () => {

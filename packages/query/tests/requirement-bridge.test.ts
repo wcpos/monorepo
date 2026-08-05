@@ -1,5 +1,6 @@
 import {
 	declareRequirements,
+	isFullyRepresentedProductSelector,
 	prepareCollectionResetRefill,
 	registerActiveBinding,
 	requirementsForQuery,
@@ -18,6 +19,50 @@ describe('requirementsForQuery', () => {
 		expect(
 			requirementsForQuery({ id: 'q', collectionName: 'nope', selector: undefined, limit: 10 })
 		).toEqual([]);
+	});
+
+	it.each([
+		['products/categories', 'categories'],
+		['products/tags', 'tags'],
+		['products/brands', 'brands'],
+		['coupons', 'coupons'],
+	] as const)('maps a %s browse to an on-demand %s refresh', (collectionName, collection) => {
+		expect(
+			requirementsForQuery({
+				id: 'picker',
+				collectionName,
+				selector: {},
+				limit: 10,
+				forceRefresh: true,
+			})
+		).toEqual([
+			{
+				id: 'picker:reference-refresh',
+				collection,
+				kind: 'refresh',
+				priority: 700,
+			},
+		]);
+	});
+
+	it('carries an explicit reference browse priority without forcing the refresh', () => {
+		expect(
+			requirementsForQuery({
+				id: 'picker',
+				collectionName: 'products/categories',
+				selector: {},
+				limit: 10,
+				priority: 725,
+				forceRefresh: true,
+			})
+		).toEqual([
+			{
+				id: 'picker:reference-refresh',
+				collection: 'categories',
+				kind: 'refresh',
+				priority: 725,
+			},
+		]);
 	});
 
 	it('maps finite id selectors to targeted-records', () => {
@@ -48,7 +93,7 @@ describe('requirementsForQuery', () => {
 		expect(bareId[0]).toMatchObject({ wooIds: [42] });
 	});
 
-	it('drops unusable id selectors instead of guessing', () => {
+	it('keeps unusable product id selectors local while emitting a superset window', () => {
 		expect(
 			requirementsForQuery({
 				id: 'q',
@@ -56,7 +101,14 @@ describe('requirementsForQuery', () => {
 				selector: { id: { $in: ['junk'] } },
 				limit: 10,
 			})
-		).toEqual([]);
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey: 'products:browse-window:limit=100',
+			},
+		]);
 		expect(
 			requirementsForQuery({
 				id: 'q',
@@ -64,7 +116,14 @@ describe('requirementsForQuery', () => {
 				selector: { id: 'junk' },
 				limit: 10,
 			})
-		).toEqual([]);
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey: 'products:browse-window:limit=100',
+			},
+		]);
 	});
 
 	it('maps search terms for searchable collections only', () => {
@@ -319,17 +378,68 @@ describe('requirementsForQuery', () => {
 		expect(requirement).not.toHaveProperty('priority');
 	});
 
-	it('creates no demand for a FILTERED products browse', () => {
-		// Filters still ride local residents only (ADR 0027) — only the UNFILTERED
-		// browse gets a window.
+	it('maps a filtered products browse to an interactive browse-window descriptor', () => {
 		expect(
 			requirementsForQuery({
 				id: 'q',
 				collectionName: 'products',
-				selector: { stock_status: 'instock' },
+				selector: {
+					$and: [
+						{
+							$or: [
+								{ categories: { $elemMatch: { id: 7 } } },
+								{ categories: { $elemMatch: { id: 2 } } },
+								{ categories: { $elemMatch: { id: 7 } } },
+							],
+						},
+						{ $or: [{ tags: { $elemMatch: { id: 3 } } }] },
+						{ $or: [{ brands: { $elemMatch: { id: 5 } } }] },
+						{ featured: true },
+						{ on_sale: false },
+						{ stock_status: { $eq: 'instock' } },
+					],
+				},
 				limit: 10,
 			})
-		).toEqual([]);
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey:
+					'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
+				priority: 700,
+			},
+		]);
+	});
+
+	it('emits only the representable subset of mixed product filters', () => {
+		expect(
+			requirementsForQuery({
+				id: 'q',
+				collectionName: 'products',
+				selector: {
+					featured: false,
+					$and: [
+						{ stock_status: 'onbackorder' },
+						{ status: 'publish' },
+						{ attributes: { $allMatch: [{ id: 1, option: 'Large' }] } },
+						{ uuid: 'local-only' },
+					],
+				},
+				limit: 110,
+				sort: [{ sortable_price: 'desc' }],
+			})
+		).toEqual([
+			{
+				id: 'q:products-browse-window',
+				collection: 'products',
+				kind: 'query',
+				queryKey:
+					'products:browse-window:limit=200:orderby=price:order=desc:featured=0:stock_status=onbackorder',
+				priority: 700,
+			},
+		]);
 	});
 
 	// #909 — the browse window carries the grid's own limit …
@@ -393,6 +503,67 @@ describe('requirementsForQuery', () => {
 		// pretending a server-sorted slice exists.
 		expect(keyFor([{ sku: 'asc' }])).toBe('products:browse-window:limit=100');
 		expect(keyFor([{ stock_quantity: 'desc' }])).toBe('products:browse-window:limit=100');
+	});
+
+	// The wire window is a deliberate SUPERSET whenever a predicate cannot be encoded. That
+	// is right for demand and wrong for a total, so the lane's own encoder reports whether
+	// anything was left over — query-bindings suppresses the coverage total when it was.
+	describe('isFullyRepresentedProductSelector', () => {
+		it('accepts selectors whose every predicate reaches the wire', () => {
+			expect(isFullyRepresentedProductSelector({})).toBe(true);
+			expect(isFullyRepresentedProductSelector(undefined)).toBe(true);
+			expect(
+				isFullyRepresentedProductSelector({
+					$and: [
+						{ $or: [{ categories: { $elemMatch: { id: 7 } } }] },
+						{ $or: [{ tags: { $elemMatch: { id: 3 } } }] },
+						{ $or: [{ brands: { $elemMatch: { id: 5 } } }] },
+						{ featured: true },
+						{ on_sale: false },
+						{ stock_status: { $eq: 'instock' } },
+					],
+				})
+			).toBe(true);
+		});
+
+		// The POS products grid sets this on EVERY browse. It carries no key dimension, but
+		// the fetcher hardcodes `status=publish` on the wire, so the lane holds exactly it.
+		it('accepts the published-only status the wire window already implies', () => {
+			expect(
+				isFullyRepresentedProductSelector({ status: 'publish', stock_status: 'instock' })
+			).toBe(true);
+			expect(isFullyRepresentedProductSelector({ status: { $eq: 'publish' } })).toBe(true);
+			// Any other status has an empty intersection with a published-only window.
+			expect(isFullyRepresentedProductSelector({ status: 'draft' })).toBe(false);
+		});
+
+		it('rejects selectors the browse-window grammar only partly carries', () => {
+			// Exactly the mixed selector the encoder test above narrows to two dimensions.
+			expect(
+				isFullyRepresentedProductSelector({
+					featured: false,
+					$and: [
+						{ stock_status: 'onbackorder' },
+						{ status: 'publish' },
+						{ attributes: { $allMatch: [{ id: 1, option: 'Large' }] } },
+						{ uuid: 'local-only' },
+					],
+				})
+			).toBe(false);
+			// The variation matcher's mixed `$or` — the encoder emits nothing for it.
+			expect(
+				isFullyRepresentedProductSelector({
+					$or: [{ categories: { $elemMatch: { id: 7 } } }, { name: 'Hat' }],
+				})
+			).toBe(false);
+			// An `$elemMatch` that narrows past a bare id is not `?category=7`.
+			expect(
+				isFullyRepresentedProductSelector({
+					$or: [{ categories: { $elemMatch: { id: 7, name: 'Hats' } } }],
+				})
+			).toBe(false);
+			expect(isFullyRepresentedProductSelector({ stock_status: 'sold' })).toBe(false);
+		});
 	});
 
 	it('creates no demand for unbounded customer browse', () => {
@@ -487,6 +658,50 @@ describe('declareRequirements / registerActiveBinding / reset refill', () => {
 		const engine2 = createFakeEngine(database);
 		await prepareCollectionResetRefill(engine2 as never, ['products'])();
 		expect(engine2.requireCalls.filter((r) => r.kind === 'targeted-records')).toEqual([]);
+	});
+
+	it('force-refreshes a reset reference collection exactly once, binding or no binding', async () => {
+		const engine = createFakeEngine(database);
+		const unregister = registerActiveBinding(engine as never, {
+			id: 'coupon-picker',
+			collectionName: 'coupons',
+			selector: {},
+			limit: 50,
+		});
+
+		await prepareCollectionResetRefill(engine as never, ['coupons'])();
+
+		// One forced refresh per COLLECTION, not one per binding: a second surface over the
+		// same collection must not double the reset pull.
+		expect(engine.requireCalls).toEqual([
+			{
+				id: 'coupons:collection-reset',
+				collection: 'coupons',
+				kind: 'refresh',
+				priority: 1000,
+				forceRefresh: true,
+			},
+		]);
+		unregister();
+	});
+
+	// The reset can be triggered from the Health → Database row or a collection footer, where
+	// nothing is mounted over coupons. Keying the refill on active bindings left that reset
+	// with no demand at all, and the materialized gate then skipped the seed lane too (#952).
+	it('force-refreshes a reset reference collection that has no active binding', async () => {
+		const engine = createFakeEngine(database);
+
+		await prepareCollectionResetRefill(engine as never, ['coupons'])();
+
+		expect(engine.requireCalls).toEqual([
+			{
+				id: 'coupons:collection-reset',
+				collection: 'coupons',
+				kind: 'refresh',
+				priority: 1000,
+				forceRefresh: true,
+			},
+		]);
 	});
 
 	it('synthesizes the taxRates refresh on a taxes reset', async () => {

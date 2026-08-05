@@ -1,10 +1,20 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject, combineLatest, EMPTY, Observable, of, timer } from 'rxjs';
+import {
+	BehaviorSubject,
+	combineLatest,
+	EMPTY,
+	firstValueFrom,
+	Observable,
+	of,
+	race,
+	timer,
+} from 'rxjs';
 import {
 	distinctUntilChanged,
 	expand,
+	filter,
 	map,
 	shareReplay,
 	startWith,
@@ -17,6 +27,7 @@ import {
 	type EngineEvent,
 	type EngineLane,
 	type EngineQueryDescriptor,
+	isFullyRepresentedProductSelector,
 	observeEngineDatabases,
 	observeEngineQuery,
 	orderRangeBoundSeconds,
@@ -402,6 +413,15 @@ function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boo
 function coverageQueryKey(id: string, descriptor: EngineQueryDescriptor): string | null {
 	const selector = selectorWithSearch(descriptor);
 	if (descriptor.collection === 'orders' && !isFullyRepresentedOrderSelector(selector)) return null;
+	// Products browses became wired+windowed when filters went on the wire (2026-08-04
+	// ruling), and the bridge deliberately emits only the REPRESENTABLE subset of the
+	// selector — an attribute match or a mixed `$or` keeps narrowing locally. That superset
+	// is right for demand and wrong for a total: a browse filtered on something the grammar
+	// cannot carry would otherwise report the wider window's size as its own count. Unlike
+	// the orders predicate above this asks the encoder itself, so the two cannot drift.
+	if (descriptor.collection === 'products' && !isFullyRepresentedProductSelector(selector)) {
+		return null;
+	}
 	const requirement = requirementsForQuery({
 		id,
 		collectionName: descriptor.collection,
@@ -855,4 +875,79 @@ export function useAllCategoriesBinding() {
 		selector: {},
 		sort: [{ name: 'asc' }],
 	});
+}
+
+/** How long the coupon replay waits for its reference pull before giving up on it. */
+const COUPON_REFERENCE_SETTLE_TIMEOUT_MS = 10_000;
+
+const COUPON_REPLAY_COUPONS_DESCRIPTOR: EngineQueryDescriptor = {
+	collection: 'coupons',
+	selector: {},
+	sort: [{ code: 'asc' }],
+};
+
+const COUPON_REPLAY_CATEGORIES_DESCRIPTOR: EngineQueryDescriptor = {
+	collection: 'products/categories',
+	selector: {},
+	sort: [{ name: 'asc' }],
+};
+
+/**
+ * Reference demand for replaying coupons already applied to the cart (#952).
+ *
+ * The coupon picker declares its own demand when it mounts, but coupon *replay*
+ * does not go through a query at all: `useRecalculateCoupons` scans the resident
+ * coupons collection for each applied code (throwing when one is missing) and the
+ * resident categories collection to enrich product categories with their ancestors,
+ * the way `wc_get_product_cat_ids()` does. Both scans are invisible to the
+ * requirement bridge.
+ *
+ * Before #952 those collections were greedily seeded at boot, so the scans always
+ * found their data. Now that reference lanes are on demand, a cart carrying coupon
+ * lines has to declare that demand itself — otherwise re-opening an order with a
+ * coupon on a device that never opened the picker fails to recalculate, and
+ * category-restricted coupons silently mis-validate against an empty tree.
+ *
+ * Declared only while coupon lines are present, and collapsed by the engine's
+ * existing `REFERENCE_REFRESH_DEDUPE_MS` window, so a coupon cart costs at most one
+ * refresh per collection per dedupe window rather than a pull per cart edit.
+ *
+ * Declaring the demand is not enough on its own: it is asynchronous, and the replay is
+ * driven by a cart edit that can land while the pull is still in flight. So this also
+ * returns `whenSettled()`, the barrier the replay awaits before it scans — without it a
+ * cashier who re-opens a coupon order and immediately changes a quantity still scans the
+ * empty collections, which is the exact failure the demand exists to prevent.
+ *
+ * `whenSettled()` resolves `false` when the wait timed out rather than the pull settling.
+ * The caller must NOT scan on `false`: the barrier's whole point is that the residents are
+ * not trustworthy yet, and a deadline does not make them trustworthy. Bail instead — the
+ * next cart edit re-runs the replay, by which time the pull has almost certainly landed.
+ */
+export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
+	whenSettled: () => Promise<boolean>;
+} {
+	const coupons = useEngineBinding(COUPON_REPLAY_COUPONS_DESCRIPTOR, hasAppliedCoupons);
+	const categories = useEngineBinding(COUPON_REPLAY_CATEGORIES_DESCRIPTOR, hasAppliedCoupons);
+	const settled$ = React.useMemo(
+		() =>
+			combineLatest([coupons.active$, categories.active$]).pipe(
+				map(([couponsActive, categoriesActive]) => !couponsActive && !categoriesActive),
+				filter(Boolean)
+			),
+		[categories.active$, coupons.active$]
+	);
+	return React.useMemo(
+		() => ({
+			// Bounded: cart math must never hang on sync, so the wait cannot be open-ended. The
+			// deadline reports itself (`false`) instead of pretending the pull landed.
+			whenSettled: () =>
+				firstValueFrom(
+					race(
+						settled$.pipe(map(() => true)),
+						timer(COUPON_REFERENCE_SETTLE_TIMEOUT_MS).pipe(map(() => false))
+					)
+				),
+		}),
+		[settled$]
+	);
 }

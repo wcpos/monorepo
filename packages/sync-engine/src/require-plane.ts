@@ -50,6 +50,8 @@ import {
 import { parseOrderBrowserSchedulerDescriptor } from './scheduler/order-browser-scheduler-descriptor';
 import { parseProductBrowseWindowDescriptor } from './scheduler/product-browse-window-descriptor';
 import { seedProductBrowseWindowSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
+import { seedReferenceLanes } from './scheduler/rx-pos-bootstrap-seeder';
+import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import {
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	runEngineSchedulerDrain,
@@ -344,9 +346,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				let skippedActive = false;
 				const applied = await bound.guardWrite(async () => {
 					const seedResult = await seedProductBrowseWindowSchedulerTask({
-						limit: browseWindow.limit,
-						orderby: browseWindow.orderby,
-						order: browseWindow.order,
+						// Spread the WHOLE descriptor, as the orders branch above does. Cherry-picking
+						// limit/orderby/order silently dropped every filter dimension: the seeder then
+						// rebuilt an UNFILTERED key, so filtered demand could never reach the wire and
+						// its coverage lane collided with the unfiltered window's.
+						...browseWindow,
 						priority: item.priority,
 						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
 						getRepository: async () => ({ getDatabase: () => database as never }),
@@ -463,6 +467,87 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					action: 'fetched',
 					missingRecordIds: [],
 					reason: 'drained full order refresh',
+					documents: drainResult.totalDocuments,
+					requests: drainResult.totalRequests,
+				};
+			}
+
+			// On-demand reference pull (#952). Categories/tags/brands/coupons are no longer
+			// seeded at boot; the mounted picker/screen/cart binding that needs one declares a
+			// `refresh` and the greedy lane runs HERE, at open. `REFERENCE_REFRESH_DEDUPE_MS`
+			// collapses a remount (or a second surface over the same collection) into the one
+			// pull, so repeated opens cost nothing until the window lapses.
+			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
+				let drainResult = emptyDrainResult();
+				let skippedActive = false;
+				let deduped = false;
+				const applied = await bound.guardWrite(async () => {
+					const nowMs = deps.now?.();
+					const seedResult = await seedReferenceLanes({
+						collections: [descriptor.collection],
+						completedDedupeForMs: item.requirement.forceRefresh ? 0 : REFERENCE_REFRESH_DEDUPE_MS,
+						getRepository: async () => ({ getDatabase: () => database as never }),
+						...(nowMs !== undefined ? { nowMs } : {}),
+					});
+					// `skippedActive` and `skippedCompleted` are NOT the same answer. An active
+					// lane means another owner is mid-pull, which releases this caller the way the
+					// order/product branches above do. Only a completed lane inside the dedupe
+					// window is a genuine "your data is already fresh" — that one serves local.
+					if (seedResult.skippedActive > 0) {
+						skippedActive = true;
+						return;
+					}
+					if (seedResult.skippedCompleted > 0) {
+						deduped = true;
+						return;
+					}
+					drainResult = await runEngineSchedulerDrain({
+						db: database as unknown as SchedulerDrainDatabase,
+						coverage,
+						baseUrl: deps.syncBaseUrl,
+						ownerId: 'require-plane',
+						fetcher: boundFetch as never,
+						diagnostics: deps.diagnostics,
+						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+						signal: item.abortController.signal,
+						...(nowMs !== undefined ? { nowMs } : {}),
+						onProgress: progressObserver(item.requirement),
+					});
+				});
+				if (applied === 'dropped')
+					throw new Error('require: scope moved mid-refresh (writes dropped)');
+				if (skippedActive)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: `${descriptor.collection} refresh already in progress`,
+					};
+				if (deduped) {
+					return {
+						action: 'serve-local',
+						missingRecordIds: [],
+						reason: `${descriptor.collection} refreshed within the dedupe window`,
+						documents: 0,
+						requests: 0,
+					};
+				}
+				if (drainResult.failed > 0)
+					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
+				const lostReferenceClaims = drainLostOutcomeCount(drainResult);
+				// Claim loss means another owner is completing the durable task. Like
+				// skippedActive, it releases this caller rather than reporting failure.
+				if (lostReferenceClaims > 0)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'claim lost to another owner',
+						documents: drainResult.totalDocuments,
+						requests: drainResult.totalRequests,
+					};
+				return {
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: `drained ${descriptor.collection} refresh`,
 					documents: drainResult.totalDocuments,
 					requests: drainResult.totalRequests,
 				};

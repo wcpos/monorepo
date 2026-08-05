@@ -29,6 +29,7 @@
  * on engine-owned state.
  */
 
+import { REFERENCE_COLLECTIONS } from '@wcpos/sync-core';
 import type { StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 
 import { seedOrderFilterSchedulerTask } from '../scheduler/rx-order-scheduler-task-seeder';
@@ -399,7 +400,15 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	});
 
 	const referenceSeed = lane('reference-seed', async (db) => {
+		const counts = await Promise.all(
+			REFERENCE_COLLECTIONS.map((collection) => db.collections[collection].count().exec())
+		);
+		const materialized = REFERENCE_COLLECTIONS.filter((_, index) => counts[index] > 0);
+		if (materialized.length === 0) {
+			return { summary: null, status: 'skipped', reason: 'no materialized reference collections' };
+		}
 		const result = await seedReferenceLanes({
+			collections: materialized,
 			completedDedupeForMs: REFERENCE_REFRESH_DEDUPE_MS,
 			getRepository: scopeResolverFor(db),
 			// Same one-clock rule as the order window seed above.

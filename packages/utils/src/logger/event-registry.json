@@ -198,6 +198,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "product.browse-window.brand-filter-ignored",
+		"domain": "PRODUCT",
+		"label": "This WooCommerce version cannot filter products by brand",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "push.aborted",
 		"domain": "SYNC",
 		"label": "Sending a change was cancelled",

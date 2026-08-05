@@ -19,12 +19,18 @@ describe('printerIconName', () => {
 });
 
 describe('templateTypeLabel', () => {
-	it('labels an escpos template with its paper width', () => {
-		expect(templateTypeLabel({ output_type: 'escpos', paper_width: '80mm' })).toBe('ESC/POS 80mm');
+	it('labels a thermal template with its paper width', () => {
+		expect(templateTypeLabel({ output_type: 'escpos', paper_width: '80mm' })).toBe('Thermal 80mm');
 	});
 
-	it('labels an escpos template with no paper width as plain "ESC/POS"', () => {
-		expect(templateTypeLabel({ output_type: 'escpos', paper_width: null })).toBe('ESC/POS');
+	it('labels a thermal template with no paper width as plain "Thermal"', () => {
+		expect(templateTypeLabel({ output_type: 'escpos', paper_width: null })).toBe('Thermal');
+	});
+
+	it('uses the supplied translated thermal label', () => {
+		expect(templateTypeLabel({ output_type: 'escpos', paper_width: '80mm' }, 'Thermisch')).toBe(
+			'Thermisch 80mm'
+		);
 	});
 
 	it('labels a non-escpos template as "HTML"', () => {

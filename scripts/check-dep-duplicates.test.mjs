@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  ALLOWED_DUPLICATES,
   parseImporters,
   findDuplicateResolutions,
   formatDuplicates,
@@ -117,6 +118,20 @@ test('findDuplicateResolutions respects the allowlist', () => {
     duplicates.map(({ name }) => name),
     ['date-fns']
   );
+});
+
+test('default allowlist permits the intentional expo-constants split', () => {
+  const importers = {
+    'apps/main': {
+      'expo-constants': { specifier: '~56.0.18', version: '56.0.18' },
+    },
+    'packages/core': {
+      'expo-constants': { specifier: '~56.0.16', version: '56.0.21' },
+    },
+  };
+
+  assert.equal(ALLOWED_DUPLICATES.has('expo-constants'), true);
+  assert.deepEqual(findDuplicateResolutions(importers), []);
 });
 
 test('formatDuplicates renders versions with their importers and specifiers', () => {
