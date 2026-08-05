@@ -151,6 +151,36 @@ describe('logger/index', () => {
 		});
 
 		describe('log methods', () => {
+			it('only writes warnings and errors to the console in production', () => {
+				const originalDev = __DEV__;
+				const consoleLog = jest.spyOn(console, 'log').mockImplementation();
+				const consoleWarn = jest.spyOn(console, 'warn').mockImplementation();
+				const consoleError = jest.spyOn(console, 'error').mockImplementation();
+
+				Object.defineProperty(globalThis, '__DEV__', {
+					configurable: true,
+					value: false,
+				});
+
+				try {
+					logger.info('informational');
+					logger.warn('warning');
+					logger.error('failure');
+
+					expect(consoleLog).not.toHaveBeenCalled();
+					expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('WARN : warning'));
+					expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('ERROR : failure'));
+				} finally {
+					Object.defineProperty(globalThis, '__DEV__', {
+						configurable: true,
+						value: originalDev,
+					});
+					consoleLog.mockRestore();
+					consoleWarn.mockRestore();
+					consoleError.mockRestore();
+				}
+			});
+
 			it('should have debug method', () => {
 				expect(typeof logger.debug).toBe('function');
 				// Should not throw
