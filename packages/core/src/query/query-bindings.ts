@@ -917,9 +917,14 @@ const COUPON_REPLAY_CATEGORIES_DESCRIPTOR: EngineQueryDescriptor = {
  * returns `whenSettled()`, the barrier the replay awaits before it scans — without it a
  * cashier who re-opens a coupon order and immediately changes a quantity still scans the
  * empty collections, which is the exact failure the demand exists to prevent.
+ *
+ * `whenSettled()` resolves `false` when the wait timed out rather than the pull settling.
+ * The caller must NOT scan on `false`: the barrier's whole point is that the residents are
+ * not trustworthy yet, and a deadline does not make them trustworthy. Bail instead — the
+ * next cart edit re-runs the replay, by which time the pull has almost certainly landed.
  */
 export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
-	whenSettled: () => Promise<void>;
+	whenSettled: () => Promise<boolean>;
 } {
 	const coupons = useEngineBinding(COUPON_REPLAY_COUPONS_DESCRIPTOR, hasAppliedCoupons);
 	const categories = useEngineBinding(COUPON_REPLAY_CATEGORIES_DESCRIPTOR, hasAppliedCoupons);
@@ -933,11 +938,15 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 	);
 	return React.useMemo(
 		() => ({
-			whenSettled: async () => {
-				// Bounded: cart math must never hang on sync. A lane that is still running after
-				// the deadline degrades to the pre-barrier behaviour rather than freezing totals.
-				await firstValueFrom(race(settled$, timer(COUPON_REFERENCE_SETTLE_TIMEOUT_MS)));
-			},
+			// Bounded: cart math must never hang on sync, so the wait cannot be open-ended. The
+			// deadline reports itself (`false`) instead of pretending the pull landed.
+			whenSettled: () =>
+				firstValueFrom(
+					race(
+						settled$.pipe(map(() => true)),
+						timer(COUPON_REFERENCE_SETTLE_TIMEOUT_MS).pipe(map(() => false))
+					)
+				),
 		}),
 		[settled$]
 	);

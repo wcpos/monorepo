@@ -106,8 +106,11 @@ export const useCartLines = () => {
 		if (hasActiveCoupons) {
 			// The demand declared above is asynchronous, and this edit can land while the pull
 			// is still in flight — scanning now would hit the still-empty collections and throw
-			// (or validate a category-restricted coupon against an empty tree). Wait for it.
-			await whenCouponReferencesSettled();
+			// (or validate a category-restricted coupon against an empty tree). Wait for it, and
+			// if the wait times out, bail rather than replaying against residents we know are
+			// not ready: same "avoid partial data" rule as the missing-coupon bail below. The
+			// next cart edit re-runs the replay.
+			if (!(await whenCouponReferencesSettled())) return;
 			const result = await recalculate(freshOrder.line_items || [], allCouponLines);
 			if (!result) return; // coupon missing locally — bail to avoid partial data
 			// Bail if order changed during async replay to avoid overwriting concurrent edits

@@ -7,7 +7,7 @@ import { BehaviorSubject } from 'rxjs';
 import { useCartLines } from './use-cart-lines';
 
 const appliedCouponReferenceDemand = jest.fn();
-let whenSettled = jest.fn(async () => undefined);
+let whenSettled = jest.fn(async () => true);
 
 jest.mock('../../../../query', () => ({
 	useAppliedCouponReferenceDemand: (enabled: boolean) => {
@@ -71,7 +71,7 @@ describe('useCartLines reference demand (#952)', () => {
 	beforeEach(() => {
 		appliedCouponReferenceDemand.mockClear();
 		recalculate.mockClear();
-		whenSettled = jest.fn(async () => undefined);
+		whenSettled = jest.fn(async () => true);
 		couponLines$.next([]);
 		lineItems$.next([]);
 	});
@@ -115,8 +115,8 @@ describe('useCartLines reference demand (#952)', () => {
 		let releaseReferences: (() => void) | undefined;
 		whenSettled = jest.fn(
 			() =>
-				new Promise<undefined>((resolve) => {
-					releaseReferences = () => resolve(undefined);
+				new Promise<boolean>((resolve) => {
+					releaseReferences = () => resolve(true);
 				})
 		);
 		couponLines$.next([{ code: 'bonus' }]);
@@ -134,5 +134,20 @@ describe('useCartLines reference demand (#952)', () => {
 			releaseReferences?.();
 		});
 		expect(recalculate).toHaveBeenCalled();
+	});
+
+	it('skips the replay entirely when the reference wait times out', async () => {
+		// A deadline does not make unmaterialized residents trustworthy. Bailing leaves the
+		// cart on its previous totals; the next edit re-runs the replay.
+		whenSettled = jest.fn(async () => false);
+		couponLines$.next([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			lineItems$.next([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(whenSettled).toHaveBeenCalled();
+		expect(recalculate).not.toHaveBeenCalled();
 	});
 });
