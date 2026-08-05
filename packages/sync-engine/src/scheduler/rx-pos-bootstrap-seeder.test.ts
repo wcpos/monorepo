@@ -2,7 +2,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+	laneKeyFor,
 	posBootstrapTasks,
+	REFERENCE_LANE_CONFIGS,
 	referenceLaneTaskFor,
 	referenceLaneTasks,
 } from './rx-pos-bootstrap-seeder';
@@ -31,6 +33,20 @@ describe('posBootstrapTasks', () => {
 		const tasks = posBootstrapTasks();
 		expect(tasks).toHaveLength(1);
 		expect(tasks[0]?.collection).toBe('taxRates');
+	});
+});
+
+describe('laneKeyFor', () => {
+	it.each(['categories', 'brands', 'tags', 'coupons'] as const)(
+		'returns the %s greedy reference lane key',
+		(collection) => {
+			expect(laneKeyFor(collection)).toBe(REFERENCE_LANE_CONFIGS[collection].config.queryKey);
+		}
+	);
+
+	it('returns the tax-rate boot lane key and null for other collections', () => {
+		expect(laneKeyFor('taxRates')).toBe('taxRates:all');
+		expect(laneKeyFor('products')).toBeNull();
 	});
 });
 

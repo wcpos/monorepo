@@ -98,6 +98,16 @@ const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 	if (requirement.kind === 'product-browse') {
 		return productBrowseWindowQueryKeyFromDimensions(requirement);
 	}
+	if (requirement.kind === 'refresh') {
+		const refreshLaneKeys: Partial<Record<SyncCollectionName, string>> = {
+			taxRates: 'taxRates:all',
+			categories: 'categories:all',
+			brands: 'brands:all',
+			tags: 'tags:all',
+			coupons: 'coupons:all',
+		};
+		return refreshLaneKeys[requirement.collection] ?? null;
+	}
 	return null;
 };
 

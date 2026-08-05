@@ -17,7 +17,7 @@ export {
 	seedOrderSchedulerTasks,
 	seedTargetedOrderSchedulerTask,
 } from './rx-order-scheduler-task-seeder';
-export { seedPosBootstrapLanes, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
+export { laneKeyFor, seedPosBootstrapLanes, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
 export { seedProductBrowseWindowSchedulerTask } from './rx-scheduler-product-task-seeder';
 export type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
 
