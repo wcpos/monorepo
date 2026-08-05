@@ -19,7 +19,7 @@ const resetLogger = getLogger(['wcpos', 'db', 'reset']);
 
 const runResetHook =
 	(hook: (collection: RxCollection) => Promise<void>) => (collection: RxCollection) =>
-		void hook(collection).catch((error) =>
+		hook(collection).catch((error) =>
 			resetLogger.error('Unhandled collection reset hook failure', { context: { error } })
 		);
 
@@ -126,6 +126,7 @@ export const resetCollectionPlugin: RxPlugin = {
 			 * Automatically re-add the collection after it's destroyed.
 			 * Only handles collections we manage - ignores plugin-created collections.
 			 */
+			// RxDB awaits this hook via runAsyncPluginHooks despite declaring its return type void.
 			after: runResetHook(async (collection) => {
 				const database = collection.database;
 				const collectionName = collection.name;
@@ -285,7 +286,7 @@ export const resetCollectionPlugin: RxPlugin = {
 					});
 					pendingReAdditions.delete(reAddKey);
 				}
-			}),
+			}) as (collection: RxCollection) => void,
 		},
 	},
 };
