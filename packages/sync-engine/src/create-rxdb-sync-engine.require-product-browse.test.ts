@@ -248,13 +248,21 @@ describe('require() for the products browse window', () => {
 		});
 		await engine.ready;
 
-		const fetched = await engine.require({
+		const handle = engine.require({
 			id: 'browse-filtered',
 			collection: 'products',
-			kind: 'query',
-			queryKey:
-				'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock',
-		}).ready;
+			kind: 'product-browse',
+			category: [7, 2],
+			tag: [3],
+			brand: [5],
+			featured: true,
+			on_sale: false,
+			stock_status: 'instock',
+		});
+		expect(handle.queryKey).toBe(
+			'products:browse-window:limit=100:category=2,7:tag=3:brand=5:featured=1:on_sale=0:stock_status=instock'
+		);
+		const fetched = await handle.ready;
 
 		expect(fetched).toMatchObject({ action: 'fetched' });
 		expect(requested.length).toBeGreaterThan(0);
