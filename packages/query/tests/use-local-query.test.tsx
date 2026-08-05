@@ -9,7 +9,7 @@ import { firstValueFrom } from 'rxjs';
 import { QueryProvider } from '../src/provider';
 import { useLocalQuery } from '../src/use-local-query';
 import { createStoreDatabase } from './helpers/db';
-import { createEngineDatabase, createFakeEngine } from './helpers/engine';
+import { createEngineDatabase, createFakeEngine } from '../src/testing';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
 

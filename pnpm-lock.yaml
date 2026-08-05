@@ -960,6 +960,9 @@ importers:
 
   packages/query:
     dependencies:
+      '@wcpos/sync-core':
+        specifier: workspace:*
+        version: link:../sync-core
       '@wcpos/sync-engine':
         specifier: workspace:*
         version: link:../sync-engine

@@ -9,7 +9,7 @@ import {
 	createFakeEngine,
 	createPendingFakeEngine,
 	engineProduct,
-} from './helpers/engine';
+} from '../src/testing';
 
 import type { RxDatabase } from 'rxdb';
 

@@ -10,7 +10,12 @@ describe('package exports', () => {
 	it("keeps the production door's runtime values curated", async () => {
 		const production = await import('./index');
 		expect(Object.keys(production).sort()).toEqual(
-			['createRxdbSyncEngine', 'SYNC_COLLECTION_NAMES', 'MUTATION_QUEUE_RXDB_COLLECTION'].sort()
+			[
+				'createRxdbSyncEngine',
+				'engineDocumentIdFor',
+				'SYNC_COLLECTION_NAMES',
+				'MUTATION_QUEUE_RXDB_COLLECTION',
+			].sort()
 		);
 	});
 

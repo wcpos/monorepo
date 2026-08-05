@@ -1,6 +1,7 @@
 import {
 	engineCollectionNameFor,
 	type EngineRxDocument,
+	isEngineRxDocument,
 	type LegacyCollectionName,
 	resolveLegacyField,
 	wrapEngineDocument,
@@ -13,24 +14,6 @@ type EngineCollection = {
 		exec(): Promise<unknown>;
 	};
 };
-
-function isEngineRxDocument(value: unknown): value is EngineRxDocument {
-	if (value === null || typeof value !== 'object') return false;
-	const candidate = value as {
-		id?: unknown;
-		payload?: unknown;
-		getLatest?: unknown;
-		collection?: unknown;
-	};
-	return (
-		typeof candidate.id === 'string' &&
-		candidate.payload !== null &&
-		typeof candidate.payload === 'object' &&
-		typeof candidate.getLatest === 'function' &&
-		candidate.collection !== null &&
-		typeof candidate.collection === 'object'
-	);
-}
 
 function activeCollection(
 	manager: QueryManager,
