@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  ALLOWED_EXPO_MISMATCHES,
   satisfies,
   findExpoMisalignments,
   formatMisalignments,
@@ -76,6 +77,10 @@ test('findExpoMisalignments accepts in-range tilde resolutions', () => {
 test('findExpoMisalignments respects the allowlist', () => {
   const allowed = new Map([['react', 'testing']]);
   assert.deepEqual(findExpoMisalignments(importers, bundled, allowed), []);
+});
+
+test('default allowlist permits the FlashList upgrade ahead of Expo metadata', () => {
+  assert.equal(ALLOWED_EXPO_MISMATCHES.has('@shopify/flash-list'), true);
 });
 
 test('formatMisalignments renders the prescribed range and importers', () => {
