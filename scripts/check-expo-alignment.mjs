@@ -21,6 +21,7 @@ import { parseImporters } from './check-dep-duplicates.mjs';
 // Intentional deviations from the Expo SDK's prescribed versions.
 // Map of dependency name -> reason.
 export const ALLOWED_EXPO_MISMATCHES = new Map([
+  ['@shopify/flash-list', 'Dependabot upgrade to 2.3.2 ahead of Expo SDK 56 metadata'],
   // example: ['react-native-svg', 'pinned ahead of SDK for fix XYZ'],
 ]);
 
