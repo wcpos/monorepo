@@ -10,6 +10,8 @@ async function addFirstProductToCart(page: Page) {
 	// Wait for products to render in whichever view mode is active
 	await expect(tile.or(tableButton)).toBeVisible({ timeout: 15_000 });
 
+	// One of the two markers has already settled visible above; a one-shot picks
+	// which view rendered (grid tile vs table button).
 	if (await tile.isVisible()) {
 		await tile.click();
 	} else {
@@ -89,6 +91,7 @@ test.describe('POS Cart', () => {
 		// Wait for products to render in whichever view mode is active
 		await expect(tile.first().or(tableButton.first())).toBeVisible({ timeout: 15_000 });
 
+		// A marker already settled visible above; one-shot picks which view rendered.
 		const isTileVisible = await tile.first().isVisible();
 		const buttons = isTileVisible ? tile : tableButton;
 

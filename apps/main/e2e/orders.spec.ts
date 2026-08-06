@@ -40,15 +40,25 @@ test.describe('Orders Page (Pro)', () => {
 	test('should show orders or empty state', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		const hasOrders = await screen
-			.getByTestId('data-table-count')
-			.isVisible({ timeout: 10_000 })
-			.catch(() => false);
-		const noOrders = await screen
-			.getByTestId('no-data-message')
-			.isVisible({ timeout: 15_000 })
-			.catch(() => false);
-		expect(hasOrders || noOrders).toBeTruthy();
+		// Poll so the assertion waits for whichever state resolves. A bare
+		// `isVisible({ timeout })` samples once and ignores its timeout, so both
+		// reads could be false while the table is still loading (#1044).
+		await expect
+			.poll(
+				async () => {
+					const hasOrders = await screen
+						.getByTestId('data-table-count')
+						.isVisible()
+						.catch(() => false);
+					const noOrders = await screen
+						.getByTestId('no-data-message')
+						.isVisible()
+						.catch(() => false);
+					return hasOrders || noOrders;
+				},
+				{ timeout: 30_000 }
+			)
+			.toBeTruthy();
 	});
 
 	test('should search orders', async ({ posPage: page }) => {

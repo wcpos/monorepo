@@ -102,7 +102,7 @@ export const E2E_PRODUCT_SKU = process.env.E2E_PRODUCT_SKU || 'woo-belt';
  * that is merely still rendering. Use this wherever the answer decides which
  * branch a helper takes.
  */
-async function becomesVisible(locator: Locator, timeout: number): Promise<boolean> {
+export async function becomesVisible(locator: Locator, timeout: number): Promise<boolean> {
 	return locator
 		.waitFor({ state: 'visible', timeout })
 		.then(() => true)
@@ -350,7 +350,9 @@ async function hasReachedPos(page: Page, timeout = 0): Promise<boolean> {
 		page.getByTestId('data-table-count').first(),
 	];
 	for (const marker of posMarkers) {
-		const visible = await marker.isVisible({ timeout: 500 }).catch(() => false);
+		// `becomesVisible`, not `isVisible({ timeout })`: the latter samples once and
+		// ignores its timeout, so a marker still rendering would read as "missing".
+		const visible = await becomesVisible(marker, 500);
 		if (visible) return true;
 	}
 
@@ -482,20 +484,12 @@ export async function authenticateWithStore(
 	const usernameInput = loginPage.locator('#user_login, #wcpos-user-login');
 	const passwordInput = loginPage.locator('#user_pass, #wcpos-user-pass');
 
-	if (
-		await usernameInput
-			.first()
-			.isVisible({ timeout: 5_000 })
-			.catch(() => false)
-	) {
+	// `becomesVisible` waits for the field to render — `isVisible({ timeout })`
+	// ignores its timeout and would skip filling a slow-rendering login form.
+	if (await becomesVisible(usernameInput.first(), 5_000)) {
 		await usernameInput.first().fill(E2E_USERNAME);
 	}
-	if (
-		await passwordInput
-			.first()
-			.isVisible({ timeout: 5_000 })
-			.catch(() => false)
-	) {
+	if (await becomesVisible(passwordInput.first(), 5_000)) {
 		await passwordInput.first().fill(E2E_PASSWORD);
 	}
 
@@ -577,7 +571,7 @@ export async function authenticateWithStore(
 		}
 
 		// Step 1: select the wp-user (no-op if already selected/visible).
-		const userButtonVisible = await userButton.isVisible({ timeout: 5_000 }).catch(() => false);
+		const userButtonVisible = await becomesVisible(userButton, 5_000);
 		if (!userButtonVisible) {
 			console.log(`[auth] wp-user-button not visible (attempt ${attempt}), waiting for POS...`);
 			const reachedPosWithoutClick = await hasReachedPos(page, 5_000);
@@ -606,7 +600,7 @@ export async function authenticateWithStore(
 		// on: stores resolved + store selected + user validation passed.
 		// Single-store users have the store auto-selected; for multi-store
 		// variants, pick the first radio option to satisfy the store gate.
-		const openPosVisible = await openPosButton.isVisible({ timeout: 10_000 }).catch(() => false);
+		const openPosVisible = await becomesVisible(openPosButton, 10_000);
 		if (!openPosVisible) {
 			console.log(`[auth] open-pos-button not visible (attempt ${attempt}), retrying...`);
 			await page.waitForTimeout(2_000);
@@ -619,7 +613,7 @@ export async function authenticateWithStore(
 			const firstStoreOption = page
 				.locator('[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]')
 				.first();
-			const hasOption = await firstStoreOption.isVisible({ timeout: 2_000 }).catch(() => false);
+			const hasOption = await becomesVisible(firstStoreOption, 2_000);
 			if (hasOption) {
 				console.log('[auth] Selecting first store radio option...');
 				await firstStoreOption.click().catch(() => null);
@@ -773,7 +767,12 @@ export async function hydrateAuthenticatedPage(
 				timeout: 60_000,
 			});
 			const appError = page.getByTestId('error-boundary-fallback').first();
-			if (await appError.isVisible({ timeout: 1_000 }).catch(() => false)) {
+			// Intentional one-shot: `search-products` is already visible above, so if the
+			// restored state faulted the error boundary has already rendered. A waiting
+			// check would add its full timeout to every happy-path hydration for a
+			// belt-and-suspenders guard, so we sample once. (`isVisible`'s `timeout` is a
+			// no-op regardless.)
+			if (await appError.isVisible().catch(() => false)) {
 				throw new Error('Saved auth state restored into an app error; falling back to OAuth.');
 			}
 			if (waitForCatalogue) {
