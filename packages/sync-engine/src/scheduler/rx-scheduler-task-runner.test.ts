@@ -62,6 +62,139 @@ const baseInput = {
 	retryAfterMs: 500,
 };
 
+describe('per-task drain outcomes', () => {
+	// A drain tick runs EVERY runnable task, so its aggregate counters describe the tick, not
+	// any one declarer's work. Callers that wait on a single task (the require-plane browse and
+	// refresh branches) need their OWN task's result, or one unrelated failure makes a
+	// successful browse reject.
+	it('reports each task separately when one succeeds and another fails', async () => {
+		const good = state({
+			taskId: 'products:browse:windowed',
+			collection: 'products',
+			queryKey: 'products:browse',
+		});
+		const bad = state({
+			taskId: 'orders:browser:windowed',
+			collection: 'orders',
+			queryKey: 'orders:browser',
+		});
+		const repository = createRepository([good, bad]);
+		const fetcher = vi.fn(async (task: { id: string }) => {
+			if (task.id === bad.taskId) throw new Error('Woo REST orders request failed: 500');
+			return { taskId: task.id, documentCount: 25, requestCount: 2, completed: true };
+		});
+
+		const result = await runPersistedSchedulerTasks({ ...baseInput, repository, fetcher });
+
+		// The aggregate still describes the whole tick …
+		expect(result).toMatchObject({ succeeded: 1, failed: 1, totalDocuments: 25, totalRequests: 2 });
+		// … and each task now carries its own verdict and its own counts.
+		expect(result.tasks).toEqual([
+			{
+				taskId: 'orders:browser:windowed',
+				requirementId: 'orders.open',
+				collection: 'orders',
+				queryKey: 'orders:browser',
+				kind: 'failed',
+				documents: 0,
+				requests: 0,
+			},
+			{
+				taskId: 'products:browse:windowed',
+				requirementId: 'orders.open',
+				collection: 'products',
+				queryKey: 'products:browse',
+				kind: 'succeeded',
+				documents: 25,
+				requests: 2,
+			},
+		]);
+	});
+
+	it('attributes documents and requests to the task that fetched them', async () => {
+		const first = state({ taskId: 'a:windowed', queryKey: 'a' });
+		const second = state({ taskId: 'b:windowed', queryKey: 'b' });
+		const repository = createRepository([first, second]);
+		const fetcher = vi.fn(async (task: { id: string }) => ({
+			taskId: task.id,
+			documentCount: task.id === 'a:windowed' ? 10 : 3,
+			requestCount: task.id === 'a:windowed' ? 1 : 4,
+			completed: true,
+		}));
+
+		const result = await runPersistedSchedulerTasks({ ...baseInput, repository, fetcher });
+
+		expect(
+			result.tasks.map((outcome) => [outcome.taskId, outcome.documents, outcome.requests])
+		).toEqual([
+			['a:windowed', 10, 1],
+			['b:windowed', 3, 4],
+		]);
+		expect(result).toMatchObject({ totalDocuments: 13, totalRequests: 5 });
+	});
+
+	it("records a lost claim as that task's own outcome, not a silent omission", async () => {
+		const runnable = state({ taskId: 'lost:windowed', queryKey: 'lost' });
+		const repository = createRepository([runnable], false);
+		const fetcher = vi.fn(async () => ({
+			taskId: runnable.taskId,
+			documentCount: 0,
+			requestCount: 0,
+			completed: true,
+		}));
+
+		const result = await runPersistedSchedulerTasks({ ...baseInput, repository, fetcher });
+
+		expect(result.claimLost).toBe(1);
+		expect(result.tasks).toEqual([
+			expect.objectContaining({
+				taskId: 'lost:windowed',
+				kind: 'claim-lost',
+				documents: 0,
+				requests: 0,
+			}),
+		]);
+	});
+
+	it("records a lost completion as that task's own outcome", async () => {
+		const runnable = state({ taskId: 'completion:windowed', queryKey: 'completion' });
+		const repository = createRepository([runnable], true, false);
+		const fetcher = vi.fn(async () => ({
+			taskId: runnable.taskId,
+			documentCount: 7,
+			requestCount: 1,
+			completed: true,
+		}));
+
+		const result = await runPersistedSchedulerTasks({ ...baseInput, repository, fetcher });
+
+		expect(result.completionLost).toBe(1);
+		expect(result.tasks).toEqual([
+			expect.objectContaining({
+				taskId: 'completion:windowed',
+				kind: 'completion-lost',
+				documents: 7,
+				requests: 1,
+			}),
+		]);
+	});
+
+	it('records a failed markFailed write as failure-lost for that task', async () => {
+		const runnable = state({ taskId: 'failure:windowed', queryKey: 'failure' });
+		const repository = createRepository([runnable], true, true, false);
+		const fetcher = vi.fn(async () => {
+			throw new Error('boom');
+		});
+
+		const result = await runPersistedSchedulerTasks({ ...baseInput, repository, fetcher });
+
+		expect(result.failureLost).toBe(1);
+		expect(result.tasks).toEqual([
+			expect.objectContaining({ taskId: 'failure:windowed', kind: 'failure-lost' }),
+		]);
+	});
+});
+
 describe('runPersistedSchedulerTasks', () => {
 	it('claims runnable scheduler state, fetches it, and marks the claimed state completed', async () => {
 		const runnable = state();
@@ -123,6 +256,18 @@ describe('runPersistedSchedulerTasks', () => {
 			totalRequests: 1,
 			// A real drain is never a ledger-rebuild abort (#956).
 			ledgerRebuilt: false,
+			// The tick's aggregate is mirrored by this task's own verdict.
+			tasks: [
+				{
+					taskId: 'orders:orders:open:windowed',
+					requirementId: 'orders.open',
+					collection: 'orders',
+					queryKey: 'orders:open',
+					kind: 'succeeded',
+					documents: 25,
+					requests: 1,
+				},
+			],
 		});
 	});
 

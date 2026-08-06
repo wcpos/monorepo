@@ -102,6 +102,7 @@ describe('seedPersistedSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 			rerunRequested: 0,
+			taskIds: ['orders:custom-pull:greedy'],
 		});
 	});
 
@@ -150,6 +151,7 @@ describe('seedPersistedSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 1,
 			rerunRequested: 0,
+			taskIds: ['orders:claim-new-lost'],
 		});
 	});
 
@@ -180,6 +182,7 @@ describe('seedPersistedSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 			rerunRequested: 0,
+			taskIds: ['orders:custom-pull:greedy'],
 		});
 	});
 
@@ -257,6 +260,7 @@ describe('seedPersistedSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 			rerunRequested: 0,
+			taskIds: ['orders:custom-pull:greedy'],
 		});
 	});
 
@@ -311,6 +315,7 @@ describe('seedPersistedSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 1,
 			rerunRequested: 0,
+			taskIds: ['orders:claim-lost'],
 		});
 	});
 
@@ -368,6 +373,7 @@ describe('seedPersistedSchedulerTasks', () => {
 			skippedRunnable: 2,
 			claimLost: 0,
 			rerunRequested: 1,
+			taskIds: ['orders:failed', 'orders:in-flight', 'orders:queued'],
 		});
 	});
 
@@ -402,6 +408,7 @@ describe('seedPersistedSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 			rerunRequested: 0,
+			taskIds: ['orders:in-flight'],
 		});
 	});
 
@@ -434,6 +441,7 @@ describe('seedPersistedSchedulerTasks', () => {
 			skippedRunnable: 0,
 			claimLost: 0,
 			rerunRequested: 0,
+			taskIds: ['orders:in-flight'],
 		});
 	});
 });

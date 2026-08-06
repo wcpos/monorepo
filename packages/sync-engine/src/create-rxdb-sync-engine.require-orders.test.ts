@@ -16,10 +16,37 @@ import * as orderTaskSeeder from './scheduler/rx-order-scheduler-task-seeder';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
 import { memoryEngineStorage } from './testing';
 
+import type { PersistedSchedulerTaskOutcomeKind } from './scheduler';
+
 const SITE = 'https://lab.example.test';
 const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const UUID_7 = '77777777-7777-4777-8777-777777777777';
 let uniqueStore = 0;
+
+/** The single task the mocked seeders own in this file. */
+const OWNED_TASK_ID = 'orders:owned:windowed';
+
+/** The aggregate counter each loss kind used to be reported through. */
+const LOSS_KIND = {
+	claimLost: 'claim-lost',
+	completionLost: 'completion-lost',
+	failureLost: 'failure-lost',
+	renewalLost: 'renewal-lost',
+} as const satisfies Record<string, PersistedSchedulerTaskOutcomeKind>;
+
+/** A per-task drain verdict for {@link OWNED_TASK_ID}. */
+const ownedTask = (
+	kind: PersistedSchedulerTaskOutcomeKind,
+	counts: { documents?: number; requests?: number } = {}
+) => ({
+	taskId: OWNED_TASK_ID,
+	requirementId: 'orders.owned',
+	collection: 'orders',
+	queryKey: 'orders:owned',
+	kind,
+	documents: counts.documents ?? 0,
+	requests: counts.requests ?? 0,
+});
 
 const EMPTY_SEED_RESULT = {
 	inserted: 0,
@@ -29,6 +56,9 @@ const EMPTY_SEED_RESULT = {
 	skippedRunnable: 0,
 	claimLost: 0,
 	rerunRequested: 0,
+	// Every mocked seed claims this one task, so a mocked drain result can be attributed to
+	// the requirement that seeded it — which is what the per-task outcome contract reads.
+	taskIds: [OWNED_TASK_ID, `${OWNED_TASK_ID}:2`],
 };
 
 const EMPTY_DRAIN_RESULT = {
@@ -43,6 +73,7 @@ const EMPTY_DRAIN_RESULT = {
 	totalDocuments: 0,
 	totalRequests: 0,
 	ledgerRebuilt: false,
+	tasks: [],
 };
 
 afterEach(() => {
@@ -299,7 +330,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			.mockResolvedValue({ ...EMPTY_SEED_RESULT, requeued: 1 });
 		vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockImplementation(async () => {
 			harness.setResidentOrderIds([8]);
-			return { ...EMPTY_DRAIN_RESULT, succeeded: 1 };
+			return { ...EMPTY_DRAIN_RESULT, succeeded: 1, tasks: [ownedTask('succeeded')] };
 		});
 
 		await harness.plane.require({
@@ -322,7 +353,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			.spyOn(schedulerDrain, 'runEngineSchedulerDrain')
 			.mockImplementation(async () => {
 				harness.setResidentOrderIds([8]);
-				return { ...EMPTY_DRAIN_RESULT, succeeded: 1 };
+				return { ...EMPTY_DRAIN_RESULT, succeeded: 1, tasks: [ownedTask('succeeded')] };
 			});
 
 		await harness.plane.require({
@@ -343,6 +374,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockResolvedValue({
 			...EMPTY_DRAIN_RESULT,
 			succeeded: 1,
+			tasks: [ownedTask('succeeded')],
 		});
 
 		const handle = harness.plane.require({
@@ -403,6 +435,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			succeeded: 1,
 			totalDocuments: 25,
 			totalRequests: 2,
+			tasks: [ownedTask('succeeded', { documents: 25, requests: 2 })],
 		});
 
 		const handle = harness.plane.require({
@@ -430,7 +463,13 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockImplementation(async (input) => {
 			input.onProgress?.({ collection: 'orders', documents: 20, requests: 1 });
 			input.onProgress?.({ collection: 'orders', documents: 35, requests: 2 });
-			return { ...EMPTY_DRAIN_RESULT, succeeded: 1, totalDocuments: 35, totalRequests: 2 };
+			return {
+				...EMPTY_DRAIN_RESULT,
+				succeeded: 1,
+				totalDocuments: 35,
+				totalRequests: 2,
+				tasks: [ownedTask('succeeded', { documents: 35, requests: 2 })],
+			};
 		});
 
 		await harness.plane.require({ id: 'manual-sync', collection: 'orders', kind: 'refresh' }).ready;
@@ -524,6 +563,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockResolvedValue({
 			...EMPTY_DRAIN_RESULT,
 			[lossCounter]: 1,
+			tasks: [ownedTask(LOSS_KIND[lossCounter])],
 		});
 
 		const requirement =
@@ -604,6 +644,11 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 				completionLost: 1,
 				totalDocuments: 17,
 				totalRequests: 3,
+				// Partial progress: one of this requirement's tasks landed, another lost its row.
+				tasks: [
+					ownedTask('succeeded', { documents: 17, requests: 3 }),
+					{ ...ownedTask('completion-lost'), taskId: `${OWNED_TASK_ID}:2` },
+				],
 			});
 
 			const requirement =
@@ -640,6 +685,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		vi.spyOn(schedulerDrain, 'runEngineSchedulerDrain').mockResolvedValue({
 			...EMPTY_DRAIN_RESULT,
 			failed: 1,
+			tasks: [ownedTask('failed')],
 		});
 
 		const requirement =
@@ -711,7 +757,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 				});
 			}
 			harness.setResidentOrderIds([9]);
-			return { ...EMPTY_DRAIN_RESULT, succeeded: 1 };
+			return { ...EMPTY_DRAIN_RESULT, succeeded: 1, tasks: [ownedTask('succeeded')] };
 		});
 
 		const slow = harness.plane.require({
@@ -746,6 +792,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			...EMPTY_DRAIN_RESULT,
 			scanned: 1,
 			failed: 1,
+			tasks: [ownedTask('failed')],
 		});
 		const harness = orchestrationHarness();
 
@@ -793,7 +840,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 			.spyOn(schedulerDrain, 'runEngineSchedulerDrain')
 			.mockImplementation(async () => {
 				harness.setResidentOrderIds([8]);
-				return { ...EMPTY_DRAIN_RESULT, succeeded: 1 };
+				return { ...EMPTY_DRAIN_RESULT, succeeded: 1, tasks: [ownedTask('succeeded')] };
 			});
 
 		await harness.plane.require({

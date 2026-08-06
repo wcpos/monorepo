@@ -50,6 +50,13 @@ export type SeedPersistedSchedulerTasksResult = {
 	 * read past the change). Replaces the old silent `skippedActive` drop for that case.
 	 */
 	rerunRequested: number;
+	/**
+	 * The task ids this seed is responsible for, whatever the per-task disposition was
+	 * (inserted, requeued, or skipped). Callers that then drain and must report on THEIR OWN
+	 * work read the drain's per-task outcomes through these ids — deriving the id again at the
+	 * call site would duplicate each seeder's id grammar and drift from it silently.
+	 */
+	taskIds: string[];
 };
 
 /**
@@ -66,6 +73,7 @@ export function emptySeedPersistedSchedulerTasksResult(): SeedPersistedScheduler
 		skippedRunnable: 0,
 		claimLost: 0,
 		rerunRequested: 0,
+		taskIds: [],
 	};
 }
 
@@ -112,6 +120,9 @@ export async function seedPersistedSchedulerTasks(
 	const existingStates = await input.repository.readForTaskIds(tasks.map((task) => task.id));
 	const existingByTaskId = new Map(existingStates.map((state) => [state.taskId, state] as const));
 	const result = emptySeedPersistedSchedulerTasksResult();
+	// Every task this seed owns, regardless of disposition — a task skipped as already-active
+	// is still this caller's task, and its drain outcome is still the one to report on.
+	result.taskIds = tasks.map((task) => task.id);
 
 	for (const task of tasks) {
 		const existing = existingByTaskId.get(task.id);
