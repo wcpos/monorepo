@@ -21,13 +21,37 @@ type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
 
 /**
+ * Which order STATE a replay was computed for.
+ *
+ * `currentOrder.getLatest()` cannot be compared by reference: the engine adapter wraps every
+ * read in a fresh Proxy and `getLatest()` returns `wrapEngineDocument(collection, …)` on EVERY
+ * call, so `getLatest() !== captured` is true even when nothing changed. Compare the state
+ * instead.
+ *
+ * `status` and `date_modified_gmt` are in the key on purpose, not just the lines the replay
+ * reads: ANY write to the order moves them — a newer cart edit, a checkout push writing the
+ * server response back, a status transition out of `pos-open`. A replay computed before such a
+ * write must never land on top of it.
+ */
+function replayStateKey(order: OrderDocument): string {
+	return JSON.stringify([
+		order.uuid ?? null,
+		order.status ?? null,
+		order.date_modified_gmt ?? null,
+		order.line_items ?? [],
+		order.coupon_lines ?? [],
+	]);
+}
+
+/**
  * The off-critical-path coupon replay armed when the foreground reference barrier expires (#963).
  *
- * Identity is (order revision, reference-demand generation): re-arming for the same pair is a
+ * Identity is (order state, reference-demand generation): re-arming for the same pair is a
  * no-op, and any other pair supersedes — the newer cart edit owns the replay from then on.
  */
 type ReplayContinuation = {
 	order: OrderDocument;
+	stateKey: string;
 	generation: number;
 	abort: AbortController;
 };
@@ -74,7 +98,7 @@ export const useCartLines = () => {
 	// Continuation + single-flight state. Refs, not state: nothing renders off them, and a
 	// re-render must not disarm a wait that is still legitimate.
 	const continuationRef = React.useRef<ReplayContinuation | null>(null);
-	const replayingRef = React.useRef<OrderDocument | null>(null);
+	const replayingRef = React.useRef<string | null>(null);
 
 	/**
 	 * If line items change, and we have a percentage fee line, we need to recalculate the fee line total.
@@ -113,8 +137,9 @@ export const useCartLines = () => {
 	 */
 	const replayCoupons = React.useCallback(
 		async (freshOrder: OrderDocument) => {
-			if (replayingRef.current === freshOrder) return;
-			replayingRef.current = freshOrder;
+			const stateKey = replayStateKey(freshOrder);
+			if (replayingRef.current === stateKey) return;
+			replayingRef.current = stateKey;
 			try {
 				// Replay coupon discounts via recalculateCoupons() which handles:
 				// - POS price as coupon base (via _woocommerce_pos_data meta)
@@ -127,8 +152,9 @@ export const useCartLines = () => {
 					freshOrder.coupon_lines || []
 				);
 				if (!result) return; // coupon missing locally — bail to avoid partial data
-				// Bail if order changed during async replay to avoid overwriting concurrent edits
-				if (currentOrder.getLatest() !== freshOrder) return;
+				// Bail if the order moved during the async replay — a concurrent cart edit, a
+				// checkout push, or a status change — rather than overwriting it.
+				if (replayStateKey(currentOrder.getLatest()) !== stateKey) return;
 
 				// Compute order totals from the coupon-adjusted line items in the same
 				// tick. This prevents useOrderTotals from running with stale pre-coupon
@@ -162,7 +188,7 @@ export const useCartLines = () => {
 					},
 				});
 			} finally {
-				if (replayingRef.current === freshOrder) replayingRef.current = null;
+				if (replayingRef.current === stateKey) replayingRef.current = null;
 			}
 		},
 		[
@@ -185,16 +211,17 @@ export const useCartLines = () => {
 	 * Arm the off-critical-path continuation for a foreground barrier that expired (#963).
 	 *
 	 * Only the cart surface calls this, and `useCartLines` lives only there, so exactly one tab
-	 * — the one holding the cart — ever waits. Idempotent per (order revision, demand
-	 * generation): re-arming for the same pair keeps the existing wait, any other pair aborts it
-	 * because the newer edit's own replay now owns the order.
+	 * — the one holding the cart — ever waits. Idempotent per (order state, demand generation):
+	 * re-arming for the same pair keeps the existing wait, any other pair aborts it because the
+	 * newer edit's own replay now owns the order.
 	 */
 	const armReplayContinuation = React.useCallback(
 		(freshOrder: OrderDocument) => {
+			const stateKey = replayStateKey(freshOrder);
 			const armed = continuationRef.current;
 			if (
 				armed &&
-				armed.order === freshOrder &&
+				armed.stateKey === stateKey &&
 				armed.generation === couponReferenceGeneration &&
 				!armed.abort.signal.aborted
 			) {
@@ -203,6 +230,7 @@ export const useCartLines = () => {
 			disarmReplayContinuation();
 			const continuation: ReplayContinuation = {
 				order: freshOrder,
+				stateKey,
 				generation: couponReferenceGeneration,
 				abort: new AbortController(),
 			};
@@ -218,8 +246,10 @@ export const useCartLines = () => {
 					cartLogger.debug('Coupon reference wait expired without settling; replay abandoned');
 					return;
 				}
-				// The cashier moved on — the newer revision's own replay owns the totals.
-				if (currentOrder.getLatest() !== continuation.order) return;
+				// The order moved on — a newer edit, a checkout push, or a status change. That
+				// write owns the order now; a replay computed against the old state must not
+				// land on top of it.
+				if (replayStateKey(currentOrder.getLatest()) !== continuation.stateKey) return;
 				await replayCoupons(continuation.order);
 			})().catch((error) => cartLogger.error(String(error)));
 		},

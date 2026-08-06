@@ -31,29 +31,38 @@ const shippingLines$ = new BehaviorSubject<unknown[]>([]);
 const couponLines$ = new BehaviorSubject<CouponLine[]>([]);
 
 /**
- * RxDB hands out a NEW document object per revision, and the replay's identity guards compare
- * by reference — so the fake has to behave the same way: `getLatest()` is stable until an edit
- * lands, and every edit mints a new object.
+ * The engine adapter wraps every order in a fresh Proxy, and `getLatest()` calls
+ * `wrapEngineDocument(collection, rxDocument.getLatest())` — so it hands back a NEW object on
+ * EVERY call, even when nothing changed (packages/query/src/engine-adapter/document-proxy.ts).
+ * The fake has to behave the same way, or the tests pass against reference comparisons that can
+ * never hold in production.
  */
-let latestOrder = buildOrder();
+let revision = buildRevision();
 
-function buildOrder() {
+function buildRevision(overrides: Record<string, unknown> = {}) {
 	return {
+		uuid: 'order-uuid-1',
+		status: 'pos-open',
+		date_modified_gmt: '2026-08-06T00:00:00',
 		line_items: lineItems$.getValue(),
 		fee_lines: [],
 		shipping_lines: [],
 		coupon_lines: couponLines$.getValue(),
+		...overrides,
 	};
 }
 
+/** A brand-new object per call, exactly like the production proxy. */
+const getLatest = () => ({ ...revision });
+
 function editCart(lineItems: LineItem[]) {
 	lineItems$.next(lineItems);
-	latestOrder = buildOrder();
+	revision = buildRevision({ date_modified_gmt: new Date().toISOString() });
 }
 
 function applyCoupon(couponLines: CouponLine[]) {
 	couponLines$.next(couponLines);
-	latestOrder = buildOrder();
+	revision = buildRevision({ date_modified_gmt: new Date().toISOString() });
 }
 
 jest.mock('../contexts/current-order', () => ({
@@ -63,7 +72,7 @@ jest.mock('../contexts/current-order', () => ({
 			fee_lines$: feeLines$,
 			shipping_lines$: shippingLines$,
 			coupon_lines$: couponLines$,
-			getLatest: () => latestOrder,
+			getLatest,
 		},
 	}),
 }));
@@ -138,7 +147,7 @@ describe('useCartLines reference demand (#952)', () => {
 		referenceGeneration = 0;
 		couponLines$.next([]);
 		lineItems$.next([]);
-		latestOrder = buildOrder();
+		revision = buildRevision();
 	});
 
 	it('declares no coupon reference demand for a cart without coupon lines', () => {
@@ -201,6 +210,24 @@ describe('useCartLines reference demand (#952)', () => {
 		expect(recalculate).toHaveBeenCalled();
 	});
 
+	it('writes the replayed totals through localPatch when the references are ready', async () => {
+		// Regression guard: the "has the order moved?" check used to compare `getLatest()` by
+		// reference. The engine adapter mints a new proxy per call, so that comparison was
+		// ALWAYS unequal and the replay bailed before every write — the totals never updated.
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0].data).toEqual(
+			expect.objectContaining({ discount_total: '5.00', total: '5.00' })
+		);
+	});
+
 	it('skips the foreground replay when the reference wait times out', async () => {
 		// A deadline does not make unmaterialized residents trustworthy. Bailing leaves the
 		// cart on its previous totals until the references actually land.
@@ -229,7 +256,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		referenceGeneration = 0;
 		couponLines$.next([]);
 		lineItems$.next([]);
-		latestOrder = buildOrder();
+		revision = buildRevision();
 	});
 
 	it('replays the coupon once the references land after the foreground barrier expired', async () => {
@@ -252,7 +279,10 @@ describe('useCartLines background coupon replay (#963)', () => {
 		expect(localPatch).toHaveBeenCalledTimes(1);
 		expect(localPatch.mock.calls[0][0]).toEqual(
 			expect.objectContaining({
-				document: latestOrder,
+				document: expect.objectContaining({
+					uuid: 'order-uuid-1',
+					line_items: revision.line_items,
+				}),
 				data: expect.objectContaining({ discount_total: '5.00', total: '5.00' }),
 			})
 		);
@@ -285,7 +315,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		await act(async () => {
 			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
 		});
-		const staleOrder = latestOrder;
+		const staleLineItems = revision.line_items;
 
 		// A newer edit lands while the references are still in flight. Its own replay owns the
 		// order from here — the older continuation must not write the pre-edit discounts back.
@@ -295,7 +325,11 @@ describe('useCartLines background coupon replay (#963)', () => {
 		});
 		expect(recalculate).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
-		expect(localPatch.mock.calls[0][0]).toEqual(expect.objectContaining({ document: latestOrder }));
+		expect(localPatch.mock.calls[0][0]).toEqual(
+			expect.objectContaining({
+				document: expect.objectContaining({ line_items: revision.line_items }),
+			})
+		);
 		expect(background.signals[0].aborted).toBe(true);
 
 		// The abandoned wait resolving late must be a no-op — no double-apply.
@@ -304,7 +338,36 @@ describe('useCartLines background coupon replay (#963)', () => {
 		});
 		expect(recalculate).toHaveBeenCalledTimes(1);
 		expect(localPatch).toHaveBeenCalledTimes(1);
-		expect(localPatch).not.toHaveBeenCalledWith(expect.objectContaining({ document: staleOrder }));
+		expect(localPatch).not.toHaveBeenCalledWith(
+			expect.objectContaining({
+				document: expect.objectContaining({ line_items: staleLineItems }),
+			})
+		);
+	});
+
+	it('does not replay into an order that checkout moved while the wait was running', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		// Checkout pushes the order and the server response lands back on the resident: the
+		// lines are untouched but the order has moved on. Replaying the pre-push discounts now
+		// would change the totals of an order that has already been submitted.
+		revision = buildRevision({
+			status: 'completed',
+			date_modified_gmt: '2026-08-06T10:00:00',
+		});
+
+		await act(async () => {
+			background.settle();
+		});
+
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
 	});
 
 	it('gives up silently when the background wait hits its cap, and the next edit still heals', async () => {

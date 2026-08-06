@@ -122,7 +122,7 @@ type DemandProjection = {
 	/** Readiness of the STANDING declaration — the one the binding keeps alive while mounted. */
 	whenReady(): Promise<DemandReadiness>;
 	/** Declares the same requirements once more and releases them; the re-arm after a release. */
-	declareOnce(): Promise<DemandReadiness>;
+	declareOnce(signal?: AbortSignal): Promise<DemandReadiness>;
 	/** Bumps whenever the engine resets coverage for this collection (re-declaration boundary). */
 	generation: number;
 	sync(): Promise<void>;
@@ -272,24 +272,34 @@ function useDemand(
 	 * owner that released us finishes, the same requirement comes back `serve-local` (inside
 	 * the reference dedupe window) or `fetched`.
 	 */
-	const declareOnce = React.useCallback(async (): Promise<DemandReadiness> => {
-		if (!enabled) return ATTEMPTED;
-		const requirements = requirementsForQuery({
-			id: `${id}:rearm`,
-			collectionName: descriptor.collection,
-			selector: selectorWithSearch(descriptor),
-			limit: descriptor.limit,
-			sort: descriptor.sort as RequirementSortPart[] | undefined,
-		}).requirements;
-		const handles = declareRequirements(engine, requirements);
-		try {
-			return readinessFrom(await Promise.all(handles.map((handle) => handle.ready)));
-		} catch {
-			return NOT_ATTEMPTED;
-		} finally {
-			releaseHandles(handles);
-		}
-	}, [descriptor, enabled, engine, id]);
+	const declareOnce = React.useCallback(
+		async (signal?: AbortSignal): Promise<DemandReadiness> => {
+			if (!enabled) return ATTEMPTED;
+			if (signal?.aborted) return NOT_ATTEMPTED;
+			const requirements = requirementsForQuery({
+				id: `${id}:rearm`,
+				collectionName: descriptor.collection,
+				selector: selectorWithSearch(descriptor),
+				limit: descriptor.limit,
+				sort: descriptor.sort as RequirementSortPart[] | undefined,
+			}).requirements;
+			const handles = declareRequirements(engine, requirements);
+			// `release()` IS the engine's cancellation verb — it aborts queued or in-flight
+			// foreground work and settles `ready` as `released`. Without this an aborted caller
+			// would keep waiting on (and holding) a declaration nobody wants any more.
+			const abortHandler = () => releaseHandles(handles);
+			signal?.addEventListener('abort', abortHandler, { once: true });
+			try {
+				return readinessFrom(await Promise.all(handles.map((handle) => handle.ready)));
+			} catch {
+				return NOT_ATTEMPTED;
+			} finally {
+				signal?.removeEventListener('abort', abortHandler);
+				releaseHandles(handles);
+			}
+		},
+		[descriptor, enabled, engine, id]
+	);
 
 	const whenReady = React.useCallback(() => ready.current.catch(() => NOT_ATTEMPTED), []);
 	return { queryKey$, sync, whenReady, declareOnce, generation: coverageGeneration };
@@ -433,7 +443,7 @@ function useEngineBinding(
 ): QueryBinding & {
 	result$: Observable<QueryResult<RxCollection>>;
 	whenReady(): Promise<DemandReadiness>;
-	declareOnce(): Promise<DemandReadiness>;
+	declareOnce(signal?: AbortSignal): Promise<DemandReadiness>;
 	generation: number;
 } {
 	const runtime = useQueryRuntime();
@@ -765,6 +775,43 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 	});
 }
 
+/**
+ * Resolve `fallback` if the caller aborts or the deadline passes before `promise` settles.
+ *
+ * The STANDING readiness promise has no deadline of its own and no cancellation — it is owned by
+ * the demand effect. A continuation that awaited it bare would hold its closure (and the order
+ * document it captured) until the demand happened to settle, ignoring both its own abort and its
+ * own cap. This bounds the wait without pretending the underlying work stopped.
+ */
+function withDeadline<T>(
+	promise: Promise<T>,
+	signal: AbortSignal,
+	deadline: number,
+	fallback: T
+): Promise<T> {
+	return new Promise<T>((resolve) => {
+		let done = false;
+		const finish = (value: T) => {
+			if (done) return;
+			done = true;
+			clearTimeout(timerId);
+			signal.removeEventListener('abort', onAbort);
+			resolve(value);
+		};
+		const onAbort = () => finish(fallback);
+		const timerId = setTimeout(() => finish(fallback), Math.max(0, deadline - Date.now()));
+		if (signal.aborted) {
+			finish(fallback);
+			return;
+		}
+		signal.addEventListener('abort', onAbort, { once: true });
+		void promise.then(
+			(value) => finish(value),
+			() => finish(fallback)
+		);
+	});
+}
+
 const COUPON_REPLAY_COUPONS_DESCRIPTOR: EngineQueryDescriptor = {
 	collection: 'coupons',
 	selector: {},
@@ -854,7 +901,13 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 				const deadline = Date.now() + COUPON_REFERENCE_BACKGROUND_TIMEOUT_MS;
 				// First pass rides the STANDING declaration — the very pull the foreground gave
 				// up on. `whenReady()` reads the live ref, so a re-declaration is picked up too.
-				let readiness = await Promise.all([coupons.whenReady(), categories.whenReady()]);
+				// Bounded, because that promise answers to neither this abort nor this cap.
+				let readiness = await withDeadline(
+					Promise.all([coupons.whenReady(), categories.whenReady()]),
+					signal,
+					deadline,
+					[NOT_ATTEMPTED, NOT_ATTEMPTED]
+				);
 				for (let attempt = 0; !signal.aborted && Date.now() < deadline; attempt += 1) {
 					if (readiness.every(({ attempted }) => attempted)) {
 						const remaining = deadline - Date.now();
@@ -877,7 +930,12 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 						signal
 					);
 					if (signal.aborted || Date.now() >= deadline) break;
-					readiness = await Promise.all([coupons.declareOnce(), categories.declareOnce()]);
+					readiness = await withDeadline(
+						Promise.all([coupons.declareOnce(signal), categories.declareOnce(signal)]),
+						signal,
+						deadline,
+						[NOT_ATTEMPTED, NOT_ATTEMPTED]
+					);
 				}
 				return false;
 			},
