@@ -93,6 +93,9 @@ function row(over: Partial<RejectedMutation> = {}): RejectedMutation {
 		rejectedAt: '2026-01-05T00:00:01.000Z',
 		requeueCount: 0,
 		residentMissing: false,
+		destroysRecord: false,
+		mayDestroyRecord: false,
+		residentUnknown: false,
 		...over,
 	};
 }
@@ -145,6 +148,80 @@ describe('RejectedMutationsPanel', () => {
 
 		await press(getByTestId('db-rejected-discard-confirm'));
 		expect(mockResolveConflict).toHaveBeenCalledWith('m-1', 'discard');
+	});
+
+	it('says outright that discarding a born-local record DELETES it (#832 R7b)', async () => {
+		rows = [row({ destroysRecord: true })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-discard-m-1'));
+
+		const confirm = getByTestId('db-rejected-discard-confirm');
+		// The confirm states destruction and names the record; it must never
+		// reassure the cashier that their server's version will be kept — there
+		// isn't one.
+		expect(document.body.textContent).toContain('permanently deletes it from this device');
+		expect(document.body.textContent).toContain('never saved to your store');
+		expect(document.body.textContent).toContain('#1042 · 25.00');
+		expect(document.body.textContent).not.toContain('your server’s version is kept');
+		expect(confirm.textContent).toContain('Delete');
+
+		await press(confirm);
+		expect(mockResolveConflict).toHaveBeenCalledWith('m-1', 'discard');
+		// …and the success toast says the record is gone, not that "a change" was dropped.
+		expect(mockToast).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'success', text1: 'Deleted from this device.' })
+		);
+	});
+
+	it('never promises deletion for a create the SERVER may already hold', async () => {
+		// `identity-ambiguous` means the uuid matched more than one server record, so
+		// the engine keeps the resident. `destroysRecord` is false there, and the
+		// dialog must not promise a deletion the engine will not perform.
+		rows = [row({ destroysRecord: false, reason: 'identity-ambiguous', status: 409 })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-discard-m-1'));
+
+		expect(document.body.textContent).not.toContain('permanently deletes it from this device');
+		expect(getByTestId('db-rejected-discard-confirm').textContent).toContain('Discard');
+	});
+
+	it('states the CONDITION when deletion depends on what the server still has', async () => {
+		// The engine re-fetches the server document for a non-order row and removes
+		// the resident when the server 404s. The client cannot know that answer
+		// without the request, so the copy must state the condition rather than
+		// promise "your server's version is kept" and then delete the record.
+		rows = [row({ operation: 'update', collectionName: 'products', mayDestroyRecord: true })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-discard-m-1'));
+
+		expect(document.body.textContent).toContain('If your server no longer has');
+		expect(document.body.textContent).toContain('also deletes it from this device');
+		expect(document.body.textContent).not.toContain('permanently deletes it from this device');
+	});
+
+	it('disables discard while the resident read failed — the outcome is unknown', async () => {
+		// Not `residentMissing` (a successful read finding nothing) but a FAILED
+		// read: whether discard destroys the record is unknowable, so every confirm
+		// we could show might describe the wrong outcome.
+		rows = [row({ residentUnknown: true })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		expect((getByTestId('db-rejected-discard-m-1') as HTMLButtonElement).disabled).toBe(true);
+		expect(getByTestId('db-rejected-row-m-1').textContent).toContain('couldn’t read the record');
+	});
+
+	it('keeps the non-destructive copy when the record survives the discard', async () => {
+		rows = [row({ operation: 'update' })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-discard-m-1'));
+
+		expect(document.body.textContent).toContain('your server’s version is kept');
+		expect(document.body.textContent).not.toContain('permanently deletes it from this device');
+		expect(getByTestId('db-rejected-discard-confirm').textContent).toContain('Discard');
 	});
 
 	it('disables requeue when the record is gone — there is nothing left to rebuild from', () => {

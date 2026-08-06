@@ -7,6 +7,7 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { StorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const refundLogger = getLogger(['wcpos', 'orders', 'refund']);
 
@@ -71,11 +72,20 @@ export function createRefundIdempotencyKey(orderId: number) {
 export function useRefundMutation() {
 	const http = useRestHttpClient();
 	const runtime = useQueryRuntime();
+	const { blockIfDegraded } = useStorageMoneyPathGuard();
 
 	return React.useCallback(
 		async ({ order, amount, reason, lineItems, refundDestination }: RefundMutationArgs) => {
 			if (!order.id) {
 				throw new Error('refund_requires_persisted_order');
+			}
+
+			// #163 follow-up ruling: refunds are a money path. This is the last
+			// synchronous point before the POST — past it the money has moved and the
+			// idempotency key makes a retry mint a SECOND refund. It throws rather
+			// than returning quietly so the form cannot toast a refund as successful.
+			if (blockIfDegraded('refund', { orderId: order.id })) {
+				throw new StorageBlockedError('refund');
 			}
 
 			const payload = buildRefundPayload({
@@ -120,6 +130,6 @@ export function useRefundMutation() {
 
 			return response?.data;
 		},
-		[http, runtime]
+		[blockIfDegraded, http, runtime]
 	);
 }

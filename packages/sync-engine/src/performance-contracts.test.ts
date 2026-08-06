@@ -33,6 +33,20 @@ import type { RxDatabase } from 'rxdb';
  *   - existence-reconcile audit, 50k residents ....... 264-276 ms
  *   - longest uninterrupted block, 10k audit ......... 55-58 ms (yields: 0)
  *   - first page of 5k local residents ............... 9 ms
+ *
+ * Re-measured 2026-08-06 after tranche 2 restored chunked yielding (ruling R10b). Both columns
+ * below were taken on the SAME machine in the same session, 3 runs each, by stashing the change
+ * and re-running — so they are comparable, unlike the pre-reboot numbers above:
+ *
+ *                                            before (next)      after (R10b)
+ *   - reconcile audit, 10k residents ....... 57.5-60.8 ms       67.5-68.6 ms   (+14%)
+ *   - reconcile audit, 50k residents ....... 254.6-255.7 ms     288.5-291.5 ms (+13%)
+ *   - longest uninterrupted block, 10k ..... 53.5-55.0 ms       29.4-30.4 ms   (-45%)
+ *   - macrotask yields during that audit ... 0                  17-18
+ *
+ * The throughput cost is the price of the block-length win: paging the manifest scan runs ~30%
+ * slower than one unbounded query, and each yield is a real macrotask hop. Percent-level, not a
+ * multiple, and the budgets keep 10-15x headroom.
  */
 
 setPremiumFlag();
@@ -58,19 +72,36 @@ function parseBudgetMultiplier(value: string): number {
 /**
  * Longest uninterrupted block the audit may hold the macrotask queue for.
  *
- * 1.9's contract was a p95 event-loop delay under 100 ms during a large audit, which
- * only means something if the audit yields REPEATEDLY — 1.9's `processFullAudit`
- * chunked its work through an explicit `yieldToEventLoop()`.
+ * 1.9's contract was a p95 event-loop delay under 100 ms during a large audit, which only
+ * means something if the audit yields REPEATEDLY — 1.9's `processFullAudit` chunked its work
+ * through an explicit `yieldToEventLoop()`.
  *
- * The current engine does not yield to the macrotask queue AT ALL during an existence
- * reconcile: every run of this suite records exactly ONE sample, i.e. the whole audit
- * is a single unbroken span. p95 therefore collapses onto max, and a 100 ms budget
- * would simply fail. So this constant pins the block LENGTH at the order of magnitude
- * the engine actually achieves today, and the suite REPORTS the yield count so the
- * gap stays visible. Restoring chunked-yield discipline — and with it a meaningful
- * sub-100 ms p95 — is tranche-2 work on #949.
+ * Tranche 1 (#1006) measured the rewritten engine performing ZERO macrotask yields: every run
+ * recorded exactly ONE sample, so p95 collapsed onto max and this constant had to be parked at
+ * 1,000 ms — a bound the engine passed only because 10k is small. Tranche 2 (ruling R10b)
+ * restored the chunk-and-yield discipline, so the audit is now many short spans and 1.9's
+ * sub-100 ms intent is back in force.
+ *
+ * Measured 2026-08-06 on this branch, Apple silicon, memory storage, 3 runs after the warmup
+ * pass: max block 29.4-30.4 ms across 18-19 spans. The budget keeps ~3.3x headroom on top of
+ * that (plus the x3 CI multiplier) while still catching a regression back to an unbroken walk —
+ * the unchunked engine blocked for 53.5-55.0 ms here, and ~255 ms at 50k.
+ *
+ * The floor is no longer the walk itself but the single `products.find().exec()` the dirty-guard
+ * scan issues: one storage query that cannot be split without a 2-4x throughput regression
+ * (measured — keyset paging products is not index-backed on this schema). In the browser and on
+ * native that query runs worker-side, so the figure above is pessimistic for production.
  */
-const MAX_EVENT_LOOP_BLOCK_MS = 1_000;
+const MAX_EVENT_LOOP_BLOCK_MS = 100;
+
+/**
+ * The audit must hand the event loop at least one real turn. This is the assertion tranche 1
+ * could only REPORT: a count of 0 means some future refactor collapsed the walk back into a
+ * single unbroken block, which is invisible to every functional test and to the wall-clock
+ * budgets above. Deliberately `> 0` rather than a tight count — the exact number is a function
+ * of the tunable chunk sizes, and pinning it here would make every retune a test edit.
+ */
+const MIN_AUDIT_YIELDS = 0;
 
 /**
  * Audit wall-clock budgets. 1.9's equivalents were 10s at 10k and 30s at 50k against
@@ -371,19 +402,27 @@ describe('sync-engine performance contracts (#949)', () => {
 
 			expect(delays.length).toBeGreaterThan(0);
 			const maxBlock = Math.max(...delays);
+			const yields = delays.length - 1;
 			const budgetMs = budget(MAX_EVENT_LOOP_BLOCK_MS);
 			report(
 				'event-loop max block',
 				maxBlock,
 				budgetMs,
-				` spans=${delays.length} yields=${delays.length - 1} p95=${percentile(delays, 0.95).toFixed(1)}ms`
+				` spans=${delays.length} yields=${yields} p95=${percentile(delays, 0.95).toFixed(1)}ms`
 			);
 
+			// The audit walks the catalog in chunks and yields between them (#949 tranche 2).
+			// Without this the two assertions below can both pass on a single unbroken span
+			// that simply happens to be short at 10k — which is exactly the state tranche 1
+			// found, and which grows without bound with the store.
+			expect(yields).toBeGreaterThan(MIN_AUDIT_YIELDS);
+
 			// A block past ~100ms is the perceived-lag threshold (16ms is the 60fps frame
-			// budget); a multi-second one is the "POS froze during sync" bug report. The
-			// budget is set where the engine is TODAY (yields=0, so max == the whole audit),
-			// not where it should be — see the MAX_EVENT_LOOP_BLOCK_MS comment and #949.
+			// budget); a multi-second one is the "POS froze during sync" bug report.
 			expect(maxBlock).toBeLessThan(budgetMs);
+			// p95 is the shape 1.9 actually contracted on, and it only means something once
+			// there are many spans to rank — which the yield assertion above guarantees.
+			expect(percentile(delays, 0.95)).toBeLessThan(budgetMs);
 		},
 		TEST_TIMEOUT_MS
 	);

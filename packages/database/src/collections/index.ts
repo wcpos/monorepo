@@ -11,6 +11,7 @@ import { notificationsLiteral } from './schemas/notifications';
 import { templatesLiteral } from './schemas/templates';
 import { ordersLiteral } from './schemas/orders';
 import { productsLiteral } from './schemas/products';
+import { receiptEmailQueueLiteral } from './schemas/receipt-email-queue';
 import { sitesLiteral } from './schemas/sites';
 import { storesLiteral } from './schemas/stores';
 import { syncLiteral } from './schemas/sync';
@@ -743,6 +744,20 @@ const template_printer_overrides: RxCollectionCreator<TemplatePrinterOverrideDoc
 	},
 };
 
+/**
+ * Receipt Email Queue (local-only, not synced to server)
+ */
+const receiptEmailQueueSchema: RxJsonSchema<ReceiptEmailQueueDocumentType> =
+	receiptEmailQueueLiteral;
+type ReceiptEmailQueueDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof receiptEmailQueueLiteral
+>;
+export type ReceiptEmailQueueDocument = RxDocument<ReceiptEmailQueueDocumentType>;
+export type ReceiptEmailQueueCollection = RxCollection<ReceiptEmailQueueDocumentType>;
+const receipt_email_queue: RxCollectionCreator<ReceiptEmailQueueDocumentType> = {
+	schema: receiptEmailQueueSchema,
+};
+
 export type UserCollections = {
 	users: UserCollection;
 	sites: SiteCollection;
@@ -768,6 +783,7 @@ export type StoreCollections = {
 	printer_profiles: PrinterProfileCollection;
 	scanner_profiles: ScannerProfileCollection;
 	template_printer_overrides: TemplatePrinterOverrideCollection;
+	receipt_email_queue: ReceiptEmailQueueCollection;
 };
 
 export type SyncCollections = {
@@ -818,6 +834,7 @@ export const storeCollections = {
 	printer_profiles,
 	scanner_profiles,
 	template_printer_overrides,
+	receipt_email_queue,
 };
 
 // @NOTE: sync collection should have corresponding collections in storeCollections

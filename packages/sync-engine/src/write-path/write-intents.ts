@@ -192,8 +192,31 @@ export async function enqueueWriteIntent(input: {
 		// born-twice/dedupe guard with this edit's payload silently ignored).
 		// Anything else — claimed, ever-pushed, terminal — makes the edit queue BEHIND.
 		const lastPending = pendingRows.at(-1);
-		const prior =
+		const coalescable =
 			lastPending !== undefined && (lastPending.attempts ?? 0) === 0 ? lastPending : undefined;
+		// A recovered UPDATE never coalesces into a live successor (#832 follow-up,
+		// R7a). Coalescing REPLACES that row, so the successor's edit stops having a
+		// queue row of its own — and if the rebuilt payload is refused again, the
+		// drain dead-letters the merged row and the successor's still-VALID edit is
+		// entombed inside it, where discard destroys both. Appending behind it keeps
+		// the two independently resolvable: the successor pushes first and survives on
+		// its own, and a second refusal dead-letters only the recovery. A recovered
+		// CREATE must still coalesce — the server has never seen the record, so an
+		// update may not reach it ahead of its create (#516 rules 1–2).
+		//
+		// The BLOCK IS SYMMETRIC (PR #1016 review): a pending recovery row is not a
+		// coalesce target for a later ordinary write either. A recovery can sit
+		// pending for a long time — offline, held, backing off — and an edit landing
+		// meanwhile would REPLACE it, merging the refused fields into the cashier's
+		// new valid edit and dropping the requeue provenance with them. One more
+		// refusal then dead-letters the merged row and discarding it loses the new
+		// edit: exactly the entombment the outbound half of this rule prevents.
+		// Keeping recovery rows unmergeable in both directions is what makes
+		// "recovered work stays independently resolvable" actually hold.
+		const recoveryUpdate = input.provenance !== undefined && intent.operation === 'update';
+		const coalescingIntoRecovery =
+			input.provenance === undefined && coalescable?.requeuedFrom !== undefined;
+		const prior = recoveryUpdate || coalescingIntoRecovery ? undefined : coalescable;
 		// A create still ahead in the queue (pending or in flight): a delete queued
 		// behind it defers its baseRevision to the drain-time re-stamp.
 		const createAhead = recordRows.find(
@@ -452,6 +475,106 @@ export async function enqueueWriteIntent(input: {
 }
 
 /**
+ * Fields no dead-letter recovery may assert: every top-level key claimed by a
+ * LIVE (non-rejected) queue row for the same record.
+ *
+ * A recovery revives an intent the server has already REFUSED. Every row still in
+ * `pending()` is an intent the server has NOT refused — pending, claimed,
+ * conflicted, or parked. Between the two, the live one owns any field they both
+ * touch, and the recovery must carry none of them: whatever it carries is merged
+ * LAST (`{...resident, ...prior, ...incoming}` in the coalescer, and a tail append
+ * pushes after every live row), so a field it keeps is a field it OVERWRITES.
+ *
+ * This deliberately replaces an earlier `seq`-based "is it newer than the dead
+ * letter" test, which was unsound in two ways the review found:
+ *  - a coalesced replacement KEEPS the original `seq` and is distinguished only by
+ *    the `coalesced` generation, so a crash that strands both generations
+ *    (`coalesceInto` appends then removes — two storage ops) leaves a strictly
+ *    newer row at an EQUAL seq that the comparison read as older;
+ *  - the same keeping-the-original-seq rule means a newer edit can coalesce into a
+ *    row whose seq is BELOW the dead letter's, so "newer intent" and "higher seq"
+ *    are not the same relation at all.
+ * Rather than reconstruct an ordering the queue does not actually guarantee, this
+ * asks a question with no ordering in it. It is strictly more conservative: the
+ * worst case is that a field the recovery wanted back is left to a live row that
+ * also mentions it — visible, and the cashier can edit again — instead of a live
+ * cart edit being silently rolled back.
+ */
+function fieldsOwnedByLiveRows(sameRecordQueued: readonly QueuedMutation[]): Set<string> {
+	return new Set(
+		sameRecordQueued
+			.filter((row) => row.operation !== 'delete')
+			.flatMap((row) => Object.keys(row.payload ?? {}))
+	);
+}
+
+/**
+ * The rebuilt outbound payload for a dead-letter recovery (#832 follow-up, R7a).
+ *
+ * For a CREATE this is the current resident, exactly as #1011 built it. For an
+ * UPDATE the resident alone is not enough: a rejected row stops guarding its
+ * record (`pendingRecordIds` skips it — #507 regression 4, deliberate), so a pull
+ * adopts server truth over the resident. That is CORRECT — the server's
+ * calculation is the source of truth and pulls are not re-blocked — but the
+ * resident is then no longer a witness to what the cashier asked for, and a
+ * rebuild taken purely from it sends the server its own values back. The edit
+ * vanishes with nothing anywhere saying so. It survives in exactly one place: the
+ * frozen payload on the rejected row, re-applied here on top of the resident.
+ *
+ * GRANULARITY — the queue row's TOP-LEVEL fields, and why not a diff:
+ *  - There is nothing to diff against. A row stores `baseRevision` (a revision
+ *    STRING, not a document); `conflictDocument` exists only for 409s, never for
+ *    a 4xx dead letter. No pre-edit snapshot is persisted anywhere, so "the
+ *    fields that changed" is not computable after the fact.
+ *  - Top-level IS the write path's own merge granularity: `enqueueWriteIntent`'s
+ *    coalescer merges `{...resident, ...prior, ...incoming}` shallowly, and the
+ *    born-twice reconcile does the same. A deeper per-leaf merge would invent a
+ *    semantics no other write in this engine uses, and for orders would emit
+ *    hybrids (half-server, half-local `billing`) that neither side ever asserted.
+ *
+ * `meta_data` is NEVER recovered from the dead letter, for either operation. The
+ * builders INJECT the `_woocommerce_pos_uuid` mirror into every payload
+ * (`identifyRecord` → `mirrorRecordUuid`), so the field is present whether or not
+ * the caller asked for it and its provenance cannot be recovered afterwards — the
+ * review was right that any heuristic here guesses. Since the engine treats it as
+ * one top-level array, re-applying is all-or-nothing, and a frozen array can only
+ * be staler than the resident's. The resident's array is used instead, and the
+ * enqueue pipeline re-mirrors the uuid into it. KNOWN LIMITATION: a meta-only edit
+ * that a pull has since overwritten is therefore not recovered; recovering it
+ * honestly needs the row to record which fields the caller actually asserted,
+ * which is a schema change and out of scope here.
+ *
+ * The dropped fields go through `fieldsOwnedByLiveRows` — see there for why the
+ * subtraction applies to the RESIDENT layer too, not just the recovered one.
+ *
+ * Nothing here bypasses sanitization: the result is handed to `enqueueWriteIntent`
+ * as an ordinary intent payload, so every outbound sanitizer
+ * (`sanitizeOutboundOrderPayload`) still runs over it. That is what keeps this
+ * from being the replay #832 exists to avoid — the FIELDS come back, the refused
+ * SHAPE does not.
+ */
+function rebuiltRecoveryPayload(
+	entry: QueuedMutation,
+	residentPayload: Record<string, unknown>,
+	sameRecordQueued: readonly QueuedMutation[]
+): Record<string, unknown> {
+	const recovered =
+		entry.operation === 'update'
+			? Object.fromEntries(
+					Object.entries(entry.payload ?? {}).filter(([key]) => key !== 'meta_data')
+				)
+			: {};
+	const merged: Record<string, unknown> = { ...residentPayload, ...recovered };
+	// Subtract from the WHOLE payload, resident layer included. The resident was
+	// read before `enqueueWriteIntent` re-reads it, so it is a snapshot that a
+	// concurrent cart edit can already have overtaken — and because the recovery's
+	// payload merges last, keeping such a field would overwrite both the fresher
+	// resident and the live row that owns it (the review's `line_items` rollback).
+	for (const key of fieldsOwnedByLiveRows(sameRecordQueued)) delete merged[key];
+	return merged;
+}
+
+/**
  * DEAD-LETTER RECOVERY (#832): turn one permanently-rejected row back into
  * pushable work by REBUILDING its payload from the record as it stands NOW, and
  * enqueueing that through the pipeline above.
@@ -467,6 +590,18 @@ export async function enqueueWriteIntent(input: {
  * truth, and running it through the normal build → sanitize → coalesce → dirty-
  * mark path means every sanitizer that has landed since the rejection applies,
  * without this function knowing what any of them are.
+ *
+ * For an UPDATE the resident alone is not enough (#832 follow-up, R7a). A
+ * rejected row stops guarding its record, so a pull between the refusal and the
+ * recovery replaces the resident with server truth — correctly, per the standing
+ * "server calculation is the source of truth" ruling. Rebuilding from that
+ * resident would send the server its own values back and the cashier's edit would
+ * be gone with nothing anywhere recording it. So an update rebuild is
+ * `current resident ⊕ the dead letter's edit fields` (`recoveredEditFields`,
+ * which documents the granularity choice) — still through the same enqueue
+ * pipeline, so the recovered fields are sanitized exactly like a fresh write.
+ * When no pull intervened the two layers agree field-for-field and the rebuild is
+ * unchanged from the resident-only one.
  *
  * Consequences of that choice, deliberately:
  *  - a FRESH `mutationId`. The payload differs from the rejected one, and the
@@ -545,6 +680,23 @@ export async function requeueRejectedMutation(input: {
 	//    asking for a retry costs a second; guessing costs a spurious 404 dead
 	//    letter on top of the one being recovered.
 	const queued = sameRecord(await queue.pending());
+	// The DELETE check reads EVERY same-record row, not just the pending ones
+	// (PR #1016 review). `pending()` filters rejected rows out by design, so a
+	// delete that itself dead-lettered was invisible here — and a dead-lettered
+	// delete is still the cashier's most recent stated intent for the record.
+	// Reviving an older update against it would push a change to a record they
+	// have asked to remove. Recovering the DELETE is the honest way forward, so
+	// this refuses and says so. (Field ownership below stays pending-only: a
+	// rejected row is a refused intent with no live row to deliver it, and
+	// subtracting its fields would silently gut this recovery instead.)
+	const supersedingDelete = sameRecord(await queue.all()).some(
+		(item) => item.operation === 'delete' && item.mutationId !== entry.mutationId
+	);
+	if (supersedingDelete) {
+		throw new Error(
+			`requeue: ${entry.collectionName}/${entry.recordId} is queued for deletion — sending the refused change again would undo that; discard instead`
+		);
+	}
 	if (queued.some((item) => item.operation === 'delete')) {
 		throw new Error(
 			`requeue: ${entry.collectionName}/${entry.recordId} is queued for deletion — sending the refused change again would undo that; discard instead`
@@ -568,7 +720,10 @@ export async function requeueRejectedMutation(input: {
 					collection: entry.collectionName as SyncCollectionName,
 					operation: entry.operation,
 					recordId: entry.recordId,
-					payload: residentPayload,
+					// A create rebuilds from the resident alone; an update layers the
+					// cashier's refused edit back on top of it. Either way no field a
+					// LIVE queue row owns survives (R7a — see `rebuiltRecoveryPayload`).
+					payload: rebuiltRecoveryPayload(entry, residentPayload, queued),
 					...(entry.explicit === true ? { explicit: true } : {}),
 				};
 	const receipt = await enqueueWriteIntent({

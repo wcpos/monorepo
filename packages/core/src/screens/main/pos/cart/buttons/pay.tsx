@@ -11,6 +11,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
+import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
 import { getNetPaymentTotal } from '../utils/get-net-payment-total';
 
@@ -28,6 +29,7 @@ export function PayButton() {
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const t = useT();
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 
 	const displayTotal = getNetPaymentTotal(total, refunds);
 
@@ -35,6 +37,12 @@ export function PayButton() {
 	 *
 	 */
 	const handlePay = React.useCallback(async () => {
+		// #163 ruling R5: a dead storage worker hard-blocks the money paths. Cash
+		// taken for an order the device cannot persist has no local record at all.
+		if (blockIfDegraded('checkout', { orderId: currentOrder.uuid })) {
+			return;
+		}
+
 		setLoading(true);
 		const orderLogger = checkoutLogger.with({
 			orderId: currentOrder.uuid,
@@ -44,6 +52,13 @@ export function PayButton() {
 		try {
 			await pushDocument(currentOrder).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
+					// Re-checked after the await: the worker can die mid-push, and
+					// opening the payment modal then would let the cashier take money
+					// for an order this device can no longer record.
+					if (blockIfDegraded('checkout', { orderId: currentOrder.uuid })) {
+						return;
+					}
+
 					// Log checkout started
 					orderLogger.info(t('pos_cart.checkout_started'), {
 						saveToDb: true,
@@ -71,7 +86,7 @@ export function PayButton() {
 		} finally {
 			setLoading(false);
 		}
-	}, [pushDocument, currentOrder, router, t, total]);
+	}, [blockIfDegraded, pushDocument, currentOrder, router, t, total]);
 
 	/**
 	 *
@@ -84,6 +99,7 @@ export function PayButton() {
 			variant="success"
 			className="flex-3 rounded-t-none rounded-bl-none"
 			loading={loading}
+			disabled={storageDegraded}
 		>
 			{t('pos_cart.checkout', {
 				order_total: format(displayTotal || 0),
