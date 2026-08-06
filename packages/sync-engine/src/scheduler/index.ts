@@ -8,6 +8,8 @@ export {
 } from './engine-scheduler-drain';
 export {
 	emptyPersistedSchedulerTaskRunnerResult,
+	type PersistedSchedulerTaskOutcome,
+	type PersistedSchedulerTaskOutcomeKind,
 	type PersistedSchedulerTaskRunnerResult,
 } from './rx-scheduler-task-runner';
 
@@ -20,7 +22,10 @@ export {
 export { laneKeyFor, seedPosBootstrapLanes, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
 export { seedProductBrowseWindowSchedulerTask } from './rx-scheduler-product-task-seeder';
 export { seedCustomerBrowseWindowSchedulerTask } from './rx-scheduler-customer-task-seeder';
-export type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
+export {
+	emptySeedPersistedSchedulerTasksResult,
+	type SeedPersistedSchedulerTasksResult,
+} from './rx-scheduler-task-seeder';
 
 // Descriptors
 export {

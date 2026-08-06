@@ -36,6 +36,42 @@ export type PersistedSchedulerTaskRunnerInput = {
 	withTaskActivity?: <T>(task: FetchTask, work: () => Promise<T>) => Promise<T>;
 };
 
+/**
+ * How ONE task ended its drain iteration.
+ *
+ * `succeeded` means the task ran to its own completion contract and its durable row was
+ * completed/requeued. It does NOT mean the task's coverage lane is complete: a browse window
+ * truncated by the per-drain page budget (#1030) still returns `completed: true` to the runner
+ * while writing an honestly incomplete lane. Lane completeness lives on the lane; read it
+ * there, not here.
+ *
+ * Everything else is a way the task did NOT finish under this owner. Only `failed` is an
+ * actual error — the three `*-lost` kinds mean another owner took the row mid-flight, which is
+ * a release for the declarer, not a failure.
+ */
+export type PersistedSchedulerTaskOutcomeKind =
+	| 'succeeded'
+	| 'failed'
+	/** The claim CAS was lost before the fetch — another owner holds the row. */
+	| 'claim-lost'
+	/** The fetch ran, but the completion CAS was lost to another owner. */
+	| 'completion-lost'
+	/** The fetch threw AND the failure write was lost to another owner. */
+	| 'failure-lost'
+	/** A greedy walk lost its lease renewal mid-flight and stopped short. */
+	| 'renewal-lost';
+
+/** One task's own verdict and its own document/request counts. */
+export type PersistedSchedulerTaskOutcome = {
+	taskId: string;
+	requirementId: string;
+	collection: string;
+	queryKey: string;
+	kind: PersistedSchedulerTaskOutcomeKind;
+	documents: number;
+	requests: number;
+};
+
 export type PersistedSchedulerTaskRunnerResult = {
 	scanned: number;
 	claimLost: number;
@@ -54,6 +90,18 @@ export type PersistedSchedulerTaskRunnerResult = {
 	 * demand-driven caller must release rather than report the requirement fetched.
 	 */
 	ledgerRebuilt: boolean;
+	/**
+	 * Per-task verdicts, one per SCANNED task, in drain order.
+	 *
+	 * A drain tick runs every runnable task, so the scalar counters above describe the TICK,
+	 * not any one declarer's work. A caller that waited on a specific task (every require-plane
+	 * browse/refresh branch) must read its verdict from here — reading `failed > 0` made an
+	 * unrelated task's failure reject a browse that had actually succeeded.
+	 *
+	 * A task the tick never scanned has no entry: it was not runnable, which for a
+	 * just-seeded task means another owner already holds it.
+	 */
+	tasks: PersistedSchedulerTaskOutcome[];
 };
 
 /** A drain tick that did nothing. */
@@ -70,6 +118,7 @@ export function emptyPersistedSchedulerTaskRunnerResult(): PersistedSchedulerTas
 		totalDocuments: 0,
 		totalRequests: 0,
 		ledgerRebuilt: false,
+		tasks: [],
 	};
 }
 
@@ -171,10 +220,15 @@ function failedState(
 
 function recordFetchResult(
 	result: PersistedSchedulerTaskRunnerResult,
-	fetchResult: FetchTaskResult
+	fetchResult: FetchTaskResult,
+	taskTotals: { documents: number; requests: number }
 ): void {
 	result.totalDocuments += fetchResult.documentCount;
 	result.totalRequests += fetchResult.requestCount;
+	// The same numbers, attributed to the task that actually fetched them, so a declarer
+	// reports ITS OWN transfer rather than the whole tick's.
+	taskTotals.documents += fetchResult.documentCount;
+	taskTotals.requests += fetchResult.requestCount;
 }
 
 function maxRequestsForTask(
@@ -239,6 +293,15 @@ export async function runPersistedSchedulerTasks(
 		const claimed = await input.repository.claim(runnableState, claimedState);
 		if (!claimed) {
 			result.claimLost += 1;
+			result.tasks.push({
+				taskId: runnableState.taskId,
+				requirementId: runnableState.requirementId,
+				collection: runnableState.collection,
+				queryKey: runnableState.queryKey,
+				kind: 'claim-lost',
+				documents: 0,
+				requests: 0,
+			});
 			continue;
 		}
 		activeState = claimedState;
@@ -247,6 +310,18 @@ export async function runPersistedSchedulerTasks(
 		const maxRequests = maxRequestsForTask(input, task, runnableState);
 		let taskCompleted = false;
 		let requests = 0;
+		const taskTotals = { documents: 0, requests: 0 };
+		const recordOutcome = (kind: PersistedSchedulerTaskOutcomeKind): void => {
+			result.tasks.push({
+				taskId: runnableState.taskId,
+				requirementId: runnableState.requirementId,
+				collection: runnableState.collection,
+				queryKey: runnableState.queryKey,
+				kind,
+				documents: taskTotals.documents,
+				requests: taskTotals.requests,
+			});
+		};
 
 		const executeTask = async (): Promise<void> => {
 			while (!taskCompleted) {
@@ -255,7 +330,7 @@ export async function runPersistedSchedulerTasks(
 				const fetchResult = input.signal
 					? await input.fetcher(task, { signal: input.signal })
 					: await input.fetcher(task);
-				recordFetchResult(result, fetchResult);
+				recordFetchResult(result, fetchResult, taskTotals);
 				try {
 					input.onProgress?.({
 						collection: task.collection,
@@ -297,13 +372,20 @@ export async function runPersistedSchedulerTasks(
 			);
 			if (!failed) {
 				result.failureLost += 1;
+				recordOutcome('failure-lost');
 				continue;
 			}
 			result.failed += 1;
+			recordOutcome('failed');
 			continue;
 		}
 
-		if (!taskCompleted) continue;
+		// Reachable only via the lease-renewal break above: the walk stopped short without
+		// throwing. Previously this exited with NO counter and no trace at all.
+		if (!taskCompleted) {
+			recordOutcome('renewal-lost');
+			continue;
+		}
 
 		const completedAtMs = currentTime(input);
 		const completionOutcome = await input.repository.completeOrRequeue(
@@ -313,12 +395,14 @@ export async function runPersistedSchedulerTasks(
 		);
 		if (completionOutcome === 'claim-lost') {
 			result.completionLost += 1;
+			recordOutcome('completion-lost');
 			continue;
 		}
 		// Both 'completed' and 'requeued' successfully handled the task; a requeue means a
 		// change arrived mid-flight, so a fresh run was queued to catch it (#318).
 		result.succeeded += 1;
 		if (completionOutcome === 'requeued') result.coalescedReruns += 1;
+		recordOutcome('succeeded');
 	}
 
 	return result;

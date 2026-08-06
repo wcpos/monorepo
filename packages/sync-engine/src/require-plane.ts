@@ -43,6 +43,7 @@ import {
 	type CustomerBrowseWindowOrderby,
 	customerBrowseWindowQueryKeyFromDimensions,
 	emptyPersistedSchedulerTaskRunnerResult,
+	emptySeedPersistedSchedulerTasksResult,
 	type FetchTask,
 	laneKeyFor,
 	ORDER_SCHEDULER_LEASE_FOR_MS,
@@ -50,6 +51,7 @@ import {
 	parseCustomerBrowseWindowDescriptor,
 	parseOrderBrowserSchedulerDescriptor,
 	parseProductBrowseWindowDescriptor,
+	type PersistedSchedulerTaskOutcomeKind,
 	type PersistedSchedulerTaskRunnerResult,
 	type ProductBrowseWindowOrderby,
 	productBrowseWindowQueryKeyFromDimensions,
@@ -59,6 +61,7 @@ import {
 	seedCustomerBrowseWindowSchedulerTask,
 	seedOrderFilterSchedulerTask,
 	seedOrderSchedulerTasks,
+	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
 	seedTargetedOrderSchedulerTask,
@@ -252,9 +255,83 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		COLLECTION_DESCRIPTORS.find((d) => d.collection === collection);
 
 	const emptyDrainResult = emptyPersistedSchedulerTaskRunnerResult;
+	const emptySeedResult = emptySeedPersistedSchedulerTasksResult;
 
-	const drainLostOutcomeCount = (result: PersistedSchedulerTaskRunnerResult): number =>
-		result.claimLost + result.completionLost + result.failureLost + result.renewalLost;
+	/**
+	 * Task outcomes that mean "another owner took this row mid-flight" rather than "this work
+	 * failed". They release the declarer instead of rejecting it.
+	 */
+	const LOST_TASK_OUTCOMES = new Set<PersistedSchedulerTaskOutcomeKind>([
+		'claim-lost',
+		'completion-lost',
+		'failure-lost',
+		'renewal-lost',
+	]);
+
+	/**
+	 * Turn a drain tick into THIS requirement's outcome.
+	 *
+	 * A drain runs every runnable task, so its scalar counters describe the tick. Reading them
+	 * as if they described one declarer's work meant an unrelated collection's failure rejected
+	 * a browse that had actually succeeded, and an unrelated lost claim reported it released.
+	 * The seed tells us which task ids are ours; the drain now reports per task; we read only
+	 * our own rows.
+	 *
+	 * `documents`/`requests` are likewise summed over OUR tasks, so a requirement no longer
+	 * reports another lane's transfer as its own.
+	 */
+	const requirementDrainOutcome = (input: {
+		drain: PersistedSchedulerTaskRunnerResult;
+		seed: SeedPersistedSchedulerTasksResult;
+		fetchedReason: string;
+		freshReason: string;
+	}): CoverageOutcome => {
+		const owned = new Set(input.seed.taskIds);
+		const mine = input.drain.tasks.filter((outcome) => owned.has(outcome.taskId));
+		const failed = mine.filter((outcome) => outcome.kind === 'failed');
+		if (failed.length > 0) {
+			throw new Error(`require: scheduler drain failed ${failed.length} task(s)`);
+		}
+		const documents = mine.reduce((total, outcome) => total + outcome.documents, 0);
+		const requests = mine.reduce((total, outcome) => total + outcome.requests, 0);
+		if (mine.some((outcome) => LOST_TASK_OUTCOMES.has(outcome.kind))) {
+			return {
+				action: 'released',
+				missingRecordIds: [],
+				reason: 'claim lost to another owner',
+				documents,
+				requests,
+			};
+		}
+		if (mine.length === 0) {
+			// Our task was never scanned, so it was not RUNNABLE this tick. That covers several
+			// states — completed inside its seed's dedupe window, failed and still inside its
+			// retry backoff, claimed by another owner between our seed and our drain, or (the
+			// pathological case) a persisted row no registered fetcher supports.
+			//
+			// All of them mean the same thing to the declarer: nothing of ours ran, so serve what
+			// is already local. `released` would be wrong here — a UI binding re-declares on
+			// every render, and a row that is never runnable (a stale unsupported task, or one
+			// parked in a long backoff) would keep answering "not met" forever and hold readiness
+			// barriers open. The old aggregate code effectively served local too; it just
+			// mislabelled it `fetched` and claimed a fetch that never happened.
+			return {
+				action: 'serve-local',
+				missingRecordIds: [],
+				reason:
+					input.seed.skippedCompleted > 0 ? input.freshReason : 'no task of ours ran this tick',
+				documents: 0,
+				requests: 0,
+			};
+		}
+		return {
+			action: 'fetched',
+			missingRecordIds: [],
+			reason: input.fetchedReason,
+			documents,
+			requests,
+		};
+	};
 
 	const releasedOutcome = (): CoverageOutcome => ({
 		action: 'released',
@@ -335,6 +412,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					);
 				}
 				let drainResult = emptyDrainResult();
+				let seedOutcome = emptySeedResult();
 				let skippedActive = false;
 				const applied = await bound.guardWrite(async () => {
 					const seedResult = await seedOrderFilterSchedulerTask({
@@ -342,6 +420,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
 						database: database,
 					});
+					seedOutcome = seedResult;
 					if (seedResult.skippedActive > 0) {
 						skippedActive = true;
 						return;
@@ -380,26 +459,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						missingRecordIds: [],
 						reason: 'local sync bookkeeping was rebuilt mid-drain',
 					};
-				if (drainResult.failed > 0)
-					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
-				const lost = drainLostOutcomeCount(drainResult);
-				// Claim loss means another owner is completing the durable task. Like
-				// skippedActive, it releases this caller rather than reporting failure.
-				if (lost > 0)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'claim lost to another owner',
-						documents: drainResult.totalDocuments,
-						requests: drainResult.totalRequests,
-					};
-				return {
-					action: 'fetched',
-					missingRecordIds: [],
-					reason: `drained order query ${decision.descriptor.queryKey}`,
-					documents: drainResult.totalDocuments,
-					requests: drainResult.totalRequests,
-				};
+				return requirementDrainOutcome({
+					drain: drainResult,
+					seed: seedOutcome,
+					fetchedReason: `drained order query ${decision.descriptor.queryKey}`,
+					freshReason: 'order query refreshed within the dedupe window',
+				});
 			}
 
 			if (item.requirement.collection === 'products' && item.requirement.kind === 'query') {
@@ -417,6 +482,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					);
 				}
 				let drainResult = emptyDrainResult();
+				let seedOutcome = emptySeedResult();
 				let skippedActive = false;
 				const applied = await bound.guardWrite(async () => {
 					const seedResult = await seedProductBrowseWindowSchedulerTask({
@@ -429,6 +495,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
 						database: database,
 					});
+					seedOutcome = seedResult;
 					if (seedResult.skippedActive > 0) {
 						skippedActive = true;
 						return;
@@ -467,24 +534,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						missingRecordIds: [],
 						reason: 'local sync bookkeeping was rebuilt mid-drain',
 					};
-				if (drainResult.failed > 0)
-					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
-				const lost = drainLostOutcomeCount(drainResult);
-				if (lost > 0)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'claim lost to another owner',
-						documents: drainResult.totalDocuments,
-						requests: drainResult.totalRequests,
-					};
-				return {
-					action: 'fetched',
-					missingRecordIds: [],
-					reason: `drained product browse window ${item.requirement.queryKey}`,
-					documents: drainResult.totalDocuments,
-					requests: drainResult.totalRequests,
-				};
+				return requirementDrainOutcome({
+					drain: drainResult,
+					seed: seedOutcome,
+					fetchedReason: `drained product browse window ${item.requirement.queryKey}`,
+					freshReason: 'product browse window refreshed within the dedupe window',
+				});
 			}
 
 			if (item.requirement.collection === 'customers' && item.requirement.kind === 'query') {
@@ -500,6 +555,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					);
 				}
 				let drainResult = emptyDrainResult();
+				let seedOutcome = emptySeedResult();
 				let skippedActive = false;
 				const applied = await bound.guardWrite(async () => {
 					const seedResult = await seedCustomerBrowseWindowSchedulerTask({
@@ -508,6 +564,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
 						database: database,
 					});
+					seedOutcome = seedResult;
 					if (seedResult.skippedActive > 0) {
 						skippedActive = true;
 						return;
@@ -519,6 +576,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						ownerId: 'require-plane',
 						fetcher: boundFetch as never,
 						diagnostics: deps.diagnostics,
+						// Work ISOLATION, orthogonal to outcome purity: the customers browse drains
+						// only its own row, so a foreground grid never drags an unrelated lane onto
+						// the wire. Per-task outcomes below make the VERDICT correct for every lane;
+						// this keeps the customers path from doing other lanes' work at all. The
+						// other five sites still drain opportunistically — generalizing this is a
+						// separate throughput decision, not a correctness one.
 						taskId: `${browseQueryKey}:windowed`,
 						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						signal: item.abortController.signal,
@@ -541,29 +604,18 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						missingRecordIds: [],
 						reason: 'local sync bookkeeping was rebuilt mid-drain',
 					};
-				if (drainResult.failed > 0)
-					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
-				const lostCustomerClaims = drainLostOutcomeCount(drainResult);
-				if (lostCustomerClaims > 0)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'claim lost to another owner',
-						documents: drainResult.totalDocuments,
-						requests: drainResult.totalRequests,
-					};
-				return {
-					action: 'fetched',
-					missingRecordIds: [],
-					reason: `drained customer browse window ${item.requirement.queryKey}`,
-					documents: drainResult.totalDocuments,
-					requests: drainResult.totalRequests,
-				};
+				return requirementDrainOutcome({
+					drain: drainResult,
+					seed: seedOutcome,
+					fetchedReason: `drained customer browse window ${item.requirement.queryKey}`,
+					freshReason: 'customer browse window refreshed within the dedupe window',
+				});
 			}
 
 			if (item.requirement.collection === 'orders' && item.requirement.kind === 'refresh') {
 				const refreshRequirement = item.requirement;
 				let drainResult = emptyDrainResult();
+				let seedOutcome = emptySeedResult();
 				let skippedActive = false;
 				const applied = await bound.guardWrite(async () => {
 					const seedResult = await seedOrderSchedulerTasks({
@@ -572,6 +624,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
 						database: database,
 					});
+					seedOutcome = seedResult;
 					if (seedResult.skippedActive > 0) {
 						skippedActive = true;
 						return;
@@ -605,26 +658,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						missingRecordIds: [],
 						reason: 'local sync bookkeeping was rebuilt mid-drain',
 					};
-				if (drainResult.failed > 0)
-					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
-				const lost = drainLostOutcomeCount(drainResult);
-				// Claim loss means another owner is completing the durable task. Like
-				// skippedActive, it releases this caller rather than reporting failure.
-				if (lost > 0)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'claim lost to another owner',
-						documents: drainResult.totalDocuments,
-						requests: drainResult.totalRequests,
-					};
-				return {
-					action: 'fetched',
-					missingRecordIds: [],
-					reason: 'drained full order refresh',
-					documents: drainResult.totalDocuments,
-					requests: drainResult.totalRequests,
-				};
+				return requirementDrainOutcome({
+					drain: drainResult,
+					seed: seedOutcome,
+					fetchedReason: 'drained full order refresh',
+					freshReason: 'order refresh completed within the dedupe window',
+				});
 			}
 
 			// On-demand reference pull (#952). Categories/tags/brands/coupons are no longer
@@ -634,6 +673,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// pull, so repeated opens cost nothing until the window lapses.
 			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
 				let drainResult = emptyDrainResult();
+				let seedOutcome = emptySeedResult();
 				let skippedActive = false;
 				let deduped = false;
 				const applied = await bound.guardWrite(async () => {
@@ -644,6 +684,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						database: database,
 						...(nowMs !== undefined ? { nowMs } : {}),
 					});
+					seedOutcome = seedResult;
 					// `skippedActive` and `skippedCompleted` are NOT the same answer. An active
 					// lane means another owner is mid-pull, which releases this caller the way the
 					// order/product branches above do. Only a completed lane inside the dedupe
@@ -694,26 +735,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						missingRecordIds: [],
 						reason: 'local sync bookkeeping was rebuilt mid-drain',
 					};
-				if (drainResult.failed > 0)
-					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
-				const lostReferenceClaims = drainLostOutcomeCount(drainResult);
-				// Claim loss means another owner is completing the durable task. Like
-				// skippedActive, it releases this caller rather than reporting failure.
-				if (lostReferenceClaims > 0)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'claim lost to another owner',
-						documents: drainResult.totalDocuments,
-						requests: drainResult.totalRequests,
-					};
-				return {
-					action: 'fetched',
-					missingRecordIds: [],
-					reason: `drained ${descriptor.collection} refresh`,
-					documents: drainResult.totalDocuments,
-					requests: drainResult.totalRequests,
-				};
+				return requirementDrainOutcome({
+					drain: drainResult,
+					seed: seedOutcome,
+					fetchedReason: `drained ${descriptor.collection} refresh`,
+					freshReason: `${descriptor.collection} refreshed within the dedupe window`,
+				});
 			}
 
 			if (item.requirement.kind === 'search') {
@@ -863,6 +890,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							database: database,
 						});
 						skippedActive = seedResult.skippedActive;
+						const ownedTaskIds = new Set(seedResult.taskIds);
 						const drainResult = await runEngineSchedulerDrain({
 							db: database as unknown as SchedulerDrainDatabase,
 							coverage,
@@ -875,7 +903,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 							nowMs,
 							onProgress: progressObserver(item.requirement),
 						});
-						failed = drainResult.failed;
+						// Only OUR targeted tasks count: an unrelated collection failing in the same
+						// tick must not abort a pull whose own tasks are fine.
+						failed = drainResult.tasks.filter(
+							(outcome) => ownedTaskIds.has(outcome.taskId) && outcome.kind === 'failed'
+						).length;
 					});
 					if (applied === 'dropped') {
 						throw new Error('require: scope moved mid-pull — writes dropped');
