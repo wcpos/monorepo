@@ -38,7 +38,6 @@ let currentOrder: Record<string, unknown> = { uuid: 'order-a', ...COMPUTED };
 
 const engine = {
 	status: () => ({ activeScopeId: 'scope-1' }),
-	statusChanges: () => () => undefined,
 	events: (callback: (event: EngineEvent) => void) => {
 		listeners.add(callback);
 		return () => listeners.delete(callback);

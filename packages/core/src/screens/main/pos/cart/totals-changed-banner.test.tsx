@@ -14,7 +14,6 @@ import { CartTotalsChangedBanner, TotalsChangedBanner } from './totals-changed-b
 type EngineEvent = Record<string, unknown> & { type: string };
 
 const listeners = new Set<(event: EngineEvent) => void>();
-const statusListeners = new Set<(status: { activeScopeId: string }) => void>();
 let activeScopeId = 'scope-1';
 let currentOrderUuid: string | undefined = 'order-a';
 
@@ -24,22 +23,17 @@ function emit(event: EngineEvent) {
 	});
 }
 
-/** Move the ACTIVE SCOPE the way a same-site store switch does. */
+/**
+ * Move the ACTIVE SCOPE the way a same-site store switch does: the engine
+ * INSTANCE is kept and the move is announced as a `scope-switched` event.
+ */
 function switchScope(next: string) {
 	activeScopeId = next;
-	act(() => {
-		for (const listener of [...statusListeners]) listener({ activeScopeId: next });
-	});
+	emit({ type: 'scope-switched', scopeId: next, from: 'scope-1' });
 }
 
-// Mirrors the real engine: a SAME-SITE store switch keeps this instance and only
-// changes the active scope, which is why the provider must key on the scope.
 const engine = {
 	status: () => ({ activeScopeId }),
-	statusChanges: (callback: (status: { activeScopeId: string }) => void) => {
-		statusListeners.add(callback);
-		return () => statusListeners.delete(callback);
-	},
 	events: (callback: (event: EngineEvent) => void) => {
 		listeners.add(callback);
 		return () => listeners.delete(callback);
@@ -109,7 +103,6 @@ function renderBanner() {
 
 beforeEach(() => {
 	listeners.clear();
-	statusListeners.clear();
 	activeScopeId = 'scope-1';
 	currentOrderUuid = 'order-a';
 });
@@ -268,8 +261,8 @@ describe('lifecycle', () => {
 
 	it('drops everything on a store switch — the orders belong to the previous till', () => {
 		// A SAME-SITE store switch keeps the engine instance and only moves the
-		// scope, so keying on engine identity would carry one store's alerts into
-		// the next.
+		// scope, so engine identity alone would carry one till's alerts into the
+		// next. The engine announces the move; the store clears on it.
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
@@ -279,9 +272,9 @@ describe('lifecycle', () => {
 	});
 
 	it('does not resurrect them when the cashier switches BACK', () => {
-		// Merely hiding a foreign scope's entries behind a read-time filter leaves
-		// them in state: store A → B → A and the dead banner walks again. The
-		// scope key has to throw the state away, not mask it.
+		// Masking a foreign scope's entries behind a read-time check leaves them in
+		// state: store A → B → A and the dead banner walks again. Clearing on the
+		// switch throws them away for real.
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 
@@ -289,6 +282,32 @@ describe('lifecycle', () => {
 		switchScope('scope-1');
 
 		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
+	});
+
+	it('keeps the POS mounted across a scope switch — the store is not a remount boundary', () => {
+		// A `key` on this provider would tear down every child, including the cart
+		// and an open checkout modal, the moment the engine's scope id resolves
+		// from null. That broke a checkout E2E; the store must reset itself
+		// WITHOUT taking the screen with it.
+		let mounts = 0;
+		function MountCounter() {
+			React.useEffect(() => {
+				mounts += 1;
+			}, []);
+			return null;
+		}
+		render(
+			<OrderMoneyDivergenceProvider>
+				<CartTotalsChangedBanner />
+				<MountCounter />
+			</OrderMoneyDivergenceProvider>
+		);
+		expect(mounts).toBe(1);
+
+		switchScope('scope-2');
+		switchScope('scope-1');
+
+		expect(mounts).toBe(1);
 	});
 
 	it('unsubscribes on unmount so a drain tick cannot set state on a dead tree', () => {
