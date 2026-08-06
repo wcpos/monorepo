@@ -933,6 +933,107 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 	});
 
+	/**
+	 * REGRESSION — the tie-heavy catalogue (#948 review finding, HIGH).
+	 *
+	 * Every `menu_order` is 0, which the fetcher's own comment calls "the common case". The
+	 * phase-2 tiebreak walk then scans far past the window and keeps the LOWEST ids it
+	 * finds, so a filled lane is "the N lowest ids in wire[0, N+1900)" — NOT wire[0, N).
+	 * Resuming positionally from its length re-reads rows the prefix already holds, the
+	 * merge dedupes them, and the lane comes back SHORT.
+	 *
+	 * The bug this pins: recording that short lane as COMPLETE made the footer report (e.g.)
+	 * 215 for a 300-row window and let the serve-local gate answer from it, so the window
+	 * stopped growing — #948's silent dead-end, reintroduced. It must report INCOMPLETE so
+	 * the next pass re-walks in full.
+	 */
+	it('never claims a window it did not fill when the tiebreak walk substitutes rows', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		// Every product ties on menu_order, and the server hands them back id-DESC, so the
+		// correct window is only reachable by substitution from later pages.
+		const products = Array.from({ length: 2_000 }, (_, index) => ({
+			id: 2_000 - index,
+			menu_order: 0,
+		}));
+		const fetcher = catalogServer(products, []);
+		// A predecessor lane holding ids the resumed pages will re-deliver.
+		const coverageRepository = coverageWithLanes({
+			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		const [recorded] = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
+			{ records: { id: string }[]; complete: boolean },
+		];
+		// The substitution genuinely bites here: the tiebreak walk re-finds the very ids the
+		// prefix already held, so the merge yields 200 unique for a 300-row window. Asserted
+		// explicitly so this test cannot quietly go vacuous if the walk changes shape.
+		expect(recorded.records.length).toBeLessThan(300);
+		// THE FIX: a short lane must be INCOMPLETE. Marking it complete is what froze the
+		// window and made the footer report the shortfall as the total.
+		expect(recorded.complete).toBe(false);
+	});
+
+	/**
+	 * REGRESSION — a ragged lane must never become a wire offset. 215 ids for a 300-row
+	 * window is a dedupe/substitution shortfall, not a clean page stop; offsetting from it
+	 * misaligns every later step. The gate refuses it and re-walks from page 1.
+	 */
+	it('re-walks from page 1 rather than offsetting from a ragged lane', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 2_000 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const pagesSeen: number[] = [];
+		const catalog = catalogServer(products, []);
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			pagesSeen.push(Number(new URL(String(request)).searchParams.get('page')));
+			return catalog(request);
+		});
+		const coverageRepository = coverageWithLanes({
+			// 215 of 300 — not page-aligned at 100/page, so not a usable offset.
+			'products:browse-window:limit=300': { complete: false, ids: wooProductIds(1, 215) },
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		expect(pagesSeen[0]).toBe(1);
+	});
+
 	it('resolves the id tiebreak across a page seam when the dial splits the window', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),

@@ -1414,6 +1414,66 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(result).toMatchObject({ documentCount: 0, requestCount: 0 });
 	});
 
+	/**
+	 * REGRESSION — order churn between two growth steps (#957 review finding, HIGH).
+	 *
+	 * The lane holds 200 ids. One order is created, so every later record shifts down a wire
+	 * slot and the resume page re-delivers one row the prefix already has. The merge dedupes
+	 * it and the lane comes back with 299 ids for a 300-row window.
+	 *
+	 * The bug this pins: 299 was then treated as a wire offset on the next pass
+	 * (299 % 100 = 99, so it skipped 99 rows of page 4) and ~99 orders were never fetched at
+	 * all — the window froze with a hole in it. The lane must report INCOMPLETE, and the
+	 * ragged count must never become an offset.
+	 */
+	it('does not punch a hole in the window when an order is created between growth steps', async () => {
+		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const coverageRepository = coverageWithLanes({
+			'orders:browser:status=processing:search=:limit=200': {
+				complete: false,
+				ids: Array.from({ length: 200 }, (_, index) => `woo-order:${1_000 - index}`),
+			},
+		});
+		// The server list has shifted by one: O_new sits above the 200 already covered, so
+		// wire positions 201..300 are O800..O701 shifted, re-delivering woo-order:801.
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			const page = Number(new URL(String(request)).searchParams.get('page'));
+			const top = 1_001 - (page - 1) * 100;
+			return response(orderPage(top, 100));
+		});
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			nowMs: () => 7_500,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+
+		await schedulerFetcher(
+			orderTask({
+				id: 'orders:browser:processing-300:windowed',
+				queryKey: 'orders:browser:status=processing:search=:limit=300',
+				limit: 300,
+				mode: 'windowed',
+			})
+		);
+
+		const [recorded] = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
+			{ records: { id: string }[]; complete: boolean },
+		];
+		// The seam duplicate is deduped, so the window is short of 300 …
+		expect(recorded.records.length).toBeLessThan(300);
+		// … and it must therefore be INCOMPLETE, which routes the next pass to a full
+		// re-walk instead of offsetting from a count that no longer maps to a wire position.
+		expect(recorded.complete).toBe(false);
+		// No duplicate ids survived into the lane.
+		expect(new Set(recorded.records.map(({ id }) => id)).size).toBe(recorded.records.length);
+	});
+
 	it('records browser order query coverage across fetched Woo REST pages', async () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),

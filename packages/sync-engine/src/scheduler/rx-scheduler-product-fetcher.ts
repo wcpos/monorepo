@@ -515,12 +515,22 @@ async function fetchProductBrowseWindow(
 	// delta — not just what travelled the wire. The grid's footer total reads
 	// `expectedRecordIds.length` for exactly this key (projectTotal), so a delta-only lane
 	// would make a grown window report the size of its last growth step.
+	const laneRecordIds = mergeBrowseWindowRecordIds(continuation.recordIds, deltaRecordIds);
+	// NEVER claim a window you did not actually fill. The phase-2 tiebreak walk substitutes
+	// rows from later wire pages, so a resumed delta can re-deliver records the prefix
+	// already holds; the merge dedupes them and this lane comes back SHORT of its window.
+	// Recording that as complete would make the footer report (say) 215 for a 300-row
+	// window AND let the serve-local gate answer from it — the window would appear to stop
+	// growing. Reporting it incomplete instead makes the next pass re-walk in full, which
+	// is correct and self-correcting (the short count is also not page-aligned, so the
+	// continuation gate refuses to offset from it).
+	const filledTheWindow = serverExhausted || laneRecordIds.length >= descriptor.limit;
 	await recordCoverage(
 		'products',
 		input,
 		task,
-		mergeBrowseWindowRecordIds(continuation.recordIds, deltaRecordIds),
-		brandsHonored && !truncatedByPageBudget
+		laneRecordIds,
+		brandsHonored && !truncatedByPageBudget && filledTheWindow
 	);
 
 	return { taskId: task.id, documentCount: documents.length, requestCount, completed: true };
@@ -612,6 +622,7 @@ export function createProductsSchedulerFetcher(
 				predecessorQueryKey: productBrowseWindowPredecessorQueryKey(descriptor),
 				predecessorLimit: descriptor.limit - PRODUCT_BROWSE_WINDOW_STEP,
 				limit,
+				pageSize,
 				nowMs: input.nowMs?.() ?? Date.now(),
 				readLane: input.coverageRepository?.readLocalLaneCoverage,
 				forceRefresh: input.refreshBrowseWindows,

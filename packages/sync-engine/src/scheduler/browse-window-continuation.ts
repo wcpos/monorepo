@@ -108,15 +108,44 @@ export const NO_BROWSE_WINDOW_CONTINUATION: BrowseWindowContinuation = {
  *     still expires on its own schedule and the window does get re-walked periodically.
  *     Without this, the seeder's 30s completed-dedupe would re-fetch the window's tail
  *     twice a minute forever.
- *  2. **This window's own lane, fresh but short** — a previous drain was cut off by
- *     {@link BROWSE_WINDOW_MAX_PAGES_PER_DRAIN}. Resume where it stopped.
- *  3. **The predecessor window's lane (one growth step smaller), fresh and settled** —
- *     the ordinary scroll case. Resume at its length; the delta is one step's worth.
+ *  2. **This window's own lane, fresh but short AND page-aligned** — a previous drain was
+ *     cut off by {@link BROWSE_WINDOW_MAX_PAGES_PER_DRAIN}. Resume where it stopped.
+ *  3. **The predecessor window's lane, fresh and EXACTLY filled** — the ordinary scroll
+ *     case. Resume at its length; the delta is one step's worth.
  *
- * The `complete` flag alone is NOT the test, because the two lanes mean different things
- * by it: a products window records complete for any honoured walk, while an orders window
- * records complete only when the server ran out of matching orders. "Filled to its own
- * limit" is the property that actually makes a prefix reusable, and it holds for both.
+ * ## Why "exactly filled" and "page-aligned", and not just "complete"
+ *
+ * A lane's `expectedRecordIds` is a DEDUPED SET OF IDS. The walk resumes at a WIRE RECORD
+ * OFFSET. Those are only the same number when the prefix is exactly the first N records of
+ * the wire listing — and there are two ways they silently diverge:
+ *
+ *  - **Products' phase-2 tiebreak walk SUBSTITUTES.** Woo REST cannot express the UI's
+ *    `id ASC` tiebreak alongside `menu_order`, so after filling the window the fetcher
+ *    scans further pages and keeps the lowest ids it finds. On the common catalogue where
+ *    every `menu_order` is 0, the resulting window is "the N lowest ids in wire[0, N+1900)"
+ *    — emphatically NOT wire[0, N). Resuming positionally from its length then re-reads
+ *    rows the prefix already holds; the merge dedupes them away, the lane comes back SHORT,
+ *    and the next step's offset is misaligned by exactly that shortfall. Left unguarded the
+ *    window converges to "the lowest ~N ids" and stops growing — reintroducing #948's
+ *    silent dead-end in a new form.
+ *  - **Orders churn.** One order created between two growth steps shifts every later record
+ *    down a wire slot, so the resume page re-delivers one row the prefix already has. Same
+ *    dedupe-shortfall, and the compounding misalignment then SKIPS a whole page of orders.
+ *
+ * Both are caught by the same two-part gate, because a shortfall is almost never a clean
+ * multiple of the page size:
+ *
+ *  - the prefix must be **exactly** the window it claims to be (`held === limit`), so a
+ *    substitution- or dedupe-shortened lane is never reused as an offset; and
+ *  - the offset must be **page-aligned** for the CURRENT dial (`covered % pageSize === 0`),
+ *    so a resume never needs a partial-page skip and a ragged count falls back to a full,
+ *    always-correct walk.
+ *
+ * The cost of the fallback is one full re-walk of that window, bounded by the per-drain
+ * page budget. On a tie-heavy catalogue the delta path therefore degrades to full walks —
+ * correct and converging, just not optimised. Making it optimal needs a content-addressed
+ * cursor (`menu_order >= X AND id > Y`), which wc/v3 cannot express for products; see the
+ * PR body.
  *
  * `forceRefresh` (an explicit user-driven sync) skips all three: a refresh that resumed
  * from its own prefix would never see anything new.
@@ -127,6 +156,8 @@ export async function readBrowseWindowContinuation(input: {
 	predecessorQueryKey: string | null;
 	predecessorLimit: number;
 	limit: number;
+	/** Current wire page size — the offset must be a whole number of these. */
+	pageSize: number;
 	nowMs: number;
 	readLane?: BrowseWindowLaneReader | undefined;
 	forceRefresh?: boolean | undefined;
@@ -144,9 +175,12 @@ export async function readBrowseWindowContinuation(input: {
 				sourceQueryKey: input.ownQueryKey,
 			};
 		}
-		if (held > 0) {
+		// A budget truncation always stops on a whole page; a dedupe/substitution shortfall
+		// almost never does. Only the former is a usable wire offset.
+		if (held > 0 && isUsableOffset(held, input.pageSize)) {
 			return continuationFrom(own.expectedRecordIds!, input.limit, input.ownQueryKey);
 		}
+		return NO_BROWSE_WINDOW_CONTINUATION;
 	}
 	if (!input.predecessorQueryKey) return NO_BROWSE_WINDOW_CONTINUATION;
 
@@ -157,12 +191,22 @@ export async function readBrowseWindowContinuation(input: {
 	);
 	if (!predecessor?.fresh) return NO_BROWSE_WINDOW_CONTINUATION;
 	const held = predecessor.expectedRecordIds?.length ?? 0;
-	if (!predecessor.complete && held < input.predecessorLimit) return NO_BROWSE_WINDOW_CONTINUATION;
+	// EXACT fill only. `complete` is not a substitute: a products lane records complete for
+	// any honoured walk (including a substituted, short one), and a lane whose catalogue was
+	// exhausted below its limit has no further rows to offset into anyway.
+	if (held !== input.predecessorLimit || !isUsableOffset(held, input.pageSize)) {
+		return NO_BROWSE_WINDOW_CONTINUATION;
+	}
 	return continuationFrom(
 		predecessor.expectedRecordIds ?? [],
 		input.limit,
 		input.predecessorQueryKey
 	);
+}
+
+/** Whether a covered count can be trusted as a wire record offset at this page size. */
+function isUsableOffset(covered: number, pageSize: number): boolean {
+	return pageSize > 0 && covered % pageSize === 0;
 }
 
 function continuationFrom(

@@ -850,6 +850,14 @@ async function fetchBrowserOrderQuery(
 	// key when no census total is fresh, so a delta-only lane would make a grown window
 	// report the size of its last growth step.
 	const laneRecordIds = mergeBrowseWindowRecordIds(continuation.recordIds, fetchedDocumentIds);
+	// A WINDOWED merge that came back SHORT means the resume page re-delivered rows the
+	// prefix already held — an order was created or trashed between two growth steps, so the
+	// wire listing shifted under the offset. The short count is not page-aligned, so the
+	// continuation gate refuses to offset from it and the next pass re-walks in full;
+	// recording it incomplete is what routes it there instead of freezing the window with a
+	// hole in it. The ranged branch below has its own completion contract (#954) and is
+	// unaffected.
+	const filledTheWindow = exhausted || laneRecordIds.length >= windowLimit;
 
 	if (descriptor.complete && descriptor.search === '') {
 		await recordRangedOrderFetchCoverage(input, task, {
@@ -867,11 +875,12 @@ async function fetchBrowserOrderQuery(
 			publishedResume,
 		});
 	} else if (descriptor.search === '') {
+		// A superset from a server that ignored the POS dimensions is still worth keeping
 		await recordOrderFetchCoverage(
 			input,
 			task,
 			laneRecordIds,
-			exhausted && dimensionsHonored && !truncatedByPageBudget
+			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow
 		);
 	} else {
 		await recordOrderFetchedRecords(input, task, laneRecordIds);
@@ -1001,6 +1010,7 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 						predecessorQueryKey: predecessor?.queryKey ?? null,
 						predecessorLimit: predecessor?.limit ?? 0,
 						limit: browserDescriptor.limit!,
+						pageSize: browserDescriptor.perPage,
 						nowMs: input.nowMs?.() ?? Date.now(),
 						readLane: input.coverageRepository?.readLocalLaneCoverage,
 						forceRefresh: input.refreshBrowseWindows,

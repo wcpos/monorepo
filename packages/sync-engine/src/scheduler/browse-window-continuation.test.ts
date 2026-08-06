@@ -33,6 +33,7 @@ const continuationFor = (
 		predecessorQueryKey: 'products:browse-window:limit=200',
 		predecessorLimit: 200,
 		limit: 300,
+		pageSize: 100,
 		nowMs: 1_000,
 		readLane: laneReader(lanes),
 		...overrides,
@@ -76,6 +77,16 @@ describe('readBrowseWindowContinuation', () => {
 		).toEqual(NO_BROWSE_WINDOW_CONTINUATION);
 	});
 
+	// A predecessor whose catalogue ran out below its limit has no further rows to offset
+	// into, so there is nothing to continue — and its count is not the window it claims.
+	it('ignores a complete predecessor that the server exhausted below its limit', async () => {
+		expect(
+			await continuationFor({
+				'products:browse-window:limit=200': { complete: true, ids: ids(1, 40) },
+			})
+		).toEqual(NO_BROWSE_WINDOW_CONTINUATION);
+	});
+
 	it('ignores a stale predecessor, so the window is periodically re-walked in full', async () => {
 		expect(
 			await continuationFor({
@@ -96,11 +107,50 @@ describe('readBrowseWindowContinuation', () => {
 
 	// A drain cut short by the page budget leaves a short lane; the next pass continues it.
 	it('resumes its own short lane left by a page-budget truncation', async () => {
+		// 150 is a whole number of 50-row pages, which is what a budget truncation leaves.
+		expect(
+			await continuationFor(
+				{ 'products:browse-window:limit=300': { complete: false, ids: ids(1, 150) } },
+				{ pageSize: 50 }
+			)
+		).toMatchObject({ covered: 150, sourceQueryKey: 'products:browse-window:limit=300' });
+	});
+
+	/**
+	 * THE DEFECT THIS GATE EXISTS FOR. `expectedRecordIds` is a deduped SET; the walk
+	 * resumes at a WIRE OFFSET. Products' phase-2 tiebreak walk substitutes rows from later
+	 * pages, and orders churn shifts every record down a slot — either way the merge comes
+	 * back short of the window, and treating that short count as an offset misaligns every
+	 * later step until the window silently stops growing.
+	 */
+	it('refuses a ragged own lane whose count cannot be a wire offset', async () => {
 		expect(
 			await continuationFor({
-				'products:browse-window:limit=300': { complete: false, ids: ids(1, 150) },
+				// 215 of a 300-row window: a substitution/dedupe shortfall, not a clean stop.
+				'products:browse-window:limit=300': { complete: false, ids: ids(1, 215) },
 			})
-		).toMatchObject({ covered: 150, sourceQueryKey: 'products:browse-window:limit=300' });
+		).toEqual(NO_BROWSE_WINDOW_CONTINUATION);
+	});
+
+	it('refuses a predecessor that came back short of its own window', async () => {
+		// The products case: a 200-row lane that phase 2 left holding 185 ids. Reusing it as
+		// an offset would re-read rows it already holds and compound the misalignment.
+		expect(
+			await continuationFor({
+				'products:browse-window:limit=200': { complete: true, ids: ids(1, 185) },
+			})
+		).toEqual(NO_BROWSE_WINDOW_CONTINUATION);
+	});
+
+	it('refuses a predecessor whose exact fill is not page-aligned for the current dial', async () => {
+		// Same 200 ids, but the dial moved to 30/page between steps: 200 % 30 !== 0, so the
+		// offset would need a partial-page skip the seam cannot be trusted to survive.
+		expect(
+			await continuationFor(
+				{ 'products:browse-window:limit=200': { complete: true, ids: ids(1, 200) } },
+				{ pageSize: 30 }
+			)
+		).toEqual(NO_BROWSE_WINDOW_CONTINUATION);
 	});
 
 	it('refuses every continuation for an explicitly requested refresh', async () => {
