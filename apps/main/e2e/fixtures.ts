@@ -5,9 +5,12 @@ import {
 	test as base,
 	type BrowserContext,
 	expect,
+	type Locator,
 	type Page,
 	type TestInfo,
 } from '@playwright/test';
+
+import { log } from '@wcpos/utils/logger';
 
 import { restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
@@ -74,6 +77,124 @@ export function storeRequestOptions(authorization: StoreAuthorization | null): {
 		},
 		params: authorization?.transport === 'query' ? { authorization: authorization.value } : {},
 	};
+}
+
+/**
+ * SKU of the product the live payment specs should buy.
+ *
+ * These specs used to add whichever product happened to render first in the
+ * catalogue. When that product is stock-managed, parallel CI shards check out
+ * the same inventory and a shard can fail purely because another shard drained
+ * the stock. Pinning the purchase to a known simple, non-stock-managed SKU
+ * removes the contention.
+ *
+ * `woo-belt` is WooCommerce sample data (simple, published, `manage_stock`
+ * false, `stock_status` instock) and is present on the free, pro and next dev
+ * stores. Override for stores with a different catalogue.
+ */
+export const E2E_PRODUCT_SKU = process.env.E2E_PRODUCT_SKU || 'woo-belt';
+
+/**
+ * Whether a locator becomes visible within `timeout`.
+ *
+ * `Locator.isVisible()` samples the DOM once and returns immediately — its
+ * `timeout` option does not make it wait — so it reports "missing" for anything
+ * that is merely still rendering. Use this wherever the answer decides which
+ * branch a helper takes.
+ */
+async function becomesVisible(locator: Locator, timeout: number): Promise<boolean> {
+	return locator
+		.waitFor({ state: 'visible', timeout })
+		.then(() => true)
+		.catch(() => false);
+}
+
+/**
+ * Try to add the dedicated E2E product to the cart by searching for its SKU.
+ *
+ * Returns `added` when the product landed in the cart, `unavailable` when the
+ * store cannot add the SKU directly, and `add_failed` when a simple product
+ * matched but did not reach the cart.
+ *
+ * The search box is always left cleared so the caller sees an unfiltered POS.
+ */
+export async function tryAddProductBySku(
+	page: Page,
+	sku = E2E_PRODUCT_SKU
+): Promise<'added' | 'unavailable' | 'add_failed'> {
+	// `waitFor`, not `isVisible` — `isVisible()` samples the DOM once and returns
+	// immediately, so it would report "missing" on anything still rendering.
+	const search = page.getByTestId('search-products');
+	if (!(await becomesVisible(search, 30_000))) {
+		log.info('[product] search unavailable — falling back to first catalogue product');
+		return 'unavailable';
+	}
+
+	const resultCount = page.getByTestId('data-table-count');
+	const unfilteredCount = await resultCount.textContent().catch(() => null);
+	await search.fill(sku);
+	// Search is debounced and resolves against the local RxDB replica.
+	await page.waitForTimeout(2_000);
+
+	// `product-tile` is the simple-product tile; variable products render as
+	// `variable-product-tile` and would open a variation picker instead.
+	const tiles = page.getByTestId('product-tile');
+	const variableTiles = page.getByTestId('variable-product-tile');
+	const rowButtons = page.getByTestId('add-to-cart-button');
+
+	// A SKU matches exactly one product, so wait for the result count to change
+	// from the unfiltered query and for every rendered product type to agree.
+	// The grid keeps showing its deferred, unfiltered catalogue for a beat after
+	// the query changes; counting only simple tiles can mistake that stale view
+	// for a match when the remaining tiles are variable products.
+	const matched = await expect
+		.poll(
+			async () => {
+				const filteredCount = await resultCount.textContent().catch(() => null);
+				if (unfilteredCount === null || filteredCount === unfilteredCount) return 0;
+				return (await tiles.count()) + (await variableTiles.count()) + (await rowButtons.count());
+			},
+			{
+				timeout: 15_000,
+				intervals: [250, 500, 1_000],
+			}
+		)
+		.toBe(1)
+		.then(() => true)
+		.catch(() => false);
+
+	if (!matched) {
+		log.info(`[product] SKU "${sku}" not in this store — falling back to first catalogue product`);
+		await search.clear();
+		await page.waitForTimeout(1_000);
+		return 'unavailable';
+	}
+
+	if (await variableTiles.count()) {
+		log.info(`[product] SKU "${sku}" is variable — falling back to first catalogue product`);
+		await search.clear();
+		await page.waitForTimeout(1_000);
+		return 'unavailable';
+	}
+
+	if (await tiles.count()) {
+		await tiles.first().click();
+	} else {
+		await rowButtons.first().click();
+	}
+
+	const inCart = await becomesVisible(page.getByTestId('checkout-button'), 15_000);
+
+	await search.clear();
+	await page.waitForTimeout(1_000);
+
+	if (!inCart) {
+		log.info(`[product] SKU "${sku}" matched but never reached the cart`);
+		return 'add_failed';
+	}
+
+	log.info(`[product] added dedicated SKU "${sku}" to the cart`);
+	return 'added';
 }
 
 export function isRouteTeardownError(error: unknown): boolean {

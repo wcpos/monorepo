@@ -1,9 +1,16 @@
+import { log } from '@wcpos/utils/logger';
+
 import {
 	blockScriptRequests,
 	isRouteTeardownError,
+	tryAddProductBySku,
 	waitForAuthEntry,
 	waitForOAuthCallback,
 } from '../e2e/fixtures';
+
+jest.mock('@wcpos/utils/logger', () => ({
+	log: { info: jest.fn() },
+}));
 
 // Reset at module scope to avoid jest-expo's winter-runtime "require outside test scope" error.
 jest.resetModules();
@@ -84,5 +91,171 @@ describe('waitForOAuthCallback', () => {
 		await expect(
 			waitForOAuthCallback(page as never, 'https://preview.example.com')
 		).rejects.toThrow('WordPress cannot write to wp-content/uploads/wc-logs');
+	});
+});
+
+describe('tryAddProductBySku', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it('waits for the SKU query and stale variable-product tiles before clicking', async () => {
+		const search = {
+			waitFor: jest.fn().mockResolvedValue(undefined),
+			fill: jest.fn().mockResolvedValue(undefined),
+			clear: jest.fn().mockResolvedValue(undefined),
+		};
+		const variableTiles = {
+			count: jest.fn().mockResolvedValueOnce(1).mockResolvedValue(0),
+		};
+		const resultCount = {
+			textContent: jest
+				.fn()
+				.mockResolvedValueOnce('Showing 10 of 10')
+				.mockResolvedValueOnce('Showing 10 of 10')
+				.mockResolvedValue('Showing 1 of 1'),
+		};
+		const tiles = {
+			count: jest.fn().mockResolvedValue(1),
+			first: jest.fn(),
+			isVisible: jest.fn().mockResolvedValue(true),
+			click: jest.fn().mockImplementation(async () => {
+				if (
+					resultCount.textContent.mock.calls.length < 3 ||
+					variableTiles.count.mock.calls.length < 2
+				) {
+					throw new Error('clicked while the unfiltered grid was still visible');
+				}
+			}),
+		};
+		tiles.first.mockReturnValue(tiles);
+		const rowButtons = {
+			count: jest.fn().mockResolvedValue(0),
+			first: jest.fn(),
+		};
+		const checkout = { waitFor: jest.fn().mockResolvedValue(undefined) };
+		const page = {
+			getByTestId: jest.fn((testId: string) => {
+				switch (testId) {
+					case 'search-products':
+						return search;
+					case 'data-table-count':
+						return resultCount;
+					case 'product-tile':
+						return tiles;
+					case 'variable-product-tile':
+						return variableTiles;
+					case 'add-to-cart-button':
+						return rowButtons;
+					case 'checkout-button':
+						return checkout;
+					default:
+						throw new Error(`Unexpected test ID: ${testId}`);
+				}
+			}),
+			waitForTimeout: jest.fn().mockResolvedValue(undefined),
+		};
+
+		await expect(tryAddProductBySku(page as never, 'woo-belt')).resolves.toBe('added');
+
+		expect(variableTiles.count).toHaveBeenCalledTimes(3);
+		expect(tiles.click).toHaveBeenCalledTimes(1);
+	});
+
+	it('routes fallback diagnostics through the project logger', async () => {
+		const page = {
+			getByTestId: jest.fn().mockReturnValue({
+				waitFor: jest.fn().mockRejectedValue(new Error('not visible')),
+			}),
+		};
+
+		await expect(tryAddProductBySku(page as never)).resolves.toBe('unavailable');
+
+		expect(log.info).toHaveBeenCalledWith(
+			'[product] search unavailable — falling back to first catalogue product'
+		);
+	});
+
+	it('treats a variable-only SKU match as unavailable without clicking it', async () => {
+		const search = {
+			waitFor: jest.fn().mockResolvedValue(undefined),
+			fill: jest.fn().mockResolvedValue(undefined),
+			clear: jest.fn().mockResolvedValue(undefined),
+		};
+		const tile = { isVisible: jest.fn().mockResolvedValue(false) };
+		const tiles = {
+			count: jest.fn().mockResolvedValue(0),
+			first: jest.fn().mockReturnValue(tile),
+		};
+		const variableTiles = { count: jest.fn().mockResolvedValue(1) };
+		const rowButton = { click: jest.fn().mockRejectedValue(new Error('missing row button')) };
+		const rowButtons = {
+			count: jest.fn().mockResolvedValue(0),
+			first: jest.fn().mockReturnValue(rowButton),
+		};
+		const page = {
+			getByTestId: jest.fn((testId: string) => {
+				switch (testId) {
+					case 'search-products':
+						return search;
+					case 'data-table-count':
+						return { textContent: jest.fn().mockResolvedValueOnce('10').mockResolvedValue('1') };
+					case 'product-tile':
+						return tiles;
+					case 'variable-product-tile':
+						return variableTiles;
+					case 'add-to-cart-button':
+						return rowButtons;
+					default:
+						throw new Error(`Unexpected test ID: ${testId}`);
+				}
+			}),
+			waitForTimeout: jest.fn().mockResolvedValue(undefined),
+		};
+
+		await expect(tryAddProductBySku(page as never, 'variable-sku')).resolves.toBe('unavailable');
+
+		expect(search.clear).toHaveBeenCalledTimes(1);
+		expect(rowButton.click).not.toHaveBeenCalled();
+		expect(log.info).toHaveBeenCalledWith(
+			'[product] SKU "variable-sku" is variable — falling back to first catalogue product'
+		);
+	});
+
+	it('distinguishes a matched SKU that never reaches the cart', async () => {
+		const search = {
+			waitFor: jest.fn().mockResolvedValue(undefined),
+			fill: jest.fn().mockResolvedValue(undefined),
+			clear: jest.fn().mockResolvedValue(undefined),
+		};
+		const tile = {
+			isVisible: jest.fn().mockResolvedValue(true),
+			click: jest.fn().mockResolvedValue(undefined),
+		};
+		const page = {
+			getByTestId: jest.fn((testId: string) => {
+				switch (testId) {
+					case 'search-products':
+						return search;
+					case 'data-table-count':
+						return { textContent: jest.fn().mockResolvedValueOnce('10').mockResolvedValue('1') };
+					case 'product-tile':
+						return {
+							count: jest.fn().mockResolvedValue(1),
+							first: jest.fn().mockReturnValue(tile),
+						};
+					case 'variable-product-tile':
+					case 'add-to-cart-button':
+						return { count: jest.fn().mockResolvedValue(0) };
+					case 'checkout-button':
+						return { waitFor: jest.fn().mockRejectedValue(new Error('not visible')) };
+					default:
+						throw new Error(`Unexpected test ID: ${testId}`);
+				}
+			}),
+			waitForTimeout: jest.fn().mockResolvedValue(undefined),
+		};
+
+		await expect(tryAddProductBySku(page as never, 'broken-sku')).resolves.toBe('add_failed');
 	});
 });

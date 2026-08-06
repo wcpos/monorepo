@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-import { getStoreVariant, authenticatedTest as test } from './fixtures';
+import { getStoreVariant, authenticatedTest as test, tryAddProductBySku } from './fixtures';
 import {
 	expectFullPrecision,
 	expectOrderPaid,
@@ -12,7 +12,19 @@ import {
 	stampRunLabel,
 } from './order-lifecycle';
 
-async function addFirstProductToCart(page: Page) {
+/**
+ * Add the dedicated E2E product to the cart. Falls back to the first catalogue
+ * product — and then to a misc product — on stores without the dedicated SKU.
+ */
+async function addTestProductToCart(page: Page) {
+	const skuResult = await tryAddProductBySku(page);
+	if (skuResult === 'added') {
+		return;
+	}
+	if (skuResult === 'add_failed') {
+		throw new Error('Dedicated E2E SKU matched but did not reach the cart');
+	}
+
 	const tile = page.getByTestId('product-tile').first();
 	const tableButton = page.getByTestId('add-to-cart-button').first();
 	const productMarker = tile.or(tableButton).first();
@@ -49,7 +61,7 @@ async function addFirstProductToCart(page: Page) {
  * the "completed order" they refund is a fixture, not a sale.
  */
 async function createRefundableOrder(page: Page) {
-	await addFirstProductToCart(page);
+	await addTestProductToCart(page);
 	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}', {
 		timeout: 90_000,
 	});
@@ -67,6 +79,7 @@ async function createRefundableOrder(page: Page) {
 async function interceptRefundDependencies(page: Page) {
 	const unsupportedProviderRefundGatewayId = 'unsupported_provider_refunds';
 	let orderRevision = 0;
+	const capturedOrder = { total: 0 };
 	const gatewayIds = [
 		unsupportedProviderRefundGatewayId,
 		'stripe_terminal_for_woocommerce',
@@ -113,6 +126,9 @@ async function interceptRefundDependencies(page: Page) {
 			payload: Record<string, unknown>;
 		};
 		const currentRevision = `sha256:e2e-refund-${++orderRevision}`;
+		if (mutation.operation === 'create') {
+			capturedOrder.total = Number(mutation.payload.total);
+		}
 
 		await route.fulfill({
 			status: mutation.operation === 'create' ? 201 : 200,
@@ -123,19 +139,19 @@ async function interceptRefundDependencies(page: Page) {
 			}),
 		});
 	});
+
+	return capturedOrder;
 }
 
 async function openRefundModalForNewOrder(page: Page) {
-	await interceptRefundDependencies(page);
+	const capturedOrder = await interceptRefundDependencies(page);
 	const orderUuid = await createRefundableOrder(page);
 	await page.goto(`/orders/refund/${orderUuid}`);
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
 		timeout: 30_000,
 	});
-	// The refund must not exceed the order total, and the order is built from
-	// whatever product happens to sort first in the store catalog — so keep the
-	// custom amount below any plausible product price.
-	await page.getByTestId('refund-custom-amount').fill('1.00');
+	expect(capturedOrder.total, 'stubbed order must have a refundable total').toBeGreaterThan(0);
+	await page.getByTestId('refund-custom-amount').fill(Math.min(capturedOrder.total, 1).toFixed(2));
 }
 
 /** The refund body the POS submits — see `buildRefundPayload` in use-refund-mutation.ts. */
@@ -275,7 +291,7 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			const label = newRunLabel();
 			const refundAmount = '1.00';
 
-			await addFirstProductToCart(page);
+			await addTestProductToCart(page);
 			await stampRunLabel(page, label);
 
 			const { orderId, uuid } = await openCheckout(page, {
