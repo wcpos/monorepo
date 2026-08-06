@@ -69,6 +69,9 @@ describe('PaymentWebview fallback order refresh', () => {
 		autoShowReceipt = false;
 		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 	});
+	afterEach(() => {
+		jest.useRealTimers();
+	});
 
 	it('refreshes the engine order before routing a successful payment to its receipt', async () => {
 		autoShowReceipt = true;
@@ -142,7 +145,6 @@ describe('PaymentWebview fallback order refresh', () => {
 
 		expect(mockEngineRequire).not.toHaveBeenCalled();
 		expect(mockGet).not.toHaveBeenCalled();
-		jest.useRealTimers();
 	});
 
 	it('routes structured stock errors to the shared rejection handler', async () => {
@@ -198,7 +200,6 @@ describe('PaymentWebview fallback order refresh', () => {
 		// (which is what surfaced the spurious PY02001 payment-gateway error).
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(logger.debug).toHaveBeenCalled();
-		jest.useRealTimers();
 	});
 
 	it('stays quiet when the fallback server status still matches the local status', async () => {
@@ -228,7 +229,6 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(logger.success).not.toHaveBeenCalled();
 		expect(mockEngineRequire).not.toHaveBeenCalled();
 		expect(mockReplace).not.toHaveBeenCalled();
-		jest.useRealTimers();
 	});
 
 	it('routes on SERVER truth even when the local document never updates', async () => {
@@ -261,7 +261,6 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(mockEngineRequire).toHaveBeenCalledTimes(1); // best-effort local catch-up
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });
-		jest.useRealTimers();
 	});
 });
 
