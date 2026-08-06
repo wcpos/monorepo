@@ -54,6 +54,67 @@ const NON_DEGRADING_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageRpcM
 	'remove',
 ]);
 
+// ---------------------------------------------------------------------------
+// Dead-worker RPC watchdog (#163 follow-up)
+// ---------------------------------------------------------------------------
+
+/**
+ * A worker that *errors* rejects the RPC and trips the latch above. A worker
+ * that *dies* does neither: rxdb-premium's message channel collects Worker
+ * `error` events into an array nobody reads, and rxdb's `requestRemote` has no
+ * timeout, so every RPC stays pending forever. Measured live 45s after a bare
+ * `worker.terminate()`: no banner, checkout and save still enabled, cashier
+ * selling into a dead database.
+ *
+ * The deadline is the only signal that survives all three variants — terminated,
+ * hung, and crashed — because it keys off the one thing that actually matters:
+ * the answer never came back.
+ *
+ * 30s is deliberately far above any interactive storage call (reads and writes
+ * on the POS hot path are milliseconds) while staying well inside a cashier's
+ * patience during a real outage. It is not a latency SLO — a slow call is never
+ * failed on elapsed time alone, see `lastStorageSuccessAt`.
+ */
+export const STORAGE_RPC_WATCHDOG_MS = 30_000;
+
+/**
+ * RPCs the watchdog never arms for, because they are unbounded by design and a
+ * long one is not evidence of a dead worker:
+ * - `close`/`remove` tear an instance down and are already owned by the engine
+ *   disposal deadline (#875), which force-frees the database registration;
+ * - `cleanup` is background housekeeping that rxdb itself time-boxes and reruns.
+ * Arming here would false-trip mid-Clear&Sync, which drops and recreates whole
+ * collections.
+ */
+const WATCHDOG_EXEMPT_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageRpcMethod>([
+	'close',
+	'remove',
+	'cleanup',
+]);
+
+/**
+ * When any RPC last completed. One worker storage backs every database
+ * (`adapters/default/index.web.ts`), so this is a liveness clock for the worker
+ * as a whole, not for one instance.
+ */
+let lastStorageSuccessAt = 0;
+
+function storageWorkerTimeoutError(methodName: StorageRpcMethod, waitedMs: number): Error {
+	const error = new Error(
+		`Storage worker did not answer ${methodName} within ${waitedMs}ms — the worker is gone`
+	);
+	error.name = 'StorageWorkerTimeoutError';
+	return error;
+}
+
+function isStorageWorkerTimeout(error: unknown): boolean {
+	return (
+		error != null &&
+		typeof error === 'object' &&
+		(error as { name?: string }).name === 'StorageWorkerTimeoutError'
+	);
+}
+
 export interface StorageDegradation {
 	databaseName: string;
 	/** The RPC that first lost the worker. */
@@ -128,6 +189,9 @@ function getRemoteErrorDescription(message: string): string | null {
  */
 export function isStorageWorkerFailure(error: unknown): boolean {
 	if (error == null) return false;
+	// A dead worker never produces a remote envelope to classify; the watchdog's
+	// timeout is the only evidence there is, and it means the same thing.
+	if (isStorageWorkerTimeout(error)) return true;
 	const message = error instanceof Error ? error.message : String(error);
 	const remoteError = getRemoteErrorDescription(message);
 	return remoteError !== null && WORKER_CONNECTION_FAILURE.test(remoteError);
@@ -327,10 +391,46 @@ async function raceStorageCall<T>(
 	}
 	void underlying.catch((error) => noteStorageWorkerFailure(state, methodName, error));
 	void underlying.then(
-		() => state.inFlight.delete(callState),
+		() => {
+			lastStorageSuccessAt = Date.now();
+			state.inFlight.delete(callState);
+		},
 		() => state.inFlight.delete(callState)
 	);
-	return Promise.race([underlying, killed]);
+
+	if (WATCHDOG_EXEMPT_METHODS.has(methodName)) {
+		return Promise.race([underlying, killed]);
+	}
+
+	const startedAt = Date.now();
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const watchdog = new Promise<T>((_resolve, reject) => {
+		const arm = () => {
+			timer = setTimeout(() => {
+				// Elapsed time alone never condemns the worker: a large OPFS write can
+				// legitimately outlast the deadline. What separates "slow" from "dead"
+				// is whether anything else on the same worker answered meanwhile — if
+				// so, re-arm and let the slow call finish. A dead worker answers
+				// nothing, so this only ever fires once, for real.
+				if (lastStorageSuccessAt > startedAt) {
+					arm();
+					return;
+				}
+				const waitedMs = Date.now() - startedAt;
+				const error = storageWorkerTimeoutError(methodName, waitedMs);
+				noteStorageWorkerFailure(state, methodName, error);
+				reject(error);
+			}, STORAGE_RPC_WATCHDOG_MS);
+			// Never hold the process open for a watchdog (node/jest); browsers ignore this.
+			(timer as unknown as { unref?: () => void }).unref?.();
+		};
+		arm();
+	});
+	void watchdog.catch(() => undefined);
+
+	return Promise.race([underlying, killed, watchdog]).finally(() => {
+		if (timer !== undefined) clearTimeout(timer);
+	});
 }
 
 function unregisterInstance(state: InstanceLatchState): void {

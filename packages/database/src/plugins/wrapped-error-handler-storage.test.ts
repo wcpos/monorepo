@@ -9,6 +9,7 @@ import {
 	degradedStorage$,
 	isStorageDegraded,
 	isStorageWorkerFailure,
+	STORAGE_RPC_WATCHDOG_MS,
 	wrappedErrorHandlerStorage,
 } from './wrapped-error-handler-storage';
 
@@ -917,6 +918,126 @@ describe('wrappedErrorHandlerStorage', () => {
 			await wrappedInstance.remove();
 
 			expect(isStorageDegraded('reset-db')).toBe(true);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// Dead-worker RPC watchdog (#163 follow-up)
+	//
+	// A hard-terminated worker never answers and never errors: rxdb-premium's
+	// message channel collects Worker "error" events into an array nobody reads,
+	// and rxdb's requestRemote has no timeout. Every RPC then stays pending
+	// forever, so the degraded-storage latch never fires and the POS keeps selling
+	// into a dead database. Measured live: 45s after a bare worker.terminate(),
+	// banner=false, checkout still enabled.
+	// ---------------------------------------------------------------------------
+	describe('dead-worker RPC watchdog', () => {
+		const pending = () => jest.fn(() => new Promise(() => undefined));
+
+		beforeEach(() => {
+			jest.useFakeTimers();
+			clearStorageDegradation();
+		});
+
+		afterEach(() => {
+			jest.useRealTimers();
+			clearStorageDegradation();
+		});
+
+		async function wrap(databaseName: string, overrides = {}) {
+			const instance = createMockStorageInstance(overrides);
+			return wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName } as any);
+		}
+
+		it('trips the latch when an RPC never comes back', async () => {
+			const wrappedInstance = await wrap('dead-worker-db', { query: pending() });
+
+			const call = wrappedInstance.query({} as any);
+			const assertion = expect(call).rejects.toMatchObject({
+				name: 'StorageWorkerTimeoutError',
+			});
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+			await assertion;
+
+			expect(isStorageDegraded('dead-worker-db')).toBe(true);
+		});
+
+		it('feeds the same failure class the latch and the POS already consume', async () => {
+			const wrappedInstance = await wrap('dead-worker-class-db', { bulkWrite: pending() });
+
+			const caught = wrappedInstance
+				.bulkWrite([{ document: { id: '1' } }] as any, 'test')
+				.catch((error: unknown) => error);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+
+			// The POS barcode path and the cart/checkout blocks all gate on this
+			// predicate, so the watchdog has to answer to it too.
+			expect(isStorageWorkerFailure(await caught)).toBe(true);
+		});
+
+		// The refutation that matters: a big OPFS write can legitimately take longer
+		// than the deadline. If anything else on the same worker answered while the
+		// slow call was outstanding, the worker is demonstrably alive.
+		it('does not trip a slow-but-alive RPC while the worker still answers', async () => {
+			let finishSlowWrite: (() => void) | undefined;
+			const wrappedInstance = await wrap('slow-alive-db', {
+				bulkWrite: jest.fn(
+					() => new Promise((resolve) => (finishSlowWrite = () => resolve({ error: [] })))
+				),
+				count: jest.fn().mockResolvedValue(7),
+			});
+
+			const slowWrite = wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test');
+			// The worker keeps answering other traffic throughout the slow write.
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 0.6);
+			await expect(wrappedInstance.count({} as any)).resolves.toBe(7);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 0.6);
+
+			expect(isStorageDegraded('slow-alive-db')).toBe(false);
+
+			finishSlowWrite!();
+			await expect(slowWrite).resolves.toBeDefined();
+			expect(isStorageDegraded('slow-alive-db')).toBe(false);
+		});
+
+		it.each(['close', 'remove', 'cleanup'] as const)(
+			'never arms the watchdog for the unbounded %s RPC',
+			async (method) => {
+				const wrappedInstance = await wrap(`exempt-${method}-db`, { [method]: pending() });
+
+				void (wrappedInstance as any)[method]();
+				await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 4);
+
+				expect(isStorageDegraded(`exempt-${method}-db`)).toBe(false);
+			}
+		);
+
+		it('stays quiet for an RPC outstanding when the scope starts closing', async () => {
+			const wrappedInstance = await wrap('watchdog-teardown-db', {
+				query: pending(),
+				close: jest.fn().mockResolvedValue(undefined),
+			});
+
+			const inFlight = wrappedInstance.query({} as any);
+			void inFlight.catch(() => undefined);
+			await wrappedInstance.close();
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2);
+
+			expect(isStorageDegraded('watchdog-teardown-db')).toBe(false);
+		});
+
+		it('leaves no timer behind once a call settles', async () => {
+			const wrappedInstance = await wrap('timer-leak-db', {
+				query: jest.fn().mockResolvedValue({ documents: [] }),
+			});
+			const before = jest.getTimerCount();
+
+			await wrappedInstance.query({} as any);
+			await wrappedInstance.query({} as any);
+
+			expect(jest.getTimerCount()).toBe(before);
 		});
 	});
 });

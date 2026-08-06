@@ -3,6 +3,7 @@ import {
 	getLogger,
 	log,
 	promoteRecorder,
+	resetRecorderPromotionBackoff,
 	setDatabase,
 	setToast,
 	setVerboseDiagnostics,
@@ -879,5 +880,108 @@ describe('review fixes (PR #851)', () => {
 		expect(admitted._droppedKeys as number).toBeGreaterThan(0);
 		const bytes = new TextEncoder().encode(JSON.stringify(admitted)).byteLength;
 		expect(bytes).toBeLessThanOrEqual(16 * 1024 + 1024);
+	});
+});
+
+/**
+ * #163 follow-up: with a dead storage worker every error log triggers a flight
+ * recorder promotion, the promotion's bulkInsert rejects, and the catch console
+ * .errors — unbounded. Measured live at roughly 200 errors/second, which buries
+ * the real diagnostics and burns the main thread during an outage.
+ */
+describe('flight recorder promotion backoff (#163)', () => {
+	let consoleError: jest.SpyInstance;
+
+	beforeEach(() => {
+		jest.useFakeTimers();
+		consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		resetRecorderPromotionBackoff();
+	});
+
+	afterEach(() => {
+		consoleError.mockRestore();
+		jest.useRealTimers();
+		resetRecorderPromotionBackoff();
+		setDatabase(null as never);
+	});
+
+	function createFailingCollection(bulkInsert: jest.Mock) {
+		return {
+			insert: jest.fn(async () => undefined),
+			bulkInsert,
+			find: jest.fn(() => ({
+				remove: jest.fn().mockResolvedValue([]),
+				exec: jest.fn().mockResolvedValue([]),
+			})),
+			bulkRemove: jest.fn().mockResolvedValue(undefined),
+		};
+	}
+
+	async function recordSomething() {
+		getLogger(['wcpos', 'db']).debug('narration for promotion', { saveToDb: true });
+		await Promise.resolve();
+	}
+
+	it('logs the failure once per streak instead of once per attempt', async () => {
+		const bulkInsert = jest.fn().mockRejectedValue(new Error('storage worker is gone'));
+		setDatabase(createFailingCollection(bulkInsert) as never);
+
+		for (let attempt = 0; attempt < 25; attempt += 1) {
+			await recordSomething();
+			await promoteRecorder('error');
+		}
+
+		const promotionErrors = consoleError.mock.calls.filter(([message]) =>
+			String(message).includes('Failed to promote flight recorder')
+		);
+		expect(promotionErrors).toHaveLength(1);
+	});
+
+	it('stops hammering dead storage until the backoff window elapses', async () => {
+		const bulkInsert = jest.fn().mockRejectedValue(new Error('storage worker is gone'));
+		setDatabase(createFailingCollection(bulkInsert) as never);
+
+		await recordSomething();
+		await promoteRecorder('error');
+		expect(bulkInsert).toHaveBeenCalledTimes(1);
+
+		for (let attempt = 0; attempt < 25; attempt += 1) {
+			await recordSomething();
+			await promoteRecorder('error');
+		}
+		expect(bulkInsert).toHaveBeenCalledTimes(1);
+
+		jest.setSystemTime(Date.now() + 120_000);
+		await recordSomething();
+		await promoteRecorder('error');
+		expect(bulkInsert).toHaveBeenCalledTimes(2);
+	});
+
+	it('recovers cleanly once storage answers again', async () => {
+		const bulkInsert = jest
+			.fn()
+			.mockRejectedValueOnce(new Error('storage worker is gone'))
+			.mockImplementation(async (rows: { seq: number }[]) => ({
+				success: rows.map((row) => ({ ...row })),
+				error: [],
+			}));
+		setDatabase(createFailingCollection(bulkInsert) as never);
+
+		await recordSomething();
+		await promoteRecorder('error');
+
+		jest.setSystemTime(Date.now() + 120_000);
+		await recordSomething();
+		await expect(promoteRecorder('error')).resolves.toBeGreaterThan(0);
+
+		// A later failure is a new streak and must be reported again.
+		bulkInsert.mockRejectedValueOnce(new Error('storage worker is gone again'));
+		await recordSomething();
+		await promoteRecorder('error');
+
+		const promotionErrors = consoleError.mock.calls.filter(([message]) =>
+			String(message).includes('Failed to promote flight recorder')
+		);
+		expect(promotionErrors).toHaveLength(2);
 	});
 });
