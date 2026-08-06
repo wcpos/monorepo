@@ -490,6 +490,23 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 								// disabled state, two windows) must not turn the loser into an error
 								// toast over work that is already done.
 								if (removesResident && doc) {
+									// A STOLEN claim must never destroy a record another window is now
+									// resolving (task 43 — the composition hole). Another window can
+									// only steal this claim AFTER its deadline, so being inside the
+									// deadline proves we still hold it exclusively; re-read the row to
+									// confirm it still carries OUR claim (defense in depth against a
+									// window that stalled past its own deadline). If it does not, abort
+									// before the irreversible removal — the row is in another window's
+									// hands, and its resolution will finish the job.
+									const fresh = (await queue.all()).find((row) => row.mutationId === mutationId);
+									const claimUntil = fresh?.resolutionClaimUntil
+										? Date.parse(fresh.resolutionClaimUntil)
+										: 0;
+									if (fresh?.resolutionClaimBy !== instanceIdFor() || claimUntil <= nowMs()) {
+										throw new Error(
+											`resolveConflict: the resolution claim on "${mutationId}" expired or was taken by another window mid-resolution — refresh the list and retry`
+										);
+									}
 									try {
 										await doc.remove();
 										residentRemoved = true;
