@@ -244,6 +244,17 @@ function continuationFrom(
  * exactly it. Anything else — wiped mid-pass, or advanced by another writer — demotes the
  * write to the delta alone with `complete: false`, restarting the window from the top next
  * pass. Wasteful, always safe; the opposite trade is a grid lying about what it holds.
+ *
+ * NOT ATOMIC, and deliberately so for now. This is a read, and the lane write that follows
+ * it is a second operation, so one window remains open: `createLocalCoverage` wraps its
+ * repository in `withLedgerRecovery`, which catches a corruption refusal, rebuilds the
+ * ledger (dropping `coverageLanes`) and then RE-INVOKES the same write with the same
+ * arguments — replaying a prefix this check had already approved. Closing that needs the
+ * condition evaluated inside the write itself, i.e. the compare-and-set #954 built for its
+ * ranged cursor (`incrementalModify` with an `expected` value), extended from
+ * `rangedResume` to `expectedRecordIds`. That is a persistence-layer change and is tracked
+ * as a follow-up; this guard still closes the ordinary case, which is a wipe landing before
+ * the write rather than inside its retry.
  */
 export async function browseWindowPrefixSurvived(input: {
 	collection: string;
