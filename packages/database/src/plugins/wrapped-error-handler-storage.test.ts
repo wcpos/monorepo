@@ -1028,6 +1028,44 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(isStorageDegraded('stale-success-db')).toBe(true);
 		});
 
+		// A worker returning CONFLICT is emphatically alive. Counting only
+		// successes let ordinary storage errors read as total silence, condemning a
+		// slow read on a perfectly healthy worker.
+		it('treats an ordinary storage error as proof the worker is answering', async () => {
+			const wrappedInstance = await wrap('erroring-but-alive-db', {
+				query: pending(),
+				count: jest.fn().mockRejectedValue(new Error('some ordinary storage failure')),
+			});
+
+			const slowRead = wrappedInstance.query({} as any);
+			void slowRead.catch(() => undefined);
+			for (let window = 0; window < 6; window += 1) {
+				await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 0.5);
+				await expect(wrappedInstance.count({} as any)).rejects.toThrow('ordinary storage failure');
+				await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 0.5);
+			}
+
+			expect(isStorageDegraded('erroring-but-alive-db')).toBe(false);
+		});
+
+		// Liveness must not be a wall-clock comparison: a backwards clock correction
+		// would park a stale marker ahead of every future window and re-arm forever,
+		// leaving checkout enabled against a worker that answers nothing.
+		it('condemns a dead worker even if the clock jumps backwards', async () => {
+			const wrappedInstance = await wrap('clock-rewind-db', {
+				query: pending(),
+				count: jest.fn().mockResolvedValue(1),
+			});
+
+			await expect(wrappedInstance.count({} as any)).resolves.toBe(1);
+			const doomed = wrappedInstance.query({} as any);
+			void doomed.catch(() => undefined);
+			jest.setSystemTime(Date.now() - 60 * 60 * 1000);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 3 + 3);
+
+			expect(isStorageDegraded('clock-rewind-db')).toBe(true);
+		});
+
 		// The watchdog cannot cancel the underlying RPC, so a write must never be
 		// told it failed while it may still commit in the worker.
 		it('never condemns a write on the clock', async () => {
@@ -1088,6 +1126,26 @@ describe('wrappedErrorHandlerStorage', () => {
 			// Still armed: a genuinely dead worker is caught on the next full windows.
 			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
 			expect(isStorageDegraded('slept-device-db')).toBe(true);
+		});
+
+		// A worker that died before startup leaves database creation pending
+		// forever, and there is no instance yet to arm a read against — the app just
+		// hangs on a spinner.
+		it('condemns a worker that never answers database creation', async () => {
+			const storage = {
+				name: 'mock-storage',
+				rxdbVersion: '16.0.0',
+				createStorageInstance: jest.fn(() => new Promise(() => undefined)),
+			} as unknown as RxStorage<any, any>;
+
+			const creation = wrappedErrorHandlerStorage({ storage }).createStorageInstance({
+				databaseName: 'never-opens-db',
+			} as any);
+			const caught = creation.catch((error: unknown) => error);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
+
+			expect(isStorageWorkerFailure(await caught)).toBe(true);
+			expect(isStorageDegraded('never-opens-db')).toBe(true);
 		});
 
 		it('leaves no timer behind once a call settles', async () => {

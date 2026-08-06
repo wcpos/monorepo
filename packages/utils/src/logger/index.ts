@@ -224,25 +224,43 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 			});
 		});
 		const result = await collection.bulkInsert(rows);
+		// The collection can be rebound while this was in flight; the old
+		// database's outcome must not reset or advance the new one's backoff.
+		if (requestedEpoch !== databaseEpoch) return 0;
 		const insertedSequences = new Set(result.success.map((document) => document.seq));
 		removePromotedEvents(recorded.filter((_, index) => insertedSequences.has(rows[index].seq)));
+		// bulkInsert resolves with separate success/error arrays, so a total write
+		// failure never reaches the catch below. Treat it as the failed attempt it
+		// is, or the same snapshot is retried on every error log — the exact
+		// hammering this backoff exists to stop.
+		if (result.success.length === 0) {
+			noteRecorderPromotionFailure(
+				new Error(`flight recorder promotion rejected all ${rows.length} rows`)
+			);
+			return 0;
+		}
 		resetRecorderPromotionBackoff();
 		return result.success.length;
 	} catch (error) {
-		recorderPromotionFailureStreak += 1;
-		recorderPromotionRetryAt =
-			Date.now() +
-			Math.min(
-				RECORDER_PROMOTION_BASE_BACKOFF_MS * 2 ** (recorderPromotionFailureStreak - 1),
-				RECORDER_PROMOTION_MAX_BACKOFF_MS
-			);
-		// Once per streak: the first failure carries the diagnosis, the next 200 a
-		// second carry nothing. A later success resets the streak, so a genuinely
-		// new outage is reported again.
-		if (recorderPromotionFailureStreak === 1) {
-			console.error('Failed to promote flight recorder', error);
-		}
+		if (requestedEpoch !== databaseEpoch) return 0;
+		noteRecorderPromotionFailure(error);
 		return 0;
+	}
+}
+
+function noteRecorderPromotionFailure(error: unknown): void {
+	recorderPromotionFailureStreak += 1;
+	recorderPromotionRetryAt =
+		Date.now() +
+		Math.min(
+			RECORDER_PROMOTION_BASE_BACKOFF_MS * 2 ** (recorderPromotionFailureStreak - 1),
+			RECORDER_PROMOTION_MAX_BACKOFF_MS
+		);
+	// Once per streak: the first failure carries the diagnosis, the next 200 a
+	// second carry nothing. A later success resets the streak, so a genuinely
+	// new outage is reported again.
+	if (recorderPromotionFailureStreak === 1) {
+		console.error('Failed to promote flight recorder', error);
 	}
 }
 

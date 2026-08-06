@@ -985,3 +985,93 @@ describe('flight recorder promotion backoff (#163)', () => {
 		expect(promotionErrors).toHaveLength(2);
 	});
 });
+
+describe('flight recorder promotion backoff — review findings (#163)', () => {
+	let consoleError: jest.SpyInstance;
+
+	beforeEach(() => {
+		jest.useFakeTimers();
+		consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+		resetRecorderPromotionBackoff();
+	});
+
+	afterEach(() => {
+		consoleError.mockRestore();
+		jest.useRealTimers();
+		resetRecorderPromotionBackoff();
+		setDatabase(null as never);
+	});
+
+	function collectionWith(bulkInsert: jest.Mock) {
+		return {
+			insert: jest.fn(async () => undefined),
+			bulkInsert,
+			find: jest.fn(() => ({
+				remove: jest.fn().mockResolvedValue([]),
+				exec: jest.fn().mockResolvedValue([]),
+			})),
+			bulkRemove: jest.fn().mockResolvedValue(undefined),
+		};
+	}
+
+	async function recordSomething() {
+		getLogger(['wcpos', 'db']).debug('narration for promotion', { saveToDb: true });
+		await Promise.resolve();
+	}
+
+	// bulkInsert reports storage write failures in an `error` array rather than
+	// rejecting, so a total failure never reached the catch and reset the backoff.
+	it('backs off when bulkInsert resolves with every row failed', async () => {
+		const bulkInsert = jest.fn(async (rows: { seq: number }[]) => ({
+			success: [],
+			error: rows.map((row) => ({ status: 500, documentId: String(row.seq) })),
+		}));
+		setDatabase(collectionWith(bulkInsert) as never);
+
+		await recordSomething();
+		await promoteRecorder('error');
+		expect(bulkInsert).toHaveBeenCalledTimes(1);
+
+		for (let attempt = 0; attempt < 25; attempt += 1) {
+			await recordSomething();
+			await promoteRecorder('error');
+		}
+
+		expect(bulkInsert).toHaveBeenCalledTimes(1);
+		expect(
+			consoleError.mock.calls.filter(([message]) =>
+				String(message).includes('Failed to promote flight recorder')
+			)
+		).toHaveLength(1);
+	});
+
+	// A promotion in flight when the collection is rebound must not hand the old
+	// database's failure to the new one.
+	it('ignores a stale promotion outcome after the collection is rebound', async () => {
+		let rejectOld: ((error: Error) => void) | undefined;
+		const oldBulkInsert = jest.fn(() => new Promise((_resolve, reject) => (rejectOld = reject)));
+		setDatabase(collectionWith(oldBulkInsert) as never);
+
+		await recordSomething();
+		const stale = promoteRecorder('error');
+		// promoteRecorder queues behind recorderPromotionChain, so let the old
+		// bulkInsert actually start before rebinding.
+		await flushWrites();
+		expect(oldBulkInsert).toHaveBeenCalledTimes(1);
+
+		const freshBulkInsert = jest.fn(async (rows: { seq: number }[]) => ({
+			success: rows.map((row) => ({ ...row })),
+			error: [],
+		}));
+		setDatabase(collectionWith(freshBulkInsert) as never);
+		rejectOld!(new Error('old storage worker is gone'));
+		await stale;
+
+		await recordSomething();
+		await promoteRecorder('error');
+
+		// The fresh collection promotes immediately instead of serving the old
+		// database's backoff window.
+		expect(freshBulkInsert).toHaveBeenCalledTimes(1);
+	});
+});

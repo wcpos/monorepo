@@ -16,7 +16,8 @@ type StorageRpcMethod =
 	| 'getChangedDocumentsSince'
 	| 'cleanup'
 	| 'remove'
-	| 'close';
+	| 'close'
+	| 'createStorageInstance';
 type InFlightCall = {
 	methodName: StorageRpcMethod;
 	kill: () => void;
@@ -73,7 +74,7 @@ const NON_DEGRADING_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageRpcM
  * 30s is deliberately far above any interactive storage call (reads and writes
  * on the POS hot path are milliseconds) while staying well inside a cashier's
  * patience during a real outage. It is not a latency SLO — a slow call is never
- * failed on elapsed time alone, see `lastStorageSuccessAt`.
+ * failed on elapsed time alone, see `storageCompletions`.
  */
 export const STORAGE_RPC_WATCHDOG_MS = 30_000;
 
@@ -116,11 +117,26 @@ const WATCHDOG_WATCHED_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageR
 ]);
 
 /**
- * When any RPC last completed. One worker storage backs every database
- * (`adapters/default/index.web.ts`), so this is a liveness clock for the worker
- * as a whole, not for one instance.
+ * How many RPCs the worker has *answered*, ever. One worker storage backs every
+ * database (`adapters/default/index.web.ts`), so this counts liveness for the
+ * worker as a whole, not for one instance.
+ *
+ * A monotonic counter rather than a timestamp on purpose: a clock corrected
+ * backwards (NTP, manual change) would leave a stale "last success at" ahead of
+ * every future window and re-arm the watchdog forever, leaving checkout enabled
+ * against a dead worker. A counter cannot go backwards.
+ *
+ * An answer is an answer whether or not it was the answer we wanted, so ordinary
+ * storage errors count too — a worker returning CONFLICT is emphatically alive.
+ * Only worker-failure rejections are excluded, since counting those would let a
+ * dying worker prove its own liveness.
  */
-let lastStorageSuccessAt = 0;
+let storageCompletions = 0;
+
+function noteStorageCompletion(error?: unknown): void {
+	if (error !== undefined && isStorageWorkerFailure(error)) return;
+	storageCompletions += 1;
+}
 
 function storageWorkerTimeoutError(methodName: StorageRpcMethod, waitedMs: number): Error {
 	const error = new Error(
@@ -232,24 +248,98 @@ function noteStorageWorkerFailure(
 	// is ours, not the worker's, and disposal is not a live-store outage.
 	if (state.failureReason !== null) return;
 	if (!isStorageWorkerFailure(error)) return;
-	if (degradedByDatabaseName.has(state.databaseName)) return;
+	latchDegradedStorage(state.databaseName, methodName, error);
+}
+
+function latchDegradedStorage(
+	databaseName: string,
+	methodName: StorageRpcMethod,
+	error: unknown
+): void {
+	if (degradedByDatabaseName.has(databaseName)) return;
 
 	const message = error instanceof Error ? error.message : String(error);
-	degradedByDatabaseName.set(state.databaseName, {
-		databaseName: state.databaseName,
+	degradedByDatabaseName.set(databaseName, {
+		databaseName,
 		methodName,
 		message,
 		at: Date.now(),
 	});
-	storageLogger.error(`Storage degraded for database "${state.databaseName}" in ${methodName}`, {
+	storageLogger.error(`Storage degraded for database "${databaseName}" in ${methodName}`, {
 		saveToDb: true,
 		context: {
 			errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
-			databaseName: state.databaseName,
+			databaseName,
 			method: methodName,
 		},
 	});
 	publishDegradedStorage();
+}
+
+/**
+ * Runs `call` under the dead-worker deadline, independent of any instance state.
+ * Shared by the per-RPC watchdog and by database creation, which has no instance
+ * to hang state off yet.
+ *
+ * Returns a promise that rejects with StorageWorkerTimeoutError once the worker
+ * has answered nothing for STORAGE_RPC_SILENT_WINDOWS_BEFORE_DEAD consecutive
+ * deadlines, and a disarm() that must be called when the guarded call settles.
+ */
+function createWatchdog(
+	methodName: StorageRpcMethod,
+	onDead: (error: Error) => void
+): { expiry: Promise<never>; disarm: () => void } {
+	const startedAt = Date.now();
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const expiry = new Promise<never>((_resolve, reject) => {
+		let silentWindows = 0;
+		const arm = () => {
+			const armedAt = Date.now();
+			const completionsAtArm = storageCompletions;
+			timer = setTimeout(() => {
+				// Elapsed time alone never condemns the worker. What separates "slow"
+				// from "dead" is whether the worker answered ANYTHING during this
+				// window — one storage worker backs every database, so any completion,
+				// on any collection or scope, proves it is alive. Under heavy sync that
+				// is constantly true, which is why a slow read queued behind a batch of
+				// writes is never condemned. Counted per window rather than against the
+				// call's start, or a single old answer would disarm this forever.
+				if (storageCompletions > completionsAtArm) {
+					silentWindows = 0;
+					arm();
+					return;
+				}
+				// The deadline is wall-clock, so a slept device or a throttled
+				// background tab can deliver this timer arbitrarily late with the worker
+				// perfectly healthy — a till whose lid was closed overnight must not
+				// wake to a spurious "reload the app". If far more time passed than we
+				// asked for, the environment stalled, not the worker: re-arm and give it
+				// a real deadline's worth of running time to answer in.
+				if (Date.now() - armedAt > STORAGE_RPC_WATCHDOG_MS * 2) {
+					arm();
+					return;
+				}
+				silentWindows += 1;
+				if (silentWindows < STORAGE_RPC_SILENT_WINDOWS_BEFORE_DEAD) {
+					arm();
+					return;
+				}
+				const error = storageWorkerTimeoutError(methodName, Date.now() - startedAt);
+				onDead(error);
+				reject(error);
+			}, STORAGE_RPC_WATCHDOG_MS);
+			// Never hold the process open for a watchdog (node/jest); browsers ignore this.
+			(timer as unknown as { unref?: () => void }).unref?.();
+		};
+		arm();
+	});
+	void expiry.catch(() => undefined);
+	return {
+		expiry,
+		disarm: () => {
+			if (timer !== undefined) clearTimeout(timer);
+		},
+	};
 }
 
 const TARGETED_RECOVERY =
@@ -415,65 +505,23 @@ async function raceStorageCall<T>(
 	void underlying.catch((error) => noteStorageWorkerFailure(state, methodName, error));
 	void underlying.then(
 		() => {
-			lastStorageSuccessAt = Date.now();
+			noteStorageCompletion();
 			state.inFlight.delete(callState);
 		},
-		() => state.inFlight.delete(callState)
+		(error) => {
+			noteStorageCompletion(error);
+			state.inFlight.delete(callState);
+		}
 	);
 
 	if (!WATCHDOG_WATCHED_METHODS.has(methodName)) {
 		return Promise.race([underlying, killed]);
 	}
 
-	const startedAt = Date.now();
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const watchdog = new Promise<T>((_resolve, reject) => {
-		let silentWindows = 0;
-		const arm = () => {
-			const armedAt = Date.now();
-			timer = setTimeout(() => {
-				// Elapsed time alone never condemns the worker. What separates "slow"
-				// from "dead" is whether the worker answered ANYTHING during this
-				// window — one storage worker backs every database, so any completion,
-				// on any collection or scope, proves it is alive. Under heavy sync that
-				// is constantly true, which is why a slow read queued behind a batch of
-				// writes is never condemned. Checked per window rather than against the
-				// call's start, or a single old success would disarm this forever.
-				if (lastStorageSuccessAt > armedAt) {
-					silentWindows = 0;
-					arm();
-					return;
-				}
-				// The deadline is wall-clock, so a slept device or a throttled
-				// background tab can deliver this timer arbitrarily late with the worker
-				// perfectly healthy — a till whose lid was closed overnight must not
-				// wake to a spurious "reload the app". If far more time passed than we
-				// asked for, the environment stalled, not the worker: re-arm and give it
-				// a real deadline's worth of running time to answer in.
-				if (Date.now() - armedAt > STORAGE_RPC_WATCHDOG_MS * 2) {
-					arm();
-					return;
-				}
-				silentWindows += 1;
-				if (silentWindows < STORAGE_RPC_SILENT_WINDOWS_BEFORE_DEAD) {
-					arm();
-					return;
-				}
-				const waitedMs = Date.now() - startedAt;
-				const error = storageWorkerTimeoutError(methodName, waitedMs);
-				noteStorageWorkerFailure(state, methodName, error);
-				reject(error);
-			}, STORAGE_RPC_WATCHDOG_MS);
-			// Never hold the process open for a watchdog (node/jest); browsers ignore this.
-			(timer as unknown as { unref?: () => void }).unref?.();
-		};
-		arm();
-	});
-	void watchdog.catch(() => undefined);
-
-	return Promise.race([underlying, killed, watchdog]).finally(() => {
-		if (timer !== undefined) clearTimeout(timer);
-	});
+	const watchdog = createWatchdog(methodName, (error) =>
+		noteStorageWorkerFailure(state, methodName, error)
+	);
+	return Promise.race([underlying, killed, watchdog.expiry]).finally(watchdog.disarm);
 }
 
 function unregisterInstance(state: InstanceLatchState): void {
@@ -630,7 +678,21 @@ export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 		async createStorageInstance<RxDocType>(
 			params: RxStorageInstanceCreationParams<RxDocType, InstanceCreationOptions>
 		) {
-			const instance = await storage.createStorageInstance(params);
+			// Opening a store is a remote RPC too. A worker that died before startup
+			// leaves it pending forever, so the app hangs on a spinner with no
+			// instance in existence to arm a read against and nothing to show the
+			// cashier. Failing instead surfaces as a bootstrap error the engine
+			// already knows how to report.
+			const watchdog = createWatchdog('createStorageInstance', (error) =>
+				latchDegradedStorage(params.databaseName, 'createStorageInstance', error)
+			);
+			let instance: RxStorageInstance<RxDocType, Internals, InstanceCreationOptions, unknown>;
+			try {
+				instance = await Promise.race([storage.createStorageInstance(params), watchdog.expiry]);
+			} finally {
+				watchdog.disarm();
+			}
+			noteStorageCompletion();
 			return wrapStorageInstance(instance, params.databaseName);
 		},
 	};
