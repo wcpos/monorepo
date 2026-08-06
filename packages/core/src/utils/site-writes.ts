@@ -53,20 +53,14 @@ export async function upsertSiteData(
 		return merge(existing);
 	}
 
-	try {
-		return await collection.insert(patch as never);
-	} catch (err) {
-		/**
-		 * Someone inserted the same site between our lookup and our insert.
-		 * Fall back to the atomic merge so the loser of the race does not
-		 * overwrite the winner's document.
-		 */
-		const raced = await collection.findOne(primary).exec();
-		if (!raced) {
-			throw err;
-		}
-		return merge(raced);
-	}
+	/**
+	 * No live document. Either the site has never been saved, or it is a tombstone
+	 * from a site the user removed — removal takes the linked credential documents
+	 * with it (`populate` preRemove), so there is no link array left to preserve and
+	 * a create-or-revive write is safe. `incrementalUpsert` covers both and queues
+	 * per primary key, so two connects for the same new site cannot both insert.
+	 */
+	return collection.incrementalUpsert(patch as never);
 }
 
 /**
@@ -84,18 +78,34 @@ export async function linkCredentialsToSite(
 	credentialsUuid: string
 ): Promise<boolean> {
 	const latest = site.getLatest();
+
+	/**
+	 * Writing to a tombstone silently "succeeds" — the caller would report a
+	 * successful login against a site the user just removed, which is the same
+	 * class of dead end #902 was about.
+	 */
+	if (latest.deleted) {
+		throw new Error('Cannot link credentials to a removed site');
+	}
+
 	const linked = Array.isArray(latest.wp_credentials) ? latest.wp_credentials : [];
 	if (linked.includes(credentialsUuid)) {
 		return false;
 	}
 
+	// Set by the modifier, which may run more than once — the last run is the
+	// one that was actually written.
+	let appended = false;
+
 	await latest.incrementalModify((current) => {
 		const currentLinks = Array.isArray(current.wp_credentials) ? current.wp_credentials : [];
 		if (currentLinks.includes(credentialsUuid)) {
+			appended = false;
 			return current;
 		}
+		appended = true;
 		return { ...current, wp_credentials: [...currentLinks, credentialsUuid] };
 	});
 
-	return true;
+	return appended;
 }

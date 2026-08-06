@@ -253,7 +253,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 			sites: {
 				schema: { primaryPath: 'uuid' },
 				findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
-				insert: jest.fn(async () => siteDoc),
+				incrementalUpsert: jest.fn(async () => siteDoc),
 			},
 			wp_credentials: { upsert: jest.fn(async () => wpCredentialsDoc) },
 			stores: {

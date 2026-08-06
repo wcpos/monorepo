@@ -9,6 +9,7 @@
  */
 import { createRxDatabase, type RxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { createRevision } from 'rxdb/plugins/utils';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
 import '@wcpos/database/plugins';
@@ -114,6 +115,20 @@ describe('upsertSiteData', () => {
 		expect(final!.wp_version).toBe('6.9');
 	});
 
+	it('revives a site the user removed and re-connected', async () => {
+		await upsertSiteData(sites(), parse(restResponse()));
+		const site = await sites().findOne(SITE_UUID).exec();
+		await site!.getLatest().remove();
+		expect(await sites().findOne(SITE_UUID).exec()).toBeNull();
+
+		const revived = await upsertSiteData(sites(), parse(restResponse({ name: 'Pro WCPOS' })));
+
+		expect(revived.deleted).toBe(false);
+		const final = await sites().findOne(SITE_UUID).exec();
+		expect(final).not.toBeNull();
+		expect(final!.name).toBe('Pro WCPOS');
+	});
+
 	it('merges into the newest revision instead of replaying a stale snapshot', async () => {
 		await upsertSiteData(sites(), parse(restResponse()));
 
@@ -159,13 +174,70 @@ describe('linkCredentialsToSite', () => {
 		await upsertSiteData(sites(), parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();
 
-		await Promise.all([
+		const results = await Promise.all([
 			linkCredentialsToSite(site!, 'cred-1'),
 			linkCredentialsToSite(site!, 'cred-1'),
 		]);
 
 		const final = await sites().findOne(SITE_UUID).exec();
 		expect(final!.wp_credentials).toEqual(['cred-1']);
+		// Exactly one of the two actually wrote the link.
+		expect(results.filter(Boolean)).toHaveLength(1);
+	});
+
+	it('recomputes the append against the DB document on a real revision conflict', async () => {
+		// The other tests share one collection and therefore one incremental write
+		// queue, which chains modifiers instead of hitting RxDB's 409 retry path.
+		// This one lands a competing write underneath the queue so the append has
+		// to survive an actual conflict — the semantics the whole fix rests on.
+		await upsertSiteData(sites(), parse(restResponse()));
+		const site = await sites().findOne(SITE_UUID).exec();
+
+		const collection = sites() as never as {
+			storageInstance: {
+				bulkWrite: (
+					rows: { previous: unknown; document: unknown }[],
+					ctx: string
+				) => Promise<never>;
+			};
+			database: { token: string };
+		};
+		const storageInstance = collection.storageInstance;
+		const originalBulkWrite = storageInstance.bulkWrite.bind(storageInstance);
+		let injected = false;
+
+		storageInstance.bulkWrite = async (rows, ctx) => {
+			if (!injected && ctx === 'incremental-write') {
+				injected = true;
+				const previous = rows[0].previous as Record<string, unknown>;
+				const competing: Record<string, unknown> = {
+					...previous,
+					wp_credentials: ['cred-from-another-writer'],
+					_meta: { lwt: Date.now() },
+					_rev: createRevision(collection.database.token, previous as never),
+				};
+				await originalBulkWrite([{ previous, document: competing }], 'test-competing-write');
+			}
+			return originalBulkWrite(rows, ctx);
+		};
+
+		try {
+			await linkCredentialsToSite(site!, 'cred-1');
+		} finally {
+			storageInstance.bulkWrite = originalBulkWrite;
+		}
+
+		expect(injected).toBe(true);
+		const final = await sites().findOne(SITE_UUID).exec();
+		expect(final!.wp_credentials).toEqual(['cred-from-another-writer', 'cred-1']);
+	});
+
+	it('refuses to link against a removed site instead of writing a tombstone', async () => {
+		await upsertSiteData(sites(), parse(restResponse()));
+		const site = await sites().findOne(SITE_UUID).exec();
+		await site!.getLatest().remove();
+
+		await expect(linkCredentialsToSite(site!, 'cred-1')).rejects.toThrow('removed site');
 	});
 
 	it('reports false and skips the write when the credential is already linked', async () => {

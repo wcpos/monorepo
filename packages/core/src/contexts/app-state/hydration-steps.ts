@@ -434,14 +434,23 @@ const testAuthorizationStep: HydrationStep = {
 
 		const result = await testAuthorizationMethod(wcposApiUrl, accessToken);
 
-		if (result && result.useJwtAsParam) {
-			// Update the site document to use JWT as query parameter
+		if (result) {
+			/**
+			 * Write the outcome both ways. The embedded payload never carries
+			 * `use_jwt_as_param`, and the site write above merges rather than
+			 * overwrites (#902), so a stale `true` from an earlier session would
+			 * otherwise keep JWTs in the query string forever.
+			 */
 			const siteDoc = await userDB.sites.findOne(initialProps.site.uuid).exec();
 			if (siteDoc) {
-				await siteDoc.incrementalPatch({ use_jwt_as_param: true });
-				appLogger.info('Site configured to use JWT as query parameter', {
-					context: { siteId: initialProps.site.uuid },
+				await siteDoc.getLatest().incrementalPatch({
+					use_jwt_as_param: !!result.useJwtAsParam,
 				});
+				if (result.useJwtAsParam) {
+					appLogger.info('Site configured to use JWT as query parameter', {
+						context: { siteId: initialProps.site.uuid },
+					});
+				}
 			}
 		}
 
