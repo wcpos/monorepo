@@ -288,7 +288,9 @@ export async function pushRecordMutation(input: {
 		throw new RecordPushError(
 			mutation,
 			428,
-			typeof body?.code === 'string' ? body.code : 'precondition-required'
+			typeof body?.code === 'string' ? body.code : 'precondition-required',
+			false,
+			typeof body?.message === 'string' ? body.message : undefined
 		);
 	}
 

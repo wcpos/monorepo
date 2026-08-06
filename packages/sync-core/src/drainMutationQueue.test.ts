@@ -291,6 +291,34 @@ describe('drainMutationQueue', () => {
 		expect((await q.all())[0]).toMatchObject({ status: 'needs-revision' });
 	});
 
+	it('dead-letters an unrefreshable born-local 428 with the server message (#832)', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'm-create-428', operation: 'create', origin: 'minted', baseRevision: null })
+		);
+		const result = await drainMutationQueue({
+			queue: q,
+			push: (mutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: () => ({ url: 'https://x/push/products', method: 'POST' }),
+					fetcher: async () =>
+						jsonResponse(428, {
+							code: 'woo_rxdb_sync_precondition_required',
+							message: 'A server revision is required.',
+						}),
+				}),
+			refreshRevision: async () => null,
+		});
+
+		expect(result.rejected.map(({ mutation }) => mutation.mutationId)).toEqual(['m-create-428']);
+		expect((await q.all())[0]).toMatchObject({
+			status: 'rejected',
+			rejectedStatus: 428,
+			rejectedReason: 'woo_rxdb_sync_precondition_required',
+			rejectedMessage: 'A server revision is required.',
+		});
+	});
+
 	it('dead-letters when the one post-refresh retry still returns 428', async () => {
 		const q = await queueWith(
 			mut({ mutationId: 'm-428-again', operation: 'update', baseRevision: null })

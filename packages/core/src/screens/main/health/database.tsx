@@ -672,11 +672,11 @@ export function DatabaseScreen() {
 
 				{/* Conflicts — 409s only. Dead letters are a different failure with a
 				    different fix, and they get their own actionable list below (#832). */}
-				{mutations.conflicts - mutations.rejected > 0 ? (
+				{mutations.unresolvedConflicts > 0 ? (
 					<Callout tone="destructive">
 						<Text className="text-destructive text-sm">
 							{t('health.database.conflicts', {
-								n: mutations.conflicts - mutations.rejected,
+								n: mutations.unresolvedConflicts,
 							})}
 						</Text>
 					</Callout>

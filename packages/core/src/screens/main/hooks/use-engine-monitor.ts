@@ -22,6 +22,8 @@ export type EngineMutationCounts = {
 	 * different fixes, and lumping them made the callout lie about half of them.
 	 */
 	rejected: number;
+	/** Conflicted + needs-revision rows, observed independently from rejected rows. */
+	unresolvedConflicts: number;
 };
 
 type CountCollection = { count(): { $: Observable<number> } };
@@ -72,7 +74,14 @@ function subscribeToMutationCounts(
 	)
 		.pipe(
 			switchMap((database) => {
-				if (!database) return of({ pending: 0, pendingOrders: 0, conflicts: 0, rejected: 0 });
+				if (!database)
+					return of({
+						pending: 0,
+						pendingOrders: 0,
+						conflicts: 0,
+						rejected: 0,
+						unresolvedConflicts: 0,
+					});
 				const mutations = database.collections[
 					MUTATION_QUEUE_RXDB_COLLECTION
 				] as unknown as MutationCollection;
@@ -87,12 +96,22 @@ function subscribeToMutationCounts(
 					selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },
 				}).$;
 				const rejected$ = mutations.find({ selector: { status: { $in: ['rejected'] } } }).$;
-				return combineLatest([pending$, pendingOrders$, conflicts$, rejected$]).pipe(
-					map(([pending, pendingOrders, conflicts, rejected]) => ({
+				const unresolvedConflicts$ = mutations.find({
+					selector: { status: { $in: ['conflicted', 'needs-revision'] } },
+				}).$;
+				return combineLatest([
+					pending$,
+					pendingOrders$,
+					conflicts$,
+					rejected$,
+					unresolvedConflicts$,
+				]).pipe(
+					map(([pending, pendingOrders, conflicts, rejected, unresolvedConflicts]) => ({
 						pending: pending.length,
 						pendingOrders: pendingOrders.length,
 						conflicts: conflicts.length,
 						rejected: rejected.length,
+						unresolvedConflicts: unresolvedConflicts.length,
 					}))
 				);
 			})
@@ -132,6 +151,7 @@ export function useMutationCounts(): EngineMutationCounts {
 		pendingOrders: 0,
 		conflicts: 0,
 		rejected: 0,
+		unresolvedConflicts: 0,
 	});
 
 	React.useEffect(() => {

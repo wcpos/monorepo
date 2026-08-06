@@ -10,6 +10,13 @@ import { DatabaseScreen } from './database';
 type TooltipProps = { children: React.ReactNode; showOnNative?: boolean };
 
 const mockTooltip = jest.fn(({ children }: TooltipProps) => <>{children}</>);
+const mockMutationCounts = {
+	conflicts: 0,
+	pending: 0,
+	pendingOrders: 0,
+	rejected: 0,
+	unresolvedConflicts: 0,
+};
 
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: (props: TooltipProps) => mockTooltip(props),
@@ -79,6 +86,7 @@ jest.mock('@wcpos/query', () => ({
 	}),
 }));
 jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
+jest.mock('./rejected-mutations', () => ({ RejectedMutationsPanel: () => null }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
 		'../../../../jest/translate'
@@ -101,7 +109,7 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 		gatedBy: null,
 		lanes: {},
 	}),
-	useMutationCounts: () => ({ conflicts: 0, pending: 0, rejected: 0 }),
+	useMutationCounts: () => mockMutationCounts,
 }));
 jest.mock('./components', () => ({
 	Callout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -126,6 +134,12 @@ jest.mock('./use-relative-time', () => ({
 }));
 
 describe('DatabaseScreen coverage', () => {
+	afterEach(() => {
+		mockMutationCounts.conflicts = 0;
+		mockMutationCounts.rejected = 0;
+		mockMutationCounts.unresolvedConflicts = 0;
+	});
+
 	it('enables press-to-show coverage tooltips on native', () => {
 		render(<DatabaseScreen />);
 
@@ -137,5 +151,17 @@ describe('DatabaseScreen coverage', () => {
 		const { queryByText } = render(<DatabaseScreen />);
 
 		expect(queryByText(/This device also stores/)).toBeNull();
+	});
+
+	it('renders the independently observed unresolved-conflict count', () => {
+		mockMutationCounts.conflicts = 1;
+		mockMutationCounts.rejected = 2;
+		mockMutationCounts.unresolvedConflicts = 1;
+
+		const { getByText } = render(<DatabaseScreen />);
+
+		expect(
+			getByText('1 sale(s) need attention — changed on the server while a till was editing.')
+		).toBeTruthy();
 	});
 });

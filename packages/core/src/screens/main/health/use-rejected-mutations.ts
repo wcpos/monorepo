@@ -138,5 +138,9 @@ function rejected$(engine: RxdbSyncEngine): Observable<RejectedMutation[]> {
 export function useRejectedMutations(): RejectedMutation[] {
 	const { engine } = useQueryRuntime();
 	const resource = React.useMemo(() => new ObservableResource(rejected$(engine)), [engine]);
+	React.useEffect(() => {
+		// ObservableResource owns the db$/RxDB subscriptions and must release them on rebind/unmount.
+		return () => resource.destroy();
+	}, [resource]);
 	return useObservableSuspense(resource);
 }
