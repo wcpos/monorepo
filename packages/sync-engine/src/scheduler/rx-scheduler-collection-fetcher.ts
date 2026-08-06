@@ -38,6 +38,18 @@ export type CollectionRepository<Doc> = {
 
 export type CollectionSchedulerCoverageRepository = {
 	recordQueryResult(input: BuildCoverageDocumentsFromQueryResultInput): Promise<void>;
+	/**
+	 * Record-level coverage with NO lane claim. Optional: older hosts (and most test fakes)
+	 * expose only `recordQueryResult`, and a demotion that cannot reach this simply keeps the
+	 * rows resident without refreshing their coverage — wasteful at worst, never wrong.
+	 */
+	recordRecords?(input: {
+		collection: string;
+		queryKey: string;
+		records: { id: string }[];
+		nowMs: number;
+		freshForMs: number;
+	}): Promise<void>;
 };
 
 export type CollectionSchedulerInput<Doc> = {
@@ -120,6 +132,26 @@ export async function recordCoverage(
 		...(prefixAncestry ? { prefixAncestry } : {}),
 	});
 }
+/**
+ * Record coverage for rows WITHOUT claiming a window for them — the demotion path, where the
+ * rows fetched are a tail of the listing and must not be read back as a leading prefix.
+ */
+export async function recordCoverageRecordsOnly(
+	collection: string,
+	input: CollectionSchedulerInput<unknown>,
+	task: FetchTask,
+	coverageRecordIds: readonly string[]
+): Promise<void> {
+	if (!input.coverageRepository?.recordRecords || coverageRecordIds.length === 0) return;
+	await input.coverageRepository.recordRecords({
+		collection,
+		queryKey: task.queryKey,
+		records: coverageRecordIds.map((id) => ({ id })),
+		nowMs: input.nowMs?.() ?? Date.now(),
+		freshForMs: input.coverageFreshForMs ?? DEFAULT_COVERAGE_FRESH_FOR_MS,
+	});
+}
+
 export { chunk };
 
 /**

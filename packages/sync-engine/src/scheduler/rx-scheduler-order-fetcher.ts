@@ -849,10 +849,12 @@ async function fetchBrowserOrderQuery(
 		// it holds is a TAIL of the listing, and readBrowseWindowContinuation reads a
 		// page-aligned incomplete lane as the LEADING prefix — storing the tail would make the
 		// next pass offset past rows nobody fetched and splice the window permanently.
+		// The rows are real and already resident, so their RECORD coverage stands; only the
+		// window claim is withdrawn. This matches the persistence-path demotion, which keeps
+		// record coverage for the same reason.
+		await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
 		if (descriptor.search === '') {
 			await recordOrderFetchCoverage(input, task, [], false);
-		} else {
-			await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
 		}
 		return {
 			taskId: task.id,

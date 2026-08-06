@@ -45,6 +45,7 @@ import {
 	type Fetcher,
 	httpGet,
 	recordCoverage,
+	recordCoverageRecordsOnly,
 } from './rx-scheduler-collection-fetcher';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
@@ -596,7 +597,9 @@ async function tryProductBrowseWindowWalk(
 		});
 		// The lane claims NOTHING, not this pass's rows — they are a TAIL of the listing and
 		// readBrowseWindowContinuation would read them as its LEADING prefix. See the orders
-		// fetcher's matching branch.
+		// fetcher's matching branch. The rows' RECORD coverage still stands: they are real and
+		// already resident, it is only the window claim that is withdrawn.
+		await recordCoverageRecordsOnly('products', input, task, deltaRecordIds);
 		await recordCoverage('products', input, task, [], false);
 		return {
 			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },

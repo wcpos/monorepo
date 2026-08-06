@@ -140,6 +140,15 @@ describe('orderBrowserQueryKey', () => {
 		);
 	});
 
+	// Both doors must agree byte-for-byte: the demand plane builds the key with
+	// orderBrowserQueryKey and the seeder rebuilds it, so the DEFAULT `id desc` sort has to be
+	// omitted by both or one browse gets two lane identities.
+	it('omits the default id-desc sort from a windowed lane key', () => {
+		expect(orderBrowserQueryKey({ orderby: 'id', order: 'desc', limit: 10 })).toBe(
+			'orders:browser:status=all:search=:limit=10'
+		);
+	});
+
 	// Lanes persisted before this change still carry the sort. They must keep parsing — the
 	// scheduler would otherwise refuse the task outright — but the descriptor is normalized so
 	// nothing downstream can act on a sort the ranged walk ignores anyway.
