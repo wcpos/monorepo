@@ -508,17 +508,19 @@ export async function requeueRejectedMutation(input: {
 	now: () => string;
 	observe?: SyncObserver;
 }): Promise<{ mutationId: string; recordId: string }> {
-	const { entry } = input;
+	const snapshot = input.entry;
 	const queue = queueFor(input.db);
-	const collection = collectionOf(input.db, entry.collectionName);
+	const collection = collectionOf(input.db, snapshot.collectionName);
 	// Re-read the dead letter INSIDE this operation. The caller matched it from an
 	// earlier snapshot, and two resolutions racing (two windows, a double-tap that
 	// beat the button's disabled state) would otherwise each rebuild and each
-	// remove, leaving two live rows for one dead letter.
-	const current = (await queue.all()).find((item) => item.mutationId === entry.mutationId);
-	if (!current || current.status !== 'rejected') {
+	// remove, leaving two live rows for one dead letter. Everything below reads the
+	// FRESH row, not the caller's copy — `requeueCount` in particular, or a second
+	// recovery would re-report the count the first one already superseded.
+	const entry = (await queue.all()).find((item) => item.mutationId === snapshot.mutationId);
+	if (!entry || entry.status !== 'rejected') {
 		throw new Error(
-			`requeue: dead letter "${entry.mutationId}" was already settled — refresh the list`
+			`requeue: dead letter "${snapshot.mutationId}" was already settled — refresh the list`
 		);
 	}
 	const doc = (await collection.findOne(entry.recordId).exec()) as MutationDoc | null;
