@@ -20,6 +20,7 @@ import {
 	type RangedLaneResumeState,
 	toLocalCoverageState,
 } from '../scheduler';
+import { retainedCoverageQueryKeys } from './coverage-key-retention';
 
 import type { CoverageLaneDocument, CoverageRecordDocument } from './coverage-schema';
 
@@ -200,13 +201,20 @@ function localLaneCoverage(
 
 function mergeRecordWithCurrentRevision(
 	current: CoverageRecordDocument,
-	next: PersistedCoverageRecord
+	next: PersistedCoverageRecord,
+	liveLaneKeys: ReadonlySet<string>
 ): CoverageRecordDocument {
 	const merged = mergePersistedCoverageWrites([
 		{ records: [fromRecordDocument(current)], lanes: [] },
 		{ records: [next], lanes: [] },
 	]).documents.records[0];
-	return toRecordDocument(merged);
+	// The union is still how two writers combine; the prune is what stops it growing without
+	// bound (#1034). Applied AFTER the merge so a key this write is asserting survives even
+	// when the stored document predates its lane.
+	return toRecordDocument({
+		...merged,
+		coveredQueryKeys: retainedCoverageQueryKeys(merged.coveredQueryKeys, liveLaneKeys),
+	});
 }
 
 /** The cursor a ranged pass STARTED from; the write may only advance from exactly this. */
@@ -387,14 +395,23 @@ export class RxCoverageRepository {
 					};
 		const lane = rangedResume ? { ...baseLane, rangedResume } : baseLane;
 
-		for (const record of recordIdsToRefresh.map((id) => ({
+		// The cumulative path writes records directly rather than through
+		// writeCoverageDocumentsWithMerge, so it resolves the live-lane set itself (#1034).
+		// Its OWN key is a ranged lane, which is never prunable — but the records it touches
+		// can still be carrying browse-window keys whose lanes are long gone.
+		const records = recordIdsToRefresh.map((id) => ({
 			collection: input.collection,
 			id,
 			coveredQueryKeys: [input.queryKey],
 			freshUntilMs,
 			updatedAtMs: input.nowMs,
-		}))) {
-			await this.insertOrMergeRecord(record);
+		}));
+		const liveLaneKeys =
+			records.length > 0
+				? await this.liveLaneKeysFor({ records, lanes: [lane] })
+				: new Set<string>();
+		for (const record of records) {
+			await this.insertOrMergeRecord(record, liveLaneKeys);
 		}
 		await this.insertOrMergeLane(
 			lane,
@@ -639,8 +656,15 @@ export class RxCoverageRepository {
 	private async writeCoverageDocumentsWithMerge(
 		documents: PersistedCoverageDocumentSet
 	): Promise<void> {
+		// ONE lane-key read per write BATCH, not per record (#1034). Every record in this
+		// batch is merged against the same live-lane set, so a browse window whose lane
+		// #1032 evicted stops being carried on the records it used to cover. Skipped
+		// entirely when the batch writes no records.
+		const liveLaneKeys =
+			documents.records.length > 0 ? await this.liveLaneKeysFor(documents) : new Set<string>();
+
 		for (const record of documents.records) {
-			await this.insertOrMergeRecord(record);
+			await this.insertOrMergeRecord(record, liveLaneKeys);
 		}
 
 		for (const lane of documents.lanes) {
@@ -648,11 +672,33 @@ export class RxCoverageRepository {
 		}
 	}
 
-	private async insertOrMergeRecord(record: PersistedCoverageRecord): Promise<void> {
+	/**
+	 * The lane keys a record written in this batch may still claim: those with a stored lane,
+	 * plus the lanes this very batch is about to write.
+	 *
+	 * The second half is load-bearing. Records are written BEFORE lanes above, so a growing
+	 * window's own lane does not exist yet at the moment its records are stamped — without it
+	 * the prune would strip the key the write is currently asserting, on every single tick.
+	 */
+	private async liveLaneKeysFor(documents: PersistedCoverageDocumentSet): Promise<Set<string>> {
+		const collections = new Set(documents.records.map((record) => record.collection));
+		const live = new Set(documents.lanes.map((lane) => lane.queryKey));
+		for (const collection of collections) {
+			for (const lane of await this.listCoverageLanesForCollection(collection)) {
+				live.add(lane.queryKey);
+			}
+		}
+		return live;
+	}
+
+	private async insertOrMergeRecord(
+		record: PersistedCoverageRecord,
+		liveLaneKeys: ReadonlySet<string>
+	): Promise<void> {
 		const documentId = coverageRecordKey(record.collection, record.id);
 		const document = await this.coverageRecords.findOne(documentId).exec();
 		if (document) {
-			await this.mergeExistingRecord(document, record);
+			await this.mergeExistingRecord(document, record, liveLaneKeys);
 			return;
 		}
 
@@ -661,16 +707,20 @@ export class RxCoverageRepository {
 		} catch (error) {
 			if (!isRxConflict(error)) throw error;
 			const conflictingDocument = await this.coverageRecords.findOne(documentId).exec(true);
-			await this.mergeExistingRecord(conflictingDocument, record);
+			await this.mergeExistingRecord(conflictingDocument, record, liveLaneKeys);
 		}
 	}
 
 	private async mergeExistingRecord(
 		document: RxCoverageDocument<CoverageRecordDocument>,
-		record: PersistedCoverageRecord
+		record: PersistedCoverageRecord,
+		liveLaneKeys: ReadonlySet<string>
 	): Promise<void> {
+		// The prune runs INSIDE incrementalModify, against the revision actually being
+		// written, so a concurrent writer that re-added a key between the read and the write
+		// is pruned too rather than leaving a survivor behind.
 		await document.incrementalModify((currentDocument) =>
-			mergeRecordWithCurrentRevision(currentDocument, record)
+			mergeRecordWithCurrentRevision(currentDocument, record, liveLaneKeys)
 		);
 	}
 
