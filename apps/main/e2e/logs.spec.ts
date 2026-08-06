@@ -26,6 +26,11 @@ test.describe('Store health · Logs', () => {
 		await expect(screen.getByTestId('logs-chip-sync')).toBeVisible();
 		await expect(screen.getByTestId('logs-chip-verbose')).toBeVisible();
 
+		await expect(screen.getByTestId('logs-heading-time')).toBeVisible();
+		await expect(screen.getByTestId('logs-heading-level')).toBeVisible();
+		await expect(screen.getByTestId('logs-heading-event')).toBeVisible();
+		await expect(screen.getByTestId('logs-heading-code')).toBeVisible();
+
 		// The engine writes startup/cycle rows on boot, so an authenticated
 		// session always has ledger entries.
 		await expect(screen.getByTestId('logs-ledger')).toBeVisible();

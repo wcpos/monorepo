@@ -201,6 +201,36 @@ describe('PaymentWebview fallback order refresh', () => {
 		jest.useRealTimers();
 	});
 
+	it('stays quiet when the fallback server status still matches the local status', async () => {
+		jest.useFakeTimers();
+		mockGet.mockResolvedValue({
+			data: [{ status: 'pos-open', number: '42', line_items: [] }],
+		});
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoad({});
+			webViewProps.onLoad({});
+			await jest.advanceTimersByTimeAsync(1000);
+		});
+
+		expect(mockGet).toHaveBeenCalledWith('orders', { params: { include: 42, per_page: 1 } });
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(logger.success).not.toHaveBeenCalled();
+		expect(mockEngineRequire).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		jest.useRealTimers();
+	});
+
 	it('routes on SERVER truth even when the local document never updates', async () => {
 		// The review scenario: an engine require can settle without applying a
 		// newer revision (skip-coalesced resident task, dirty-row protection) —

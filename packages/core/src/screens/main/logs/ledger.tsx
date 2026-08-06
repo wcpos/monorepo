@@ -250,10 +250,16 @@ export function Ledger({
 	return (
 		<VStack testID="logs-ledger" className="gap-0">
 			<HairlineHeaderRow className="hidden pl-2 md:flex">
-				<HairlineHeaderCell className="w-20">{t('health.logs.col_time')}</HairlineHeaderCell>
-				<HairlineHeaderCell className="w-16">{t('health.logs.col_level')}</HairlineHeaderCell>
-				<HairlineHeaderCell className="flex-1">{t('health.logs.col_event')}</HairlineHeaderCell>
-				<HairlineHeaderCell className="w-24 text-right">
+				<HairlineHeaderCell testID="logs-heading-time" className="w-20">
+					{t('health.logs.col_time')}
+				</HairlineHeaderCell>
+				<HairlineHeaderCell testID="logs-heading-level" className="w-16">
+					{t('health.logs.col_level')}
+				</HairlineHeaderCell>
+				<HairlineHeaderCell testID="logs-heading-event" className="flex-1">
+					{t('health.logs.col_event')}
+				</HairlineHeaderCell>
+				<HairlineHeaderCell testID="logs-heading-code" className="w-24 text-right">
 					{t('health.logs.col_code')}
 				</HairlineHeaderCell>
 				<View className="w-6" />

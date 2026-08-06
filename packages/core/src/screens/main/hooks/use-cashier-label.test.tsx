@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { parseRemoteId, useCashierLabel } from './use-cashier-label';
@@ -21,13 +21,15 @@ const mockFormat = jest.fn((json: { id?: number; first_name?: string; last_name?
 const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(null);
 const findOne = jest.fn(() => ({ $: document$.asObservable() }));
 const database = { collections: { customers: { findOne } } };
+const active = jest.fn(() => ({ database }));
+const db$ = jest.fn((subscriber: (value: typeof database) => void) => {
+	subscriber(database);
+	return () => undefined;
+});
 const engine = {
-	active: () => ({ database }),
+	active,
 	ready: Promise.resolve({ database }),
-	db$: (subscriber: (value: typeof database) => void) => {
-		subscriber(database);
-		return () => undefined;
-	},
+	db$,
 };
 const manager = { engine };
 
@@ -91,10 +93,23 @@ describe('useCashierLabel', () => {
 		expect(result.current).toEqual({ id: 99, label: 'ID: 99', document: undefined });
 	});
 
-	it('returns an empty label without querying when the id is invalid', () => {
-		const { result } = renderHook(() => useCashierLabel('not-a-number'));
+	it('updates one mounted label when the cashier document arrives', async () => {
+		const { result } = renderHook(() => useCashierLabel(42));
+
+		expect(result.current).toEqual({ id: 42, label: 'ID: 42', document: undefined });
+
+		act(() => document$.next(fakeCustomer()));
+
+		await waitFor(() => expect(result.current.label).toBe('Ada Lovelace'));
+		expect(result.current.document?.id).toBe(42);
+	});
+
+	it.each([undefined, 'not-a-number'])('returns an empty label without querying for %p', (id) => {
+		const { result } = renderHook(() => useCashierLabel(id));
 
 		expect(findOne).not.toHaveBeenCalled();
+		expect(active).not.toHaveBeenCalled();
+		expect(db$).not.toHaveBeenCalled();
 		expect(result.current).toEqual({ id: undefined, label: '', document: undefined });
 	});
 });

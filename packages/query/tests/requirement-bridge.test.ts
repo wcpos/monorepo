@@ -412,6 +412,20 @@ describe('requirementsForQuery extraction', () => {
 			expect(result.requirements[0]).not.toHaveProperty(dimension);
 		});
 
+		it('keeps unrelated metadata residual without creating cashier or store demand', () => {
+			const result = orderPlan({
+				selector: {
+					$and: [{ meta_data: { $elemMatch: { key: '_unrelated_plugin_key', value: '7' } } }],
+				},
+				limit: 25,
+			});
+
+			expect(result.represented).toBe(false);
+			expect(result.requirements).toHaveLength(1);
+			expect(result.requirements[0]).not.toHaveProperty('cashierId');
+			expect(result.requirements[0]).not.toHaveProperty('store');
+		});
+
 		it.each([
 			{ created_via: 'woocommerce-pos' },
 			{ created_via: { $eq: 'woocommerce-pos' } },
@@ -725,5 +739,20 @@ describe('declareRequirements', () => {
 		await expect(handles[1].ready).resolves.toMatchObject({
 			action: 'serve-local',
 		});
+	});
+
+	it('contains a rejected category refresh without an unhandled rejection', async () => {
+		const engine = createFakeEngine(database);
+		engine.refreshFailure = new Error('offline');
+		const unhandled = jest.fn();
+		process.once('unhandledRejection', unhandled);
+
+		declareRequirements(engine, [
+			{ id: 'category-filter', collection: 'categories', kind: 'refresh' },
+		]);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(unhandled).not.toHaveBeenCalled();
+		process.removeListener('unhandledRejection', unhandled);
 	});
 });
