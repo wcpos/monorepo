@@ -566,7 +566,13 @@ async function patch(
 /** Drop a delivered row; a failure here is only unreclaimed space. */
 async function forget(deps: DrainDeps, doc: ReceiptEmailDoc): Promise<void> {
 	try {
-		await doc.remove();
+		// The row was just marked `sent` via incrementalPatch, which bumped its
+		// revision, so THIS handle is stale. remove() is not incremental — it
+		// operates on the handle's own revision and a stale one throws CONFLICT.
+		// latest(doc) reaches the current revision (the same guard removeReceiptEmail
+		// uses). Without it every delivered receipt left a permanent `sent` row that
+		// even Clear & Sync could not reclaim.
+		await latest(doc).remove();
 	} catch (error) {
 		deps.logger.debug('Could not prune a sent receipt email', {
 			context: {

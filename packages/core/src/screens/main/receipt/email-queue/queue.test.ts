@@ -22,30 +22,94 @@ const silentLogger = () => ({
 	error: jest.fn(),
 });
 
-/** In-memory stand-in for the RxDB collection, with the same read/patch surface. */
+/**
+ * In-memory stand-in for the RxDB collection, revision-aware on purpose.
+ *
+ * A real RxDocument handle is a snapshot at one revision. `incrementalPatch`
+ * always applies to the LATEST revision (that is what "incremental" means) and
+ * bumps it, so the handle the caller still holds goes stale — `getLatest()` is
+ * how you reach the fresh one. The non-incremental `remove()` operates on the
+ * handle's own revision and throws a CONFLICT when that revision is behind. An
+ * earlier in-place mock could not model this: it mutated one object and never
+ * moved a revision forward, so a stale-handle bug (patch then remove the same
+ * handle) passed silently. This mock reproduces it.
+ */
 function createFakeCollection(seed: ReceiptEmailRow[] = []) {
 	const docs: ReceiptEmailDoc[] = [];
 
+	// The authoritative record per row, keyed by primary key — the "storage".
+	type StoredRecord = { fields: ReceiptEmailRow; rev: number; deleted: boolean };
+	const store = new Map<string, StoredRecord>();
+
+	const conflict = () =>
+		new Error(
+			'RxError (CONFLICT): Document update conflict — cannot update a document that has changed; must work on the previous revision'
+		);
+
+	// Every field a queued row can carry. Defined as live getters on each handle
+	// so a stale handle still REPORTS the latest values (only the write path is
+	// revision-sensitive in RxDB), while staying own enumerable properties that
+	// `toMatchObject` and `Object.keys` can see.
+	const FIELD_KEYS: (keyof ReceiptEmailRow)[] = [
+		'localID',
+		'orderId',
+		'orderNumber',
+		'email',
+		'saveTo',
+		'status',
+		'queuedAt',
+		'attempts',
+		'nextAttemptAt',
+		'lastAttemptAt',
+		'sentAt',
+		'lastError',
+		'lastErrorCode',
+	];
+
+	/** A handle pinned to `handleRev`; its fields read live from the record. */
+	const handleFor = (localID: string, handleRev: number): ReceiptEmailDoc => {
+		const record = () => store.get(localID);
+		const handle = {
+			get deleted() {
+				return record()?.deleted ?? true;
+			},
+			getLatest(): ReceiptEmailDoc {
+				const rec = record();
+				return handleFor(localID, rec ? rec.rev : handleRev);
+			},
+			async incrementalPatch(patch: Partial<ReceiptEmailRow>) {
+				const rec = record();
+				if (!rec || rec.deleted) throw new Error('RxError: document is removed');
+				// Incremental: always applied to the latest revision, never conflicts.
+				rec.fields = { ...rec.fields, ...patch };
+				rec.rev += 1;
+				return handleFor(localID, rec.rev);
+			},
+			async remove() {
+				const rec = record();
+				if (!rec || rec.deleted) throw new Error('RxError: document is removed');
+				// Non-incremental: a stale handle cannot delete the current row.
+				if (handleRev !== rec.rev) throw conflict();
+				rec.deleted = true;
+				rec.rev += 1;
+				const index = docs.findIndex((doc) => doc.localID === localID);
+				if (index >= 0) docs.splice(index, 1);
+				return undefined;
+			},
+		} as unknown as ReceiptEmailDoc;
+		for (const key of FIELD_KEYS) {
+			Object.defineProperty(handle, key, {
+				configurable: true,
+				enumerable: true,
+				get: () => record()?.fields[key],
+			});
+		}
+		return handle;
+	};
+
 	const wrap = (row: ReceiptEmailRow): ReceiptEmailDoc => {
-		const doc = { ...row, deleted: false } as ReceiptEmailDoc & {
-			deleted: boolean;
-			getLatest(): ReceiptEmailDoc;
-		};
-		doc.incrementalPatch = async (patch: Partial<ReceiptEmailRow>) => {
-			if (!docs.includes(doc)) throw new Error('RxError: document is removed');
-			Object.assign(doc, patch);
-			return doc;
-		};
-		doc.remove = async () => {
-			const index = docs.indexOf(doc);
-			if (index >= 0) docs.splice(index, 1);
-			doc.deleted = true;
-			return doc;
-		};
-		// RxDB hands callers the freshest revision through getLatest(); the fake
-		// mutates in place, so the doc IS its own latest revision.
-		doc.getLatest = () => doc;
-		return doc;
+		store.set(row.localID, { fields: { ...row }, rev: 1, deleted: false });
+		return handleFor(row.localID, 1);
 	};
 
 	seed.forEach((row) => docs.push(wrap(row)));
@@ -210,6 +274,35 @@ describe('drainReceiptEmailQueue', () => {
 		// A delivered email is history — the row is pruned so the collection
 		// cannot grow without bound on a till that is never cleared.
 		expect(collection.docs).toHaveLength(0);
+	});
+
+	it('prunes the delivered row through the current revision, not the stale send handle', async () => {
+		// Regression for the live-smoke defect: the drain marks the row `sent` with
+		// incrementalPatch (which bumps the revision), so the handle it still holds
+		// is stale. Pruning through that stale handle throws a CONFLICT — caught at
+		// debug — and every delivered receipt leaves a permanent `sent` row that
+		// even Clear & Sync cannot reclaim. The revision-aware fake reproduces the
+		// conflict; the assertion is that the row is actually gone.
+		const collection = createFakeCollection([pendingRow()]);
+		const debug = jest.fn();
+		const logger = { ...silentLogger(), debug };
+		const post = jest.fn(async () => ({ data: { success: true } }));
+
+		const summary = await drainReceiptEmailQueue({
+			collection,
+			post,
+			logger,
+			now: () => Date.parse('2026-08-06T10:05:00.000Z'),
+			sleep: async () => undefined,
+		});
+
+		expect(summary.sent).toBe(1);
+		expect(collection.docs).toHaveLength(0);
+		// The prune succeeded on the first try — no swallowed conflict.
+		expect(debug).not.toHaveBeenCalledWith(
+			'Could not prune a sent receipt email',
+			expect.anything()
+		);
 	});
 
 	it('sends oldest first and spaces consecutive sends', async () => {
