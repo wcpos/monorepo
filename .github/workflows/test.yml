@@ -31,9 +31,11 @@ jobs:
               - 'apps/**'
               - 'packages/**'
               - 'scripts/**'
-              - '.github/workflows/test.yml'
+              - '.github/workflows/*.yml'
+              - '.github/workflows/*.yaml'
               - 'package.json'
               - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
 
   lint:
     name: "\U0001F9F9 Lint"

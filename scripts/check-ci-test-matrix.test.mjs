@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -19,6 +20,7 @@ import {
   detectLanes,
   findTestFiles,
   parseWorkspaceGlobs,
+  readLaneSources,
   readSubmodulePaths,
   resolveWorkspacePackages,
   surveyPackages,
@@ -76,6 +78,19 @@ test("resolves globs to directories that actually hold a package.json", (t) => {
     resolveWorkspacePackages(["apps/*", "packages/*"], tree.root),
     ["apps/beta", "packages/alpha"],
   );
+});
+
+test("rejects workspace glob shapes the resolver does not support", (t) => {
+  const tree = makeTree();
+  t.after(() => rmSync(tree.root, { recursive: true, force: true }));
+
+  for (const glob of ["packages/**", "packages/*/nested", "packages/{a,b}"]) {
+    assert.throws(
+      () => resolveWorkspacePackages([glob], tree.root),
+      /unsupported workspace glob/i,
+      glob,
+    );
+  }
 });
 
 test("finds test files and skips build output", (t) => {
@@ -229,6 +244,44 @@ test("shape 3: cd into a package followed by a runner counts", () => {
   assert.ok(!noRunner.has("packages/query"));
 });
 
+test("shape 3: a package cannot borrow a runner from the next YAML step", () => {
+  const lanes = detectLanes(
+    [
+      [
+        "test.yml",
+        [
+          "- name: Typecheck query",
+          "  run: |",
+          "    cd packages/query",
+          "    npx tsc --noEmit",
+          "- if: always()",
+          "  name: Test core",
+          "  run: pnpm --filter @wcpos/core exec jest --ci",
+        ].join("\n"),
+      ],
+    ],
+    PACKAGES,
+  );
+
+  assert.ok(!lanes.has("packages/query"));
+  assert.ok(lanes.has("packages/core"));
+});
+
+test("root script names are escaped before workflow matching", (t) => {
+  const tree = makeTree();
+  t.after(() => rmSync(tree.root, { recursive: true, force: true }));
+  tree.write(
+    "package.json",
+    JSON.stringify({ scripts: { "test+scripts": "echo covered" } }),
+  );
+  tree.write(".github/workflows/test.yml", "run: pnpm test+scripts\n");
+
+  assert.deepEqual(
+    readLaneSources(tree.root).find(([source]) => source.startsWith("package")),
+    ["package.json#test+scripts", "echo covered"],
+  );
+});
+
 test("a package mentioned nowhere is dark", () => {
   const lanes = detectLanes(
     [["test.yml", "for pkg in core; do x; done"]],
@@ -296,6 +349,74 @@ test("every other-lane entry points at a workflow that exists", () => {
     assert.ok(
       existsSync(path.resolve(workflowDir, "../..", entry.dir)),
       `${entry.dir} is gone`,
+    );
+  }
+});
+
+test("the allowlist fails closed when an entry is gone or has no tests", (t) => {
+  const roots = [];
+  t.after(() => {
+    for (const root of roots) rmSync(root, { recursive: true, force: true });
+  });
+
+  for (const packageState of ["gone", "testless"]) {
+    const tree = makeTree();
+    roots.push(tree.root);
+    tree.write("pnpm-workspace.yaml", 'packages:\n  - "apps/*"\n');
+    tree.write("package.json", JSON.stringify({ scripts: {} }));
+    tree.write(".github/workflows/test.yml", "name: tests\n");
+    tree.write(
+      ".github/workflows/deploy.yml",
+      "run: cd apps/main && npx playwright test\n",
+    );
+    tree.write(
+      ".github/workflows/e2e-native.yml",
+      "run: maestro test apps/main/.maestro\n",
+    );
+    if (packageState === "testless") {
+      tree.pkg("apps/template-studio", "@wcpos/template-studio");
+    }
+
+    assert.throws(
+      () => checkCiTestMatrix(tree.root),
+      /ALLOWLIST.*(?:gone|no test files)/is,
+      packageState,
+    );
+  }
+});
+
+test("the Lint change filter covers every matrix input", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const workflow = readFileSync(
+    path.join(root, ".github/workflows/test.yml"),
+    "utf8",
+  );
+
+  assert.match(workflow, /'\.github\/workflows\/\*\.yml'/);
+  assert.match(workflow, /'\.github\/workflows\/\*\.yaml'/);
+  assert.match(workflow, /'pnpm-workspace\.yaml'/);
+});
+
+test("package and script tests run before governance entrypoints", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const manifest = JSON.parse(
+    readFileSync(path.join(root, "package.json"), "utf8"),
+  );
+  const script = manifest.scripts["test:scripts"];
+  const firstGovernance = script.indexOf(
+    "node scripts/check-dep-duplicates.mjs",
+  );
+
+  for (const command of [
+    "pnpm --filter @wcpos/virtual-printer test",
+    "pnpm --filter @wcpos/eslint-config test",
+    "node --test scripts/*.test.mjs",
+  ]) {
+    const commandIndex = script.indexOf(command);
+    assert.ok(commandIndex >= 0, `${command} must remain in test:scripts`);
+    assert.ok(
+      commandIndex < firstGovernance,
+      `${command} must run before governance checks`,
     );
   }
 });

@@ -125,7 +125,13 @@ export function parseWorkspaceGlobs(yamlText) {
 export function resolveWorkspacePackages(globs, root = repoRoot) {
   const dirs = [];
   for (const glob of globs) {
-    if (glob.endsWith("/*")) {
+    const simpleWildcard = /^[^*?[\]{}]+\/\*$/.test(glob);
+    if (/[*?[\]{}]/.test(glob) && !simpleWildcard) {
+      throw new Error(
+        `Unsupported workspace glob \`${glob}\` — use a literal directory or one trailing /*`,
+      );
+    }
+    if (simpleWildcard) {
       const parent = glob.slice(0, -2);
       const absolute = path.join(root, parent);
       if (!existsSync(absolute)) continue;
@@ -249,7 +255,9 @@ export function detectLanes(sources, packages) {
     }
     // Shape 3 — `cd packages/query` then jest/vitest inside the same step.
     for (const match of text.matchAll(/cd\s+((?:packages|apps)\/[\w-]+)/g)) {
-      const window = text.slice(match.index, match.index + 400);
+      const window = text
+        .slice(match.index, match.index + 400)
+        .split(/^\s*-\s+[A-Za-z_][\w-]*:/m, 1)[0];
       if (!/\b(jest|vitest|playwright)\b/.test(window)) continue;
       record(byDir.get(match[1]), source, match[0]);
     }
@@ -273,11 +281,12 @@ export function readLaneSources(root = repoRoot) {
   // Lint job; `test` (turbo) is a local convenience and runs in no lane — the
   // negative lookahead is what keeps `pnpm test:scripts` from also counting as
   // an invocation of the `test` script.
-  const invoked = Object.entries(manifest.scripts ?? {}).filter(([name]) =>
-    sources.some(([, text]) =>
-      new RegExp(`pnpm\\s+(run\\s+)?${name}(?![\\w:-])`).test(text),
-    ),
-  );
+  const invoked = Object.entries(manifest.scripts ?? {}).filter(([name]) => {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return sources.some(([, text]) =>
+      new RegExp(`pnpm\\s+(run\\s+)?${escapedName}(?![\\w:-])`).test(text),
+    );
+  });
   return [
     ...sources,
     ...invoked.map(([name, body]) => [`package.json#${name}`, body]),
@@ -343,11 +352,24 @@ export function checkCiTestMatrix(root = repoRoot) {
 
   // An allowlist entry that is no longer needed is rot — the exclusion outlives
   // the reason and the next reader believes it.
-  const stale = ALLOWLIST.filter((entry) => lanes.has(entry.dir));
+  const byDir = new Map(packages.map((entry) => [entry.dir, entry]));
+  const stale = ALLOWLIST.flatMap((entry) => {
+    const workspacePackage = byDir.get(entry.dir);
+    const reason = !workspacePackage
+      ? "package is gone"
+      : workspacePackage.unit.length + workspacePackage.otherLane.length === 0
+        ? "package has no test files"
+        : lanes.has(entry.dir)
+          ? "tests now run in CI"
+          : null;
+    return reason ? [{ ...entry, staleReason: reason }] : [];
+  });
   if (stale.length > 0) {
     throw new Error(
-      `ALLOWLIST in scripts/check-ci-test-matrix.mjs is stale — these now run in CI:\n` +
-        stale.map((entry) => `  ${entry.dir}`).join("\n") +
+      `ALLOWLIST in scripts/check-ci-test-matrix.mjs is stale:\n` +
+        stale
+          .map((entry) => `  ${entry.dir} — ${entry.staleReason}`)
+          .join("\n") +
         "\nDelete the entries.",
     );
   }

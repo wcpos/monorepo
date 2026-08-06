@@ -15,6 +15,8 @@ import {
   formatFailure,
   parseNameStatusZ,
   prContext,
+  readBlob,
+  readEvent,
 } from "./check-test-removal.mjs";
 
 /* ------------------------------------------------------------------ counting */
@@ -110,14 +112,15 @@ test("a pure rename does NOT trip — the content is identical", () => {
 });
 
 test("a rename that also loses a few tests stays under the threshold", () => {
+  const sourceCount = COUNT_DROP_THRESHOLD + 17;
   const changes = [
     { status: "R", oldPath: "old/a.spec.ts", path: "new/a.spec.ts" },
   ];
   const { shrunk } = findRemovals(
     changes,
     readerFor({
-      "base:old/a.spec.ts": sourceWith(20),
-      "head:new/a.spec.ts": sourceWith(17),
+      "base:old/a.spec.ts": sourceWith(sourceCount),
+      "head:new/a.spec.ts": sourceWith(sourceCount - COUNT_DROP_THRESHOLD),
     }),
   );
   assert.equal(
@@ -287,7 +290,8 @@ function makeRepo() {
   const dir = mkdtempSync(path.join(tmpdir(), "check-test-removal-"));
   const git = (...args) =>
     execFileSync("git", args, { cwd: dir, encoding: "utf8" });
-  git("init", "-q", "-b", "next");
+  git("init", "-q");
+  git("branch", "-M", "next");
   git("config", "user.email", "test@example.com");
   git("config", "user.name", "Test");
   git("config", "commit.gpgsign", "false");
@@ -308,12 +312,82 @@ function makeRepo() {
 
 const run = (dir, env = {}) => {
   try {
-    checkTestRemoval({ cwd: dir, baseOverride: "base-ref", env: { ...env } });
+    checkTestRemoval({
+      cwd: dir,
+      baseOverride: env.GITHUB_EVENT_PATH ? undefined : "base-ref",
+      env: {
+        GITHUB_EVENT_NAME: "pull_request",
+        GITHUB_BASE_REF: "base-ref",
+        ...env,
+      },
+    });
     return null;
   } catch (error) {
     return error.message;
   }
 };
+
+test("readBlob returns empty only for a missing path", (t) => {
+  const repo = makeRepo();
+  t.after(() => rmSync(repo.dir, { recursive: true, force: true }));
+  const base = repo.git("rev-parse", "base-ref").trim();
+
+  assert.equal(readBlob(base, "missing.test.ts", repo.dir), "");
+  assert.throws(
+    () => readBlob("not-a-revision", "src/util.test.ts", repo.dir),
+    /cannot read not-a-revision:src\/util\.test\.ts/,
+  );
+});
+
+test("end to end: the event base SHA wins over an advanced base ref", (t) => {
+  const repo = makeRepo();
+  t.after(() => rmSync(repo.dir, { recursive: true, force: true }));
+  const base = repo.git("rev-parse", "base-ref").trim();
+  repo.write("src/util.test.ts", sourceWith(10));
+  repo.commit("test: thin out util");
+  repo.git("branch", "-f", "base-ref", "HEAD");
+  repo.write(
+    "event.json",
+    JSON.stringify({ pull_request: { base: { sha: base }, labels: [] } }),
+  );
+
+  const message = run(repo.dir, {
+    GITHUB_EVENT_PATH: path.join(repo.dir, "event.json"),
+  });
+  assert.ok(message, "expected the immutable event base to expose the removal");
+  assert.match(message, /src\/util\.test\.ts {2}20 -> 10 \(-10\)/);
+});
+
+test("malformed event JSON is ignored", (t) => {
+  const repo = makeRepo();
+  t.after(() => rmSync(repo.dir, { recursive: true, force: true }));
+  repo.write("event.json", "{not-json");
+
+  assert.equal(readEvent(path.join(repo.dir, "event.json")), null);
+});
+
+test("end to end: a label in a partially malformed event acknowledges removal", (t) => {
+  const repo = makeRepo();
+  t.after(() => rmSync(repo.dir, { recursive: true, force: true }));
+  const base = repo.git("rev-parse", "base-ref").trim();
+  repo.write("src/util.test.ts", sourceWith(10));
+  repo.commit("test: thin out util");
+  repo.write(
+    "event.json",
+    JSON.stringify({
+      pull_request: {
+        base: { sha: base },
+        body: null,
+        labels: [null, { name: ACK_LABEL }],
+      },
+    }),
+  );
+
+  assert.equal(
+    run(repo.dir, { GITHUB_EVENT_PATH: path.join(repo.dir, "event.json") }),
+    null,
+  );
+});
 
 test("end to end: deleting a spec file fails the check", (t) => {
   const repo = makeRepo();

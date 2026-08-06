@@ -129,11 +129,21 @@ const git = (args, cwd = repoRoot) =>
   });
 
 /** A blob's text, or '' when the path does not exist at that revision. */
-function readBlob(revision, filePath, cwd) {
+export function readBlob(revision, filePath, cwd) {
   try {
     return git(["show", `${revision}:${filePath}`], cwd);
-  } catch {
-    return "";
+  } catch (error) {
+    const stderr = String(error?.stderr ?? "");
+    if (
+      /^fatal: path .* (?:does not exist in|exists on disk, but not in) /m.test(
+        stderr,
+      )
+    ) {
+      return "";
+    }
+    throw new Error(
+      `check-test-removal: cannot read ${revision}:${filePath} — ${stderr.trim() || error.message}`,
+    );
   }
 }
 
@@ -260,16 +270,12 @@ export function prContext(env = process.env) {
 }
 
 /**
- * The base commit to diff against. `origin/<base>` is what the Lint job's
- * `fetch-depth: 0` checkout provides; the first parent of the PR merge commit
- * is the fallback, and it IS the base branch tip by construction.
+ * The base commit to diff against. The event's immutable base SHA is preferred;
+ * the first parent of GitHub's PR merge commit is the fallback.
  */
-export function resolveBase(baseRef, cwd = repoRoot) {
-  for (const candidate of [
-    `origin/${baseRef}`,
-    `refs/remotes/origin/${baseRef}`,
-    baseRef,
-  ]) {
+export function resolveBase(baseRevision, cwd = repoRoot) {
+  for (const candidate of [baseRevision, "HEAD^1"]) {
+    if (!candidate) continue;
     try {
       return git(
         ["rev-parse", "--verify", `${candidate}^{commit}`],
@@ -279,11 +285,7 @@ export function resolveBase(baseRef, cwd = repoRoot) {
       /* try the next candidate */
     }
   }
-  try {
-    return git(["rev-parse", "--verify", "HEAD^1^{commit}"], cwd).trim();
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export function readEvent(eventPath) {
@@ -307,11 +309,13 @@ export function checkTestRemoval({
     );
     return;
   }
-  const base = resolveBase(context.baseRef, cwd);
+  const event = readEvent(context.eventPath);
+  const baseRevision = baseOverride ?? event?.pull_request?.base?.sha;
+  const base = resolveBase(baseRevision, cwd);
   if (!base) {
     throw new Error(
-      `check-test-removal: cannot resolve the base ref \`${context.baseRef}\`. ` +
-        "The Lint job checks out with `fetch-depth: 0`, which is what makes `origin/<base>` resolvable.",
+      "check-test-removal: cannot resolve the event base SHA or merge first parent. " +
+        "The Lint job must check out the PR history with `fetch-depth: 0`.",
     );
   }
   const changes = parseNameStatusZ(
@@ -336,10 +340,7 @@ export function checkTestRemoval({
   const commitMessages = git(["log", "--format=%B%x00", `${base}..HEAD`], cwd)
     .split("\0")
     .filter((message) => message.trim() !== "");
-  const acknowledgement = findAcknowledgement(
-    readEvent(context.eventPath),
-    commitMessages,
-  );
+  const acknowledgement = findAcknowledgement(event, commitMessages);
   if (acknowledgement) {
     console.log(
       `✓ check-test-removal: ${removals.deleted.length + removals.shrunk.length} file(s) lost tests, ` +
