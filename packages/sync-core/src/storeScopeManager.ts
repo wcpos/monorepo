@@ -118,6 +118,7 @@ export type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<
 
 /** The only client-side collection that cannot be re-fetched from the server. */
 export const MUTATION_QUEUE_COLLECTION = 'mutations';
+const RESET_COLLECTION_TIMEOUT_MS = 30_000;
 
 /**
  * Thrown by `scopedFetch` when a non-aborted response lands after its scope
@@ -509,7 +510,20 @@ export class StoreScopeManager {
 					await invalidate(scopeId);
 				}
 				this.teardownScopeSubscriptions(scopeId);
-				await database.resetCollection(name);
+				let resetDeadline: ReturnType<typeof setTimeout> | undefined;
+				try {
+					await Promise.race([
+						database.resetCollection(name),
+						new Promise<never>((_resolve, reject) => {
+							resetDeadline = setTimeout(
+								() => reject(new Error(`Reset collection "${name}" timed out after 30000ms`)),
+								RESET_COLLECTION_TIMEOUT_MS
+							);
+						}),
+					]);
+				} finally {
+					if (resetDeadline !== undefined) clearTimeout(resetDeadline);
+				}
 				this.emit({ type: 'reset', scopeId, epoch: this.currentEpoch, detail: name });
 				return 'reset';
 			} finally {

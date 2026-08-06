@@ -10,6 +10,7 @@ import {
 	reconcileCreateAck,
 } from './recordPushAdapter';
 import { drainMutationQueue } from './drainMutationQueue';
+import { createFakeWriteServer } from './fakeWriteServer';
 
 /**
  * Integration: the generic write path assembled end to end — buildMutation → durable
@@ -34,6 +35,27 @@ const fakeServer = (assignedId: number, revision: string) =>
 		};
 		return { status: 201, ok: true, json: async () => body } as unknown as Response;
 	});
+
+async function pushOrderPayload(
+	payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+	const queue = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+	const mutation = buildCreateMutation({ collectionName: 'orders', payload }, deps);
+	const server = createFakeWriteServer();
+	await queue.enqueue(mutation);
+
+	await drainMutationQueue({
+		queue,
+		push: (queued) =>
+			pushRecordMutation({
+				mutation: queued,
+				resolveEndpoint: pushEndpointResolver('https://shop.example/wp-json/wcpos/v2'),
+				fetcher: server.fetch,
+			}),
+	});
+
+	return server.received[0]!.payload!;
+}
 
 describe('write path integration', () => {
 	it('build → enqueue → drain → push → reconcile, with identity + revision round-trip', async () => {
@@ -117,5 +139,40 @@ describe('write path integration', () => {
 		expect(result.conflicts).toHaveLength(1);
 		expect(result.conflicts[0].conflict?.currentRevision).toBe('sha256:rev2');
 		expect((await queue.pending()).map((m) => m.mutationId)).toEqual([update.mutationId]); // left queued to resolve
+	});
+
+	it('preserves a line-item image byte-for-byte through enqueue, drain, and push', async () => {
+		const image = {
+			id: 91,
+			src: 'https://shop.example/wp-content/uploads/apron.jpg',
+			name: 'Apron',
+			alt: 'Blue apron',
+		};
+		const payload = {
+			line_items: [
+				{
+					product_id: 17,
+					quantity: 1,
+					image,
+				},
+			],
+		};
+
+		const received = await pushOrderPayload(payload);
+		const receivedImage = (received.line_items as { image: unknown }[])[0]!.image;
+
+		expect(JSON.stringify(receivedImage)).toBe(JSON.stringify(image));
+	});
+
+	it('preserves suffix-less order GMT dates byte-for-byte through enqueue, drain, and push', async () => {
+		const payload = {
+			date_created_gmt: '2026-01-02T03:04:05',
+			date_modified_gmt: '2026-01-02T03:04:05',
+		};
+
+		const received = await pushOrderPayload(payload);
+
+		expect(received.date_created_gmt).toBe('2026-01-02T03:04:05');
+		expect(received.date_modified_gmt).toBe('2026-01-02T03:04:05');
 	});
 });

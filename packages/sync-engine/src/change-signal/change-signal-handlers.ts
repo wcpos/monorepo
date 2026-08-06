@@ -94,7 +94,16 @@ async function fetchBody(
 	const url = `${ctx.syncBaseUrl}${path}${search === '' ? '' : `?${search}`}`;
 	const response = await ctx.fetch(url);
 	if (!response.ok) {
-		throw new Error(`${path} pull failed: HTTP ${response.status}`);
+		const errorBody = (await response.json().catch(() => null)) as {
+			code?: unknown;
+			message?: unknown;
+		} | null;
+		const serverDetail = [errorBody?.code, errorBody?.message]
+			.filter((value): value is string => typeof value === 'string')
+			.join(': ');
+		throw new Error(
+			`${path} pull failed: HTTP ${response.status}${serverDetail ? ` — ${serverDetail}` : ''}`
+		);
 	}
 	return (await response.json()) as unknown;
 }

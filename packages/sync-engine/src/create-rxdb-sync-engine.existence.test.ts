@@ -768,6 +768,28 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.dispose();
 	});
 
+	it('reports a valid-JSON non-array remote manifest lane instead of silently succeeding', async () => {
+		const e = engine(async (url) => {
+			const path = new URL(url).pathname;
+			if (path.endsWith('/integrity/bucket')) return json({ ids: { id: 1, digest: 'bad' } });
+			throw new Error(`unexpected fetch ${url}`);
+		});
+		await e.ready;
+		await seed(e.active()!.database.collections.existenceManifest as never, {
+			id: '1',
+			wooId: 1,
+			digest: 'local-digest',
+			objectType: 'product',
+		});
+
+		const report = await e.sync('existence-reconcile');
+
+		expect(report).toMatchObject({ status: 'error' });
+		expect(report.error).toMatch(/map is not a function/i);
+		expect(e.status().lanes['existence-reconcile'].lastError).toBe(report.error);
+		await e.dispose();
+	});
+
 	it('skips both existence lanes offline without fetching', async () => {
 		const connectivity = scriptedConnectivity('offline');
 		const fetcher = vi.fn(async () => json({}));

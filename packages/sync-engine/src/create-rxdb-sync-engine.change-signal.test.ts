@@ -47,6 +47,7 @@ function scriptedServer() {
 		rows: [] as SequenceRow[],
 		reportedSince: null as number | null,
 		poisonSequenceLog: false,
+		productResponse: null as { status: number; body: unknown } | null,
 		productPulls: 0,
 		productIncludes: [] as number[][],
 		variationPulls: 0,
@@ -127,6 +128,12 @@ function scriptedServer() {
 		}
 		if (path.endsWith('/products')) {
 			state.productPulls += 1;
+			if (state.productResponse) {
+				return new Response(JSON.stringify(state.productResponse.body), {
+					status: state.productResponse.status,
+					headers: { 'content-type': 'application/json' },
+				});
+			}
 			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
 			state.productIncludes.push(include);
 			return json(include.map((id) => state.products.get(id)).filter(Boolean));
@@ -767,6 +774,100 @@ describe('sync("change-signal") through the public handle', () => {
 		expect(recovered.status).toBe('ran');
 		expect(engine.status().lanes['change-signal'].lastError).toBeNull();
 		expect(await productCount(engine)).toBe(1);
+		await engine.dispose();
+	});
+
+	it('an incremental targeted update reports a valid-JSON non-array pull body', async () => {
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		await engine.ready;
+		await engine.sync('change-signal');
+		server.state.head = 6;
+		server.state.rows.push({
+			sequence: 6,
+			id: 9,
+			type: 'update',
+			collection: 'products',
+			modified_gmt: '2026-07-10T00:00:01',
+		});
+		server.state.productResponse = { status: 200, body: { id: 9 } };
+
+		const report = await engine.sync('change-signal');
+
+		expect(report).toMatchObject({ status: 'error' });
+		expect(report.error).toMatch(/targeted pull returned a non-array body/i);
+		expect(engine.status().lanes['change-signal'].lastError).toBe(report.error);
+		expect(await productCount(engine)).toBe(0);
+		await engine.dispose();
+	});
+
+	it('a targeted bulk requirement rejects and diagnoses a valid-JSON non-array body', async () => {
+		const server = scriptedServer();
+		const diagnosticsEvents: SyncEvent[] = [];
+		server.state.productResponse = { status: 200, body: { id: 9 } };
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+			diagnostics: (event) => diagnosticsEvents.push(event),
+		});
+		await engine.ready;
+
+		await expect(
+			engine.require({
+				id: 'non-array-targeted-products',
+				collection: 'products',
+				kind: 'targeted-records',
+				wooIds: [9],
+			}).ready
+		).rejects.toThrow(/targeted pull returned a non-array body/i);
+		expect(diagnosticsEvents).toContainEqual(
+			expect.objectContaining({
+				type: 'coverage.require.error',
+				level: 'error',
+				collection: 'products',
+			})
+		);
+		expect(engine.status().collections.products.active).toBe(false);
+		expect(await productCount(engine)).toBe(0);
+		await engine.dispose();
+	});
+
+	it('preserves a WP REST error code and message in the pull lane report', async () => {
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		await engine.ready;
+		await engine.sync('change-signal');
+		server.state.head = 6;
+		server.state.rows.push({
+			sequence: 6,
+			id: 9,
+			type: 'update',
+			collection: 'products',
+			modified_gmt: '2026-07-10T00:00:01',
+		});
+		server.state.productResponse = {
+			status: 500,
+			body: {
+				code: 'woocommerce_rest_cannot_view',
+				message: 'Sorry, you cannot list resources.',
+				data: { status: 500 },
+			},
+		};
+
+		const report = await engine.sync('change-signal');
+
+		expect(report).toMatchObject({ status: 'error' });
+		expect(report.error).toContain('woocommerce_rest_cannot_view');
+		expect(report.error).toContain('Sorry, you cannot list resources.');
 		await engine.dispose();
 	});
 
