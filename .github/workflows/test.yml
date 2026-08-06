@@ -168,14 +168,15 @@ jobs:
           # apps/main is on jest-expo 29 while packages are on jest 30, so it
           # cannot join the loop above. Its jest config ignores e2e/ (Playwright
           # specs, see #676) and plugins/ (node:test files, run separately).
+          set -o pipefail
           failed=0
 
           echo "::group::Testing @wcpos/main (jest-expo)"
-          pnpm --filter @wcpos/main exec jest --ci --passWithNoTests || failed=1
+          pnpm --filter @wcpos/main exec jest --ci --passWithNoTests --json --outputFile=test-results.json || failed=1
           echo "::endgroup::"
 
           echo "::group::Testing @wcpos/main config plugins (node:test)"
-          pnpm --filter @wcpos/main test:plugins || failed=1
+          pnpm --filter @wcpos/main test:plugins 2>&1 | tee apps/main/plugin-test-results.tap || failed=1
           echo "::endgroup::"
 
           if [ "$failed" -ne 0 ]; then
@@ -199,8 +200,12 @@ jobs:
           has_failures=false
           failure_md=""
 
-          for pkg in core components database hooks utils order-math query; do
-            file="packages/$pkg/test-results.json"
+          for pkg in core components database hooks utils order-math query main; do
+            if [ "$pkg" = "main" ]; then
+              file="apps/main/test-results.json"
+            else
+              file="packages/$pkg/test-results.json"
+            fi
             if [ -f "$file" ]; then
               pkg_failures=$(node -e "
                 const r = require('./$file');
@@ -224,6 +229,13 @@ jobs:
               fi
             fi
           done
+
+          plugin_file="apps/main/plugin-test-results.tap"
+          if [ -f "$plugin_file" ] && grep -q '^not ok ' "$plugin_file"; then
+            plugin_failures=$(printf '\n\n### `@wcpos/main plugins`\n```text\n'; sed -n '/^not ok /,$p' "$plugin_file" | head -c 2000; printf '\n```\n')
+            has_failures=true
+            failure_md="$failure_md$plugin_failures"
+          fi
 
           if [ "$has_failures" = true ]; then
             echo "## ❌ Test Failures" >> $GITHUB_STEP_SUMMARY
@@ -446,4 +458,3 @@ jobs:
                 body: body
               });
             }
-

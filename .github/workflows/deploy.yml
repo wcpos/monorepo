@@ -18,7 +18,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
     # NOTE: deliberately no workflow-level `paths:` filter. "🎭 E2E Tests"
     # (the e2e-gate job) is a REQUIRED merge-gate check, and a check that is
     # never reported blocks the gate until it times out. The path filtering
@@ -234,12 +234,13 @@ jobs:
   # app-affecting paths) or when a manual dispatch explicitly opted out.
   e2e-gate:
     name: 🎭 E2E Tests
-    needs: [deploy, e2e]
-    if: always() && !cancelled()
+    needs: [changes, deploy, e2e]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check shard results
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           DEPLOY_URL: ${{ needs.deploy.outputs.deployment_url }}
           E2E_RESULT: ${{ needs.e2e.result }}
@@ -249,7 +250,12 @@ jobs:
           set -uo pipefail
 
           if [ -n "$DEPLOY_URL" ]; then url_state="present"; else url_state="EMPTY"; fi
-          echo "deploy=$DEPLOY_RESULT deployment_url=$url_state e2e=$E2E_RESULT event=$EVENT_NAME"
+          echo "changes=$CHANGES_RESULT deploy=$DEPLOY_RESULT deployment_url=$url_state e2e=$E2E_RESULT event=$EVENT_NAME"
+
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::Change detection did not succeed (result: $CHANGES_RESULT). Refusing to treat downstream skips as legitimate."
+            exit 1
+          fi
 
           if [ "$E2E_RESULT" = "success" ]; then
             echo "✅ All E2E shards passed"
