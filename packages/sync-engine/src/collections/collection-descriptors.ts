@@ -46,10 +46,12 @@ import {
 	materializeTargeted,
 	materializeUpsertRefresh,
 } from '../materialization/record-materialization';
+import { stripNonStringMetaDisplayFields } from '../materialization/strip-order-meta-display';
 import {
 	EngineOrderRepository,
 	POS_ORDER_IDENTITY_META_KEYS,
 } from '../write-path/engine-order-repository';
+import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
 import { taxRateDocumentId, type WooTaxRatePayload } from './tax-rate-schema';
 
 import type { RxDatabase } from 'rxdb';
@@ -140,7 +142,29 @@ export type WriteAck = {
 	remoteId: unknown;
 	currentRevision: string | null;
 	document?: Record<string, unknown> | null;
+	/**
+	 * The RAW server document, kept even when `document` is deliberately withheld
+	 * from value adoption (the born-twice arm). Identity-only source for
+	 * `graftAckIdentity` (#818): taking an id off an existing server record is
+	 * always safe; taking its VALUES over a local edit is not.
+	 */
+	identityDocument?: Record<string, unknown> | null;
 };
+
+/**
+ * Graft server-assigned CHILD-ROW identity onto a LOCAL payload without
+ * adopting any of the source's values (#818). The source is an ack document at
+ * ack time and the resident's stored payload at push time — both carry the same
+ * `{ id, meta_data }` line shape. Distinct from `documentPatchFromAckDocument`,
+ * which replaces the payload wholesale and is therefore only safe when nothing
+ * is queued behind the ack.
+ *
+ * Returning the SAME reference means "nothing to graft".
+ */
+export type AckIdentityGraft = (
+	payload: Record<string, unknown>,
+	source: Record<string, unknown>
+) => Record<string, unknown>;
 
 /**
  * The write facet (slice 4): a collection is client-writeable ONLY when its
@@ -169,6 +193,14 @@ export type CollectionWriteFacet = {
 	/** Create/update ack: re-anchor sync.revision, capture the remote id, drop
 	 * the drained mutationId, clear dirty when nothing is pending. */
 	reconcile: (db: RxDatabase, ack: WriteAck, signal?: AbortSignal) => Promise<void>;
+	/**
+	 * Identity-only projection (#818), used at BOTH ends of the write path: the
+	 * ack teaches the RESIDENT the server's line ids, and every outgoing push
+	 * re-grafts from that resident so a frozen queue snapshot never posts an
+	 * id-less line. Present only for collections whose payload carries child rows
+	 * the server keys by id — orders today.
+	 */
+	graftAckIdentity?: AckIdentityGraft;
 	/** Delete ack: the record is gone server-side — remove the local row. */
 	onDeleteAck: (
 		db: RxDatabase,
@@ -191,13 +223,22 @@ type AckDoc = {
 	remove(): Promise<unknown>;
 };
 
-function ackBookkeeping(
-	collection: CollectionWriteFacet['collection'],
-	remoteIdField: CollectionWriteFacet['remoteIdField'],
-	createAckSource?: 'woo-rest',
-	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>,
-	preserveMetaKeys?: string[]
-): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
+function ackBookkeeping(options: {
+	collection: CollectionWriteFacet['collection'];
+	remoteIdField: CollectionWriteFacet['remoteIdField'];
+	createAckSource?: 'woo-rest';
+	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
+	preserveMetaKeys?: string[];
+	graftAckIdentity?: AckIdentityGraft;
+}): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
+	const {
+		collection,
+		remoteIdField,
+		createAckSource,
+		documentPatchFromAckDocument,
+		preserveMetaKeys,
+		graftAckIdentity,
+	} = options;
 	return {
 		reconcile: async (db, ack, signal) => {
 			if (signal?.aborted) return;
@@ -241,9 +282,24 @@ function ackBookkeeping(
 						payload: { ...adoptedPayload, meta_data: adoptedMeta },
 					});
 				}
+				const adopting = adoptionPatch !== null && pending.length === 0;
+				// #818: when adoption is SKIPPED — a successor is queued, the ack
+				// document was not materializable, or the born-twice arm withheld it —
+				// the resident would keep its pre-create, ID-LESS lines, and every push
+				// built from it makes WooCommerce APPEND duplicates. Take the server's
+				// line IDENTITY (and nothing else) so local values still win.
+				let identityPatch: Record<string, unknown> = {};
+				if (!adopting && graftAckIdentity && ack.identityDocument) {
+					const residentPayload = (data.payload ?? {}) as Record<string, unknown>;
+					const grafted = graftAckIdentity(residentPayload, ack.identityDocument);
+					// Payload ONLY: the promoted filter/sort columns derive from values
+					// this graft never touches, so re-promoting them here would smuggle
+					// the ack's status/total past the pending-successor guard.
+					if (grafted !== residentPayload) identityPatch = { payload: grafted };
+				}
 				return {
 					...data,
-					...(adoptionPatch && pending.length === 0 ? adoptionPatch : {}),
+					...(adopting && adoptionPatch ? adoptionPatch : identityPatch),
 					[remoteIdField]:
 						ack.mutation.operation === 'create' && typeof ack.remoteId === 'number'
 							? ack.remoteId
@@ -306,11 +362,13 @@ function createWriteFacet(input: {
 	createAckSource?: 'woo-rest';
 	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
 	preserveMetaKeys?: string[];
+	graftAckIdentity?: AckIdentityGraft;
 	upsert?: CollectionWriteFacet['upsertServerDocument'];
 }): CollectionWriteFacet {
 	return {
 		collection: input.collection,
 		remoteIdField: input.remoteIdField,
+		...(input.graftAckIdentity ? { graftAckIdentity: input.graftAckIdentity } : {}),
 		documentFromServerPayload: (payload) => input.project(payload as WooPayload),
 		fetchServerDocument: async ({ fetch, syncBaseUrl, remoteId, signal }) => {
 			const search = new URLSearchParams({
@@ -338,13 +396,16 @@ function createWriteFacet(input: {
 					`write facet ${input.collection} upsert`
 				);
 			}),
-		...ackBookkeeping(
-			input.collection,
-			input.remoteIdField,
-			input.createAckSource,
-			input.documentPatchFromAckDocument,
-			input.preserveMetaKeys
-		),
+		...ackBookkeeping({
+			collection: input.collection,
+			remoteIdField: input.remoteIdField,
+			...(input.createAckSource ? { createAckSource: input.createAckSource } : {}),
+			...(input.documentPatchFromAckDocument
+				? { documentPatchFromAckDocument: input.documentPatchFromAckDocument }
+				: {}),
+			...(input.preserveMetaKeys ? { preserveMetaKeys: input.preserveMetaKeys } : {}),
+			...(input.graftAckIdentity ? { graftAckIdentity: input.graftAckIdentity } : {}),
+		}),
 	};
 }
 
@@ -394,6 +455,13 @@ const ordersWriteFacet = createWriteFacet({
 			payload: orderDocument(document as WooPayload).payload as WooOrderPayload,
 		}) as unknown as Record<string, unknown>,
 	preserveMetaKeys: [...POS_ORDER_IDENTITY_META_KEYS],
+	// #818: WooCommerce APPENDS an order line posted without an `id`. Adoption is
+	// skipped while a successor is queued, so without this the resident — and
+	// every push built from it — keeps posting ID-LESS lines and duplicates the
+	// cart. Identity only, never a value. The display-field strip re-applies
+	// because a payload may predate it (#885/#890) and this rewrites line arrays.
+	graftAckIdentity: (payload, source) =>
+		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source)),
 	upsert: async (db, document) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
 	},
