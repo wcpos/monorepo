@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
 	createRxdbSyncEngine,
@@ -47,11 +47,13 @@ setPremiumFlag();
  * locally, e.g.
  *   PERF_BUDGET_MULTIPLIER=3 pnpm --filter @wcpos/sync-engine exec vitest run performance-contracts
  */
-const BUDGET_MULTIPLIER = Number(
-	process.env['PERF_BUDGET_MULTIPLIER'] ?? (process.env['CI'] ? '3' : '1')
-);
-
-const budget = (ms: number): number => ms * BUDGET_MULTIPLIER;
+function parseBudgetMultiplier(value: string): number {
+	const multiplier = Number(value);
+	if (!Number.isFinite(multiplier) || multiplier <= 0) {
+		throw new Error('PERF_BUDGET_MULTIPLIER must be a finite number greater than 0');
+	}
+	return multiplier;
+}
 
 /**
  * Longest uninterrupted block the audit may hold the macrotask queue for.
@@ -115,6 +117,26 @@ const SITE = 'https://perf.example.test';
 const BASE = `${SITE}/wp-json/wcpos/v2`;
 
 let scope = 0;
+type DisposableEngine = { dispose(): Promise<unknown> };
+const activeEngines = new Set<DisposableEngine>();
+
+function trackEngine<T extends DisposableEngine>(engine: T): T {
+	activeEngines.add(engine);
+	return engine;
+}
+
+async function disposeEngine(engine: DisposableEngine): Promise<void> {
+	try {
+		await engine.dispose();
+	} finally {
+		activeEngines.delete(engine);
+	}
+}
+
+async function disposeEngines(): Promise<void> {
+	await Promise.all([...activeEngines].map(disposeEngine));
+}
+
 const identity = (): StoreScopeIdentity => ({
 	site: SITE,
 	storeId: 1,
@@ -128,19 +150,21 @@ const json = (body: unknown): Response =>
 	});
 
 function engineWith(fetcher: NonNullable<RxdbSyncEnginePorts['fetcher']>) {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: BASE, wpJsonRoot: `${SITE}/wp-json` },
-			// validate: false — z-schema validation of 50k documents would dominate every
-			// measurement here, and this suite is about ENGINE work, not schema validation.
-			storage: memoryEngineStorage({ validate: false }),
-			mode: 'manual',
-			fetcher: async (url, init) =>
-				url.endsWith('/changes/config-fingerprint')
-					? json({ fingerprints: {} })
-					: fetcher(url, init),
-		},
-		identity()
+	return trackEngine(
+		createRxdbSyncEngine(
+			{
+				site: { syncBaseUrl: BASE, wpJsonRoot: `${SITE}/wp-json` },
+				// validate: false — z-schema validation of 50k documents would dominate every
+				// measurement here, and this suite is about ENGINE work, not schema validation.
+				storage: memoryEngineStorage({ validate: false }),
+				mode: 'manual',
+				fetcher: async (url, init) =>
+					url.endsWith('/changes/config-fingerprint')
+						? json({ fingerprints: {} })
+						: fetcher(url, init),
+			},
+			identity()
+		)
 	);
 }
 
@@ -166,18 +190,6 @@ function productPayload(wooId: number): Record<string, unknown> {
 		date_modified_gmt: '2026-01-01T00:00:00',
 		_rxdb_digest: digestFor(wooId),
 		meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(wooId, 0) }],
-	};
-}
-
-function customerPayload(wooId: number): Record<string, unknown> {
-	return {
-		id: wooId,
-		email: `perf-${wooId}@example.test`,
-		first_name: 'Perf',
-		last_name: `Customer ${wooId}`,
-		date_modified_gmt: '2026-01-01T00:00:00',
-		_rxdb_digest: digestFor(wooId),
-		meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(wooId, 900_000_000) }],
 	};
 }
 
@@ -252,30 +264,59 @@ function percentile(values: readonly number[], fraction: number): number {
 	return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))] ?? 0;
 }
 
-function report(label: string, measuredMs: number, budgetMs: number, extra = ''): void {
-	process.stderr.write(
-		`[perf] ${label}: ${measuredMs.toFixed(1)}ms (budget ${budgetMs.toFixed(0)}ms, x${BUDGET_MULTIPLIER})${extra}\n`
-	);
-}
-
 /**
  * Warm V8, RxDB and the materialization path on a throwaway engine so the first
  * MEASURED audit reports steady-state cost rather than cold-start cost.
  */
 beforeAll(async () => {
 	const engine = engineWith(convergedBucketFetcher(WARMUP_RESIDENTS));
-	const active = await engine.ready;
-	await seedResidentProducts(active.database, WARMUP_RESIDENTS);
-	await engine.sync('existence-reconcile');
-	await active.database.collections['products']!.find({ limit: 10 }).exec();
-	await engine.dispose();
+	try {
+		const active = await engine.ready;
+		await seedResidentProducts(active.database, WARMUP_RESIDENTS);
+		await engine.sync('existence-reconcile');
+		await active.database.collections['products']!.find({ limit: 10 }).exec();
+	} finally {
+		await disposeEngine(engine);
+	}
 }, TEST_TIMEOUT_MS);
 
-afterEach(() => {
+afterEach(async () => {
+	await disposeEngines();
 	vi.restoreAllMocks();
 });
 
+afterAll(disposeEngines);
+
+describe('performance harness safeguards', () => {
+	it('rejects invalid performance budget multipliers', () => {
+		for (const value of ['', 'not-a-number', '0', '-1', 'Infinity']) {
+			expect(() => parseBudgetMultiplier(value)).toThrow(
+				'PERF_BUDGET_MULTIPLIER must be a finite number greater than 0'
+			);
+		}
+	});
+
+	it('disposes tracked engines after a contract fails', async () => {
+		const dispose = vi.fn(async () => undefined);
+		trackEngine({ dispose });
+
+		await disposeEngines();
+
+		expect(dispose).toHaveBeenCalledOnce();
+	});
+});
+
 describe('sync-engine performance contracts (#949)', () => {
+	const budgetMultiplier = parseBudgetMultiplier(
+		process.env['PERF_BUDGET_MULTIPLIER'] ?? (process.env['CI'] ? '3' : '1')
+	);
+	const budget = (ms: number): number => ms * budgetMultiplier;
+	const report = (label: string, measuredMs: number, budgetMs: number, extra = ''): void => {
+		process.stderr.write(
+			`[perf] ${label}: ${measuredMs.toFixed(1)}ms (budget ${budgetMs.toFixed(0)}ms, x${budgetMultiplier})${extra}\n`
+		);
+	};
+
 	// -------------------------------------------------------------------------
 	// Contract 1 — large-dataset audit throughput
 	// -------------------------------------------------------------------------
@@ -307,8 +348,6 @@ describe('sync-engine performance contracts (#949)', () => {
 				// this the timing above could pass by doing nothing at all.
 				expect(fetcher.mock.calls.length).toBe(Math.floor(residents / 1000) + 1);
 				expect(elapsed).toBeLessThan(budgetMs);
-
-				await engine.dispose();
 			},
 			TEST_TIMEOUT_MS
 		);
@@ -345,8 +384,6 @@ describe('sync-engine performance contracts (#949)', () => {
 			// budget is set where the engine is TODAY (yields=0, so max == the whole audit),
 			// not where it should be — see the MAX_EVENT_LOOP_BLOCK_MS comment and #949.
 			expect(maxBlock).toBeLessThan(budgetMs);
-
-			await engine.dispose();
 		},
 		TEST_TIMEOUT_MS
 	);
@@ -364,18 +401,21 @@ describe('sync-engine performance contracts (#949)', () => {
 				await seedResidentProducts(active.database, residents);
 
 				// A concurrent bulk apply, deliberately NOT awaited: the contract is that a
-				// cashier's query still lands while the engine is writing. It targets the
-				// customers collection so the product query's hit count stays deterministic.
-				const concurrentApply = active.database.collections['customers']!.bulkUpsert(
+				// cashier's query still lands while the products collection is writing. The
+				// inserted IDs sit above the resident range queried below.
+				const concurrentApply = active.database.collections['products']!.bulkUpsert(
 					Array.from(
 						{ length: CONCURRENT_APPLY_SIZE },
 						(_unused, index) =>
-							materializeTargeted('customers', customerPayload(index + 1)).storedDocument
+							materializeTargeted('products', productPayload(residents + index + 1)).storedDocument
 					) as never[]
 				);
 
 				const started = performance.now();
-				const page = await active.database.collections['products']!.find({ limit: 10 }).exec();
+				const page = await active.database.collections['products']!.find({
+					selector: { wooProductId: { $lte: residents } },
+					limit: 10,
+				}).exec();
 				const elapsed = performance.now() - started;
 
 				const scaledBudget = budget(budgetMs);
@@ -385,7 +425,9 @@ describe('sync-engine performance contracts (#949)', () => {
 				expect(elapsed).toBeLessThan(scaledBudget);
 
 				await concurrentApply;
-				await engine.dispose();
+				expect(await active.database.collections['products']!.count().exec()).toBe(
+					residents + CONCURRENT_APPLY_SIZE
+				);
 			},
 			TEST_TIMEOUT_MS
 		);
