@@ -1374,91 +1374,172 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 
+	// ── ranged fetch-to-completion: #941's completion detection + #954's resumable cursor ──
+
+	/** An arbitrary UTC instant inside the ranges these tests declare. */
+	const RANGE_BASE_SECONDS = 1_783_000_000;
+	const RANGE_QUERY_KEY =
+		'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all';
+	const gmtSeconds = (epochSeconds: number) =>
+		new Date(epochSeconds * 1_000).toISOString().slice(0, 19);
+	const beforeParam = (epochSeconds: number) =>
+		encodeURIComponent(new Date(epochSeconds * 1_000).toISOString());
+	const rangedOrder = (wooId: number, epochSeconds: number) => ({
+		id: wooId,
+		date_created_gmt: gmtSeconds(epochSeconds),
+		date_modified_gmt: gmtSeconds(epochSeconds),
+		meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(wooId) }],
+	});
+	const rangedResponse = (payload: unknown[], headers: Record<string, string> = {}) =>
+		new Response(JSON.stringify(payload), {
+			status: 200,
+			headers: { 'content-type': 'application/json', ...headers },
+		});
+
+	/**
+	 * A Woo `/orders` stand-in that honours exactly the params the ranged walk cursors on —
+	 * `after`/`before` (exclusive, `dates_are_gmt`), `exclude`, `per_page`, `page` — and
+	 * advertises `X-WP-Total` / `X-WP-TotalPages` for the window it just answered. Orders can
+	 * be removed between requests, which is how the "trashed mid-walk" case is exercised.
+	 */
+	function rangedOrderServer(orders: { wooId: number; seconds: number }[]) {
+		const live = new Map(orders.map((order) => [order.wooId, order] as const));
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			const beforeParamValue = params.get('before');
+			const before = beforeParamValue === null ? Infinity : Date.parse(beforeParamValue) / 1_000;
+			const afterParamValue = params.get('after');
+			const after = afterParamValue === null ? -Infinity : Date.parse(afterParamValue) / 1_000;
+			const excluded = new Set(
+				(params.get('exclude') ?? '')
+					.split(',')
+					.filter(Boolean)
+					.map((value) => Number(value))
+			);
+			const perPage = Number(params.get('per_page'));
+			const page = Number(params.get('page'));
+			const matching = [...live.values()]
+				.filter(
+					(order) => order.seconds < before && order.seconds >= after && !excluded.has(order.wooId)
+				)
+				.sort((left, right) => right.seconds - left.seconds || right.wooId - left.wooId);
+			const slice = matching.slice((page - 1) * perPage, page * perPage);
+			return rangedResponse(
+				slice.map((order) => rangedOrder(order.wooId, order.seconds)),
+				{
+					'X-WP-Total': String(matching.length),
+					'X-WP-TotalPages': String(Math.max(1, Math.ceil(matching.length / perPage))),
+				}
+			);
+		});
+		return { fetcher, trash: (wooId: number) => live.delete(wooId) };
+	}
+
+	/** The coverage lane as the Rx repository behaves: cumulative ids + the persisted cursor. */
+	function rangedLaneStore() {
+		let lane: {
+			complete: boolean;
+			fresh: boolean;
+			expectedRecordIds: string[];
+			rangedResume?: unknown;
+		} | null = null;
+		return {
+			lane: () => lane,
+			recordQueryResult: vi.fn(async () => undefined),
+			readLocalLaneCoverage: vi.fn(async () => lane),
+			recordCumulativeQueryResult: vi.fn(
+				async (input: {
+					complete: boolean;
+					records: { id: string }[];
+					resetCumulativeExpectedIds?: boolean;
+					rangedResume?: unknown;
+				}) => {
+					const carried = input.resetCumulativeExpectedIds ? [] : (lane?.expectedRecordIds ?? []);
+					lane = {
+						complete: input.complete,
+						fresh: true,
+						expectedRecordIds: [...new Set([...carried, ...input.records.map((r) => r.id)])],
+						...(input.rangedResume ? { rangedResume: input.rangedResume } : {}),
+					};
+				}
+			),
+		};
+	}
+
+	function rangedFetcherFor(overrides: {
+		fetcher: unknown;
+		coverageRepository: unknown;
+		repository?: unknown;
+	}) {
+		return createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: (overrides.repository ?? {
+				upsertMany: vi.fn(async () => undefined),
+			}) as never,
+			coverageRepository: overrides.coverageRepository as never,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher: overrides.fetcher as never,
+		});
+	}
+
 	it('fetches ranged complete order descriptors until a short page', async () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
 		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
-		const fullPage = Array.from({ length: 25 }, (_, index) => ({
-			id: 1_000 - index,
-			date_modified_gmt: '2026-07-01T00:00:00',
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(1_000 - index) }],
-		}));
-		const shortPage = [
-			{
-				id: 900,
-				date_modified_gmt: '2026-07-02T00:00:00',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(900) }],
-			},
-		];
+		const fullPage = Array.from({ length: 25 }, (_, index) =>
+			rangedOrder(1_000 - index, RANGE_BASE_SECONDS - index)
+		);
+		const shortPage = [rangedOrder(900, RANGE_BASE_SECONDS - 500)];
 		const fetcher = vi
 			.fn()
-			.mockResolvedValueOnce(response(fullPage))
-			.mockResolvedValueOnce(response(shortPage));
-		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
-			repository,
-			coverageRepository,
-			checkpointStore: {
-				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
-				writeCustomPullCheckpoint: vi.fn(async () => undefined),
-			},
-			fetcher,
-		});
-		const queryKey =
-			'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all';
+			.mockResolvedValueOnce(rangedResponse(fullPage))
+			.mockResolvedValueOnce(rangedResponse(shortPage));
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+		const queryKey = RANGE_QUERY_KEY;
 
 		const result = await schedulerFetcher(
 			orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 25 })
 		);
 
+		// A fetch-to-completion lane walks `date desc` — the dimension its cursor is expressed in.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=2026-07-14T23%3A59%3A59.000Z&dates_are_gmt=true&per_page=25&page=1&orderby=id&order=desc'
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=2026-07-14T23%3A59%3A59.000Z&dates_are_gmt=true&per_page=25&page=1&orderby=date&order=desc'
+		);
+		// The second request RE-CURSORS instead of asking for page 2: the window now ends one
+		// second past the oldest record page 1 returned, with that record excluded.
+		expect(fetcher).toHaveBeenNthCalledWith(
+			2,
+			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=${beforeParam(
+				RANGE_BASE_SECONDS - 24 + 1
+			)}&dates_are_gmt=true&exclude=976&per_page=25&page=1&orderby=date&order=desc`
 		);
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(result.documentCount).toBe(26);
+		// A coverage port with no cumulative channel cannot resume, so it keeps #941's behaviour.
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({ queryKey, complete: true })
 		);
 	});
 
 	// A range whose total is an exact multiple of the page size never short-pages, so the
-	// advertised last page is the only stop signal — without it the walk asks for page 3 of
-	// 2 and Woo fails the whole task after every record has already been downloaded.
+	// advertised last page is the only stop signal — without it the walk keeps re-cursoring
+	// into an empty window (or, before cursoring, asked for page 3 of 2 and failed the whole
+	// task after every record had already been downloaded).
 	it('stops ranged complete order descriptors at the advertised last page', async () => {
-		const repository = {
-			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
-		};
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
-		const pageOf = (startId: number) =>
-			Array.from({ length: 25 }, (_, index) => ({
-				id: startId - index,
-				date_modified_gmt: '2026-07-01T00:00:00',
-				meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(startId - index) }],
-			}));
-		const pagedResponse = (payload: unknown[]) =>
-			new Response(JSON.stringify(payload), {
-				status: 200,
-				headers: { 'content-type': 'application/json', 'X-WP-TotalPages': '2' },
-			});
-		const fetcher = vi
-			.fn()
-			.mockResolvedValueOnce(pagedResponse(pageOf(1_000)))
-			.mockResolvedValueOnce(pagedResponse(pageOf(900)))
-			.mockRejectedValue(new Error('requested a page past the advertised last page'));
-		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
-			repository,
-			coverageRepository,
-			checkpointStore: {
-				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
-				writeCustomPullCheckpoint: vi.fn(async () => undefined),
-			},
-			fetcher,
-		});
-		const queryKey =
-			'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all';
+		const coverageRepository = rangedLaneStore();
+		const { fetcher } = rangedOrderServer(
+			Array.from({ length: 50 }, (_, index) => ({
+				wooId: 1_000 - index,
+				seconds: RANGE_BASE_SECONDS - index,
+			}))
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+		const queryKey = RANGE_QUERY_KEY;
 
 		const result = await schedulerFetcher(
 			orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 25 })
@@ -1466,30 +1547,21 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(result.documentCount).toBe(50);
-		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
-			expect.objectContaining({ queryKey, complete: true })
-		);
+		expect(coverageRepository.lane()).toMatchObject({ complete: true });
+		expect(coverageRepository.lane()?.rangedResume).toBeUndefined();
 	});
 
-	it('stops ranged complete order descriptors at the runaway backstop as incomplete', async () => {
-		const repository = { upsertMany: vi.fn(async () => undefined) };
-		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
-		const page = Array.from({ length: 100 }, (_, index) => ({
-			id: 10_000 - index,
-			date_modified_gmt: '2026-07-01T00:00:00',
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(10_000 - index) }],
-		}));
-		const fetcher = vi.fn(async () => response(page));
-		const schedulerFetcher = createOrdersSchedulerFetcher({
-			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
-			repository,
-			coverageRepository,
-			checkpointStore: {
-				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
-				writeCustomPullCheckpoint: vi.fn(async () => undefined),
-			},
-			fetcher,
-		});
+	// #954 (a): the 10k bound is a per-PASS work budget, so tripping it leaves the lane
+	// honestly incomplete AND records where the walk stopped.
+	it('persists a continuation cursor when a ranged pass stops at the per-pass record bound', async () => {
+		const coverageRepository = rangedLaneStore();
+		const { fetcher } = rangedOrderServer(
+			Array.from({ length: 25_000 }, (_, index) => ({
+				wooId: 25_000 - index,
+				seconds: RANGE_BASE_SECONDS - index,
+			}))
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
 		const queryKey = 'orders:browser:status=all:after=1782864000:search=:limit=all';
 
 		const result = await schedulerFetcher(
@@ -1498,9 +1570,239 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		expect(result.documentCount).toBe(10_000);
 		expect(fetcher).toHaveBeenCalledTimes(100);
-		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
-			expect.objectContaining({ queryKey, complete: false })
+		expect(coverageRepository.recordCumulativeQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey,
+				complete: false,
+				resetCumulativeExpectedIds: true,
+				rangedResume: {
+					// One second past the oldest record taken (the 10,000th, woo id 15_001).
+					beforeSeconds: RANGE_BASE_SECONDS - 9_999 + 1,
+					excludeWooIds: [15_001],
+					// The progress denominator: nothing covered before this pass + X-WP-Total.
+					totalRecords: 25_000,
+				},
+			})
 		);
+	});
+
+	// A server that sends no `X-WP-Total` leaves the range size unknown; recording it as 0
+	// would tell the cashier the download had already finished.
+	it('keeps the ranged progress total unknown when the server sends no X-WP-Total', async () => {
+		const coverageRepository = rangedLaneStore();
+		let served = 0;
+		const fetcher = vi.fn(async () => {
+			const page = Array.from({ length: 100 }, (_, index) =>
+				rangedOrder(25_000 - served - index, RANGE_BASE_SECONDS - served - index)
+			);
+			served += 100;
+			return rangedResponse(page);
+		});
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+		const queryKey = 'orders:browser:status=all:after=1782864000:search=:limit=all';
+
+		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }));
+
+		expect(coverageRepository.lane()?.rangedResume).toMatchObject({ totalRecords: null });
+	});
+
+	// #954 (b): the next pass resumes at the cursor and fetches ONLY the remainder.
+	it('resumes a ranged walk from the persisted cursor instead of re-downloading the range', async () => {
+		const cursorBeforeSeconds = RANGE_BASE_SECONDS - 9_998;
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+			recordCumulativeQueryResult: vi.fn(async () => undefined),
+			// Deliberately STALE: the cursor records work already done, not a freshness claim,
+			// and a multi-pass walk routinely outlives the coverage freshness window.
+			readLocalLaneCoverage: vi.fn(async () => ({
+				complete: false,
+				fresh: false,
+				expectedRecordIds: Array.from({ length: 10_000 }, (_, index) => `woo-order:${index + 1}`),
+				rangedResume: {
+					beforeSeconds: cursorBeforeSeconds,
+					excludeWooIds: [15_001],
+					totalRecords: 25_000,
+				},
+			})),
+		};
+		const fetcher = vi.fn(async () =>
+			rangedResponse([rangedOrder(15_000, RANGE_BASE_SECONDS - 10_000)], {
+				'X-WP-Total': '1',
+				'X-WP-TotalPages': '1',
+			})
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+		const queryKey = RANGE_QUERY_KEY;
+
+		const result = await schedulerFetcher(
+			orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 })
+		);
+
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(fetcher).toHaveBeenNthCalledWith(
+			1,
+			`http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=${beforeParam(
+				cursorBeforeSeconds
+			)}&dates_are_gmt=true&exclude=15001&per_page=100&page=1&orderby=date&order=desc`
+		);
+		expect(result.documentCount).toBe(1);
+		expect(coverageRepository.recordCumulativeQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey,
+				complete: true,
+				// The pass appends to what earlier passes covered rather than replacing it…
+				resetCumulativeExpectedIds: false,
+				// …and the finished walk has nothing left to resume from.
+				rangedResume: null,
+			})
+		);
+	});
+
+	// #954 (c): the cursor lives on the coverage lane, so Clear & Sync (which bulk-removes the
+	// lane rows for the collection) invalidates it with the covered-id set it belongs to.
+	it('starts a fresh ranged walk when a reset has wiped the lane', async () => {
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+			recordCumulativeQueryResult: vi.fn(async () => undefined),
+			readLocalLaneCoverage: vi.fn(async () => null),
+		};
+		const fetcher = vi.fn(async () =>
+			rangedResponse([rangedOrder(500, RANGE_BASE_SECONDS)], {
+				'X-WP-Total': '1',
+				'X-WP-TotalPages': '1',
+			})
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+		const queryKey = RANGE_QUERY_KEY;
+
+		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }));
+
+		// The descriptor's own upper bound, with no narrowing and no exclusions.
+		expect(fetcher).toHaveBeenNthCalledWith(
+			1,
+			'http://wcpos.local/wp-json/wcpos/v2/orders?status=completed&after=2026-07-01T00%3A00%3A00.000Z&before=2026-07-14T23%3A59%3A59.000Z&dates_are_gmt=true&per_page=100&page=1&orderby=date&order=desc'
+		);
+		expect(coverageRepository.recordCumulativeQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ resetCumulativeExpectedIds: true })
+		);
+	});
+
+	// #954 (d): every pass is bounded, and a range larger than the bound converges instead of
+	// re-downloading its newest window forever.
+	it('converges a range larger than the per-pass bound across passes, with no gap or repeat', async () => {
+		const totalOrders = 10_050;
+		const coverageRepository = rangedLaneStore();
+		const upserted: number[] = [];
+		const repository = {
+			upsertMany: vi.fn(async (documents: { wooOrderId: number | null }[]) => {
+				for (const document of documents)
+					if (document.wooOrderId) upserted.push(document.wooOrderId);
+			}),
+		};
+		const { fetcher } = rangedOrderServer(
+			Array.from({ length: totalOrders }, (_, index) => ({
+				wooId: totalOrders - index,
+				seconds: RANGE_BASE_SECONDS - index,
+			}))
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+		const queryKey = 'orders:browser:status=all:after=1782864000:search=:limit=all';
+		const task = orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 });
+
+		const firstPass = await schedulerFetcher(task);
+		expect(firstPass.documentCount).toBe(10_000);
+		expect(coverageRepository.lane()).toMatchObject({ complete: false });
+		expect(coverageRepository.lane()?.rangedResume).toMatchObject({ totalRecords: totalOrders });
+
+		const secondPass = await schedulerFetcher(task);
+		// Only the remainder — not another 10,000.
+		expect(secondPass.documentCount).toBe(50);
+		expect(coverageRepository.lane()).toMatchObject({ complete: true });
+		expect(coverageRepository.lane()?.rangedResume).toBeUndefined();
+		expect(coverageRepository.lane()?.expectedRecordIds).toHaveLength(totalOrders);
+		// No record was skipped at the resume boundary, and none was downloaded twice.
+		expect(upserted).toHaveLength(totalOrders);
+		expect(new Set(upserted).size).toBe(totalOrders);
+	});
+
+	// The cursor is a DATE bound, not a page offset: an order trashed after its page was served
+	// shifts every positional cursor by one slot and would silently skip a record.
+	it('does not skip records when an order is trashed mid-walk', async () => {
+		const totalOrders = 250;
+		const coverageRepository = rangedLaneStore();
+		const upserted: number[] = [];
+		const repository = {
+			upsertMany: vi.fn(async (documents: { wooOrderId: number | null }[]) => {
+				for (const document of documents)
+					if (document.wooOrderId) upserted.push(document.wooOrderId);
+			}),
+		};
+		const server = rangedOrderServer(
+			Array.from({ length: totalOrders }, (_, index) => ({
+				wooId: totalOrders - index,
+				seconds: RANGE_BASE_SECONDS - index,
+			}))
+		);
+		const fetcher = vi.fn(async (url: string) => {
+			const response = await server.fetcher(url);
+			// Trash an already-served order right after the first page.
+			server.trash(250);
+			return response;
+		});
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+		const queryKey = 'orders:browser:status=all:after=1782864000:search=:limit=all';
+
+		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }));
+
+		expect(coverageRepository.lane()).toMatchObject({ complete: true });
+		expect(new Set(upserted).size).toBe(totalOrders);
+	});
+
+	// Orders sharing one creation second straddling a page boundary must be neither missed nor
+	// re-downloaded: the cursor re-requests that second and excludes the ids already taken.
+	it('carries a boundary-second tie group across the page cursor exactly once', async () => {
+		const coverageRepository = rangedLaneStore();
+		const upserted: number[] = [];
+		const repository = {
+			upsertMany: vi.fn(async (documents: { wooOrderId: number | null }[]) => {
+				for (const document of documents)
+					if (document.wooOrderId) upserted.push(document.wooOrderId);
+			}),
+		};
+		// 30 orders; ids 30…16 are all stamped the SAME second, so the 25-record page splits them.
+		const { fetcher } = rangedOrderServer(
+			Array.from({ length: 30 }, (_, index) => ({
+				wooId: 30 - index,
+				seconds: index < 15 ? RANGE_BASE_SECONDS : RANGE_BASE_SECONDS - index,
+			}))
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
+		const queryKey = RANGE_QUERY_KEY;
+
+		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 25 }));
+
+		expect(coverageRepository.lane()).toMatchObject({ complete: true });
+		expect(upserted).toHaveLength(30);
+		expect(new Set(upserted).size).toBe(30);
+	});
+
+	// A tie group too large to express as an `exclude` list cannot be resumed without either
+	// skipping records or looping, so the pass fails loudly and the lane stays incomplete.
+	it('fails a ranged pass rather than resume past an unbounded boundary second', async () => {
+		const coverageRepository = rangedLaneStore();
+		const { fetcher } = rangedOrderServer(
+			Array.from({ length: 2_000 }, (_, index) => ({
+				wooId: 2_000 - index,
+				seconds: RANGE_BASE_SECONDS,
+			}))
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+		const queryKey = RANGE_QUERY_KEY;
+
+		await expect(
+			schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }))
+		).rejects.toThrow(/share the boundary second/);
+		expect(coverageRepository.lane()).toBeNull();
 	});
 
 	it('fetches browser order search descriptors through Woo REST search requests', async () => {

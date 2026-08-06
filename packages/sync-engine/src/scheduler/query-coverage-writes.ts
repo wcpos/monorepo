@@ -1,4 +1,7 @@
-import type { PersistedCoverageDocumentSet } from './persisted-coverage-schema';
+import type {
+	PersistedCoverageDocumentSet,
+	RangedLaneResumeState,
+} from './persisted-coverage-schema';
 
 export type QueryCoverageResultRecord = {
 	id: string;
@@ -27,6 +30,12 @@ export type BuildCoverageDocumentsFromQueryResultInput = {
 export type BuildCumulativeCoverageDocumentsFromQueryResultInput =
 	BuildCoverageDocumentsFromQueryResultInput & {
 		resetCumulativeExpectedIds?: boolean;
+		/**
+		 * The ranged walk's continuation cursor (#954). `undefined` leaves whatever the lane
+		 * already carries alone (the greedy custom-pull lane never sets it); an explicit `null`
+		 * CLEARS it — the walk finished, so there is nothing left to resume from.
+		 */
+		rangedResume?: RangedLaneResumeState | null;
 	};
 
 export function buildCoverageDocumentsFromQueryResult(

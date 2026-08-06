@@ -16,6 +16,7 @@ import {
 	type PersistedCoverageRetentionDecision,
 	type PlanPersistedCoverageRetentionInput,
 	type QueryCoverageResultRecord,
+	type RangedLaneResumeState,
 	toLocalCoverageState,
 } from '../scheduler';
 
@@ -44,6 +45,8 @@ export type LocalLaneCoverageWithExpectedRecords = {
 	complete: boolean;
 	fresh: boolean;
 	expectedRecordIds: string[];
+	/** The ranged walk's continuation cursor, when this lane is a mid-flight `limit=all` walk (#954). */
+	rangedResume?: RangedLaneResumeState;
 };
 
 type RxCoverageCollection<T> = {
@@ -81,12 +84,15 @@ function toRecordDocument(record: PersistedCoverageRecord): CoverageRecordDocume
 }
 
 function toLaneDocument(lane: PersistedCoverageLane): CoverageLaneDocument {
-	const { collection, ...rest } = lane;
+	// `rangedResume` is destructured out and re-added conditionally: the storage validator
+	// rejects a key present with an `undefined` value, so an optional field must be ABSENT.
+	const { collection, rangedResume, ...rest } = lane;
 	return {
 		laneKey: coverageLaneKey(collection, lane.queryKey),
 		collectionName: collection,
 		...rest,
-		schemaVersion: 2,
+		...(rangedResume ? { rangedResume } : {}),
+		schemaVersion: 3,
 	};
 }
 
@@ -175,6 +181,7 @@ function localLaneCoverage(
 		complete: lane.complete,
 		fresh: lane.freshUntilMs > nowMs,
 		expectedRecordIds: [...lane.expectedRecordIds],
+		...(lane.rangedResume ? { rangedResume: lane.rangedResume } : {}),
 	};
 }
 
@@ -260,25 +267,24 @@ export class RxCoverageRepository {
 			? expectedRecordIds
 			: input.records.map((record) => record.id);
 
-		const lanes =
+		// `undefined` leaves the lane's existing cursor alone (the greedy custom-pull lane never
+		// sets one); an explicit `null` CLEARS it — the ranged walk reached the end of its range.
+		const rangedResume =
+			input.rangedResume === undefined
+				? existingLane?.rangedResume
+				: (input.rangedResume ?? undefined);
+		const { rangedResume: _previousResume, ...baseLane }: PersistedCoverageLane =
 			!input.complete && existingLane?.complete
-				? [
-						{
-							...existingLane,
-							expectedRecordIds,
-							updatedAtMs: input.nowMs,
-						},
-					]
-				: [
-						{
-							collection: input.collection,
-							queryKey: input.queryKey,
-							complete: input.complete,
-							expectedRecordIds,
-							freshUntilMs,
-							updatedAtMs: input.nowMs,
-						},
-					];
+				? { ...existingLane, expectedRecordIds, updatedAtMs: input.nowMs }
+				: {
+						collection: input.collection,
+						queryKey: input.queryKey,
+						complete: input.complete,
+						expectedRecordIds,
+						freshUntilMs,
+						updatedAtMs: input.nowMs,
+					};
+		const lanes = [rangedResume ? { ...baseLane, rangedResume } : baseLane];
 
 		await this.writeCoverageDocumentsWithMerge({
 			records: recordIdsToRefresh.map((id) => ({

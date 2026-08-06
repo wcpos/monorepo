@@ -640,6 +640,8 @@
 	"reports.cashier_id": "Cashier ID",
 	"reports.cashier_store_totals": "Cashier/Store Totals",
 	"reports.default_offline": "Default (Offline)",
+	"reports.downloading_orders": "Downloading orders — {downloaded} of {total} downloaded",
+	"reports.downloading_orders_unknown_total": "Downloading orders — {downloaded} downloaded",
 	"reports.exclude": "Exclude",
 	"reports.include": "Include",
 	"reports.items_sold": "Items Sold",

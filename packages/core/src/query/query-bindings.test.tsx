@@ -354,7 +354,7 @@ describe('query bindings', () => {
 			expectedRecordIds: ['order-1', 'order-2'],
 			freshUntilMs: Date.now() + 60_000,
 			updatedAtMs: Date.now(),
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 		const { result } = renderHook(
 			() =>
@@ -389,6 +389,80 @@ describe('query bindings', () => {
 		);
 	});
 
+	// #954: the lane's continuation cursor IS the "still downloading" signal — the reports
+	// progress line reads downloaded-vs-total straight off the lane it is already projecting
+	// the total from, so the two can never disagree.
+	it('reports ranged download progress while a fetch-to-completion lane carries a cursor', async () => {
+		const queryKey =
+			'orders:browser:status=processing:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25';
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: `orders::${queryKey}`,
+			collectionName: 'orders',
+			queryKey,
+			complete: false,
+			expectedRecordIds: Array.from({ length: 3 }, (_, index) => `order-${index}`),
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			rangedResume: { beforeSeconds: 1_783_000_000, excludeWooIds: [7], totalRecords: 30_000 },
+			schemaVersion: 3,
+		});
+		const { result } = renderHook(
+			() =>
+				useCollectionBinding('orders', {
+					search: '',
+					filters: {
+						status: 'processing',
+						dateRange: { from: '2026-07-01', to: '2026-07-14' },
+					},
+					sort: { field: 'date_created_gmt', direction: 'desc' },
+					limit: 25,
+				}),
+			{ wrapper: Provider }
+		);
+
+		await expect(
+			firstValueFrom(result.current.laneProgress$.pipe(filter((progress) => progress !== null)))
+		).resolves.toEqual({ downloaded: 3, total: 30_000 });
+	});
+
+	it('reports no ranged progress once the lane has nothing left to resume', async () => {
+		const queryKey =
+			'orders:browser:status=processing:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25';
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.coverageLanes.insert({
+			laneKey: `orders::${queryKey}`,
+			collectionName: 'orders',
+			queryKey,
+			complete: true,
+			expectedRecordIds: ['order-1'],
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 3,
+		});
+		const { result } = renderHook(
+			() =>
+				useCollectionBinding('orders', {
+					search: '',
+					filters: {
+						status: 'processing',
+						dateRange: { from: '2026-07-01', to: '2026-07-14' },
+					},
+					sort: { field: 'date_created_gmt', direction: 'desc' },
+					limit: 25,
+				}),
+			{ wrapper: Provider }
+		);
+
+		await expect(firstValueFrom(result.current.laneProgress$)).resolves.toBeNull();
+	});
+
 	// The lane may only stand in for the grid's total when the descriptor carries EVERY
 	// condition in the selector. A bound the encoder cannot resolve to epoch seconds is
 	// dropped from the key, so the lane it names is the UNRANGED browse — reporting its
@@ -407,7 +481,7 @@ describe('query bindings', () => {
 			expectedRecordIds: ['order-1', 'order-2'],
 			freshUntilMs: Date.now() + 60_000,
 			updatedAtMs: Date.now(),
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 		const { result } = renderHook(
 			() =>
@@ -520,7 +594,7 @@ describe('query bindings', () => {
 			expectedRecordIds: ['p1', 'p2', 'p3'],
 			freshUntilMs: Date.now() + 60_000,
 			updatedAtMs: Date.now(),
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 3)))
@@ -552,7 +626,7 @@ describe('query bindings', () => {
 			expectedRecordIds: ['p1', 'p2', 'p3', 'p4', 'p5'],
 			freshUntilMs: Date.now() + 60_000,
 			updatedAtMs: Date.now(),
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 
 		const posShaped: QueryStateOf<'products'> = {
@@ -600,7 +674,7 @@ describe('query bindings', () => {
 			expectedRecordIds: ['p1', 'p2', 'p3', 'p4'],
 			freshUntilMs: Date.now() + 60_000,
 			updatedAtMs: Date.now(),
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 
 		const partly: QueryStateOf<'products'> = {
@@ -652,7 +726,7 @@ describe('query bindings', () => {
 			expectedRecordIds: ['coupon-1', 'coupon-2', 'coupon-3'],
 			freshUntilMs: Date.now() + 60_000,
 			updatedAtMs: Date.now(),
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 		const base: QueryStateOf<'coupons'> = {
 			search: '',
@@ -701,7 +775,7 @@ describe('query bindings', () => {
 			expectedRecordIds: ['woo-tax-rate:1', 'woo-tax-rate:2'],
 			freshUntilMs: Date.now() + 60_000,
 			updatedAtMs: Date.now(),
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 		const state: QueryStateOf<'tax-rates'> = {
 			search: '',
@@ -737,7 +811,7 @@ describe('query bindings', () => {
 			expectedRecordIds: Array.from({ length: 9 }, (_, index) => `customer-${index}`),
 			freshUntilMs: Date.now() + 60_000,
 			updatedAtMs: Date.now(),
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 		const state: QueryStateOf<'customers'> = {
 			search: 'ada',

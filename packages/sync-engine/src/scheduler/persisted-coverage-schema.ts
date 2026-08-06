@@ -6,6 +6,46 @@ export type PersistedCoverageRecord = {
 	updatedAtMs: number;
 };
 
+/**
+ * Where a fetch-to-completion (ranged `limit=all`) walk stopped, so the next pass resumes
+ * from the boundary instead of re-downloading the same newest window forever (#954).
+ *
+ * The cursor is a DATE bound, not a page or an offset, because the wcpos/v2 `/orders` route
+ * is a faithful pass-through to `wc/v3` (Catalog_Proxy_Controller::proxy) and `wc/v3` offers
+ * no id bound — its cursor-shaped params are `page`, `offset`, `before`/`after` and
+ * `exclude`. `page`/`offset` are POSITIONAL: an order inserted or trashed inside the range
+ * mid-walk shifts every later position, which silently skips records. `before` is
+ * CONTENT-addressed — "everything older than this instant is still owed" — so it survives
+ * concurrent inserts and deletes untouched. It is paired with `excludeWooIds` because WP's
+ * date columns have one-second resolution: the bound is re-requested INCLUSIVE of the
+ * boundary second (`beforeSeconds` = last seen second + 1, and `before` is exclusive) and
+ * the ids already taken from that second are excluded, so a tie group split across a page
+ * boundary is neither missed nor re-downloaded.
+ *
+ * It lives on the coverage LANE — the same document as `expectedRecordIds` — deliberately.
+ * A cursor that outlived the covered-id set (an `engineKv` blob would, since the ledger
+ * rebuild only drops the coverage/scheduler collections) would resume mid-range against an
+ * empty covered set and then declare the lane complete having never re-fetched the newest
+ * part of the range. Co-locating them makes that state unrepresentable: every wipe that
+ * clears the covered set — Clear & Sync (`registerCursorInvalidator`), a ledger rebuild
+ * (`DERIVABLE_METADATA_COLLECTIONS`), coverage compaction — clears the cursor with it.
+ */
+export type RangedLaneResumeState = {
+	/**
+	 * The EXCLUSIVE `before` bound (epoch seconds) for the next pass. Records at
+	 * `beforeSeconds - 1` are re-requested and filtered by `excludeWooIds`.
+	 */
+	beforeSeconds: number;
+	/** Woo ids already covered at exactly `beforeSeconds - 1` — the boundary second's tie group. */
+	excludeWooIds: number[];
+	/**
+	 * Best known size of the WHOLE range (ids already covered + the server's `X-WP-Total`
+	 * for the uncovered remainder) — the denominator the Reports progress line shows.
+	 * `null` when the server sent no total header.
+	 */
+	totalRecords: number | null;
+};
+
 export type PersistedCoverageLane = {
 	collection: string;
 	queryKey: string;
@@ -13,6 +53,8 @@ export type PersistedCoverageLane = {
 	expectedRecordIds: string[];
 	freshUntilMs: number;
 	updatedAtMs: number;
+	/** Present only while a ranged fetch-to-completion walk is mid-flight — see RangedLaneResumeState. */
+	rangedResume?: RangedLaneResumeState;
 };
 
 export type LocalRecordCoverage = Pick<PersistedCoverageRecord, 'collection' | 'id'> & {
