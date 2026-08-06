@@ -172,13 +172,26 @@ describe('RejectedMutationsPanel', () => {
 		);
 	});
 
+	it('never promises deletion for a create the SERVER may already hold', async () => {
+		// `identity-ambiguous` means the uuid matched more than one server record, so
+		// the engine keeps the resident. `destroysRecord` is false there, and the
+		// dialog must not promise a deletion the engine will not perform.
+		rows = [row({ destroysRecord: false, reason: 'identity-ambiguous', status: 409 })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-discard-m-1'));
+
+		expect(document.body.textContent).not.toContain('permanently deletes it from this device');
+		expect(getByTestId('db-rejected-discard-confirm').textContent).toContain('Discard');
+	});
+
 	it('keeps the non-destructive copy when the record survives the discard', async () => {
 		rows = [row({ operation: 'update' })];
 		const { getByTestId } = render(<RejectedMutationsPanel />);
 
 		await press(getByTestId('db-rejected-discard-m-1'));
 
-		expect(document.body.textContent).toContain('The record stays on this device');
+		expect(document.body.textContent).toContain('your server’s version is kept');
 		expect(document.body.textContent).not.toContain('permanently deletes it from this device');
 		expect(getByTestId('db-rejected-discard-confirm').textContent).toContain('Discard');
 	});

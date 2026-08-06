@@ -899,7 +899,16 @@ describe('write facets beyond orders', () => {
 	it('discard removes a rejected born-local create that never existed remotely', async () => {
 		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
 		const route = routedServer(spec, () => null);
-		route.server.script(() => ({ kind: 'identity_ambiguous' }));
+		// A refusal that says nothing about server-side existence. This used to be
+		// `identity_ambiguous`, chosen only as a convenient permanent rejection —
+		// but that verdict means the uuid matched MORE THAN ONE server record, and
+		// discard now deliberately keeps the resident in that case (#832 follow-up,
+		// R7b: never delete a record the server may hold). Its own test covers it.
+		route.server.script(() => ({
+			kind: 'invalid_param',
+			code: 'rest_invalid_param',
+			message: 'Invalid parameter(s): email',
+		}));
 		const subject = engine(route.fetch);
 		await subject.ready;
 		await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'born-local' }));

@@ -5,7 +5,7 @@ import { from, Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
 import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
-import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
+import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 /**
@@ -129,9 +129,15 @@ async function describe(
 				requeueCount: entry.requeueCount ?? 0,
 				residentMissing: resident === null && !readFailed,
 				// Born-local CREATE ⇒ discard deletes the record. A read failure says
-				// nothing about the record, so it never claims destruction.
+				// nothing about the record, so it never claims destruction — and neither
+				// does a verdict that says the SERVER matched this record's uuid
+				// (`identity-ambiguous`): the engine keeps the resident in that case, so
+				// promising deletion here would be a lie the confirm dialog tells.
 				destroysRecord:
-					entry.operation === 'create' && resident !== null && typeof remoteId !== 'number',
+					entry.operation === 'create' &&
+					resident !== null &&
+					typeof remoteId !== 'number' &&
+					!rejectionSuggestsServerRecord(entry.rejectedReason),
 			};
 		})
 	);

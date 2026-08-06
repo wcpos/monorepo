@@ -58,7 +58,6 @@ import {
 	buildCreateMutation,
 	buildDeleteMutation,
 	buildUpdateMutation,
-	RECORD_UUID_META_KEY,
 	RecordMutationQueue,
 	RxRecordMutationStorage,
 } from '@wcpos/sync-core';
@@ -193,8 +192,18 @@ export async function enqueueWriteIntent(input: {
 		// born-twice/dedupe guard with this edit's payload silently ignored).
 		// Anything else — claimed, ever-pushed, terminal — makes the edit queue BEHIND.
 		const lastPending = pendingRows.at(-1);
-		const prior =
+		const coalescable =
 			lastPending !== undefined && (lastPending.attempts ?? 0) === 0 ? lastPending : undefined;
+		// A recovered UPDATE never coalesces into a live successor (#832 follow-up,
+		// R7a). Coalescing REPLACES that row, so the successor's edit stops having a
+		// queue row of its own — and if the rebuilt payload is refused again, the
+		// drain dead-letters the merged row and the successor's still-VALID edit is
+		// entombed inside it, where discard destroys both. Appending behind it keeps
+		// the two independently resolvable: the successor pushes first and survives on
+		// its own, and a second refusal dead-letters only the recovery. A recovered
+		// CREATE must still coalesce — the server has never seen the record, so an
+		// update may not reach it ahead of its create (#516 rules 1–2).
+		const prior = input.provenance && intent.operation === 'update' ? undefined : coalescable;
 		// A create still ahead in the queue (pending or in flight): a delete queued
 		// behind it defers its baseRevision to the drain-time re-stamp.
 		const createAhead = recordRows.find(
@@ -453,36 +462,51 @@ export async function enqueueWriteIntent(input: {
 }
 
 /**
- * True when `meta_data` is nothing but the canonical uuid mirror this record
- * already carries. `buildUpdateMutation`/`buildCreateMutation` INJECT that entry
- * into every payload (`identifyRecord` → `mirrorRecordUuid`), so its presence on
- * a dead letter carries no cashier intent — and re-applying the stub over the
- * resident's real `meta_data` would replace a full array (server ids, local-only
- * `_pos_*` entries) with one plumbing row. A genuinely edited `meta_data` has
- * other entries and is re-applied like any other field.
+ * Fields no dead-letter recovery may assert: every top-level key claimed by a
+ * LIVE (non-rejected) queue row for the same record.
+ *
+ * A recovery revives an intent the server has already REFUSED. Every row still in
+ * `pending()` is an intent the server has NOT refused — pending, claimed,
+ * conflicted, or parked. Between the two, the live one owns any field they both
+ * touch, and the recovery must carry none of them: whatever it carries is merged
+ * LAST (`{...resident, ...prior, ...incoming}` in the coalescer, and a tail append
+ * pushes after every live row), so a field it keeps is a field it OVERWRITES.
+ *
+ * This deliberately replaces an earlier `seq`-based "is it newer than the dead
+ * letter" test, which was unsound in two ways the review found:
+ *  - a coalesced replacement KEEPS the original `seq` and is distinguished only by
+ *    the `coalesced` generation, so a crash that strands both generations
+ *    (`coalesceInto` appends then removes — two storage ops) leaves a strictly
+ *    newer row at an EQUAL seq that the comparison read as older;
+ *  - the same keeping-the-original-seq rule means a newer edit can coalesce into a
+ *    row whose seq is BELOW the dead letter's, so "newer intent" and "higher seq"
+ *    are not the same relation at all.
+ * Rather than reconstruct an ordering the queue does not actually guarantee, this
+ * asks a question with no ordering in it. It is strictly more conservative: the
+ * worst case is that a field the recovery wanted back is left to a live row that
+ * also mentions it — visible, and the cashier can edit again — instead of a live
+ * cart edit being silently rolled back.
  */
-function isBareUuidMirror(value: unknown, recordId: string): boolean {
-	if (!Array.isArray(value) || value.length !== 1) return false;
-	const entry = value[0] as { key?: unknown; value?: unknown } | null;
-	return (
-		typeof entry === 'object' &&
-		entry !== null &&
-		entry.key === RECORD_UUID_META_KEY &&
-		entry.value === recordId
+function fieldsOwnedByLiveRows(sameRecordQueued: readonly QueuedMutation[]): Set<string> {
+	return new Set(
+		sameRecordQueued
+			.filter((row) => row.operation !== 'delete')
+			.flatMap((row) => Object.keys(row.payload ?? {}))
 	);
 }
 
 /**
- * The cashier's EDIT INTENT, recovered from a dead-lettered UPDATE (#832
- * follow-up, ruling R7a).
+ * The rebuilt outbound payload for a dead-letter recovery (#832 follow-up, R7a).
  *
- * A rejected row stops guarding its record (`pendingRecordIds` skips it — #507
- * regression 4, deliberate), so a later pull adopts server truth over the
- * resident. That is CORRECT: the server's calculation is the source of truth and
- * pulls are not re-blocked. But the resident is then no longer a witness to what
- * the cashier asked for, and a rebuild taken purely from it sends the server its
- * own values back — the edit vanishes with nothing anywhere saying so. The intent
- * survives in exactly one place: the frozen payload on the rejected row.
+ * For a CREATE this is the current resident, exactly as #1011 built it. For an
+ * UPDATE the resident alone is not enough: a rejected row stops guarding its
+ * record (`pendingRecordIds` skips it — #507 regression 4, deliberate), so a pull
+ * adopts server truth over the resident. That is CORRECT — the server's
+ * calculation is the source of truth and pulls are not re-blocked — but the
+ * resident is then no longer a witness to what the cashier asked for, and a
+ * rebuild taken purely from it sends the server its own values back. The edit
+ * vanishes with nothing anywhere saying so. It survives in exactly one place: the
+ * frozen payload on the rejected row, re-applied here on top of the resident.
  *
  * GRANULARITY — the queue row's TOP-LEVEL fields, and why not a diff:
  *  - There is nothing to diff against. A row stores `baseRevision` (a revision
@@ -491,47 +515,50 @@ function isBareUuidMirror(value: unknown, recordId: string): boolean {
  *    fields that changed" is not computable after the fact.
  *  - Top-level IS the write path's own merge granularity: `enqueueWriteIntent`'s
  *    coalescer merges `{...resident, ...prior, ...incoming}` shallowly, and the
- *    born-twice reconcile does the same. Re-applying the rejected payload's
- *    top-level fields over the resident is literally that same operation with
- *    the dead letter as the last layer. A deeper per-leaf merge would invent a
+ *    born-twice reconcile does the same. A deeper per-leaf merge would invent a
  *    semantics no other write in this engine uses, and for orders would emit
  *    hybrids (half-server, half-local `billing`) that neither side ever asserted.
  *
- * Two subtractions, both about never letting an OLD intent win:
- *  - `meta_data` when it is only the injected uuid mirror (see above);
- *  - every field asserted by a same-record queue row NEWER than the dead letter
- *    (`seq` above the dead letter's). Those are edits the cashier made AFTER the
- *    one being recovered; the resident already carries them, and re-applying the
- *    older value on top would silently roll them back. Same rule the queued-delete
- *    guard states: a recovery replays an old intent, and an old intent never wins.
+ * `meta_data` is NEVER recovered from the dead letter, for either operation. The
+ * builders INJECT the `_woocommerce_pos_uuid` mirror into every payload
+ * (`identifyRecord` → `mirrorRecordUuid`), so the field is present whether or not
+ * the caller asked for it and its provenance cannot be recovered afterwards — the
+ * review was right that any heuristic here guesses. Since the engine treats it as
+ * one top-level array, re-applying is all-or-nothing, and a frozen array can only
+ * be staler than the resident's. The resident's array is used instead, and the
+ * enqueue pipeline re-mirrors the uuid into it. KNOWN LIMITATION: a meta-only edit
+ * that a pull has since overwritten is therefore not recovered; recovering it
+ * honestly needs the row to record which fields the caller actually asserted,
+ * which is a schema change and out of scope here.
  *
- * Nothing here bypasses sanitization — the result is handed to
- * `enqueueWriteIntent` as an ordinary intent payload, so every outbound sanitizer
- * (`sanitizeOutboundOrderPayload`) still runs over the re-applied fields. That is
- * what keeps this from being the replay #832 exists to avoid: the FIELDS come
- * back, the refused SHAPE does not.
+ * The dropped fields go through `fieldsOwnedByLiveRows` — see there for why the
+ * subtraction applies to the RESIDENT layer too, not just the recovered one.
  *
- * Applies to UPDATEs only. A rejected CREATE has no server document, so no pull
- * can overwrite its resident — the resident IS the intent, and layering the frozen
- * create on top could only resurrect what the cashier has since removed locally
- * (a deleted line item, a cleared fee).
+ * Nothing here bypasses sanitization: the result is handed to `enqueueWriteIntent`
+ * as an ordinary intent payload, so every outbound sanitizer
+ * (`sanitizeOutboundOrderPayload`) still runs over it. That is what keeps this
+ * from being the replay #832 exists to avoid — the FIELDS come back, the refused
+ * SHAPE does not.
  */
-function recoveredEditFields(
+function rebuiltRecoveryPayload(
 	entry: QueuedMutation,
+	residentPayload: Record<string, unknown>,
 	sameRecordQueued: readonly QueuedMutation[]
 ): Record<string, unknown> {
-	const supersededKeys = new Set(
-		sameRecordQueued
-			.filter((row) => row.operation !== 'delete' && (row.seq ?? 0) > (entry.seq ?? 0))
-			.flatMap((row) => Object.keys(row.payload ?? {}))
-	);
-	const recovered: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(entry.payload ?? {})) {
-		if (supersededKeys.has(key)) continue;
-		if (key === 'meta_data' && isBareUuidMirror(value, entry.recordId)) continue;
-		recovered[key] = value;
-	}
-	return recovered;
+	const recovered =
+		entry.operation === 'update'
+			? Object.fromEntries(
+					Object.entries(entry.payload ?? {}).filter(([key]) => key !== 'meta_data')
+				)
+			: {};
+	const merged: Record<string, unknown> = { ...residentPayload, ...recovered };
+	// Subtract from the WHOLE payload, resident layer included. The resident was
+	// read before `enqueueWriteIntent` re-reads it, so it is a snapshot that a
+	// concurrent cart edit can already have overtaken — and because the recovery's
+	// payload merges last, keeping such a field would overwrite both the fresher
+	// resident and the live row that owns it (the review's `line_items` rollback).
+	for (const key of fieldsOwnedByLiveRows(sameRecordQueued)) delete merged[key];
+	return merged;
 }
 
 /**
@@ -664,12 +691,9 @@ export async function requeueRejectedMutation(input: {
 					operation: entry.operation,
 					recordId: entry.recordId,
 					// A create rebuilds from the resident alone; an update layers the
-					// cashier's refused edit back on top of it (R7a — see
-					// `recoveredEditFields` for the field granularity and why).
-					payload:
-						entry.operation === 'update'
-							? { ...residentPayload, ...recoveredEditFields(entry, queued) }
-							: residentPayload,
+					// cashier's refused edit back on top of it. Either way no field a
+					// LIVE queue row owns survives (R7a — see `rebuiltRecoveryPayload`).
+					payload: rebuiltRecoveryPayload(entry, residentPayload, queued),
 					...(entry.explicit === true ? { explicit: true } : {}),
 				};
 	const receipt = await enqueueWriteIntent({

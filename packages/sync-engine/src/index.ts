@@ -17,6 +17,7 @@ export {
 	type SyncCollectionName,
 } from './create-rxdb-sync-engine';
 export { engineDocumentIdFor } from './engine-document-id';
+export { rejectionSuggestsServerRecord } from './write-path/conflict-resolution';
 
 // prettier-ignore
 export { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from './collections/engine-collections';

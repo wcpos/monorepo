@@ -2030,7 +2030,7 @@ describe('#507 offline write flows through the public handle', () => {
 		}
 	});
 
-	it('#832 R7a: a NEWER queued edit still wins — the recovered fields never roll it back', async () => {
+	it('#832 R7a: a LIVE queued row keeps its fields and its own row — the recovery neither rolls it back nor absorbs it', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
 		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
@@ -2051,10 +2051,9 @@ describe('#507 offline write flows through the public handle', () => {
 				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
 			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
-			// An edit the cashier made AFTER the refusal. A recovery replays an OLD
-			// intent, and an old intent never wins over a newer one — the same rule the
-			// queued-delete guard states.
-			await engine.write({
+			// A live edit the server has NOT refused. Between a live intent and a dead
+			// one, the live one owns every field they both touch.
+			const live = await engine.write({
 				collection: 'orders',
 				operation: 'update',
 				recordId: UUID_A,
@@ -2064,12 +2063,118 @@ describe('#507 offline write flows through the public handle', () => {
 			await engine.resolveConflict('refused-update', 'requeue-rebuilt');
 
 			const rows = await queueRows(engine);
-			expect(rows).toHaveLength(1);
-			expect(rows[0].payload).toMatchObject({
-				customer_note: 'newer edit',
-				// A field the newer edit says nothing about still comes back.
-				status: 'completed',
+			// TWO rows, not one. A recovered UPDATE must not coalesce into the live row:
+			// coalescing replaces it, so a second refusal would dead-letter the merged
+			// row and entomb the live edit inside it, where discard destroys both.
+			expect(rows).toHaveLength(2);
+			const survivor = rows.find((row) => row.mutationId === live.mutationId);
+			const recovery = rows.find((row) => row.requeuedFrom === 'refused-update');
+			expect(survivor?.payload).toMatchObject({ customer_note: 'newer edit' });
+			expect(recovery).toBeDefined();
+			// The recovery carries the field the live row does NOT own…
+			expect(recovery?.payload).toMatchObject({ status: 'completed' });
+			// …and none that it does — keeping 'refused note' would overwrite the live
+			// edit, because the recovery is ordered behind it.
+			expect(recovery?.payload).not.toHaveProperty('customer_note');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	/**
+	 * The subtraction asks "is this field owned by a LIVE row?", never "is that row
+	 * newer?". `seq` cannot answer the second question: a coalesced replacement
+	 * KEEPS the original seq (so a crash stranding both generations leaves a strictly
+	 * newer row at an EQUAL seq), and a newer edit can coalesce into a row whose seq
+	 * sits BELOW the dead letter's. This pins the lower-seq case — the recovery must
+	 * still not touch that row's fields.
+	 */
+	it('#832 R7a: a live row with a LOWER seq than the dead letter still owns its fields', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			// Enqueued FIRST, so its seq is below the dead letter's.
+			const live = await queue.enqueue({
+				mutationId: 'live-lower-seq',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { customer_note: 'live edit' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
 			});
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed', customer_note: 'refused note' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:01.000Z',
+			});
+			expect((live.seq ?? 0) < (stale.seq ?? 0)).toBe(true);
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			await engine.resolveConflict('refused-update', 'requeue-rebuilt');
+
+			const recovery = (await queueRows(engine)).find(
+				(row) => row.requeuedFrom === 'refused-update'
+			);
+			expect(recovery?.payload).toMatchObject({ status: 'completed' });
+			expect(recovery?.payload).not.toHaveProperty('customer_note');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832 R7a: meta_data is never recovered from the dead letter — the resident array wins', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			// The frozen row carries the uuid mirror PLUS a real POS meta entry, which
+			// the old heuristic read as "intentional" and re-applied wholesale over the
+			// resident's array. The builders inject the mirror into every payload, so
+			// provenance is unrecoverable and no heuristic can be sound — meta_data is
+			// simply never taken from a dead letter.
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: {
+					status: 'completed',
+					meta_data: [
+						{ key: '_woocommerce_pos_uuid', value: UUID_A },
+						{ key: '_pos_stale', value: 'from the refused push' },
+					],
+				},
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			await engine.resolveConflict('refused-update', 'requeue-rebuilt');
+
+			const [recovery] = await queueRows(engine);
+			expect(recovery.payload).toMatchObject({ status: 'completed' });
+			const meta = (recovery.payload as { meta_data?: { key: string }[] }).meta_data ?? [];
+			expect(meta.some((item) => item.key === '_pos_stale')).toBe(false);
+			expect(meta.some((item) => item.key === '_woocommerce_pos_uuid')).toBe(true);
 		} finally {
 			await engine.dispose();
 		}
@@ -2212,6 +2317,200 @@ describe('#507 offline write flows through the public handle', () => {
 
 			expect(await orderJson(engine, UUID_A)).not.toBeNull();
 			expect(await engine.conflicts()).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	/**
+	 * `identity-ambiguous` is the push adapter's PERMANENT 409: the record's uuid
+	 * resolves to more than one server record, so the server fails closed and the
+	 * create dead-letters with no ack. Nothing local ever gets a `wooOrderId`, so
+	 * every local signal says "born local" — while the server demonstrably holds
+	 * matching orders. Destroying there deletes a real sale on an inference the
+	 * client is not entitled to make.
+	 */
+	it('#832 R7b: a create rejected as identity-ambiguous is NOT born-local — discard keeps the order', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'ambiguous-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-paid', total: '25.00' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({
+				...stale,
+				status: 'rejected',
+				rejectedStatus: 409,
+				rejectedReason: 'identity-ambiguous',
+				rejectedMessage: 'This record matches more than one order.',
+			});
+
+			await engine.resolveConflict('ambiguous-create', 'discard');
+
+			// The order survives: the server may hold it, and a pull can reconcile.
+			expect(await orderJson(engine, UUID_A)).not.toBeNull();
+			expect(await engine.conflicts()).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832 R7b: a destructive discard refuses while anything is still queued to send for the record', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-paid' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+			// A recovery's replacement — or any live row — will be pushed by the drain.
+			// Destroying the resident now lets that push recreate the order the cashier
+			// just confirmed destroying (its ack rematerializes the record).
+			await engine.resolveConflict('stranded-create', 'requeue-rebuilt');
+			const [replacement] = await queueRows(engine);
+			expect(replacement).toMatchObject({ status: 'pending', operation: 'create' });
+
+			// Re-dead-letter the replacement so there is something to discard, and leave
+			// a second live row queued for the same record.
+			await queue.replace({ ...replacement, status: 'rejected', rejectedStatus: 400 } as never);
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { customer_note: 'still queued' },
+			});
+
+			await expect(
+				engine.resolveConflict(replacement.mutationId as string, 'discard')
+			).rejects.toThrow(/queued to send/i);
+			// Nothing was destroyed and nothing was retired.
+			expect(await orderJson(engine, UUID_A)).not.toBeNull();
+			expect((await engine.conflicts()).map((row) => row.mutationId)).toEqual([
+				replacement.mutationId,
+			]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	/**
+	 * Requeue enqueues its replacement BEFORE it retires the dead letter. A discard
+	 * interleaving in that window destroyed the resident while the replacement was
+	 * already queued — the drain then pushed the create and the ack's
+	 * missing-resident path rematerialized the order the cashier just confirmed
+	 * destroying. Resolutions are now serialized, so the interleave cannot happen:
+	 * whichever runs first completes fully and the other finds the row settled.
+	 */
+	it('#832 R7b: concurrent requeue + discard never leaves a destroyed order with a live create queued', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-paid' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			// FORCE the interleave rather than hoping the scheduler produces it:
+			// `guardWrite` tracks in-flight writes but does not serialize them, so
+			// without the resolution chain a discard genuinely can run to completion
+			// inside requeue's enqueue→retire window. The hook fires once the
+			// replacement is durably enqueued and the requeue is about to retire the
+			// dead letter — precisely the reviewed schedule.
+			const queueUnderTest = queue as unknown as {
+				removeIfStatus: (id: string, status: string) => Promise<boolean>;
+			};
+			const realRemoveIfStatus = queueUnderTest.removeIfStatus.bind(queueUnderTest);
+			let raced = false;
+			let discardOutcome: Promise<unknown> = Promise.resolve();
+			let draining: Promise<unknown> = Promise.resolve();
+			queueUnderTest.removeIfStatus = async (id: string, status: string) => {
+				if (!raced) {
+					raced = true;
+					discardOutcome = engine
+						.resolveConflict('stranded-create', 'discard')
+						.catch((error) => error);
+					// The drain must CLAIM the replacement inside this window too: without
+					// a claim the requeue's own compensation (`removePending`) unwinds the
+					// replacement cleanly and nothing is lost. The damage needs a claimed
+					// row that neither resolution can take back.
+					draining = engine.sync('write-drain').catch((error) => error);
+					// Give both real turns. Neither can be awaited here: once resolutions
+					// are serialized the discard is chained BEHIND this requeue, so
+					// awaiting it would deadlock — which is itself the proof that the
+					// interleave is gone.
+					for (let tick = 0; tick < 30; tick += 1) {
+						await new Promise((resolve) => setTimeout(resolve, 0));
+					}
+				}
+				return realRemoveIfStatus(id, status);
+			};
+
+			await Promise.allSettled([engine.resolveConflict('stranded-create', 'requeue-rebuilt')]);
+			const discardResult = await discardOutcome;
+			await draining;
+			queueUnderTest.removeIfStatus = realRemoveIfStatus;
+			expect(raced).toBe(true);
+			await engine.sync('write-drain');
+
+			// THE invariant. A discard that REPORTS SUCCESS told the cashier the order
+			// was deleted; the order must then be gone and must never have been created
+			// server-side. (When the discard instead refuses — because the resolution ran
+			// after the requeue, or because the live-row guard stopped it — there is no
+			// promise to keep, and the order legitimately survives.)
+			if (!(discardResult instanceof Error)) {
+				expect(await orderJson(engine, UUID_A)).toBeNull();
+				expect(server.received.filter((envelope) => envelope.operation === 'create')).toEqual([]);
+			} else {
+				expect(String(discardResult)).toMatch(/not found|queued to send/i);
+			}
 		} finally {
 			await engine.dispose();
 		}

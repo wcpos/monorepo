@@ -40,6 +40,6 @@ export {
 	type StoredOrderDocument, type StoredProductDocument, type SyncCheckpoint,
 	type WooOrderPayload, type WooProductPayload,
 } from './protocol';
-export { identifyRecord, RECORD_UUID_META_KEY, webCryptoUuid } from './recordIdentity';
+export { identifyRecord, webCryptoUuid } from './recordIdentity';
 // prettier-ignore
 export { composeObservers, createMetricsCollector, type MetricsSnapshot, type SyncEvent, type SyncObserver } from './telemetry';
