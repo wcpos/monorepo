@@ -38,12 +38,9 @@ const instancesByDatabaseName = new Map<string, Set<InstanceLatchState>>();
 // Degraded storage signal (#163)
 // ---------------------------------------------------------------------------
 
-/**
- * requestRemote only throws this when the RPC round-trip to the storage worker
- * failed; every wrapped read and write funnels through it, which is why one lost
- * worker takes barcode lookups down together with order writes.
- */
-const WORKER_LOSS_MARKER = 'could not requestRemote';
+const REQUEST_REMOTE_ERROR_MARKER = 'could not requestRemote: ';
+const WORKER_CONNECTION_FAILURE =
+	/(?:worker|message (?:channel|port)).*(?:closed|disconnected|gone|lost|terminated|unavailable)|(?:closed|disconnected|gone|lost|terminated|unavailable).*(?:worker|message (?:channel|port))/i;
 
 /**
  * RPCs whose failure must NOT raise the signal. `close`/`remove` run only while
@@ -72,13 +69,9 @@ const degradedStorageSubject = new BehaviorSubject<readonly StorageDegradation[]
  * Databases whose storage worker stopped answering; empty while storage is healthy.
  *
  * Latch semantics: one-shot per database, and it can never be cleared by a later
- * successful call. A worker that answered with an error envelope is still alive
- * (see the requestRemote branch below) and a half-dead worker keeps serving some
- * collections while failing others — so a subsequent success proves nothing about
- * recovery. The latch therefore lives exactly as long as the database scope that
- * lost the worker: it is dropped when that scope's last storage instance
- * unregisters (store switch / Clear & Sync / engine restart), and otherwise
- * persists until the app reloads.
+ * successful call or instance teardown. Web databases share one module-scope
+ * worker, so closing one database or resetting one collection does not replace the
+ * worker that failed. Recovery requires replacing that worker by reloading the app.
  */
 export const degradedStorage$: Observable<readonly StorageDegradation[]> =
 	degradedStorageSubject.asObservable();
@@ -95,8 +88,8 @@ export function isStorageDegraded(databaseName?: string): boolean {
 }
 
 /**
- * Drops the latch. Called when a database's last storage instance unregisters so
- * a reopened scope starts clean; also used by tests to reset module state.
+ * Explicitly drops the latch. Recovery normally happens by reloading the app;
+ * this escape hatch is used by tests to reset module state.
  */
 export function clearStorageDegradation(databaseName?: string): void {
 	if (databaseName === undefined) {
@@ -108,19 +101,24 @@ export function clearStorageDegradation(databaseName?: string): void {
 	publishDegradedStorage();
 }
 
-/**
- * The worker wraps a corrupt-file SyntaxError in a requestRemote envelope, so
- * OPFS JSON corruption shares the requestRemote prefix without being worker loss.
- * That class has its own owner and its own remedy — `logs-storage-recovery` drops
- * the affected collection and reloads once — so it must not raise a
- * reload-the-app banner the cashier can't clear. Kept in sync with
- * `isRecoverableLogsStorageError` in packages/query.
- */
-function isRecoverableCorruption(message: string): boolean {
-	return (
-		message.includes('SyntaxError') &&
-		(message.includes('Expected') || message.includes('JSON') || message.includes('property name'))
-	);
+function getRemoteErrorDescription(message: string): string | null {
+	if (!message.startsWith(REQUEST_REMOTE_ERROR_MARKER)) return null;
+	try {
+		const envelope: unknown = JSON.parse(message.slice(REQUEST_REMOTE_ERROR_MARKER.length));
+		if (envelope === null || typeof envelope !== 'object') return null;
+		const remoteError = (envelope as { error?: unknown }).error;
+		if (typeof remoteError === 'string') return remoteError;
+		if (remoteError === null || typeof remoteError !== 'object') return null;
+		const { name, message: remoteMessage } = remoteError as {
+			name?: unknown;
+			message?: unknown;
+		};
+		return [name, remoteMessage]
+			.filter((value): value is string => typeof value === 'string')
+			.join(': ');
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -131,7 +129,8 @@ function isRecoverableCorruption(message: string): boolean {
 export function isStorageWorkerFailure(error: unknown): boolean {
 	if (error == null) return false;
 	const message = error instanceof Error ? error.message : String(error);
-	return message.includes(WORKER_LOSS_MARKER) && !isRecoverableCorruption(message);
+	const remoteError = getRemoteErrorDescription(message);
+	return remoteError !== null && WORKER_CONNECTION_FAILURE.test(remoteError);
 }
 
 function noteStorageWorkerFailure(
@@ -251,20 +250,23 @@ function handleStorageError(
 		return true;
 	}
 
-	// Worker communication failures
-	if (message.includes('could not requestRemote')) {
-		// requestRemote throws this only when the worker answers with an error envelope, so it is
-		// still alive. A dead worker stays silent; the host disposal deadline marks that storage dead.
-		storageLogger.error(`Storage worker error in ${methodName}`, {
-			saveToDb: true,
-			context: {
-				errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
-				method: methodName,
-				...context,
-				recoveryDocumentId: targetedRecovery?.[1],
-				recoveryFailure: targetedRecovery?.[2],
-			},
-		});
+	// Errors serialized by the remote worker can be either a worker/channel
+	// failure or an ordinary storage-method exception.
+	if (message.startsWith(REQUEST_REMOTE_ERROR_MARKER)) {
+		const workerFailure = isStorageWorkerFailure(error);
+		storageLogger.error(
+			`${workerFailure ? 'Storage worker error' : 'Storage remote method error'} in ${methodName}`,
+			{
+				saveToDb: true,
+				context: {
+					errorCode: workerFailure ? ERROR_CODES.WORKER_CONNECTION_LOST : ERROR_CODES.STORAGE_ERROR,
+					method: methodName,
+					...context,
+					recoveryDocumentId: targetedRecovery?.[1],
+					recoveryFailure: targetedRecovery?.[2],
+				},
+			}
+		);
 		// Don't suppress -- this is critical
 		return false;
 	}
@@ -337,9 +339,6 @@ function unregisterInstance(state: InstanceLatchState): void {
 	instances.delete(state);
 	if (instances.size === 0) {
 		instancesByDatabaseName.delete(state.databaseName);
-		// The scope that lost the worker is gone; a reopened scope gets a fresh
-		// worker and must not inherit a stale banner.
-		clearStorageDegradation(state.databaseName);
 	}
 }
 

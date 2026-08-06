@@ -52,10 +52,16 @@ describe('useStorageDegraded', () => {
 		expect(result.current).toBe(false);
 	});
 
-	it('turns true when a write loses the storage worker and clears when the scope closes', async () => {
+	it('stays true after a degraded scope closes while the shared worker remains', async () => {
 		const wrappedInstance = await createWrappedInstance(
 			'pos-store-1',
-			jest.fn().mockRejectedValue(new Error('could not requestRemote: {"methodName":"bulkWrite"}'))
+			jest
+				.fn()
+				.mockRejectedValue(
+					new Error(
+						'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
+					)
+				)
 		);
 		const { result } = renderHook(() => useStorageDegraded());
 
@@ -71,6 +77,6 @@ describe('useStorageDegraded', () => {
 			await wrappedInstance.close();
 		});
 
-		expect(result.current).toBe(false);
+		expect(result.current).toBe(true);
 	});
 });

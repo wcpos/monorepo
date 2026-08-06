@@ -198,9 +198,10 @@ describe('wrappedErrorHandlerStorage', () => {
 				'could not requestRemote'
 			);
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage worker error in findDocumentsById',
+				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
 					context: expect.objectContaining({
+						errorCode: 'DB01004',
 						collectionName: 'test-collection',
 						documentId: '1',
 						recoveryDocumentId,
@@ -221,8 +222,10 @@ describe('wrappedErrorHandlerStorage', () => {
 
 			await expect(wrappedInstance.findDocumentsById(['1'], false)).rejects.toBe(error);
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage worker error in findDocumentsById',
-				expect.any(Object)
+				'Storage remote method error in findDocumentsById',
+				expect.objectContaining({
+					context: expect.objectContaining({ errorCode: 'DB01004' }),
+				})
 			);
 		});
 
@@ -246,9 +249,10 @@ describe('wrappedErrorHandlerStorage', () => {
 			await expect(wrappedInstance.findDocumentsById(['409'], false)).rejects.toBe(error);
 			expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
-				'Storage worker error in findDocumentsById',
+				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
 					context: expect.objectContaining({
+						errorCode: 'DB01004',
 						recoveryDocumentId: '409',
 						recoveryFailure: 'no-valid-document',
 					}),
@@ -495,7 +499,14 @@ describe('wrappedErrorHandlerStorage', () => {
 
 		it('should log with WORKER_CONNECTION_LOST code for requestRemote errors', async () => {
 			const instance = createMockStorageInstance({
-				findDocumentsById: jest.fn().mockRejectedValue(new Error('could not requestRemote')),
+				findDocumentsById: jest.fn().mockRejectedValue(
+					new Error(
+						'could not requestRemote: ' +
+							JSON.stringify({
+								error: { message: 'storage worker connection lost' },
+							})
+					)
+				),
 			});
 			const storage = createMockStorage(instance);
 			const wrapped = wrappedErrorHandlerStorage({ storage });
@@ -710,6 +721,32 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(latest()).toEqual([]);
 		});
 
+		it('stays quiet for storage-method errors serialized by requestRemote', async () => {
+			const quotaError = new Error(
+				'could not requestRemote: {"methodName":"bulkWrite","error":{"name":"QuotaExceededError","message":"The quota has been exceeded."}}'
+			);
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(quotaError),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'quota-db' } as any);
+
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test')
+			).rejects.toThrow('could not requestRemote');
+
+			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+				'Storage remote method error in bulkWrite',
+				expect.objectContaining({
+					context: expect.objectContaining({ errorCode: 'DB01004' }),
+				})
+			);
+			expect(isStorageWorkerFailure(quotaError)).toBe(false);
+			expect(isStorageDegraded('quota-db')).toBe(false);
+			expect(latest()).toEqual([]);
+		});
+
 		it('stays quiet when teardown RPCs fail (store switch / Clear & Sync / logs recovery)', async () => {
 			const instance = createMockStorageInstance({
 				close: jest.fn().mockRejectedValue(workerLoss()),
@@ -786,7 +823,10 @@ describe('wrappedErrorHandlerStorage', () => {
 			subscription.unsubscribe();
 		});
 
-		it('drops the latch when the database scope closes (store switch reopens clean)', async () => {
+		it('keeps the latch when a database scope closes but the shared worker remains', async () => {
+			await wrappedErrorHandlerStorage({
+				storage: createMockStorage(createMockStorageInstance()),
+			}).createStorageInstance({ databaseName: 'surviving-db' } as any);
 			const instance = createMockStorageInstance({
 				bulkWrite: jest.fn().mockRejectedValue(workerLoss()),
 				close: jest.fn().mockResolvedValue(undefined),
@@ -802,14 +842,41 @@ describe('wrappedErrorHandlerStorage', () => {
 
 			await wrappedInstance.close();
 
-			expect(isStorageDegraded('closing-db')).toBe(false);
-			expect(latest()).toEqual([]);
+			expect(isStorageDegraded('closing-db')).toBe(true);
+			expect(isStorageDegraded()).toBe(true);
+			expect(latest()).toEqual([
+				expect.objectContaining({
+					databaseName: 'closing-db',
+					methodName: 'bulkWrite',
+				}),
+			]);
+		});
+
+		it.each(['close', 'remove'] as const)('keeps the latch when %s rejects', async (methodName) => {
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(workerLoss()),
+				[methodName]: jest.fn().mockRejectedValue(new Error(`${methodName} failed`)),
+			});
+			const databaseName = `failed-${methodName}-db`;
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName } as any);
+
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test')
+			).rejects.toThrow('could not requestRemote');
+			await expect(wrappedInstance[methodName]()).rejects.toThrow(`${methodName} failed`);
+
+			expect(isStorageDegraded(databaseName)).toBe(true);
+		});
+
+		it('does not infer worker loss from a malformed requestRemote wrapper', () => {
+			expect(isStorageWorkerFailure('could not requestRemote: string form')).toBe(false);
 		});
 
 		it('recognises worker-loss errors for callers that must fail loudly', () => {
 			expect(isStorageWorkerFailure(workerLoss())).toBe(true);
 			expect(isStorageWorkerFailure(new Error('CONFLICT'))).toBe(false);
-			expect(isStorageWorkerFailure('could not requestRemote: string form')).toBe(true);
 			expect(isStorageWorkerFailure(undefined)).toBe(false);
 		});
 
@@ -833,9 +900,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(isStorageDegraded('corrupt-db')).toBe(false);
 		});
 
-		// A collection reset removes and recreates the instance; without unregistering
-		// on remove the state would be stranded and the latch pinned forever.
-		it('drops the latch when a collection reset removes the instance', async () => {
+		it('keeps the latch when a collection reset removes the instance', async () => {
 			const instance = createMockStorageInstance({
 				bulkWrite: jest.fn().mockRejectedValue(workerLoss()),
 				remove: jest.fn().mockResolvedValue(undefined),
@@ -851,7 +916,7 @@ describe('wrappedErrorHandlerStorage', () => {
 
 			await wrappedInstance.remove();
 
-			expect(isStorageDegraded('reset-db')).toBe(false);
+			expect(isStorageDegraded('reset-db')).toBe(true);
 		});
 	});
 });
