@@ -44,27 +44,18 @@ test.describe('Coupons Page (Pro)', () => {
 		await navigateToPage(page, 'coupons');
 		const screen = page.getByTestId('screen-coupons');
 		await expect(screen.getByTestId('search-coupons')).toBeVisible({ timeout: 30_000 });
+		const countEl = screen.getByTestId('data-table-count');
+		await expect(countEl).toBeVisible({ timeout: 30_000 });
+		const initialCount = await countEl.textContent();
+		await expect(screen.getByTestId(/^data-table-row-/).first()).toBeVisible({ timeout: 30_000 });
 
 		const searchInput = screen.getByTestId('search-coupons');
 		await searchInput.fill('test');
 
-		await expect
-			.poll(
-				async () => {
-					const countEl = screen.getByTestId('data-table-count');
-					const hasResults = await countEl
-						.isVisible()
-						.then(async (visible) => visible && /[0-9]/.test((await countEl.textContent()) ?? ''))
-						.catch(() => false);
-					const noResults = await screen
-						.getByTestId('no-data-message')
-						.isVisible()
-						.catch(() => false);
-					return hasResults || noResults;
-				},
-				{ timeout: 15_000 }
-			)
-			.toBeTruthy();
+		const matchingRow = screen.getByTestId(/^data-table-row-/).first();
+		await expect(matchingRow).toBeVisible({ timeout: 15_000 });
+		await expect(matchingRow).toContainText(/test/i);
+		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialCount);
 	});
 
 	test('should have add coupon button on Coupons page', async ({ posPage: page }) => {
@@ -72,12 +63,7 @@ test.describe('Coupons Page (Pro)', () => {
 		const screen = page.getByTestId('screen-coupons');
 		await expect(screen.getByTestId('search-coupons')).toBeVisible({ timeout: 30_000 });
 
-		// The add coupon button is an IconButton next to the search
-		const headerButtons = screen.locator('[role="button"]');
-		const buttonCount = await headerButtons.count();
-
-		// Should have at least 2 buttons in the header (add coupon + settings)
-		expect(buttonCount).toBeGreaterThanOrEqual(2);
+		await expect(screen.getByTestId('coupons-add-button')).toBeVisible();
 	});
 });
 

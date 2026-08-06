@@ -90,19 +90,26 @@ test.describe('Products Page (Pro)', () => {
 
 	test('should search products on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		const screen = page.locator('[data-testid="screen-products"]:visible');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+		const screen = page.getByTestId('screen-products').filter({ visible: true });
+		const countEl = screen.getByTestId('data-table-count');
+		await expect(countEl).toBeVisible({
 			timeout: 60_000,
 		});
+		const initialCount = await countEl.textContent();
+		const knownNonMatch = screen.getByTestId('data-table-row-belt');
+		await expect(knownNonMatch).toBeVisible({ timeout: 30_000 });
 
 		const searchInput = screen.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_500);
+		await searchInput.fill('hoodie with');
 
-		const countEl = screen.getByTestId('data-table-count');
-		const noResults = screen.getByTestId('no-data-message');
-
-		await expect(countEl.or(noResults).first()).toBeVisible({ timeout: 30_000 });
+		await expect(screen.getByTestId('data-table-row-hoodie-with-pocket')).toBeVisible({
+			timeout: 30_000,
+		});
+		await expect(screen.getByTestId('data-table-row-hoodie-with-zipper')).toBeVisible({
+			timeout: 30_000,
+		});
+		await expect(knownNonMatch).not.toBeVisible();
+		await expect.poll(() => countEl.textContent(), { timeout: 30_000 }).not.toBe(initialCount);
 	});
 
 	test('should show product actions menu', async ({ posPage: page }) => {

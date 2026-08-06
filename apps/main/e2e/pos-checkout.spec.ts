@@ -389,16 +389,23 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 					if (sentItem[field] === undefined) continue;
 					expectMoneyMatches(match[field], sentItem[field], `line_items[${index}].${field}`);
 				}
-				for (const field of ['subtotal_tax', 'total_tax'] as const) {
-					if (match[field] === undefined) continue;
-					expectFullPrecision(match[field], `line_items[${index}].${field}`);
+				expect(match.total_tax, `line_items[${index}].total_tax must be present`).toBeDefined();
+				expectFullPrecision(match.total_tax!, `line_items[${index}].total_tax`);
+				if (match.subtotal_tax !== undefined) {
+					expectFullPrecision(match.subtotal_tax, `line_items[${index}].subtotal_tax`);
 				}
 			}
 
-			for (const [index, taxLine] of (server.tax_lines ?? []).entries()) {
+			expect(server.tax_lines, 'tax_lines must be present').toBeDefined();
+			expect(
+				server.tax_lines!.length,
+				'tax_lines must contain the taxable fixture'
+			).toBeGreaterThan(0);
+			for (const [index, taxLine] of server.tax_lines!.entries()) {
 				expectFullPrecision(taxLine.tax_total, `tax_lines[${index}].tax_total`);
 			}
-			if (server.cart_tax !== undefined) expectFullPrecision(server.cart_tax, 'cart_tax');
+			expect(server.cart_tax, 'cart_tax must be present').toBeDefined();
+			expectFullPrecision(server.cart_tax!, 'cart_tax');
 
 			// THE MONEY THE CASHIER WAS ASKED FOR IS THE MONEY THE SERVER RECORDED.
 			//

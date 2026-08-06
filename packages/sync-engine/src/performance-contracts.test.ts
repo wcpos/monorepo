@@ -546,7 +546,14 @@ describe('sync-engine performance contracts (#949)', () => {
 				const concurrentApply = active.database.collections['products']!.bulkUpsert(
 					productDocuments(residents + 1, CONCURRENT_APPLY_SIZE) as never[]
 				);
+				let applySettled = false;
+				void concurrentApply.finally(() => {
+					applySettled = true;
+				});
 
+				// The apply must still be in flight when the timer starts, or this measures a
+				// query against an idle collection and the contention contract is vacuous.
+				expect(applySettled).toBe(false);
 				const { elapsedMs, hitCount } = await measureFirstPage(active.database, residents);
 
 				const scaledBudget = budget(budgetMs);

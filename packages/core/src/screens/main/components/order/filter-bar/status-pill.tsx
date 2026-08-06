@@ -33,6 +33,7 @@ export function StatusPill() {
 		>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
+					testID="order-filter-status"
 					size="xs"
 					leftIcon="cartCircleCheck"
 					variant={isActive ? undefined : 'muted'}

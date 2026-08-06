@@ -1,7 +1,7 @@
 import type { EngineRequirement, RequirementHandle } from '@wcpos/sync-engine';
 
 import { declareRequirements, requirementsForQuery } from '../src/requirement-bridge';
-import { createEngineDatabase, createFakeEngine, orderBrowserQueryKey } from '../src/testing';
+import { createEngineDatabase, orderBrowserQueryKey } from '../src/testing';
 
 import type { RequirementInput, RequirementPlan } from '../src/requirement-bridge';
 import type { RxDatabase } from 'rxdb';
@@ -764,8 +764,25 @@ describe('declareRequirements', () => {
 	});
 
 	it('declares requirement objects and swallows search rejections', async () => {
-		const engine = createFakeEngine(database);
-		engine.searchFailure = new Error('offline');
+		const searchHandle: RequirementHandle = {
+			ready: Promise.reject(new Error('offline')),
+			release: jest.fn(),
+			queryKey: null,
+		};
+		const targetedHandle: RequirementHandle = {
+			ready: Promise.resolve({
+				action: 'serve-local',
+				missingRecordIds: [],
+				reason: 'stub',
+			}),
+			release: jest.fn(),
+			queryKey: null,
+		};
+		const engine = {
+			require: jest.fn((requirement: EngineRequirement) =>
+				requirement.kind === 'search' ? searchHandle : targetedHandle
+			),
+		};
 		const requirements: EngineRequirement[] = [
 			{ id: 'a', collection: 'products', kind: 'search', term: 'mug' },
 			{
@@ -775,12 +792,19 @@ describe('declareRequirements', () => {
 				wooIds: [1],
 			},
 		];
+		const unhandled = jest.fn();
+		process.once('unhandledRejection', unhandled);
 		const handles = declareRequirements(engine as never, requirements);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
 		expect(handles).toHaveLength(2);
-		expect(engine.requireCalls).toEqual(requirements);
+		expect(handles).toEqual([searchHandle, targetedHandle]);
+		expect(engine.require.mock.calls.map(([requirement]) => requirement)).toEqual(requirements);
+		expect(unhandled).not.toHaveBeenCalled();
 		await expect(handles[1].ready).resolves.toMatchObject({
 			action: 'serve-local',
 		});
+		process.removeListener('unhandledRejection', unhandled);
 	});
 
 	it('contains a rejected category refresh without an unhandled rejection', async () => {

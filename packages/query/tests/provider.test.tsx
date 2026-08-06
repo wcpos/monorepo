@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 
 import { createStoreDatabase } from './helpers/db';
 import { createEngineDatabase, createFakeEngine } from '../src/testing';
@@ -35,7 +35,7 @@ describe('QueryProvider', () => {
 				locale: 'en',
 			});
 			expect(runtime).not.toHaveProperty('registerQuery');
-			return null;
+			return <span data-testid="runtime-consumer-rendered" />;
 		}
 
 		render(
@@ -43,6 +43,7 @@ describe('QueryProvider', () => {
 				<Consumer />
 			</QueryProvider>
 		);
+		expect(screen.getByTestId('runtime-consumer-rendered')).toBeTruthy();
 	});
 
 	it('rejects consumers outside the provider', () => {

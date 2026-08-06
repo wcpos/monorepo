@@ -126,27 +126,18 @@ test.describe('Customers Page (Pro)', () => {
 		await navigateToPage(page, 'customers');
 		const screen = page.getByTestId('screen-customers');
 		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
+		const countEl = screen.getByTestId('data-table-count');
+		await expect(countEl).toBeVisible({ timeout: 30_000 });
+		const initialCount = await countEl.textContent();
+		await expect(screen.getByTestId(/^data-table-row-/).first()).toBeVisible({ timeout: 30_000 });
 
 		const searchInput = screen.getByTestId('search-customers');
 		await searchInput.fill('admin');
 
-		await expect
-			.poll(
-				async () => {
-					const countEl = screen.getByTestId('data-table-count');
-					const hasResults = await countEl
-						.isVisible()
-						.then(async (visible) => visible && /[0-9]/.test((await countEl.textContent()) ?? ''))
-						.catch(() => false);
-					const noResults = await screen
-						.getByTestId('no-data-message')
-						.isVisible()
-						.catch(() => false);
-					return hasResults || noResults;
-				},
-				{ timeout: 15_000 }
-			)
-			.toBeTruthy();
+		const matchingRows = screen.getByTestId(/^data-table-row-/);
+		await expect(matchingRows.first()).toBeVisible({ timeout: 15_000 });
+		await expect(matchingRows.first()).toContainText(/admin/i);
+		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialCount);
 	});
 
 	test('should have add customer button on Customers page', async ({ posPage: page }) => {
@@ -154,14 +145,7 @@ test.describe('Customers Page (Pro)', () => {
 		const screen = page.getByTestId('screen-customers');
 		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
 
-		// The add customer button is an IconButton with userPlus icon next to the search
-		// It doesn't have accessible text, so we find it by being a button near the search
-		// The button is inside an HStack with the search input, look for buttons with role="button"
-		const headerButtons = screen.locator('[role="button"]');
-		const buttonCount = await headerButtons.count();
-
-		// Should have at least 2 buttons in the header (add customer + settings)
-		expect(buttonCount).toBeGreaterThanOrEqual(2);
+		await expect(screen.getByTestId('customers-add-button')).toBeVisible();
 	});
 });
 

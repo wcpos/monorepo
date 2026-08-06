@@ -171,7 +171,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<IconButton name="ellipsisVertical" />
+					<IconButton testID="order-actions-button" name="ellipsisVertical" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem

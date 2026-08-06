@@ -123,6 +123,7 @@ function CustomersScreenContent() {
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<IconButton
+									testID="customers-add-button"
 									name="userPlus"
 									onPress={() => router.push({ pathname: '/customers/add' })}
 									disabled={readOnly}

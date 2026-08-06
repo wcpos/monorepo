@@ -364,7 +364,7 @@ describe('WooCommerce coupon discount parity (discounts.php calculations_test_pr
 			// Coupon 1: 10% = ~5.985
 			// Coupon 2: 20% of remaining ~53.865 = ~10.773
 			// WooCommerce expects 16.75 (rounding at different precision)
-			expect(total).toBeCloseTo(16.75, 1);
+			expect(total).toBe(16.75);
 		});
 
 		it('Test 15: two percent coupons (20% no limit, 30% limit=5), sequential', () => {
@@ -379,7 +379,7 @@ describe('WooCommerce coupon discount parity (discounts.php calculations_test_pr
 			// Coupon 1 (20%): 20% of 45 = 9, remaining items: $8*3 + $4*3 = $36
 			// Coupon 2 (30%, limit 5): top 5 units (3x$8 + 2x$4 = $32), 30% = $9.60
 			// Total = 18.60
-			expect(total).toBeCloseTo(18.6, 1);
+			expect(total).toBe(18.6);
 		});
 
 		it('Test 16: sequential + limit + zero-dollar items', () => {
@@ -403,7 +403,7 @@ describe('WooCommerce coupon discount parity (discounts.php calculations_test_pr
 			// Coupon 1 (30%, limit 5): top 5 units (3x$13.95 + 2x$1.80 = $43.65), 30% = $13.095
 			// Coupon 2 (20%): 20% of remaining
 			// WooCommerce expects 20.35
-			expect(total).toBeCloseTo(20.35, 1);
+			expect(total).toBe(20.35);
 		});
 	});
 });
