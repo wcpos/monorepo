@@ -3,6 +3,7 @@ import { expect, type Page } from '@playwright/test';
 import { getStoreVariant, authenticatedTest as test } from './fixtures';
 import {
 	expectFullPrecision,
+	expectOrderPaid,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	openCheckout,
@@ -137,6 +138,15 @@ async function openRefundModalForNewOrder(page: Page) {
 	await page.getByTestId('refund-custom-amount').fill('1.00');
 }
 
+/** The refund body the POS submits — see `buildRefundPayload` in use-refund-mutation.ts. */
+interface RefundRequestPayload {
+	amount?: string;
+	reason?: string;
+	refund_destination?: string;
+	api_refund?: boolean;
+	line_items?: unknown[];
+}
+
 /**
  * The stubbed tests below assert the REQUEST CONTRACT — that the destination the
  * cashier picks becomes the right `refund_destination` / `api_refund` pair for a
@@ -155,7 +165,7 @@ test.describe('POS refunds (Pro)', () => {
 	});
 
 	test('submits refund_destination=cash for a non-cash order', async ({ posPage: page }) => {
-		let refundPayload: any = null;
+		const captured: { refund: RefundRequestPayload | null } = { refund: null };
 		await page.route('**/wp-json/wcpos/v2/orders/*/refunds**', async (route) => {
 			if (route.request().method() !== 'POST') {
 				await route.fulfill({
@@ -167,7 +177,7 @@ test.describe('POS refunds (Pro)', () => {
 				return;
 			}
 
-			refundPayload = route.request().postDataJSON();
+			captured.refund = route.request().postDataJSON() as RefundRequestPayload;
 			await route.fulfill({
 				status: 201,
 				contentType: 'application/json',
@@ -193,14 +203,14 @@ test.describe('POS refunds (Pro)', () => {
 		});
 		await page.getByTestId('confirm-process-refund-button').click();
 
-		await expect.poll(() => refundPayload?.refund_destination, { timeout: 15_000 }).toBe('cash');
-		expect(refundPayload?.api_refund).toBe(false);
+		await expect.poll(() => captured.refund?.refund_destination, { timeout: 15_000 }).toBe('cash');
+		expect(captured.refund?.api_refund).toBe(false);
 	});
 
 	test('submits refund_destination=original_method when provider refunds are supported', async ({
 		posPage: page,
 	}) => {
-		let refundPayload: any = null;
+		const captured: { refund: RefundRequestPayload | null } = { refund: null };
 		await page.route('**/wp-json/wcpos/v2/orders/*/refunds**', async (route) => {
 			if (route.request().method() !== 'POST') {
 				await route.fulfill({
@@ -212,7 +222,7 @@ test.describe('POS refunds (Pro)', () => {
 				return;
 			}
 
-			refundPayload = route.request().postDataJSON();
+			captured.refund = route.request().postDataJSON() as RefundRequestPayload;
 			await route.fulfill({
 				status: 201,
 				contentType: 'application/json',
@@ -236,9 +246,9 @@ test.describe('POS refunds (Pro)', () => {
 		await page.getByTestId('confirm-process-refund-button').click();
 
 		await expect
-			.poll(() => refundPayload?.refund_destination, { timeout: 15_000 })
+			.poll(() => captured.refund?.refund_destination, { timeout: 15_000 })
 			.toBe('original_method');
-		expect(refundPayload?.api_refund).toBe(true);
+		expect(captured.refund?.api_refund).toBe(true);
 	});
 });
 
@@ -278,7 +288,10 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			// the wrong reason.
 			const paid = await readOrder(request, testInfo, storeAuthorization(), orderId);
 			expect(paid.customer_note, 'must refund the order this test created').toBe(label);
-			expect(paid.status, 'order must be paid before refunding').not.toBe('pos-open');
+			// WooCommerce will record a refund against an order that never took
+			// payment, so "not pos-open" would let this test pass while covering only
+			// half of the payment-then-refund lifecycle it is named for.
+			expectOrderPaid(paid);
 			expect(
 				Number(paid.total),
 				`refund of ${refundAmount} must not exceed the order total`
@@ -331,7 +344,9 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			expect(afterRefund.customer_note, 'still the order this test created').toBe(label);
 
 			// WooCommerce stores refunds as negative amounts against the parent order.
-			const refund = afterRefund.refunds[0];
+			const refunds = afterRefund.refunds ?? [];
+			expect(refunds, 'exactly the one refund this test made').toHaveLength(1);
+			const refund = refunds[0];
 			expect(Number(refund.total), 'a refund must be recorded as a negative amount').toBeLessThan(
 				0
 			);

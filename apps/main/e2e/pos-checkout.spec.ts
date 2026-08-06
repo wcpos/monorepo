@@ -4,9 +4,11 @@ import { isRouteTeardownError, authenticatedTest as test } from './fixtures';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
+	expectOrderPaid,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	openCheckout,
+	type OrderLineItem,
 	processPayment,
 	readOrder,
 	stampRunLabel,
@@ -329,22 +331,12 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			expect(server.customer_note, 'readback must be the order this test created').toBe(label);
 			expect(Number(server.id ?? server.order_id)).toBe(orderId);
 
-			// PAYMENT ACTUALLY HAPPENED. "not pos-open" alone is too weak — `failed`
-			// and `cancelled` also satisfy it. WooCommerce stamps `date_paid` only
-			// when payment completes, which is the store-config-independent signal.
-			expect(server.status, 'order must have left the open-cart state').not.toBe('pos-open');
-			expect(
-				['failed', 'cancelled', 'trash'],
-				`order ended in a non-paid state: ${server.status}`
-			).not.toContain(String(server.status).replace(/^wc-/, ''));
-			expect(
-				server.date_paid ?? server.date_paid_gmt,
-				'WooCommerce must have recorded the payment'
-			).toBeTruthy();
+			// PAYMENT ACTUALLY HAPPENED.
+			expectOrderPaid(server);
 
 			// THE CART SURVIVED THE ROUND TRIP.
-			const sentItems: any[] = sent.line_items ?? [];
-			const serverItems: any[] = server.line_items ?? [];
+			const sentItems: OrderLineItem[] = sent.line_items ?? [];
+			const serverItems: OrderLineItem[] = server.line_items ?? [];
 			expect(sentItems.length, 'test must have sent at least one line item').toBeGreaterThan(0);
 			expect(serverItems).toHaveLength(sentItems.length);
 
@@ -361,13 +353,22 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			//     inverse of the server-calc-is-truth rule. What IS an invariant is that
 			//     tax comes back at full stored precision — the #946 contract.
 			for (const [index, sentItem] of sentItems.entries()) {
-				const match =
-					serverItems.find(
-						(item) =>
-							Number(item.product_id) === Number(sentItem.product_id) &&
-							Number(item.variation_id ?? 0) === Number(sentItem.variation_id ?? 0)
-					) ?? serverItems[index];
-				expect(match, `line item ${index} must exist on the server`).toBeTruthy();
+				// Match on identity ONLY. There is deliberately no positional fallback:
+				// substituting `serverItems[index]` when the (product_id, variation_id)
+				// lookup misses would let the test pass whenever an unrelated line
+				// happened to share a quantity and price — which is precisely the
+				// "the cart's exact items survived" claim this block is making.
+				const match = serverItems.find(
+					(item) =>
+						Number(item.product_id) === Number(sentItem.product_id) &&
+						Number(item.variation_id ?? 0) === Number(sentItem.variation_id ?? 0)
+				);
+				expect(
+					match,
+					`server has no line item for product ${sentItem.product_id}` +
+						`/variation ${sentItem.variation_id ?? 0} (sent as line ${index})`
+				).toBeTruthy();
+				if (!match) continue;
 
 				expect(Number(match.quantity), `line_items[${index}].quantity`).toBe(
 					Number(sentItem.quantity)
@@ -382,7 +383,7 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 				}
 			}
 
-			for (const [index, taxLine] of ((server.tax_lines ?? []) as any[]).entries()) {
+			for (const [index, taxLine] of (server.tax_lines ?? []).entries()) {
 				expectFullPrecision(taxLine.tax_total, `tax_lines[${index}].tax_total`);
 			}
 			if (server.cart_tax !== undefined) expectFullPrecision(server.cart_tax, 'cart_tax');

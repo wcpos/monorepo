@@ -35,6 +35,88 @@ const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
 /** The checkout modal route, `/cart/<uuid>/checkout`. */
 const CHECKOUT_ROUTE = /\/cart\/[^/]+\/checkout$/;
 
+/* -------------------------------------------------------------------------- */
+/* Wire shapes                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The order fields these specs assert on.
+ *
+ * Deliberately a narrow, partial view rather than the full WooCommerce order:
+ * every field is optional because this is untrusted JSON off the wire, and the
+ * index signature keeps the rest reachable without pretending we have modelled
+ * it. What matters is that the asserted fields are NAMED — a plugin-side rename
+ * then fails to compile here instead of silently degrading an assertion to
+ * `undefined === undefined`.
+ */
+export interface OrderLineItem {
+	product_id?: number | string;
+	variation_id?: number | string;
+	quantity?: number | string;
+	subtotal?: string;
+	subtotal_tax?: string;
+	total?: string;
+	total_tax?: string;
+	[key: string]: unknown;
+}
+
+export interface OrderTaxLine {
+	tax_total?: string;
+	[key: string]: unknown;
+}
+
+export interface OrderRefund {
+	id?: number;
+	reason?: string;
+	total?: string;
+	total_tax?: string;
+	[key: string]: unknown;
+}
+
+export interface ServerOrder {
+	id?: number;
+	order_id?: number;
+	status?: string;
+	total?: string;
+	cart_tax?: string;
+	customer_note?: string;
+	date_paid?: string | null;
+	date_paid_gmt?: string | null;
+	line_items?: OrderLineItem[];
+	tax_lines?: OrderTaxLine[];
+	refunds?: OrderRefund[];
+	_rxdb_revision?: string;
+	[key: string]: unknown;
+}
+
+/** The `payload` half of the mutation envelope — what the CLIENT believes. */
+export interface OrderPayload {
+	total?: string;
+	cart_tax?: string;
+	line_items?: OrderLineItem[];
+	tax_lines?: OrderTaxLine[];
+	[key: string]: unknown;
+}
+
+/** The mutation envelope the write surface POSTs (see `recordPushAdapter`). */
+interface PushEnvelope {
+	recordId?: string;
+	payload?: OrderPayload;
+}
+
+/** The write surface's answer to a create/update. */
+interface PushAck {
+	document?: ServerOrder;
+	currentRevision?: string | null;
+}
+
+/** An order this run created, as tracked for cleanup. */
+export interface TrackedOrder {
+	id: number;
+	uuid?: string;
+	label?: string;
+}
+
 /**
  * A human-traceable scope for this process: which CI run (and attempt) created
  * the order. Shards each run in their own process, so this is NOT unique on its
@@ -88,12 +170,17 @@ export async function stampRunLabel(page: Page, label: string): Promise<void> {
  */
 export async function openCheckout(
 	page: Page,
-	options: { onOrderCreated?: (order: { id: number; uuid: string }) => void } = {}
-): Promise<{ orderId: number; uuid: string; sent: any }> {
+	options: { onOrderCreated?: (order: TrackedOrder) => void } = {}
+): Promise<{ orderId: number; uuid: string; sent: OrderPayload }> {
 	const saved = page.waitForResponse(
 		(response) => PUSH_ORDERS.test(response.url()) && response.request().method() === 'POST',
 		{ timeout: 90_000 }
 	);
+	// If the click below throws, this waiter is left pending and rejects later with
+	// nobody listening. An unhandled rejection takes down the whole worker process
+	// (#997), turning one checkout failure into a shard-wide failure. The no-op
+	// handler makes it inert; the `await` on the normal path still sees the result.
+	saved.catch(() => {});
 
 	await page.getByTestId('checkout-button').click();
 
@@ -101,10 +188,7 @@ export async function openCheckout(
 	// The write surface sends the full mutation envelope, so the request itself
 	// names the record: `recordId` is the order uuid and `payload` is exactly what
 	// the client believes the order to be.
-	const envelope = (response.request().postDataJSON() ?? {}) as {
-		recordId?: string;
-		payload?: any;
-	};
+	const envelope = (response.request().postDataJSON() ?? {}) as PushEnvelope;
 	const uuid = envelope.recordId ?? '';
 	const sent = envelope.payload ?? {};
 
@@ -118,7 +202,7 @@ export async function openCheckout(
 		);
 	}
 
-	const ack = await response.json().catch(() => null as any);
+	const ack = (await response.json().catch(() => null)) as PushAck | null;
 	const orderId = Number(ack?.document?.id ?? 0);
 
 	// REGISTER FOR CLEANUP HERE, not at the end. The order exists on the server
@@ -144,7 +228,14 @@ export async function openCheckout(
 	await expect(page.getByTestId('checkout-dialog')).toBeVisible({ timeout: 30_000 });
 	await expect(page.getByTestId('process-payment-button')).toBeVisible({ timeout: 30_000 });
 
-	const resolvedId = orderId > 0 ? orderId : await orderIdFromPaymentFrame(page);
+	if (orderId > 0) return { orderId, uuid, sent };
+
+	// The ack carried no id. The order still exists server-side, so recover the id
+	// from the payment frame — and register THAT, or a real paid order silently
+	// escapes the cleanup registry.
+	const resolvedId = await orderIdFromPaymentFrame(page);
+	expect(resolvedId, 'server-assigned order id (ack had none, iframe fallback)').toBeGreaterThan(0);
+	options.onOrderCreated?.({ id: resolvedId, uuid });
 	return { orderId: resolvedId, uuid, sent };
 }
 
@@ -182,6 +273,12 @@ async function orderIdFromPaymentFrame(page: Page): Promise<number> {
  * <head> script, so the presence of `#place_order` in the body proves the
  * listener is already registered.
  *
+ * #1031 has since gated the button on frame load in the app too, which fixes the
+ * cashier-facing half of this. The wait stays, and stays first: it asserts the
+ * precise precondition (the store's LISTENER exists), where the app's gate keys
+ * off the iframe `onLoad` event — a related but not identical signal. Belt and
+ * braces is correct here; a dropped payment message is a silent lost sale.
+ *
  * (`#place_order` is a WooCommerce selector inside the STORE's own checkout
  * page, not app UI — the repo's testID policy governs app markup, which this
  * third-party document is not.)
@@ -191,16 +288,22 @@ async function orderIdFromPaymentFrame(page: Page): Promise<number> {
  * before any payment happens. Route departure cannot.
  */
 export async function processPayment(page: Page): Promise<void> {
-	const button = page.getByTestId('process-payment-button');
-	await expect(
-		button,
-		'payment button must be enabled — the store supplied a payment link'
-	).toBeEnabled({ timeout: 30_000 });
-
+	// Order matters. Since #1031 the app itself keeps this button disabled while
+	// `paymentFrameLoading` is true, so `toBeEnabled` now transitively waits on the
+	// store's page load — a live cross-origin fetch. Wait for the frame FIRST, so
+	// the enabled check is the fast assertion it reads as, and so a slow store
+	// fails as "the store payment page never loaded" rather than as an
+	// indistinguishable "button never enabled".
 	await expect(
 		page.frameLocator('iframe[src*="order-pay"]').locator('#place_order'),
 		'the store payment page must be loaded before the process-payment message is posted'
-	).toBeAttached({ timeout: 60_000 });
+	).toBeAttached({ timeout: 90_000 });
+
+	const button = page.getByTestId('process-payment-button');
+	await expect(
+		button,
+		'payment button must be enabled — the store supplied a payment link and the frame has loaded'
+	).toBeEnabled({ timeout: 60_000 });
 
 	await button.click();
 
@@ -226,7 +329,7 @@ export async function readOrder(
 	testInfo: TestInfo,
 	authorization: StoreAuthorization | null,
 	orderId: number
-): Promise<Record<string, any>> {
+): Promise<ServerOrder> {
 	const storeUrl = getStoreUrl(testInfo).replace(/\/+$/, '');
 	const { headers, params } = storeRequestOptions(authorization);
 
@@ -268,13 +371,16 @@ export async function readOrder(
  * rather than pin, so a plugin-side envelope change fails the assertion that
  * actually matters instead of exploding in the unwrapping.
  */
-export function unwrapOrders(body: unknown): Record<string, any>[] {
-	if (Array.isArray(body)) return body as Record<string, any>[];
-	const record = body as Record<string, any> | null;
-	if (Array.isArray(record?.documents)) {
-		return record!.documents.map((doc: any) => doc?.payload ?? doc);
+export function unwrapOrders(body: unknown): ServerOrder[] {
+	if (Array.isArray(body)) return body as ServerOrder[];
+	const record = body as Record<string, unknown> | null;
+	const documents = record?.documents;
+	if (Array.isArray(documents)) {
+		return documents.map(
+			(doc) => ((doc as { payload?: ServerOrder })?.payload ?? doc) as ServerOrder
+		);
 	}
-	if (Array.isArray(record?.data)) return record!.data;
+	if (Array.isArray(record?.data)) return record.data as ServerOrder[];
 	return [];
 }
 
@@ -338,6 +444,29 @@ export function expectMoneyMatches(server: unknown, client: unknown, label: stri
 	);
 }
 
+/** Terminal states that mean the sale did NOT happen. */
+const UNPAID_STATUSES = new Set(['pos-open', 'failed', 'cancelled', 'trash', 'pending']);
+
+/**
+ * Assert that a server order was genuinely PAID.
+ *
+ * "Not `pos-open`" is not enough: `failed` and `cancelled` also satisfy it, and
+ * WooCommerce will happily record a refund against an order that never took
+ * payment — so a refund test asserting only "not pos-open" can pass without ever
+ * covering the payment half of its own name.
+ *
+ * `date_paid` is the store-config-independent signal: WooCommerce stamps it in
+ * `payment_complete()`, whatever status the POS is configured to map sales to.
+ */
+export function expectOrderPaid(order: ServerOrder): void {
+	const status = String(order.status ?? '').replace(/^wc-/, '');
+	expect(UNPAID_STATUSES.has(status), `order ended in an unpaid state: "${status}"`).toBe(false);
+	expect(
+		order.date_paid ?? order.date_paid_gmt,
+		'WooCommerce must have recorded the payment (date_paid)'
+	).toBeTruthy();
+}
+
 /* -------------------------------------------------------------------------- */
 /* Cleanup                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -363,7 +492,7 @@ export async function trashOrder(
 	request: APIRequestContext,
 	testInfo: TestInfo,
 	authorization: StoreAuthorization | null,
-	order: { id: number; uuid?: string; label?: string }
+	order: TrackedOrder
 ): Promise<void> {
 	console.log(`[e2e-cleanup] created order ${order.id} (${order.label ?? 'unlabelled'})`);
 	await testInfo
@@ -376,19 +505,22 @@ export async function trashOrder(
 	const storeUrl = getStoreUrl(testInfo).replace(/\/+$/, '');
 	const { headers, params } = storeRequestOptions(authorization);
 
-	const current = await request
-		.get(`${storeUrl}/wp-json/wcpos/v2/orders`, {
-			headers,
-			params: { ...params, include: String(order.id), per_page: '1' },
-			failOnStatusCode: false,
-		})
-		.then(async (response) => (response.ok() ? unwrapOrders(await response.json())[0] : null))
-		.catch(() => null);
+	// Ownership read goes through `readOrder`, which retries transient 5xx. A
+	// single bare read here would turn one 502 into either a guaranteed leak (the
+	// update serialises without `baseRevision` and the push contract rejects it) or
+	// an unverified write.
+	const current = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
 
-	if (order.label && current && current.customer_note !== order.label) {
+	// Ownership must be PROVEN, not merely "not disproven". If the read failed
+	// after its retries, we do not know whose order this is, and on a shared live
+	// store the worse outcome is modifying someone else's record — a leak is
+	// recoverable from the id printed above, a wrong write is not.
+	if (order.label && current?.customer_note !== order.label) {
 		console.warn(
-			`[e2e-cleanup] SKIPPING order ${order.id}: its note is not this run's label. ` +
-				`Refusing to modify an order this test did not create.`
+			`[e2e-cleanup] SKIPPING order ${order.id}: ownership not verified ` +
+				`(${current ? "note does not match this run's label" : 'readback failed'}). ` +
+				`Refusing to modify an order this test may not have created. ` +
+				`Prune by hand using the id above.`
 		);
 		return;
 	}
@@ -418,11 +550,26 @@ export async function trashOrder(
 					attempts.push(`${status}: HTTP ${response.status()} ${body.slice(0, 200)}`);
 					return false;
 				}
-				// A 2xx is not proof: confirm the status the server actually kept.
-				const parsed = JSON.parse(body || '{}');
-				const kept = String(parsed?.document?.status ?? status).replace(/^wc-/, '');
-				if (!CLEANED_UP.has(kept)) {
-					attempts.push(`${status}: server kept status "${kept}"`);
+				// A 2xx is not proof, and neither is silence. Only a status the SERVER
+				// reported counts — defaulting to the status we asked for would report
+				// success on a malformed or changed response and hide a live order.
+				const parsed = JSON.parse(body || '{}') as PushAck;
+				const kept = parsed?.document?.status;
+				if (typeof kept === 'string') {
+					if (!CLEANED_UP.has(kept.replace(/^wc-/, ''))) {
+						attempts.push(`${status}: server kept status "${kept}"`);
+						return false;
+					}
+					return true;
+				}
+				// No status in the ack: go and look, rather than assume.
+				const after = await readOrder(request, testInfo, authorization, order.id).catch(() => null);
+				const observed = String(after?.status ?? '').replace(/^wc-/, '');
+				if (!after || !CLEANED_UP.has(observed)) {
+					attempts.push(
+						`${status}: ack omitted document.status and readback showed ` +
+							`"${after ? observed : 'unreadable'}"`
+					);
 					return false;
 				}
 				return true;
@@ -455,10 +602,10 @@ export async function trashOrder(
  * a hard timeout.
  */
 export const liveOrderTest = authenticatedTest.extend<{
-	trackOrder: (order: { id: number; uuid?: string; label?: string }) => void;
+	trackOrder: (order: TrackedOrder) => void;
 }>({
 	trackOrder: async ({ request, storeAuthorization }, use, testInfo) => {
-		const tracked = new Map<number, { id: number; uuid?: string; label?: string }>();
+		const tracked = new Map<number, TrackedOrder>();
 
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 		await use((order) => {
