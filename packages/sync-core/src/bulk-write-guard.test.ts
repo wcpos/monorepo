@@ -36,7 +36,11 @@ describe('RxDB bulk write result guard', () => {
 				if (!/\.bulk(?:Insert|Upsert|Remove|Write)\s*\(/.test(line)) return;
 				// Prettier may split `assertBulkSuccess(await x.bulkY(...))` across
 				// lines; accept the wrapper on the match line or the two above it.
-				const window = lines.slice(Math.max(0, index - 2), index + 1).join('\n');
+				// A conflict-TOLERANT write (the revision-checked insert) must inspect
+				// the result for a 409 BEFORE asserting the rest, so the assert lands a
+				// line or two BELOW the call — accept that window too. Either way an
+				// `assertBulkSuccess` must sit adjacent: the result is never dropped.
+				const window = lines.slice(Math.max(0, index - 2), index + 3).join('\n');
 				if (!window.includes('assertBulkSuccess(')) {
 					offenders.push(`${path}:${index + 1}`);
 				}

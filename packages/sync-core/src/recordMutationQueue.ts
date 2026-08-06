@@ -97,18 +97,96 @@ export type QueuedMutation = RecordMutation & {
 	 */
 	readonly requeuedFrom?: string;
 	readonly requeueCount?: number;
+	/**
+	 * DURABLE RESOLUTION CLAIM (#1016/#1046 → task 43). An engine instance
+	 * serializes its OWN resolutions in memory, which is enough for one process;
+	 * two Electron windows are two processes over one storage and neither chain
+	 * sees the other. The claim lives on the row — the only state both processes
+	 * share — and is taken/released through the queue's REVISION-CHECKED writes, so
+	 * exactly one process can hold it at a time.
+	 *
+	 * `resolutionClaimBy` is the claiming instance's id; `resolutionClaimUntil` the
+	 * ISO deadline after which the claim may be STOLEN. The deadline is what makes a
+	 * crashed process recoverable: a window that dies mid-resolution cannot release,
+	 * and a permanent lock on a dead letter is a completed sale nobody can recover.
+	 * Both absent on a row nobody is resolving.
+	 */
+	readonly resolutionClaimBy?: string;
+	readonly resolutionClaimUntil?: string;
+	/**
+	 * DURABLE DRAIN LEASE (task 43 follow-up). The drain claim (`status: 'claimed'`)
+	 * was reclaimable by any process the instant it was set — so two Electron
+	 * windows draining could both claim one row and double-push. The lease mirrors
+	 * the resolution claim: `claimedBy` is the draining instance's id and
+	 * `claimedUntil` the deadline after which the claim may be STOLEN. Within the
+	 * lease exactly one window holds the row; past it — a crashed drain that never
+	 * acked or rescheduled — the row is reclaimable so recovery still works. Absent
+	 * on a row no drain currently holds.
+	 */
+	readonly claimedBy?: string;
+	readonly claimedUntil?: string;
 };
 
-/** Storage port — an append-only set keyed by `mutationId`. RxDB (durable) or memory (tests). */
+/**
+ * An opaque per-row version token. Platform-neutral by design: to sync-core it is
+ * just a string it round-trips from `listStored()` back into a conditional write.
+ * The RxDB adapter maps it to the document's `_rev`; the in-memory adapter uses a
+ * monotonic counter. Callers never parse it — they only compare "the token I read"
+ * against "the token the write must still match".
+ */
+export type RevisionToken = string;
+
+/** A stored row paired with the version token a conditional write must match. */
+export type StoredMutation = { readonly mutation: QueuedMutation; readonly rev: RevisionToken };
+
+/**
+ * Storage port — an append-only set keyed by `mutationId`. RxDB (durable) or
+ * memory (tests).
+ *
+ * TWO WRITE KINDS, chosen deliberately at every call site (task 43):
+ *  - UNCONDITIONAL (`append` / `remove`): the caller owns the row exclusively —
+ *    a first enqueue mints a fresh id nobody else holds, and an acknowledge drops
+ *    a row whose push this process just completed. No other process is racing it.
+ *  - CONDITIONAL / revision-checked (`appendIfUnchanged` / `removeIfUnchanged`):
+ *    the write must land ONLY IF the row is still exactly as the caller last read
+ *    it (`expectedRev`). This is the cross-process guard: the in-memory
+ *    single-writer chain serializes contention within ONE process, but two
+ *    Electron windows are two processes over one storage, and only the storage's
+ *    own revision check can make a claim/resolve/coalesce mutually exclusive
+ *    across them. A stale write returns `false` (RxDB answers its native 409
+ *    CONFLICT; memory compares the token) and the caller re-reads and re-decides.
+ */
 export type RecordMutationStorage = {
 	list(): Promise<QueuedMutation[]>;
 	/**
-	 * Persist a queued mutation, keyed by `mutationId` (an upsert). `enqueue` writes a fresh
-	 * write-intent; `reschedule` re-writes the same entry with updated retry bookkeeping.
+	 * Every row WITH its current version token — the read half of a revision-checked
+	 * transition. A CAS method captures a row's `rev` here, decides, then hands that
+	 * same token to `appendIfUnchanged` / `removeIfUnchanged` so the write is refused
+	 * if anything moved the row in between (in this process or another).
+	 */
+	listStored(): Promise<StoredMutation[]>;
+	/**
+	 * Persist a queued mutation UNCONDITIONALLY, keyed by `mutationId` (an upsert).
+	 * For writes whose row the caller owns exclusively — the first enqueue, and the
+	 * drain-owned bookkeeping on a row this process has already claimed.
 	 */
 	append(mutation: QueuedMutation): Promise<void>;
-	/** Remove the exact mutations that were acknowledged, by `mutationId`. */
+	/**
+	 * Revision-checked upsert: write `mutation` ONLY IF its stored row still carries
+	 * `expectedRev` — or, when `expectedRev` is `null`, ONLY IF no row exists yet
+	 * (an insert). Returns `false` without writing when the precondition fails: the
+	 * row moved, or a row already exists for an insert. This is how a claim, a
+	 * coalesce, or a drain-claim stays exactly-once across processes.
+	 */
+	appendIfUnchanged(mutation: QueuedMutation, expectedRev: RevisionToken | null): Promise<boolean>;
+	/** Remove the exact mutations UNCONDITIONALLY, by `mutationId`. */
 	remove(mutationIds: readonly string[]): Promise<void>;
+	/**
+	 * Revision-checked remove: drop the row ONLY IF it still carries `expectedRev`.
+	 * Returns `false` when the row is gone or has moved — the caller then knows some
+	 * other transition (or process) settled it first.
+	 */
+	removeIfUnchanged(mutationId: string, expectedRev: RevisionToken): Promise<boolean>;
 };
 
 export class RecordMutationQueue {
@@ -194,16 +272,37 @@ export class RecordMutationQueue {
 	 * scan and this claim — the drain must then SKIP the row; an unconditional
 	 * upsert here would RESURRECT a row a concurrent write intent just removed.
 	 */
-	async claim(next: QueuedMutation): Promise<boolean> {
+	async claim(next: QueuedMutation, nowMs: number = Date.now()): Promise<boolean> {
 		return this.transact(async () => {
-			const row = (await this.storage.list()).find((item) => item.mutationId === next.mutationId);
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === next.mutationId
+			);
+			const row = stored?.mutation;
 			if (
 				!row ||
 				(row.status !== undefined && row.status !== 'pending' && row.status !== 'claimed')
 			)
 				return false;
-			await this.storage.append(next);
-			return true;
+			// DRAIN LEASE (task 43 follow-up): a row already 'claimed' by ANOTHER
+			// instance whose lease has not expired is being pushed right now — refuse,
+			// so two windows draining cannot both claim it and double-push. Our own
+			// claim is always re-takeable (a retry within one process), a pending row
+			// is free, and an EXPIRED claim is stealable so a crashed drain that never
+			// acked or rescheduled still recovers.
+			if (
+				row.status === 'claimed' &&
+				row.claimedBy !== undefined &&
+				row.claimedBy !== next.claimedBy
+			) {
+				const until = row.claimedUntil ? Date.parse(row.claimedUntil) : 0;
+				if (until > nowMs) return false;
+			}
+			// Revision-checked: two processes both draining can each SCAN the same
+			// pending row (or both try to steal one expired claim), but only one can
+			// write it — the loser's write finds the row already at the winner's
+			// revision and is refused. (#1046 spike: the old unconditional upsert let
+			// both win.)
+			return this.storage.appendIfUnchanged(next, stored.rev);
 		});
 	}
 
@@ -217,12 +316,48 @@ export class RecordMutationQueue {
 	 */
 	async coalesceInto(priorMutationId: string, replacement: QueuedMutation): Promise<boolean> {
 		return this.transact(async () => {
-			const row = (await this.storage.list()).find((item) => item.mutationId === priorMutationId);
-			if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
-			await this.storage.append(replacement);
-			await this.storage.remove([priorMutationId]);
-			return true;
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === priorMutationId
+			);
+			const row = stored?.mutation;
+			// Coalescing is valid ONLY into a never-pushed pending row (#516 rule 1).
+			// The write-intent layer checks `attempts === 0` on its own read, but that
+			// read can be stale across processes: another window's drain may have pushed
+			// this row and rescheduled it back to `pending` (attempts > 0) in between.
+			// Re-assert it HERE, on the revision-checked read, so a stale replacement can
+			// never consume an ever-pushed mutation under a fresh id (adversarial P2).
+			if (
+				!row ||
+				(row.status !== undefined && row.status !== 'pending') ||
+				(row.attempts ?? 0) !== 0
+			)
+				return false;
+			// Insert the replacement under its FRESH id (nobody else holds it), then
+			// remove the prior row CONDITIONALLY on the revision we just read. If the
+			// prior moved between the read and the remove — a concurrent claim,
+			// coalesce, or another window — the remove is refused and we unwind the
+			// replacement so the swap is all-or-nothing.
+			const inserted = await this.storage.appendIfUnchanged(replacement, null);
+			if (!inserted) return false;
+			if (await this.storage.removeIfUnchanged(priorMutationId, stored.rev)) return true;
+			// Compensation is CONDITIONAL on the replacement still being pending: if a
+			// drain in another window claimed it in the microtask window, removing it
+			// unconditionally would cancel a push that may already be reaching the
+			// server. Leave a claimed replacement in place (the server dedupes on its
+			// mutationId) rather than delete in-flight work (adversarial P2).
+			await this.removePendingInternal(replacement.mutationId);
+			return false;
 		});
+	}
+
+	/** `removePending` without the transact wrapper — for use INSIDE a transaction. */
+	private async removePendingInternal(mutationId: string): Promise<boolean> {
+		const stored = (await this.storage.listStored()).find(
+			(item) => item.mutation.mutationId === mutationId
+		);
+		const row = stored?.mutation;
+		if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
+		return this.storage.removeIfUnchanged(mutationId, stored.rev);
 	}
 
 	/**
@@ -233,10 +368,15 @@ export class RecordMutationQueue {
 	 */
 	async removePending(mutationId: string): Promise<boolean> {
 		return this.transact(async () => {
-			const row = (await this.storage.list()).find((item) => item.mutationId === mutationId);
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === mutationId
+			);
+			const row = stored?.mutation;
 			if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
-			await this.storage.remove([mutationId]);
-			return true;
+			// Revision-checked: a drain-in-flight claim in another process must not be
+			// annihilated. If the row moved to 'claimed' after our read, the remove is
+			// refused and the delete queues behind the in-flight create instead.
+			return this.storage.removeIfUnchanged(mutationId, stored.rev);
 		});
 	}
 
@@ -318,10 +458,82 @@ export class RecordMutationQueue {
 	 */
 	async removeIfStatus(mutationId: string, status: QueuedMutation['status']): Promise<boolean> {
 		return this.transact(async () => {
-			const row = (await this.storage.list()).find((item) => item.mutationId === mutationId);
-			if (!row || row.status !== status) return false;
-			await this.storage.remove([mutationId]);
-			return true;
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === mutationId
+			);
+			if (!stored || stored.mutation.status !== status) return false;
+			// Revision-checked: two concurrent resolutions of one dead letter (two
+			// windows) both reach here, but only one remove lands — the loser sees the
+			// row already gone and compensates. Cross-process, the resolution claim
+			// above already gates this to one holder; the conditional remove is the
+			// belt to that suspenders, and covers a claim stolen after its deadline.
+			return this.storage.removeIfUnchanged(mutationId, stored.rev);
+		});
+	}
+
+	/**
+	 * DURABLE RESOLUTION CLAIM (CAS) — the cross-process half of resolution safety
+	 * (#1016/#1046 → task 43). Returns:
+	 *  - `claimed` — the caller holds it until `untilIso`;
+	 *  - `held` — someone else holds an UNEXPIRED claim; the caller must not proceed;
+	 *  - `gone` — the row is absent or no longer in `expectedStatus` (already settled).
+	 *
+	 * A claim is STEALABLE once its deadline passes — the only safe direction, since
+	 * a crashed holder can never release and a permanent lock strands a sale. The
+	 * write is revision-checked, so two windows racing to claim resolve to exactly
+	 * one winner even though each has its own in-process chain.
+	 */
+	async claimForResolution(input: {
+		mutationId: string;
+		expectedStatus: QueuedMutation['status'];
+		holder: string;
+		untilIso: string;
+		nowMs: number;
+	}): Promise<'claimed' | 'held' | 'gone'> {
+		return this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === input.mutationId
+			);
+			if (!stored || stored.mutation.status !== input.expectedStatus) return 'gone';
+			const heldBy = stored.mutation.resolutionClaimBy;
+			const until = stored.mutation.resolutionClaimUntil
+				? Date.parse(stored.mutation.resolutionClaimUntil)
+				: 0;
+			// Our own claim is re-takeable (a retry inside one process); an expired one
+			// is stealable; a live foreign holder is not.
+			if (heldBy !== undefined && heldBy !== input.holder && until > input.nowMs) return 'held';
+			const claimed = await this.storage.appendIfUnchanged(
+				{
+					...stored.mutation,
+					resolutionClaimBy: input.holder,
+					resolutionClaimUntil: input.untilIso,
+				},
+				stored.rev
+			);
+			// A refused write means another window claimed it in the same instant —
+			// treat as held; the caller backs off exactly as for a live holder.
+			return claimed ? 'claimed' : 'held';
+		});
+	}
+
+	/**
+	 * Release a claim this holder still owns, by parking its deadline in the past so
+	 * the row is immediately re-claimable. A no-op when the row is GONE (a successful
+	 * resolution already removed it — re-writing would resurrect a retired dead
+	 * letter) or when someone else now holds it (ours expired and was stolen —
+	 * clearing a live foreign claim would hand the row to a third process).
+	 * Revision-checked, so the release cannot clobber a concurrent steal.
+	 */
+	async releaseResolutionClaim(mutationId: string, holder: string): Promise<void> {
+		await this.transact(async () => {
+			const stored = (await this.storage.listStored()).find(
+				(item) => item.mutation.mutationId === mutationId
+			);
+			if (!stored || stored.mutation.resolutionClaimBy !== holder) return;
+			await this.storage.appendIfUnchanged(
+				{ ...stored.mutation, resolutionClaimUntil: new Date(0).toISOString() },
+				stored.rev
+			);
 		});
 	}
 
@@ -371,16 +583,51 @@ export function pendingRecordIds(mutations: readonly QueuedMutation[]): Set<stri
 	return ids;
 }
 
-/** In-memory storage — for tests and ephemeral hosts. */
+/**
+ * In-memory storage — for tests and ephemeral hosts.
+ *
+ * It keeps a monotonic revision token per row, exactly so TWO
+ * `RecordMutationQueue` instances sharing ONE storage model two processes over
+ * one durable store: each instance captures a row's token through `listStored`
+ * and its conditional writes are refused when the other moved the row first. That
+ * is what lets the cross-process resolution-claim tests run without RxDB.
+ */
 export class InMemoryRecordMutationStorage implements RecordMutationStorage {
-	private readonly mutations = new Map<string, QueuedMutation>();
+	private readonly mutations = new Map<string, { mutation: QueuedMutation; rev: RevisionToken }>();
+	private revCounter = 0;
+
+	private nextRev(): RevisionToken {
+		this.revCounter += 1;
+		return `rev-${this.revCounter}`;
+	}
 
 	async list(): Promise<QueuedMutation[]> {
-		return [...this.mutations.values()];
+		return [...this.mutations.values()].map((entry) => entry.mutation);
+	}
+
+	async listStored(): Promise<StoredMutation[]> {
+		return [...this.mutations.values()].map((entry) => ({
+			mutation: entry.mutation,
+			rev: entry.rev,
+		}));
 	}
 
 	async append(mutation: QueuedMutation): Promise<void> {
-		this.mutations.set(mutation.mutationId, mutation);
+		this.mutations.set(mutation.mutationId, { mutation, rev: this.nextRev() });
+	}
+
+	async appendIfUnchanged(
+		mutation: QueuedMutation,
+		expectedRev: RevisionToken | null
+	): Promise<boolean> {
+		const existing = this.mutations.get(mutation.mutationId);
+		if (expectedRev === null) {
+			if (existing) return false; // insert-if-absent: a row already exists
+		} else if (!existing || existing.rev !== expectedRev) {
+			return false; // moved (or gone) since the caller read it
+		}
+		this.mutations.set(mutation.mutationId, { mutation, rev: this.nextRev() });
+		return true;
 	}
 
 	async remove(mutationIds: readonly string[]): Promise<void> {
@@ -388,24 +635,61 @@ export class InMemoryRecordMutationStorage implements RecordMutationStorage {
 			this.mutations.delete(mutationId);
 		}
 	}
+
+	async removeIfUnchanged(mutationId: string, expectedRev: RevisionToken): Promise<boolean> {
+		const existing = this.mutations.get(mutationId);
+		if (!existing || existing.rev !== expectedRev) return false;
+		this.mutations.delete(mutationId);
+		return true;
+	}
 }
 
 /**
  * Structural view of the RxDB collection backing the durable queue — declared here (not imported from rxdb) so
  * sync-core stays platform-neutral. The host passes its real RxCollection; only these members are used.
+ *
+ * The document members carry the revision-checked write (task 43): `revision` is
+ * RxDB's `_rev`, and `patch` / `remove` are the NON-incremental variants that
+ * fail closed with a native 409 CONFLICT when the stored `_rev` has moved since
+ * the document was fetched — the exact cross-process guard the port needs. (The
+ * `incremental*` variants retry through conflicts and would DEFEAT a claim, so
+ * they are deliberately not used.) A real RxDocument satisfies this shape.
  */
-export type RxRecordMutationDocument = { toJSON(): QueuedMutation };
+export type RxRecordMutationDocument = {
+	toJSON(): QueuedMutation;
+	readonly revision?: string;
+	patch(changes: Partial<QueuedMutation>): Promise<unknown>;
+	remove(): Promise<unknown>;
+};
 export type RxRecordMutationCollection = {
 	bulkUpsert(items: QueuedMutation[]): Promise<unknown>;
+	/** Insert-if-absent — a per-row 409 in `error` means the id already exists. */
+	bulkInsert(items: QueuedMutation[]): Promise<unknown>;
 	find(query?: unknown): { exec(): Promise<(RxRecordMutationDocument | QueuedMutation)[]> };
 	bulkRemove(mutationIds: string[]): Promise<unknown>;
 };
 
+/** True for the storage's native optimistic-concurrency refusal (RxDB: 409 / `CONFLICT`). */
+function isRevisionConflict(error: unknown): boolean {
+	const e = error as { status?: number; code?: string } | null;
+	return e?.status === 409 || e?.code === 'CONFLICT';
+}
+
+/** Every per-row failure in a bulk result is a 409, i.e. purely a revision conflict. */
+function onlyConflicts(result: unknown): boolean {
+	const failures = (result as { error?: { status?: number }[] } | null)?.error ?? [];
+	return failures.length > 0 && failures.every((failure) => failure.status === 409);
+}
+
 /**
- * Durable RxDB-backed storage for the record mutation queue. Append-only: `append` is a keyed upsert on the
- * immutable `mutationId`, and `remove` deletes exactly those ids — no read-modify-write and no race guard is
- * needed, because a mutationId is unique per enqueue and never reused (an edit landing mid-push is a DIFFERENT
- * mutationId, so it is never collaterally removed).
+ * Durable RxDB-backed storage for the record mutation queue.
+ *
+ * Two write kinds (task 43): `append`/`remove` are UNCONDITIONAL upserts/deletes
+ * on a `mutationId` the caller owns; `appendIfUnchanged`/`removeIfUnchanged` are
+ * REVISION-CHECKED — they patch/remove the RxDocument only while its `_rev` still
+ * matches what the caller read, and map RxDB's native 409 to a `false` return.
+ * That is what makes a resolution claim, a drain claim, and a coalesce
+ * mutually-exclusive across two Electron windows sharing one storage worker.
  */
 export class RxRecordMutationStorage implements RecordMutationStorage {
 	public constructor(
@@ -419,12 +703,38 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 			: this.collectionOrResolver;
 	}
 
+	private async documents(): Promise<RxRecordMutationDocument[]> {
+		const rows = await this.collection().find().exec();
+		// The real collection returns RxDocuments; a bare-object row (older test
+		// fakes exercising only the unconditional read path) is wrapped so `list()`
+		// still works. Its `patch`/`remove` reject — a conditional write against a
+		// non-RxDocument is a wiring error, never a runtime path.
+		return rows.map((row) =>
+			'toJSON' in row
+				? (row as RxRecordMutationDocument)
+				: {
+						toJSON: () => row as QueuedMutation,
+						patch: () => Promise.reject(new Error('conditional write on a non-RxDocument row')),
+						remove: () => Promise.reject(new Error('conditional write on a non-RxDocument row')),
+					}
+		);
+	}
+
 	async list(): Promise<QueuedMutation[]> {
 		// No sort clause: seq is not indexed (RxDB rejects sorting on a non-indexed field at runtime), and it
 		// need not be — the queue is small, and RecordMutationQueue.pending() applies the monotonic seq order
 		// in memory. list() just returns every stored row.
-		const documents = await this.collection().find().exec();
-		return documents.map((document) => ('toJSON' in document ? document.toJSON() : document));
+		return (await this.documents()).map((document) => document.toJSON());
+	}
+
+	async listStored(): Promise<StoredMutation[]> {
+		// The `_rev` is the version token a conditional write must still match. A row
+		// with no revision (a test fake) yields '' — harmless, since only conditional
+		// writes read it and those run against the real RxDB.
+		return (await this.documents()).map((document) => ({
+			mutation: document.toJSON(),
+			rev: document.revision ?? '',
+		}));
 	}
 
 	async append(mutation: QueuedMutation): Promise<void> {
@@ -434,6 +744,35 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 		assertBulkSuccess(await this.collection().bulkUpsert([mutation]), 'mutation queue append');
 	}
 
+	async appendIfUnchanged(
+		mutation: QueuedMutation,
+		expectedRev: RevisionToken | null
+	): Promise<boolean> {
+		if (expectedRev === null) {
+			// Insert-if-absent: a 409 means the id already exists (someone enqueued a
+			// replacement first). Any other failure is a real fault and must throw.
+			const result = await this.collection().bulkInsert([mutation]);
+			if (onlyConflicts(result)) return false;
+			assertBulkSuccess(result, 'mutation queue conditional insert');
+			return true;
+		}
+		const document = (await this.documents()).find(
+			(candidate) => candidate.toJSON().mutationId === mutation.mutationId
+		);
+		// Gone, or already moved since the caller read it: the precondition fails.
+		if (!document || (document.revision ?? '') !== expectedRev) return false;
+		try {
+			// Non-incremental patch: atomic against the `_rev` we just verified, so a
+			// concurrent write landing between the read above and here fails the patch
+			// with 409 rather than silently overwriting.
+			await document.patch(mutation);
+			return true;
+		} catch (error) {
+			if (isRevisionConflict(error)) return false;
+			throw error;
+		}
+	}
+
 	async remove(mutationIds: readonly string[]): Promise<void> {
 		if (mutationIds.length === 0) return;
 		assertBulkSuccess(
@@ -441,12 +780,26 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 			'mutation queue remove'
 		);
 	}
+
+	async removeIfUnchanged(mutationId: string, expectedRev: RevisionToken): Promise<boolean> {
+		const document = (await this.documents()).find(
+			(candidate) => candidate.toJSON().mutationId === mutationId
+		);
+		if (!document || (document.revision ?? '') !== expectedRev) return false;
+		try {
+			await document.remove();
+			return true;
+		} catch (error) {
+			if (isRevisionConflict(error)) return false;
+			throw error;
+		}
+	}
 }
 
 /** RxDB collection schema for the durable queue — one row per mutation (`mutationId` PK). */
 export const recordMutationQueueSchema = {
 	title: 'record mutation queue schema',
-	version: 4,
+	version: 5,
 	primaryKey: 'mutationId',
 	type: 'object',
 	properties: {
@@ -480,6 +833,15 @@ export const recordMutationQueueSchema = {
 		rejectedAt: { type: 'string', maxLength: 32 },
 		requeuedFrom: { type: 'string', maxLength: 64 },
 		requeueCount: { type: 'number', minimum: 0, maximum: 1_000_000, multipleOf: 1 },
+		// The durable resolution claim (task 43) — optional, so a row nobody is
+		// resolving simply has neither.
+		resolutionClaimBy: { type: 'string', maxLength: 64 },
+		resolutionClaimUntil: { type: 'string', maxLength: 32 },
+		// The durable DRAIN lease (task 43 follow-up) — optional; a row no drain
+		// holds has neither. Amended into v5 in place: v5 is unreleased (introduced
+		// by this change), so the house "amend an unreleased schema" rule applies.
+		claimedBy: { type: 'string', maxLength: 64 },
+		claimedUntil: { type: 'string', maxLength: 32 },
 	},
 	required: ['mutationId', 'recordId', 'collectionName', 'operation', 'payload', 'queuedAt'],
 } as const;
@@ -508,6 +870,10 @@ export const recordMutationQueueSchema = {
  * dead-lettered sales this very feature exists to recover (dev-next still
  * carries stranded orders from the #786 incident). A one-line passthrough at v4
  * costs nothing and keeps them. Flagged for ruling in the #832 PR.
+ * v4 → v5: the durable resolution-claim fields (task 43) — OPTIONAL additive
+ * properties, rows pass through. A new version for the same DB6 reason as v4: an
+ * in-place amend of a released v4 keeps the `name-version` key with a different
+ * schema hash and the scope database fails to open at all.
  */
 export const recordMutationQueueMigrationStrategies = {
 	1: (doc: QueuedMutation): QueuedMutation => doc,
@@ -522,4 +888,5 @@ export const recordMutationQueueMigrationStrategies = {
 	}),
 	3: (doc: QueuedMutation): QueuedMutation => doc,
 	4: (doc: QueuedMutation): QueuedMutation => doc,
+	5: (doc: QueuedMutation): QueuedMutation => doc,
 };

@@ -99,6 +99,14 @@ function isNonRetryable(error: unknown): boolean {
 	return typeof status === 'number' && status >= 400 && status < 500 && !RETRYABLE_4XX.has(status);
 }
 
+/**
+ * How long a drain claim is honoured before another window may steal it (task 43
+ * follow-up). Comfortably longer than any single push (network timeouts are far
+ * shorter), so a live drain never loses its row; short enough that a CRASHED
+ * drain — one that never acked or rescheduled — frees the row within a minute.
+ */
+const DEFAULT_CLAIM_LEASE_MS = 60_000;
+
 export async function drainMutationQueue(input: {
 	queue: RecordMutationQueue;
 	/** Pushes one mutation. The host wraps `pushRecordMutation` (endpoint, scope guard, telemetry). */
@@ -119,6 +127,14 @@ export async function drainMutationQueue(input: {
 	currentRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
 	/** Leaves matching mutations pending without claiming, retrying, or backing off. */
 	shouldHold?: (mutation: QueuedMutation) => Promise<boolean>;
+	/**
+	 * This drain instance's id + how long its claim lease lasts (task 43 follow-up).
+	 * With both set, a claim carries a stealable lease so two windows draining
+	 * cannot both claim one row. Absent ⇒ no lease (single-process / legacy callers
+	 * behave exactly as before).
+	 */
+	drainInstanceId?: string;
+	claimLeaseMs?: number;
 	/** On a 428 precondition failure, performs one targeted server refresh and
 	 * returns the record's newly observed revision. The drain retries once with
 	 * that revision; a missing revision parks update/delete, while an unrefreshable
@@ -171,9 +187,24 @@ export async function drainMutationQueue(input: {
 	let deferred = 0;
 	let attempted = 0;
 
+	// LEASE FENCE (task 43): a settlement write is safe only while THIS drain still
+	// holds the row's lease. If another window stole it — our push outlived the
+	// lease — the stored row now carries the thief's `claimedBy` (or is gone, acked
+	// by the thief). An unconditional reschedule/replace/ack here would overwrite,
+	// delete, or RESURRECT the thief's row, so every settlement path checks this
+	// first and no-ops when the lease is no longer ours. With no `drainInstanceId`
+	// (single-process / legacy) there is no lease and this is always true — settle
+	// exactly as before.
+	const stillOwnLease = async (mutationId: string): Promise<boolean> => {
+		if (input.drainInstanceId === undefined) return true;
+		const row = (await input.queue.all()).find((item) => item.mutationId === mutationId);
+		return row?.claimedBy === input.drainInstanceId;
+	};
+
 	// Bump the attempt count + set the backoff gate after a failed push OR a failed ack, so the next
 	// drain waits before re-pushing (ADR 0012) — the same policy for both failure kinds.
 	const applyBackoff = async (mutation: QueuedMutation): Promise<void> => {
+		if (!(await stillOwnLease(mutation.mutationId))) return;
 		const attempts = (mutation.attempts ?? 0) + 1;
 		const delayMs = computeRetryBackoffMs(attempts, backoff, retryJitterSeed(mutation.mutationId));
 		try {
@@ -201,6 +232,7 @@ export async function drainMutationQueue(input: {
 	// row, no same-base retry loop). Only an explicit resolution moves it:
 	// retry-with-server-base first refreshes the revision; discard works as-is.
 	const parkNeedsRevision = async (mutation: QueuedMutation): Promise<void> => {
+		if (!(await stillOwnLease(mutation.mutationId))) return;
 		conflicts.push({
 			outcome: 'conflict',
 			mutation,
@@ -219,6 +251,7 @@ export async function drainMutationQueue(input: {
 	};
 
 	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void> => {
+		if (!(await stillOwnLease(mutation.mutationId))) return;
 		const { status, reason, serverMessage } = error as {
 			status?: number;
 			reason?: string;
@@ -336,18 +369,50 @@ export async function drainMutationQueue(input: {
 		// re-anchored. Creates keep their null base: there is nothing to re-anchor.
 		const freshRevision =
 			mutation.operation === 'create' ? undefined : await input.currentRevision?.(mutation);
+		// Never INHERIT a foreign lease: strip any `claimedBy`/`claimedUntil` the
+		// scanned row carried before stamping our own (or none). Without this, a
+		// caller with no `drainInstanceId` would spread a foreign holder into
+		// `draining` and `claim()` would read it as its OWN claim, bypassing the
+		// live-lease check (adversarial P2).
+		const { claimedBy: _priorBy, claimedUntil: _priorUntil, ...bare } = mutation;
+		const lease =
+			input.drainInstanceId !== undefined
+				? {
+						claimedBy: input.drainInstanceId,
+						claimedUntil: new Date(
+							now() + (input.claimLeaseMs ?? DEFAULT_CLAIM_LEASE_MS)
+						).toISOString(),
+					}
+				: {};
 		const draining = {
-			...mutation,
+			...bare,
 			baseRevision: freshRevision || mutation.baseRevision,
 			status: 'claimed' as const,
+			...lease,
 		};
 		// CONDITIONAL durable claim BEFORE the push (CAS): from here until this row
 		// settles, the write-intent layer refuses to coalesce it (an edit queues
 		// behind it). If the row left the queue between the scan and this claim —
 		// coalesced away or annihilated by a concurrent write intent — the claim
 		// refuses and this drain SKIPS it (an unconditional upsert would resurrect
-		// a row the write plane just removed and push a cancelled create).
-		if (!(await input.queue.claim(draining))) {
+		// a row the write plane just removed and push a cancelled create). The lease
+		// (task 43) additionally refuses a row another window is actively pushing.
+		if (!(await input.queue.claim(draining, now()))) {
+			// A row another window is actively pushing (live foreign lease) must also
+			// HOLD this record's later mutations — otherwise we would skip the leased
+			// predecessor and push a successor out of FIFO order (an update before its
+			// create reaches the server). A row that is merely gone needs no block.
+			const current = (await input.queue.all()).find(
+				(item) => item.mutationId === mutation.mutationId
+			);
+			if (
+				current?.status === 'claimed' &&
+				current.claimedBy !== undefined &&
+				current.claimedBy !== input.drainInstanceId &&
+				(current.claimedUntil ? Date.parse(current.claimedUntil) : 0) > now()
+			) {
+				blockedRecords.add(mutation.recordId);
+			}
 			continue;
 		}
 		attempted += 1;
@@ -430,6 +495,16 @@ export async function drainMutationQueue(input: {
 				await applyBackoff({ ...draining, status: 'pending' });
 				continue;
 			}
+		}
+
+		// LEASE FENCE (task 43): the push (and any 428 refresh/retry) is where a slow
+		// drain outlives its lease. Before recording the outcome — a conflict
+		// transition, a born-twice follow-up, or the acknowledge that REMOVES the row
+		// — confirm the lease is still ours. If a window stole it mid-push, the row is
+		// theirs now (they will re-push and settle, the server deduping on
+		// mutationId); recording our outcome would delete or resurrect their row.
+		if (!(await stillOwnLease(mutation.mutationId))) {
+			continue;
 		}
 
 		if (result.outcome === 'conflict') {

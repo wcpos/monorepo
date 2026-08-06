@@ -2660,6 +2660,138 @@ describe('#507 offline write flows through the public handle', () => {
 		}
 	});
 
+	/**
+	 * Cross-process resolution safety (task 43). A SECOND Electron window holding a
+	 * live durable claim on the dead letter must block this window's resolve —
+	 * proving `resolveConflict` is gated by the durable claim, not only the
+	 * in-process chain. Once the other window's deadline passes, the claim is
+	 * stealable and the resolution proceeds. `now` is injected so the deadline is
+	 * deterministic.
+	 */
+	it('#task43: a live claim held by another window blocks resolveConflict until it expires', async () => {
+		let clock = Date.parse('2026-01-05T00:00:00.000Z');
+		const server = createFakeWriteServer();
+		const engine = engineWith({
+			fetch: (url, init) => server.fetch(url, init as never),
+			now: () => clock,
+		});
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-paid' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			// Another window dead-letters it AND holds a claim expiring 30s out.
+			await queue.replace({
+				...stale,
+				status: 'rejected',
+				rejectedStatus: 400,
+				resolutionClaimBy: 'other-window',
+				resolutionClaimUntil: new Date(clock + 30_000).toISOString(),
+			});
+
+			// This window cannot resolve while the other's claim is live.
+			await expect(engine.resolveConflict('stranded-create', 'discard')).rejects.toThrow(
+				/another window is resolving/i
+			);
+			expect(await orderJson(engine, UUID_A)).not.toBeNull();
+			expect((await engine.conflicts()).map((row) => row.mutationId)).toEqual(['stranded-create']);
+
+			// The other window crashed without releasing; past its deadline the claim
+			// is stealable and the resolution goes through.
+			clock += 31_000;
+			await engine.resolveConflict('stranded-create', 'discard');
+			expect(await orderJson(engine, UUID_A)).toBeNull();
+			expect(await engine.conflicts()).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	/**
+	 * The composition hole (task 43): a claim STOLEN mid-resolution must not let the
+	 * original window destroy the record. A window may only destroy the resident
+	 * while its own claim is unexpired — another window can steal only AFTER the
+	 * deadline — so a resolution that stalls past its deadline aborts before the
+	 * irreversible removal. Here the injected clock jumps past the deadline right
+	 * before the destructive step; the discard must refuse and leave the order.
+	 */
+	it('#task43: a resolution whose claim was stolen mid-flight aborts before destroying the resident', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-paid' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			// Simulate ANOTHER window stealing the claim in the window between our
+			// claim and the destructive step: hook the resident read (which the discard
+			// branch performs just before the removal) to overwrite the claim.
+			const orders = scope.database.collections.orders as unknown as {
+				findOne(id: string): { exec(): Promise<unknown> };
+			};
+			const realFindOne = orders.findOne.bind(orders);
+			let stolen = false;
+			orders.findOne = (id: string) => ({
+				exec: async () => {
+					const doc = await realFindOne(id).exec();
+					if (!stolen && id === UUID_A) {
+						stolen = true;
+						const row = (await queue.all()).find((r) => r.mutationId === 'stranded-create');
+						if (row) {
+							await queue.replace({
+								...row,
+								resolutionClaimBy: 'other-window',
+								resolutionClaimUntil: new Date(Date.now() + 60_000).toISOString(),
+							});
+						}
+					}
+					return doc;
+				},
+			});
+
+			await expect(engine.resolveConflict('stranded-create', 'discard')).rejects.toThrow(
+				/expired or was taken by another window/i
+			);
+			orders.findOne = realFindOne;
+			// The order survived — no destructive write ran under a stolen claim.
+			expect(await orderJson(engine, UUID_A)).not.toBeNull();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('regression 5: same-millisecond create+update under a fixed clock drains AS the create, carrying the latest snapshot', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_500 });
 		const engine = engineWith({

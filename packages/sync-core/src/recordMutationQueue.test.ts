@@ -5,11 +5,25 @@ import {
 	pendingRecordIds,
 	RecordMutationQueue,
 	recordMutationQueueMigrationStrategies,
-	type RxRecordMutationCollection,
 	RxRecordMutationStorage,
 } from './recordMutationQueue';
 
 import type { RecordMutation } from './recordMutation';
+
+/** The revision-checked methods delegated to an inner store, for partial stubs
+ * that only need to override append/remove/list. */
+function delegateRevisioned(inner: InMemoryRecordMutationStorage) {
+	return {
+		listStored: () => inner.listStored(),
+		appendIfUnchanged: (
+			m: Parameters<InMemoryRecordMutationStorage['appendIfUnchanged']>[0],
+			rev: Parameters<InMemoryRecordMutationStorage['appendIfUnchanged']>[1]
+		) => inner.appendIfUnchanged(m, rev),
+		removeIfUnchanged: (id: string, rev: string) => inner.removeIfUnchanged(id, rev),
+	};
+}
+
+const iso = (ms: number): string => new Date(ms).toISOString();
 
 const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 	mutationId: 'm1',
@@ -145,6 +159,7 @@ describe('RecordMutationQueue', () => {
 		const inner = new InMemoryRecordMutationStorage();
 		let raced = false;
 		const storage = {
+			...delegateRevisioned(inner),
 			list: () => inner.list(),
 			remove: (ids: readonly string[]) => inner.remove(ids),
 			append: async (m: Parameters<InMemoryRecordMutationStorage['append']>[0]) => {
@@ -208,6 +223,7 @@ describe('RecordMutationQueue', () => {
 		let appendCount = 0;
 		const failure = new Error('restored append failed');
 		const storage = {
+			...delegateRevisioned(inner),
 			list: () => inner.list(),
 			remove: (ids: readonly string[]) => inner.remove(ids),
 			append: async (mutation: Parameters<InMemoryRecordMutationStorage['append']>[0]) => {
@@ -395,15 +411,54 @@ describe('pendingRecordIds', () => {
 });
 
 describe('RxRecordMutationStorage', () => {
-	// Fake RxDB collection keyed by mutationId; find() returns RxDocument-like rows ({ toJSON }).
+	// A faithful RxDB-like fake keyed by mutationId, with a monotonic `_rev` per
+	// row and NON-incremental patch/remove that fail closed (409) on a stale rev —
+	// the exact optimistic-concurrency contract the conditional writes rely on.
 	function fakeCollection() {
-		const store = new Map<string, RecordMutation>();
+		const store = new Map<string, { mutation: RecordMutation; rev: string }>();
+		let revCounter = 0;
+		const nextRev = () => `1-fake-${(revCounter += 1)}`;
+		const docFor = (mutationId: string) => {
+			const entry = store.get(mutationId);
+			if (!entry) return undefined;
+			return {
+				toJSON: () => entry.mutation,
+				get revision() {
+					return store.get(mutationId)?.rev ?? '';
+				},
+				patch: async (changes: Partial<RecordMutation>) => {
+					const current = store.get(mutationId);
+					if (!current || current.rev !== entry.rev) {
+						throw Object.assign(new Error('CONFLICT'), { status: 409, code: 'CONFLICT' });
+					}
+					store.set(mutationId, {
+						mutation: { ...current.mutation, ...changes },
+						rev: nextRev(),
+					});
+				},
+				remove: async () => {
+					const current = store.get(mutationId);
+					if (!current || current.rev !== entry.rev) {
+						throw Object.assign(new Error('CONFLICT'), { status: 409, code: 'CONFLICT' });
+					}
+					store.delete(mutationId);
+				},
+			};
+		};
 		const col = {
 			store,
 			bulkUpsert: async (items: RecordMutation[]) => {
-				for (const m of items) store.set(m.mutationId, m);
+				for (const m of items) store.set(m.mutationId, { mutation: m, rev: nextRev() });
 			},
-			find: () => ({ exec: async () => [...store.values()].map((m) => ({ toJSON: () => m })) }),
+			bulkInsert: async (items: RecordMutation[]) => {
+				const error: { documentId: string; status: number }[] = [];
+				for (const m of items) {
+					if (store.has(m.mutationId)) error.push({ documentId: m.mutationId, status: 409 });
+					else store.set(m.mutationId, { mutation: m, rev: nextRev() });
+				}
+				return { success: [], error };
+			},
+			find: () => ({ exec: async () => [...store.keys()].map((id) => docFor(id)!) }),
 			bulkRemove: async (ids: string[]) => {
 				for (const id of ids) store.delete(id);
 			},
@@ -456,5 +511,190 @@ describe('RxRecordMutationStorage', () => {
 		await q.enqueue(mut({ mutationId: 'm-a', queuedAt: '2026-06-26T00:00:01.000Z' }));
 		await q.acknowledge(['m-a']);
 		expect((await q.pending()).map((m) => m.mutationId)).toEqual(['m-b']);
+	});
+
+	it('appendIfUnchanged writes on a matching rev and refuses a stale one (409 → false)', async () => {
+		const storage = new RxRecordMutationStorage(fakeCollection());
+		await storage.append(mut({ mutationId: 'm1', status: 'rejected' } as never));
+		const [{ rev }] = await storage.listStored();
+
+		// A concurrent write moves the row (bumps its rev)…
+		expect(
+			await storage.appendIfUnchanged({ ...mut({ mutationId: 'm1' }), seq: 9 } as never, rev)
+		).toBe(true);
+		// …so the original captured rev is now stale and the second write is refused.
+		expect(
+			await storage.appendIfUnchanged({ ...mut({ mutationId: 'm1' }), seq: 5 } as never, rev)
+		).toBe(false);
+		expect((await storage.list())[0]).toMatchObject({ seq: 9 });
+	});
+
+	it('appendIfUnchanged(null) inserts only when absent (a second insert 409s → false)', async () => {
+		const storage = new RxRecordMutationStorage(fakeCollection());
+		expect(await storage.appendIfUnchanged(mut({ mutationId: 'm1' }), null)).toBe(true);
+		expect(await storage.appendIfUnchanged(mut({ mutationId: 'm1' }), null)).toBe(false);
+	});
+
+	it('removeIfUnchanged removes on a matching rev and refuses a stale one', async () => {
+		const storage = new RxRecordMutationStorage(fakeCollection());
+		await storage.append(mut({ mutationId: 'm1' }));
+		const [{ rev }] = await storage.listStored();
+		await storage.appendIfUnchanged({ ...mut({ mutationId: 'm1' }), seq: 2 } as never, rev); // moves it
+		expect(await storage.removeIfUnchanged('m1', rev)).toBe(false); // stale rev
+		const [{ rev: fresh }] = await storage.listStored();
+		expect(await storage.removeIfUnchanged('m1', fresh)).toBe(true);
+		expect(await storage.list()).toEqual([]);
+	});
+});
+
+/**
+ * TWO PROCESSES, ONE STORAGE (#1016/#1046 → task 43). Each `RecordMutationQueue`
+ * has its own in-memory transition chain, so two instances over one storage is
+ * exactly the two-Electron-windows condition: neither chain can see the other,
+ * and only the durable row + its revision are shared. Before the revision-checked
+ * writes landed, the mutual-exclusion case below was `it.fails` — it now passes.
+ */
+describe('durable resolution claim across two instances (cross-process)', () => {
+	const shared = () => {
+		const storage = new InMemoryRecordMutationStorage();
+		return { storage, a: new RecordMutationQueue(storage), b: new RecordMutationQueue(storage) };
+	};
+	const seedRejected = async (q: RecordMutationQueue) => {
+		const row = await q.enqueue(mut({ mutationId: 'dead-1' }));
+		await q.replace({ ...row, status: 'rejected' });
+	};
+	const claim = (q: RecordMutationQueue, holder: string, untilIso: string, nowMs = 0) =>
+		q.claimForResolution({
+			mutationId: 'dead-1',
+			expectedStatus: 'rejected',
+			holder,
+			untilIso,
+			nowMs,
+		});
+
+	it('lets exactly ONE instance claim a dead letter; the other is told it is held', async () => {
+		const { a, b } = shared();
+		await seedRejected(a);
+
+		const [first, second] = await Promise.all([
+			claim(a, 'window-A', '2026-01-01T00:00:30.000Z'),
+			claim(b, 'window-B', '2026-01-01T00:00:30.000Z'),
+		]);
+
+		expect([first, second].filter((o) => o === 'claimed')).toHaveLength(1);
+		expect([first, second].filter((o) => o === 'held')).toHaveLength(1);
+	});
+
+	it('lets a crashed window claim be STOLEN once its deadline passes', async () => {
+		const { a, b } = shared();
+		await seedRejected(a);
+		await claim(a, 'window-A', '2026-01-01T00:00:30.000Z');
+
+		// Window A died without releasing. Before the deadline the row is locked…
+		expect(
+			await claim(b, 'window-B', '2026-01-01T00:01:00.000Z', Date.parse('2026-01-01T00:00:29Z'))
+		).toBe('held');
+		// …and after it, recovery is possible again.
+		expect(
+			await claim(b, 'window-B', '2026-01-01T00:01:00.000Z', Date.parse('2026-01-01T00:00:31Z'))
+		).toBe('claimed');
+	});
+
+	it('hands the row back on release, and reports a settled row as gone', async () => {
+		const { a, b } = shared();
+		await seedRejected(a);
+		await claim(a, 'window-A', '2026-01-01T00:00:30.000Z');
+		await a.releaseResolutionClaim('dead-1', 'window-A');
+
+		expect(await claim(b, 'window-B', '2026-01-01T00:00:30.000Z')).toBe('claimed');
+
+		await b.remove(['dead-1']); // the winner resolved it
+		expect(await claim(a, 'window-A', '2026-01-01T00:00:30.000Z')).toBe('gone');
+	});
+
+	it('release never RESURRECTS a row the winner already retired', async () => {
+		const { a, storage } = shared();
+		await seedRejected(a);
+		await claim(a, 'window-A', '2026-01-01T00:00:30.000Z');
+		await a.remove(['dead-1']); // resolution succeeded and removed the row
+		await a.releaseResolutionClaim('dead-1', 'window-A');
+		expect(await storage.list()).toEqual([]);
+	});
+
+	it('release does not clear a claim that has since been stolen by someone else', async () => {
+		const { a, b } = shared();
+		await seedRejected(a);
+		await claim(a, 'window-A', '2026-01-01T00:00:30.000Z');
+		await claim(b, 'window-B', '2026-01-01T00:02:00.000Z', Date.parse('2026-01-01T00:00:31Z'));
+
+		await a.releaseResolutionClaim('dead-1', 'window-A'); // A wakes late; must not unlock B
+		expect((await b.all())[0]).toMatchObject({ resolutionClaimBy: 'window-B' });
+	});
+
+	it('two draining processes cannot both claim one pending row (no double-push)', async () => {
+		const { a, b } = shared();
+		const row = await a.enqueue(mut({ mutationId: 'm-push' }));
+		const claimed = { ...row, status: 'claimed' as const, attempts: 1 };
+
+		const [ra, rb] = await Promise.all([a.claim(claimed), b.claim(claimed)]);
+		expect([ra, rb].filter(Boolean)).toHaveLength(1);
+	});
+
+	it('a drain LEASE blocks a second window from re-claiming a live claimed row', async () => {
+		const { a, b } = shared();
+		const row = await a.enqueue(mut({ mutationId: 'm-push' }));
+		const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+
+		// Window A claims with a 60s lease.
+		expect(
+			await a.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-A', claimedUntil: iso(t0 + 60_000) },
+				t0
+			)
+		).toBe(true);
+		// Window B, draining, sees the row 'claimed' and tries to re-claim it — but the
+		// lease is live, so it is refused (before the lease it would have double-pushed).
+		expect(
+			await b.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-B', claimedUntil: iso(t0 + 90_000) },
+				t0 + 30_000
+			)
+		).toBe(false);
+	});
+
+	it('a crashed drain lease is STOLEN once it expires — recovery still works', async () => {
+		const { a, b } = shared();
+		const row = await a.enqueue(mut({ mutationId: 'm-push' }));
+		const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+		await a.claim(
+			{ ...row, status: 'claimed', claimedBy: 'window-A', claimedUntil: iso(t0 + 60_000) },
+			t0
+		);
+
+		// A crashed without acking or rescheduling. Past the lease, B reclaims and pushes.
+		expect(
+			await b.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-B', claimedUntil: iso(t0 + 120_000) },
+				t0 + 61_000
+			)
+		).toBe(true);
+		expect((await b.all())[0]).toMatchObject({ claimedBy: 'window-B' });
+	});
+
+	it('coalesceInto REFUSES an ever-pushed (attempts > 0) prior — never consumes a pushed mutation', async () => {
+		// The write-intent layer checks attempts===0 on ITS read; across processes
+		// that read can be stale (another window pushed + rescheduled the prior back
+		// to pending). coalesceInto re-asserts the invariant on its own read.
+		const { a } = shared();
+		const prior = await a.enqueue(mut({ mutationId: 'prior' }));
+		await a.replace({ ...prior, status: 'pending', attempts: 1 }); // pushed once, back to pending
+
+		const ok = await a.coalesceInto('prior', {
+			...mut({ mutationId: 'replacement' }),
+			seq: prior.seq,
+			status: 'pending',
+		});
+		expect(ok).toBe(false);
+		expect((await a.all()).map((m) => m.mutationId)).toEqual(['prior']); // untouched, no replacement
 	});
 });

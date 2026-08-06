@@ -5,3 +5,4 @@ export * from './fakeWriteServer';
 export * from './fakePullServer';
 export * from './orderMoneyOracle';
 export { InMemoryRecordMutationStorage } from './recordMutationQueue';
+export { createFakeMutationCollection } from './fakeMutationCollection';

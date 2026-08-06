@@ -243,6 +243,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 	let chain: Promise<unknown> = Promise.resolve();
 	let lastError: string | null = null;
 	let queueDepth: number | null = null;
+	// This drain instance's id for the durable claim lease (task 43 follow-up):
+	// one per lane, so two Electron windows mint different ids and cannot both hold
+	// one row's claim. Minted lazily on first use — the lane may be constructed on a
+	// host without Web Crypto, and a lane that never drains must not pay for an id.
+	let drainInstanceIdOnce: string | null = null;
+	const drainInstanceIdFor = (): string => (drainInstanceIdOnce ??= globalThis.crypto.randomUUID());
 
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
 		if (signal?.aborted) {
@@ -501,6 +507,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								});
 							},
 							observe: deps.diagnostics,
+							drainInstanceId: drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
 						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));

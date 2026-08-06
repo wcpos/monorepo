@@ -946,4 +946,130 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		expect(await q.all()).toEqual([]); // and does NOT re-insert it
 		expect(result).toMatchObject({ pushed: 0, failed: 0, deferred: 0, rejected: [] });
 	});
+
+	describe('drain lease across two windows (task 43)', () => {
+		it('two windows draining one row push it EXACTLY once', async () => {
+			// Two RecordMutationQueue over one storage = two Electron windows. Both
+			// drain at the same time; the lease + revision-checked claim mean only one
+			// wins the row, so it is pushed once, not twice.
+			const storage = new InMemoryRecordMutationStorage();
+			const a = new RecordMutationQueue(storage);
+			const b = new RecordMutationQueue(storage);
+			await a.enqueue(mut({ mutationId: 'm-shared' }));
+			const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+
+			const pushA = vi.fn(async (m: RecordMutation) => ok(m));
+			const pushB = vi.fn(async (m: RecordMutation) => ok(m));
+			await Promise.all([
+				drainMutationQueue({ queue: a, push: pushA, drainInstanceId: 'window-A', now: () => t0 }),
+				drainMutationQueue({ queue: b, push: pushB, drainInstanceId: 'window-B', now: () => t0 }),
+			]);
+
+			expect(pushA.mock.calls.length + pushB.mock.calls.length).toBe(1);
+			expect(await a.all()).toEqual([]); // acked once, gone
+		});
+
+		it('a crashed window (claim never released) frees the row after the lease — the other window pushes it', async () => {
+			const storage = new InMemoryRecordMutationStorage();
+			const a = new RecordMutationQueue(storage);
+			const b = new RecordMutationQueue(storage);
+			const row = await a.enqueue(mut({ mutationId: 'm-stuck' }));
+			const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+
+			// Window A claimed the row and then crashed — the row is durably 'claimed'
+			// under A's lease, never acked or rescheduled.
+			await a.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-A', claimedUntil: iso(t0 + 60_000) },
+				t0
+			);
+
+			// Within the lease, window B's drain leaves it alone…
+			const early = vi.fn(async (m: RecordMutation) => ok(m));
+			await drainMutationQueue({
+				queue: b,
+				push: early,
+				drainInstanceId: 'window-B',
+				now: () => t0 + 30_000,
+			});
+			expect(early).not.toHaveBeenCalled();
+
+			// …past the lease, B reclaims and pushes it — crashed-drain recovery.
+			const late = vi.fn(async (m: RecordMutation) => ok(m));
+			await drainMutationQueue({
+				queue: b,
+				push: late,
+				drainInstanceId: 'window-B',
+				now: () => t0 + 61_000,
+			});
+			expect(late).toHaveBeenCalledTimes(1);
+			expect(await b.all()).toEqual([]);
+		});
+
+		it('holds a records later mutations when its predecessor is claimed by another live window (FIFO)', async () => {
+			// A record with a create + a following update. Window A holds a live lease
+			// on the create; window B, draining, must NOT push the update out of order
+			// (an update reaching the server before its create 404s).
+			const storage = new InMemoryRecordMutationStorage();
+			const a = new RecordMutationQueue(storage);
+			const b = new RecordMutationQueue(storage);
+			const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+			const create = await a.enqueue(
+				mut({ mutationId: 'm-create', operation: 'create', recordId: 'rec-X' })
+			);
+			await a.enqueue(mut({ mutationId: 'm-update', operation: 'update', recordId: 'rec-X' }));
+			// Window A claims the create with a live lease and is (notionally) pushing it.
+			await a.claim(
+				{ ...create, status: 'claimed', claimedBy: 'window-A', claimedUntil: iso(t0 + 60_000) },
+				t0
+			);
+
+			const push = vi.fn(async (m: RecordMutation) => ok(m));
+			await drainMutationQueue({
+				queue: b,
+				push,
+				drainInstanceId: 'window-B',
+				now: () => t0 + 10_000,
+			});
+			// B pushed NOTHING for rec-X: the leased create blocks its successor.
+			expect(push).not.toHaveBeenCalled();
+		});
+
+		it('a stolen lease FENCES the original window: its late ack cannot resurrect or delete the thief row', async () => {
+			// Window A's push outlived its lease; window B stole the row and is pushing
+			// it. A's push now completes — its settlement (ack/reschedule) must be a
+			// no-op, or it would delete B's claim or resurrect an already-acked row.
+			const storage = new InMemoryRecordMutationStorage();
+			const a = new RecordMutationQueue(storage);
+			const b = new RecordMutationQueue(storage);
+			const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+			const row = await a.enqueue(mut({ mutationId: 'm-slow' }));
+
+			// A claims (t0, lease 60s) and starts a push that will outlive the lease.
+			// B steals past the deadline and re-stamps its own claim.
+			await a.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-A', claimedUntil: iso(t0 + 60_000) },
+				t0
+			);
+			await b.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-B', claimedUntil: iso(t0 + 120_000) },
+				t0 + 61_000
+			);
+
+			// A's slow drain finally settles — but A no longer owns the lease, so its
+			// success acknowledge is fenced and does NOT remove B's claimed row.
+			await drainMutationQueue({
+				queue: a,
+				push: async (m) => ok(m),
+				drainInstanceId: 'window-A',
+				now: () => t0 + 62_000,
+				// The row is already 'claimed' by B; A's scan still sees it (pending()
+				// includes claimed), tries to re-claim → refused (B's live lease) → A
+				// never even pushes. Prove the row stays B's.
+			});
+			const survivor = (await a.all()).find((m) => m.mutationId === 'm-slow');
+			expect(survivor?.claimedBy).toBe('window-B');
+		});
+	});
 });
+
+const iso = (ms: number): string => new Date(ms).toISOString();
