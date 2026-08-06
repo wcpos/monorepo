@@ -860,9 +860,9 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 			);
 
 			// Both items should get $2 discount each
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16, 0);
-			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(16, 0);
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(4, 0);
+			expect(result.lineItems[0].total).toBe('16');
+			expect(result.lineItems[1].total).toBe('16');
+			expect(result.couponLines[0].discount).toBe('4');
 		});
 
 		it('only discounts directly-matching item WITHOUT ancestry enrichment', () => {
@@ -917,9 +917,9 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 			);
 
 			// Only beanie (Accessories) gets $2 discount, T-shirt excluded
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16, 0);
-			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(18, 0);
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 0);
+			expect(result.lineItems[0].total).toBe('16');
+			expect(result.lineItems[1].total).toBe('18');
+			expect(result.couponLines[0].discount).toBe('2');
 		});
 	});
 
@@ -946,7 +946,7 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 			);
 
 			// 10% of $55 = $5.50 discount on Belt only
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(5.5, 1);
+			expect(result.couponLines[0].discount).toBe('5.5');
 			// Deleted item should still be in the array (preserved for server sync)
 			expect(result.lineItems[1].product_id).toBeNull();
 		});
@@ -973,7 +973,7 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 			);
 
 			// Active coupon should calculate correctly
-			expect(parseFloat(result.couponLines[1].discount!)).toBeCloseTo(5.5, 1);
+			expect(result.couponLines[1].discount).toBe('5.5');
 			// Deleted coupon should be preserved as-is (code still null)
 			expect(result.couponLines[0].code).toBeNull();
 			expect(result.couponLines[0].discount).toBe('5.00');

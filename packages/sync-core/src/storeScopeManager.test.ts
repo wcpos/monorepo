@@ -204,15 +204,19 @@ describe('StoreScopeManager', () => {
 		it('invalidates the outgoing capture on switch; a fresh capture on the new scope is live', async () => {
 			const { manager } = makeManager();
 			await manager.switchTo('scope-a');
-			await manager.runGuarded(async (bound) => {
+			const outgoingCaptureRan = await manager.runGuarded(async (bound) => {
 				expect(bound.isCurrent()).toBe(true);
 				await manager.switchTo('scope-b');
 				expect(bound.isCurrent()).toBe(false);
+				return true;
 			});
-			await manager.runGuarded(async (bound) => {
+			expect(outgoingCaptureRan).toBe(true);
+			const freshCaptureRan = await manager.runGuarded(async (bound) => {
 				expect(bound.isCurrent()).toBe(true);
 				expect(bound.scopeId).toBe('scope-b');
+				return true;
 			});
+			expect(freshCaptureRan).toBe(true);
 		});
 
 		it('refuses to run a guarded operation with no active scope', () => {
@@ -250,14 +254,16 @@ describe('StoreScopeManager', () => {
 					);
 				});
 
-			await manager.runGuarded(async (bound) => {
+			const guardedFetchRan = await manager.runGuarded(async (bound) => {
 				const pending = bound.bindFetch(fetcher)(
 					'https://store.example/wp-json/wcpos/v2/orders/pull'
 				);
 				await manager.switchTo('scope-b');
 				expect(observedSignal?.aborted).toBe(true);
 				await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+				return true;
 			});
+			expect(guardedFetchRan).toBe(true);
 			// An aborted request never landed — it is not a late response.
 			expect(manager.stats().lateResponsesDropped).toBe(0);
 		});
@@ -303,7 +309,7 @@ describe('StoreScopeManager', () => {
 			await manager.switchTo('scope-a');
 			const fetcher = vi.fn<Fetcher>(async () => ({ ok: true }) as Response);
 
-			await manager.runGuarded(async (bound) => {
+			const guardedFetchRan = await manager.runGuarded(async (bound) => {
 				// The scope switches AFTER capture. Every request through the bound
 				// fetcher must refuse to start network work, classified as an
 				// AbortError, rather than burn a request against a scope the capture
@@ -314,7 +320,9 @@ describe('StoreScopeManager', () => {
 				).rejects.toMatchObject({
 					name: 'AbortError',
 				});
+				return true;
 			});
+			expect(guardedFetchRan).toBe(true);
 			expect(fetcher).not.toHaveBeenCalled();
 		});
 
@@ -323,7 +331,7 @@ describe('StoreScopeManager', () => {
 			await manager.switchTo('scope-a');
 			const fetcher = vi.fn<Fetcher>(async () => ({ ok: true }) as Response);
 
-			await manager.runGuarded(async (bound) => {
+			const guardedFetchRan = await manager.runGuarded(async (bound) => {
 				// Reset the active scope's collection: bumps the epoch AND aborts the
 				// scope's controller, so the captured signal fires even though the
 				// scope id is unchanged. The pre-check must catch the aborted signal.
@@ -333,7 +341,9 @@ describe('StoreScopeManager', () => {
 				).rejects.toMatchObject({
 					name: 'AbortError',
 				});
+				return true;
 			});
+			expect(guardedFetchRan).toBe(true);
 			expect(fetcher).not.toHaveBeenCalled();
 		});
 	});
@@ -441,7 +451,7 @@ describe('StoreScopeManager', () => {
 			await manager.switchTo('scope-a');
 			await manager.switchTo('scope-b');
 
-			await manager.runGuarded(async (bound) => {
+			const inactiveResetRan = await manager.runGuarded(async (bound) => {
 				let observedSignal: AbortSignal | undefined;
 				let release!: (response: Response) => void;
 				const hung: Fetcher = (_url, init) =>
@@ -460,7 +470,9 @@ describe('StoreScopeManager', () => {
 				await expect(bound.guardWrite(async () => {})).resolves.toBe('dropped');
 				release({ ok: true } as Response);
 				await expect(pending).rejects.toBeInstanceOf(ScopeStaleError);
+				return true;
 			});
+			expect(inactiveResetRan).toBe(true);
 		});
 
 		it('rejects resets for unopened scopes and unknown collections', async () => {
@@ -604,10 +616,12 @@ describe('StoreScopeManager', () => {
 			expect(fetcher).not.toHaveBeenCalled();
 			expect(cursor).toBe(0);
 			// The window closed with the reset: fresh captures are current again.
-			await manager.runGuarded(async (bound) => {
+			const freshCaptureRan = await manager.runGuarded(async (bound) => {
 				expect(bound.isCurrent()).toBe(true);
 				await expect(bound.guardWrite(async () => {})).resolves.toBe('applied');
+				return true;
 			});
+			expect(freshCaptureRan).toBe(true);
 		});
 
 		it('a needs-confirmation mutation-queue reset runs no invalidators', async () => {

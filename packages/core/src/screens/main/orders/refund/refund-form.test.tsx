@@ -17,10 +17,21 @@ function mockWebProps({ testID, ...props }: any) {
 	return testID ? { ...props, 'data-testid': testID } : props;
 }
 
+let mockEnableRefundActions = false;
+
 jest.mock('@wcpos/components/alert-dialog', () => ({
-	AlertDialog: ({ children }: any) => <>{children}</>,
-	AlertDialogAction: ({ children, onPress, loading, ...props }: any) => (
-		<button onClick={onPress} {...mockWebProps(props)}>
+	AlertDialog: ({ children, open }: any) => (
+		<div data-testid="refund-confirm-dialog" data-open={open}>
+			{children}
+		</div>
+	),
+	AlertDialogAction: ({ children, onPress, loading, disabled, ...props }: any) => (
+		<button
+			type="button"
+			onClick={onPress}
+			disabled={mockEnableRefundActions ? false : disabled}
+			{...mockWebProps(props)}
+		>
 			{children}
 		</button>
 	),
@@ -56,8 +67,13 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
 }));
 jest.mock('@wcpos/components/modal', () => ({
-	ModalAction: ({ children, onPress, loading, ...props }: any) => (
-		<button onClick={onPress} {...mockWebProps(props)}>
+	ModalAction: ({ children, onPress, loading, disabled, ...props }: any) => (
+		<button
+			type="button"
+			onClick={onPress}
+			disabled={mockEnableRefundActions ? false : disabled}
+			{...mockWebProps(props)}
+		>
 			{children}
 		</button>
 	),
@@ -126,6 +142,7 @@ jest.mock('observable-hooks', () => {
 const mockUseRefundMutation = jest.fn(() => jest.fn());
 const mockUseRouter = jest.fn(() => ({ back: jest.fn() }));
 const mockGet = jest.fn();
+const mockRestHttpClient = { get: mockGet };
 
 jest.mock('./use-refund-mutation', () => ({
 	useRefundMutation: () => mockUseRefundMutation(),
@@ -145,7 +162,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ get: mockGet }),
+	useRestHttpClient: () => mockRestHttpClient,
 }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({
@@ -167,6 +184,7 @@ const order = {
 describe('RefundOrderForm', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockEnableRefundActions = false;
 	});
 
 	it('formats the summary totals and enables original-method refunds when supported', async () => {
@@ -463,9 +481,17 @@ describe('RefundOrderForm while storage is degraded', () => {
 		await expect(wrapped.bulkWrite([{ document: { id: '1' } }] as never, 'test')).rejects.toThrow();
 	}
 
-	it('disables both refund actions and refuses the submit', async () => {
+	it('disables both refund actions', async () => {
 		render(<RefundOrderForm order={order} />);
-		await waitFor(() => expect(screen.getByTestId('process-refund-button')).toBeInTheDocument());
+		await screen.findByTestId('process-refund-button');
+
+		// Prove the healthy starting state first: without this, an initially-disabled
+		// control would satisfy the post-degradation `toBeDisabled` without the
+		// storage latch ever changing the UI. The confirm action is the right probe —
+		// its disabled prop is `loading || storageDegraded`, independent of form
+		// validity (the process button also folds in `!isValid`, which holds before
+		// any amount is entered).
+		await waitFor(() => expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled());
 
 		await killStorageWorker();
 
@@ -473,10 +499,25 @@ describe('RefundOrderForm while storage is degraded', () => {
 		// an async act() that would also block on the form's in-flight refund fetch.
 		await waitFor(() => expect(screen.getByTestId('process-refund-button')).toBeDisabled());
 		expect(screen.getByTestId('confirm-process-refund-button')).toBeDisabled();
+	});
+
+	it('refuses the submit when storage degrades after confirmation opens', async () => {
+		mockEnableRefundActions = true;
+		render(<RefundOrderForm order={order} />);
+		await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+
+		fireEvent.click(screen.getByTestId('process-refund-button'));
+		expect(screen.getByTestId('refund-confirm-dialog')).toHaveAttribute('data-open', 'true');
+
+		await killStorageWorker();
 
 		// The handler refuses too: `disabled` cannot cover a latch that fires while
 		// the confirm dialog is already open.
 		fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
-		await waitFor(() => expect(mockRefundCall).not.toHaveBeenCalled());
+
+		await waitFor(() =>
+			expect(screen.getByTestId('refund-confirm-dialog')).toHaveAttribute('data-open', 'false')
+		);
+		expect(mockRefundCall).not.toHaveBeenCalled();
 	});
 });

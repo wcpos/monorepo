@@ -151,6 +151,7 @@ function CouponsScreenContent() {
 							<Tooltip>
 								<TooltipTrigger asChild>
 									<IconButton
+										testID="coupons-add-button"
 										name="plus"
 										onPress={() => router.push({ pathname: '/coupons/add' })}
 										disabled={readOnly}

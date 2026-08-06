@@ -13,10 +13,11 @@ describe('filter', () => {
 		];
 
 		it('should return all items for empty query', () => {
-			// Empty query typically matches all
+			// Snapshot BEFORE the call: if defaultFilter mutated its input, comparing
+			// against the (mutated) sampleOptions would pass incorrectly.
+			const expected = sampleOptions.map((option) => ({ ...option }));
 			const result = defaultFilter(sampleOptions, '');
-			// The result depends on the implementation - empty string might score all items
-			expect(result.length).toBeGreaterThanOrEqual(0);
+			expect(result).toEqual(expected);
 		});
 
 		it('should filter items matching the query', () => {

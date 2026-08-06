@@ -50,12 +50,19 @@ test.describe('Products in POS', () => {
 	});
 
 	test('should search products by name', async ({ posPage: page }) => {
-		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-
+		await page.getByTestId('view-mode-toggle').click();
 		const countEl = page.getByTestId('data-table-count');
-		const noResults = page.getByTestId('no-data-message');
-		await expect(countEl.or(noResults).first()).toBeVisible({ timeout: 15_000 });
+		await expect(countEl).toBeVisible({ timeout: 15_000 });
+		const initialCount = await countEl.textContent();
+		const knownNonMatch = page.getByTestId('data-table-row-hoodie');
+		await expect(knownNonMatch).toBeVisible({ timeout: 15_000 });
+
+		const searchInput = page.getByTestId('search-products');
+		await searchInput.fill('Belt');
+
+		await expect(page.getByTestId('data-table-row-belt')).toBeVisible({ timeout: 15_000 });
+		await expect(knownNonMatch).not.toBeVisible();
+		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialCount);
 	});
 
 	test('should clear search and show all products', async ({ posPage: page }) => {
@@ -79,21 +86,18 @@ test.describe('Products in POS', () => {
 	});
 
 	test('should update product count after search', async ({ posPage: page }) => {
+		await page.getByTestId('view-mode-toggle').click();
 		const countEl = page.getByTestId('data-table-count');
-		await expect(countEl).toBeVisible();
+		await expect(countEl).toBeVisible({ timeout: 15_000 });
 		const initialText = await countEl.textContent();
+		await expect(page.getByTestId('data-table-row-hoodie')).toBeVisible({ timeout: 15_000 });
 
 		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('hoodie');
+		await searchInput.fill('Belt');
 
-		const noResults = page.getByTestId('no-data-message');
-		await expect(countEl.or(noResults).first()).toBeVisible({ timeout: 15_000 });
-		const hasResults = await countEl.isVisible().catch(() => false);
-
-		if (hasResults) {
-			const filteredText = await countEl.textContent();
-			expect(filteredText).toBeTruthy();
-		}
+		await expect(page.getByTestId('data-table-row-belt')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('data-table-row-hoodie')).not.toBeVisible();
+		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialText);
 	});
 
 	test('should add a simple product to cart by clicking tile', async ({ posPage: page }) => {

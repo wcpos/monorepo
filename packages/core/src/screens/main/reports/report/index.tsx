@@ -179,7 +179,7 @@ export function Report() {
 	});
 
 	return (
-		<View className="h-full p-2 pt-0 pl-0">
+		<View testID="reports-content" className="h-full p-2 pt-0 pl-0">
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-2">
 					<HStack>
@@ -207,7 +207,7 @@ export function Report() {
 					</ScrollView>
 				</CardContent>
 				<CardFooter className="border-border bg-footer justify-end border-t p-2">
-					<Button onPress={print} loading={isPrinting}>
+					<Button testID="reports-print-button" onPress={print} loading={isPrinting}>
 						<ButtonText>{t('reports.print')}</ButtonText>
 					</Button>
 				</CardFooter>

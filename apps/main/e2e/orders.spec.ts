@@ -53,56 +53,36 @@ test.describe('Orders Page (Pro)', () => {
 
 	test('should search orders', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
+		const countEl = screen.getByTestId('data-table-count');
+		await expect(countEl).toBeVisible({ timeout: 30_000 });
+		const initialCount = await countEl.textContent();
+		await expect(screen.getByTestId(/^data-table-row-/).first()).toBeVisible({ timeout: 30_000 });
 
 		const searchInput = screen.getByTestId('search-orders');
-		await searchInput.fill('123');
-		await page.waitForTimeout(1_500);
+		// Order 70954 is a retained dev-next E2E fixture documented in the sync regression suite.
+		await searchInput.fill('70954');
 
-		const hasResults = await screen
-			.getByTestId('data-table-count')
-			.isVisible()
-			.catch(() => false);
-		const noResults = await screen
-			.getByTestId('no-data-message')
-			.isVisible()
-			.catch(() => false);
-		expect(hasResults || noResults).toBeTruthy();
+		const matchingRows = screen.getByTestId(/^data-table-row-/);
+		await expect(matchingRows).toHaveCount(1, { timeout: 30_000 });
+		await expect(matchingRows.first()).toBeVisible();
+		await expect(matchingRows.first()).toContainText('70954');
+		await expect.poll(() => countEl.textContent(), { timeout: 30_000 }).not.toBe(initialCount);
 	});
 
 	test('should show filter pills', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		// Filter pills are buttons near the search bar
-		const filterButtons = screen.locator('[role="button"]');
-		expect(await filterButtons.count()).toBeGreaterThanOrEqual(1);
+		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show order actions menu', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		const countEl = screen.getByTestId('data-table-count');
-		const hasOrders = await countEl
-			.isVisible({ timeout: 15_000 })
-			.then(
-				async (visible) => visible && /Showing\s+[1-9]/.test((await countEl.textContent()) ?? '')
-			)
-			.catch(() => false);
-
-		if (!hasOrders) {
-			test.skip(true, 'No orders available to test actions menu');
-		}
-
-		// Find the first data row in the table body
-		const dataRow = screen.locator('[role="rowgroup"] [role="row"]').first();
-		await expect(dataRow).toBeVisible({ timeout: 15_000 });
-
-		// The actions trigger is the last button in the row
-		const actionsButton = dataRow.locator('[role="button"]').last();
+		const actionsButton = screen.getByTestId('order-actions-button').first();
 		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
 		await actionsButton.click();
 
-		// Menu should show at least one menu item
-		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('order-delete-menu-item')).toBeVisible({ timeout: 15_000 });
 	});
 });
 

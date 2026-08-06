@@ -35,9 +35,7 @@ test.describe('Reports Page (Pro)', () => {
 		await expect(screen).toBeVisible({ timeout: 30_000 });
 		await page.waitForTimeout(3_000);
 
-		// Filter pills are buttons on the reports page
-		const filterButtons = screen.locator('[role="button"]');
-		expect(await filterButtons.count()).toBeGreaterThanOrEqual(1);
+		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show report content', async ({ posPage: page }) => {
@@ -46,14 +44,7 @@ test.describe('Reports Page (Pro)', () => {
 		await expect(screen).toBeVisible({ timeout: 30_000 });
 		await page.waitForTimeout(3_000);
 
-		// Reports page should have some content (table, chart, or summary)
-		const hasTable = await screen
-			.locator('table')
-			.first()
-			.isVisible()
-			.catch(() => false);
-		const hasButtons = (await screen.locator('[role="button"]').count()) > 0;
-		expect(hasTable || hasButtons).toBeTruthy();
+		await expect(screen.getByTestId('reports-content')).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show print button', async ({ posPage: page }) => {
@@ -62,10 +53,7 @@ test.describe('Reports Page (Pro)', () => {
 		await expect(screen).toBeVisible({ timeout: 30_000 });
 		await page.waitForTimeout(3_000);
 
-		// Print button might have different labels in different locales
-		// Look for any button with a print icon (svg) in the reports screen
-		const buttons = screen.locator('[role="button"]');
-		expect(await buttons.count()).toBeGreaterThanOrEqual(1);
+		await expect(screen.getByTestId('reports-print-button')).toBeVisible({ timeout: 15_000 });
 	});
 });
 

@@ -184,10 +184,10 @@ describe('coupon integration: real order scenarios', () => {
 		// Per-item tax rounding (matching WC's wc_round_tax_total) produces a
 		// ~0.009 gap here — WC itself has the same rounding artefact.
 		const couponTotal = parseFloat(discount) + parseFloat(discount_tax);
-		expect(couponTotal).toBeCloseTo(10, 1);
+		expect(couponTotal).toBe(9.99091);
 
 		// Cart was $105 inc tax, minus $10 coupon = $95
-		expect(grandTotal).toBeCloseTo(95, 1);
+		expect(grandTotal).toBe(95);
 
 		// Individual line items should all have reduced totals
 		for (const item of discountedLineItems) {
@@ -590,11 +590,11 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 			taxRates21
 		);
 
-		expect(parseFloat(discountedLineItems[0].total!)).toBeCloseTo(332.48, 1);
-		expect(parseFloat(discountedLineItems[0].total_tax!)).toBeCloseTo(69.82, 1);
+		expect(discountedLineItems[0].total).toBe('332.479339');
+		expect(discountedLineItems[0].total_tax).toBe('69.820661');
 
 		const orderTotal =
 			parseFloat(discountedLineItems[0].total!) + parseFloat(discountedLineItems[0].total_tax!);
-		expect(orderTotal).toBeCloseTo(402.3, 1);
+		expect(Math.round(orderTotal * 100)).toBe(40_230);
 	});
 });

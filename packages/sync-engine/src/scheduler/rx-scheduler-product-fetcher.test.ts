@@ -781,6 +781,14 @@ describe('createProductsSchedulerFetcher', () => {
 			'products:browse-window:limit=200',
 			expect.any(Number)
 		);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(repository.upsertMany).toHaveBeenCalledTimes(1);
+		const [documents] = repository.upsertMany.mock.calls[0] as unknown as [
+			{ wooProductId: number }[],
+		];
+		expect(documents.map(({ wooProductId }) => wooProductId)).toEqual(
+			Array.from({ length: 100 }, (_, index) => index + 201)
+		);
 		expect(fetcher.mock.calls.every(([url]) => String(url).includes('category=9'))).toBe(true);
 	});
 
@@ -1519,6 +1527,14 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(repository.upsertMany).toHaveBeenCalledTimes(1);
+		const [upsertedDocuments] = repository.upsertMany.mock.calls[0] as unknown as [
+			{ id: string; wooProductId: number }[],
+		];
+		expect(upsertedDocuments.map(({ wooProductId }) => wooProductId)).toEqual(
+			Array.from({ length: 39 }, (_, index) => index + 1)
+		);
 		for (const [documents] of repository.upsertMany.mock.calls as unknown as [{ id: string }[]][]) {
 			const ids = documents.map(({ id }) => id);
 			expect(new Set(ids).size).toBe(ids.length);
