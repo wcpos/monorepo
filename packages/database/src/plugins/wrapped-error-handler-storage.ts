@@ -452,15 +452,103 @@ function handleStorageError(
 		return false;
 	}
 
-	// Unknown errors -- log but don't suppress
+	// Unknown errors -- log but don't suppress. Unclassified errors are the ones
+	// with the least to go on, so the caller's context (which collection, which
+	// database) is carried here rather than dropped.
 	storageLogger.error(`Storage error in ${methodName}: ${message}`, {
 		saveToDb: true,
 		context: {
 			errorCode: ERROR_CODES.STORAGE_ERROR,
 			method: methodName,
+			...context,
 		},
 	});
 	return false;
+}
+
+// ---------------------------------------------------------------------------
+// Cleanup containment
+// ---------------------------------------------------------------------------
+
+/**
+ * Collections whose cleanup already reported a failure this session, keyed
+ * `databaseName::collectionName`.
+ */
+const reportedCleanupFailures = new Set<string>();
+
+/** Test-only reset for the report-once ledger. */
+export function resetReportedCleanupFailures(): void {
+	reportedCleanupFailures.clear();
+}
+
+/**
+ * Drops a collection's report-once entry when its instance is torn down.
+ *
+ * Database and collection names are deterministic and deliberately reused — a
+ * store switch reopens the same name (`closeDuplicates`), and Clear & Sync
+ * removes then re-adds the same collection. Without this, a collection that
+ * failed cleanup before a Clear & Sync would inherit "already reported"
+ * afterwards, and Clear & Sync is precisely the remedy someone runs for it.
+ */
+function forgetCleanupFailure(key: string): void {
+	reportedCleanupFailures.delete(key);
+}
+
+/**
+ * Reports a failed `cleanup` and resolves it as done.
+ *
+ * RxDB's cleanup plugin starts from an un-awaited `createRxCollection` hook and
+ * chains every collection of every database onto a single process-wide promise
+ * (`RXSTORAGE_CLEANUP_QUEUE`). A rejection there is doubly damaging: it escapes
+ * as an unhandled rejection — raising the dev LogBox overlay once per collection
+ * — and it poisons the shared queue, so one failing collection silently ends
+ * cleanup for the entire app. Tombstones then accumulate and, on the OPFS
+ * backend, the documents file never compacts again.
+ *
+ * Resolving `true` reports the round complete, which is the only safe value:
+ * `false` is the storage's "called me again" signal and RxDB loops on it
+ * immediately (`while (!isDone && !closed)`). Note this ends the round rather
+ * than retrying within it — `runCleanupAfterDelete` awaits the next write to
+ * the collection before re-arming the `runEach` timer, so a collection that
+ * goes quiet after a failure does not retry again this session.
+ *
+ * Reporting is once per collection until its cleanup completes: each report
+ * writes a log document, and that insert is itself a write event that schedules
+ * the next cleanup round, so an unthrottled report would feed itself. Only a
+ * completed round (`true`) re-arms reporting — a `false` is mid-round progress,
+ * and the realistic failing sequence is `false, false, …, throw`, so clearing
+ * on `false` would report every round forever.
+ *
+ * A background cleanup that loses its race against a deliberate teardown —
+ * engine disposal, a store-scope switch, Clear & Sync — is not a storage
+ * failure, the same judgement `noteStorageWorkerFailure` already makes, so it
+ * is contained silently.
+ *
+ * Composition with the dead-worker watchdog (#163 follow-up): this sits OUTSIDE
+ * `raceStorageCall`, so it contains whatever that call rejects with — an
+ * ordinary storage error today, and a `StorageWorkerTimeoutError` for free if
+ * `cleanup` were ever added to `WATCHDOG_WATCHED_METHODS`. It is deliberately
+ * absent from that set (unbounded by design, and arming it would false-trip
+ * mid-Clear&Sync), so no cleanup timeout exists to contain right now. Nothing
+ * here special-cases the timeout class, because nothing needs to: the watchdog
+ * raises the degraded-storage latch from inside `raceStorageCall`, before this
+ * runs, so containing the rejection never costs the banner.
+ */
+function containCleanupFailure(
+	state: InstanceLatchState,
+	key: string,
+	collectionName: string,
+	error: unknown
+): boolean {
+	const teardown = state.closing || state.failureReason !== null;
+	if (!teardown && !reportedCleanupFailures.has(key)) {
+		reportedCleanupFailures.add(key);
+		handleStorageError('cleanup', error, {
+			databaseName: state.databaseName,
+			collectionName,
+		});
+	}
+	return true;
 }
 
 function terminalFailureError(databaseName: string, reason: string): Error {
@@ -645,7 +733,16 @@ function wrapStorageInstance<RxDocType>(
 			raceStorageCall(state, 'getChangedDocumentsSince', () => getChangedDocumentsSince(...args));
 	}
 	const cleanup = instance.cleanup.bind(instance);
-	instance.cleanup = (...args) => raceStorageCall(state, 'cleanup', () => cleanup(...args));
+	const cleanupKey = `${databaseName}::${instance.collectionName}`;
+	instance.cleanup = (...args) =>
+		raceStorageCall(state, 'cleanup', () => cleanup(...args)).then(
+			(result) => {
+				// Only a completed round re-arms reporting — see containCleanupFailure.
+				if (result === true) reportedCleanupFailures.delete(cleanupKey);
+				return result;
+			},
+			(error) => containCleanupFailure(state, cleanupKey, instance.collectionName, error)
+		);
 	const remove = instance.remove.bind(instance);
 	instance.remove = (...args) => {
 		state.closing = true;
@@ -653,16 +750,18 @@ function wrapStorageInstance<RxDocType>(
 		// after `close`, and a collection reset removes then recreates the instance
 		// (sync-engine's resetEngineCollection). Without unregistering here, every
 		// Clear & Sync would strand a state in the map and pin the latch forever.
-		return raceStorageCall(state, 'remove', () => remove(...args)).finally(() =>
-			unregisterInstance(state)
-		);
+		return raceStorageCall(state, 'remove', () => remove(...args)).finally(() => {
+			unregisterInstance(state);
+			forgetCleanupFailure(cleanupKey);
+		});
 	};
 	const close = instance.close.bind(instance);
 	instance.close = (...args) => {
 		state.closing = true;
-		return raceStorageCall(state, 'close', () => close(...args)).finally(() =>
-			unregisterInstance(state)
-		);
+		return raceStorageCall(state, 'close', () => close(...args)).finally(() => {
+			unregisterInstance(state);
+			forgetCleanupFailure(cleanupKey);
+		});
 	};
 
 	return instance;
