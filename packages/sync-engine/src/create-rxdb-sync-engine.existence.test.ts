@@ -285,6 +285,7 @@ describe('existence maintenance lanes through the public facade', () => {
 			],
 			tax_lines: [{ id: 2, tax_total: '1.234567', shipping_tax_total: '0.000001' }],
 		};
+		const reconciliationRequestUrls: string[] = [];
 		const fetcher = vi.fn(async (url: string) => {
 			const parsed = new URL(url);
 			if (parsed.pathname.endsWith('/integrity/bucket')) {
@@ -296,6 +297,7 @@ describe('existence maintenance lanes through the public facade', () => {
 				});
 			}
 			if (parsed.pathname.endsWith('/orders')) {
+				reconciliationRequestUrls.push(url);
 				return json([
 					{
 						id: 42,
@@ -325,6 +327,10 @@ describe('existence maintenance lanes through the public facade', () => {
 		});
 
 		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
+		expect(reconciliationRequestUrls).toHaveLength(1);
+		expect(reconciliationRequestUrls.every((url) => !new URL(url).searchParams.has('dp'))).toBe(
+			true
+		);
 		const stored = await db.orders.findOne('42424242-4242-4242-8242-424242424242').exec();
 		expect(stored?.toJSON()).toMatchObject({ payload: sixDecimalMoney });
 		await e.dispose();

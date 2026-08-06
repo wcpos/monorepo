@@ -1785,7 +1785,10 @@ describe('createOrdersSchedulerFetcher', () => {
 					readCustomPullCheckpoint: vi.fn(async () => checkpoint),
 					writeCustomPullCheckpoint: vi.fn(async () => undefined),
 				},
-				fetcher: vi.fn(async () => response(body(wooId))),
+				fetcher: vi.fn(async (url: string) => {
+					expect(new URL(url).searchParams.has('dp')).toBe(false);
+					return response(body(wooId));
+				}),
 			});
 
 			await schedulerFetcher(task);
