@@ -31,9 +31,11 @@ jobs:
               - 'apps/**'
               - 'packages/**'
               - 'scripts/**'
-              - '.github/workflows/test.yml'
+              - '.github/workflows/*.yml'
+              - '.github/workflows/*.yaml'
               - 'package.json'
               - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
 
   lint:
     name: "\U0001F9F9 Lint"
@@ -151,8 +153,10 @@ jobs:
           done
 
           # Vitest packages with no coverage floor yet. printer (43 suites) and
-          # receipt-renderer (3 suites) previously never ran in CI at all.
-          for pkg in printer receipt-renderer; do
+          # receipt-renderer (3 suites) previously never ran in CI at all;
+          # scanner (7 suites / 63 tests) was found dark by the CI-matrix
+          # tripwire and joined here (ruling R15).
+          for pkg in printer receipt-renderer scanner; do
             echo "::group::Testing @wcpos/$pkg"
             pnpm --filter @wcpos/$pkg test || failed=1
             echo "::endgroup::"
