@@ -1333,6 +1333,104 @@ describe('query bindings', () => {
 		}
 	});
 
+	it('background wait treats a released outcome as not-attempted and re-declares (#963)', async () => {
+		jest.useFakeTimers();
+		// Another tab owns the scheduler row: the handle comes back `released` while THAT tab's
+		// pull is still in flight, and this tab's activity counters stay quiet throughout.
+		engine.refreshReleased = true;
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+
+		const controller = new AbortController();
+		let settled: boolean | undefined;
+		const background = result.current.whenSettledInBackground(controller.signal).then((value) => {
+			settled = value;
+			return value;
+		});
+
+		await act(async () => jest.advanceTimersByTimeAsync(30_000));
+		// Firing here would replay against still-empty coupon/category residents.
+		expect(settled).toBeUndefined();
+		const rearms = engine.requireCalls.filter(
+			(call) => call.kind === 'refresh' && call.collection === 'coupons'
+		).length;
+		expect(rearms).toBeGreaterThan(1);
+
+		// The other owner finishes; the next re-declaration is met for real.
+		engine.refreshReleased = false;
+		await act(async () => jest.advanceTimersByTimeAsync(30_000));
+		await expect(background).resolves.toBe(true);
+	});
+
+	it('background wait gives up at its cap instead of waiting forever (#963)', async () => {
+		jest.useFakeTimers();
+		engine.refreshReleased = true;
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+
+		const controller = new AbortController();
+		const background = result.current.whenSettledInBackground(controller.signal);
+
+		// No timers-forever: the cap expires and the next cart edit becomes the self-heal again.
+		await act(async () => jest.advanceTimersByTimeAsync(4 * 60_000));
+		await expect(background).resolves.toBe(false);
+	});
+
+	it('releases pending rearmed requirements when the background cap wins (#963)', async () => {
+		jest.useFakeTimers();
+		engine.refreshReleased = true;
+		const originalRequire = engine.require.bind(engine);
+		const releaseRearm = jest.fn();
+		engine.require = (requirement) => {
+			const handle = originalRequire(requirement);
+			if (!requirement.id.includes(':rearm:')) return handle;
+			return {
+				...handle,
+				ready: new Promise(() => undefined),
+				release: () => {
+					releaseRearm(requirement.collection);
+					handle.release();
+				},
+			};
+		};
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+
+		const controller = new AbortController();
+		const background = result.current.whenSettledInBackground(controller.signal);
+		await act(async () => jest.advanceTimersByTimeAsync(4 * 60_000));
+
+		await expect(background).resolves.toBe(false);
+		expect(releaseRearm.mock.calls.map(([collection]) => collection).sort()).toEqual([
+			'categories',
+			'coupons',
+		]);
+	});
+
+	it('background wait abandons itself when the caller aborts (#963)', async () => {
+		jest.useFakeTimers();
+		engine.refreshReleased = true;
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+
+		const controller = new AbortController();
+		const background = result.current.whenSettledInBackground(controller.signal);
+		await act(async () => jest.advanceTimersByTimeAsync(2_000));
+
+		// Unmount / store switch / newer cart edit: the continuation must not outlive its owner.
+		controller.abort();
+		await act(async () => jest.advanceTimersByTimeAsync(20_000));
+		await expect(background).resolves.toBe(false);
+	});
+
 	it('binds cashier search-select to eligible customer roles only', async () => {
 		await engineDB.collections.customers.bulkInsert([
 			{

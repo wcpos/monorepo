@@ -37,6 +37,7 @@ import {
 } from '@wcpos/query';
 import type {
 	CoverageLaneDocument,
+	CoverageOutcome,
 	QueryTotalCacheDocument,
 	RequirementHandle,
 	RxdbSyncEngine,
@@ -98,9 +99,32 @@ function useObservableResource<T>(observable$: Observable<T>): ObservableResourc
 	return resource;
 }
 
+/**
+ * What a settled demand declaration proves about the collection behind it.
+ *
+ * `attempted: false` is the `released` case of the CoverageOutcome contract: the requirement
+ * was handed back without being met, because another engine instance (another tab) owns the
+ * scheduler row or the claim was lost mid-drain. That other owner's pull is invisible to this
+ * tab's activity counters, so a release must never be read as "the references landed" — the
+ * caller has to keep waiting and re-declare rather than act on it.
+ */
+type DemandReadiness = { attempted: boolean };
+
+const ATTEMPTED: DemandReadiness = { attempted: true };
+const NOT_ATTEMPTED: DemandReadiness = { attempted: false };
+
+function readinessFrom(outcomes: CoverageOutcome[]): DemandReadiness {
+	return { attempted: outcomes.every((outcome) => outcome.action !== 'released') };
+}
+
 type DemandProjection = {
 	queryKey$: Observable<string | null>;
-	whenReady(): Promise<void>;
+	/** Readiness of the STANDING declaration — the one the binding keeps alive while mounted. */
+	whenReady(): Promise<DemandReadiness>;
+	/** Declares the same requirements once more and releases them; the re-arm after a release. */
+	declareOnce(signal?: AbortSignal): Promise<DemandReadiness>;
+	/** Bumps whenever the engine resets coverage for this collection (re-declaration boundary). */
+	generation: number;
 	sync(): Promise<void>;
 };
 
@@ -123,7 +147,7 @@ function useDemand(
 	enabled: boolean
 ): DemandProjection {
 	const queryKey$ = React.useMemo(() => new BehaviorSubject<string | null>(null), [engine, id]);
-	const ready = React.useRef<Promise<void>>(Promise.resolve());
+	const ready = React.useRef<Promise<DemandReadiness>>(Promise.resolve(ATTEMPTED));
 	const selector = selectorWithSearch(descriptor);
 	const selectorKey = JSON.stringify(selector);
 	// The products browse window travels with the grid's sort (#909), so the sort is part
@@ -135,7 +159,7 @@ function useDemand(
 	React.useEffect(() => {
 		if (!enabled) {
 			queryKey$.next(null);
-			ready.current = Promise.resolve();
+			ready.current = Promise.resolve(ATTEMPTED);
 			return undefined;
 		}
 		const stableSelector = JSON.parse(selectorKey) as Record<string, unknown>;
@@ -164,7 +188,7 @@ function useDemand(
 			const isUnfiltered = Object.keys(stableSelector).length === 0;
 			const fixedKey = isUnfiltered ? (BOOT_LANE_QUERY_KEYS[descriptor.collection] ?? null) : null;
 			queryKey$.next(plan.represented || isUnfiltered ? (handleQueryKey ?? fixedKey) : null);
-			const settled = Promise.all(handles.map((handle) => handle.ready)).then(() => undefined);
+			const settled = Promise.all(handles.map((handle) => handle.ready)).then(readinessFrom);
 			// The readiness barrier must stay PENDING across the scheduled retry: settling
 			// through the rejection would let whenReady() complete while nothing is in
 			// flight yet, and the coupon barrier would read collections that are quiet only
@@ -172,10 +196,10 @@ function useDemand(
 			ready.current = retryOnReject
 				? settled.catch(
 						() =>
-							new Promise<void>((resolve) => {
+							new Promise<DemandReadiness>((resolve) => {
 								retryTimer = setTimeout(() => {
 									if (cancelled) {
-										resolve();
+										resolve(NOT_ATTEMPTED);
 										return;
 									}
 									releaseHandles(handles);
@@ -184,7 +208,9 @@ function useDemand(
 									// declaration; chain this barrier to it.
 									resolve(ready.current);
 								}, DEMAND_RETRY_BACKOFF_MS);
-								void cancelBarrier.then(resolve);
+								// An abandoned declaration proves nothing either — it unblocks
+								// whenReady() without the requirement ever having been met.
+								void cancelBarrier.then(() => resolve(NOT_ATTEMPTED));
 							})
 					)
 				: settled;
@@ -237,8 +263,46 @@ function useDemand(
 		}
 	}, [descriptor, enabled, engine, id]);
 
-	const whenReady = React.useCallback(() => ready.current.catch(() => undefined), []);
-	return { queryKey$, sync, whenReady };
+	/**
+	 * Re-declare the standing requirements once and release them again.
+	 *
+	 * The standing declaration settles exactly once, so a caller that has to treat a
+	 * `released` outcome as not-attempted cannot simply await `whenReady()` again — it would
+	 * get the same already-settled release forever. This asks the engine afresh: once the
+	 * owner that released us finishes, the same requirement comes back `serve-local` (inside
+	 * the reference dedupe window) or `fetched`.
+	 */
+	const declareOnce = React.useCallback(
+		async (signal?: AbortSignal): Promise<DemandReadiness> => {
+			if (!enabled) return ATTEMPTED;
+			if (signal?.aborted) return NOT_ATTEMPTED;
+			const requirements = requirementsForQuery({
+				id: `${id}:rearm`,
+				collectionName: descriptor.collection,
+				selector: selectorWithSearch(descriptor),
+				limit: descriptor.limit,
+				sort: descriptor.sort as RequirementSortPart[] | undefined,
+			}).requirements;
+			const handles = declareRequirements(engine, requirements);
+			// `release()` IS the engine's cancellation verb — it aborts queued or in-flight
+			// foreground work and settles `ready` as `released`. Without this an aborted caller
+			// would keep waiting on (and holding) a declaration nobody wants any more.
+			const abortHandler = () => releaseHandles(handles);
+			signal?.addEventListener('abort', abortHandler, { once: true });
+			try {
+				return readinessFrom(await Promise.all(handles.map((handle) => handle.ready)));
+			} catch {
+				return NOT_ATTEMPTED;
+			} finally {
+				signal?.removeEventListener('abort', abortHandler);
+				releaseHandles(handles);
+			}
+		},
+		[descriptor, enabled, engine, id]
+	);
+
+	const whenReady = React.useCallback(() => ready.current.catch(() => NOT_ATTEMPTED), []);
+	return { queryKey$, sync, whenReady, declareOnce, generation: coverageGeneration };
 }
 
 function coverageFreshnessTicks(
@@ -378,7 +442,9 @@ function useEngineBinding(
 	enabled = true
 ): QueryBinding & {
 	result$: Observable<QueryResult<RxCollection>>;
-	whenReady(): Promise<void>;
+	whenReady(): Promise<DemandReadiness>;
+	declareOnce(signal?: AbortSignal): Promise<DemandReadiness>;
+	generation: number;
 } {
 	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
@@ -425,6 +491,8 @@ function useEngineBinding(
 		totalSource$,
 		sync: demand.sync,
 		whenReady: demand.whenReady,
+		declareOnce: demand.declareOnce,
+		generation: demand.generation,
 	};
 }
 
@@ -667,6 +735,83 @@ export function useAllCategoriesBinding() {
 /** How long the coupon replay waits for its reference pull before giving up on it. */
 const COUPON_REFERENCE_SETTLE_TIMEOUT_MS = 10_000;
 
+/**
+ * How long the OFF-CRITICAL-PATH continuation keeps waiting after the foreground barrier
+ * expired (#963). Generous, because nothing is blocked on it — but not forever: a wedged lane
+ * must not leave a timer and a captured order document alive for the life of the session. The
+ * next cart edit remains the ultimate self-heal.
+ */
+const COUPON_REFERENCE_BACKGROUND_TIMEOUT_MS = 3 * 60_000;
+const COUPON_REFERENCE_REARM_BASE_MS = 500;
+const COUPON_REFERENCE_REARM_MAX_MS = 10_000;
+
+/** Emits `false` once the caller aborts; never completes otherwise (safe inside `race`). */
+function whenAborted$(signal: AbortSignal): Observable<boolean> {
+	return new Observable<boolean>((subscriber) => {
+		const abort = () => {
+			subscriber.next(false);
+			subscriber.complete();
+		};
+		if (signal.aborted) {
+			abort();
+			return undefined;
+		}
+		signal.addEventListener('abort', abort);
+		return () => signal.removeEventListener('abort', abort);
+	});
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise<void>((resolve) => {
+		const abort = () => {
+			clearTimeout(timerId);
+			resolve();
+		};
+		const timerId = setTimeout(() => {
+			signal.removeEventListener('abort', abort);
+			resolve();
+		}, ms);
+		signal.addEventListener('abort', abort, { once: true });
+	});
+}
+
+/**
+ * Resolve `fallback` if the caller aborts or the deadline passes before `promise` settles.
+ *
+ * The STANDING readiness promise has no deadline of its own and no cancellation — it is owned by
+ * the demand effect. A continuation that awaited it bare would hold its closure (and the order
+ * document it captured) until the demand happened to settle, ignoring both its own abort and its
+ * own cap. This bounds the wait without pretending the underlying work stopped.
+ */
+function withDeadline<T>(
+	promise: Promise<T>,
+	signal: AbortSignal,
+	deadline: number,
+	fallback: T
+): Promise<T> {
+	return new Promise<T>((resolve) => {
+		let done = false;
+		const finish = (value: T) => {
+			if (done) return;
+			done = true;
+			clearTimeout(timerId);
+			signal.removeEventListener('abort', onAbort);
+			resolve(value);
+		};
+		const onAbort = () => finish(fallback);
+		const timerId = setTimeout(() => finish(fallback), Math.max(0, deadline - Date.now()));
+		if (signal.aborted) {
+			finish(fallback);
+			return;
+		}
+		signal.addEventListener('abort', onAbort, { once: true });
+		void promise.then(
+			(value) => finish(value),
+			() => finish(fallback)
+		);
+	});
+}
+
 const COUPON_REPLAY_COUPONS_DESCRIPTOR: EngineQueryDescriptor = {
 	collection: 'coupons',
 	selector: {},
@@ -711,9 +856,21 @@ const COUPON_REPLAY_CATEGORIES_DESCRIPTOR: EngineQueryDescriptor = {
  * next cart edit re-runs the replay, by which time the pull has almost certainly landed.
  * Readiness is awaited before quietness so another owner's in-flight pull cannot be mistaken
  * for completion when these handles resolve `released` after a skipped-active declaration.
+ *
+ * `whenSettledInBackground(signal)` is the continuation for that `false` (#963): the same wait,
+ * moved off the critical path so a pull that outran the foreground deadline still ends in a
+ * replay instead of stranding the cashier on stale totals until the next edit. It differs from
+ * the foreground barrier in exactly two ways — it is capped minutes rather than seconds, and it
+ * reads the CoverageOutcome contract strictly. Ready-then-quiet is safe same-tab but not
+ * cross-tab: a refresh handle can resolve `released` because ANOTHER tab owns the scheduler row,
+ * and that tab's in-flight pull is invisible to this tab's activity counters, so the collections
+ * go quiet while they are still empty. A release is therefore NOT-attempted here — the wait
+ * re-declares after a backoff instead of firing on it.
  */
 export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 	whenSettled: () => Promise<boolean>;
+	whenSettledInBackground: (signal: AbortSignal) => Promise<boolean>;
+	generation: number;
 } {
 	const coupons = useEngineBinding(COUPON_REPLAY_COUPONS_DESCRIPTOR, hasAppliedCoupons);
 	const categories = useEngineBinding(COUPON_REPLAY_CATEGORIES_DESCRIPTOR, hasAppliedCoupons);
@@ -740,6 +897,57 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 						timer(COUPON_REFERENCE_SETTLE_TIMEOUT_MS).pipe(map(() => false))
 					)
 				),
+			whenSettledInBackground: async (signal: AbortSignal): Promise<boolean> => {
+				const deadline = Date.now() + COUPON_REFERENCE_BACKGROUND_TIMEOUT_MS;
+				// First pass rides the STANDING declaration — the very pull the foreground gave
+				// up on. `whenReady()` reads the live ref, so a re-declaration is picked up too.
+				// Bounded, because that promise answers to neither this abort nor this cap.
+				let readiness = await withDeadline(
+					Promise.all([coupons.whenReady(), categories.whenReady()]),
+					signal,
+					deadline,
+					[NOT_ATTEMPTED, NOT_ATTEMPTED]
+				);
+				for (let attempt = 0; !signal.aborted && Date.now() < deadline; attempt += 1) {
+					if (readiness.every(({ attempted }) => attempted)) {
+						const remaining = deadline - Date.now();
+						if (remaining <= 0) break;
+						// Ready-then-quiet, same ordering as the foreground barrier: readiness is
+						// proven for this tab, quietness rules out a sibling declaration still writing.
+						return await firstValueFrom(
+							race(
+								quiet$.pipe(map(() => true)),
+								timer(remaining).pipe(map(() => false)),
+								whenAborted$(signal)
+							)
+						);
+					}
+					// `released` (or an abandoned declaration) proves nothing: another owner holds
+					// the scheduler row and its pull is invisible here. Ask again after a backoff
+					// rather than reading the release as a settle.
+					await sleep(
+						Math.min(COUPON_REFERENCE_REARM_BASE_MS * 2 ** attempt, COUPON_REFERENCE_REARM_MAX_MS),
+						signal
+					);
+					if (signal.aborted || Date.now() >= deadline) break;
+					const rearm = new AbortController();
+					try {
+						readiness = await withDeadline(
+							Promise.all([
+								coupons.declareOnce(rearm.signal),
+								categories.declareOnce(rearm.signal),
+							]),
+							signal,
+							deadline,
+							[NOT_ATTEMPTED, NOT_ATTEMPTED]
+						);
+					} finally {
+						rearm.abort();
+					}
+				}
+				return false;
+			},
+			generation: coupons.generation + categories.generation,
 		}),
 		[categories, coupons, quiet$]
 	);
