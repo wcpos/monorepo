@@ -133,6 +133,10 @@ const WATCHDOG_WATCHED_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageR
  */
 let storageCompletions = 0;
 
+export function __resetStorageLivenessForTests(): void {
+	storageCompletions = 0;
+}
+
 function noteStorageCompletion(error?: unknown): void {
 	if (error !== undefined && isStorageWorkerFailure(error)) return;
 	storageCompletions += 1;
@@ -294,7 +298,7 @@ function createWatchdog(
 	const expiry = new Promise<never>((_resolve, reject) => {
 		let silentWindows = 0;
 		const arm = () => {
-			const armedAt = Date.now();
+			const armedAt = performance.now();
 			const completionsAtArm = storageCompletions;
 			timer = setTimeout(() => {
 				// Elapsed time alone never condemns the worker. What separates "slow"
@@ -309,13 +313,13 @@ function createWatchdog(
 					arm();
 					return;
 				}
-				// The deadline is wall-clock, so a slept device or a throttled
+				// The deadline is monotonic, so a slept device or a throttled
 				// background tab can deliver this timer arbitrarily late with the worker
 				// perfectly healthy — a till whose lid was closed overnight must not
 				// wake to a spurious "reload the app". If far more time passed than we
 				// asked for, the environment stalled, not the worker: re-arm and give it
 				// a real deadline's worth of running time to answer in.
-				if (Date.now() - armedAt > STORAGE_RPC_WATCHDOG_MS * 2) {
+				if (performance.now() - armedAt > STORAGE_RPC_WATCHDOG_MS * 2) {
 					arm();
 					return;
 				}

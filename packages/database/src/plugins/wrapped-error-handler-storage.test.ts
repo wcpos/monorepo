@@ -5,6 +5,7 @@
 import { getLogger } from '@wcpos/utils/logger';
 
 import {
+	__resetStorageLivenessForTests,
 	clearStorageDegradation,
 	degradedStorage$,
 	isStorageDegraded,
@@ -936,10 +937,12 @@ describe('wrappedErrorHandlerStorage', () => {
 
 		beforeEach(() => {
 			jest.useFakeTimers();
+			__resetStorageLivenessForTests();
 			clearStorageDegradation();
 		});
 
 		afterEach(() => {
+			jest.restoreAllMocks();
 			jest.useRealTimers();
 			clearStorageDegradation();
 		});
@@ -1109,23 +1112,40 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(isStorageDegraded('watchdog-teardown-db')).toBe(false);
 		});
 
-		// A till whose lid was closed overnight must not wake to a spurious
-		// "reload the app": the deadline is wall-clock, so a slept device delivers
-		// the timer arbitrarily late with the worker perfectly healthy.
-		it('does not condemn the worker when the device slept through the deadline', async () => {
-			const wrappedInstance = await wrap('slept-device-db', { query: pending() });
+		it('does not mistake a forward wall-clock jump for a stalled environment', async () => {
+			const wrappedInstance = await wrap('clock-forward-db', { query: pending() });
 			const call = wrappedInstance.query({} as any);
 			void call.catch(() => undefined);
 
-			// The timer is delivered hours late, as it would be on wake.
 			jest.setSystemTime(Date.now() + 6 * 60 * 60 * 1000);
 			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+			expect(isStorageDegraded('clock-forward-db')).toBe(false);
 
-			expect(isStorageDegraded('slept-device-db')).toBe(false);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+			expect(isStorageDegraded('clock-forward-db')).toBe(true);
+		});
 
-			// Still armed: a genuinely dead worker is caught on the next full windows.
-			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
-			expect(isStorageDegraded('slept-device-db')).toBe(true);
+		// A till whose lid was closed overnight must not wake to a spurious
+		// "reload the app": a timer delivered far behind the monotonic clock means
+		// the environment stalled, so the worker gets two fresh windows to answer.
+		it('re-arms when the environment stalls through the deadline', async () => {
+			let monotonicTime = 0;
+			jest.spyOn(performance, 'now').mockImplementation(() => monotonicTime);
+			const wrappedInstance = await wrap('stalled-environment-db', { query: pending() });
+			const call = wrappedInstance.query({} as any);
+			void call.catch(() => undefined);
+
+			monotonicTime = STORAGE_RPC_WATCHDOG_MS * 3;
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+			expect(isStorageDegraded('stalled-environment-db')).toBe(false);
+
+			monotonicTime += STORAGE_RPC_WATCHDOG_MS;
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+			expect(isStorageDegraded('stalled-environment-db')).toBe(false);
+
+			monotonicTime += STORAGE_RPC_WATCHDOG_MS;
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+			expect(isStorageDegraded('stalled-environment-db')).toBe(true);
 		});
 
 		// A worker that died before startup leaves database creation pending
