@@ -3,6 +3,11 @@
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import {
+	clearStorageDegradation,
+	wrappedErrorHandlerStorage,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
+
 import { useCheckoutSession } from './use-checkout-session';
 
 const mockGet = jest.fn();
@@ -36,7 +41,11 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ success: jest.fn(), error: jest.fn() }),
 }));
 jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: { PAYMENT_GATEWAY_ERROR: 'PAYMENT_GATEWAY_ERROR' },
+	ERROR_CODES: {
+		PAYMENT_GATEWAY_ERROR: 'PAYMENT_GATEWAY_ERROR',
+		WORKER_CONNECTION_LOST: 'WORKER_CONNECTION_LOST',
+		STORAGE_ERROR: 'STORAGE_ERROR',
+	},
 }));
 
 const order = {
@@ -257,5 +266,102 @@ describe('useCheckoutSession', () => {
 		expect(result.current.error).toBe('insufficient_stock');
 		expect(release).toHaveBeenCalledTimes(1);
 		await waitFor(() => expect(mockResolveStockOwnerId).toHaveBeenCalledWith(10, 0));
+	});
+
+	/**
+	 * #163 ruling R5, the narrowest window that matters: Process Payment was
+	 * pressed while storage was healthy and the worker died during the gateway
+	 * bootstrap round-trip. The payment-start POST is the last point at which no
+	 * money has moved, so the guard must be re-read there.
+	 */
+	describe('degraded storage', () => {
+		afterEach(() => {
+			// Still mounted here (RTL's cleanup runs after this hook), so the latch
+			// reset re-renders subscribed components.
+			act(() => clearStorageDegradation());
+		});
+
+		async function killStorageWorker(databaseName: string) {
+			const instance = {
+				schema: { version: 0, type: 'object', properties: {}, primaryKey: 'id' },
+				findDocumentsById: jest.fn(),
+				bulkWrite: jest
+					.fn()
+					.mockRejectedValue(
+						new Error(
+							'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
+						)
+					),
+				query: jest.fn(),
+				count: jest.fn(),
+				getAttachmentData: jest.fn(),
+				getChangedDocumentsSince: jest.fn(),
+				changeStream: jest.fn(),
+				cleanup: jest.fn(),
+				close: jest.fn().mockResolvedValue(undefined),
+				remove: jest.fn(),
+				collectionName: 'orders',
+				databaseName,
+				internals: {},
+				options: {},
+			};
+			const wrapped = await wrappedErrorHandlerStorage({
+				storage: {
+					name: 'mock-storage',
+					rxdbVersion: '17.4.0',
+					createStorageInstance: jest.fn().mockResolvedValue(instance),
+				} as never,
+			}).createStorageInstance({ databaseName } as never);
+			await expect(
+				wrapped.bulkWrite([{ document: { id: '1' } }] as never, 'test')
+			).rejects.toThrow();
+		}
+
+		const contractGateway = {
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		};
+
+		it('never posts the payment start when the worker dies during bootstrap', async () => {
+			mockGet.mockResolvedValueOnce(contractGateway);
+			// The bootstrap POST resolves, but the worker dies while it is in flight.
+			mockPost.mockImplementationOnce(async () => {
+				await killStorageWorker('degraded-during-bootstrap');
+				return { data: {} };
+			});
+
+			const { result } = renderHook(() => useCheckoutSession(order));
+			await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+			await act(async () => {
+				await result.current.startCheckout();
+			});
+
+			// Only the bootstrap call happened — no `orders/42/checkout` start.
+			expect(mockPost).toHaveBeenCalledTimes(1);
+			expect(mockPost.mock.calls[0][0]).toBe(
+				'payment-gateways/stripe_terminal_for_woocommerce/bootstrap'
+			);
+			expect(result.current.loading).toBe(false);
+		});
+
+		it('refuses to start a checkout that begins while already degraded', async () => {
+			mockGet.mockResolvedValueOnce(contractGateway);
+
+			const { result } = renderHook(() => useCheckoutSession(order));
+			await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+			await killStorageWorker('degraded-before-start');
+
+			await act(async () => {
+				await result.current.startCheckout();
+			});
+
+			expect(mockPost).not.toHaveBeenCalled();
+		});
 	});
 });

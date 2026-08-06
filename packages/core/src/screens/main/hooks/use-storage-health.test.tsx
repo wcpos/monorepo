@@ -8,7 +8,14 @@ import {
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 
-import { useStorageDegraded } from './use-storage-health';
+import { useStorageDegraded, useStorageMoneyPathGuard } from './use-storage-health';
+
+jest.mock('../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
+		'../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 
 /**
  * End-to-end over the seam that mattered in #163: the storage wrapper sets the
@@ -78,5 +85,53 @@ describe('useStorageDegraded', () => {
 		});
 
 		expect(result.current).toBe(true);
+	});
+});
+
+describe('useStorageMoneyPathGuard', () => {
+	afterEach(() => {
+		// Still mounted here (RTL's cleanup runs after this hook), so the latch
+		// reset re-renders subscribed components.
+		act(() => clearStorageDegradation());
+	});
+
+	it('lets the money paths through while storage is healthy', () => {
+		const { result } = renderHook(() => useStorageMoneyPathGuard());
+
+		expect(result.current.storageDegraded).toBe(false);
+		expect(result.current.blockIfDegraded('checkout')).toBe(false);
+	});
+
+	/**
+	 * The guard reads the latch synchronously rather than the render snapshot, so
+	 * a handler that was already running when the worker died still refuses —
+	 * without this, a checkout in flight completes into a database that cannot
+	 * store the order.
+	 */
+	it('blocks from the live latch, not the render snapshot the handler closed over', async () => {
+		const wrappedInstance = await createWrappedInstance(
+			'pos-store-guard',
+			jest
+				.fn()
+				.mockRejectedValue(
+					new Error(
+						'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
+					)
+				)
+		);
+		const { result } = renderHook(() => useStorageMoneyPathGuard());
+		// What a handler created during the healthy render closed over.
+		const captured = result.current;
+
+		expect(captured.blockIfDegraded('checkout')).toBe(false);
+
+		await act(async () => {
+			await expect(
+				wrappedInstance.bulkWrite([{ document: { id: '1' } }] as never, 'test')
+			).rejects.toThrow();
+		});
+
+		expect(captured.storageDegraded).toBe(false);
+		expect(captured.blockIfDegraded('checkout', { orderId: 'order-1' })).toBe(true);
 	});
 });

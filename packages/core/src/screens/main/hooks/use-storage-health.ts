@@ -1,6 +1,24 @@
+import * as React from 'react';
+
 import { useObservableEagerState } from 'observable-hooks';
 
-import { degradedStorage$ } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import {
+	degradedStorage$,
+	isStorageDegraded,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+import { useT } from '../../../contexts/translations';
+
+const storageBlockLogger = getLogger(['wcpos', 'pos', 'storage-block']);
+
+/**
+ * The money paths blocked while storage is degraded (ruling R5, #163).
+ * Used only as log context so an incident can be traced to the surface that
+ * refused.
+ */
+export type MoneyPathSurface = 'checkout' | 'process-payment' | 'save-order' | 'void';
 
 /**
  * True while any open database has lost its RxDB storage worker (#163).
@@ -13,17 +31,52 @@ import { degradedStorage$ } from '@wcpos/database/plugins/wrapped-error-handler-
  * the loss takes barcode lookups down at the same moment as order writes — which
  * is what made the March 6 incident look like "scanning just stopped".
  *
- * The latch is one-shot for the lifetime of the database scope: a half-dead
- * worker still answers some calls, so a later success is not proof of recovery.
- * It clears when that scope's last storage instance unregisters. Note that a
- * same-site store switch may retain the outgoing database rather than disposing
- * it, in which case the signal correctly persists — the shared worker is still
- * broken. Recovery means reloading the app.
- *
- * This is a signal only — it does not gate writes. Blocking checkout/cart writes
- * during degraded storage is a separate product decision (see #163 discussion).
+ * The latch is one-shot and is NOT cleared by a store switch, Clear & Sync or a
+ * collection reset: a half-dead worker still answers some calls, so neither a
+ * later success nor a fresh database scope is proof of recovery, and the same
+ * dead worker backs the successor scope. Recovery means reloading the app.
  */
 export function useStorageDegraded(): boolean {
 	const degraded = useObservableEagerState(degradedStorage$);
 	return degraded.length > 0;
+}
+
+/**
+ * Hard block for the money paths — checkout, order save and void (ruling R5).
+ *
+ * A payment accepted for an order that cannot be persisted is cash in the drawer
+ * with no local record, so these surfaces refuse outright rather than failing
+ * halfway. Browsing and cart edits stay alive: they already fail loudly and
+ * losing them would strand the cashier mid-sale for no safety gain.
+ *
+ * Two layers, because they answer different questions:
+ * - `storageDegraded` drives the rendered `disabled` state (re-renders on latch).
+ * - `blockIfDegraded` re-reads the latch **synchronously** at call time, so a
+ *   handler that started before the worker died — or that is resuming after an
+ *   `await` — still refuses instead of completing into the void.
+ */
+export function useStorageMoneyPathGuard() {
+	const storageDegraded = useStorageDegraded();
+	const t = useT();
+
+	const blockIfDegraded = React.useCallback(
+		(surface: MoneyPathSurface, context: Record<string, unknown> = {}): boolean => {
+			// Live read, not the render snapshot: the latch can fire mid-handler.
+			if (!isStorageDegraded()) return false;
+
+			storageBlockLogger.error(t('pos_cart.storage_unavailable_action_blocked'), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+					surface,
+					...context,
+				},
+			});
+			return true;
+		},
+		[t]
+	);
+
+	return { storageDegraded, blockIfDegraded };
 }

@@ -10,6 +10,7 @@ import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
+import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
@@ -22,11 +23,18 @@ export function SaveButton() {
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 
 	/**
 	 *
 	 */
 	const handleSave = React.useCallback(async () => {
+		// #163 ruling R5: an order save that cannot reach local storage leaves the
+		// cashier with a "saved" order that exists nowhere on this device.
+		if (blockIfDegraded('save-order', { orderId: currentOrder.uuid ?? currentOrder.id })) {
+			return;
+		}
+
 		setLoading(true);
 		try {
 			await pushDocument(currentOrder).then((savedDoc) => {
@@ -59,7 +67,7 @@ export function SaveButton() {
 		} finally {
 			setLoading(false);
 		}
-	}, [currentOrder, pushDocument, t]);
+	}, [blockIfDegraded, currentOrder, pushDocument, t]);
 
 	/**
 	 *
@@ -71,7 +79,7 @@ export function SaveButton() {
 				variant="outline"
 				onPress={handleSave}
 				loading={loading}
-				disabled={loading}
+				disabled={loading || storageDegraded}
 			>
 				{t('pos_cart.save_to_server')}
 			</Button>

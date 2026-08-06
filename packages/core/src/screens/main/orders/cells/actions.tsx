@@ -31,6 +31,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useProAccess } from '../../contexts/pro-access';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -70,6 +71,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
 	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const canRefund = orderHasID && !!status && REFUNDABLE_STATUSES.includes(status);
 
 	const handleRefresh = React.useCallback(() => {
@@ -103,6 +105,11 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	 * - navigate to POS screen
 	 */
 	const handleOpen = React.useCallback(async () => {
+		// #163 ruling R5: re-opening writes status + cashier/store meta to the order.
+		// With the worker dead that write cannot be recorded, and the cart it lands
+		// in could not be checked out anyway.
+		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
+
 		const meta_data = order.getLatest().toMutableJSON()?.meta_data || [];
 		upsertMetaData(meta_data, '_pos_user', String(wpCredentials.id));
 		if (store.id !== 0) {
@@ -114,12 +121,16 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 			pathname: '/cart/[...orderId]',
 			params: { orderId: order.uuid ? [order.uuid] : [] },
 		} as any);
-	}, [localPatch, router, order, store.id, wpCredentials.id]);
+	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id]);
 
 	/**
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
+		// #163 ruling R5: same hazard as the cart's Void — a delete the device
+		// cannot record leaves the order's fate unknowable locally.
+		if (blockIfDegraded('void', { orderId: order.uuid })) return;
+
 		const receipt = await runtime.engine.write({
 			collection: 'orders',
 			operation: 'delete',
@@ -136,7 +147,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 				}
 			});
 		}
-	}, [runtime, order.uuid, t]);
+	}, [blockIfDegraded, runtime, order.uuid, t]);
 
 	if (readOnly) {
 		return null;
@@ -172,7 +183,11 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 						<Icon name="penToSquare" />
 						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
-					<DropdownMenuItem onPress={handleOpen}>
+					<DropdownMenuItem
+						testID="order-reopen-menu-item"
+						onPress={handleOpen}
+						disabled={storageDegraded}
+					>
 						<Icon name="cartShopping" />
 						<Text>{t('orders.re-open')}</Text>
 					</DropdownMenuItem>
@@ -199,7 +214,12 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 						</>
 					)}
 					<DropdownMenuSeparator />
-					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+					<DropdownMenuItem
+						testID="order-delete-menu-item"
+						variant="destructive"
+						onPress={() => setDeleteDialogOpened(true)}
+						disabled={storageDegraded}
+					>
 						<Icon
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
@@ -226,7 +246,12 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleDelete}>
+						<AlertDialogAction
+							testID="order-delete-confirm-button"
+							variant="destructive"
+							onPress={handleDelete}
+							disabled={storageDegraded}
+						>
 							{t('common.delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
