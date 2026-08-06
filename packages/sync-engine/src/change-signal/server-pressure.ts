@@ -94,9 +94,27 @@ const SLOW_MEDIAN_MS = 2_000;
 const RECOVERY_HEALTHY_RESPONSES = 10;
 
 /**
- * A hostile or broken `Retry-After` must not park the till for a day. Fifteen
- * minutes is well past any ceiling we would choose ourselves and still short
- * enough that a merchant watching the screen sees it come back.
+ * How long a back-off must stand before ANY recovery step is allowed.
+ *
+ * Response COUNT alone is not enough: the engine runs several lanes plus
+ * demand-driven traffic, so ten responses can settle within a second or two of a
+ * back-off — often from requests that were already in flight when the 429 landed
+ * and therefore prove nothing about the server's state now. Without a dwell the
+ * cadence can flap ×1 → ×2 → ×1 inside one second. Sixty seconds is one Balanced
+ * poll: long enough that the healthy responses are genuinely new evidence.
+ */
+const RECOVERY_MIN_DWELL_MS = 60_000;
+
+/**
+ * A hostile or broken `Retry-After` must not park a point of sale for a day.
+ *
+ * This is a deliberate, eyes-open deviation from RFC 9110's "wait exactly this
+ * long": a till that stops seeing price and stock changes for 24 hours because
+ * one misconfigured proxy sent `Retry-After: 86400` is a broken POS, and the
+ * cashier standing at it cannot tell the difference between that and a crash.
+ * Fifteen minutes is far past any ceiling we would choose ourselves — it is real
+ * meaningful relief for the server — and still short enough that a merchant
+ * watching the screen sees the till come back on its own.
  */
 const MAX_RETRY_AFTER_MS = 15 * 60_000;
 
@@ -134,12 +152,14 @@ export function createServerPressureMonitor(
 	let multiplier = 1;
 	let retryAfterUntilMs = 0;
 	let healthyStreak = 0;
+	let lastBackoffAtMs = Number.NEGATIVE_INFINITY;
 	/** Timestamps of 5xx / transport failures inside the rolling window. */
 	let distressAtMs: number[] = [];
 	let latencySamples: number[] = [];
 
 	const stepUp = (signal: PressureSignal, atMs: number): ServerPressureTransition | null => {
 		healthyStreak = 0;
+		lastBackoffAtMs = atMs;
 		const from = multiplier;
 		const to = Math.min(multiplier * 2, maxMultiplier);
 		if (to === from) return null;
@@ -152,6 +172,20 @@ export function createServerPressureMonitor(
 			...(retryAfterUntilMs > atMs ? { retryAfterUntilMs } : {}),
 		};
 	};
+
+	/**
+	 * The server named a pause but the ladder did not move (already at the top, or
+	 * a 5xx that has not yet made a burst). The cadence layer still has to hear
+	 * about it — otherwise an ALREADY-ARMED timer fires inside the pause and we
+	 * violate the one instruction the server gave us explicitly.
+	 */
+	const pauseOnly = (signal: PressureSignal): ServerPressureTransition => ({
+		direction: 'backoff',
+		signal,
+		fromMultiplier: multiplier,
+		toMultiplier: multiplier,
+		retryAfterUntilMs,
+	});
 
 	return {
 		multiplier: () => multiplier,
@@ -190,26 +224,26 @@ export function createServerPressureMonitor(
 				if (stepped !== null) return stepped;
 				// Already at the ladder's top: still worth a transition when the server
 				// extended its own pause, and silence when nothing actually changed.
-				return retryAfterAdvanced
-					? {
-							direction: 'backoff',
-							signal: 'rate-limited',
-							fromMultiplier: multiplier,
-							toMultiplier: multiplier,
-							retryAfterUntilMs,
-						}
-					: null;
+				return retryAfterAdvanced ? pauseOnly('rate-limited') : null;
 			}
 
 			if (status === 0 || status >= 500) {
 				healthyStreak = 0;
 				distressAtMs = distressAtMs.filter((at) => atMs - at < PRESSURE_WINDOW_MS);
 				distressAtMs.push(atMs);
-				if (distressAtMs.length < PRESSURE_BURST) return null;
+				if (distressAtMs.length < PRESSURE_BURST) {
+					// Below the burst threshold the ladder does not move — but a 503 that
+					// carried Retry-After has still bought the server a pause, and the
+					// cadence layer has to re-arm for it or the already-armed tick fires
+					// straight through the window the server asked for.
+					return retryAfterAdvanced ? pauseOnly('server-error') : null;
+				}
 				// The burst has been spent — start a fresh window so the NEXT step needs
 				// another three failures rather than riding the same ones up the ladder.
 				distressAtMs = [];
-				return stepUp(status === 0 ? 'timeout' : 'server-error', atMs);
+				const stepped = stepUp(status === 0 ? 'timeout' : 'server-error', atMs);
+				if (stepped !== null) return stepped;
+				return retryAfterAdvanced ? pauseOnly('server-error') : null;
 			}
 
 			// 4xx that is not 429 (401/403/404/409…) says something about the request,
@@ -228,7 +262,19 @@ export function createServerPressureMonitor(
 
 			healthyStreak += 1;
 			if (multiplier === 1 || healthyStreak < RECOVERY_HEALTHY_RESPONSES) return null;
+			// Two brakes on recovery, both anti-flap:
+			//  - the dwell, so ten responses that were already in flight when we backed
+			//    off cannot immediately undo it;
+			//  - the server's own pause, because claiming to have recovered while still
+			//    inside a Retry-After window would write a false "back to normal" row
+			//    into the durable log (#899: the log must not lie about outcomes).
+			if (atMs - lastBackoffAtMs < RECOVERY_MIN_DWELL_MS) return null;
+			if (retryAfterUntilMs > atMs) return null;
 			healthyStreak = 0;
+			// A server this healthy makes any surviving strike stale evidence. Without
+			// this, one old 5xx left in the window could complete a burst right after a
+			// recovery and bounce the cadence straight back up.
+			distressAtMs = [];
 			const from = multiplier;
 			multiplier = Math.max(1, Math.floor(multiplier / 2));
 			return {

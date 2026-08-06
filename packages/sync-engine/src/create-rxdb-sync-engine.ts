@@ -539,9 +539,14 @@ export function createRxdbSyncEngine(
 		try {
 			response = await rawFetcher(url, init);
 		} catch (error) {
-			// status 0 is the transport-failure spelling the rest of the stack uses
-			// (see apps/main transport.request): timeout, DNS, TLS, abort.
-			observe(0);
+			// An abort is OUR doing, not the server's: a scope switch, a disposal or a
+			// superseded request cancels in-flight work, and a store switch can cancel
+			// several at once — exactly the three-strike burst that would invent a
+			// back-off out of nothing and hand it to the incoming scope. Everything
+			// else that throws here (timeout, DNS, TLS, connection reset) is a real
+			// transport failure and reports as status 0, the spelling the rest of the
+			// stack uses (see apps/main transport.request).
+			if ((error as { name?: unknown } | null)?.name !== 'AbortError') observe(0);
 			throw error;
 		}
 		let retryAfter: string | null = null;

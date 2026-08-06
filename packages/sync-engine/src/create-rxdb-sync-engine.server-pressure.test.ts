@@ -233,6 +233,13 @@ describe('change-signal server-pressure adaptation', () => {
 		for (let index = 0; index < 9; index += 1) await context.respond(emptyEnvelope());
 		expect(cadenceEvents(context.diagnostics, 'cadence.recovered')).toHaveLength(0);
 
+		// Even the tenth changes nothing while the dwell is running: these all landed
+		// within a second of the back-off, so they were in flight when it happened.
+		await context.respond(emptyEnvelope());
+		expect(cadenceEvents(context.diagnostics, 'cadence.recovered')).toHaveLength(0);
+
+		// Once the back-off has stood for a full minute, the earned streak counts.
+		context.setNow(context.now() + 60_000);
 		await context.respond(emptyEnvelope());
 		const [first] = cadenceEvents(context.diagnostics, 'cadence.recovered');
 		expect(first!.level).toBe('info');
@@ -304,6 +311,41 @@ describe('change-signal server-pressure adaptation', () => {
 				(event) => event.type === 'engine.lane.tick' && event.fields?.lane === 'change-signal'
 			)
 		).toHaveLength(ticksBefore);
+		await context.engine.dispose();
+	});
+
+	it('never lets an armed tick fire through a pause the server asked for', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		// ONE 503 — below the three-strike burst, so the ladder does not move. The
+		// armed 10s tick must still be pushed out behind the 60s the server named.
+		await context.respond(new Response(null, { status: 503, headers: { 'retry-after': '60' } }));
+
+		expect(armedDelay(context.engine, context.now())).toBeGreaterThanOrEqual(60_000);
+		const [backoff] = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoff!.fields).toMatchObject({
+			signal: 'server-error',
+			pressureMultiplier: 1,
+			retryAfterMs: 60_000,
+		});
+		await context.engine.dispose();
+	});
+
+	it('does not invent pressure from requests the engine itself aborted', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		// A scope switch or disposal cancels several in-flight requests at once —
+		// exactly the shape of a three-strike burst, but none of it is the server.
+		const abort = (): Error => Object.assign(new Error('aborted'), { name: 'AbortError' });
+		for (let index = 0; index < 10; index += 1) {
+			context.setNow(context.now() + 1_000);
+			await context.respond(abort());
+		}
+
+		expect(cadenceEvents(context.diagnostics, 'cadence.backoff')).toHaveLength(0);
+		expect(armedDelay(context.engine, context.now() - 10_000)).toBe(10_000);
 		await context.engine.dispose();
 	});
 

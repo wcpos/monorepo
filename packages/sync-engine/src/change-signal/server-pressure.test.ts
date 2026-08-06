@@ -151,21 +151,64 @@ describe('server pressure monitor', () => {
 		monitor.observe({ atMs: 2_000, status: 429, durationMs: 5 });
 		expect(monitor.multiplier()).toBe(8);
 
-		healthy(monitor, 9, 10_000);
+		const afterDwell = 2_000 + 60_000;
+		healthy(monitor, 9, afterDwell);
 		expect(monitor.multiplier()).toBe(8);
-		expect(monitor.observe({ atMs: 20_000, ...OK })).toMatchObject({
+		expect(monitor.observe({ atMs: afterDwell + 100, ...OK })).toMatchObject({
 			direction: 'recovery',
 			signal: 'healthy',
 			fromMultiplier: 8,
 			toMultiplier: 4,
 		});
 
-		healthy(monitor, 10, 30_000);
+		healthy(monitor, 10, afterDwell + 1_000);
 		expect(monitor.multiplier()).toBe(2);
-		healthy(monitor, 10, 40_000);
+		healthy(monitor, 10, afterDwell + 2_000);
 		expect(monitor.multiplier()).toBe(1);
 		// At rest, clean traffic produces no further transitions to log.
-		expect(monitor.observe({ atMs: 50_000, ...OK })).toBeNull();
+		expect(monitor.observe({ atMs: afterDwell + 5_000, ...OK })).toBeNull();
+	});
+
+	it('will not undo a back-off with responses that were already in flight', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 100_000, status: 429, durationMs: 5 });
+		expect(monitor.multiplier()).toBe(2);
+
+		// Twenty clean responses one second later: plenty of COUNT, no elapsed time.
+		// Without the dwell this would flap straight back to ×1.
+		healthy(monitor, 20, 101_000);
+		expect(monitor.multiplier()).toBe(2);
+
+		healthy(monitor, 10, 100_000 + 60_000);
+		expect(monitor.multiplier()).toBe(1);
+	});
+
+	it('does not call itself recovered while the server-named pause is still running', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 429, durationMs: 5, retryAfter: '600' });
+		expect(monitor.retryAfterUntilMs()).toBe(600_000);
+
+		// Past the dwell, plenty of healthy traffic — but still inside the pause.
+		healthy(monitor, 30, 120_000);
+		expect(monitor.multiplier()).toBe(2);
+
+		healthy(monitor, 10, 600_001);
+		expect(monitor.multiplier()).toBe(1);
+	});
+
+	it('clears stale strikes on recovery so an old 5xx cannot bounce it back', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
+		// Two strikes that never made a burst.
+		monitor.observe({ atMs: 1_000, status: 500, durationMs: 20 });
+		monitor.observe({ atMs: 2_000, status: 500, durationMs: 20 });
+
+		healthy(monitor, 10, 70_000);
+		expect(monitor.multiplier()).toBe(1);
+
+		// A single 5xx must now be strike ONE again, not the third of a stale burst.
+		expect(monitor.observe({ atMs: 71_000, status: 500, durationMs: 20 })).toBeNull();
+		expect(monitor.multiplier()).toBe(1);
 	});
 
 	it('restarts the recovery streak on any distress', () => {
@@ -175,6 +218,24 @@ describe('server pressure monitor', () => {
 		monitor.observe({ atMs: 5_000, status: 500, durationMs: 20 });
 		healthy(monitor, 9, 6_000);
 		expect(monitor.multiplier()).toBe(2);
+	});
+
+	it('reports a 503 pause even when the burst threshold is not met', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		// Strike one: the ladder does not move, but the server named a 60s pause and
+		// the cadence layer MUST hear about it or an armed tick fires straight through.
+		expect(
+			monitor.observe({ atMs: 10_000, status: 503, durationMs: 20, retryAfter: '60' })
+		).toMatchObject({
+			direction: 'backoff',
+			signal: 'server-error',
+			fromMultiplier: 1,
+			toMultiplier: 1,
+			retryAfterUntilMs: 70_000,
+		});
+		expect(monitor.retryAfterUntilMs()).toBe(70_000);
+		// A 503 with no pause and no burst stays silent.
+		expect(monitor.observe({ atMs: 11_000, status: 503, durationMs: 20 })).toBeNull();
 	});
 
 	it('lowers a multiplier that is above a newly shortened ladder', () => {
