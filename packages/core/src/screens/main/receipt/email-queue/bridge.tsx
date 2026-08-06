@@ -4,7 +4,12 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-import { drainReceiptEmailQueue, type ReceiptEmailQueuePort, type ReceiptEmailRow } from './queue';
+import {
+	drainReceiptEmailQueue,
+	receiptEmailPostRequest,
+	type ReceiptEmailQueuePort,
+	type ReceiptEmailRow,
+} from './queue';
 import { useReceiptEmailQueueCollection } from './use-receipt-email-queue-collection';
 
 const logger = getLogger(['wcpos', 'receipt', 'emailQueue']);
@@ -36,11 +41,7 @@ export function ReceiptEmailQueueBridge() {
 	const online = status === 'online-website-available';
 
 	const post = React.useCallback(
-		(row: ReceiptEmailRow) =>
-			http.post(`/orders/${row.orderId}/email`, {
-				email: row.email,
-				save_to: row.saveTo ?? '',
-			}),
+		(row: ReceiptEmailRow) => http.post(...receiptEmailPostRequest(row)),
 		[http]
 	);
 

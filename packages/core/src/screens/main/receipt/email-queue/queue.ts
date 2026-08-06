@@ -219,6 +219,13 @@ export interface ReceiptEmailPostResponse {
 	data?: { success?: boolean; message?: string } | null;
 }
 
+/** The receipt-email endpoint contract shared by every queue drain trigger. */
+export function receiptEmailPostRequest(
+	row: Pick<ReceiptEmailRow, 'orderId' | 'email' | 'saveTo'>
+): [string, { email: string; save_to: string }] {
+	return [`/orders/${row.orderId}/email`, { email: row.email, save_to: row.saveTo ?? '' }];
+}
+
 export interface DrainLogger {
 	debug: (message: string, options?: { context?: unknown }) => void;
 	info: (message: string, options?: { context?: unknown }) => void;
@@ -269,10 +276,43 @@ interface DrainLock {
 }
 
 const inFlight = new Map<ReceiptEmailQueuePort, DrainLock>();
+const operationChains = new Map<ReceiptEmailQueuePort, Promise<void>>();
+const claimedRows = new Map<ReceiptEmailQueuePort, Set<string>>();
+
+function serializeQueueOperation<T>(
+	collection: ReceiptEmailQueuePort,
+	operation: () => Promise<T>
+): Promise<T> {
+	const previous = operationChains.get(collection) ?? Promise.resolve();
+	const result = previous.then(operation);
+	const settled = result.then(
+		() => undefined,
+		() => undefined
+	);
+	operationChains.set(collection, settled);
+	void settled.then(() => {
+		if (operationChains.get(collection) === settled) operationChains.delete(collection);
+	});
+	return result;
+}
+
+function claimRow(collection: ReceiptEmailQueuePort, localID: string): void {
+	const rows = claimedRows.get(collection) ?? new Set<string>();
+	rows.add(localID);
+	claimedRows.set(collection, rows);
+}
+
+function releaseRow(collection: ReceiptEmailQueuePort, localID: string): void {
+	const rows = claimedRows.get(collection);
+	rows?.delete(localID);
+	if (rows?.size === 0) claimedRows.delete(collection);
+}
 
 /** Test seam: the module-level lock must not leak between test cases. */
 export function __resetDrainLocksForTests(): void {
 	inFlight.clear();
+	operationChains.clear();
+	claimedRows.clear();
 }
 
 export function drainReceiptEmailQueue(deps: DrainDeps): Promise<DrainSummary> {
@@ -327,7 +367,7 @@ async function drainOnce(deps: DrainDeps): Promise<DrainPass> {
 	if (rows.length === 0) return { summary, transportDown: false };
 
 	let posted = 0;
-	for (const snapshot of rows) {
+	for (const [index, snapshot] of rows.entries()) {
 		if (snapshot.nextAttemptAt && Date.parse(snapshot.nextAttemptAt) > now()) {
 			summary.deferred += 1;
 			continue;
@@ -338,124 +378,143 @@ async function drainOnce(deps: DrainDeps): Promise<DrainPass> {
 		// spike it can least afford.
 		if (posted > 0) await sleep(spacingMs);
 
-		// The Store health panel can remove a row while this pass is sleeping or
-		// posting an earlier one. Re-read immediately before POST so a stale
-		// snapshot can never send a discarded email.
-		const [doc] = await deps.collection
-			.find({
-				selector: {
-					localID: { $eq: snapshot.localID },
-					status: { $eq: 'pending' },
-				},
-			})
-			.exec();
-		if (!doc) continue;
-		if (doc.nextAttemptAt && Date.parse(doc.nextAttemptAt) > now()) {
-			summary.deferred += 1;
-			continue;
-		}
-		posted += 1;
-
-		const attempt = doc.attempts + 1;
-		const attemptedAt = iso(now());
-		let failure: EmailSendFailure | undefined;
+		claimRow(deps.collection, snapshot.localID);
+		let result: DrainRow;
 		try {
-			const response = await deps.post(doc);
-			if (response?.data?.success !== true) {
-				// The endpoint answered 200 but declined. That is a verdict, not a
-				// transport failure, so it does not earn a retry.
-				throw asPermanent(response?.data?.message ?? 'The server did not send the email.');
-			}
-		} catch (error) {
-			failure = permanentOf(error) ?? classifyEmailSendError(error);
+			result = await serializeQueueOperation(deps.collection, () =>
+				drainRow(deps, snapshot, now, maxAttempts)
+			);
+		} finally {
+			releaseRow(deps.collection, snapshot.localID);
 		}
-
-		if (!failure) {
-			await patch(deps, doc, {
-				status: 'sent',
-				attempts: attempt,
-				lastAttemptAt: attemptedAt,
-				sentAt: attemptedAt,
-				lastError: '',
-				lastErrorCode: '',
-			});
-			summary.sent += 1;
-			deps.logger.info('Queued receipt email sent', {
-				context: {
-					type: 'email.queue.sent',
-					localID: doc.localID,
-					orderId: doc.orderId,
-					attempts: attempt,
-				},
-			});
-			// A delivered email is history; the Logs row is the record. Keeping the
-			// document would grow this collection without bound on a busy till that
-			// never gets cleared. Marked `sent` first so a reader that catches the
-			// row between the two writes sees a terminal state, never a pending one.
-			await forget(deps, doc);
-			continue;
+		summary.sent += result.sent;
+		summary.failed += result.failed;
+		summary.deferred += result.deferred;
+		if (result.posted) posted += 1;
+		if (result.transportDown) {
+			// The transport is down. Every remaining row would fail the same way,
+			// burn an attempt against its own budget, and add load a struggling
+			// server does not need. Stop the pass; the next trigger picks it up.
+			summary.deferred += rows.length - index - 1;
+			return { summary, transportDown: true };
 		}
-
-		// A block that never left the device is not evidence the send is futile,
-		// so it must not spend an attempt: a till asleep overnight would burn the
-		// whole budget without one request reaching the store.
-		const attemptsAfter = failure.attempted ? attempt : doc.attempts;
-		const exhausted =
-			failure.kind === 'connectivity' && failure.attempted && attemptsAfter >= maxAttempts;
-
-		if (failure.kind === 'permanent' || exhausted) {
-			await patch(deps, doc, {
-				status: 'failed',
-				attempts: attemptsAfter,
-				lastAttemptAt: attemptedAt,
-				lastError: exhausted
-					? `${failure.reason} (gave up after ${attemptsAfter} tries)`
-					: failure.reason,
-				lastErrorCode: failure.code ?? '',
-			});
-			summary.failed += 1;
-			deps.logger.error('Queued receipt email failed permanently', {
-				context: {
-					type: 'email.queue.failed',
-					localID: doc.localID,
-					orderId: doc.orderId,
-					attempts: attemptsAfter,
-					status: failure.status,
-					errorCode: failure.code,
-					error: failure.reason,
-					exhausted,
-				},
-			});
-			// A refusal aimed at this row says nothing about the next one.
-			continue;
-		}
-
-		await patch(deps, doc, {
-			attempts: attemptsAfter,
-			lastAttemptAt: attemptedAt,
-			nextAttemptAt: iso(now() + backoffMs(Math.max(1, attemptsAfter))),
-			lastError: failure.reason,
-			lastErrorCode: failure.code ?? '',
-		});
-		summary.deferred += 1;
-		deps.logger.warn('Queued receipt email deferred', {
-			context: {
-				type: 'email.queue.deferred',
-				localID: doc.localID,
-				orderId: doc.orderId,
-				attempts: attemptsAfter,
-				backoffMs: backoffMs(Math.max(1, attemptsAfter)),
-				error: failure.reason,
-			},
-		});
-		// The transport is down. Every remaining row would fail the same way,
-		// burn an attempt against its own budget, and add load a struggling
-		// server does not need. Stop the pass; the next trigger picks it up.
-		summary.deferred += rows.length - rows.indexOf(snapshot) - 1;
-		return { summary, transportDown: true };
 	}
 
 	return { summary, transportDown: false };
+}
+
+interface DrainRow extends DrainSummary {
+	posted: boolean;
+	transportDown: boolean;
+}
+
+async function drainRow(
+	deps: DrainDeps,
+	snapshot: ReceiptEmailDoc,
+	now: () => number,
+	maxAttempts: number
+): Promise<DrainRow> {
+	const result: DrainRow = { ...emptySummary(), posted: false, transportDown: false };
+	// Discard uses this same critical section. Re-read after entering it so the
+	// query and POST cannot be split by a successful removal.
+	const [doc] = await deps.collection
+		.find({
+			selector: {
+				localID: { $eq: snapshot.localID },
+				status: { $eq: 'pending' },
+			},
+		})
+		.exec();
+	if (!doc) return result;
+	if (doc.nextAttemptAt && Date.parse(doc.nextAttemptAt) > now()) {
+		result.deferred = 1;
+		return result;
+	}
+
+	result.posted = true;
+	const attempt = doc.attempts + 1;
+	const attemptedAt = iso(now());
+	let failure: EmailSendFailure | undefined;
+	try {
+		const response = await deps.post(doc);
+		if (response?.data?.success !== true) {
+			throw asPermanent(response?.data?.message ?? 'The server did not send the email.');
+		}
+	} catch (error) {
+		failure = permanentOf(error) ?? classifyEmailSendError(error);
+	}
+
+	if (!failure) {
+		await patch(deps, doc, {
+			status: 'sent',
+			attempts: attempt,
+			lastAttemptAt: attemptedAt,
+			sentAt: attemptedAt,
+			lastError: '',
+			lastErrorCode: '',
+		});
+		result.sent = 1;
+		deps.logger.info('Queued receipt email sent', {
+			context: {
+				type: 'email.queue.sent',
+				localID: doc.localID,
+				orderId: doc.orderId,
+				attempts: attempt,
+			},
+		});
+		await forget(deps, doc);
+		return result;
+	}
+
+	const attemptsAfter = failure.attempted ? attempt : doc.attempts;
+	const exhausted =
+		failure.kind === 'connectivity' && failure.attempted && attemptsAfter >= maxAttempts;
+	if (failure.kind === 'permanent' || exhausted) {
+		await patch(deps, doc, {
+			status: 'failed',
+			attempts: attemptsAfter,
+			lastAttemptAt: attemptedAt,
+			lastError: exhausted
+				? `${failure.reason} (gave up after ${attemptsAfter} tries)`
+				: failure.reason,
+			lastErrorCode: failure.code ?? '',
+		});
+		result.failed = 1;
+		deps.logger.error('Queued receipt email failed permanently', {
+			context: {
+				type: 'email.queue.failed',
+				localID: doc.localID,
+				orderId: doc.orderId,
+				attempts: attemptsAfter,
+				status: failure.status,
+				errorCode: failure.code,
+				error: failure.reason,
+				exhausted,
+			},
+		});
+		return result;
+	}
+
+	await patch(deps, doc, {
+		attempts: attemptsAfter,
+		lastAttemptAt: attemptedAt,
+		nextAttemptAt: iso(now() + backoffMs(Math.max(1, attemptsAfter))),
+		lastError: failure.reason,
+		lastErrorCode: failure.code ?? '',
+	});
+	result.deferred = 1;
+	result.transportDown = true;
+	deps.logger.warn('Queued receipt email deferred', {
+		context: {
+			type: 'email.queue.deferred',
+			localID: doc.localID,
+			orderId: doc.orderId,
+			attempts: attemptsAfter,
+			backoffMs: backoffMs(Math.max(1, attemptsAfter)),
+			error: failure.reason,
+		},
+	});
+	return result;
 }
 
 /** RxDB caps these fields; a server that answers with an essay must not wedge the row. */
@@ -493,7 +552,7 @@ async function patch(
 	try {
 		await doc.incrementalPatch(safe);
 	} catch (error) {
-		if (!doc.deleted) throw error;
+		if (!latest(doc).deleted) throw error;
 		deps.logger.warn('Could not record a receipt email outcome', {
 			context: {
 				localID: doc.localID,
@@ -574,16 +633,29 @@ function latest(doc: ReceiptEmailDoc): ReceiptEmailDoc {
 
 /** Drop a row the merchant no longer wants sent. */
 export async function removeReceiptEmail(
+	collection: ReceiptEmailQueuePort,
 	doc: ReceiptEmailDoc,
 	logger?: DrainLogger
-): Promise<void> {
-	await doc.remove();
-	logger?.info('Queued receipt email discarded', {
-		context: {
-			type: 'email.queue.discarded',
-			localID: doc.localID,
-			orderId: doc.orderId,
-			status: doc.status,
-		},
+): Promise<boolean> {
+	if (claimedRows.get(collection)?.has(doc.localID)) {
+		logger?.debug('Skipped a receipt email discard — delivery has already started', {
+			context: { localID: doc.localID },
+		});
+		return false;
+	}
+
+	return serializeQueueOperation(collection, async () => {
+		const current = latest(doc);
+		if (current.deleted || current.status === 'sent') return false;
+		await current.remove();
+		logger?.info('Queued receipt email discarded', {
+			context: {
+				type: 'email.queue.discarded',
+				localID: current.localID,
+				orderId: current.orderId,
+				status: current.status,
+			},
+		});
+		return true;
 	});
 }

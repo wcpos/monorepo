@@ -8,8 +8,10 @@ import {
 	enqueueReceiptEmail,
 	MAX_BACKOFF_MS,
 	type ReceiptEmailDoc,
+	receiptEmailPostRequest,
 	type ReceiptEmailQueuePort,
 	type ReceiptEmailRow,
+	removeReceiptEmail,
 	retryReceiptEmail,
 } from './queue';
 
@@ -557,6 +559,100 @@ describe('drain hardening (adversarial findings)', () => {
 		).rejects.toBe(storageError);
 	});
 
+	it('tolerates an outcome write when the latest document revision was removed', async () => {
+		const collection = createFakeCollection([pendingRow()]);
+		const stale = collection.docs[0] as ReceiptEmailDoc & {
+			getLatest(): ReceiptEmailDoc;
+		};
+		const removed = { ...stale, deleted: true } as ReceiptEmailDoc;
+		const removalError = new Error('RxError: document is removed');
+		stale.getLatest = () => removed;
+		stale.incrementalPatch = async () => {
+			throw removalError;
+		};
+
+		await expect(
+			drainReceiptEmailQueue({
+				collection,
+				post: async () => ({ data: { success: true } }),
+				logger: silentLogger(),
+				now: () => Date.parse('2026-08-06T10:00:00.000Z'),
+				sleep: async () => undefined,
+			})
+		).resolves.toEqual({ sent: 1, failed: 0, deferred: 0 });
+	});
+
+	it('reports that a discard cannot cancel a send already in flight', async () => {
+		const collection = createFakeCollection([pendingRow()]);
+		const doc = collection.docs[0];
+		let markStarted: (() => void) | undefined;
+		let releasePost: (() => void) | undefined;
+		const started = new Promise<void>((resolve) => {
+			markStarted = resolve;
+		});
+		const blockedPost = new Promise<void>((resolve) => {
+			releasePost = resolve;
+		});
+		const drain = drainReceiptEmailQueue({
+			collection,
+			post: async () => {
+				markStarted?.();
+				await blockedPost;
+				return { data: { success: true } };
+			},
+			logger: silentLogger(),
+			now: () => Date.parse('2026-08-06T10:00:00.000Z'),
+			sleep: async () => undefined,
+		});
+		await started;
+
+		await expect(removeReceiptEmail(collection, doc, silentLogger())).resolves.toBe(false);
+		releasePost?.();
+		await drain;
+	});
+
+	it('serializes a later-row discard behind the active send and before its post', async () => {
+		const collection = createFakeCollection([
+			pendingRow({ localID: 'a', queuedAt: '2026-08-06T09:00:00.000Z' }),
+			pendingRow({ localID: 'b', queuedAt: '2026-08-06T09:30:00.000Z', email: 'b@example.com' }),
+		]);
+		const later = collection.docs[1];
+		let markStarted: (() => void) | undefined;
+		let releasePost: (() => void) | undefined;
+		const started = new Promise<void>((resolve) => {
+			markStarted = resolve;
+		});
+		const blockedPost = new Promise<void>((resolve) => {
+			releasePost = resolve;
+		});
+		const post = jest.fn(async () => {
+			markStarted?.();
+			await blockedPost;
+			return { data: { success: true } };
+		});
+		const drain = drainReceiptEmailQueue({
+			collection,
+			post,
+			logger: silentLogger(),
+			now: () => Date.parse('2026-08-06T10:00:00.000Z'),
+			sleep: async () => undefined,
+		});
+		await started;
+
+		let discardSettled = false;
+		const discard = removeReceiptEmail(collection, later, silentLogger()).finally(() => {
+			discardSettled = true;
+		});
+		await Promise.resolve();
+		expect(discardSettled).toBe(false);
+
+		releasePost?.();
+		await expect(discard).resolves.toBe(true);
+		await expect(drain).resolves.toEqual({ sent: 1, failed: 0, deferred: 0 });
+		expect(post).toHaveBeenCalledTimes(1);
+		expect(collection.docs).toHaveLength(0);
+	});
+
 	it('does not run another pass after the transport went down', async () => {
 		const collection = createFakeCollection([
 			pendingRow({ localID: 'a', queuedAt: '2026-08-06T09:00:00.000Z' }),
@@ -611,6 +707,43 @@ describe('retryReceiptEmail', () => {
 
 		await expect(retryReceiptEmail(collection.docs[0])).resolves.toBe(false);
 		expect(collection.docs[0].status).toBe('sent');
+	});
+});
+
+describe('removeReceiptEmail', () => {
+	it('removes and logs the latest document revision', async () => {
+		const collection = createFakeCollection([pendingRow()]);
+		const stale = collection.docs[0] as ReceiptEmailDoc & {
+			getLatest(): ReceiptEmailDoc;
+		};
+		const current = {
+			...stale,
+			status: 'failed' as const,
+			remove: jest.fn(async () => undefined),
+		};
+		stale.getLatest = () => current;
+		stale.remove = jest.fn(async () => {
+			throw new Error('stale revision');
+		});
+		const logger = silentLogger();
+
+		await expect(removeReceiptEmail(collection, stale, logger)).resolves.toBe(true);
+		expect(current.remove).toHaveBeenCalledTimes(1);
+		expect(stale.remove).not.toHaveBeenCalled();
+		expect(logger.info).toHaveBeenCalledWith(
+			'Queued receipt email discarded',
+			expect.objectContaining({ context: expect.objectContaining({ status: 'failed' }) })
+		);
+	});
+});
+
+describe('receiptEmailPostRequest', () => {
+	it('maps a queue row to the shared endpoint and payload contract', () => {
+		expect(receiptEmailPostRequest(pendingRow())).toEqual([
+			'/orders/42/email',
+			{ email: 'customer@example.com', save_to: '' },
+		]);
+		expect(receiptEmailPostRequest(pendingRow({ saveTo: 'billing' }))[1].save_to).toBe('billing');
 	});
 });
 

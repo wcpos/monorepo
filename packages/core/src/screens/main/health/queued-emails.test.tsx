@@ -11,7 +11,7 @@ import type { QueuedEmail } from './use-queued-emails';
 
 const mockDrain = jest.fn(async () => ({ sent: 1, failed: 0, deferred: 0 }));
 const mockRetry = jest.fn(async () => true);
-const mockRemove = jest.fn(async () => undefined);
+const mockRemove = jest.fn(async () => true);
 const mockToast = jest.fn();
 let rows: QueuedEmail[] = [];
 
@@ -56,6 +56,10 @@ jest.mock('../receipt/email-queue/use-receipt-email-queue-collection', () => ({
 }));
 jest.mock('../receipt/email-queue/queue', () => ({
 	drainReceiptEmailQueue: (...args: unknown[]) => mockDrain(...(args as [])),
+	receiptEmailPostRequest: (row: { orderId: number; email: string; saveTo?: string }) => [
+		`/orders/${row.orderId}/email`,
+		{ email: row.email, save_to: row.saveTo ?? '' },
+	],
 	retryReceiptEmail: (...args: unknown[]) => mockRetry(...(args as [])),
 	removeReceiptEmail: (...args: unknown[]) => mockRemove(...(args as [])),
 }));
@@ -102,18 +106,31 @@ describe('QueuedEmailsPanel', () => {
 		expect(screen.getByTestId('db-queued-email-row-row-1')).toBeTruthy();
 		expect(screen.getByTestId('db-queued-email-pending-row-1')).toBeTruthy();
 		expect(screen.getByText(/customer@example\.com · #1042/)).toBeTruthy();
+		expect(screen.getByText(/waiting for another send attempt/i)).toBeTruthy();
+		expect(screen.getByText(/delivery is not guaranteed/i)).toBeTruthy();
 	});
 
-	it('shows the server’s reason on a refused row', () => {
+	it('shows the failure reason without assuming why the send failed', () => {
 		rows = [row({ status: 'failed', attempts: 3, lastError: 'Invalid email address.' })];
 		render(<QueuedEmailsPanel />);
 
 		expect(screen.getByTestId('db-queued-email-failed-row-1')).toBeTruthy();
+		expect(screen.getByTestId('db-queued-email-failed-row-1').textContent).toBe('failed');
 		expect(screen.getByText('Invalid email address.')).toBeTruthy();
-		expect(
-			screen.getByText(/remove it, correct the order, then resend from the order/i)
-		).toBeTruthy();
-		expect(screen.getByText(/Send again retries the saved address/i)).toBeTruthy();
+		expect(screen.getByText(/could not be sent and has stopped trying/i)).toBeTruthy();
+		expect(screen.getByText(/review the reason below/i)).toBeTruthy();
+		expect(screen.queryByText(/correct the order/i)).toBeNull();
+	});
+
+	it('uses neutral wording for multiple failed sends', () => {
+		rows = [
+			row({ localID: 'row-1', status: 'failed' }),
+			row({ localID: 'row-2', orderId: 43, status: 'failed' }),
+		];
+		render(<QueuedEmailsPanel />);
+
+		expect(screen.getByText(/2 of these could not be sent and have stopped trying/i)).toBeTruthy();
+		expect(screen.getByText(/review the reasons below/i)).toBeTruthy();
 	});
 
 	it('requeues through the shared drain, so a retry cannot double-send', async () => {
@@ -158,5 +175,20 @@ describe('QueuedEmailsPanel', () => {
 
 		expect(mockRemove).toHaveBeenCalledTimes(1);
 		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'success' }));
+	});
+
+	it('warns instead of claiming removal when delivery has already started', async () => {
+		mockRemove.mockResolvedValueOnce(false);
+		rows = [row()];
+		render(<QueuedEmailsPanel />);
+
+		await act(async () => {
+			fireEvent.click(screen.getByTestId('db-queued-email-remove-row-1'));
+		});
+
+		expect(mockToast).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'warning', text1: expect.stringMatching(/already started/i) })
+		);
+		expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'success' }));
 	});
 });

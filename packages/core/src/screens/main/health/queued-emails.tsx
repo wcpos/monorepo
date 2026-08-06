@@ -12,6 +12,7 @@ import { useT } from '../../../contexts/translations';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import {
 	drainReceiptEmailQueue,
+	receiptEmailPostRequest,
 	type ReceiptEmailQueuePort,
 	type ReceiptEmailRow,
 	removeReceiptEmail,
@@ -47,11 +48,7 @@ export function QueuedEmailsPanel() {
 	const [busyId, setBusyId] = React.useState<string | null>(null);
 
 	const post = React.useCallback(
-		(row: ReceiptEmailRow) =>
-			http.post(`/orders/${row.orderId}/email`, {
-				email: row.email,
-				save_to: row.saveTo ?? '',
-			}),
+		(row: ReceiptEmailRow) => http.post(...receiptEmailPostRequest(row)),
 		[http]
 	);
 
@@ -92,8 +89,18 @@ export function QueuedEmailsPanel() {
 	const discard = async (row: QueuedEmail) => {
 		setBusyId(row.localID);
 		try {
-			await removeReceiptEmail(row.doc, logger);
-			Toast.show({ type: 'success', text1: t('health.database.emails.removed') });
+			if (!collection) return;
+			const removed = await removeReceiptEmail(
+				collection as unknown as ReceiptEmailQueuePort,
+				row.doc,
+				logger
+			);
+			Toast.show({
+				type: removed ? 'success' : 'warning',
+				text1: t(
+					removed ? 'health.database.emails.removed' : 'health.database.emails.remove_in_flight'
+				),
+			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			logger.error('Receipt email removal failed', {
