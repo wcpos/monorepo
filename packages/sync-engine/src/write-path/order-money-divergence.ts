@@ -248,12 +248,12 @@ export function roundDecimalString(value: string, decimals: number): string | nu
 /**
  * The width one slot is compared at.
  *
- * `exact-6dp` takes the NARROWER of the two representations, capped at six —
- * neither side can assert more precision than it printed, so the shorter string
- * is the most either of them actually claims. That is what gives order-level
- * `total` its 2dp-storage tolerance for free: WooCommerce stores it at display
- * decimals and `dp=6` only pads the string, so `36.68` against `36.680000`
- * compares at two and agrees, while `36.68` against `50.070000` still differs.
+ * `exact-6dp` takes the NARROWER explicit fractional width, capped at six. An
+ * integral spelling has no decimal point because POS arithmetic uses
+ * `String(...)`; it does not claim zero-decimal storage precision, so the other
+ * side's width is retained. This gives order-level `total` its 2dp-storage
+ * tolerance: `36.68` against `36.680000` compares at two and agrees, while
+ * integral `0` against `0.010000` compares at six and differs.
  *
  * `server-precision` is the legacy rule: whatever width the ack printed.
  */
@@ -266,7 +266,9 @@ function comparisonDecimals(
 	const pos = decimalsOf(posValue);
 	const server = decimalsOf(serverValue);
 	if (pos === null || server === null) return null;
-	return Math.min(EXACT_COMPARISON_DECIMALS, pos, server);
+	const posWidth = pos === 0 ? EXACT_COMPARISON_DECIMALS : pos;
+	const serverWidth = server === 0 ? EXACT_COMPARISON_DECIMALS : server;
+	return Math.min(EXACT_COMPARISON_DECIMALS, posWidth, serverWidth);
 }
 
 /**
@@ -459,7 +461,10 @@ export function preserveEquivalentLocalPrecision(
 		// with what `use-order-totals` recomputes, and that hook answers a
 		// disagreement by patching — which enqueues a server write. Byte-equal
 		// is the only spelling that does not oscillate.
-		const width = Math.min(posDecimals, serverDecimals);
+		const width =
+			posDecimals === 0 || serverDecimals === 0
+				? Math.max(posDecimals, serverDecimals)
+				: Math.min(posDecimals, serverDecimals);
 		if (roundDecimalString(pos, width) !== roundDecimalString(server, width)) return;
 		write(pos);
 		changed = true;

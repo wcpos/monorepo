@@ -220,6 +220,17 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 		expect(compareOrderMoney({ pushed: pos, acked: server6dp, mode: 'exact-6dp' })).toBeNull();
 	});
 
+	it('flags a six-decimal correction to an integrally spelled local value', () => {
+		const divergence = compareOrderMoney({
+			pushed: { cart_tax: '0' },
+			acked: { cart_tax: '0.010000' },
+			mode: 'exact-6dp',
+		});
+		expect(divergence?.fields).toEqual([
+			{ field: 'cart_tax', expected: '0.000000', got: '0.010000', decimals: 6 },
+		]);
+	});
+
 	it('tolerates the 2dp-STORAGE padding on order-level total', () => {
 		// WC_Abstract_Order::set_total stores at display decimals on every route,
 		// so `dp=6` only widens the string: the POS holds `36.68` and the ack says
@@ -331,6 +342,11 @@ describe('preserveEquivalentLocalPrecision (the adoption half of the mirror cont
 		expect(merged.total).toBe('50.070000');
 		// …and the fields that DID agree still keep the POS's spelling.
 		expect(merged.cart_tax).toBe('6.71328');
+	});
+
+	it('adopts a six-decimal server correction to an integrally spelled local value', () => {
+		const merged = preserveEquivalentLocalPrecision({ cart_tax: '0' }, { cart_tax: '0.010000' });
+		expect(merged.cart_tax).toBe('0.010000');
 	});
 
 	it('leaves non-monetary fields to the ack — identity and status are the server’s', () => {
