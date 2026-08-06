@@ -146,9 +146,9 @@ describe('compareOrderMoney — server-precision mode (the legacy rule)', () => 
 		const acked = clone(server2dp);
 		acked.cart_tax = '7';
 		expect(compareOrderMoney({ pushed: pos, acked, mode: 'server-precision' })).toBeNull();
-		// The shipped rule preserves the wider POS width and reports it.
+		// The shipped rule floors the tolerance at cents and reports it.
 		expect(compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' })?.fields).toEqual([
-			{ field: 'cart_tax', expected: '6.71328', got: '7.00000', decimals: 5 },
+			{ field: 'cart_tax', expected: '6.71', got: '7.00', decimals: 2 },
 		]);
 	});
 
@@ -350,6 +350,23 @@ describe('preserveEquivalentLocalPrecision (the adoption half of the mirror cont
 	it('adopts a six-decimal correction beyond the POS decimal width', () => {
 		const merged = preserveEquivalentLocalPrecision({ total: '36.68' }, { total: '36.680001' });
 		expect(merged.total).toBe('36.680001');
+	});
+
+	it('adopts a correction that COLLIDES at the ack width — the cent floor', () => {
+		// The case a bare `serverDecimals < posDecimals ? serverDecimals : …`
+		// rule silently loses: rounding 29.97 to the ack's one decimal makes it
+		// 30.0, identical to the ack, and a 3-cent server correction is dropped
+		// as "the same number". Cents is the floor because below a cent there is
+		// no money left to protect.
+		const merged = preserveEquivalentLocalPrecision({ total: '29.97' }, { total: '30.0' });
+		expect(merged.total).toBe('30.0');
+		expect(
+			compareOrderMoney({
+				pushed: { total: '29.97' },
+				acked: { total: '30.0' },
+				mode: 'exact-6dp',
+			})?.fields
+		).toEqual([{ field: 'total', expected: '29.97', got: '30.00', decimals: 2 }]);
 	});
 
 	it('leaves non-monetary fields to the ack — identity and status are the server’s', () => {

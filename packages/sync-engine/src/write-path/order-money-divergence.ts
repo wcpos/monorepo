@@ -20,9 +20,9 @@
  * change with time.
  *
  * ── At what precision ───────────────────────────────────────────────────────
- * At the width `equivalenceDecimals` picks — the ack's own width when it is a
- * narrower nonzero width than the POS value, the wider of the two otherwise,
- * capped at six.
+ * At the width `equivalenceDecimals` picks — the ack's own width when it is
+ * narrower than the POS value (floored at cents), the wider of the two
+ * otherwise, capped at six.
  *
  * The naive reading of "the server now serves six decimals" (woocommerce-pos
  * #1466, live on dev-next) would be to compare everything at six. That is
@@ -245,6 +245,9 @@ export function roundDecimalString(value: string, decimals: number): string | nu
 	return negative && /[1-9]/.test(digits) ? `-${magnitude}` : magnitude;
 }
 
+/** Cents — the floor the narrower-ack tolerance may never dip below. */
+const CENT_DECIMALS = 2;
+
 /**
  * THE width at which two spellings of money count as the same number.
  *
@@ -259,21 +262,23 @@ export function roundDecimalString(value: string, decimals: number): string | nu
  *  - The ack is NARROWER than the POS value. That is a display-decimals
  *    rendering of the POS's own number (a store still on the pre-#1466 plugin
  *    sends `"6.71"` for `6.71328`), so the ack's width is the most it claims
- *    and the rounding artefact is tolerated. A zero-width ack is different:
- *    POS arithmetic goes through `String(...)`, so an integral spelling such
- *    as `"7"` does not claim zero-decimal storage precision. The POS width is
- *    retained so unrelated values cannot collide at zero decimals.
+ *    and the rounding artefact is tolerated. Floored at CENTS, because
+ *    rounding to the ack's width lets UNRELATED numbers collide: `29.97`
+ *    against a one-decimal `"30.0"` agrees at 1dp, and adoption would discard
+ *    a 0.03 correction as "the same number". Below a cent there is no money
+ *    left to protect. The floor also covers the integral-spelling case
+ *    @wcpos-bot raised — POS arithmetic goes through `String(...)`, so `"7"`
+ *    has no decimal point and claims no storage precision at all.
  *  - The ack is as precise or MORE precise. Then it is either padding (`36.68`
  *    against `36.680000`, equal once the POS value is widened) or a real
  *    correction, and the wider width is what tells them apart. Capped at six,
  *    the contract width.
  */
 function equivalenceDecimals(posDecimals: number, serverDecimals: number): number {
-	const width =
-		serverDecimals > 0 && serverDecimals < posDecimals
-			? serverDecimals
-			: Math.max(posDecimals, serverDecimals);
-	return Math.min(EXACT_COMPARISON_DECIMALS, width);
+	if (serverDecimals < posDecimals) {
+		return Math.min(EXACT_COMPARISON_DECIMALS, Math.max(serverDecimals, CENT_DECIMALS));
+	}
+	return Math.min(EXACT_COMPARISON_DECIMALS, Math.max(posDecimals, serverDecimals));
 }
 
 /**
