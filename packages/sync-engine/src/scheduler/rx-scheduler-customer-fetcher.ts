@@ -135,9 +135,10 @@ async function fetchCustomerBrowseWindow(
 		const url = `${input.baseUrl}/customers?${query.toString()}`;
 		const response = await httpGet(input, url, context);
 		if (!response.ok) {
-			// A 400 here is almost always an `orderby` wc/v3 will not accept. Surface it as a
-			// labelled event so it is diagnosable from the Logs screen instead of showing up as
-			// a bare failed drain — see CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES.
+			// A 400 here is almost always a customer `orderby` this store's plugin does not
+			// proxy — a build predating #1488, which re-applies the five WCPOS sorts through the
+			// V1 handler. Surface it as a labelled event so it is diagnosable from the Logs
+			// screen instead of showing up as a bare failed drain; the grid keeps local results.
 			if (response.status === 400) {
 				input.diagnostics?.({
 					type: 'customer.browse-window.sort-rejected',

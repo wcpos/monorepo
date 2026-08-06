@@ -562,11 +562,10 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	// once the cashier picks a sort the wire can express, that sort becomes SERVER demand —
 	// Paul's ruling (2026-08-06): "you change the sorting … you expect to see those customers."
 	//
-	// The gate is deliberately the wire's own vocabulary. Most customers columns (last_name,
-	// first_name, email, role, username) are NOT expressible through the v2 proxy's wc/v3
-	// forward, and sending one would 400 on every scroll tick rather than degrade — so those
-	// keep sorting local residents and the footer keeps admitting it is local. See
-	// CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES for the plugin change that widens this.
+	// The gate is the wire's own vocabulary (collection-map's customers `wooOrderby`s). As of
+	// the #1488/#1500 plugin proxy that vocabulary covers id, name, registered_date and the five
+	// WCPOS sorts — first_name, last_name, email, username, role (staff-hierarchy, server-side).
+	// A column with no wire orderby (e.g. date_modified_gmt) still sorts local residents.
 	if (engineCollection === 'customers') {
 		// A selector carrying an `id` predicate is a targeted LOOKUP, never a browse. When it
 		// names ids the targeted branch above already returned; when it resolves to the EMPTY

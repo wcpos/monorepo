@@ -337,16 +337,27 @@ describe('require() for the customers browse window', () => {
 		handle.release();
 	});
 
-	it('rejects a sort the customers read surface cannot express', () => {
+	// last_name is now proxied (#1488), so it builds a valid window; a sort with no wire
+	// orderby on ANY surface (date_modified_gmt) is what the lane still refuses to build.
+	it('builds a window for a plugin-proxied sort and rejects one with no wire orderby', () => {
 		const server = scriptedCustomerBase(10);
 		const engine = engineWith(server.fetch);
+		const handle = engine.require({
+			id: 'customers-browse-last-name',
+			collection: 'customers',
+			kind: 'customer-browse',
+			orderby: 'last_name',
+			order: 'asc',
+		});
+		expect(handle.queryKey).toBe('customers:browse-window:limit=100:orderby=last_name:order=asc');
+		handle.release();
+
 		expect(() =>
 			engine.require({
 				id: 'customers-browse-bad-sort',
 				collection: 'customers',
 				kind: 'customer-browse',
-				// wc/v3 would answer `rest_invalid_param`; the lane refuses to build the key at all.
-				orderby: 'last_name' as never,
+				orderby: 'date_modified_gmt' as never,
 				order: 'asc',
 			})
 		).toThrow(/unsupported customer browse orderby/);

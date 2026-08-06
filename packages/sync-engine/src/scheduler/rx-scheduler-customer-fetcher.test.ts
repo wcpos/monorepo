@@ -375,6 +375,32 @@ describe('createCustomerSchedulerFetcher', () => {
 			return { repository, coverageRepository, queryTotalRepository, schedulerFetcher };
 		};
 
+		// #1028 follow-on: the five WCPOS plugin sorts (#1488/#1500) travel to the wire exactly
+		// like the wc/v3-native ones — the fetcher re-parses the queryKey and forwards `orderby`
+		// verbatim, so no per-sort branch is needed and none should creep in.
+		it.each(['first_name', 'last_name', 'email', 'username', 'role'] as const)(
+			'forwards the plugin-proxied sort %s verbatim to the server',
+			async (orderby) => {
+				const fetcher = vi.fn(async (_url: string) =>
+					response(
+						Array.from({ length: 5 }, (_, index) => customerPayload(index + 1)),
+						{
+							'X-WP-Total': '5',
+							'X-WP-TotalPages': '1',
+						}
+					)
+				);
+				const kit = browseFetcher(fetcher);
+
+				await kit.schedulerFetcher(browseTask(100, { orderby, order: 'desc' }));
+
+				const url = new URL(fetcher.mock.calls[0]![0]);
+				expect(url.searchParams.get('orderby')).toBe(orderby);
+				expect(url.searchParams.get('order')).toBe('desc');
+				expect(url.searchParams.get('role')).toBe('all');
+			}
+		);
+
 		it('asks the SERVER for the sorted window, with role=all (#1379/#850)', async () => {
 			const fetcher = vi.fn(async (_url: string) =>
 				response(

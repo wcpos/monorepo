@@ -60,7 +60,6 @@ export {
 export {
 	CUSTOMER_BROWSE_WINDOW_DEFAULT_LIMIT,
 	CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES,
-	CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES,
 	customerBrowseWindowQueryKey,
 	customerBrowseWindowQueryKeyFromDimensions,
 	isCustomerBrowseWindowQueryKey,

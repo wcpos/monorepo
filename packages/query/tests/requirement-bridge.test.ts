@@ -258,17 +258,30 @@ describe('requirementsForQuery extraction', () => {
 			});
 		});
 
-		// The v2 proxy forwards /customers to wc/v3, which rejects these with a 400. Requesting
-		// one per scroll tick is strictly worse than a local sort that admits it is local.
-		it.each(['last_name', 'first_name', 'email', 'role', 'username', 'date_modified_gmt'])(
-			'never puts the plugin-only sort %s on the wire',
+		// #1028 follow-on: the WCPOS plugin proxy (#1488) now re-applies these five customer
+		// sorts through the V1 handler — role by staff hierarchy (#1500) — so the grid drives a
+		// SERVER-sorted window instead of a local-only sort. Each maps 1:1 to its wire orderby.
+		it.each(['last_name', 'first_name', 'email', 'role', 'username'] as const)(
+			'sends the now-proxied customer sort %s to the server',
 			(field) => {
-				expect(customerPlan({ sort: [{ [field]: 'asc' }] })).toEqual({
-					requirements: [],
-					represented: false,
+				expect(customerRequirement({ sort: [{ [field]: 'asc' }], limit: 10 })).toEqual({
+					id: 'q:customers-browse-window',
+					collection: 'customers',
+					kind: 'customer-browse',
+					limit: 10,
+					orderby: field,
+					order: 'asc',
 				});
 			}
 		);
+
+		// date_modified_gmt has no customers orderby on any surface, so it stays local-only.
+		it('keeps a sort with no wire orderby local (date_modified_gmt)', () => {
+			expect(customerPlan({ sort: [{ date_modified_gmt: 'asc' }] })).toEqual({
+				requirements: [],
+				represented: false,
+			});
+		});
 
 		it('carries the grid limit so scroll extension advances the window', () => {
 			const first = customerRequirement({ sort: [{ id: 'asc' }], limit: 10 });

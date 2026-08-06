@@ -1,7 +1,6 @@
 import {
 	CUSTOMER_BROWSE_WINDOW_DEFAULT_LIMIT,
 	CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES,
-	CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES,
 	customerBrowseWindowQueryKey,
 	customerBrowseWindowQueryKeyFromDimensions,
 	isCustomerBrowseWindowQueryKey,
@@ -44,19 +43,23 @@ describe('customer browse-window descriptor', () => {
 		).toBeNull();
 	});
 
-	it('rejects the orderby values that need a plugin-side change', () => {
-		for (const orderby of CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES) {
-			// Never encodable …
-			expect(() =>
-				customerBrowseWindowQueryKeyFromDimensions({ orderby: orderby as never, order: 'asc' })
-			).toThrow(/unsupported customer browse orderby/);
-			// … and never parseable, so a stale persisted task cannot resurrect one on the wire.
+	// #1028 follow-on: the WCPOS plugin proxy now strips these off the inner wc/v3 request and
+	// re-applies them through the V1 customer handler (#1488), with role sorted by staff
+	// hierarchy (#1500). So they are ordinary supported sorts now — encodable and parseable.
+	it('accepts the five sorts the plugin proxy now handles', () => {
+		for (const orderby of ['first_name', 'last_name', 'email', 'role', 'username'] as const) {
+			expect(customerBrowseWindowQueryKeyFromDimensions({ orderby, order: 'asc' })).toBe(
+				`customers:browse-window:limit=100:orderby=${orderby}:order=asc`
+			);
 			expect(
 				parseCustomerBrowseWindowDescriptor(
-					`customers:browse-window:limit=100:orderby=${orderby}:order=asc`
+					`customers:browse-window:limit=100:orderby=${orderby}:order=desc`
 				)
-			).toBeNull();
+			).toEqual({ limit: 100, orderby, order: 'desc' });
 		}
+		expect(CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES).toEqual(
+			expect.arrayContaining(['first_name', 'last_name', 'email', 'role', 'username'])
+		);
 	});
 
 	it('does not collide with the customers search or targeted lanes', () => {
@@ -133,9 +136,9 @@ describe('customer browse-window descriptor', () => {
 	});
 
 	it('refuses to encode anything the parser would reject', () => {
-		expect(() => customerBrowseWindowQueryKey(100, { orderby: 'last_name', order: 'asc' })).toThrow(
-			/unsupported customer browse orderby/
-		);
+		expect(() =>
+			customerBrowseWindowQueryKey(100, { orderby: 'date_modified_gmt', order: 'asc' })
+		).toThrow(/unsupported customer browse orderby/);
 		expect(() => customerBrowseWindowQueryKey(100, { orderby: 'id', order: 'sideways' })).toThrow(
 			/unsupported customer browse order/
 		);

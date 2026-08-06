@@ -44,44 +44,42 @@ export const CUSTOMER_BROWSE_WINDOW_ORDERBY = 'id';
 export const CUSTOMER_BROWSE_WINDOW_ORDER = 'asc';
 
 /**
- * The `orderby` values the customers read surface accepts TODAY.
+ * The `orderby` values the customers read surface accepts.
  *
- * Verified 2026-08-06 against the wire the engine actually talks to. `syncBaseUrl` is the
- * `wcpos/v2` namespace, whose `/customers` route is `Catalog_Proxy_Controller`, and that
- * proxy forwards to **`wc/v3/customers`** via `rest_do_request`. The inner request is
- * validated against wc/v3's own `orderby` enum — `id | include | name | registered_date`
- * (class-wc-rest-customers-v1-controller.php). `include` is an id-order echo, not a browse
- * sort, so the browse window offers the other three.
+ * `syncBaseUrl` is the `wcpos/v2` namespace, whose `/customers` route is
+ * `Catalog_Proxy_Controller`. Two families reach the wire:
  *
- * See {@link CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES} for the ones that need a
- * plugin-side change before they can be requested.
+ *  - **wc/v3-native** — `id`, `name`, `registered_date`. The proxy forwards these verbatim to
+ *    `wc/v3/customers`, whose own enum accepts them. (`include` is an id-order echo, not a
+ *    browse sort, so it is not offered.)
+ *  - **WCPOS plugin sorts** — `first_name`, `last_name`, `email`, `username`, `role`. wc/v3
+ *    rejects these with `rest_invalid_param`, so the proxy strips each off the inner request
+ *    and re-applies it through `V1_Customers_Controller::wcpos_customer_query` — the same seam
+ *    it already uses for multi-term customer search (plugin #1488). `role` sorts by STAFF
+ *    HIERARCHY, not alphabetically (administrator > shop_manager > cashier > editor/author/
+ *    contributor > customer > subscriber; a multi-role user ranks by highest privilege, plugin
+ *    #1500). The client passes `orderby=role&order=asc|desc` and does NO local rank mapping —
+ *    the ordering is entirely server-side.
+ *
+ * This closes the #951/#1028 gap where the five plugin sorts were withheld because the v2
+ * proxy did not yet re-apply them; 1.9 could sort the list server-side because it talked to
+ * `wcpos/v1` directly, and parity is now restored through the proxy.
+ *
+ * OLDER PLUGINS. A store still running a plugin build without the #1488 proxy answers one of
+ * the five with a 400. The fetcher degrades that to a labelled `customer.browse-window.sort-
+ * rejected` event and a failed drain (the grid keeps its local results) rather than crashing —
+ * see rx-scheduler-customer-fetcher.ts. Correctness on current stores; graceful degradation on
+ * stale ones.
  */
-export const CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES = ['id', 'name', 'registered_date'] as const;
-
-/**
- * Sorts the customers GRID offers that the v2 read surface cannot express yet — NOT sent.
- *
- * The WCPOS plugin does implement all of these, but on its OWN `wcpos/v1/customers`
- * controller (`Customers_Controller::get_collection_params()` widens the enum;
- * `wcpos_customer_query()` maps each one onto a `WP_User_Query` meta/column sort). 1.9 talked
- * to that route directly, which is why 1.9 could sort the customer list by last name
- * server-side. The v2 proxy bypasses it and forwards to wc/v3, so requesting one of these
- * would fail validation with `rest_invalid_param` (a 400) rather than being ignored.
- *
- * Sending an orderby the server rejects is strictly worse than not sending it, so the bridge
- * treats these as unrepresentable: the grid keeps its local sort and the footer keeps saying
- * so, instead of a broken request per scroll tick. Closing the gap is a plugin change — teach
- * `Catalog_Proxy_Controller` to strip a WCPOS customers `orderby` off the inner wc/v3 request
- * and re-apply it through `V1_Customers_Controller::wcpos_customer_query`, exactly as it
- * already does for multi-term customer `search`. When that ships, move these into
- * {@link CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES} and add the grid columns to the sort map.
- */
-export const CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES = [
+export const CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES = [
+	'id',
+	'name',
+	'registered_date',
 	'first_name',
 	'last_name',
 	'email',
-	'role',
 	'username',
+	'role',
 ] as const;
 
 export type CustomerBrowseWindowOrderby = (typeof CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES)[number];
