@@ -108,6 +108,8 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 	limit: number;
 	queryKey: string;
 	requirementId: string;
+	/** Whether this is a fetch-to-completion (`limit=all`) range — it runs greedy. */
+	complete: boolean;
 } {
 	if (!Number.isSafeInteger(input.limit) || input.limit <= 0) {
 		throw new Error('Browser order scheduler descriptor limit must be a positive integer');
@@ -157,6 +159,7 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 		limit,
 		queryKey,
 		requirementId,
+		complete: Boolean(input.complete),
 	};
 }
 
@@ -182,7 +185,16 @@ export async function seedOrderFilterSchedulerTask(
 						queryKey: descriptor.queryKey,
 						limit: descriptor.limit,
 						priority: input.priority ?? ORDER_FILTER_SCHEDULER_PRIORITY,
-						mode: 'windowed',
+						// A fetch-to-completion (`limit=all`) range is GREEDY: the runner keeps
+						// calling the fetcher until it reports `completed`, renewing the claim between
+						// passes. A windowed task gets exactly ONE fetch invocation
+						// (`taskCompleted = task.mode !== 'greedy' || fetchResult.completed` in
+						// rx-scheduler-task-runner.ts) and `useDemand` declares a requirement once, so
+						// a ranged walk left windowed would stop after its first pass and the report
+						// would stay permanently capped — the cursor would be persisted and never read
+						// (#954). The per-pass record bound still applies; greedy just means the next
+						// pass follows immediately instead of waiting for an unrelated re-declaration.
+						mode: descriptor.complete ? 'greedy' : 'windowed',
 					},
 				],
 				nowMs,

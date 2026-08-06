@@ -1447,6 +1447,11 @@ describe('createOrdersSchedulerFetcher', () => {
 			lane: () => lane,
 			recordQueryResult: vi.fn(async () => undefined),
 			readLocalLaneCoverage: vi.fn(async () => lane),
+			publishRangedResume: vi.fn(async (input: { resume: unknown; expected: unknown }) => {
+				lane = lane
+					? { ...lane, rangedResume: input.resume }
+					: { complete: false, fresh: true, expectedRecordIds: [], rangedResume: input.resume };
+			}),
 			recordCumulativeQueryResult: vi.fn(
 				async (input: {
 					complete: boolean;
@@ -1581,6 +1586,7 @@ describe('createOrdersSchedulerFetcher', () => {
 					excludeWooIds: [15_001],
 					// The progress denominator: nothing covered before this pass + X-WP-Total.
 					totalRecords: 25_000,
+					downloadedRecords: 10_000,
 				},
 			})
 		);
@@ -1711,12 +1717,16 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		const firstPass = await schedulerFetcher(task);
 		expect(firstPass.documentCount).toBe(10_000);
+		// The task runs GREEDY, and the runner keeps calling until this is true — claiming
+		// completion after a bounded pass would strand the range at its first 10,000 records.
+		expect(firstPass.completed).toBe(false);
 		expect(coverageRepository.lane()).toMatchObject({ complete: false });
 		expect(coverageRepository.lane()?.rangedResume).toMatchObject({ totalRecords: totalOrders });
 
 		const secondPass = await schedulerFetcher(task);
 		// Only the remainder — not another 10,000.
 		expect(secondPass.documentCount).toBe(50);
+		expect(secondPass.completed).toBe(true);
 		expect(coverageRepository.lane()).toMatchObject({ complete: true });
 		expect(coverageRepository.lane()?.rangedResume).toBeUndefined();
 		expect(coverageRepository.lane()?.expectedRecordIds).toHaveLength(totalOrders);
@@ -1769,11 +1779,14 @@ describe('createOrdersSchedulerFetcher', () => {
 					if (document.wooOrderId) upserted.push(document.wooOrderId);
 			}),
 		};
-		// 30 orders; ids 30…16 are all stamped the SAME second, so the 25-record page splits them.
+		// 40 orders of which THIRTY (ids 40…11) share one second — more than the 25-record page,
+		// so the tie group genuinely straddles the page boundary and the cursor cannot move past
+		// that second on the first page. This is what exercises the accumulate-exclusions branch:
+		// a fixture whose tie group fits inside one page only ever takes the `advanced` branch.
 		const { fetcher } = rangedOrderServer(
-			Array.from({ length: 30 }, (_, index) => ({
-				wooId: 30 - index,
-				seconds: index < 15 ? RANGE_BASE_SECONDS : RANGE_BASE_SECONDS - index,
+			Array.from({ length: 40 }, (_, index) => ({
+				wooId: 40 - index,
+				seconds: index < 30 ? RANGE_BASE_SECONDS : RANGE_BASE_SECONDS - index,
 			}))
 		);
 		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository, repository });
@@ -1781,9 +1794,53 @@ describe('createOrdersSchedulerFetcher', () => {
 
 		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 25 }));
 
+		// The second request re-asks for the SAME second with the 25 ids already taken excluded.
+		const secondRequest = new URL(fetcher.mock.calls[1][0] as string).searchParams;
+		expect(secondRequest.get('exclude')?.split(',')).toHaveLength(25);
+		expect(secondRequest.get('before')).toBe(
+			new Date((RANGE_BASE_SECONDS + 1) * 1_000).toISOString()
+		);
+
 		expect(coverageRepository.lane()).toMatchObject({ complete: true });
-		expect(upserted).toHaveLength(30);
-		expect(new Set(upserted).size).toBe(30);
+		expect(upserted).toHaveLength(40);
+		expect(new Set(upserted).size).toBe(40);
+	});
+
+	// #954: the progress line reads the lane, and the id set is only written when a pass ENDS —
+	// so without a per-page publish the line stays dark for the whole first pass, which is the
+	// entire walk for any range under the per-pass bound.
+	it('publishes ranged progress after every page, not just at the end of a pass', async () => {
+		const coverageRepository = rangedLaneStore();
+		const { fetcher } = rangedOrderServer(
+			Array.from({ length: 250 }, (_, index) => ({
+				wooId: 250 - index,
+				seconds: RANGE_BASE_SECONDS - index,
+			}))
+		);
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+		const queryKey = RANGE_QUERY_KEY;
+
+		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }));
+
+		// Three pages → three publishes, each carrying a growing count against the same total.
+		expect(coverageRepository.publishRangedResume).toHaveBeenCalledTimes(3);
+		expect(
+			coverageRepository.publishRangedResume.mock.calls.map(
+				(call) =>
+					(call[0] as { resume: { downloadedRecords: number; totalRecords: number } }).resume
+			)
+		).toEqual([
+			expect.objectContaining({ downloadedRecords: 100, totalRecords: 250 }),
+			expect.objectContaining({ downloadedRecords: 200, totalRecords: 250 }),
+			expect.objectContaining({ downloadedRecords: 250, totalRecords: 250 }),
+		]);
+		// Each publish declares the cursor it is replacing, so a lane wiped mid-pass is caught at
+		// the very next write rather than at the end of a 10,000-record pass.
+		const expectations = coverageRepository.publishRangedResume.mock.calls.map(
+			(call) => (call[0] as { expected: unknown }).expected
+		);
+		expect(expectations[0]).toBeNull();
+		expect(expectations[1]).toEqual(expect.objectContaining({ downloadedRecords: 100 }));
 	});
 
 	// A server that ignores the POS dimensions answers with the unfiltered superset.
@@ -1826,7 +1883,9 @@ describe('createOrdersSchedulerFetcher', () => {
 		await expect(
 			schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }))
 		).rejects.toThrow(/share the boundary second/);
-		expect(coverageRepository.lane()).toBeNull();
+		// The pages it did read are published, so the lane exists — but it never claims
+		// completeness, which is the property that matters.
+		expect(coverageRepository.lane()?.complete).not.toBe(true);
 	});
 
 	it('fetches browser order search descriptors through Woo REST search requests', async () => {

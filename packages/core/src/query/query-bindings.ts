@@ -378,7 +378,9 @@ function projectLaneProgress(input: {
 	const lane = input.lanes.find((candidate) => candidate.queryKey === input.queryKey);
 	if (!lane?.rangedResume) return null;
 	return {
-		downloaded: lane.expectedRecordIds.length,
+		// The walk publishes its running count per page; the id set is only written when a pass
+		// ends, so it is the fallback for lanes written before the per-page publish.
+		downloaded: lane.rangedResume.downloadedRecords ?? lane.expectedRecordIds.length,
 		total: lane.rangedResume.totalRecords,
 	};
 }

@@ -208,6 +208,30 @@ function mergeRecordWithCurrentRevision(
 	return toRecordDocument(merged);
 }
 
+/** The cursor a ranged pass STARTED from; the write may only advance from exactly this. */
+export type RangedAncestryGuard = {
+	expected: RangedLaneResumeState | null;
+};
+
+/**
+ * Demote a ranged lane write whose cursor lineage no longer matches the stored document.
+ *
+ * A broken lineage means the lane was removed or moved while the pass was in flight, so the
+ * ids this pass carries are not the whole story: the cursor is dropped and the lane is forced
+ * incomplete, which restarts the walk from the top of the range on the next pass. Wasteful,
+ * always safe — the alternative is a report that silently omits orders.
+ */
+function laneForAncestry(
+	current: PersistedCoverageLane | null,
+	next: PersistedCoverageLane,
+	ancestry?: RangedAncestryGuard
+): PersistedCoverageLane {
+	if (!ancestry) return next;
+	if (sameRangedResume(current?.rangedResume ?? null, ancestry.expected)) return next;
+	const { rangedResume: _rejected, ...demoted } = next;
+	return { ...demoted, complete: false };
+}
+
 function mergeLaneWithCurrentRevision(
 	current: CoverageLaneDocument,
 	next: PersistedCoverageLane
@@ -263,72 +287,122 @@ export class RxCoverageRepository {
 		});
 	}
 
+	/**
+	 * Publish a ranged walk's cursor + progress mid-pass, without touching the id set (#954).
+	 *
+	 * Two problems solve themselves here. The Reports progress line reads this document, and the
+	 * id set is only written when a pass ENDS — so without a per-page publish the line stayed
+	 * dark for the whole first pass, which is the entire walk for any range under the per-pass
+	 * bound, while the charts and totals were already moving. And an incomplete lane is subject
+	 * to coverage compaction: a long pass could outlive the freshness plus stale-retention
+	 * windows, have its lane removed, and then be rejected by the ancestry guard — restarting
+	 * forever instead of converging. Refreshing `freshUntilMs` every page closes both.
+	 *
+	 * `complete` and `expectedRecordIds` are deliberately left alone, so this can never downgrade
+	 * a lane; it only ever moves the cursor forward under the same ancestry rule as a full write.
+	 */
+	async publishRangedResume(input: {
+		collection: string;
+		queryKey: string;
+		resume: RangedLaneResumeState;
+		expected: RangedLaneResumeState | null;
+		nowMs: number;
+		freshForMs: number;
+	}): Promise<void> {
+		const documentId = coverageLaneKey(input.collection, input.queryKey);
+		const freshUntilMs = input.nowMs + input.freshForMs;
+		const document = await this.coverageLanes.findOne(documentId).exec();
+		if (!document) {
+			// Only the START of a walk may create the lane. A pass that expected a cursor and
+			// found no lane at all has lost its lineage; the end-of-pass write demotes it.
+			if (input.expected !== null) return;
+			try {
+				await this.coverageLanes.insert(
+					toLaneDocument({
+						collection: input.collection,
+						queryKey: input.queryKey,
+						complete: false,
+						expectedRecordIds: [],
+						freshUntilMs,
+						updatedAtMs: input.nowMs,
+						rangedResume: input.resume,
+					})
+				);
+			} catch (error) {
+				if (!isRxConflict(error)) throw error;
+			}
+			return;
+		}
+		await document.incrementalModify((currentDocument) => {
+			const current = fromLaneDocument(currentDocument);
+			if (!sameRangedResume(current.rangedResume ?? null, input.expected)) return currentDocument;
+			return toLaneDocument({
+				...current,
+				freshUntilMs: Math.max(current.freshUntilMs, freshUntilMs),
+				updatedAtMs: input.nowMs,
+				rangedResume: input.resume,
+			});
+		});
+	}
+
 	async recordCumulativeQueryResult(
 		input: BuildCumulativeCoverageDocumentsFromQueryResultInput
 	): Promise<void> {
 		const freshUntilMs = input.nowMs + input.freshForMs;
-		// A ranged walk always re-reads the lane, even on a reset pass: it has to check that the
-		// cursor it started from is still there before it is allowed to advance one (see below).
-		const storedLane =
-			input.resetCumulativeExpectedIds && input.rangedResume === undefined
-				? null
-				: await this.readCoverageLane(input.collection, input.queryKey);
-		/**
-		 * CURSOR ANCESTRY (#954). The fetcher reads the cursor at the start of a pass and writes
-		 * the advanced one at the end; between those two points the lane can vanish — Clear & Sync,
-		 * a ledger rebuild and coverage compaction all remove lane rows, and another tab can move
-		 * the cursor. Writing the advanced cursor anyway would recreate the lane claiming
-		 * "everything newer than here is covered" while holding only THIS pass's ids, over records
-		 * the wipe just deleted, and the walk would then complete having never re-fetched them.
-		 *
-		 * So a pass may only advance the cursor when the stored one is still exactly the cursor it
-		 * started from. Otherwise the walk restarts from the top of the range: wasteful, always
-		 * safe — the opposite trade is a silently incomplete report.
-		 */
-		const rangedWriteRejected =
-			input.rangedResume !== undefined &&
-			!sameRangedResume(storedLane?.rangedResume ?? null, input.rangedResumeExpected ?? null);
-		const existingLane = input.resetCumulativeExpectedIds ? null : storedLane;
+		const existingLane = input.resetCumulativeExpectedIds
+			? null
+			: await this.readCoverageLane(input.collection, input.queryKey);
+		// Dedupe through a Set: a ranged report accumulates tens of thousands of unique ids across
+		// passes, and an `indexOf` scan per element is quadratic — ~50M string compares at 10,000
+		// ids and ~450M at 30,000, run synchronously before persistence on exactly the large ranges
+		// this path exists for.
 		const expectedRecordIds = [
-			...(existingLane?.expectedRecordIds ?? []),
-			...input.records.map((record) => record.id),
-		].filter((id, index, ids) => ids.indexOf(id) === index);
+			...new Set([
+				...(existingLane?.expectedRecordIds ?? []),
+				...input.records.map((record) => record.id),
+			]),
+		];
 
-		const complete = rangedWriteRejected ? false : input.complete;
-		const recordIdsToRefresh = complete
+		const recordIdsToRefresh = input.complete
 			? expectedRecordIds
 			: input.records.map((record) => record.id);
 
 		// `undefined` leaves the lane's existing cursor alone (the greedy custom-pull lane never
 		// sets one); an explicit `null` CLEARS it — the ranged walk reached the end of its range.
-		const rangedResume = rangedWriteRejected
-			? undefined
-			: input.rangedResume === undefined
+		const rangedResume =
+			input.rangedResume === undefined
 				? existingLane?.rangedResume
 				: (input.rangedResume ?? undefined);
 		const { rangedResume: _previousResume, ...baseLane }: PersistedCoverageLane =
-			!complete && existingLane?.complete
+			!input.complete && existingLane?.complete
 				? { ...existingLane, expectedRecordIds, updatedAtMs: input.nowMs }
 				: {
 						collection: input.collection,
 						queryKey: input.queryKey,
-						complete,
+						complete: input.complete,
 						expectedRecordIds,
 						freshUntilMs,
 						updatedAtMs: input.nowMs,
 					};
-		const lanes = [rangedResume ? { ...baseLane, rangedResume } : baseLane];
+		const lane = rangedResume ? { ...baseLane, rangedResume } : baseLane;
 
-		await this.writeCoverageDocumentsWithMerge({
-			records: recordIdsToRefresh.map((id) => ({
-				collection: input.collection,
-				id,
-				coveredQueryKeys: [input.queryKey],
-				freshUntilMs,
-				updatedAtMs: input.nowMs,
-			})),
-			lanes,
-		});
+		for (const record of recordIdsToRefresh.map((id) => ({
+			collection: input.collection,
+			id,
+			coveredQueryKeys: [input.queryKey],
+			freshUntilMs,
+			updatedAtMs: input.nowMs,
+		}))) {
+			await this.insertOrMergeRecord(record);
+		}
+		await this.insertOrMergeLane(
+			lane,
+			// Only a ranged walk carries an ancestry expectation; the greedy custom-pull lane
+			// passes no cursor and is written exactly as before.
+			input.rangedResume === undefined
+				? undefined
+				: { expected: input.rangedResumeExpected ?? null }
+		);
 	}
 
 	async recordQueryResult(input: BuildCoverageDocumentsFromQueryResultInput): Promise<void> {
@@ -485,29 +559,41 @@ export class RxCoverageRepository {
 		);
 	}
 
-	private async insertOrMergeLane(lane: PersistedCoverageLane): Promise<void> {
+	private async insertOrMergeLane(
+		lane: PersistedCoverageLane,
+		ancestry?: RangedAncestryGuard
+	): Promise<void> {
 		const documentId = coverageLaneKey(lane.collection, lane.queryKey);
 		const document = await this.coverageLanes.findOne(documentId).exec();
 		if (document) {
-			await this.mergeExistingLane(document, lane);
+			await this.mergeExistingLane(document, lane, ancestry);
 			return;
 		}
 
 		try {
-			await this.coverageLanes.insert(toLaneDocument(lane));
+			await this.coverageLanes.insert(toLaneDocument(laneForAncestry(null, lane, ancestry)));
 		} catch (error) {
 			if (!isRxConflict(error)) throw error;
 			const conflictingDocument = await this.coverageLanes.findOne(documentId).exec(true);
-			await this.mergeExistingLane(conflictingDocument, lane);
+			await this.mergeExistingLane(conflictingDocument, lane, ancestry);
 		}
 	}
 
 	private async mergeExistingLane(
 		document: RxCoverageDocument<CoverageLaneDocument>,
-		lane: PersistedCoverageLane
+		lane: PersistedCoverageLane,
+		ancestry?: RangedAncestryGuard
 	): Promise<void> {
+		// The ancestry test runs INSIDE incrementalModify, against the document as it stands at
+		// write time. Checking it before the write would leave a wide window — the pass's coverage
+		// records are persisted first — in which a reset, a compaction or a competing writer could
+		// drop or move the lane, and the advanced cursor would then be resurrected onto a lineage
+		// it never walked. RxDB re-runs this function on conflict, so the comparison is a CAS.
 		await document.incrementalModify((currentDocument) =>
-			mergeLaneWithCurrentRevision(currentDocument, lane)
+			mergeLaneWithCurrentRevision(
+				currentDocument,
+				laneForAncestry(fromLaneDocument(currentDocument), lane, ancestry)
+			)
 		);
 	}
 

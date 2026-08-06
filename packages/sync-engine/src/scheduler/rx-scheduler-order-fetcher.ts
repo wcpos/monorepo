@@ -58,6 +58,14 @@ export type OrdersSchedulerCoverageRepository = {
 	recordCumulativeQueryResult?(
 		input: BuildCumulativeCoverageDocumentsFromQueryResultInput
 	): Promise<void>;
+	publishRangedResume?(input: {
+		collection: string;
+		queryKey: string;
+		resume: RangedLaneResumeState;
+		expected: RangedLaneResumeState | null;
+		nowMs: number;
+		freshForMs: number;
+	}): Promise<void>;
 	readLocalLaneCoverage?(
 		collection: string,
 		queryKey: string,
@@ -395,6 +403,23 @@ async function readRangedResumeState(
 	};
 }
 
+async function publishRangedProgress(
+	input: OrdersSchedulerFetcherInput,
+	task: FetchTask,
+	resume: RangedLaneResumeState,
+	expected: RangedLaneResumeState | null
+): Promise<void> {
+	if (!input.coverageRepository?.publishRangedResume) return;
+	await input.coverageRepository.publishRangedResume({
+		collection: 'orders',
+		queryKey: task.queryKey,
+		resume,
+		expected,
+		nowMs: coverageNowMs(input),
+		freshForMs: input.coverageFreshForMs ?? DEFAULT_COVERAGE_FRESH_FOR_MS,
+	});
+}
+
 type RangedCoverageWrite = {
 	documentIds: string[];
 	complete: boolean;
@@ -408,6 +433,8 @@ type RangedCoverageWrite = {
 	exhausted: boolean;
 	/** Whether every record this pass saw actually carried the descriptor's POS dimensions. */
 	dimensionsHonored: boolean;
+	/** The cursor last PERSISTED by this pass — what the final write's ancestry must match. */
+	publishedResume: RangedLaneResumeState | null;
 };
 
 /**
@@ -445,6 +472,7 @@ async function recordRangedOrderFetchCoverage(
 						write.remainingTotal === null
 							? (previous?.state.totalRecords ?? null)
 							: coveredBefore + write.remainingTotal,
+					downloadedRecords: coveredBefore + write.documentIds.length,
 				};
 
 	await repository.recordCumulativeQueryResult({
@@ -455,7 +483,7 @@ async function recordRangedOrderFetchCoverage(
 		rangedResume: resume,
 		// Lets the write reject an advance whose starting cursor no longer exists — see the
 		// cursor-ancestry note in RxCoverageRepository.recordCumulativeQueryResult.
-		rangedResumeExpected: previous?.state ?? null,
+		rangedResumeExpected: write.publishedResume,
 	});
 }
 
@@ -555,6 +583,10 @@ async function fetchBrowserOrderQuery(
 				? previousResume.state.beforeSeconds
 				: Math.min(descriptor.beforeSeconds, previousResume.state.beforeSeconds);
 	let cursorExcludeWooIds = previousResume?.state.excludeWooIds ?? [];
+	// The cursor most recently PERSISTED for this lane — the ancestry expectation each
+	// subsequent write must match. It starts as the cursor the pass resumed from and advances
+	// with every per-page publish, so a wipe mid-pass is caught at the very next write.
+	let publishedResume: RangedLaneResumeState | null = previousResume?.state ?? null;
 
 	const recordLimit = descriptor.limit ?? RANGED_COMPLETE_MAX_RECORDS;
 	while (documentCount < recordLimit) {
@@ -670,6 +702,24 @@ async function fetchBrowserOrderQuery(
 		documentCount += documents.length;
 		requestCount += 1;
 
+		if (descriptor.complete && cursorBeforeSeconds !== undefined) {
+			// Publish progress + cursor per PAGE: it lights the Reports progress line during the
+			// FIRST pass (the whole walk for any range under the bound), keeps the incomplete lane
+			// fresh so compaction cannot delete it mid-pass, and makes the walk resumable from the
+			// last page rather than the last pass if the app dies here.
+			const pageResume: RangedLaneResumeState = {
+				beforeSeconds: cursorBeforeSeconds,
+				excludeWooIds: cursorExcludeWooIds,
+				totalRecords:
+					remainingTotal === null
+						? (previousResume?.state.totalRecords ?? null)
+						: (previousResume?.coveredRecordCount ?? 0) + remainingTotal,
+				downloadedRecords: (previousResume?.coveredRecordCount ?? 0) + documentCount,
+			};
+			await publishRangedProgress(input, task, pageResume, publishedResume);
+			publishedResume = pageResume;
+		}
+
 		// A short page is the usual end-of-walk signal, but a range whose total is an exact
 		// multiple of the page size never produces one — every page is full. Woo advertises
 		// the last page in `X-WP-TotalPages` (the same signal the product fetcher and the
@@ -703,6 +753,7 @@ async function fetchBrowserOrderQuery(
 			remainingTotal,
 			exhausted,
 			dimensionsHonored,
+			publishedResume,
 		});
 	} else if (descriptor.search === '') {
 		await recordOrderFetchCoverage(input, task, fetchedDocumentIds, exhausted && dimensionsHonored);
@@ -714,7 +765,11 @@ async function fetchBrowserOrderQuery(
 		taskId: task.id,
 		documentCount,
 		requestCount,
-		completed: true,
+		// A fetch-to-completion lane reports HONESTLY whether the range is finished: it runs as a
+		// greedy task, and the runner keeps calling until this is true, so claiming completion
+		// after a bounded pass would strand the range at its first 10,000 records. A windowed
+		// browse is complete by construction — its window is the bound.
+		completed: descriptor.complete ? exhausted : true,
 	};
 }
 

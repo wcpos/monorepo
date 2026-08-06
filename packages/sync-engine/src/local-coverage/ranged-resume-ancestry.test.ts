@@ -201,6 +201,76 @@ describe('ranged resume cursor ancestry', () => {
 		expect((await lane())?.rangedResume).toBeUndefined();
 	});
 
+	// Per-page publish: creates the lane at the start of a walk so the Reports progress line has
+	// something to read during the first pass, and refreshes freshness so an in-flight lane
+	// cannot be compacted out from under the walk.
+	it('creates and refreshes an in-flight lane without touching its ids or completeness', async () => {
+		await repository.publishRangedResume({
+			collection: 'orders',
+			queryKey: QUERY_KEY,
+			resume: { ...cursor(2_000, [2]), downloadedRecords: 100 },
+			expected: null,
+			nowMs: 1,
+			freshForMs: 60_000,
+		});
+
+		const created = await lane();
+		expect(created).toMatchObject({ complete: false, expectedRecordIds: [] });
+		expect(created?.rangedResume).toMatchObject({ downloadedRecords: 100 });
+
+		await repository.publishRangedResume({
+			collection: 'orders',
+			queryKey: QUERY_KEY,
+			resume: { ...cursor(1_500, [5]), downloadedRecords: 200 },
+			expected: cursor(2_000, [2]),
+			nowMs: 2,
+			freshForMs: 60_000,
+		});
+
+		expect((await lane())?.rangedResume).toMatchObject({
+			beforeSeconds: 1_500,
+			downloadedRecords: 200,
+		});
+	});
+
+	it('does not move an in-flight cursor whose lineage no longer matches', async () => {
+		await repository.publishRangedResume({
+			collection: 'orders',
+			queryKey: QUERY_KEY,
+			resume: { ...cursor(2_000, [2]), downloadedRecords: 100 },
+			expected: null,
+			nowMs: 1,
+			freshForMs: 60_000,
+		});
+
+		await repository.publishRangedResume({
+			collection: 'orders',
+			queryKey: QUERY_KEY,
+			resume: { ...cursor(1_000, [9]), downloadedRecords: 300 },
+			// A cursor this lane never held.
+			expected: cursor(1_777, [7]),
+			nowMs: 2,
+			freshForMs: 60_000,
+		});
+
+		expect((await lane())?.rangedResume).toMatchObject({ beforeSeconds: 2_000 });
+	});
+
+	// A pass that expected a cursor but finds no lane has lost its lineage: it must not
+	// resurrect one, or the walk would resume over records a reset had just deleted.
+	it('refuses to recreate a lane a reset removed mid-pass', async () => {
+		await repository.publishRangedResume({
+			collection: 'orders',
+			queryKey: QUERY_KEY,
+			resume: { ...cursor(1_500, [5]), downloadedRecords: 200 },
+			expected: cursor(2_000, [2]),
+			nowMs: 1,
+			freshForMs: 60_000,
+		});
+
+		expect(await lane()).toBeNull();
+	});
+
 	// The greedy custom-pull lane passes no cursor at all; the guard must not touch it.
 	it('leaves a non-ranged cumulative write untouched', async () => {
 		await repository.recordCumulativeQueryResult({

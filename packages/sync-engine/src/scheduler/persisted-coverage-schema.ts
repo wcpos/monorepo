@@ -44,6 +44,15 @@ export type RangedLaneResumeState = {
 	 * `null` when the server sent no total header.
 	 */
 	totalRecords: number | null;
+	/**
+	 * Records covered so far, published PER PAGE — the numerator. It is carried here rather
+	 * than read from `expectedRecordIds.length` because the id set is only written once a pass
+	 * ends: without it the progress line would stay dark through the whole first pass, which is
+	 * the entire walk for any range under the per-pass bound, while the report's charts and
+	 * totals were already moving underneath the cashier. Absent on lanes written before the
+	 * per-page publish, where the id count is the best available answer.
+	 */
+	downloadedRecords?: number;
 };
 
 export type PersistedCoverageLane = {
