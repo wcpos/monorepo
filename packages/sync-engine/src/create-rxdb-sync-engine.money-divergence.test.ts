@@ -56,8 +56,18 @@ function posPayload(): Record<string, unknown> {
 	};
 }
 
-/** The same order as the server serializes it today: display decimals (#946). */
+/**
+ * The same order as the server serializes it since woocommerce-pos#1466: six
+ * decimals on every WCPOS order surface — genuine for `cart_tax` and the line
+ * values, 2dp-PADDED for order-level `total` / `total_tax`, which WooCommerce
+ * stores at display decimals whatever `dp` a route asks for.
+ */
 function serverPayload(): Record<string, unknown> {
+	return clone(ORDER_MONEY_ORACLE.server6dp);
+}
+
+/** The legacy pre-#1466 shape, for the version-skew case. */
+function legacyServerPayload(): Record<string, unknown> {
 	return clone(ORDER_MONEY_ORACLE.server2dp);
 }
 
@@ -68,8 +78,8 @@ function serverPayload(): Record<string, unknown> {
  */
 type Serialize = (payload: Record<string, unknown>) => Record<string, unknown>;
 
-/** Render every monetary string of the stored payload at display decimals. */
-const toDisplayDecimals: Serialize = () => serverPayload();
+/** Render the stored payload the way the live server does (six-decimal strings). */
+const toSixDecimals: Serialize = () => serverPayload();
 
 function engineWith(input: { serialize?: Serialize; diagnostics?: SyncObserver }): {
 	engine: RxdbSyncEngine;
@@ -201,17 +211,33 @@ function divergenceEvents(events: EngineEvent[]) {
 	return events.filter((event) => event.type === 'order-money-divergence');
 }
 
-describe('(a) precision preservation — a 2dp ack of the same number must not clobber 6dp money', () => {
-	it('keeps the resident’s six-decimal money when the ack says the same number narrower', async () => {
-		const run = await saveOracleOrder({ serialize: toDisplayDecimals });
+describe('(a) precision preservation — an ack that only RE-SPELLS money must not touch the resident', () => {
+	it('keeps the POS spelling against the live six-decimal ack', async () => {
+		const run = await saveOracleOrder({ serialize: toSixDecimals });
 		try {
 			const payload = residentPayload(await residentJson(run.engine));
-			expect(payload.total).toBe('36.683280');
-			expect(payload.total_tax).toBe('6.713280');
-			expect(payload.cart_tax).toBe('6.713280');
-			expect(lineOf(payload).total_tax).toBe('6.713280');
-			expect((lineOf(payload).taxes as Record<string, unknown>[])[0]!.total).toBe('5.994000');
-			expect((payload.tax_lines as Record<string, unknown>[])[1]!.tax_total).toBe('0.719280');
+			// Padded wider by the server, unchanged on the record.
+			expect(payload.total).toBe('36.68');
+			expect(payload.total_tax).toBe('6.71');
+			// Genuinely six-decimal money, preserved exactly (this is #946's point).
+			expect(payload.cart_tax).toBe('6.71328');
+			expect(lineOf(payload).total_tax).toBe('6.71328');
+			expect((lineOf(payload).taxes as Record<string, unknown>[])[0]!.total).toBe('5.994');
+			expect((payload.tax_lines as Record<string, unknown>[])[1]!.tax_total).toBe('0.72');
+		} finally {
+			await run.dispose();
+		}
+	});
+
+	it('keeps the sub-cent money against a store still on the OLD plugin', async () => {
+		// Version skew: the till is upgraded, the store is not, so the ack still
+		// arrives at display decimals and would round 6.71328 away.
+		const run = await saveOracleOrder({ serialize: () => legacyServerPayload() });
+		try {
+			const payload = residentPayload(await residentJson(run.engine));
+			expect(payload.cart_tax).toBe('6.71328');
+			expect(lineOf(payload).total_tax).toBe('6.71328');
+			expect(payload.total).toBe('36.68');
 		} finally {
 			await run.dispose();
 		}
@@ -219,23 +245,23 @@ describe('(a) precision preservation — a 2dp ack of the same number must not c
 
 	it('adopts the server value outright when the number actually changed', async () => {
 		const run = await saveOracleOrder({
-			serialize: () => ({ ...serverPayload(), total: '50.07' }),
+			serialize: () => ({ ...serverPayload(), total: '50.070000' }),
 		});
 		try {
 			const payload = residentPayload(await residentJson(run.engine));
 			// Server is the source of truth — the changed value is adopted verbatim…
-			expect(payload.total).toBe('50.07');
-			// …while everything it merely re-rendered keeps its precision.
-			expect(payload.total_tax).toBe('6.713280');
+			expect(payload.total).toBe('50.070000');
+			// …while everything it merely re-spelled keeps the POS's spelling.
+			expect(payload.cart_tax).toBe('6.71328');
 		} finally {
 			await run.dispose();
 		}
 	});
 
-	it('promotes the adopted total onto the indexed column, precision and all', async () => {
-		const run = await saveOracleOrder({ serialize: toDisplayDecimals });
+	it('promotes the adopted total onto the indexed column', async () => {
+		const run = await saveOracleOrder({ serialize: toSixDecimals });
 		try {
-			expect((await residentJson(run.engine)).total).toBe('36.683280');
+			expect((await residentJson(run.engine)).total).toBe('36.68');
 		} finally {
 			await run.dispose();
 		}
@@ -272,7 +298,7 @@ describe('(b) server-authoritative fields still graft (no #1008 / #815 regressio
 				value: ORDER_UUID,
 			});
 			// …and the money is still the POS's.
-			expect(payload.total_tax).toBe('6.713280');
+			expect(payload.cart_tax).toBe('6.71328');
 		} finally {
 			await run.dispose();
 		}
@@ -293,7 +319,7 @@ describe('(c) sparse-ack tolerance — an omitted array must not destroy the res
 			const payload = residentPayload(await residentJson(run.engine));
 			expect(Array.isArray(payload.line_items)).toBe(true);
 			expect((payload.line_items as unknown[]).length).toBe(1);
-			expect(lineOf(payload).total).toBe('29.970000');
+			expect(lineOf(payload).total).toBe('29.97');
 			expect((payload.tax_lines as unknown[]).length).toBe(2);
 		} finally {
 			await run.dispose();
@@ -324,7 +350,7 @@ describe('(c) sparse-ack tolerance — an omitted array must not destroy the res
 			const row = await residentJson(run.engine);
 			const payload = residentPayload(row);
 			expect(row.wooOrderId).toBe(500);
-			expect(payload.total).toBe('36.683280');
+			expect(payload.total).toBe('36.68');
 			expect((payload.line_items as unknown[]).length).toBe(1);
 		} finally {
 			await run.dispose();
@@ -335,8 +361,8 @@ describe('(c) sparse-ack tolerance — an omitted array must not destroy the res
 describe('(d) no re-push oscillation', () => {
 	it('enqueues nothing new after adoption — with or without a divergence', async () => {
 		for (const serialize of [
-			toDisplayDecimals,
-			() => ({ ...serverPayload(), total: '50.07' }),
+			toSixDecimals,
+			() => ({ ...serverPayload(), total: '50.070000' }),
 		] as Serialize[]) {
 			const run = await saveOracleOrder({ serialize });
 			try {
@@ -353,7 +379,7 @@ describe('(d) no re-push oscillation', () => {
 	});
 
 	it('leaves the record clean: no pending ids, not dirty', async () => {
-		const run = await saveOracleOrder({ serialize: toDisplayDecimals });
+		const run = await saveOracleOrder({ serialize: toSixDecimals });
 		try {
 			const row = await residentJson(run.engine);
 			expect(row.local).toEqual({ dirty: false, pendingMutationIds: [] });
@@ -364,8 +390,8 @@ describe('(d) no re-push oscillation', () => {
 });
 
 describe('divergence detection at the ack boundary', () => {
-	it('is SILENT for the oracle’s 2dp ack — an alert that fires on every sale is never read', async () => {
-		const run = await saveOracleOrder({ serialize: toDisplayDecimals });
+	it('is SILENT for the live six-decimal ack — an alert that fires on every sale is never read', async () => {
+		const run = await saveOracleOrder({ serialize: toSixDecimals });
 		try {
 			expect(divergenceEvents(run.events)).toEqual([]);
 			expect(run.diagnostics.filter((event) => event.type === 'push.money-divergence')).toEqual([]);
@@ -387,8 +413,8 @@ describe('divergence detection at the ack boundary', () => {
 		const run = await saveOracleOrder({
 			serialize: () => ({
 				...serverPayload(),
-				total: '50.07',
-				total_tax: '11.10',
+				total: '50.070000',
+				total_tax: '11.100000',
 			}),
 		});
 		try {
@@ -398,7 +424,7 @@ describe('divergence detection at the ack boundary', () => {
 					collection: 'orders',
 					recordId: ORDER_UUID,
 					mutationId: expect.any(String),
-					mode: 'server-precision',
+					mode: 'exact-6dp',
 					fields: [
 						{ field: 'total', expected: '36.68', got: '50.07', decimals: 2 },
 						{ field: 'total_tax', expected: '6.71', got: '11.10', decimals: 2 },
@@ -412,7 +438,7 @@ describe('divergence detection at the ack boundary', () => {
 
 	it('logs it durably at ERROR — a broken mirror is a terminal anomaly (#899)', async () => {
 		const run = await saveOracleOrder({
-			serialize: () => ({ ...serverPayload(), total: '50.07' }),
+			serialize: () => ({ ...serverPayload(), total: '50.070000' }),
 		});
 		try {
 			const logged = run.diagnostics.filter((event) => event.type === 'push.money-divergence');
@@ -424,7 +450,7 @@ describe('divergence detection at the ack boundary', () => {
 				fields: expect.objectContaining({
 					recordId: ORDER_UUID,
 					outcome: 'failed',
-					mode: 'server-precision',
+					mode: 'exact-6dp',
 					divergentFields: 'total',
 				}),
 			});
@@ -437,7 +463,7 @@ describe('divergence detection at the ack boundary', () => {
 		const run = await saveOracleOrder({
 			serialize: () => {
 				const payload = serverPayload();
-				(payload.line_items as Record<string, unknown>[])[0]!.total = '19.98';
+				(payload.line_items as Record<string, unknown>[])[0]!.total = '19.980000';
 				return payload;
 			},
 		});
@@ -455,7 +481,7 @@ describe('divergence detection at the ack boundary', () => {
 
 	it('fires BEFORE the acknowledgement so a listener sees the anomaly with the outcome', async () => {
 		const run = await saveOracleOrder({
-			serialize: () => ({ ...serverPayload(), total: '50.07' }),
+			serialize: () => ({ ...serverPayload(), total: '50.070000' }),
 		});
 		try {
 			const types = run.events.map((event) => event.type);

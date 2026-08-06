@@ -20,18 +20,38 @@
  * change with time.
  *
  * ── At what precision ───────────────────────────────────────────────────────
- * At the SERVER'S OWN returned precision, per field. v2 push acks currently
- * serialize money at DISPLAY decimals because the plugin's `dp` pins have not
- * landed (#946), so `6.713280` comes back as `"6.71"`. That is a serialization
- * width, not a different number, and flagging it would fire on every single
- * sale — an alert that fires on every sale is never read. So the POS value is
- * rounded to the ack string's own decimal count and then compared.
+ * At the NARROWER of the two representations, capped at six decimals.
  *
- * `ORDER_MONEY_PRECISION_MODE` is the one constant that tightens this to exact
- * six-decimal comparison once #946's server-side pins land. Both modes are
- * pinned by tests; flipping the flag ahead of the server makes EVERY monetary
- * field diverge at once, which is a loud failure by construction, not a quiet
- * one.
+ * The naive reading of "the server now serves six decimals" (woocommerce-pos
+ * #1466, live on dev-next) would be to compare everything at six. That is
+ * wrong, because a six-decimal STRING is not a six-decimal VALUE. WooCommerce
+ * stores its money per field, and the POS mirrors that field for field:
+ *
+ *   6dp, genuinely — `cart_tax` / `shipping_tax` (WC sums per-rate taxes at
+ *   full precision), and every LINE value (`WC_Order_Item::set_total` formats
+ *   with no `dp` argument). Live: `cart_tax 9.163636`, line total `40.909091`.
+ *
+ *   2dp, then PADDED to six — order-level `total` above all
+ *   (`WC_Abstract_Order::set_total` runs `wc_format_decimal($v,
+ *   wc_get_price_decimals())`, so the stored value is already cents; `dp=6`
+ *   only widens the string). Live: `50.070000`. Same for `total_tax`,
+ *   `discount_total` / `discount_tax`, `shipping_total` and `tax_lines[]`,
+ *   all of which pass through `wc_round_tax_total` / `NumberUtil::round` at
+ *   display decimals first. `order-totals.ts` reproduces each of these
+ *   exactly, which is why both sides agree field for field.
+ *
+ * Taking the narrower width is what makes that safe without a table of field
+ * names to keep in sync with WooCommerce: a value cannot carry more
+ * information than its shortest representation, so `36.68` vs `36.680000` is
+ * one number and `36.68` vs `50.070000` is two. It also absorbs VERSION SKEW
+ * in both directions — a till running against a store that has not taken the
+ * plugin fix yet still sees `"6.71"` for a 6dp `cart_tax`, and comparing at
+ * two decimals keeps that correctly silent instead of alerting on every taxed
+ * sale.
+ *
+ * `ORDER_MONEY_PRECISION_MODE` selects between that and the legacy rule
+ * (`server-precision`: trust the ack's own width, whatever it is). Both are
+ * pinned by tests.
  *
  * Rounding is done on the DIGITS of the decimal string, half-up away from zero
  * (PHP `round()` / `wc_format_decimal` semantics). No float ever touches the
@@ -47,24 +67,27 @@ export type MoneyPrecisionMode = 'server-precision' | 'exact-6dp';
 /**
  * The active mode.
  *
- * TODO(#946): flip to `'exact-6dp'` when the plugin pins `dp=6` atomically
- * across `Order_Serializer::serialize_order`, `Catalog_Proxy_Controller::proxy`
- * and `Write_Controller::document_for` (the same ruling that unblocks the read
- * side). Until then a 2dp ack is the CONTRACT, not a defect, and comparing at
- * six decimals would alert on every sale. `order-money-divergence.test.ts` pins
- * both modes so the flip is a one-line change with its evidence already written.
+ * `exact-6dp` since woocommerce-pos#1466 pinned `dp=6` across
+ * `Order_Serializer::serialize_order`, `Catalog_Proxy_Controller::proxy` and
+ * `Write_Controller::document_for` — merged and live-verified on dev-next, where
+ * a param-less v2 order read now returns `cart_tax 9.163636` and line totals at
+ * `40.909091`. That closes the client half of #946: sub-cent tax components
+ * survive the write path and are now COMPARED rather than rounded away.
  *
- * What flipping it EARLY looks like, stated so nobody has to guess: every order
- * carrying a sub-cent component (any compound tax, any percentage discount)
- * alerts immediately and logs at error — loud, and loud on the first sale, not
- * days later. An order whose money is exact at display decimals stays silent,
- * because at six decimals it genuinely does not differ; that is a correct
- * answer, not a swallowed one. So the failure signature is "suddenly alerting
- * on most sales", never "quietly stopped checking".
+ * `server-precision` is retained as the legacy rule, not as dead code: it is the
+ * behaviour to fall back to if the six-decimal guarantee ever has to be walked
+ * back server-side. Both modes stay pinned by tests.
+ *
+ * Note what this flip did NOT need: a per-field table of which money
+ * WooCommerce stores at display decimals. Comparing at the narrower of the two
+ * representations (see the module docblock) derives that from the values
+ * themselves, so a store on an older plugin — still serving `"6.71"` where the
+ * POS holds `6.71328` — stays correctly silent instead of alerting on every
+ * taxed sale.
  */
-export const ORDER_MONEY_PRECISION_MODE: MoneyPrecisionMode = 'server-precision';
+export const ORDER_MONEY_PRECISION_MODE: MoneyPrecisionMode = 'exact-6dp';
 
-/** The precision `exact-6dp` compares at — 1.9's dp=6 money contract. */
+/** The ceiling `exact-6dp` compares at — 1.9's dp=6 money contract. */
 export const EXACT_COMPARISON_DECIMALS = 6;
 
 /** Order-level monetary fields, in the order a cashier reads them. */
@@ -222,8 +245,28 @@ export function roundDecimalString(value: string, decimals: number): string | nu
 }
 
 /** The comparison width for one field: the ack's own width, or a fixed six. */
-function comparisonDecimals(mode: MoneyPrecisionMode, serverValue: string): number | null {
-	return mode === 'exact-6dp' ? EXACT_COMPARISON_DECIMALS : decimalsOf(serverValue);
+/**
+ * The width one slot is compared at.
+ *
+ * `exact-6dp` takes the NARROWER of the two representations, capped at six —
+ * neither side can assert more precision than it printed, so the shorter string
+ * is the most either of them actually claims. That is what gives order-level
+ * `total` its 2dp-storage tolerance for free: WooCommerce stores it at display
+ * decimals and `dp=6` only pads the string, so `36.68` against `36.680000`
+ * compares at two and agrees, while `36.68` against `50.070000` still differs.
+ *
+ * `server-precision` is the legacy rule: whatever width the ack printed.
+ */
+function comparisonDecimals(
+	mode: MoneyPrecisionMode,
+	posValue: string,
+	serverValue: string
+): number | null {
+	if (mode !== 'exact-6dp') return decimalsOf(serverValue);
+	const pos = decimalsOf(posValue);
+	const server = decimalsOf(serverValue);
+	if (pos === null || server === null) return null;
+	return Math.min(EXACT_COMPARISON_DECIMALS, pos, server);
 }
 
 /**
@@ -243,7 +286,7 @@ function compareSlot(
 	// divergence out of an omission.
 	if (pos === null || server === null) return null;
 
-	const decimals = comparisonDecimals(mode, server);
+	const decimals = comparisonDecimals(mode, pos, server);
 	const roundedPos = decimals === null ? null : roundDecimalString(pos, decimals);
 	const roundedServer = decimals === null ? null : roundDecimalString(server, decimals);
 	if (roundedPos === null || roundedServer === null) {
@@ -364,24 +407,27 @@ export function compareOrderMoney(input: {
 }
 
 /**
- * Keep the POS's higher-precision money when the ack says THE SAME NUMBER at a
- * narrower width — the adoption half of the mirror contract.
+ * Keep the POS's SPELLING of any money the ack did not actually change — the
+ * adoption half of the mirror contract.
  *
  * Ack adoption replaces the resident's payload wholesale with the server's, so
- * without this a 2dp ack silently rewrites `6.713280` to `"6.71"` on every
- * save. Two reasons that is the wrong trade while #946 is open:
+ * without this every re-spelling of an unchanged number lands on the record.
+ * Both directions do damage, and the server has served each of them:
  *
- *  1. It DESTROYS information the server never disputed. `"6.71"` is the same
- *     number rendered narrower, not a correction; the sub-cent tax components
- *     1.9 shipped are simply lost, which is the #946 bug arriving through the
- *     write path instead of the read path.
- *  2. It OSCILLATES. The cart recomputes `6.713280` from the same inputs on the
- *     next render, sees the resident holding `"6.71"`, and patches it back —
- *     a write the cashier never made, on a record that was already settled.
+ *  1. NARROWER than the POS destroys information the server never disputed. A
+ *     pre-#1466 ack rewrites `6.71328` to `"6.71"`, and the sub-cent tax
+ *     components 1.9 shipped are simply lost — #946 arriving through the write
+ *     path instead of the read path.
+ *  2. WIDER than the POS is the same problem wearing a nicer hat. Since
+ *     woocommerce-pos#1466 the ack pads order-level `total` to `36.680000`
+ *     against the cart's `36.68`. Nothing is lost, but the resident no longer
+ *     matches what `use-order-totals` recomputes — and that hook answers a
+ *     disagreement by patching, which enqueues a server write. An oscillation
+ *     on every sale, caused purely by trailing zeros.
  *
- * When the numbers genuinely differ the ACK WINS, unconditionally: the server
- * is the source of truth and this is only ever about how wide the truth was
- * printed. It also never widens a value the POS itself held narrowly.
+ * So the rule is byte-equality, not precision: same number → keep the POS's
+ * string; different number → the ACK WINS, unconditionally, because the server
+ * is the source of truth and this was only ever about spelling.
  *
  * @param localPayload - The resident's payload before adoption.
  * @param ackedPayload - The payload projected from the ack document.
@@ -402,16 +448,19 @@ export function preserveEquivalentLocalPrecision(
 		const pos = moneyString(posValue);
 		const server = moneyString(serverValue);
 		if (pos === null || server === null) return;
+		if (pos === server) return;
 		const serverDecimals = decimalsOf(server);
 		const posDecimals = decimalsOf(pos);
 		if (serverDecimals === null || posDecimals === null) return;
-		// Only ever a WIDENING of the same number, never a narrowing and never a
-		// value change: the local string must be strictly more precise AND agree
-		// with the ack once rounded to the ack's own width.
-		if (posDecimals <= serverDecimals) return;
-		if (roundDecimalString(pos, serverDecimals) !== roundDecimalString(server, serverDecimals)) {
-			return;
-		}
+		// Same NUMBER, different spelling → keep the POS's spelling, in either
+		// direction. Narrower-local matters as much as wider-local now that the
+		// server pads to six decimals (woocommerce-pos#1466): adopting
+		// `36.680000` over the cart's `36.68` leaves the resident disagreeing
+		// with what `use-order-totals` recomputes, and that hook answers a
+		// disagreement by patching — which enqueues a server write. Byte-equal
+		// is the only spelling that does not oscillate.
+		const width = Math.min(posDecimals, serverDecimals);
+		if (roundDecimalString(pos, width) !== roundDecimalString(server, width)) return;
 		write(pos);
 		changed = true;
 	});

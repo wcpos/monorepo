@@ -9,7 +9,7 @@ import {
 	roundDecimalString,
 } from './order-money-divergence';
 
-const { pos, server2dp } = ORDER_MONEY_ORACLE;
+const { pos, server6dp, server2dp } = ORDER_MONEY_ORACLE;
 
 /** Deep-clone a fixture so a mutation in one test cannot leak into the next. */
 function clone<T>(value: T): T {
@@ -69,7 +69,7 @@ describe('roundDecimalString', () => {
 	);
 });
 
-describe('compareOrderMoney — server-precision mode (the #946 reality)', () => {
+describe('compareOrderMoney — server-precision mode (the legacy rule)', () => {
 	it('does not flag the oracle: 2dp serialization of the same money is NOT divergence', () => {
 		expect(
 			compareOrderMoney({
@@ -78,12 +78,6 @@ describe('compareOrderMoney — server-precision mode (the #946 reality)', () =>
 				mode: 'server-precision',
 			})
 		).toBeNull();
-	});
-
-	it('ships with server-precision as the default mode while #946 is open', () => {
-		expect(ORDER_MONEY_PRECISION_MODE).toBe('server-precision');
-		// The default path and the explicit path must agree, or the flag is decorative.
-		expect(compareOrderMoney({ pushed: pos, acked: server2dp })).toBeNull();
 	});
 
 	it('flags a real recalculation — a server-side surcharge the POS never computed', () => {
@@ -137,11 +131,27 @@ describe('compareOrderMoney — server-precision mode (the #946 reality)', () =>
 	});
 
 	it('rounds the POS value to the ACK’s own precision, per field', () => {
-		// A server that serves `total` at 2dp but `total_tax` at 6dp is compared
+		// A server that serves `total` at 2dp but `cart_tax` at 6dp is compared
 		// at BOTH precisions — the ack string is the authority on its own width.
 		const acked = clone(server2dp);
-		acked.total_tax = '6.713280';
+		acked.cart_tax = '6.713280';
 		expect(compareOrderMoney({ pushed: pos, acked, mode: 'server-precision' })).toBeNull();
+	});
+
+	it('is why the legacy rule could not survive the server going 6dp', () => {
+		// Trusting the ack's width alone breaks the moment the server widens a
+		// field the POS stores at display decimals: `total_tax` is `6.71` on both
+		// sides, but padded to `6.710000` it gets compared against the POS's
+		// 2dp value at six decimals. This is the false alert the mode flip
+		// exists to avoid — pinned here so the tradeoff is on the record.
+		const acked = clone(server2dp);
+		acked.total_tax = '6.713280';
+		const legacy = compareOrderMoney({ pushed: pos, acked, mode: 'server-precision' });
+		expect(legacy?.fields).toEqual([
+			{ field: 'total_tax', expected: '6.710000', got: '6.713280', decimals: 6 },
+		]);
+		// The shipped rule takes the narrower width and stays correctly silent.
+		expect(compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' })).toBeNull();
 	});
 
 	it('tolerates a sparse ack: fields the server omitted are not compared', () => {
@@ -181,7 +191,7 @@ describe('compareOrderMoney — server-precision mode (the #946 reality)', () =>
 	});
 
 	it('compares numeric money against its string form without complaint', () => {
-		const pushed = { ...clone(pos), total: 36.68328 };
+		const pushed = { ...clone(pos), total: 36.68 };
 		expect(compareOrderMoney({ pushed, acked: server2dp, mode: 'server-precision' })).toBeNull();
 	});
 
@@ -194,76 +204,137 @@ describe('compareOrderMoney — server-precision mode (the #946 reality)', () =>
 			mode: 'server-precision',
 		});
 		expect(divergence?.fields).toEqual([
-			{ field: 'total', expected: '36.683280', got: 'n/a', decimals: null },
+			{ field: 'total', expected: '36.68', got: 'n/a', decimals: null },
 		]);
 	});
 });
 
-describe('compareOrderMoney — exact-6dp mode (after #946 lands server-side)', () => {
-	it('is SILENT when the server serves the full six decimals', () => {
-		expect(compareOrderMoney({ pushed: pos, acked: pos, mode: 'exact-6dp' })).toBeNull();
+describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', () => {
+	it('is the shipped default now that the server guarantee is live', () => {
+		expect(ORDER_MONEY_PRECISION_MODE).toBe('exact-6dp');
+		// The default path and the explicit path must agree, or the flag is decorative.
+		expect(compareOrderMoney({ pushed: pos, acked: server6dp })).toBeNull();
 	});
 
-	it('flags the 2dp ack LOUDLY — flipping the mode without server support must not fail quiet', () => {
+	it('is SILENT against the live six-decimal ack', () => {
+		expect(compareOrderMoney({ pushed: pos, acked: server6dp, mode: 'exact-6dp' })).toBeNull();
+	});
+
+	it('tolerates the 2dp-STORAGE padding on order-level total', () => {
+		// WC_Abstract_Order::set_total stores at display decimals on every route,
+		// so `dp=6` only widens the string: the POS holds `36.68` and the ack says
+		// `36.680000`. Comparing at the narrower width makes that one number.
+		// Live-observed shape: `50.070000` for a 50.07 order.
+		expect((server6dp as { total: string }).total).toBe('36.680000');
+		expect((pos as { total: string }).total).toBe('36.68');
+		expect(
+			compareOrderMoney({
+				pushed: { total: '45.00' },
+				acked: { total: '45.000000' },
+				mode: 'exact-6dp',
+			})
+		).toBeNull();
+	});
+
+	it('still catches a real recalculation hiding behind that padding', () => {
+		// The live payment-time case, 45.00 -> 50.07, arriving 2dp-padded.
 		const divergence = compareOrderMoney({
-			pushed: pos,
-			acked: server2dp,
+			pushed: { total: '45.00' },
+			acked: { total: '50.070000' },
 			mode: 'exact-6dp',
 		});
-		expect(divergence).not.toBeNull();
-		expect(divergence?.mode).toBe('exact-6dp');
-		// Every component the server ROUNDED diverges — order level, line level and
-		// the nested tax rows — which is exactly the signal that the mode was
-		// flipped ahead of the server. Nothing here degrades to silence.
-		expect(divergence?.fields.map((f) => f.field)).toEqual(
-			expect.arrayContaining([
-				'total',
-				'total_tax',
-				'cart_tax',
-				`line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total_tax`,
-				`line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].taxes[1].total`,
-				'tax_lines[2].tax_total',
-			])
-		);
-		// A value the 2dp serialization did NOT round (29.970000 → "29.97") is
-		// still the same number at six decimals, so it must stay silent even here.
-		expect(divergence?.fields.map((f) => f.field)).not.toContain(
-			`line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].subtotal`
-		);
-		expect(divergence?.fields.every((f) => f.decimals === 6)).toBe(true);
+		expect(divergence?.fields).toEqual([
+			{ field: 'total', expected: '45.00', got: '50.07', decimals: 2 },
+		]);
+	});
+
+	it('compares genuinely six-decimal money at six decimals — the point of #946', () => {
+		// `cart_tax` is the field that carries sub-cent components (WC sums
+		// per-rate taxes unrounded), and it is now compared without being rounded
+		// away. A sub-cent server disagreement here is a real divergence.
+		const acked = clone(server6dp);
+		acked.cart_tax = '6.714000';
+		const divergence = compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' });
+		expect(divergence?.fields).toEqual([
+			{ field: 'cart_tax', expected: '6.71328', got: '6.71400', decimals: 5 },
+		]);
+	});
+
+	it('flags a sub-cent LINE divergence the old 2dp comparison would have swallowed', () => {
+		const acked = clone(server6dp);
+		lineOf(acked).total_tax = '6.723280';
+		const divergence = compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' });
+		expect(divergence?.fields).toEqual([
+			{
+				field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total_tax`,
+				expected: '6.71328',
+				got: '6.72328',
+				decimals: 5,
+			},
+		]);
+	});
+
+	it('stays SILENT against a store still on the old plugin — version skew must not alert', () => {
+		// A till upgraded ahead of its store keeps receiving display decimals.
+		// Comparing at the narrower width keeps that correctly quiet; the previous
+		// design flagged every taxed sale here, which is an alert nobody reads.
+		expect(compareOrderMoney({ pushed: pos, acked: server2dp, mode: 'exact-6dp' })).toBeNull();
+	});
+
+	it('still catches a real recalculation from a store on the old plugin', () => {
+		const acked = clone(server2dp);
+		acked.total = '50.07';
+		const divergence = compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' });
+		expect(divergence?.fields).toEqual([
+			{ field: 'total', expected: '36.68', got: '50.07', decimals: 2 },
+		]);
 	});
 });
 
 describe('preserveEquivalentLocalPrecision (the adoption half of the mirror contract)', () => {
-	it('keeps the six-decimal local value when the ack says the same number at 2dp', () => {
+	it('keeps the sub-cent local value when a pre-#1466 ack says the same number at 2dp', () => {
 		const merged = preserveEquivalentLocalPrecision(pos, server2dp);
-		expect(merged.total).toBe('36.683280');
-		expect(merged.total_tax).toBe('6.713280');
-		expect(lineOf(merged).total_tax).toBe('6.713280');
+		expect(merged.cart_tax).toBe('6.71328');
+		expect(lineOf(merged).total_tax).toBe('6.71328');
 		expect(
 			((lineOf(merged).taxes as Record<string, unknown>[])[0] as Record<string, unknown>).total
-		).toBe('5.994000');
-		expect((merged.tax_lines as Record<string, unknown>[])[0]!.tax_total).toBe('5.994000');
+		).toBe('5.994');
+	});
+
+	it('keeps the local spelling when the LIVE ack merely pads it wider', () => {
+		// The regression this guards: adopting `36.680000` over the cart's
+		// `36.68` leaves the resident disagreeing with what use-order-totals
+		// recomputes, and that hook patches a disagreement — a server write on
+		// every sale, caused by trailing zeros.
+		const merged = preserveEquivalentLocalPrecision(pos, server6dp);
+		expect(merged.total).toBe('36.68');
+		expect(merged.total_tax).toBe('6.71');
+		expect(merged.cart_tax).toBe('6.71328');
+		expect(lineOf(merged).total).toBe('29.97');
+		expect((merged.tax_lines as Record<string, unknown>[])[0]!.tax_total).toBe('5.99');
+	});
+
+	it('leaves the resident byte-identical to the cart’s own arithmetic', () => {
+		// The property the no-oscillation contract actually needs: every money
+		// slot the ack did not change comes back spelled exactly as the POS
+		// spelled it, so a JSON compare in use-order-totals finds nothing to do.
+		const merged = preserveEquivalentLocalPrecision(pos, server6dp);
+		for (const field of ['total', 'total_tax', 'cart_tax', 'discount_total', 'shipping_total']) {
+			expect(merged[field]).toBe((pos as Record<string, unknown>)[field]);
+		}
 	});
 
 	it('adopts the server value whenever the numbers actually differ — server is truth', () => {
-		const acked = clone(server2dp);
-		acked.total = '50.07';
+		const acked = clone(server6dp);
+		acked.total = '50.070000';
 		const merged = preserveEquivalentLocalPrecision(pos, acked);
-		expect(merged.total).toBe('50.07');
-		// …and the fields that DID agree still keep their precision.
-		expect(merged.total_tax).toBe('6.713280');
-	});
-
-	it('never upgrades a local value to a WIDER string than it had', () => {
-		const pushed = clone(pos);
-		pushed.total = '36.68';
-		const merged = preserveEquivalentLocalPrecision(pushed, server2dp);
-		expect(merged.total).toBe('36.68');
+		expect(merged.total).toBe('50.070000');
+		// …and the fields that DID agree still keep the POS's spelling.
+		expect(merged.cart_tax).toBe('6.71328');
 	});
 
 	it('leaves non-monetary fields to the ack — identity and status are the server’s', () => {
-		const acked = clone(server2dp);
+		const acked = clone(server6dp);
 		acked.status = 'completed';
 		acked.number = '1042';
 		const merged = preserveEquivalentLocalPrecision(pos, acked);
@@ -272,7 +343,7 @@ describe('preserveEquivalentLocalPrecision (the adoption half of the mirror cont
 	});
 
 	it('returns the ack payload unchanged when there is nothing to preserve', () => {
-		const acked = clone(server2dp);
+		const acked = clone(server6dp);
 		expect(preserveEquivalentLocalPrecision({}, acked)).toBe(acked);
 	});
 });
