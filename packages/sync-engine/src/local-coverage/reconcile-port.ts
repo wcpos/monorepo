@@ -2,11 +2,13 @@ import { assertBulkSuccess } from '@wcpos/sync-core';
 
 import { pullTargetedByIds } from '../change-signal/change-signal-handlers';
 import { COLLECTION_DESCRIPTORS } from '../collections/collection-descriptors';
+import { forEachYielding } from '../event-loop-yield';
 import { manifestRowOf } from '../materialization/record-materialization';
 import { chunk, orderDocumentFromWooPayload, WOO_REST_MAX_PER_PAGE } from '../scheduler';
 import { EngineOrderRepository } from '../write-path/engine-order-repository';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import {
+	maxManifestWooId,
 	readManifestRange,
 	removeManifestByWooIds,
 	upsertManifestRows,
@@ -14,6 +16,15 @@ import {
 
 import type { LocalCoverageReconcilePort, ReconcileRequest } from './local-coverage';
 import type { RxDatabase } from 'rxdb';
+
+/**
+ * Documents per yield in the dirty-guard catalog scan (#949 tranche 2).
+ *
+ * Measured 2026-08-06, memory storage: the `toJSON()` walk runs 2.4-5.9 us/document depending on
+ * JIT warmth, so 1,000 documents is a 2-6 ms span — inside a 60fps frame budget with room to
+ * spare, while keeping the yield count (and its per-hop overhead) proportionate.
+ */
+const DIRTY_SCAN_CHUNK_SIZE = 1_000;
 
 type ReconcilePortDeps = {
 	database: RxDatabase;
@@ -51,7 +62,9 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 			const ids = new Set<number>();
 			for (const name of sourceCollections) {
 				const docs = await db.collections[name].find().exec();
-				for (const doc of docs) {
+				// Chunked so the per-document `toJSON()` cost — the main-thread half of this scan,
+				// measured at ~24 ms per 50k products — cannot hold the loop in one span (#949).
+				await forEachYielding(docs, DIRTY_SCAN_CHUNK_SIZE, (doc) => {
 					const row = doc.toJSON() as {
 						wooProductId?: number;
 						wooId?: number;
@@ -59,10 +72,10 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 						wooOrderId?: number;
 						local?: { dirty?: boolean; pendingMutationIds?: unknown[] };
 					};
-					if (!row.local?.dirty && !row.local?.pendingMutationIds?.length) continue;
+					if (!row.local?.dirty && !row.local?.pendingMutationIds?.length) return;
 					const wooId = row.wooProductId ?? row.wooId ?? row.wooCustomerId ?? row.wooOrderId;
 					if (typeof wooId === 'number') ids.add(wooId);
-				}
+				});
 			}
 			return ids;
 		};
@@ -133,13 +146,7 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 		};
 		return {
 			bucketSize: 1000,
-			maxWooId: async () => {
-				const docs = await db.collections[manifestName].find().exec();
-				return docs.reduce(
-					(max, doc) => Math.max(max, Number((doc.toJSON() as { wooId?: unknown }).wooId) || 0),
-					0
-				);
-			},
+			maxWooId: () => maxManifestWooId(manifest),
 			readManifestRange: (lo: number, hi: number) => readManifestRange(manifest, lo, hi),
 			dirtyWooIds,
 			fetchServerBucket: async (bucket: number, bucketSize: number, request?: ReconcileRequest) => {

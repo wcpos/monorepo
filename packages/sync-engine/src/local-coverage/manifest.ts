@@ -1,5 +1,6 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
+import { forEachYielding } from '../event-loop-yield';
 import { chunk } from '../scheduler';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import {
@@ -12,6 +13,10 @@ import { upsertManifestRows } from './rx-existence-manifest-repository';
 type CountFindCollection<TDoc> = {
 	count(): { exec(): Promise<number> };
 	find(): { exec(): Promise<TDoc[]> };
+};
+/** Keyed re-read, so a decision taken across a yield can be re-validated against current state. */
+type FindByIdsCollection<TDoc> = {
+	findByIds(ids: string[]): { exec(): Promise<Map<string, TDoc>> };
 };
 type PrimeProductDocument = {
 	primary: string;
@@ -33,9 +38,10 @@ export type ExistenceManifestPrimeDatabase = {
 	existenceManifest: PrimeManifestCollection;
 	existenceManifestCustomers: PrimeManifestCollection;
 	existenceManifestOrders: PrimeManifestCollection;
-	products: CountFindCollection<PrimeProductDocument> & {
-		bulkRemove(ids: string[]): Promise<unknown>;
-	};
+	products: CountFindCollection<PrimeProductDocument> &
+		FindByIdsCollection<PrimeProductDocument> & {
+			bulkRemove(ids: string[]): Promise<unknown>;
+		};
 	variations: CountFindCollection<{ wooId?: number | null }>;
 	customers: CountFindCollection<{ wooCustomerId?: number | null }>;
 	orders: CountFindCollection<{ toJSON(): unknown }>;
@@ -51,6 +57,16 @@ export type ExistenceManifestPrimeDatabase = {
  */
 
 export type DigestFetch = (ids: number[]) => Promise<{ id: number; digest: string }[]>;
+
+/**
+ * Documents per yield in the boot primes' classification passes (#949 tranche 2, ruling R10b).
+ *
+ * These run on the BOOT path and read one property per resident document off an RxDocument proxy,
+ * which measured 39.7 ms at 10k residents and 145.2 ms at 50k in one unbroken span — a freeze the
+ * cashier meets before the till is even usable. 1,000 documents keeps each span in single-digit
+ * milliseconds, matching the reconcile's dirty-scan chunk.
+ */
+const PRIME_SCAN_CHUNK_SIZE = 1_000;
 
 /**
  * Pure core: given the local product/variation id sets, the manifest ids already present, and injected
@@ -138,28 +154,59 @@ export async function primeExistenceManifest(
 		db.products.find().exec(),
 		db.variations.find().exec(),
 	]);
-	const unpublishedProducts = productDocs.filter(
-		(doc) =>
-			typeof doc.wooProductId === 'number' &&
-			doc.wooProductId > 0 &&
-			doc.payload?.status !== 'publish' &&
-			!hasPendingLocalWork(doc)
-	);
-	if (unpublishedProducts.length > 0) {
-		assertBulkSuccess(
-			await db.products.bulkRemove(unpublishedProducts.map((doc) => doc.primary)),
-			'existence manifest prime product removal'
-		);
+	// One chunked classification pass replaces the two full filter/map passes this used to make
+	// over productDocs: a product is either an unpublished removal CANDIDATE or a candidate id —
+	// the same partition, walked once, yielding between chunks.
+	const unpublishedCandidates: string[] = [];
+	const productWooIds: number[] = [];
+	await forEachYielding(productDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		const wooId = doc.wooProductId;
+		if (typeof wooId !== 'number' || wooId <= 0) {
+			return;
+		}
+		if (doc.payload?.status !== 'publish' && !hasPendingLocalWork(doc)) {
+			unpublishedCandidates.push(doc.primary);
+			return;
+		}
+		productWooIds.push(wooId);
+	});
+	// Re-validate before deleting. The classification above yields, so a cashier can start editing
+	// a product AFTER it was classified as clean-and-unpublished; RxDocuments are immutable
+	// snapshots, so the stale instance would never show that edit and the prime would delete
+	// un-pushed work. A keyed re-read is the only way to see the current row, and the candidate
+	// list is small (unpublished residents), so it costs a point-read per candidate, not a scan.
+	if (unpublishedCandidates.length > 0) {
+		const current = await db.products.findByIds(unpublishedCandidates).exec();
+		const removable: string[] = [];
+		for (const [primary, doc] of current) {
+			if (doc.payload?.status !== 'publish' && !hasPendingLocalWork(doc)) {
+				removable.push(primary);
+				continue;
+			}
+			// It grew local work (or got published) while we walked — it stays resident, so it
+			// belongs in the primed id set exactly as an untouched product would.
+			if (typeof doc.wooProductId === 'number' && doc.wooProductId > 0) {
+				productWooIds.push(doc.wooProductId);
+			}
+		}
+		if (removable.length > 0) {
+			assertBulkSuccess(
+				await db.products.bulkRemove(removable),
+				'existence manifest prime product removal'
+			);
+		}
 	}
-	const removedProductIds = new Set(unpublishedProducts.map((doc) => doc.primary));
-	const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
-	const productWooIds = productDocs
-		.filter((doc) => !removedProductIds.has(doc.primary))
-		.map((doc) => doc.wooProductId)
-		.filter((id): id is number => typeof id === 'number' && id > 0);
-	const variationWooIds = variationDocs
-		.map((doc) => doc.wooId)
-		.filter((id): id is number => typeof id === 'number' && id > 0);
+	const existingManifestWooIds = new Set<number>();
+	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		existingManifestWooIds.add(doc.wooId);
+	});
+	const variationWooIds: number[] = [];
+	await forEachYielding(variationDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		const wooId = doc.wooId;
+		if (typeof wooId === 'number' && wooId > 0) {
+			variationWooIds.push(wooId);
+		}
+	});
 
 	const fetchDigests: DigestFetch = async (ids) => {
 		const url = `${input.syncBaseUrl}/digests?include=${ids.join(',')}&status=publish`;
@@ -239,10 +286,17 @@ export async function primeExistenceManifestCustomers(
 		db.existenceManifestCustomers.find().exec(),
 		db.customers.find().exec(),
 	]);
-	const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
-	const customerWooIds = customerDocs
-		.map((doc) => doc.wooCustomerId)
-		.filter((id): id is number => typeof id === 'number' && id > 0);
+	const existingManifestWooIds = new Set<number>();
+	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		existingManifestWooIds.add(doc.wooId);
+	});
+	const customerWooIds: number[] = [];
+	await forEachYielding(customerDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		const wooId = doc.wooCustomerId;
+		if (typeof wooId === 'number' && wooId > 0) {
+			customerWooIds.push(wooId);
+		}
+	});
 
 	const fetchDigests: DigestFetch = async (ids) => {
 		const response = await input.fetcher(
@@ -286,10 +340,17 @@ export async function primeExistenceManifestOrders(
 		db.existenceManifestOrders.find().exec(),
 		db.orders.find().exec(),
 	]);
-	const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
-	const orderWooIds = orderDocs
-		.map((doc) => (doc.toJSON() as { wooOrderId?: number | null }).wooOrderId)
-		.filter((id): id is number => typeof id === 'number' && id > 0);
+	const existingManifestWooIds = new Set<number>();
+	await forEachYielding(manifestDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		existingManifestWooIds.add(doc.wooId);
+	});
+	const orderWooIds: number[] = [];
+	await forEachYielding(orderDocs, PRIME_SCAN_CHUNK_SIZE, (doc) => {
+		const wooId = (doc.toJSON() as { wooOrderId?: number | null }).wooOrderId;
+		if (typeof wooId === 'number' && wooId > 0) {
+			orderWooIds.push(wooId);
+		}
+	});
 
 	const fetchDigests: DigestFetch = async (ids) => {
 		const response = await input.fetcher(

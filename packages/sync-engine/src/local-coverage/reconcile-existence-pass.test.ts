@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { runExistenceReconcile } from './reconcile-existence-pass';
 
-import type { LocalManifestEntry, ServerDigestEntry } from '../reconcile-bucket-plan';
+import type {
+	LocalManifestEntry,
+	ReconcileAction,
+	ServerDigestEntry,
+} from '../reconcile-bucket-plan';
 
 const L = (wooId: number, digest: string, dirty = false): LocalManifestEntry => ({
 	wooId,
@@ -140,5 +144,79 @@ describe('runExistenceReconcile', () => {
 		});
 		// Bucket 0 fully applied (pruned 1); buckets 1 & 2 skipped at the top-of-loop check.
 		expect(summary).toEqual({ buckets: 1, pruned: 1, pulled: 0, repulled: 0, skippedDirty: 0 });
+	});
+
+	// --- event-loop fairness (#949 tranche 2, ruling R10b) ---------------------------------------
+
+	it('hands the event loop a turn BETWEEN buckets, so a long walk cannot freeze the UI', async () => {
+		// A self-rearming macrotask ticks once per turn the loop gets. Under the node host the
+		// yield resolves through setImmediate, whose queue is FIFO, so the count is exact.
+		let turns = 0;
+		let running = true;
+		const rearm = () => {
+			if (!running) return;
+			turns += 1;
+			setImmediate(rearm);
+		};
+		setImmediate(rearm);
+
+		await runExistenceReconcile({
+			buckets: [0, 1, 2, 3],
+			bucketSize: 10,
+			readLocalBucket: () => Promise.resolve([]),
+			fetchServerBucket: () => Promise.resolve([]),
+			executePrune: async () => undefined,
+			enqueuePull: async () => undefined,
+		});
+		running = false;
+
+		// Three boundaries between four buckets — never before the first, never after the last.
+		expect(turns).toBe(3);
+	});
+
+	it('re-checks abort AFTER the between-bucket yield, so teardown during it stops the walk', async () => {
+		const executePrune = vi.fn(async () => undefined);
+		let aborted = false;
+		// Teardown lands while the walk is parked on its between-bucket yield.
+		setImmediate(() => void (aborted = true));
+
+		const summary = await runExistenceReconcile({
+			buckets: [0, 1],
+			bucketSize: 10,
+			readLocalBucket: async (lo) => (lo === 10 ? [L(3, 'gone')] : []),
+			fetchServerBucket: async () => [],
+			executePrune,
+			enqueuePull: async () => undefined,
+			isAborted: () => aborted,
+		});
+
+		expect(executePrune).not.toHaveBeenCalled();
+		expect(summary.buckets).toBe(1);
+	});
+
+	it('re-diffs each bucket against state as of THAT bucket, tolerating a mid-walk write', async () => {
+		// The cashier edits a record in bucket 1 while bucket 0 is being applied. Buckets are
+		// disjoint id ranges, so bucket 0's plan is unaffected and bucket 1 simply sees the new
+		// state when its own read runs — no stale plan is executed against changed data.
+		const enqueuePull = vi.fn(async (_actions: ReconcileAction[]) => undefined);
+		let editedMidWalk = false;
+
+		const summary = await runExistenceReconcile({
+			buckets: [0, 1],
+			bucketSize: 10,
+			readLocalBucket: async (lo) =>
+				lo === 0 ? [L(4, 'old')] : [L(14, editedMidWalk ? 'dirty-now' : 'old', editedMidWalk)],
+			fetchServerBucket: async (bucket) => (bucket === 0 ? [S(4, 'new')] : [S(14, 'new')]),
+			executePrune: async () => undefined,
+			enqueuePull: async (actions) => {
+				editedMidWalk = true; // a write lands as bucket 0 applies
+				await enqueuePull(actions);
+			},
+		});
+
+		// Bucket 0 repulled 4; bucket 1 saw wooId 14 as dirty by the time it was read and left it
+		// to the write path rather than clobbering the un-pushed edit.
+		expect(summary).toEqual({ buckets: 2, pruned: 0, pulled: 0, repulled: 1, skippedDirty: 1 });
+		expect(enqueuePull).toHaveBeenCalledTimes(1);
 	});
 });
