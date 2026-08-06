@@ -301,23 +301,28 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 				</ModalBody>
 				<ModalFooter>
 					<ModalClose testID="receipt-close-button">{t('common.close')}</ModalClose>
-					{!isOffline ? (
-						<Dialog>
-							<DialogTrigger asChild>
-								<ModalAction>{t('receipt.email_receipt')}</ModalAction>
-							</DialogTrigger>
-							<DialogContent>
-								<DialogHeader>
-									<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
-								</DialogHeader>
-								<DialogBody>
-									<EmailForm order={order} />
-								</DialogBody>
-							</DialogContent>
-						</Dialog>
-					) : (
-						<ModalAction disabled>{t('receipt.email_receipt')}</ModalAction>
-					)}
+					{/* Reachable offline on purpose (#165). The 2026-03-06 stopgap
+					    (ba8729a77) disabled this button when the store was unreachable,
+					    because a send could only fail. It cannot any more: EmailForm owns
+					    the offline path — it explains the situation, relabels the button,
+					    and writes a durable queue row instead of a doomed round trip. A
+					    cashier finishing a sale offline is the whole reason the queue
+					    exists, so this is the one entry point that must NOT be gated on
+					    connectivity. The PDF download above still is: that one genuinely
+					    needs the server. */}
+					<Dialog>
+						<DialogTrigger asChild>
+							<ModalAction testID="receipt-email-button">{t('receipt.email_receipt')}</ModalAction>
+						</DialogTrigger>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
+							</DialogHeader>
+							<DialogBody>
+								<EmailForm order={order} />
+							</DialogBody>
+						</DialogContent>
+					</Dialog>
 					<ModalAction
 						testID="receipt-download-pdf-button"
 						onPress={() => downloadReceiptPdf({ orderId, templateId: templateInfo?.id })}
