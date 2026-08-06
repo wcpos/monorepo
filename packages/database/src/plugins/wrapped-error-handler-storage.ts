@@ -78,18 +78,41 @@ const NON_DEGRADING_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageRpcM
 export const STORAGE_RPC_WATCHDOG_MS = 30_000;
 
 /**
- * RPCs the watchdog never arms for, because they are unbounded by design and a
- * long one is not evidence of a dead worker:
- * - `close`/`remove` tear an instance down and are already owned by the engine
- *   disposal deadline (#875), which force-frees the database registration;
- * - `cleanup` is background housekeeping that rxdb itself time-boxes and reruns.
- * Arming here would false-trip mid-Clear&Sync, which drops and recreates whole
- * collections.
+ * How many consecutive deadlines must pass with the worker answering *nothing*
+ * before it is declared dead. Two, so condemning takes a full minute of total
+ * storage silence.
+ *
+ * Deliberately slower than it could be: a false positive latches the app into
+ * degraded mode and blocks checkout and save until a reload, so certainty is
+ * worth more here than a faster banner. A genuinely dead worker is not going to
+ * recover in the extra 30s.
  */
-const WATCHDOG_EXEMPT_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageRpcMethod>([
-	'close',
-	'remove',
-	'cleanup',
+const STORAGE_RPC_SILENT_WINDOWS_BEFORE_DEAD = 2;
+
+/**
+ * Only reads are ever condemned by the clock.
+ *
+ * A read that never returns is exactly the #163 symptom — barcode lookups went
+ * silent — and failing one is harmless: it is idempotent, and the worst case of
+ * a wrong guess is a spurious banner, never lost or duplicated data.
+ *
+ * Writes are deliberately excluded. The watchdog cannot cancel the underlying
+ * RPC, so rejecting a `bulkWrite` on a hunch would tell the caller the write
+ * failed while it may still commit in the worker — inviting a duplicate order on
+ * retry. Writes still *feed* the liveness clock below when they succeed, so
+ * excluding them costs no detection: a dead worker is caught by the next read,
+ * and the POS reads constantly.
+ *
+ * `close`/`remove`/`cleanup` are absent for the same reason as always — they are
+ * unbounded by design, `close`/`remove` are owned by the engine disposal
+ * deadline (#875), and arming them would false-trip mid-Clear&Sync.
+ */
+const WATCHDOG_WATCHED_METHODS: ReadonlySet<StorageRpcMethod> = new Set<StorageRpcMethod>([
+	'query',
+	'count',
+	'findDocumentsById',
+	'getAttachmentData',
+	'getChangedDocumentsSince',
 ]);
 
 /**
@@ -398,21 +421,41 @@ async function raceStorageCall<T>(
 		() => state.inFlight.delete(callState)
 	);
 
-	if (WATCHDOG_EXEMPT_METHODS.has(methodName)) {
+	if (!WATCHDOG_WATCHED_METHODS.has(methodName)) {
 		return Promise.race([underlying, killed]);
 	}
 
 	const startedAt = Date.now();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const watchdog = new Promise<T>((_resolve, reject) => {
+		let silentWindows = 0;
 		const arm = () => {
+			const armedAt = Date.now();
 			timer = setTimeout(() => {
-				// Elapsed time alone never condemns the worker: a large OPFS write can
-				// legitimately outlast the deadline. What separates "slow" from "dead"
-				// is whether anything else on the same worker answered meanwhile — if
-				// so, re-arm and let the slow call finish. A dead worker answers
-				// nothing, so this only ever fires once, for real.
-				if (lastStorageSuccessAt > startedAt) {
+				// Elapsed time alone never condemns the worker. What separates "slow"
+				// from "dead" is whether the worker answered ANYTHING during this
+				// window — one storage worker backs every database, so any completion,
+				// on any collection or scope, proves it is alive. Under heavy sync that
+				// is constantly true, which is why a slow read queued behind a batch of
+				// writes is never condemned. Checked per window rather than against the
+				// call's start, or a single old success would disarm this forever.
+				if (lastStorageSuccessAt > armedAt) {
+					silentWindows = 0;
+					arm();
+					return;
+				}
+				// The deadline is wall-clock, so a slept device or a throttled
+				// background tab can deliver this timer arbitrarily late with the worker
+				// perfectly healthy — a till whose lid was closed overnight must not
+				// wake to a spurious "reload the app". If far more time passed than we
+				// asked for, the environment stalled, not the worker: re-arm and give it
+				// a real deadline's worth of running time to answer in.
+				if (Date.now() - armedAt > STORAGE_RPC_WATCHDOG_MS * 2) {
+					arm();
+					return;
+				}
+				silentWindows += 1;
+				if (silentWindows < STORAGE_RPC_SILENT_WINDOWS_BEFORE_DEAD) {
 					arm();
 					return;
 				}

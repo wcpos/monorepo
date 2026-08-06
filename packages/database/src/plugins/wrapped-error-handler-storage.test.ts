@@ -958,6 +958,10 @@ describe('wrappedErrorHandlerStorage', () => {
 			const assertion = expect(call).rejects.toMatchObject({
 				name: 'StorageWorkerTimeoutError',
 			});
+			// One silent window is not enough — the worker gets a full minute.
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+			expect(isStorageDegraded('dead-worker-db')).toBe(false);
+
 			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
 			await assertion;
 
@@ -965,12 +969,10 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 
 		it('feeds the same failure class the latch and the POS already consume', async () => {
-			const wrappedInstance = await wrap('dead-worker-class-db', { bulkWrite: pending() });
+			const wrappedInstance = await wrap('dead-worker-class-db', { count: pending() });
 
-			const caught = wrappedInstance
-				.bulkWrite([{ document: { id: '1' } }] as any, 'test')
-				.catch((error: unknown) => error);
-			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+			const caught = wrappedInstance.count({} as any).catch((error: unknown) => error);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
 
 			// The POS barcode path and the cart/checkout blocks all gate on this
 			// predicate, so the watchdog has to answer to it too.
@@ -980,29 +982,70 @@ describe('wrappedErrorHandlerStorage', () => {
 		// The refutation that matters: a big OPFS write can legitimately take longer
 		// than the deadline. If anything else on the same worker answered while the
 		// slow call was outstanding, the worker is demonstrably alive.
-		it('does not trip a slow-but-alive RPC while the worker still answers', async () => {
-			let finishSlowWrite: (() => void) | undefined;
+		it('does not condemn a slow read while the worker keeps answering other traffic', async () => {
+			let finishSlowRead: (() => void) | undefined;
 			const wrappedInstance = await wrap('slow-alive-db', {
-				bulkWrite: jest.fn(
-					() => new Promise((resolve) => (finishSlowWrite = () => resolve({ error: [] })))
+				query: jest.fn(
+					() => new Promise((resolve) => (finishSlowRead = () => resolve({ documents: [] })))
 				),
 				count: jest.fn().mockResolvedValue(7),
 			});
 
-			const slowWrite = wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test');
-			// The worker keeps answering other traffic throughout the slow write.
-			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 0.6);
-			await expect(wrappedInstance.count({} as any)).resolves.toBe(7);
-			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 0.6);
+			const slowRead = wrappedInstance.query({} as any);
+			// Heavy-but-alive: something completes inside every window, for minutes.
+			for (let window = 0; window < 6; window += 1) {
+				await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 0.5);
+				await expect(wrappedInstance.count({} as any)).resolves.toBe(7);
+				await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 0.5);
+			}
 
 			expect(isStorageDegraded('slow-alive-db')).toBe(false);
 
-			finishSlowWrite!();
-			await expect(slowWrite).resolves.toBeDefined();
+			finishSlowRead!();
+			await expect(slowRead).resolves.toBeDefined();
 			expect(isStorageDegraded('slow-alive-db')).toBe(false);
 		});
 
-		it.each(['close', 'remove', 'cleanup'] as const)(
+		// Regression: comparing liveness against the call's start instead of the
+		// current window meant one old success disarmed the watchdog permanently —
+		// call A starts, call B succeeds, the worker dies, and A re-armed forever.
+		it('still condemns a worker that dies after an earlier call succeeded', async () => {
+			const wrappedInstance = await wrap('stale-success-db', {
+				query: pending(),
+				count: jest.fn().mockResolvedValue(1),
+			});
+
+			// Order matters: the doomed read must already be outstanding when the
+			// other call succeeds, which is what made the old predicate true forever.
+			const doomed = wrappedInstance.query({} as any);
+			void doomed.catch(() => undefined);
+			await jest.advanceTimersByTimeAsync(1_000);
+			await expect(wrappedInstance.count({} as any)).resolves.toBe(1);
+
+			// The worker answers nothing from here on.
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 3 + 3);
+
+			expect(isStorageDegraded('stale-success-db')).toBe(true);
+		});
+
+		// The watchdog cannot cancel the underlying RPC, so a write must never be
+		// told it failed while it may still commit in the worker.
+		it('never condemns a write on the clock', async () => {
+			const wrappedInstance = await wrap('slow-write-db', { bulkWrite: pending() });
+
+			const write = wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test');
+			let settled = false;
+			void write.then(
+				() => (settled = true),
+				() => (settled = true)
+			);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 10);
+
+			expect(settled).toBe(false);
+			expect(isStorageDegraded('slow-write-db')).toBe(false);
+		});
+
+		it.each(['close', 'remove', 'cleanup', 'bulkWrite'] as const)(
 			'never arms the watchdog for the unbounded %s RPC',
 			async (method) => {
 				const wrappedInstance = await wrap(`exempt-${method}-db`, { [method]: pending() });
@@ -1023,9 +1066,28 @@ describe('wrappedErrorHandlerStorage', () => {
 			const inFlight = wrappedInstance.query({} as any);
 			void inFlight.catch(() => undefined);
 			await wrappedInstance.close();
-			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 4);
 
 			expect(isStorageDegraded('watchdog-teardown-db')).toBe(false);
+		});
+
+		// A till whose lid was closed overnight must not wake to a spurious
+		// "reload the app": the deadline is wall-clock, so a slept device delivers
+		// the timer arbitrarily late with the worker perfectly healthy.
+		it('does not condemn the worker when the device slept through the deadline', async () => {
+			const wrappedInstance = await wrap('slept-device-db', { query: pending() });
+			const call = wrappedInstance.query({} as any);
+			void call.catch(() => undefined);
+
+			// The timer is delivered hours late, as it would be on wake.
+			jest.setSystemTime(Date.now() + 6 * 60 * 60 * 1000);
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS + 1);
+
+			expect(isStorageDegraded('slept-device-db')).toBe(false);
+
+			// Still armed: a genuinely dead worker is caught on the next full windows.
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
+			expect(isStorageDegraded('slept-device-db')).toBe(true);
 		});
 
 		it('leaves no timer behind once a call settles', async () => {
