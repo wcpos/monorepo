@@ -35,7 +35,12 @@
 
 import { type APIRequestContext, test as base, type Page } from '@playwright/test';
 
-import { hydrateAuthenticatedPage, isRouteTeardownError } from './fixtures';
+import {
+	captureStoreAuthorization,
+	hydrateAuthenticatedPage,
+	isRouteTeardownError,
+	type StoreAuthorization,
+} from './fixtures';
 
 /**
  * Keep in sync with the same check in `playwright.config.ts` — the config
@@ -122,25 +127,6 @@ export async function installThinCatalogueRoutes(page: Page): Promise<void> {
 			}
 		}
 	);
-}
-
-type StoreAuthorization = { transport: 'header' | 'query'; value: string };
-
-/**
- * Record the header or query-parameter authorization the app sends to the
- * store, so a spec can probe the REST API with the same credentials and
- * transport the app uses (the JWT itself lives inside OPFS).
- */
-function captureStoreAuthorization(page: Page): () => StoreAuthorization | null {
-	let authorization: StoreAuthorization | null = null;
-	page.on('request', (request) => {
-		if (!request.url().includes('/wcpos/v2/')) return;
-		const header = request.headers()['authorization'];
-		const query = new URL(request.url()).searchParams.get('authorization');
-		if (header) authorization = { transport: 'header', value: header };
-		else if (query) authorization = { transport: 'query', value: query };
-	});
-	return () => authorization;
 }
 
 export type VariationSearchProbe =

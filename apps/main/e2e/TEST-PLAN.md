@@ -1,6 +1,6 @@
 # WCPOS E2E Test Plan
 
-Inventory of the Playwright web suite in `apps/main/e2e/` — 119 tests across 15 spec files.
+Inventory of the Playwright web suite in `apps/main/e2e/` — 121 tests across 15 spec files.
 Regenerated from the spec files themselves (see #691 for the audit that found the previous
 version stale). If you add, remove, or rename tests, update this file.
 
@@ -118,7 +118,7 @@ POS Cart — Add Items Menu (the cart "+" dropdown):
 - [x] Add miscellaneous product via the dropdown menu
 - [x] Close the add-item dialog (Escape) without adding
 
-### pos-checkout.spec.ts (authenticated, free + pro) — 11 tests
+### pos-checkout.spec.ts (authenticated, free + pro) — 12 tests
 
 Order Actions:
 
@@ -133,23 +133,41 @@ Multiple Orders:
 POS Checkout:
 
 - [x] Open checkout modal
-- [x] Order total shown in checkout (cancel + process payment buttons visible)
+- [x] Order total shown in checkout (modal amount equals the cart's Pay button amount, non-zero)
 - [x] Cancel checkout returns to cart
-- [x] Complete an order (process payment, receipt or POS screen appears)
+- [x] Payment disabled when the server omits the payment link
 - [x] Auto-print receipt after checkout when the cart settings enable auto show/print (print button auto-triggered and disabled)
+
+Real payment against the live store (**writes**, see "Live-store write discipline" below):
+
+- [x] Completes a real payment and reads the order back from the store REST API: order
+      exists and carries this run's label, `date_paid` is set and the status is not a
+      failure state, line-item count and quantities match the cart, line-item
+      `subtotal`/`total` match what the client sent, tax fields come back at full 6dp
+      stored precision (#946), and **the amount charged equals the amount the checkout
+      modal showed the cashier**
 
 Payment gateway routing (top-level tests, network-stubbed):
 
 - [x] Built-in POS gateways use the legacy webview even when `supports_checkout=true` (no contract-checkout API calls)
 - [x] Falls back to the legacy webview when `supports_checkout=false`
 
-### pos-refunds.spec.ts (pro only, network-stubbed) — 2 tests
+### pos-refunds.spec.ts (pro only) — 3 tests
 
-Both tests create a completed order, open `/orders/refund/:uuid`, and intercept the refunds
-API to assert the submitted payload:
+Two **contract** tests build an order, open `/orders/refund/:uuid`, and intercept the
+refunds API to assert the submitted payload. They stub the gateway list deliberately — a
+single live store advertises one capability set, so the `supports_provider_refunds`
+matrix is not reachable against dev-next. Their order never reaches the server and no
+payment is taken:
 
 - [x] Refund to cash for a non-cash order submits `refund_destination=cash`, `api_refund=false`
 - [x] Refund to original method (provider refunds supported) submits `refund_destination=original_method`, `api_refund=true`
+
+One **real** test against the live store (**writes**, see below), with no stubs at all:
+
+- [x] Completes a real payment, refunds part of it, and reads the refund back from the
+      store: the order carries this run's label, `refunds[]` holds exactly the one refund,
+      recorded as a negative amount at full 6dp precision
 
 ### pos-variations.spec.ts (authenticated, free + pro) — 9 tests
 
@@ -263,6 +281,29 @@ Language Settings:
 
 ---
 
+## Live-store write discipline
+
+Most specs only read. The two "real" specs above **create orders on the shared live store**
+(dev-next), which every shard and the occasional human also use. There is no ephemeral
+store, so they follow one contract, implemented in `e2e/order-lifecycle.ts`:
+
+1. **Label.** Every created order gets a globally unique run label (CI run id + attempt +
+   a per-order UUID) stamped into `customer_note`. Uniqueness is per ORDER, not per file,
+   so parallel shards and retries cannot collide.
+2. **Assert only on your own records.** The order id comes from the push ack for the order
+   under test, the ack is correlated against the checkout route's uuid, and the label is
+   re-checked on every readback. No spec asserts on "the newest order" or on global counts.
+3. **Clean up, and say what you made.** Cleanup runs in a Playwright **fixture teardown**
+   (not a `finally`) so it still runs when a test times out, and orders are registered for
+   cleanup as soon as the server acks them — not at the end of the happy path. The demo
+   cashier cannot hard-DELETE, so cleanup sets the order to `cancelled` (`trash` is
+   rejected); it refuses to touch any order whose note is not this run's label, never
+   throws, and always prints and attaches the created order ids so a leak is traceable.
+
+`readOrder` probes the REST API through Playwright's `APIRequestContext`, which page route
+stubs cannot touch, and retries transient 5xx — dev-next is a real host under load from six
+shards.
+
 ## Cold-start profile (thin local catalogue) — #991
 
 Every project above runs against a fully-synced tiny demo catalogue, so a query that
@@ -345,7 +386,7 @@ Lower-priority tests that would add depth but are harder to automate reliably:
 - Edit and save customer billing/shipping from cart
 - Switch between multiple open orders
 - Complete order with selected customer
-- Refund flow end-to-end against a real store (current tests stub the refunds API)
+- Full refund (not just partial) and refund-to-original-method against a real store
 - Theme switching persists
 - Barcode scanning adds product
 - Offline indicator shown when network drops

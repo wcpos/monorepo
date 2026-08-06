@@ -31,6 +31,51 @@ const VERSION_STUBBED_CONTEXTS = new WeakSet<BrowserContext>();
 const AUTH_ENTRY_ATTEMPTS = 3;
 const AUTH_ENTRY_RETRY_DELAY_MS = 15_000;
 
+/**
+ * How the app presents its store credentials: some sites accept the JWT in an
+ * `Authorization` header, others (when `use_jwt_as_param` is set) can only take
+ * it as a query parameter.
+ */
+export type StoreAuthorization = { transport: 'header' | 'query'; value: string };
+
+/**
+ * Record the header or query-parameter authorization the app sends to the
+ * store, so a spec can probe the REST API with the same credentials and
+ * transport the app uses (the JWT itself lives inside OPFS, which the test
+ * process cannot read).
+ *
+ * Attach this BEFORE the app boots — `authenticatedTest` does so by declaring
+ * `storeAuthorization` as a dependency of `posPage`.
+ */
+export function captureStoreAuthorization(page: Page): () => StoreAuthorization | null {
+	let authorization: StoreAuthorization | null = null;
+	page.on('request', (request) => {
+		if (!request.url().includes('/wcpos/v2/')) return;
+		const header = request.headers()['authorization'];
+		const query = new URL(request.url()).searchParams.get('authorization');
+		if (header) authorization = { transport: 'header', value: header };
+		else if (query) authorization = { transport: 'query', value: query };
+	});
+	return () => authorization;
+}
+
+/**
+ * Request options that carry the app's own store credentials, for out-of-band
+ * `APIRequestContext` calls (which page route stubs never touch).
+ */
+export function storeRequestOptions(authorization: StoreAuthorization | null): {
+	headers: Record<string, string>;
+	params: Record<string, string>;
+} {
+	return {
+		headers: {
+			'X-WCPOS': '1',
+			...(authorization?.transport === 'header' ? { Authorization: authorization.value } : {}),
+		},
+		params: authorization?.transport === 'query' ? { authorization: authorization.value } : {},
+	};
+}
+
 export function isRouteTeardownError(error: unknown): boolean {
 	if (!(error instanceof Error)) {
 		return false;
@@ -662,8 +707,18 @@ export async function hydrateAuthenticatedPage(
 	}
 }
 
-export const authenticatedTest = base.extend<{ posPage: Page }>({
-	posPage: async ({ page }, use, testInfo) => {
+export const authenticatedTest = base.extend<{
+	posPage: Page;
+	storeAuthorization: () => StoreAuthorization | null;
+}>({
+	storeAuthorization: async ({ page }, use) => {
+		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
+		await use(captureStoreAuthorization(page));
+	},
+	posPage: async ({ page, storeAuthorization }, use, testInfo) => {
+		// `storeAuthorization` is a declared dependency so its request listener is
+		// attached before the app boots and sends its first authenticated request.
+		storeAuthorization();
 		await hydrateAuthenticatedPage(page, testInfo);
 
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
