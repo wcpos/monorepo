@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { authenticatedTest as test } from './fixtures';
+import { becomesVisible, authenticatedTest as test } from './fixtures';
 
 /**
  * Helper: ensure the POS products are in table view (not grid view).
@@ -134,7 +134,10 @@ async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
  */
 async function voidCartIfNeeded(page: Page) {
 	const voidButton = page.getByTestId('void-button');
-	if (await voidButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
+	// `becomesVisible` honours the wait; `isVisible({ timeout })` ignores its
+	// timeout, so a void button still rendering would read as "cart empty" and
+	// skip the cleanup.
+	if (await becomesVisible(voidButton, 1_000)) {
 		await voidButton.click();
 		await page.waitForTimeout(1_500);
 	}

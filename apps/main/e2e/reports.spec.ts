@@ -18,6 +18,9 @@ test.describe('Reports Page (Pro)', () => {
 
 		// Reports page should have filter buttons or data content
 		await page.waitForTimeout(3_000);
+		// Snapshot check after a fixed settle: `hasButtons` is an instantaneous count,
+		// so a one-shot `isVisible()` for the table is the matching read (either
+		// content marker satisfies the assertion). Not a branch decision on render.
 		const hasButtons = (await screen.locator('[role="button"]').count()) > 0;
 		const hasTable = await screen
 			.locator('table')

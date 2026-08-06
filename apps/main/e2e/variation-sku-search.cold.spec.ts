@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 import { probeVariationSearch, coldStartTest as test } from './cold-start';
-import { getStoreUrl } from './fixtures';
+import { becomesVisible, getStoreUrl } from './fixtures';
 
 /**
  * Variation-SKU search on a THIN local catalogue — wcpos/monorepo#991,
@@ -25,7 +25,10 @@ const VARIATION_SKU_TERM = process.env.E2E_VARIATION_SKU_TERM || 'woo-hoodie';
  */
 async function ensureTableView(page: Page): Promise<void> {
 	const expandLink = page.getByTestId('variable-product-expand').first();
-	if (await expandLink.isVisible().catch(() => false)) {
+	// Wait briefly for the table marker before deciding — a bare `isVisible()`
+	// samples once, so a slow-rendering expand link (when already in table view)
+	// would wrongly toggle back to grid.
+	if (await becomesVisible(expandLink, 2_000)) {
 		return;
 	}
 	await page.getByTestId('view-mode-toggle').click();

@@ -1,6 +1,11 @@
 import { expect, type Page } from '@playwright/test';
 
-import { getStoreVariant, authenticatedTest as test, tryAddProductBySku } from './fixtures';
+import {
+	becomesVisible,
+	getStoreVariant,
+	authenticatedTest as test,
+	tryAddProductBySku,
+} from './fixtures';
 import {
 	expectFullPrecision,
 	expectOrderPaid,
@@ -29,8 +34,13 @@ async function addTestProductToCart(page: Page) {
 	const tableButton = page.getByTestId('add-to-cart-button').first();
 	const productMarker = tile.or(tableButton).first();
 
-	const hasCatalogProduct = await productMarker.isVisible({ timeout: 30_000 }).catch(() => false);
+	// `becomesVisible` waits for the catalogue to render; `isVisible({ timeout })`
+	// samples once and ignores its timeout, so a slow render would wrongly fall
+	// through to the misc-product branch below (#1044).
+	const hasCatalogProduct = await becomesVisible(productMarker, 30_000);
 
+	// Both markers have settled once `hasCatalogProduct` is true; a one-shot picks
+	// which view rendered.
 	if (hasCatalogProduct && (await tile.isVisible())) {
 		await tile.click();
 	} else if (hasCatalogProduct) {

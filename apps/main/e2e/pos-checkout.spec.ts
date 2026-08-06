@@ -1,6 +1,11 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { isRouteTeardownError, authenticatedTest as test, tryAddProductBySku } from './fixtures';
+import {
+	becomesVisible,
+	isRouteTeardownError,
+	authenticatedTest as test,
+	tryAddProductBySku,
+} from './fixtures';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
@@ -57,8 +62,10 @@ async function addTestProductToCart(page: Page) {
 	const tableButton = page.getByTestId('add-to-cart-button').first();
 	const productMarker = tile.or(tableButton);
 
-	// Wait for products to render in whichever view mode is active.
-	let productsVisible = await productMarker.isVisible({ timeout: 30_000 }).catch(() => false);
+	// Wait for products to render in whichever view mode is active. `becomesVisible`
+	// actually waits — `isVisible({ timeout })` samples once and ignores its timeout,
+	// so a slow catalogue would wrongly route to the error-boundary recovery branch.
+	let productsVisible = await becomesVisible(productMarker, 30_000);
 	if (
 		!productsVisible &&
 		(await page
@@ -70,12 +77,14 @@ async function addTestProductToCart(page: Page) {
 		await expect(page.getByTestId('search-products')).toBeVisible({
 			timeout: 60_000,
 		});
-		productsVisible = await productMarker.isVisible({ timeout: 60_000 }).catch(() => false);
+		productsVisible = await becomesVisible(productMarker, 60_000);
 	}
 	await expect(productMarker).toBeVisible({
 		timeout: productsVisible ? 1_000 : 60_000,
 	});
 
+	// Both markers already settled via the assertion above; a one-shot picks which
+	// view (grid tile vs table button) rendered.
 	if (await tile.isVisible()) {
 		await tile.click();
 	} else {
