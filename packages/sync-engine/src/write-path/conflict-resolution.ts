@@ -279,6 +279,23 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 							}
 						}
 						const applied = await bound.guardWrite(async () => {
+							// Re-validate the claim before ANY terminal write (task 43 —
+							// adversarial P1). The slow part of a resolution (fetching the
+							// server base / document) runs BEFORE this guardWrite, so a claim
+							// that expired during it — letting another window steal it — is
+							// caught here, before the retry re-pends, the requeue rebuilds, or
+							// the discard restores server truth. The destructive resident
+							// removal re-checks again immediately before it, for a stall inside
+							// guardWrite itself.
+							const held = (await queue.all()).find((row) => row.mutationId === mutationId);
+							const heldUntil = held?.resolutionClaimUntil
+								? Date.parse(held.resolutionClaimUntil)
+								: 0;
+							if (held?.resolutionClaimBy !== instanceIdFor() || heldUntil <= nowMs()) {
+								throw new Error(
+									`resolveConflict: the resolution claim on "${mutationId}" expired or was taken by another window — refresh the list and retry`
+								);
+							}
 							if (resolution === 'retry-with-server-base') {
 								// Back to pending on the SERVER's base (same mutationId — the intent
 								// is unchanged, so the server-side replay key stays valid). Strip the

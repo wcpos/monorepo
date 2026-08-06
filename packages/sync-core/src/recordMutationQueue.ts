@@ -293,19 +293,44 @@ export class RecordMutationQueue {
 				(item) => item.mutation.mutationId === priorMutationId
 			);
 			const row = stored?.mutation;
-			if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
+			// Coalescing is valid ONLY into a never-pushed pending row (#516 rule 1).
+			// The write-intent layer checks `attempts === 0` on its own read, but that
+			// read can be stale across processes: another window's drain may have pushed
+			// this row and rescheduled it back to `pending` (attempts > 0) in between.
+			// Re-assert it HERE, on the revision-checked read, so a stale replacement can
+			// never consume an ever-pushed mutation under a fresh id (adversarial P2).
+			if (
+				!row ||
+				(row.status !== undefined && row.status !== 'pending') ||
+				(row.attempts ?? 0) !== 0
+			)
+				return false;
 			// Insert the replacement under its FRESH id (nobody else holds it), then
 			// remove the prior row CONDITIONALLY on the revision we just read. If the
 			// prior moved between the read and the remove — a concurrent claim,
 			// coalesce, or another window — the remove is refused and we unwind the
-			// replacement so the swap is all-or-nothing. Same compensation the
-			// write-intent layer already relied on, now safe across processes too.
+			// replacement so the swap is all-or-nothing.
 			const inserted = await this.storage.appendIfUnchanged(replacement, null);
 			if (!inserted) return false;
 			if (await this.storage.removeIfUnchanged(priorMutationId, stored.rev)) return true;
-			await this.storage.remove([replacement.mutationId]);
+			// Compensation is CONDITIONAL on the replacement still being pending: if a
+			// drain in another window claimed it in the microtask window, removing it
+			// unconditionally would cancel a push that may already be reaching the
+			// server. Leave a claimed replacement in place (the server dedupes on its
+			// mutationId) rather than delete in-flight work (adversarial P2).
+			await this.removePendingInternal(replacement.mutationId);
 			return false;
 		});
+	}
+
+	/** `removePending` without the transact wrapper — for use INSIDE a transaction. */
+	private async removePendingInternal(mutationId: string): Promise<boolean> {
+		const stored = (await this.storage.listStored()).find(
+			(item) => item.mutation.mutationId === mutationId
+		);
+		const row = stored?.mutation;
+		if (!row || (row.status !== undefined && row.status !== 'pending')) return false;
+		return this.storage.removeIfUnchanged(mutationId, stored.rev);
 	}
 
 	/**

@@ -637,4 +637,21 @@ describe('durable resolution claim across two instances (cross-process)', () => 
 		const [ra, rb] = await Promise.all([a.claim(claimed), b.claim(claimed)]);
 		expect([ra, rb].filter(Boolean)).toHaveLength(1);
 	});
+
+	it('coalesceInto REFUSES an ever-pushed (attempts > 0) prior — never consumes a pushed mutation', async () => {
+		// The write-intent layer checks attempts===0 on ITS read; across processes
+		// that read can be stale (another window pushed + rescheduled the prior back
+		// to pending). coalesceInto re-asserts the invariant on its own read.
+		const { a } = shared();
+		const prior = await a.enqueue(mut({ mutationId: 'prior' }));
+		await a.replace({ ...prior, status: 'pending', attempts: 1 }); // pushed once, back to pending
+
+		const ok = await a.coalesceInto('prior', {
+			...mut({ mutationId: 'replacement' }),
+			seq: prior.seq,
+			status: 'pending',
+		});
+		expect(ok).toBe(false);
+		expect((await a.all()).map((m) => m.mutationId)).toEqual(['prior']); // untouched, no replacement
+	});
 });
