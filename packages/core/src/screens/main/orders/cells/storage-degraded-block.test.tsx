@@ -189,4 +189,26 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 		expect(mockPush).not.toHaveBeenCalled();
 		expect(mockEngineWrite).not.toHaveBeenCalled();
 	});
+
+	it('stops before navigation when storage degrades during the re-open patch', async () => {
+		let resolveLocalPatch!: () => void;
+		mockLocalPatch.mockImplementation(
+			() => new Promise<void>((resolve) => (resolveLocalPatch = resolve))
+		);
+		render(<Actions {...cellProps} />);
+
+		let openPromise!: Promise<unknown>;
+		act(() => {
+			openPromise = mockHandlers.get('order-reopen-menu-item')!() as Promise<unknown>;
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+
+		await degradeStorage('degraded-orders-list-during-reopen');
+		await act(async () => {
+			resolveLocalPatch();
+			await openPromise;
+		});
+
+		expect(mockPush).not.toHaveBeenCalled();
+	});
 });

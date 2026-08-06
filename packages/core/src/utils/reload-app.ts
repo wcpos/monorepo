@@ -18,7 +18,7 @@ export function reloadApp(): boolean {
 	// builds would need expo-updates, which is not installed — so report the
 	// failure instead of pretending, and let the caller tell the cashier to close
 	// and reopen the app by hand.
-	if (typeof NativeModules.DevSettings?.reload !== 'function') {
+	if (!__DEV__ || typeof NativeModules.DevSettings?.reload !== 'function') {
 		return false;
 	}
 

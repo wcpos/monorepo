@@ -176,6 +176,43 @@ function customer(id: number): Customer {
 	};
 }
 
+async function degradeStorage(databaseName: string) {
+	const instance = {
+		schema: { version: 0, type: 'object', properties: {}, primaryKey: 'id' },
+		findDocumentsById: jest.fn(),
+		bulkWrite: jest
+			.fn()
+			.mockRejectedValue(
+				new Error(
+					'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
+				)
+			),
+		query: jest.fn(),
+		count: jest.fn(),
+		getAttachmentData: jest.fn(),
+		getChangedDocumentsSince: jest.fn(),
+		changeStream: jest.fn(),
+		cleanup: jest.fn(),
+		close: jest.fn().mockResolvedValue(undefined),
+		remove: jest.fn(),
+		collectionName: 'orders',
+		databaseName,
+		internals: {},
+		options: {},
+	};
+	const wrapped = await wrappedErrorHandlerStorage({
+		storage: {
+			name: 'mock-storage',
+			rxdbVersion: '17.4.0',
+			createStorageInstance: jest.fn().mockResolvedValue(instance),
+		} as never,
+	}).createStorageInstance({ databaseName } as never);
+
+	await act(async () => {
+		await expect(wrapped.bulkWrite([{ document: { id: '1' } }] as never, 'test')).rejects.toThrow();
+	});
+}
+
 describe('EditOrderForm customer lookup', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -251,41 +288,7 @@ describe('EditOrderForm while storage is degraded', () => {
 		render(<EditOrderForm order={order} />);
 		expect(modalActions.get('order-edit-save-button')?.disabled).toBe(false);
 
-		const instance = {
-			schema: { version: 0, type: 'object', properties: {}, primaryKey: 'id' },
-			findDocumentsById: jest.fn(),
-			bulkWrite: jest
-				.fn()
-				.mockRejectedValue(
-					new Error(
-						'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
-					)
-				),
-			query: jest.fn(),
-			count: jest.fn(),
-			getAttachmentData: jest.fn(),
-			getChangedDocumentsSince: jest.fn(),
-			changeStream: jest.fn(),
-			cleanup: jest.fn(),
-			close: jest.fn().mockResolvedValue(undefined),
-			remove: jest.fn(),
-			collectionName: 'orders',
-			databaseName: 'degraded-order-edit',
-			internals: {},
-			options: {},
-		};
-		const wrapped = await wrappedErrorHandlerStorage({
-			storage: {
-				name: 'mock-storage',
-				rxdbVersion: '17.4.0',
-				createStorageInstance: jest.fn().mockResolvedValue(instance),
-			} as never,
-		}).createStorageInstance({ databaseName: 'degraded-order-edit' } as never);
-		await act(async () => {
-			await expect(
-				wrapped.bulkWrite([{ document: { id: '1' } }] as never, 'test')
-			).rejects.toThrow();
-		});
+		await degradeStorage('degraded-order-edit');
 
 		expect(modalActions.get('order-edit-save-button')?.disabled).toBe(true);
 
@@ -294,6 +297,29 @@ describe('EditOrderForm while storage is degraded', () => {
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+	});
+
+	it('stops before pushing when storage degrades during the local patch', async () => {
+		let resolveLocalPatch!: () => void;
+		mockLocalPatch.mockImplementation(
+			() => new Promise<void>((resolve) => (resolveLocalPatch = resolve))
+		);
+		mockPushDocument.mockResolvedValue(undefined);
+		render(<EditOrderForm order={order} />);
+
+		let savePromise!: Promise<unknown>;
+		act(() => {
+			savePromise = modalActions.get('order-edit-save-button')!.onPress!() as Promise<unknown>;
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+
+		await degradeStorage('degraded-order-edit-during-patch');
+		await act(async () => {
+			resolveLocalPatch();
+			await savePromise;
+		});
+
 		expect(mockPushDocument).not.toHaveBeenCalled();
 	});
 });

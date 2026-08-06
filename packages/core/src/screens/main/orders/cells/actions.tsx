@@ -117,6 +117,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		}
 
 		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
+		if (blockIfDegraded('save-order', { orderId: order.uuid })) return;
 		router.push({
 			pathname: '/cart/[...orderId]',
 			params: { orderId: order.uuid ? [order.uuid] : [] },

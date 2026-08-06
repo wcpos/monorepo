@@ -156,6 +156,7 @@ export function EditOrderForm({ order }: Props) {
 					document: order,
 					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
 				});
+				if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
 				await pushDocument(order).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						const doc = savedDoc as unknown as { id?: number; number?: string };
