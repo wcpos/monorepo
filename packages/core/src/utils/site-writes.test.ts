@@ -240,6 +240,47 @@ describe('linkCredentialsToSite', () => {
 		await expect(linkCredentialsToSite(site!, 'cred-1')).rejects.toThrow('removed site');
 	});
 
+	it('refuses to link when the site is removed during a revision-conflict retry', async () => {
+		await upsertSiteData(sites(), parse(restResponse()));
+		const site = await sites().findOne(SITE_UUID).exec();
+
+		const collection = sites() as never as {
+			storageInstance: {
+				bulkWrite: (
+					rows: { previous: unknown; document: unknown }[],
+					ctx: string
+				) => Promise<never>;
+			};
+			database: { token: string };
+		};
+		const storageInstance = collection.storageInstance;
+		const originalBulkWrite = storageInstance.bulkWrite.bind(storageInstance);
+		let injected = false;
+
+		storageInstance.bulkWrite = async (rows, ctx) => {
+			if (!injected && ctx === 'incremental-write') {
+				injected = true;
+				const previous = rows[0].previous as Record<string, unknown>;
+				const tombstone: Record<string, unknown> = {
+					...previous,
+					_deleted: true,
+					_meta: { lwt: Date.now() },
+					_rev: createRevision(collection.database.token, previous as never),
+				};
+				await originalBulkWrite([{ previous, document: tombstone }], 'test-remove-site');
+			}
+			return originalBulkWrite(rows, ctx);
+		};
+
+		try {
+			await expect(linkCredentialsToSite(site!, 'cred-1')).rejects.toThrow('removed site');
+		} finally {
+			storageInstance.bulkWrite = originalBulkWrite;
+		}
+
+		expect(injected).toBe(true);
+	});
+
 	it('reports false and skips the write when the credential is already linked', async () => {
 		await upsertSiteData(sites(), parse(restResponse()));
 		const site = await sites().findOne(SITE_UUID).exec();

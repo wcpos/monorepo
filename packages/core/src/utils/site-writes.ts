@@ -98,6 +98,9 @@ export async function linkCredentialsToSite(
 	let appended = false;
 
 	await latest.incrementalModify((current) => {
+		if (current._deleted) {
+			throw new Error('Cannot link credentials to a removed site');
+		}
 		const currentLinks = Array.isArray(current.wp_credentials) ? current.wp_credentials : [];
 		if (currentLinks.includes(credentialsUuid)) {
 			appended = false;

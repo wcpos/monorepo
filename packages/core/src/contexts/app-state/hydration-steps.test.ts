@@ -297,6 +297,46 @@ describe('PROCESS_INITIAL_PROPS', () => {
 	});
 });
 
+describe('TEST_AUTHORIZATION', () => {
+	const fetchMock = jest.fn();
+
+	beforeEach(() => {
+		fetchMock.mockReset();
+		global.fetch = fetchMock as unknown as typeof fetch;
+	});
+
+	it('clears stale query parameter auth when Authorization headers work', async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: jest.fn(async () => ({ status: 'success' })),
+		});
+		const siteDoc = {
+			use_jwt_as_param: true,
+			incrementalPatch: jest.fn(async (patch: { use_jwt_as_param: boolean }) => {
+				Object.assign(siteDoc, patch);
+			}),
+			getLatest: jest.fn(),
+		};
+		siteDoc.getLatest.mockReturnValue(siteDoc);
+		const step = hydrationSteps.find(({ name }) => name === 'TEST_AUTHORIZATION');
+
+		await step!.execute({
+			userDB: { sites: documentLookup(siteDoc) } as never,
+			initialProps: {
+				site: {
+					uuid: 'site-1',
+					wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+				},
+				wp_credentials: { access_token: 'token' },
+				stores: [],
+			},
+		});
+
+		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({ use_jwt_as_param: false });
+		expect(siteDoc.use_jwt_as_param).toBe(false);
+	});
+});
+
 describe('testAuthorizationMethod', () => {
 	const fetchMock = jest.fn();
 
