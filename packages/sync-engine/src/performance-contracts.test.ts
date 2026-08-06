@@ -553,6 +553,9 @@ describe('sync-engine performance contracts (#949)', () => {
 
 				// The apply must still be in flight when the timer starts, or this measures a
 				// query against an idle collection and the contention contract is vacuous.
+				// Flush one microtask first: `.finally` runs in a microtask, so without the
+				// flush an ALREADY-fulfilled apply would still read as pending here.
+				await Promise.resolve();
 				expect(applySettled).toBe(false);
 				const { elapsedMs, hitCount } = await measureFirstPage(active.database, residents);
 
@@ -767,6 +770,7 @@ describe('sync-engine performance contracts (#949)', () => {
 			const batchSize = 200;
 			const engine = engineWith(convergedBucketFetcher(0));
 			const active = await engine.ready;
+			let appliesSettled = false;
 			const sequentialApplies = (async () => {
 				for (let batch = 0; batch < batchCount; batch += 1) {
 					await active.database.collections['products']!.bulkUpsert(
@@ -774,6 +778,12 @@ describe('sync-engine performance contracts (#949)', () => {
 					);
 				}
 			})();
+			void sequentialApplies.finally(() => {
+				appliesSettled = true;
+			});
+			// Same in-flight proof as the single-apply tiers (microtask flushed first).
+			await Promise.resolve();
+			expect(appliesSettled).toBe(false);
 
 			const { elapsedMs, hitCount } = await measureFirstPage(active.database, 0);
 			const budgetMs = budget(TTFR_TIERS[0]!.budgetMs);

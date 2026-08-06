@@ -485,6 +485,14 @@ describe('RefundOrderForm while storage is degraded', () => {
 		render(<RefundOrderForm order={order} />);
 		await screen.findByTestId('process-refund-button');
 
+		// Prove the healthy starting state first: without this, an initially-disabled
+		// control would satisfy the post-degradation `toBeDisabled` without the
+		// storage latch ever changing the UI. The confirm action is the right probe —
+		// its disabled prop is `loading || storageDegraded`, independent of form
+		// validity (the process button also folds in `!isValid`, which holds before
+		// any amount is entered).
+		await waitFor(() => expect(screen.getByTestId('confirm-process-refund-button')).toBeEnabled());
+
 		await killStorageWorker();
 
 		// The latch emission re-renders the form; waitFor lets that settle without
