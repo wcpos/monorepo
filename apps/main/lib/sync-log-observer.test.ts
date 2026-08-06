@@ -507,3 +507,83 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].context.collection).toBe('tax_rates');
 	});
 });
+
+describe('push.money-divergence is an advisory, not a failed transfer', () => {
+	// Live regression, dev-next smoke of orders 70954-70956: a plain one-item
+	// cash sale the server ACCEPTED (status completed, receipt printed the
+	// server's own totals) showed in Store Health as
+	//   "#70956" can't upload — orders <uuid> — server totals differ from the till
+	// with a "1 stuck" pill on Pedidos, 2 sales out of 3.
+	//
+	// Nothing had failed. `deriveStuckRecords` takes the NEWEST decisive
+	// `sync.record` row per record and reads `failed`/`rejected` as "did not
+	// make it to the server". The divergence row is written AFTER the
+	// `push.outcome` ok row (the push emits during the drain; the divergence
+	// rides the post-drain flush), so it won the tie and marked a completed sale
+	// undeliverable.
+	//
+	// It has to stay an error-level row a cashier can find — the money really
+	// did change. It must not claim the record failed to upload.
+	let rows: {
+		level: string;
+		message: string;
+		context: Record<string, unknown>;
+		terminal?: LogTerminalFields;
+	}[];
+	let observer: ReturnType<typeof createSyncLogObserver>;
+
+	beforeEach(() => {
+		rows = [];
+		observer = createSyncLogObserver({
+			persist: (level, message, context, terminal) =>
+				rows.push({ level, message, context, terminal }),
+			nowMs: () => 2_000,
+		});
+	});
+
+	const divergence = () =>
+		observer.observe(
+			event({
+				type: 'push.money-divergence',
+				level: 'error',
+				collection: 'orders',
+				message: 'order 6cc42964 — the server totals differ from the POS calculation',
+				fields: {
+					recordId: '6cc42964-cd42-4c78-bcd6-062329ba81ea',
+					mutationId: 'm-1',
+					outcome: 'failed',
+					mode: 'exact-6dp',
+					divergentFields: 'total,total_tax',
+				},
+			})
+		);
+
+	it('is NOT a sync.record row, so it cannot be read as a stuck record', () => {
+		divergence();
+		expect(rows).toHaveLength(1);
+		expect(rows[0]?.terminal?.operationType).not.toBe('sync.record');
+	});
+
+	it('still persists at error with the record named, so the cashier can find it', () => {
+		divergence();
+		expect(rows[0]?.level).toBe('error');
+		expect(rows[0]?.context.recordId).toBe('6cc42964-cd42-4c78-bcd6-062329ba81ea');
+		expect(rows[0]?.context.type).toBe('push.money-divergence');
+		expect(rows[0]?.context.divergentFields).toBe('total,total_tax');
+	});
+
+	it('does not overturn the push.outcome that said the write succeeded', () => {
+		observer.observe(
+			event({
+				type: 'push.outcome',
+				collection: 'orders',
+				fields: { recordId: '6cc42964-cd42-4c78-bcd6-062329ba81ea', outcome: 'ok' },
+			})
+		);
+		divergence();
+
+		const recordRows = rows.filter((row) => row.terminal?.operationType === 'sync.record');
+		expect(recordRows).toHaveLength(1);
+		expect(recordRows[0]?.terminal?.outcome).toBe('ok');
+	});
+});

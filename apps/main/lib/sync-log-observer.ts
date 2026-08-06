@@ -275,14 +275,27 @@ const CONFORMANCE = new Map<string, Conformance>([
 		},
 	],
 	[
-		// R1: the write SUCCEEDED, so this is not a push failure — but the money came
-		// back different, which is the one thing a cashier has to know about a sale
-		// that already left the till. `failed` is the honest terminal outcome: the
-		// POS's calculation did not survive, and filtering the log by outcome must
-		// not hide it (the PY02001 lesson).
+		// R1: the write SUCCEEDED — the server accepted the order and the till
+		// adopted its totals — but the money came back different, which is the one
+		// thing a cashier has to know about a sale that already left the counter.
+		//
+		// Deliberately NOT `sync.record`. That operationType means "this record's
+		// transfer", and `deriveStuckRecords` reads its newest `failed`/`rejected`
+		// row as "did not make it to the server". This row is written AFTER the
+		// `push.outcome` ok row — the push emits during the drain, the divergence
+		// rides the post-drain flush — so as a `sync.record` failure it won the tie
+		// and reported completed sales as undeliverable: "can't upload — server
+		// totals differ from the till", with a stuck pill on Orders. Observed on
+		// dev-next for 2 of 3 plain cash sales (70954-70956).
+		//
+		// `sync.money` keeps it at error, keeps the record named, keeps it
+		// filterable — and keeps it out of a derivation that is answering a
+		// different question. `failed` stays as the outcome because the POS's
+		// calculation genuinely did not survive; filtering by outcome must not hide
+		// it (the PY02001 lesson).
 		'push.money-divergence',
 		{
-			operationType: 'sync.record',
+			operationType: 'sync.money',
 			outcome: 'failed',
 			message: recordMessage('server totals differ from the till'),
 		},

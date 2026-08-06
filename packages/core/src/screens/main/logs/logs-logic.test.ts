@@ -261,6 +261,46 @@ describe('deriveStuckRecords', () => {
 	): LogRow =>
 		row({ logId, timestamp, outcome, operationType: 'sync.record', context, level: 'error' });
 
+	// Live regression, dev-next orders 70954-70956: a completed sale the server
+	// ACCEPTED was reported as "can't upload — server totals differ from the
+	// till" with a stuck pill on Orders, 2 sales out of 3. The R1 money-divergence
+	// row is written AFTER the push.outcome ok row, so as a `sync.record` failure
+	// it won this derivation's newest-wins tie and overturned a successful write.
+	// It is now `sync.money`; this pins that the derivation ignores it.
+	it('does not let a money-divergence advisory overturn a successful write', () => {
+		const rows = [
+			row({
+				logId: 'divergence',
+				timestamp: 400,
+				outcome: 'failed',
+				operationType: 'sync.money',
+				level: 'error',
+				context: {
+					recordId: '6cc42964',
+					collection: 'orders',
+					type: 'push.money-divergence',
+					reason: 'server totals differ from the till',
+				},
+			}),
+			recordRow('push-ok', 300, 'ok', { recordId: '6cc42964', collection: 'orders' }),
+		];
+
+		expect(deriveStuckRecords(rows)).toEqual([]);
+	});
+
+	it('still reports a record whose transfer really did fail', () => {
+		const rows = [
+			recordRow('push-failed', 400, 'failed', {
+				recordId: '6cc42964',
+				collection: 'orders',
+				reason: 'rest_invalid_param',
+			}),
+			recordRow('push-ok', 300, 'ok', { recordId: '6cc42964', collection: 'orders' }),
+		];
+
+		expect(deriveStuckRecords(rows).map((entry) => entry.recordId)).toEqual(['6cc42964']);
+	});
+
 	it('rules stuck from the latest decisive outcome per record', () => {
 		const rows = [
 			recordRow('newest', 300, 'failed', {
