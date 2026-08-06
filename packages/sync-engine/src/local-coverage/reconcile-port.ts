@@ -175,6 +175,7 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 			pullProducts: async (wooIds: number[], request?: ReconcileRequest) => {
 				if (collection === 'orders') {
 					for (const batch of chunk(wooIds, WOO_REST_MAX_PER_PAGE)) {
+						// No `dp` — see the monetary-precision note in rx-scheduler-order-fetcher (#946).
 						const response = await (request?.fetcher ?? fetcher)(
 							`${ports.site.syncBaseUrl}/orders?include=${batch.join(',')}&per_page=${batch.length}&orderby=include`,
 							request?.signal ? { signal: request.signal } : undefined

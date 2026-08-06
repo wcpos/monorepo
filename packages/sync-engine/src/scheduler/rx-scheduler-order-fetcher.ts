@@ -328,6 +328,37 @@ function targetedBatchSize(task: FetchTask, pullBatchSize?: () => number | undef
 	return Math.min(pullRequestLimit(task, pullBatchSize), WOO_REST_MAX_PER_PAGE);
 }
 
+/**
+ * MONETARY PRECISION — do NOT add `dp=6` to any order read URL below (#946).
+ *
+ * 1.9 delivered six-decimal money on every order read, but it did so SERVER-side:
+ * `V1\Orders_Controller::wcpos_dispatch_request` forced `$request->set_param('dp','6')`
+ * on the dispatched request, and the client's `dp: 6` (packages/query, deleted in #662)
+ * was belt-and-braces on top of it. The v2 sync lane never carried the server pin over,
+ * so pulled orders now arrive at the store's display decimals (typically 2dp) and
+ * sub-cent tax components round away.
+ *
+ * Restoring the param HERE alone would trade that rounding bug for a much worse one.
+ * The plugin stamps each proxied record's `_rxdb_revision` by hashing the payload AS
+ * SERVED (Sync/Revision.php::stamp_proxy_revisions → Order_Serializer::canonical_revision),
+ * and the client adopts that stamp as `sync.revision` (adoptStampedRevision) — its
+ * baseRevision for the next push. The write path recomputes the revision from a
+ * SYNTHETIC re-read that carries no `dp` (V2\Write_Controller::document_for /
+ * revision_matches_with_grace), so a client holding a 6dp-derived hash would fail the
+ * optimistic-concurrency check — a false 409 on every edit of a pulled order, with the
+ * legacy_revision grace path unable to bridge it either.
+ *
+ * The fix belongs server-side, pinned atomically across every order serialization so all
+ * of them hash identical bytes: Order_Serializer::serialize_order (covers /orders/pull,
+ * sync-index revision generation and the grace recompute), Catalog_Proxy_Controller::proxy
+ * for the orders forward, and Write_Controller::document_for — plus a sync-index revision
+ * rebuild, since the planner trusts already-persisted rows. Once that lands the client
+ * needs no param at all; precision becomes a server guarantee no client can forget.
+ *
+ * What this file DOES owe #946 is carrying whatever precision the server sends straight
+ * through to storage, unrounded and unreformatted — pinned for every read shape by
+ * "preserves server monetary precision verbatim on every order read shape" in the test.
+ */
 async function fetchBrowserOrderQuery(
 	input: OrdersSchedulerFetcherInput,
 	task: FetchTask,
@@ -447,6 +478,7 @@ async function fetchTargetedOrders(
 	const fetchedDocumentIds: string[] = [];
 
 	for (const idsBatch of chunk(ids, batchSize)) {
+		// No `dp` — see the monetary-precision note above fetchBrowserOrderQuery (#946).
 		const query = new URLSearchParams();
 		query.set('include', idsBatch.join(','));
 		query.set('per_page', String(idsBatch.length));

@@ -30,6 +30,8 @@ export async function pullCustomBatch(input: {
 	signal?: AbortSignal;
 }): Promise<PullResponse & { metrics?: ServerMetrics; responseBytes: number }> {
 	const checkpoint = normalizeCheckpoint(input.checkpoint);
+	// No `dp` — monetary precision is a SERVER guarantee on this route, not a client param.
+	// See the monetary-precision note in sync-engine's rx-scheduler-order-fetcher (#946).
 	const params = new URLSearchParams({
 		limit: String(input.limit),
 		updated_at_gmt: checkpoint.updatedAtGmt,

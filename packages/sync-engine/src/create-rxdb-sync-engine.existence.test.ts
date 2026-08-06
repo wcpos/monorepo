@@ -271,6 +271,71 @@ describe('existence maintenance lanes through the public facade', () => {
 		await e.dispose();
 	});
 
+	it('preserves server monetary precision verbatim through the order reconciliation read (#946)', async () => {
+		const sixDecimalMoney = {
+			total: '10.123456',
+			total_tax: '1.234567',
+			line_items: [
+				{
+					id: 1,
+					total: '8.888889',
+					total_tax: '0.740741',
+					taxes: [{ id: 1, total: '0.740741', subtotal: '0.740741' }],
+				},
+			],
+			tax_lines: [{ id: 2, tax_total: '1.234567', shipping_tax_total: '0.000001' }],
+		};
+		const reconciliationRequestUrls: string[] = [];
+		const fetcher = vi.fn(async (url: string) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/integrity/bucket')) {
+				return json({
+					ids:
+						parsed.searchParams.get('collection') === 'orders'
+							? [{ id: 42, digest: 'new-42', object_type: 'order' }]
+							: [],
+				});
+			}
+			if (parsed.pathname.endsWith('/orders')) {
+				reconciliationRequestUrls.push(url);
+				return json([
+					{
+						id: 42,
+						_rxdb_digest: 'new-42',
+						number: '42',
+						date_created_gmt: '2026-01-01T00:00:00',
+						date_modified_gmt: '2026-01-01T00:00:00',
+						status: 'processing',
+						customer_id: 0,
+						meta_data: [
+							{ key: '_woocommerce_pos_uuid', value: '42424242-4242-4242-8242-424242424242' },
+						],
+						...sixDecimalMoney,
+					},
+				]);
+			}
+			return json({ ids: [] });
+		});
+		const e = engine(fetcher);
+		await e.ready;
+		const db = e.active()!.database.collections;
+		await seed(db.existenceManifestOrders as never, {
+			id: '42',
+			wooId: 42,
+			digest: 'old-42',
+			objectType: 'order',
+		});
+
+		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
+		expect(reconciliationRequestUrls).toHaveLength(1);
+		expect(reconciliationRequestUrls.every((url) => !new URL(url).searchParams.has('dp'))).toBe(
+			true
+		);
+		const stored = await db.orders.findOne('42424242-4242-4242-8242-424242424242').exec();
+		expect(stored?.toJSON()).toMatchObject({ payload: sixDecimalMoney });
+		await e.dispose();
+	});
+
 	it('removes a resident product omitted by a publish-filtered reconciliation pull', async () => {
 		const productId = '77777777-7777-4777-8777-777777777777';
 		const fetcher = vi.fn(async (url: string) => {
