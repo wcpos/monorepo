@@ -892,8 +892,15 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 
 		// The row is NOT durably rejected…
 		expect((await q.all())[0]).toMatchObject({ status: 'claimed' });
-		// …so the drain must not claim it was.
+		// …so the drain must not claim it was, on any surface: not the result…
 		expect(result.rejected).toEqual([]);
+		// …and not the event the log pipeline classifies as a terminal rejection.
+		expect(events.some((event) => event.type === 'push.rejected')).toBe(false);
+		// It counts as a FAILURE and takes the backoff gate, or the lane reports a
+		// clean tick and re-claims the row every cycle — an unbounded retry+log loop.
+		expect(result.failed).toBe(1);
+		expect((await q.all())[0]).toMatchObject({ attempts: 1 });
+		expect(typeof (await q.all())[0]?.nextAttemptAt).toBe('string');
 		// …and the failure is reported at error level, naming the row, instead of
 		// being swallowed into a silence nobody can see.
 		const unpersisted = events.find((event) => event.type === 'push.dead-letter-unpersisted');

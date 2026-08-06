@@ -73,9 +73,22 @@ function deadLetterStuck$(engine: RxdbSyncEngine): Observable<StuckRecord[]> {
 			const mutations = database.collections[
 				MUTATION_QUEUE_RXDB_COLLECTION
 			] as unknown as MutationCollection;
-			return mutations
-				.find({ selector: { status: { $in: ['rejected'] } } })
-				.$.pipe(map((rows) => rows.map((row) => deadLetterToStuckRecord(toJson(row)))));
+			return mutations.find({ selector: { status: { $in: ['rejected'] } } }).$.pipe(
+				map((rows) => {
+					const described = rows.map((row) => deadLetterToStuckRecord(toJson(row)));
+					// Newest refusal first. The RxDB query has no sort clause (`rejectedAt`
+					// is not indexed), so without this the row the panel puts forward as
+					// THE one to act on is whatever order storage happened to return.
+					described.sort((a, b) => b.lastSeen - a.lastSeen);
+					// One entry per RECORD, not per mutation: a record can hold several
+					// dead letters (a requeue that was refused again leaves its own row),
+					// and counting them separately would tell the cashier there are three
+					// problems where there is one record to fix.
+					const byRecord = new Map<string, StuckRecord>();
+					for (const row of described) if (!byRecord.has(row.key)) byRecord.set(row.key, row);
+					return [...byRecord.values()];
+				})
+			);
 		})
 	);
 }
@@ -103,6 +116,12 @@ export function mergeStuckRecords(
 	durable: readonly StuckRecord[],
 	fromLogs: readonly StuckRecord[]
 ): StuckRecord[] {
-	const seen = new Set(durable.map((row) => row.key));
-	return [...durable, ...fromLogs.filter((row) => !seen.has(row.key))];
+	// Deduped across BOTH inputs, not just the log side: a record can hold several
+	// dead letters (a requeue refused again leaves its own row), and the panel's
+	// count is a count of records that need attention, not of queue rows.
+	const byRecord = new Map<string, StuckRecord>();
+	for (const row of [...durable, ...fromLogs]) {
+		if (!byRecord.has(row.key)) byRecord.set(row.key, row);
+	}
+	return [...byRecord.values()];
 }

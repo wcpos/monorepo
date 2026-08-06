@@ -224,17 +224,6 @@ export async function drainMutationQueue(input: {
 			reason?: string;
 			serverMessage?: string;
 		};
-		emit({
-			type: 'push.rejected',
-			level: 'warn',
-			collection: mutation.collectionName,
-			fields: {
-				recordId: mutation.recordId,
-				mutationId: mutation.mutationId,
-				status,
-				reason,
-			},
-		});
 		try {
 			// Persist the WHY ON the row (#832), not just in the event: the event is
 			// long gone by the time anyone looks, and a dead letter with no stated
@@ -257,6 +246,22 @@ export async function drainMutationQueue(input: {
 			// dead-lettered while storage still holds it as claimed/pending — the row
 			// is then invisible to recovery and to anyone reading the logs.
 			rejected.push({ mutation, status, reason });
+			// Emitted only once the verdict is DURABLE, for the same reason. The log
+			// pipeline classifies `push.rejected` as a terminal rejection and the
+			// health banner reads that classification, so emitting it on a failed
+			// write would put the row back on the very surface this change exists to
+			// keep honest — reporting a dead letter the queue does not hold.
+			emit({
+				type: 'push.rejected',
+				level: 'warn',
+				collection: mutation.collectionName,
+				fields: {
+					recordId: mutation.recordId,
+					mutationId: mutation.mutationId,
+					status,
+					reason,
+				},
+			});
 		} catch (error) {
 			// LOUD, not swallowed (#832 follow-up). The previous bare `catch {}` is
 			// how the 2026-08-06 dev-next smoke became undiagnosable: the drain
@@ -279,6 +284,14 @@ export async function drainMutationQueue(input: {
 					reason,
 				},
 			});
+			// Counted as a FAILURE and put behind the backoff gate. Without both, the
+			// drain returns `failed: 0, rejected: 0` — a clean-looking tick — while
+			// the row stays instantly re-claimable, so the write-drain lane retries it
+			// every cycle and the error event repeats forever. This is a double fault
+			// (the server refused it AND the queue would not record that), so it gets
+			// the same treatment as any other failed write: visible, and slowed down.
+			failed += 1;
+			await applyBackoff(mutation);
 		}
 		blockedRecords.add(mutation.recordId);
 	};

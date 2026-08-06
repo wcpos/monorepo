@@ -67,6 +67,16 @@ describe('dead-letter attention (durable, survives restart)', () => {
 		expect(merged[0].recordId).toBe('0cf8eb74-5db6-4d1c-8be2-bd579c304662');
 	});
 
+	it('counts one entry per RECORD when a record holds several dead letters', () => {
+		// A requeue that is refused again leaves its own row. That is one record to
+		// fix, not two problems.
+		const a = deadLetterToStuckRecord(deadLetter as never);
+		const b = deadLetterToStuckRecord({ ...deadLetter, mutationId: 'dead-2' } as never);
+
+		expect(a.key).toBe(b.key);
+		expect(mergeStuckRecords([a, b], [])).toHaveLength(1);
+	});
+
 	it('shows one entry per record, durable first, when both surfaces see it', () => {
 		const durable = deadLetterToStuckRecord(deadLetter as never);
 		const merged = mergeStuckRecords(
