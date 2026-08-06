@@ -35,6 +35,11 @@ import {
 import type { Fetcher, QueuedMutation, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
 
 import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
+import {
+	compareOrderMoney,
+	type MoneyDivergenceField,
+	type MoneyPrecisionMode,
+} from './order-money-divergence';
 import { queueFor, requeueBornTwiceSnapshot } from './write-intents';
 import { orderDocumentFromWooPayload } from '../scheduler';
 
@@ -106,6 +111,46 @@ export async function fetchOrderServerRevision(input: {
 	return orderDocumentFromWooPayload(payload as never).sync.revision || null;
 }
 
+/**
+ * The R1 save-time mirror check, as an ack candidate.
+ *
+ * Compares the PUSHED envelope payload with the ACK document — never the resident,
+ * which moves under an in-flight push (coupon replay, a fee recalculation, the
+ * cart's own totals patch) and would make ordinary cart activity look like server
+ * divergence. Returns null when there is nothing to report, so the caller stages
+ * one event or none.
+ *
+ * @param input.mutation - The mutation whose ack just landed.
+ * @param input.document - The server document from that ack, or null.
+ * @param input.bornTwice - True when the server answered 200 to a create and
+ *   DISCARDED the pushed payload; its document answers a different write, so
+ *   comparing them would report a divergence that never happened.
+ */
+function orderMoneyDivergenceEvent(input: {
+	mutation: QueuedMutation;
+	document: Record<string, unknown> | null;
+	bornTwice: boolean;
+}): Extract<WriteOutcomeEvent, { type: 'order-money-divergence' }> | null {
+	const { mutation, document, bornTwice } = input;
+	if (mutation.collectionName !== 'orders' || mutation.operation === 'delete') return null;
+	if (bornTwice || document === null) return null;
+	const pushed = mutation.payload;
+	if (typeof pushed !== 'object' || pushed === null || Array.isArray(pushed)) return null;
+	const divergence = compareOrderMoney({
+		pushed: pushed as Record<string, unknown>,
+		acked: document,
+	});
+	if (!divergence) return null;
+	return {
+		type: 'order-money-divergence',
+		collection: mutation.collectionName,
+		recordId: mutation.recordId,
+		mutationId: mutation.mutationId,
+		mode: divergence.mode,
+		fields: divergence.fields,
+	};
+}
+
 function revisionOf(document: Record<string, unknown> | null): string | null {
 	const revision = (document?.sync as { revision?: unknown } | undefined)?.revision;
 	return typeof revision === 'string' && revision !== '' ? revision : null;
@@ -140,6 +185,24 @@ export type WriteOutcomeEvent =
 			mutationId: string;
 			status?: number;
 			reason?: string;
+	  }
+	/**
+	 * R1: the server ACKED an order the POS built, but the money it returned is not
+	 * the money that was sent. WooCommerce's calculation is the source of truth and
+	 * the POS mirrors it — so this is the mirror breaking, and the cashier has to see
+	 * it before goods leave the counter.
+	 *
+	 * NOT terminal: the write succeeded, `write-acknowledged` still follows, and the
+	 * server's totals stand. This is an anomaly report riding alongside the outcome,
+	 * never a replacement for it.
+	 */
+	| {
+			type: 'order-money-divergence';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			mode: MoneyPrecisionMode;
+			fields: MoneyDivergenceField[];
 	  };
 
 export type WriteDrainReport = {
@@ -401,6 +464,16 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										identityDocument: pushResult.document ?? null,
 									};
 									await facet.reconcile(database, ack, signal);
+									// R1: stage the save-time mirror check next to the outcome it
+									// belongs to. STAGED, not emitted, for the same reason as the
+									// ack itself — a divergence announced for a mutation the queue
+									// has not yet released would fire again on the re-push.
+									const divergence = orderMoneyDivergenceEvent({
+										mutation,
+										document: pushResult.document ?? null,
+										bornTwice: bornTwiceCreate,
+									});
+									if (divergence) ackCandidates.push(divergence);
 									// BORN-TWICE honest reconcile (gate2 #516 item 1): a create the
 									// server answered 200 (not 201) matched an EXISTING document —
 									// the pushed payload was DISCARDED by the born-twice guard.
@@ -432,9 +505,32 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						});
 						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));
 						for (const ack of ackCandidates) {
-							if (!stillPending.has(ack.mutationId)) {
-								deps.emitWriteEvent(ack);
+							if (stillPending.has(ack.mutationId)) continue;
+							// A broken money mirror is a TERMINAL anomaly, not a transient step
+							// the arc later settles, so it logs at error (#899's outcome-based
+							// rule) and stamps its own outcome rather than letting the observer
+							// derive one. It rides the same still-pending gate as the event, so
+							// the durable row and the UI alert can never disagree about whether
+							// it happened.
+							if (ack.type === 'order-money-divergence') {
+								deps.diagnostics({
+									type: 'push.money-divergence',
+									level: 'error',
+									collection: ack.collection,
+									message: `order ${ack.recordId} — the server's totals differ from the POS calculation`,
+									fields: {
+										recordId: ack.recordId,
+										mutationId: ack.mutationId,
+										outcome: 'failed',
+										mode: ack.mode,
+										divergentFields: ack.fields.map((field) => field.field).join(','),
+										detail: ack.fields
+											.map((field) => `${field.field}: ${field.expected} -> ${field.got}`)
+											.join('; '),
+									},
+								});
 							}
+							deps.emitWriteEvent(ack);
 						}
 						for (const conflict of result.conflicts) {
 							deps.emitWriteEvent({

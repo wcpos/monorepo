@@ -52,6 +52,7 @@ import {
 	POS_ORDER_IDENTITY_META_KEYS,
 } from '../write-path/engine-order-repository';
 import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
+import { preserveEquivalentLocalPrecision } from '../write-path/order-money-divergence';
 import { taxRateDocumentId, type WooTaxRatePayload } from './tax-rate-schema';
 
 import type { RxDatabase } from 'rxdb';
@@ -167,6 +168,22 @@ export type AckIdentityGraft = (
 ) => Record<string, unknown>;
 
 /**
+ * A collection's rule for turning "what the resident holds" plus "what the ack
+ * projected" into the payload actually stored (#946 / R1).
+ *
+ * Wholesale replacement — the old behaviour — reads every property of the ack
+ * document as an assertion, including the ones it never made. Two are load-bearing
+ * for orders: a TRIMMED projection that omits `line_items` would delete the cart,
+ * and a 2dp rendering of `6.713280` would silently destroy precision the server
+ * never disputed. A collection with no such subtleties omits this and keeps the
+ * wholesale patch.
+ */
+export type AckPayloadAdoption = (
+	localPayload: Record<string, unknown>,
+	adoptedPayload: Record<string, unknown>
+) => Record<string, unknown>;
+
+/**
  * The write facet (slice 4): a collection is client-writeable ONLY when its
  * descriptor carries this — the push route existing server-side is not
  * enough; the ack write-back contract must exist too. Orthogonal to `shape`
@@ -230,6 +247,7 @@ function ackBookkeeping(options: {
 	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
 	preserveMetaKeys?: string[];
 	graftAckIdentity?: AckIdentityGraft;
+	adoptPayload?: AckPayloadAdoption;
 }): Pick<CollectionWriteFacet, 'reconcile' | 'onDeleteAck'> {
 	const {
 		collection,
@@ -238,6 +256,7 @@ function ackBookkeeping(options: {
 		documentPatchFromAckDocument,
 		preserveMetaKeys,
 		graftAckIdentity,
+		adoptPayload,
 	} = options;
 	return {
 		reconcile: async (db, ack, signal) => {
@@ -263,24 +282,29 @@ function ackBookkeeping(options: {
 				).filter((id) => id !== ack.mutation.mutationId);
 				const sync = (data.sync ?? {}) as { revision?: string; source?: string };
 				let adoptionPatch = ackDocumentPatch;
-				if (adoptionPatch && preserveMetaKeys && pending.length === 0) {
+				if (adoptionPatch && (preserveMetaKeys || adoptPayload) && pending.length === 0) {
 					const localPayload = (data.payload ?? {}) as Record<string, unknown>;
-					const adoptedPayload = (adoptionPatch.payload ?? {}) as Record<string, unknown>;
-					const localMeta = Array.isArray(localPayload.meta_data) ? localPayload.meta_data : [];
-					const adoptedMeta = Array.isArray(adoptedPayload.meta_data)
-						? [...adoptedPayload.meta_data]
-						: [];
-					for (const key of preserveMetaKeys) {
-						const localEntry = localMeta.find((entry) => entry?.key === key);
-						if (!localEntry) continue;
-						const index = adoptedMeta.findIndex((entry) => entry?.key === key);
-						if (index === -1) adoptedMeta.push(localEntry);
-						else adoptedMeta[index] = localEntry;
+					let adoptedPayload = (adoptionPatch.payload ?? {}) as Record<string, unknown>;
+					// The collection's own adoption rule runs FIRST — it decides what the
+					// ack actually ASSERTED, before any meta bookkeeping (see the orders
+					// facet: an omitted key is silence, not a deletion, and a narrower
+					// rendering of the same number is not a correction).
+					if (adoptPayload) adoptedPayload = adoptPayload(localPayload, adoptedPayload);
+					if (preserveMetaKeys) {
+						const localMeta = Array.isArray(localPayload.meta_data) ? localPayload.meta_data : [];
+						const adoptedMeta = Array.isArray(adoptedPayload.meta_data)
+							? [...adoptedPayload.meta_data]
+							: [];
+						for (const key of preserveMetaKeys) {
+							const localEntry = localMeta.find((entry) => entry?.key === key);
+							if (!localEntry) continue;
+							const index = adoptedMeta.findIndex((entry) => entry?.key === key);
+							if (index === -1) adoptedMeta.push(localEntry);
+							else adoptedMeta[index] = localEntry;
+						}
+						adoptedPayload = { ...adoptedPayload, meta_data: adoptedMeta };
 					}
-					adoptionPatch = withOrderColumns({
-						...adoptionPatch,
-						payload: { ...adoptedPayload, meta_data: adoptedMeta },
-					});
+					adoptionPatch = withOrderColumns({ ...adoptionPatch, payload: adoptedPayload });
 				}
 				const adopting = adoptionPatch !== null && pending.length === 0;
 				// #818: when adoption is SKIPPED — a successor is queued, the ack
@@ -363,6 +387,7 @@ function createWriteFacet(input: {
 	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
 	preserveMetaKeys?: string[];
 	graftAckIdentity?: AckIdentityGraft;
+	adoptPayload?: AckPayloadAdoption;
 	upsert?: CollectionWriteFacet['upsertServerDocument'];
 }): CollectionWriteFacet {
 	return {
@@ -405,6 +430,7 @@ function createWriteFacet(input: {
 				: {}),
 			...(input.preserveMetaKeys ? { preserveMetaKeys: input.preserveMetaKeys } : {}),
 			...(input.graftAckIdentity ? { graftAckIdentity: input.graftAckIdentity } : {}),
+			...(input.adoptPayload ? { adoptPayload: input.adoptPayload } : {}),
 		}),
 	};
 }
@@ -455,6 +481,18 @@ const ordersWriteFacet = createWriteFacet({
 			payload: orderDocument(document as WooPayload).payload as WooOrderPayload,
 		}) as unknown as Record<string, unknown>,
 	preserveMetaKeys: [...POS_ORDER_IDENTITY_META_KEYS],
+	// R1, the adoption half of the mirror contract. Two rules, both about what the
+	// ack DIDN'T say:
+	//  - key presence: the write contract permits a TRIMMED ack document, so a key
+	//    the server omitted keeps the resident's value. Wholesale adoption read an
+	//    omitted `line_items` as an empty cart and deleted the sale's lines.
+	//  - money width: a 2dp rendering of the same number is a serialization width,
+	//    not a correction (#946). Keeping the six-decimal local value preserves the
+	//    sub-cent tax components 1.9 shipped AND stops the cart from patching the
+	//    rounded value straight back — an oscillation the cashier never asked for.
+	//    A number that genuinely CHANGED is adopted verbatim: server is truth.
+	adoptPayload: (localPayload, adoptedPayload) =>
+		preserveEquivalentLocalPrecision(localPayload, { ...localPayload, ...adoptedPayload }),
 	// #818: WooCommerce APPENDS an order line posted without an `id`. Adoption is
 	// skipped while a successor is queued, so without this the resident — and
 	// every push built from it — keeps posting ID-LESS lines and duplicates the

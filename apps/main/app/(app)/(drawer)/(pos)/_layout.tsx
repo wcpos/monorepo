@@ -14,6 +14,7 @@ import {
 	useCurrentOrder,
 	useOpenOrdersResource,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
+import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
@@ -72,13 +73,20 @@ export default function POSLayout() {
 
 	return (
 		<Suspense>
-			<CurrentOrderProvider resource={resource} currentOrderUUID={orderId}>
-				<ErrorBoundary>
-					<Suspense>
-						<POSStack />
-					</Suspense>
-				</ErrorBoundary>
-			</CurrentOrderProvider>
+			{/* Above CurrentOrderProvider on purpose: a save-time money divergence (R1)
+			    can be acked for an order in a background tab, or while the cart screen
+			    itself is unmounted on a small layout. The subscription has to outlive
+			    both, and the store is keyed by order uuid so the alert surfaces on the
+			    tab it belongs to. */}
+			<OrderMoneyDivergenceProvider>
+				<CurrentOrderProvider resource={resource} currentOrderUUID={orderId}>
+					<ErrorBoundary>
+						<Suspense>
+							<POSStack />
+						</Suspense>
+					</ErrorBoundary>
+				</CurrentOrderProvider>
+			</OrderMoneyDivergenceProvider>
 		</Suspense>
 	);
 }

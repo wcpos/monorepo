@@ -126,6 +126,51 @@ function unambiguousLocalUuids(lines: unknown[]): Set<string> {
 	return new Set([...seen].filter(([, count]) => count === 1).map(([uuid]) => uuid));
 }
 
+/** One local line paired with the server line carrying the same identity uuid. */
+export type PairedLine = {
+	uuid: string;
+	local: Record<string, unknown>;
+	server: Record<string, unknown>;
+};
+
+/**
+ * Pair local lines with server lines on the SAME unambiguous-uuid rule the graft
+ * uses — a uuid present exactly once on each side. Shared with the money comparator
+ * (`order-money-divergence.ts`) so "which local line is which server line" has one
+ * answer in the write path: a comparator that paired lines more loosely than the
+ * graft would report divergence on a line the graft refused to touch, and a cashier
+ * would be told the wrong line changed.
+ *
+ * @param localLines - Lines from the pushed payload / the resident.
+ * @param serverLines - Lines from the server document.
+ * @returns One entry per unambiguously matched uuid, in local order.
+ */
+export function pairLinesByUuid(localLines: unknown[], serverLines: unknown[]): PairedLine[] {
+	if (!Array.isArray(localLines) || !Array.isArray(serverLines)) return [];
+	const local = unambiguousLocalUuids(localLines);
+	if (local.size === 0) return [];
+	const serverByUuid = new Map<string, Record<string, unknown> | null>();
+	for (const line of serverLines) {
+		if (!isRecord(line)) continue;
+		const claims = readLineUuidClaims(line);
+		for (const uuid of claims) {
+			// Same fail-closed rule as `serverIdentityIndex`: a uuid seen twice on the
+			// server side, or a line claiming two uuids, identifies nothing.
+			serverByUuid.set(uuid, claims.size === 1 && !serverByUuid.has(uuid) ? line : null);
+		}
+	}
+	const pairs: PairedLine[] = [];
+	for (const line of localLines) {
+		if (!isRecord(line)) continue;
+		const uuid = readLineUuid(line);
+		if (!uuid || !local.has(uuid)) continue;
+		const server = serverByUuid.get(uuid);
+		if (!server) continue;
+		pairs.push({ uuid, local: line, server });
+	}
+	return pairs;
+}
+
 /**
  * Graft the ack document's server-assigned line ids onto `payload`, matching on
  * the line's `_woocommerce_pos_uuid` meta. Local values are never touched and

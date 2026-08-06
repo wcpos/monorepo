@@ -263,6 +263,19 @@ const CONFORMANCE = new Map<string, Conformance>([
 		},
 	],
 	[
+		// R1: the write SUCCEEDED, so this is not a push failure — but the money came
+		// back different, which is the one thing a cashier has to know about a sale
+		// that already left the till. `failed` is the honest terminal outcome: the
+		// POS's calculation did not survive, and filtering the log by outcome must
+		// not hide it (the PY02001 lesson).
+		'push.money-divergence',
+		{
+			operationType: 'sync.record',
+			outcome: 'failed',
+			message: recordMessage('server totals differ from the till'),
+		},
+	],
+	[
 		'queue.write.needs-revision',
 		{
 			operationType: 'sync.record',

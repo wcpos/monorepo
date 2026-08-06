@@ -3,4 +3,5 @@
 // the './bench' sub-path precedent for non-engine modules.
 export * from './fakeWriteServer';
 export * from './fakePullServer';
+export * from './orderMoneyOracle';
 export { InMemoryRecordMutationStorage } from './recordMutationQueue';

@@ -234,6 +234,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "push.money-divergence",
+		"domain": "CHECKOUT",
+		"label": "Totals from your store differ from the till",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "push.outcome",
 		"domain": "SYNC",
 		"label": "Sent a change to your store",
