@@ -467,7 +467,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				// above. This is what makes a SORTED customers grid reach the wire: before it
 				// existed, a customers browse declared no demand at all, so sorting by anything
 				// re-ordered whichever residents the idle trickle happened to have walked to.
-				const browseWindow = parseCustomerBrowseWindowDescriptor(item.requirement.queryKey ?? '');
+				const browseQueryKey = item.requirement.queryKey ?? '';
+				const browseWindow = parseCustomerBrowseWindowDescriptor(browseQueryKey);
 				if (!browseWindow) {
 					throw new Error(
 						`require: unsupported customer query (${item.requirement.queryKey ?? 'missing queryKey'})`
@@ -493,6 +494,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						ownerId: 'require-plane',
 						fetcher: boundFetch as never,
 						diagnostics: deps.diagnostics,
+						taskId: `${browseQueryKey}:windowed`,
 						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						signal: item.abortController.signal,
 						onProgress: progressObserver(item.requirement),

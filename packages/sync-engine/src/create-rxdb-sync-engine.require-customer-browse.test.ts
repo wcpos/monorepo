@@ -22,6 +22,7 @@ import {
 	type RxdbSyncEngine,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
+import { seedTaxRatesLane } from './scheduler/rx-pos-bootstrap-seeder';
 import { memoryEngineStorage } from './testing';
 
 const SITE = 'https://lab.example.test';
@@ -175,6 +176,37 @@ describe('require() for the customers browse window', () => {
 
 		// The footer's total is the SERVER's count for this view, not the 100 rows held (#894/#945).
 		expect(await cachedTotalFor(engine, handle.queryKey!)).toBe(4_000);
+		handle.release();
+	});
+
+	it('ignores an unrelated failing scheduler task while draining a customer browse', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const server = scriptedCustomerBase(100);
+		let unrelatedRequests = 0;
+		const engine = engineWith(async (url) => {
+			if (new URL(url).pathname.endsWith('/customers')) return server.fetch(url);
+			unrelatedRequests += 1;
+			return new Response('unrelated task failed', { status: 500 });
+		});
+		await engine.ready;
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		await seedTaxRatesLane({ database: scope.database as never });
+		const unrelatedRequestsBeforeBrowse = unrelatedRequests;
+
+		const handle = engine.require({
+			id: 'customers-browse-isolated-drain',
+			collection: 'customers',
+			kind: 'customer-browse',
+			limit: 10,
+			orderby: 'id',
+			order: 'asc',
+		});
+		await expect(handle.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(server.requests.length).toBeGreaterThan(0);
+		expect(unrelatedRequests).toBe(unrelatedRequestsBeforeBrowse);
 		handle.release();
 	});
 
