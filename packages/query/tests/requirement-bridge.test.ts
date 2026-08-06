@@ -277,6 +277,23 @@ describe('requirementsForQuery extraction', () => {
 			expect(extended).toMatchObject({ limit: 110 });
 		});
 
+		// #850/#865 regression guard. use-default-customer.ts passes `wooIds: []` for the guest
+		// (id 0) so that NOTHING is fetched — its comment says "no fetch is ever declared". That
+		// selector compiles to `id: { $in: [] }`, which finiteWooIds reports as null (no targeted
+		// demand). Without this guard the browse branch then sees the hook's `id asc` sort and
+		// pulls a 100-row customer window on every cold POS mount — an eager customer seed, which
+		// is exactly what #865 rules out.
+		it('declares NOTHING for an empty finite-ID customer lookup, even with a sortable field', () => {
+			expect(
+				plan({
+					collectionName: 'customers',
+					selector: { id: { $in: [] } },
+					sort: [{ id: 'asc' }],
+					limit: 1,
+				})
+			).toEqual({ requirements: [], represented: false });
+		});
+
 		it('still prefers search and targeted demand over the browse window', () => {
 			expect(
 				onlyRequirement({

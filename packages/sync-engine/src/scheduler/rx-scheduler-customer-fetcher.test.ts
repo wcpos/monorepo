@@ -470,6 +470,48 @@ describe('createCustomerSchedulerFetcher', () => {
 			expect(fetcher).toHaveBeenCalledTimes(1);
 		});
 
+		// A proxy (or a browser without `Access-Control-Expose-Headers`) can hide X-WP-Total.
+		// `Number(null)` is 0, so a naive read caches a FRESH ZERO and the footer reports 0 for
+		// five minutes while rows are on screen — worse than admitting the total is unknown.
+		it('caches no total at all when the response exposes no X-WP-Total', async () => {
+			const fetcher = vi.fn(async (_url: string) =>
+				response(Array.from({ length: 7 }, (_, index) => customerPayload(index + 1)))
+			);
+			const kit = browseFetcher(fetcher);
+
+			const result = await kit.schedulerFetcher(browseTask(100));
+
+			expect(result).toMatchObject({ documentCount: 7 });
+			expect(kit.queryTotalRepository.upsert).not.toHaveBeenCalled();
+		});
+
+		// Offset pagination is not stable: a customer created between page requests shifts every
+		// later page by one, so a boundary row can repeat. RxDB's bulkUpsert throws COL22 on
+		// duplicate primary keys in one call, which would fail the WHOLE browse after several
+		// successful requests.
+		it('deduplicates repeated boundary rows so a mid-walk insert cannot fail the browse', async () => {
+			let page = 0;
+			const fetcher = vi.fn(async (_url: string) => {
+				page += 1;
+				// Page 2 repeats customer 50 — the shape an insert between requests produces.
+				const ids =
+					page === 1
+						? Array.from({ length: 50 }, (_, index) => index + 1)
+						: [50, ...Array.from({ length: 49 }, (_, index) => index + 51)];
+				return response(ids.map(customerPayload), {
+					'X-WP-Total': '4200',
+					'X-WP-TotalPages': '84',
+				});
+			});
+			const kit = browseFetcher(fetcher, { pullBatchSize: () => 50 });
+
+			await kit.schedulerFetcher(browseTask(100));
+
+			const upserted = kit.repository.upsertMany.mock.calls[0]?.[0] ?? [];
+			const ids = upserted.map((document) => document.id);
+			expect(new Set(ids).size).toBe(ids.length);
+		});
+
 		it('leaves the targeted and search lanes untouched', async () => {
 			const fetcher = vi.fn(async (_url: string) => response([customerPayload(12)]));
 			const kit = browseFetcher(fetcher);

@@ -567,6 +567,17 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 	// keep sorting local residents and the footer keeps admitting it is local. See
 	// CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES for the plugin change that widens this.
 	if (engineCollection === 'customers') {
+		// A selector carrying an `id` predicate is a targeted LOOKUP, never a browse. When it
+		// names ids the targeted branch above already returned; when it resolves to the EMPTY
+		// set it must still declare nothing. `use-default-customer.ts` relies on exactly that:
+		// it passes `wooIds: []` for the guest (id 0) so no request is made — passing `[0]` once
+		// jammed the customers cursor on every boot (#850) — and its own comment records that
+		// "no fetch is ever declared". Falling through to the browse would read that hook's
+		// `id asc` sort and pull a 100-row window on every cold POS mount, which is precisely
+		// the eager customer seed #865 rules out.
+		if (selector?.id !== undefined) {
+			return { requirements: [], represented: false };
+		}
 		const { dimensions, residual } = customerBrowseDimensions(selector, limit, input.sort);
 		if (dimensions.orderby === undefined) {
 			return { requirements: [], represented: false };

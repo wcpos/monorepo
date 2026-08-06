@@ -151,10 +151,20 @@ async function fetchCustomerBrowseWindow(
 		requestCount += 1;
 		const pagePayloads = JSON.parse(await response.text()) as WooCustomerPayload[];
 		payloads.push(...pagePayloads);
-		const headerTotal = Number(response.headers.get('X-WP-Total'));
-		if (Number.isSafeInteger(headerTotal) && headerTotal >= 0) totalRecords = headerTotal;
-		const headerPages = Number(response.headers.get('X-WP-TotalPages'));
-		if (Number.isSafeInteger(headerPages) && headerPages > 0) totalPages = headerPages;
+		// Read the RAW header first: a proxy (or a browser whose CORS response omits
+		// `Access-Control-Expose-Headers`) hides these, and `Number(null)` is 0 — which would
+		// cache a FRESH ZERO total and make the footer report 0 for five minutes while rows are
+		// on screen. An unknown total must stay unknown so the footer falls back to local.
+		const rawTotal = response.headers.get('X-WP-Total');
+		if (rawTotal !== null) {
+			const headerTotal = Number(rawTotal);
+			if (Number.isSafeInteger(headerTotal) && headerTotal >= 0) totalRecords = headerTotal;
+		}
+		const rawPages = response.headers.get('X-WP-TotalPages');
+		if (rawPages !== null) {
+			const headerPages = Number(rawPages);
+			if (Number.isSafeInteger(headerPages) && headerPages > 0) totalPages = headerPages;
+		}
 		if (pagePayloads.length < pageSize) {
 			exhausted = true;
 			break;
@@ -169,8 +179,18 @@ async function fetchCustomerBrowseWindow(
 		}
 	}
 
-	const windowPayloads = payloads.slice(0, limit);
-	const documents = windowPayloads.map(customerDocumentFromWooPayload);
+	// Offset pagination is not stable across requests: a customer created (or deleted) between
+	// two page requests shifts every later page, so a boundary row can arrive twice. RxDB's
+	// bulkUpsert REJECTS an input carrying duplicate primary keys (COL22), which would fail the
+	// whole browse after several otherwise-successful requests. Dedupe on the materialized
+	// storage id, keeping the first sighting so the server's ordering is preserved.
+	const documentsById = new Map<string, LocalCustomerDocument>();
+	for (const payload of payloads) {
+		const document = customerDocumentFromWooPayload(payload);
+		if (!documentsById.has(document.id)) documentsById.set(document.id, document);
+		if (documentsById.size === limit) break;
+	}
+	const documents = [...documentsById.values()];
 	await input.repository.upsertMany(documents);
 	// COMPLETE means "this lane holds every customer matching the query", which is true only
 	// when the server ran out inside the window. A truncated walk records an incomplete lane so
