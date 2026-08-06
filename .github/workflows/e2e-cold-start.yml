@@ -42,12 +42,16 @@ jobs:
             exit 1
           fi
 
+      # No uniwind-auth-token here, deliberately: this job checks out `next`, so
+      # it runs *next's* copy of the composite action, and next dropped the
+      # uniwind-pro auth plumbing in 0e9d5b761 (pro's download quota was
+      # exhausted; the override is free uniwind@1.10.0, which installs with no
+      # token). Passing it would be an undeclared input — a warning and a no-op.
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
-          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
       - name: 💾 Cache Playwright browsers
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
