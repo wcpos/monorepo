@@ -22,11 +22,7 @@ import { CollectionKey, useCollection } from '../use-collection';
 const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 
 type Document =
-	| OrderDocument
-	| ProductDocument
-	| CustomerDocument
-	| ProductVariationDocument
-	| CouponDocument;
+	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
 
 interface Props {
 	collectionName: CollectionKey;
