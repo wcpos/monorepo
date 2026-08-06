@@ -173,6 +173,19 @@ export async function enqueueWriteIntent(input: {
 		const pendingRows = recordRows.filter(
 			(item) => item.status === undefined || item.status === 'pending'
 		);
+		// DEAD-LETTER RECOVERY GUARD (#832), checked HERE — inside the loop, against
+		// the same `rows` read that decides coalescing — because checking it before
+		// the loop is not enough: a delete enqueued in between would become the
+		// coalesce target, and coalescing takes the INCOMING operation
+		// (delete∘update = update), so the delete row would be swapped away and the
+		// cashier's deletion silently cancelled. A recovery replays an OLD intent;
+		// it must never win over a newer deletion. If a delete lands after this read
+		// the CAS below refuses and the next iteration re-reads and finds it.
+		if (input.provenance && recordRows.some((item) => item.operation === 'delete')) {
+			throw new Error(
+				`requeue: ${intent.collection}/${intent.recordId} is queued for deletion — sending the refused change again would undo that; discard instead`
+			);
+		}
 		// The coalesce target (#516 rules 1–2): the LAST pending row, and only when
 		// it has NEVER been claimed/pushed (attempts > 0 ⇒ the server may already
 		// hold that exact mutation — a fresh-id replacement would replay into the
@@ -367,6 +380,33 @@ export async function enqueueWriteIntent(input: {
 				collection: mutation.collectionName,
 				fields: { recordId: mutation.recordId, removed: 1, added: 1 },
 			});
+		} else if (input.provenance) {
+			// CONDITIONAL append for a recovery (#832), the same idiom
+			// requeueBornTwiceSnapshot uses: prove the record's row-set is unchanged
+			// INSIDE the queue's serialized turn. Without it, a delete enqueued
+			// between the read above and this append would sit AHEAD of the rebuilt
+			// intent — and a rebuilt CREATE ordered after a delete recreates a record
+			// the cashier just deleted. On mismatch, re-read and re-decide; the
+			// delete guard at the top of the loop then refuses.
+			const observedIds = recordRows
+				.map((item) => item.mutationId)
+				.sort()
+				.join('|');
+			const queued = await queue.enqueueWhen(
+				mutation,
+				(fresh) =>
+					fresh
+						.filter(
+							(item) =>
+								item.collectionName === intent.collection &&
+								item.recordId === intent.recordId &&
+								item.status !== 'rejected'
+						)
+						.map((item) => item.mutationId)
+						.sort()
+						.join('|') === observedIds
+			);
+			if (queued === null) continue;
 		} else {
 			await queue.enqueue(mutation);
 		}
@@ -540,25 +580,18 @@ export async function requeueRejectedMutation(input: {
 			requeueCount: (entry.requeueCount ?? 0) + 1,
 		},
 	});
-	// TOCTOU compensation: a delete for this record can enqueue in the window
-	// between the check above and this enqueue, and it would now sit AHEAD of the
-	// replacement — a rebuilt create would then recreate a record the cashier just
-	// deleted. Unwind (the row is still pending; removePending refuses if a drain
-	// claimed it, in which case the push is already in flight and cancelling it
-	// would be worse) and refuse, leaving the dead letter listed and recoverable.
-	const raced = sameRecord(await queue.pending()).find(
-		(item) => item.operation === 'delete' && item.mutationId !== receipt.mutationId
-	);
-	if (raced) {
+	// The replacement is durable; retire the dead letter — CONDITIONALLY, so two
+	// concurrent recoveries of one dead letter cannot both succeed. Exactly one
+	// wins the CAS; the loser unwinds the replacement it just enqueued (still
+	// pending — removePending refuses if a drain claimed it in the meantime, and
+	// cancelling an in-flight push would be worse than letting the server's
+	// born-twice guard absorb the duplicate) and refuses.
+	if (!(await queue.removeIfStatus(entry.mutationId, 'rejected'))) {
 		await queue.removePending(receipt.mutationId);
 		throw new Error(
-			`requeue: ${entry.collectionName}/${entry.recordId} was queued for deletion while it was being rebuilt — discard instead`
+			`requeue: dead letter "${entry.mutationId}" was settled by something else mid-rebuild — refresh the list`
 		);
 	}
-	// The replacement is durable; retire the dead letter. If this remove fails the
-	// dead letter simply stays listed — a duplicate the cashier can discard — which
-	// is the failure direction that never loses a sale.
-	await queue.remove([entry.mutationId]);
 	// The dead-letter cleanup dropped this id from the record's pendingMutationIds
 	// when it was rejected; enqueueWriteIntent has already re-marked the record
 	// dirty under the replacement's id, so no extra bookkeeping is owed here.

@@ -1697,6 +1697,69 @@ describe('#507 offline write flows through the public handle', () => {
 		}
 	});
 
+	it('#832: a delete that lands DURING the rebuild still wins — the recovery refuses instead of coalescing over it', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			// Slip the delete in AFTER the pre-flight check has already passed: the
+			// resident read inside the rebuild is the last await before the enqueue
+			// decision, so enqueueing here lands the delete in exactly the window the
+			// pre-flight check cannot see. Coalescing takes the INCOMING operation, so
+			// without the in-loop guard the delete row would be swapped for an update
+			// and the cashier's deletion would vanish silently.
+			const orders = scope.database.collections.orders as unknown as {
+				findOne(id: string): { exec(): Promise<unknown> };
+			};
+			const realFindOne = orders.findOne.bind(orders);
+			let reads = 0;
+			orders.findOne = (id: string) => ({
+				exec: async () => {
+					const doc = await realFindOne(id).exec();
+					// The FIRST read is the recovery's own pre-flight; its delete check
+					// runs after it. The SECOND is inside enqueueWriteIntent's decision
+					// loop — past every pre-flight, which is precisely the window only
+					// the in-loop guard covers.
+					reads += 1;
+					if (reads === 2) {
+						await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+					}
+					return doc;
+				},
+			});
+
+			await expect(engine.resolveConflict('refused-update', 'requeue-rebuilt')).rejects.toThrow(
+				/queued for deletion/i
+			);
+			orders.findOne = realFindOne;
+
+			// The delete survived, and no rebuilt update replaced it.
+			const rows = await queueRows(engine);
+			expect(rows.filter((row) => row.operation === 'delete')).toHaveLength(1);
+			expect(rows.filter((row) => row.requeuedFrom !== undefined)).toEqual([]);
+			expect((await engine.conflicts()).map((row) => row.mutationId)).toEqual(['refused-update']);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('regression 5: same-millisecond create+update under a fixed clock drains AS the create, carrying the latest snapshot', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_500 });
 		const engine = engineWith({

@@ -270,6 +270,29 @@ describe('RecordMutationQueue', () => {
 });
 
 describe('RecordMutationQueue — conditional (CAS) transitions (#507 P1-2)', () => {
+	it('#832: removeIfStatus settles a dead letter exactly once, so concurrent recoveries cannot both win', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		const row = await q.enqueue(mut({ mutationId: 'm-dead' }));
+		await q.replace({ ...row, status: 'rejected' });
+
+		// Both recoveries raced to here; only one may retire the row.
+		const [first, second] = await Promise.all([
+			q.removeIfStatus('m-dead', 'rejected'),
+			q.removeIfStatus('m-dead', 'rejected'),
+		]);
+		expect([first, second].filter(Boolean)).toHaveLength(1);
+		expect(await q.all()).toEqual([]);
+	});
+
+	it('#832: removeIfStatus refuses a row that is no longer in the expected status', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await q.enqueue(mut({ mutationId: 'm-pending' }));
+
+		expect(await q.removeIfStatus('m-pending', 'rejected')).toBe(false);
+		expect(await q.removeIfStatus('m-absent', 'rejected')).toBe(false);
+		expect((await q.all()).map((m) => m.mutationId)).toEqual(['m-pending']);
+	});
+
 	it('claim refuses a row that was removed after the scan — never resurrects it', async () => {
 		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
 		const row = await q.enqueue(mut({ mutationId: 'm-annihilated' }));

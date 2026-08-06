@@ -57,9 +57,12 @@ function toJson(row: MutationRow): EngineConflict {
 
 function labelFor(resident: Record<string, unknown> | null, entry: EngineConflict): string | null {
 	const payload = (entry.payload ?? {}) as Record<string, unknown>;
-	const source = resident ?? payload;
-	const number = source.number ?? payload.number;
-	const total = source.total ?? payload.total;
+	// Three sources, best first: orders promote `number`/`total` to the document
+	// root; a collection without promoted columns keeps them in the resident's
+	// nested payload; the queued snapshot is the last resort.
+	const residentPayload = (resident?.payload ?? {}) as Record<string, unknown>;
+	const number = resident?.number ?? residentPayload.number ?? payload.number;
+	const total = resident?.total ?? residentPayload.total ?? payload.total;
 	const parts = [
 		typeof number === 'string' && number !== '' ? `#${number}` : null,
 		typeof total === 'string' && total !== '' ? total : null,
@@ -74,8 +77,24 @@ async function describe(
 	const described = await Promise.all(
 		rows.map(async (row) => {
 			const entry = toJson(row);
-			const doc = await database.collections[entry.collectionName]?.findOne(entry.recordId).exec();
-			const resident = (doc?.toJSON() ?? null) as Record<string, unknown> | null;
+			// A failed read must NOT reject this Promise.all: the observable would
+			// error, useObservableSuspense would rethrow during render, and Suspense
+			// does not catch errors — one bad storage read would blank the entire
+			// Database health screen. This is a diagnostic surface; it degrades.
+			// `readFailed` is tracked separately from "no such record" because they
+			// mean opposite things for recovery: a genuinely absent record cannot be
+			// rebuilt, while a read that merely failed says nothing about the record,
+			// so requeue must stay offered rather than be silently disabled.
+			let resident: Record<string, unknown> | null = null;
+			let readFailed = false;
+			try {
+				const doc = await database.collections[entry.collectionName]
+					?.findOne(entry.recordId)
+					.exec();
+				resident = (doc?.toJSON() ?? null) as Record<string, unknown> | null;
+			} catch {
+				readFailed = true;
+			}
 			return {
 				mutationId: entry.mutationId,
 				collectionName: entry.collectionName,
@@ -87,7 +106,7 @@ async function describe(
 				status: entry.rejectedStatus ?? null,
 				rejectedAt: entry.rejectedAt ?? null,
 				requeueCount: entry.requeueCount ?? 0,
-				residentMissing: resident === null,
+				residentMissing: resident === null && !readFailed,
 			};
 		})
 	);

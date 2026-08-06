@@ -307,6 +307,24 @@ export class RecordMutationQueue {
 		await this.storage.remove(mutationIds);
 	}
 
+	/**
+	 * Conditional remove (CAS) for a TERMINAL row — the dead-letter recovery's
+	 * transition (#832): drop the row ONLY IF it still holds `status`. Returns
+	 * false when it is gone or already moved, which is how two concurrent
+	 * resolutions of one dead letter settle: exactly one wins the remove, and the
+	 * loser compensates by unwinding the replacement it enqueued. Without it both
+	 * would enqueue a rebuild and both would remove, leaving two live writes for
+	 * one recovery.
+	 */
+	async removeIfStatus(mutationId: string, status: QueuedMutation['status']): Promise<boolean> {
+		return this.transact(async () => {
+			const row = (await this.storage.list()).find((item) => item.mutationId === mutationId);
+			if (!row || row.status !== status) return false;
+			await this.storage.remove([mutationId]);
+			return true;
+		});
+	}
+
 	/** EVERY stored entry, terminal rows included — the engine's `conflicts()` reads this. */
 	async all(): Promise<QueuedMutation[]> {
 		return this.storage.list();

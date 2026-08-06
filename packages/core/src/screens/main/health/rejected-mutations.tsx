@@ -71,12 +71,8 @@ export function RejectedMutationsPanel() {
 				type: 'success',
 				text1:
 					resolution === 'discard'
-						? t('health.database.rejected.discarded', {
-								defaultValue: 'Change discarded.',
-							})
-						: t('health.database.rejected.requeued', {
-								defaultValue: 'Queued to send again.',
-							}),
+						? t('health.database.rejected.discarded')
+						: t('health.database.rejected.requeued'),
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -93,12 +89,8 @@ export function RejectedMutationsPanel() {
 				type: 'error',
 				text1:
 					resolution === 'discard'
-						? t('health.database.rejected.discard_failed', {
-								defaultValue: "Couldn't discard that change.",
-							})
-						: t('health.database.rejected.requeue_failed', {
-								defaultValue: "Couldn't queue that again.",
-							}),
+						? t('health.database.rejected.discard_failed')
+						: t('health.database.rejected.requeue_failed'),
 				text2: message,
 			});
 		} finally {
@@ -113,14 +105,10 @@ export function RejectedMutationsPanel() {
 					<Text className="text-destructive text-sm font-semibold">
 						{t('health.database.rejected.title', {
 							count: rows.length,
-							defaultValue: '{count} changes never reached your server',
 						})}
 					</Text>
 					<Text className="text-muted-foreground text-xs">
-						{t('health.database.rejected.body', {
-							defaultValue:
-								'Your server refused these and nothing will retry them on its own. Send again rebuilds each one from what is on this device; discard drops the local change and keeps your server’s version.',
-						})}
+						{t('health.database.rejected.body')}
 					</Text>
 				</VStack>
 			</Callout>
@@ -139,7 +127,6 @@ export function RejectedMutationsPanel() {
 									<Pill tone="warning" testID={`db-rejected-tries-${row.mutationId}`}>
 										{t('health.database.rejected.tries', {
 											count: row.requeueCount,
-											defaultValue: 'sent again {count}×',
 										})}
 									</Pill>
 								) : null}
@@ -149,16 +136,12 @@ export function RejectedMutationsPanel() {
 								<Text className="text-muted-foreground/80 text-xs">
 									{t('health.database.rejected.when', {
 										ago: relative(Date.parse(row.rejectedAt), nowMs),
-										defaultValue: 'refused {ago}',
 									})}
 								</Text>
 							) : null}
 							{row.residentMissing ? (
 								<Text className="text-muted-foreground/80 text-xs">
-									{t('health.database.rejected.no_record', {
-										defaultValue:
-											'This record is no longer on this device, so there is nothing left to send — discard is the only option.',
-									})}
+									{t('health.database.rejected.no_record')}
 								</Text>
 							) : null}
 						</View>
@@ -170,9 +153,7 @@ export function RejectedMutationsPanel() {
 								disabled={busyId !== null || row.residentMissing}
 								onPress={() => void settle(row, 'requeue-rebuilt')}
 							>
-								<ButtonText>
-									{t('health.database.rejected.requeue', { defaultValue: 'Send again' })}
-								</ButtonText>
+								<ButtonText>{t('health.database.rejected.requeue')}</ButtonText>
 							</Button>
 							<Button
 								variant="ghost"
@@ -182,7 +163,7 @@ export function RejectedMutationsPanel() {
 								onPress={() => setDiscarding(row)}
 							>
 								<ButtonText className="text-destructive">
-									{t('health.database.rejected.discard', { defaultValue: 'Discard' })}
+									{t('health.database.rejected.discard')}
 								</ButtonText>
 							</Button>
 						</HStack>
@@ -198,16 +179,9 @@ export function RejectedMutationsPanel() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>
-							{t('health.database.rejected.discard_title', {
-								defaultValue: 'Discard this change?',
-							})}
-						</AlertDialogTitle>
+						<AlertDialogTitle>{t('health.database.rejected.discard_title')}</AlertDialogTitle>
 						<AlertDialogDescription>
-							{t('health.database.rejected.discard_body', {
-								defaultValue:
-									'The refused change is dropped and your server’s version is kept. Nothing is sent. If your server never received this sale, discarding gives up on delivering it — the record stays on this device but will never reach your server. This cannot be undone.',
-							})}
+							{t('health.database.rejected.discard_body')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -223,7 +197,7 @@ export function RejectedMutationsPanel() {
 							}}
 						>
 							<Text className="text-destructive">
-								{t('health.database.rejected.discard_confirm', { defaultValue: 'Discard' })}
+								{t('health.database.rejected.discard_confirm')}
 							</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>
@@ -249,9 +223,5 @@ function describeReason(row: RejectedMutation, t: Translate): string {
 	const parts = [row.status !== null ? String(row.status) : null, row.reason, row.message].filter(
 		(part): part is string => typeof part === 'string' && part !== ''
 	);
-	return parts.length > 0
-		? parts.join(' · ')
-		: t('health.database.rejected.no_reason', {
-				defaultValue: 'Your server refused it without saying why.',
-			});
+	return parts.length > 0 ? parts.join(' · ') : t('health.database.rejected.no_reason');
 }
