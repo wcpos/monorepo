@@ -375,9 +375,11 @@ describe('seedOrderSchedulerTasks', () => {
 				database: MOCK_DATABASE,
 				status: 'processing',
 				search: '',
-				limit: 201,
+				// #957 flips this pin deliberately: 201 is an ordinary window now, and only
+				// the runaway backstop refuses.
+				limit: 100_001,
 			})
-		).rejects.toThrow('Browser order scheduler descriptors cannot exceed 200 records');
+		).rejects.toThrow('Browser order scheduler descriptors cannot exceed 100000 records');
 		await expect(
 			seedOrderFilterSchedulerTask({
 				database: MOCK_DATABASE,

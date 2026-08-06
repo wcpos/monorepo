@@ -1,8 +1,68 @@
+import {
+	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
+	clampToBrowseWindowBackstop,
+	isBrowseWindowLimit,
+} from './browse-window-continuation';
+
 import type { OrderBrowseDimensions } from '../require-plane';
 
 export const WOO_REST_MAX_PER_PAGE = 100;
-export const ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS = WOO_REST_MAX_PER_PAGE * 2;
 export const ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON = 'descriptor is not supported';
+
+/**
+ * Window growth quantum past the first page (#948/#957 — mirrors
+ * PRODUCT_BROWSE_WINDOW_STEP). The orders grid extends its limit 10 rows at a time; below
+ * one Woo page the limit travels verbatim (a cold grid must not pull 100 orders to show
+ * 10), and above it the window rounds up to this step so scrolling to row 5,000 mints ~50
+ * coverage lanes rather than 500.
+ */
+export const ORDER_BROWSE_WINDOW_STEP = WOO_REST_MAX_PER_PAGE;
+
+/**
+ * Record ceiling for a RANGED FETCH-TO-COMPLETION browse (`limit=all`, Reports only).
+ * Distinct from a scroll window: nothing here is scroll-driven, the caller asked for the
+ * whole date range, and this is the sanity bound on that.
+ */
+export const ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS = 10_000;
+
+/**
+ * Quantize a requested orders browse window (#948/#957).
+ *
+ * Replaces the old `Math.min(…, ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS = 200)`
+ * clamp. That clamp was not merely a small ceiling — because the limit travels IN the lane
+ * key, clamping made every `extendLimit` past 200 produce the identical key, which the
+ * scheduler deduped as already-done work, so no further window was ever requested and the
+ * grid dead-ended in silence. Quantizing (rather than clamping) keeps the key space small
+ * while keeping successive windows DISTINCT.
+ */
+export function normalizeOrderBrowseWindowLimit(limit: number): number {
+	if (!Number.isFinite(limit)) return 10;
+	const requested = Math.max(1, Math.trunc(clampToBrowseWindowBackstop(limit)));
+	if (requested <= ORDER_BROWSE_WINDOW_STEP) return requested;
+	return clampToBrowseWindowBackstop(
+		Math.ceil(requested / ORDER_BROWSE_WINDOW_STEP) * ORDER_BROWSE_WINDOW_STEP
+	);
+}
+
+/**
+ * The lane identity of the orders window ONE GROWTH STEP smaller — the prefix a growing
+ * window resumes from (#957; see browse-window-continuation.ts). The limit is the LAST
+ * field of this grammar, so the predecessor is the same key with a smaller `:limit=`
+ * suffix; every other dimension is preserved verbatim, which is what keeps a
+ * customer/cashier/store/date-scoped browse continuing from its own prefix.
+ */
+export function orderBrowserPredecessorWindow(
+	queryKey: string,
+	limit: number
+): { queryKey: string; limit: number } | null {
+	// Below the quantum the grid still extends 10 rows at a time, so the predecessor is
+	// one UI page back; above it, one full step.
+	const previous = limit > ORDER_BROWSE_WINDOW_STEP ? limit - ORDER_BROWSE_WINDOW_STEP : limit - 10;
+	if (previous <= 0) return null;
+	const suffix = `:limit=${limit}`;
+	if (!queryKey.endsWith(suffix)) return null;
+	return { queryKey: `${queryKey.slice(0, -suffix.length)}:limit=${previous}`, limit: previous };
+}
 
 export type OrderBrowserSchedulerDescriptor = {
 	queryKey: string;
@@ -64,31 +124,20 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 			? ''
 			: `:orderby=${dims.orderby}:order=${dims.order}`;
 	const limit =
-		dims.limit === 'all'
-			? 'all'
-			: Number.isFinite(dims.limit)
-				? Math.min(
-						Math.max(1, Math.trunc(dims.limit as number)),
-						ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS
-					)
-				: 10;
+		dims.limit === 'all' ? 'all' : normalizeOrderBrowseWindowLimit(dims.limit as number);
 
 	return `orders:browser:status=${status}${dimension('customer', safeNonNegativeInteger(dims.customerId))}${dimension('cashier', safeNonNegativeInteger(dims.cashierId))}${dimension('store', store)}${dimension('after', afterSeconds)}${dimension('before', beforeSeconds)}${sortPart}:search=${search}:limit=${limit}`;
 }
 
 export function browserOrderSchedulerDescriptorLimit(limitText: string): number | null {
 	const limit = Number(limitText);
-	if (
-		!Number.isSafeInteger(limit) ||
-		limit <= 0 ||
-		limit > ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS
-	)
-		return null;
-	return limit;
+	// Only the runaway backstop refuses now (#957). The old 200-record refusal is gone:
+	// a window is however many orders the cashier has scrolled to.
+	return isBrowseWindowLimit(limit) ? limit : null;
 }
 
 export function browserOrderSchedulerDescriptorLimitError(): string {
-	return `Browser order scheduler descriptors cannot exceed ${ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS} records`;
+	return `Browser order scheduler descriptors cannot exceed ${BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT} records`;
 }
 
 export function parseOrderBrowserSchedulerDescriptor(
@@ -144,7 +193,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 		};
 	}
 	const limit = complete
-		? ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS
+		? ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS
 		: browserOrderSchedulerDescriptorLimit(limitText);
 	if (limit === null) return { skipReason: browserOrderSchedulerDescriptorLimitError() };
 

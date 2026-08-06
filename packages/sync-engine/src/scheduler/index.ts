@@ -23,13 +23,21 @@ export type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seed
 
 // Descriptors
 export {
+	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
+	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
+} from './browse-window-continuation';
+export {
+	normalizeOrderBrowseWindowLimit,
+	ORDER_BROWSE_WINDOW_STEP,
 	orderBrowserQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
 export {
+	normalizeProductBrowseWindowLimit,
 	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_LIMIT,
+	PRODUCT_BROWSE_WINDOW_STEP,
 	productBrowseWindowQueryKeyFromDimensions,
 	type ProductBrowseWindowOrderby,
 } from './product-browse-window-descriptor';

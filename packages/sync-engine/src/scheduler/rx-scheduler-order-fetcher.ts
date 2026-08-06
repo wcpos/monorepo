@@ -8,11 +8,22 @@ import {
 	shouldApplyPulledDocument,
 	type SyncCheckpoint,
 	syncCustomPullBatchIntoRepository,
+	type SyncObserver,
 	type WooOrderPayload,
 } from '@wcpos/sync-core';
 
 import { materializeLocalOnly } from '../materialization/record-materialization';
 import {
+	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
+	type BrowseWindowContinuation,
+	browseWindowPrefixSurvived,
+	mergeBrowseWindowRecordIds,
+	NO_BROWSE_WINDOW_CONTINUATION,
+	readBrowseWindowContinuation,
+} from './browse-window-continuation';
+import {
+	ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS,
+	orderBrowserPredecessorWindow,
 	parseOrderBrowserSchedulerDescriptor,
 	WOO_REST_MAX_PER_PAGE,
 } from './order-browser-scheduler-descriptor';
@@ -38,8 +49,11 @@ const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
  * the SAME newest 10,000 records, so a range with more orders than this could never converge.
  * It now bounds how much ONE drain pass will do: the lane stays honestly incomplete, a
  * continuation cursor is persisted on it, and the next pass picks up where this one stopped.
+ *
+ * Defined once in the descriptor module (#957) so the parser's `limit=all` descriptor and this
+ * walk cannot drift apart.
  */
-const RANGED_COMPLETE_MAX_RECORDS = 10_000;
+const RANGED_COMPLETE_MAX_RECORDS = ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS;
 /**
  * How many boundary-second ids the resume cursor will carry in `exclude`. WP's date columns
  * have one-second resolution, so a page can split a group of orders sharing one creation
@@ -66,6 +80,12 @@ export type OrdersSchedulerCoverageRepository = {
 		nowMs: number;
 		freshForMs: number;
 	}): Promise<void>;
+	/**
+	 * Serves two readers: #954's ranged resume cursor, and #957's browse-window
+	 * CONTINUATION, which asks how much of a growing window is already covered so extending
+	 * 200 → 300 fetches one page rather than three. Structurally a
+	 * BrowseWindowLaneReader; `rangedResume` is simply ignored by that consumer.
+	 */
 	readLocalLaneCoverage?(
 		collection: string,
 		queryKey: string,
@@ -88,11 +108,18 @@ export type OrdersSchedulerFetcherInput = {
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
 	pullBatchSize?: () => number | undefined;
+	diagnostics?: SyncObserver;
 	/**
 	 * Resolved before each pull batch; pulled documents whose ids are in the
 	 * set are skipped so scheduled pulls never overwrite queued local work.
 	 */
 	pendingMutationOrderIds?: () => Promise<ReadonlySet<string | number>>;
+	/**
+	 * The ONE browse-window lane key an explicitly user-driven sync is refreshing. Only
+	 * THAT window re-walks from page 1 instead of resuming from its covered prefix; every
+	 * other queued window keeps its continuation.
+	 */
+	refreshBrowseWindowKey?: string;
 };
 
 function assertSupportedOrderTask(task: FetchTask): void {
@@ -556,6 +583,7 @@ async function fetchBrowserOrderQuery(
 	input: OrdersSchedulerFetcherInput,
 	task: FetchTask,
 	descriptor: NonNullable<ReturnType<typeof browserOrderQueryDescriptor>>,
+	continuation: BrowseWindowContinuation,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
 	if (task.collection !== 'orders') {
@@ -588,8 +616,28 @@ async function fetchBrowserOrderQuery(
 	// with every per-page publish, so a wipe mid-pass is caught at the very next write.
 	let publishedResume: RangedLaneResumeState | null = previousResume?.state ?? null;
 
-	const recordLimit = descriptor.limit ?? RANGED_COMPLETE_MAX_RECORDS;
+	const windowLimit = descriptor.limit ?? RANGED_COMPLETE_MAX_RECORDS;
+	// #957 — the WINDOWED analogue of the ranged cursor above, and deliberately a different
+	// mechanism. A ranged walk owns its whole range and re-cursors by DATE; a scroll window
+	// takes a bounded positional slice of the same listing, so it resumes at a RECORD
+	// OFFSET. `covered` is always 0 on the ranged path (the continuation is refused for
+	// `descriptor.complete`), so the two never interact.
+	const covered = continuation.covered;
+	const recordLimit = windowLimit - covered;
+	const skipInResumePage = covered % descriptor.perPage;
+	let nextPageNumber = Math.floor(covered / descriptor.perPage) + 1;
+	// See the page-budget note in the loop: only a walk that can resume may be truncated.
+	const resumable = !descriptor.complete && descriptor.search === '';
 	while (documentCount < recordLimit) {
+		// The per-drain page budget only applies to a walk that can RESUME. Truncating one
+		// that cannot is not a pause, it is a ceiling: the walk would stop at the same page
+		// every attempt and the records beyond it could never load. Two walks are exempt:
+		//  - a ranged fetch-to-completion (Reports), which carries #954's own cursor and is
+		//    bounded by RANGED_COMPLETE_MAX_RECORDS; and
+		//  - a SEARCH-scoped window, whose coverage goes through `recordRecords` — that
+		//    writes no lane document, so `readBrowseWindowContinuation` has nothing to
+		//    resume from. Its work is still bounded by the window the cashier asked for.
+		if (resumable && requestCount >= BROWSE_WINDOW_MAX_PAGES_PER_DRAIN) break;
 		const query = new URLSearchParams();
 		if (descriptor.status) query.set('status', descriptor.status);
 		if (descriptor.search) query.set('search', descriptor.search);
@@ -616,7 +664,9 @@ async function fetchBrowserOrderQuery(
 		// down a slot (re-download), and a trashed one pulls them up (a silent skip). The date
 		// bound is content-addressed, so neither can move it. Windowed lanes keep page paging —
 		// they take a bounded slice, not the whole range, and are not resumable.
-		query.set('page', String(descriptor.complete ? 1 : requestCount + 1));
+		// A windowed lane resumes at its record offset (#957), so its page number comes from
+		// the continuation rather than from the request counter.
+		query.set('page', String(descriptor.complete ? 1 : nextPageNumber));
 		// A fetch-to-completion lane walks `date desc` NO MATTER what the grid asked to sort by:
 		// the cursor is a date bound, and a cursor that does not share the walk's ordering can
 		// skip records (an id-desc walk cannot express "everything older than X" to wc/v3, which
@@ -645,7 +695,16 @@ async function fetchBrowserOrderQuery(
 			remainingTotal =
 				totalHeader !== null && Number.isSafeInteger(total) && total >= 0 ? total : null;
 		}
-		const payloads = JSON.parse(await response.text()) as WooOrderPayload[];
+		const rawPayloads = JSON.parse(await response.text()) as WooOrderPayload[];
+		// Rows of the resume page the covered prefix already holds — dropped before they
+		// are counted or persisted, so a continuation never double-counts the seam. Always a
+		// no-op on the ranged path (`covered` is 0) and, since #957's continuation gate only
+		// offsets from a page-aligned prefix, a no-op on the windowed path too; kept as the
+		// explicit guard that makes the raw/sliced distinction below correct by construction.
+		const payloads =
+			requestCount === 0 && skipInResumePage > 0
+				? rawPayloads.slice(skipInResumePage)
+				: rawPayloads;
 		if (!payloads.every((payload) => honorsRequestedDimensions(payload, descriptor))) {
 			dimensionsHonored = false;
 		}
@@ -725,13 +784,19 @@ async function fetchBrowserOrderQuery(
 		// the last page in `X-WP-TotalPages` (the same signal the product fetcher and the
 		// customer trickle already stop on), so honour it rather than requesting a page past
 		// the end and failing the whole task after downloading every record. A cursored walk
-		// always asks for page 1, so its own advertised-last-page test is `totalPages <= 1`.
+		// always asks for page 1, so its own advertised-last-page test is `totalPages <= 1`;
+		// a windowed walk compares the page it JUST fetched (#957 resumes at an offset, so
+		// that is `nextPageNumber`, not the request counter).
+		//
+		// The short-page signal below reads the RAW page: the resume-page skip shortens
+		// `payloads` without the server having run out, and would otherwise fake exhaustion.
 		const atAdvertisedLastPage =
 			totalPagesHeader !== null &&
 			Number.isSafeInteger(totalPages) &&
-			(descriptor.complete ? totalPages <= 1 : requestCount >= totalPages);
+			(descriptor.complete ? totalPages <= 1 : nextPageNumber >= totalPages);
+		nextPageNumber += 1;
 		if (
-			(payloads.length < descriptor.perPage || atAdvertisedLastPage) &&
+			(rawPayloads.length < descriptor.perPage || atAdvertisedLastPage) &&
 			payloads.length <= remaining &&
 			!(descriptor.complete && documentCount >= RANGED_COMPLETE_MAX_RECORDS)
 		) {
@@ -739,6 +804,66 @@ async function fetchBrowserOrderQuery(
 			break;
 		}
 	}
+
+	// #957 windowed bookkeeping. Every piece below is inert on the ranged path: the
+	// continuation is refused for `descriptor.complete`, so `covered` is 0, the budget never
+	// applies, and the ancestry guard has no carried prefix to check.
+	//
+	// The per-drain page budget bit before the window filled: the lane must not claim
+	// completeness, and the next drain resumes from the prefix this one leaves.
+	const truncatedByPageBudget = resumable && !exhausted && documentCount < recordLimit;
+	if (truncatedByPageBudget) {
+		input.diagnostics?.({
+			type: 'browse-window.page-budget-reached',
+			level: 'warn',
+			collection: 'orders',
+			message: `Orders browse window paused after ${requestCount} pages with ${covered + documentCount} of ${windowLimit} rows covered; the next drain resumes from there`,
+		});
+	}
+
+	// Ancestry guard — the same principle #954 applies to its ranged cursor: only assert the
+	// carried prefix if the lane it came from still holds exactly it. A Clear & Sync or
+	// ledger rebuild landing mid-walk would otherwise resurrect coverage for orders it just
+	// deleted.
+	const prefixSurvived = await browseWindowPrefixSurvived({
+		collection: 'orders',
+		continuation,
+		nowMs: coverageNowMs(input),
+		readLane: input.coverageRepository?.readLocalLaneCoverage,
+	});
+	if (!prefixSurvived) {
+		input.diagnostics?.({
+			type: 'browse-window.prefix-invalidated',
+			level: 'warn',
+			collection: 'orders',
+			message: `Orders browse window ${windowLimit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
+		});
+		if (descriptor.search === '') {
+			await recordOrderFetchCoverage(input, task, fetchedDocumentIds, false);
+		} else {
+			await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
+		}
+		return {
+			taskId: task.id,
+			documentCount,
+			requestCount,
+			completed: descriptor.complete ? exhausted : true,
+		};
+	}
+
+	// The lane records the WHOLE window — the covered prefix unioned with this drain's
+	// delta. The grid's footer total reads `expectedRecordIds.length` for exactly this
+	// key when no census total is fresh, so a delta-only lane would make a grown window
+	// report the size of its last growth step.
+	const laneRecordIds = mergeBrowseWindowRecordIds(continuation.recordIds, fetchedDocumentIds);
+	// A WINDOWED merge that came back SHORT means the resume page re-delivered rows the
+	// prefix already held — an order was created or trashed between two growth steps, so the
+	// wire listing shifted under the offset. The short count is not page-aligned, so the
+	// continuation gate refuses to offset from it and the next pass re-walks in full;
+	// recording it incomplete is what routes it there instead of freezing the window with a
+	// hole in it. The ranged branch below has its own completion contract (#954) and is
+	// unaffected.
+	const filledTheWindow = exhausted || laneRecordIds.length >= windowLimit;
 
 	if (descriptor.complete && descriptor.search === '') {
 		await recordRangedOrderFetchCoverage(input, task, {
@@ -756,9 +881,20 @@ async function fetchBrowserOrderQuery(
 			publishedResume,
 		});
 	} else if (descriptor.search === '') {
-		await recordOrderFetchCoverage(input, task, fetchedDocumentIds, exhausted && dimensionsHonored);
+		// A superset from a server that ignored the POS dimensions is still worth keeping
+		// locally — it is real order data — but this lane must claim NO coverage for it.
+		// `complete:false` alone does not prevent it being SERVED: a filled-but-incomplete
+		// lane is exactly what an ordinary un-exhausted window looks like, so the
+		// serve-local gate would answer a cashier/store-filtered window from rows that were
+		// never filtered, for a whole freshness window.
+		await recordOrderFetchCoverage(
+			input,
+			task,
+			dimensionsHonored ? laneRecordIds : [],
+			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow
+		);
 	} else {
-		await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
+		await recordOrderFetchedRecords(input, task, laneRecordIds);
 	}
 
 	return {
@@ -869,7 +1005,33 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 
 		const browserDescriptor = browserOrderQueryDescriptor(task, input.pullBatchSize);
 		if (browserDescriptor) {
-			return fetchBrowserOrderQuery(input, task, browserDescriptor, context);
+			// #957: ask coverage how much of this window is already held before walking it,
+			// so extending the grid past the old 200-record ceiling costs one page per step
+			// rather than re-downloading the window. Deliberately NOT applied to a ranged
+			// fetch-to-completion (`limit=all`, Reports): that is not a scroll window, and
+			// it owns its own completion semantics.
+			const predecessor = browserDescriptor.complete
+				? null
+				: orderBrowserPredecessorWindow(task.queryKey, browserDescriptor.limit!);
+			const continuation = browserDescriptor.complete
+				? NO_BROWSE_WINDOW_CONTINUATION
+				: await readBrowseWindowContinuation({
+						collection: 'orders',
+						ownQueryKey: task.queryKey,
+						predecessorQueryKey: predecessor?.queryKey ?? null,
+						predecessorLimit: predecessor?.limit ?? 0,
+						limit: browserDescriptor.limit!,
+						pageSize: browserDescriptor.perPage,
+						nowMs: input.nowMs?.() ?? Date.now(),
+						readLane: input.coverageRepository?.readLocalLaneCoverage,
+						forceRefresh: input.refreshBrowseWindowKey === task.queryKey,
+					});
+			if (continuation.satisfied) {
+				// Fresh coverage already holds this whole window: serve local. No coverage
+				// rewrite — the lane keeps its own expiry so the window is still re-walked.
+				return { taskId: task.id, documentCount: 0, requestCount: 0, completed: true };
+			}
+			return fetchBrowserOrderQuery(input, task, browserDescriptor, continuation, context);
 		}
 
 		assertSupportedOrderTask(task);

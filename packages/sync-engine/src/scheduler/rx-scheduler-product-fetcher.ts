@@ -15,12 +15,23 @@ import {
 } from '@wcpos/sync-core';
 
 import { type Materialized, materializeTargeted } from '../materialization/record-materialization';
+import {
+	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
+	type BrowseWindowContinuation,
+	type BrowseWindowLaneReader,
+	browseWindowPrefixSurvived,
+	mergeBrowseWindowRecordIds,
+	NO_BROWSE_WINDOW_CONTINUATION,
+	readBrowseWindowContinuation,
+} from './browse-window-continuation';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
 	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_ORDER,
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
+	PRODUCT_BROWSE_WINDOW_STEP,
 	type ProductBrowseWindowDescriptor,
+	productBrowseWindowPredecessorQueryKey,
 } from './product-browse-window-descriptor';
 import {
 	assertReturnedRequestedIds,
@@ -42,7 +53,15 @@ export type ProductSchedulerRepository = {
 	removeMany(documents: StoredProductDocument[]): Promise<void>;
 };
 
-export type ProductSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
+export type ProductSchedulerCoverageRepository = CollectionSchedulerCoverageRepository & {
+	/**
+	 * Optional lane read used by the browse-window CONTINUATION (#948): it tells the walk
+	 * how much of this window is already covered so growing 200 → 300 fetches one page
+	 * instead of three. Optional so a host without coverage still gets a correct (just
+	 * un-resumed) full walk.
+	 */
+	readLocalLaneCoverage?: BrowseWindowLaneReader;
+};
 
 export type ProductsSchedulerFetcherInput = {
 	baseUrl: string;
@@ -59,6 +78,12 @@ export type ProductsSchedulerFetcherInput = {
 	 * to db.existenceManifest by the bootstrap. When present, the digest is also stripped from the payload.
 	 */
 	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
+	/**
+	 * The ONE browse-window lane key an explicitly user-driven sync (the grid's `sync()`)
+	 * is refreshing. Only THAT window re-walks from page 1 instead of resuming from its
+	 * covered prefix; every other queued window keeps its continuation.
+	 */
+	refreshBrowseWindowKey?: string;
 };
 
 /**
@@ -295,15 +320,26 @@ function honorsRequestedBrands(payload: WooProductPayload, brands: number[]): bo
 }
 
 /**
- * The products browse-window seed (ADR 0027 §2): a bounded window over the servable set,
+ * The products browse window (ADR 0027 §2): the result window the grid is showing,
  * sorted by the window descriptor's sort — the POS default catalog sort (menu_order ASC,
  * id ASC, #810) unless the grid asked for another Woo-expressible column (#909).
  *
  * TWO INDEPENDENT SIZES (#908). `descriptor.limit` is the WINDOW — how many rows the grid
- * seeds. `pageSize` is the WIRE page — `per_page` on each request, governed by the
- * Performance dial. The window is walked in ceil(limit / pageSize) pages, so a 100-row
- * window at pullBatchSize=25 costs four polite requests instead of one heavy one. No
- * request ever asks for more than the dial allows.
+ * shows. `pageSize` is the WIRE page — `per_page` on each request, governed by the
+ * Performance dial. No request ever asks for more than the dial allows.
+ *
+ * THREE INDEPENDENT SIZES, really (#948). `continuation.covered` is how much of the
+ * window is ALREADY covered, from the lane the previous scroll tick wrote. The walk
+ * resumes there — `page = floor(covered / pageSize) + 1`, dropping the `covered %
+ * pageSize` rows of that page it already holds — so growing the window by one step costs
+ * one page whether the grid sits at row 300 or row 30,000. That constant per-step cost is
+ * what lets the window grow without a ceiling. The offset is denominated in RECORDS, so a
+ * Performance-dial change between two steps cannot corrupt the page arithmetic.
+ *
+ * A resumed walk trusts the server's order across the seam rather than re-deriving it: the
+ * prefix was truncated under the same sort by the walk that wrote it. For the default sort
+ * that inherits the same boundary-group approximation the tiebreak walk below already
+ * documents — a menu_order tie straddling the seam may resolve to either candidate.
  *
  * BOUNDARY WALK (default sort only). Woo REST cannot express the UI's `id ASC` tiebreak
  * alongside `menu_order`, and menu_order=0 is the common case, so after the window is
@@ -322,9 +358,76 @@ async function fetchProductBrowseWindow(
 	task: FetchTask,
 	descriptor: ProductBrowseWindowDescriptor,
 	pageSize: number,
+	continuation: BrowseWindowContinuation,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
-	const { limit } = descriptor;
+	// A RESUMED walk has two ways to be useless, and both are only detectable once it has
+	// run, so both fall back to a full walk in this same pass rather than stranding the
+	// window until coverage expires:
+	//
+	//  - **It made no progress.** The exact-fill + page-alignment gate cannot tell a
+	//    positional prefix from one the phase-2 tiebreak walk SUBSTITUTED out of later wire
+	//    pages. On an all-tied catalogue a 300-row lane can hold exactly 200 page-aligned
+	//    ids, which passes the gate, resumes at the same offset, re-fetches the same ids and
+	//    re-merges to 200 — identically, forever. Progress, not shape, is the honest test.
+	//  - **Its resume page no longer exists.** Records deleted since the prefix was written
+	//    can pull the listing's last page below the resume offset, and WP answers an
+	//    out-of-range `page` with a 400 rather than an empty page.
+	if (continuation.covered > 0) {
+		const resumed = await tryProductBrowseWindowWalk(
+			input,
+			task,
+			descriptor,
+			pageSize,
+			continuation,
+			context
+		);
+		if (resumed !== null && resumed.progressed) return resumed.result;
+		const full = await fetchProductBrowseWindow(
+			input,
+			task,
+			descriptor,
+			pageSize,
+			NO_BROWSE_WINDOW_CONTINUATION,
+			context
+		);
+		return {
+			...full,
+			// Report the wasted resume attempt honestly — it did cost requests.
+			requestCount: full.requestCount + (resumed?.result.requestCount ?? 0),
+		};
+	}
+	const walked = await tryProductBrowseWindowWalk(
+		input,
+		task,
+		descriptor,
+		pageSize,
+		continuation,
+		context
+	);
+	if (walked === null) {
+		throw new Error(`Woo REST product browse-window request failed for ${task.queryKey}`);
+	}
+	return walked.result;
+}
+
+/**
+ * One browse-window walk. Returns `null` when the walk could not run because its resume page
+ * is out of range (the caller retries from the top); otherwise the result plus whether the
+ * window actually grew past what the continuation already covered.
+ */
+async function tryProductBrowseWindowWalk(
+	input: ProductsSchedulerFetcherInput,
+	task: FetchTask,
+	descriptor: ProductBrowseWindowDescriptor,
+	pageSize: number,
+	continuation: BrowseWindowContinuation,
+	context?: SchedulerFetcherContext
+): Promise<{ result: FetchTaskResult; progressed: boolean } | null> {
+	const covered = continuation.covered;
+	// Rows still owed for this window. The walk below is expressed entirely in DELTA terms
+	// — `limit` here is what is left to fetch, not the window's size.
+	const limit = descriptor.limit - covered;
 	const isDefaultSort =
 		descriptor.orderby === PRODUCT_BROWSE_WINDOW_ORDERBY &&
 		descriptor.order === PRODUCT_BROWSE_WINDOW_ORDER;
@@ -341,21 +444,50 @@ async function fetchProductBrowseWindow(
 	}
 	if (descriptor.stock_status) query.set('stock_status', descriptor.stock_status);
 
-	const windowPages = Math.ceil(limit / pageSize);
+	// Resume at the first page holding uncovered rows, dropping the rows of that page the
+	// prefix already carries. Worst case one partially-wasted page per growth step —
+	// cheaper than any page-cursor the lane would have to persist, and immune to the
+	// Performance dial changing between steps.
+	const skipInResumePage = covered % pageSize;
+	let nextPageNumber = Math.floor(covered / pageSize) + 1;
+	const windowPages = Math.min(
+		Math.ceil((limit + skipInResumePage) / pageSize),
+		BROWSE_WINDOW_MAX_PAGES_PER_DRAIN
+	);
 	let payloads: WooProductPayload[] = [];
 	let pagePayloads: WooProductPayload[] = [];
 	let totalPages: number | null = null;
 	let requestCount = 0;
+	let serverExhausted = false;
 
-	// Phase 1 — fill the window: ceil(limit / pageSize) pages at the dial's page size.
+	// Phase 1 — fill the window's uncovered tail at the dial's page size.
 	while (requestCount < windowPages) {
-		query.set('page', String(requestCount + 1));
-		const page = await fetchProductQuery(input, query, context);
+		query.set('page', String(nextPageNumber));
+		// The FIRST request of a resumed walk is the one that can be out of range: records
+		// deleted since the prefix was written can pull the last page below the resume
+		// offset, and WP answers that with a 400. Report it as an unusable resume so the
+		// caller re-walks from the top, instead of failing the whole browse into retry
+		// backoff where every attempt would re-request the same dead page.
+		let page: Awaited<ReturnType<typeof fetchProductQuery>>;
+		try {
+			page = await fetchProductQuery(input, query, context);
+		} catch (error) {
+			if (requestCount === 0 && covered > 0) return null;
+			throw error;
+		}
 		requestCount += 1;
+		nextPageNumber += 1;
 		pagePayloads = page.payloads;
 		totalPages = page.totalPages ?? totalPages;
-		payloads = payloads.concat(pagePayloads);
-		if (pagePayloads.length < pageSize) break; // server exhausted before the window filled
+		payloads = payloads.concat(
+			requestCount === 1 && skipInResumePage > 0
+				? pagePayloads.slice(skipInResumePage)
+				: pagePayloads
+		);
+		if (pagePayloads.length < pageSize) {
+			serverExhausted = true;
+			break; // server exhausted before the window filled
+		}
 		// A result set that is an exact multiple of pageSize never yields a short page, so a
 		// short page alone cannot detect exhaustion: without this the walk asks for one page
 		// past the last, which WP answers with `rest_..._invalid_page_number` (a 400) and
@@ -363,10 +495,17 @@ async function fetchProductBrowseWindow(
 		// advertised last page; phase 1 must too. Same class as the orders fix in 35be526ed —
 		// pre-filters this needed a catalog sized to an exact page multiple, but a FILTERED
 		// window lands on small exact counts routinely.
-		if (totalPages !== null && requestCount >= totalPages) break;
+		if (totalPages !== null && nextPageNumber > totalPages) {
+			serverExhausted = true;
+			break;
+		}
 	}
 	if (isDefaultSort) payloads = payloads.sort(compareMenuOrderPayloads);
 	payloads = payloads.slice(0, limit);
+	// The per-drain page budget bit before the window filled and before the server ran out:
+	// the coverage below must NOT claim a complete lane, and the next drain resumes from
+	// the prefix this one leaves behind.
+	const truncatedByPageBudget = !serverExhausted && payloads.length < limit;
 
 	// Phase 2 — resolve the id tiebreak at the window's boundary (default sort only).
 	const boundaryMenuOrder =
@@ -376,14 +515,15 @@ async function fetchProductBrowseWindow(
 	const stillOnBoundary = (): boolean =>
 		boundaryMenuOrder !== null &&
 		pagePayloads.length === pageSize &&
-		(totalPages === null || requestCount < totalPages) &&
+		(totalPages === null || nextPageNumber <= totalPages) &&
 		Number(pagePayloads[pagePayloads.length - 1]?.menu_order ?? 0) === boundaryMenuOrder;
 
 	let tiebreakPages = 0;
 	while (tiebreakPages < PRODUCT_BROWSE_WINDOW_MAX_TIEBREAK_PAGES && stillOnBoundary()) {
-		query.set('page', String(requestCount + 1));
+		query.set('page', String(nextPageNumber));
 		const nextPage = await fetchProductQuery(input, query, context);
 		requestCount += 1;
+		nextPageNumber += 1;
 		tiebreakPages += 1;
 		pagePayloads = nextPage.payloads;
 		totalPages = nextPage.totalPages ?? totalPages;
@@ -414,17 +554,96 @@ async function fetchProductBrowseWindow(
 				'Store returned products outside the requested brands — brand filtering needs a WooCommerce version with core brands in the REST API; keeping the superset locally without claiming coverage',
 		});
 	}
-	const documents = windowPayloads.map(productDocumentFromWooPayload);
+	// bulkUpsert REJECTS an input carrying duplicate primary keys (COL22), which would fail
+	// the whole browse after several otherwise-successful requests. The walk concatenates
+	// pages verbatim, so a product inserted mid-walk — shifting every later row down a wire
+	// slot and repeating one across the page boundary — is enough to trigger it, and an
+	// uncapped window walks more boundaries than the old 1,000-row one ever did. Dedupe on
+	// the materialized storage id, keeping the first sighting so server ordering is
+	// preserved. (Same defect and remedy as the customers lane, bddd21d17.)
+	const documentsById = new Map<string, Materialized<Record<string, unknown>>>();
+	for (const payload of windowPayloads) {
+		const document = productDocumentFromWooPayload(payload);
+		const storageId = (document.storedDocument as { id: string }).id;
+		if (!documentsById.has(storageId)) documentsById.set(storageId, document);
+	}
+	const documents = [...documentsById.values()];
 	await persistProductDocuments(input, documents);
+	const deltaRecordIds = documents.map(({ storedDocument }) =>
+		coverageRecordId(storedDocument as ProductDocument)
+	);
+	// Ancestry guard (#1023's pattern): only assert the carried prefix if the lane it came
+	// from still holds exactly it. A Clear & Sync or ledger rebuild landing mid-walk would
+	// otherwise resurrect coverage for records it just deleted.
+	const prefixSurvived = await browseWindowPrefixSurvived({
+		collection: 'products',
+		continuation,
+		nowMs: input.nowMs?.() ?? Date.now(),
+		readLane: input.coverageRepository?.readLocalLaneCoverage,
+	});
+	if (!prefixSurvived) {
+		input.diagnostics?.({
+			type: 'browse-window.prefix-invalidated',
+			level: 'warn',
+			collection: 'products',
+			message: `Product browse window ${descriptor.limit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
+		});
+		await recordCoverage('products', input, task, deltaRecordIds, false);
+		return {
+			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
+			// The prefix is gone, so the next pass must re-walk from the top regardless; do not
+			// send the caller round again in this one.
+			progressed: true,
+		};
+	}
+	if (truncatedByPageBudget) {
+		input.diagnostics?.({
+			type: 'browse-window.page-budget-reached',
+			level: 'warn',
+			collection: 'products',
+			message: `Product browse window paused after ${requestCount} pages with ${covered + documents.length} of ${descriptor.limit} rows covered; the next drain resumes from there`,
+		});
+	}
+	// The lane records the WHOLE window — the covered prefix unioned with this drain's
+	// delta — not just what travelled the wire. The grid's footer total reads
+	// `expectedRecordIds.length` for exactly this key (projectTotal), so a delta-only lane
+	// would make a grown window report the size of its last growth step.
+	const laneRecordIds = mergeBrowseWindowRecordIds(continuation.recordIds, deltaRecordIds);
+	// NEVER claim a window you did not actually fill. The phase-2 tiebreak walk substitutes
+	// rows from later wire pages, so a resumed delta can re-deliver records the prefix
+	// already holds; the merge dedupes them and this lane comes back SHORT of its window.
+	// Recording that as complete would make the footer report (say) 215 for a 300-row
+	// window AND let the serve-local gate answer from it — the window would appear to stop
+	// growing.
+	const filledTheWindow = serverExhausted || laneRecordIds.length >= descriptor.limit;
+	// Did this walk move the window past what it already had? A resumed walk that re-fetched
+	// only ids the prefix already held has not — and must NOT write its lane, or it would
+	// leave a spurious short lane behind for the full re-walk to overwrite a moment later.
+	const progressed = laneRecordIds.length > covered || serverExhausted;
+	if (!progressed) {
+		return {
+			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
+			progressed: false,
+		};
+	}
+	// A store that ignored `brand` returned an UNFILTERED SUPERSET. Those records are worth
+	// keeping locally, but this lane must claim NO coverage for them: recording `limit`
+	// superset ids under a filtered descriptor would let the serve-local gate answer a
+	// brand-filtered window from rows that were never brand-filtered, for a whole freshness
+	// window. `complete:false` alone does not prevent that, because a filled-but-incomplete
+	// lane is exactly what an ordinary un-exhausted window looks like.
 	await recordCoverage(
 		'products',
 		input,
 		task,
-		documents.map(({ storedDocument }) => coverageRecordId(storedDocument as ProductDocument)),
-		brandsHonored
+		brandsHonored ? laneRecordIds : [],
+		brandsHonored && !truncatedByPageBudget && filledTheWindow
 	);
 
-	return { taskId: task.id, documentCount: documents.length, requestCount, completed: true };
+	return {
+		result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
+		progressed: true,
+	};
 }
 
 async function fetchProductSearch(
@@ -503,7 +722,28 @@ export function createProductsSchedulerFetcher(
 				pullRequestLimit({ ...task, limit }, input.pullBatchSize),
 				WOO_REST_MAX_PER_PAGE
 			);
-			return fetchProductBrowseWindow(input, task, { ...browseWindow, limit }, pageSize, context);
+			const descriptor = { ...browseWindow, limit };
+			// #948: ask coverage how much of this window is already held before walking it.
+			// This is what makes scrolling past the old 1,000-row ceiling affordable —
+			// each extendLimit fetches its step, not the whole window again.
+			const continuation = await readBrowseWindowContinuation({
+				collection: 'products',
+				ownQueryKey: task.queryKey,
+				predecessorQueryKey: productBrowseWindowPredecessorQueryKey(descriptor),
+				predecessorLimit: descriptor.limit - PRODUCT_BROWSE_WINDOW_STEP,
+				limit,
+				pageSize,
+				nowMs: input.nowMs?.() ?? Date.now(),
+				readLane: input.coverageRepository?.readLocalLaneCoverage,
+				forceRefresh: input.refreshBrowseWindowKey === task.queryKey,
+			});
+			if (continuation.satisfied) {
+				// Fresh, complete coverage for this exact window: serve local. Deliberately
+				// NO coverage rewrite — the lane must keep its own expiry so the window is
+				// still re-walked periodically instead of being pinned fresh forever.
+				return { taskId: task.id, documentCount: 0, requestCount: 0, completed: true };
+			}
+			return fetchProductBrowseWindow(input, task, descriptor, pageSize, continuation, context);
 		}
 
 		const search = productSearchTerm(task);

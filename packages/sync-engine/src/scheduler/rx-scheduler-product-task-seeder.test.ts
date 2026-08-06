@@ -269,11 +269,13 @@ describe('seedProductBrowseWindowSchedulerTask', () => {
 		);
 	});
 
-	it('rejects a result window past the window ceiling before queuing work', async () => {
-		// A window may exceed one Woo page now (#909) — the fetcher walks it in dial-sized
-		// pages (#908) — but it is still bounded: browse is a seed, not a query engine.
+	it('accepts any scrolled-to window, rejecting only past the runaway backstop', async () => {
+		// #948 flips this pin deliberately. A window may exceed one Woo page (#909) — the
+		// fetcher walks it in dial-sized pages (#908) and resumes it from its covered prefix
+		// — and it is no longer bounded by a product ceiling: 1,001 rows is an ordinary
+		// window now. Only the runaway backstop refuses.
 		await expect(
-			seedProductBrowseWindowSchedulerTask({ database: MOCK_DATABASE, limit: 1001 })
+			seedProductBrowseWindowSchedulerTask({ database: MOCK_DATABASE, limit: 100_001 })
 		).rejects.toThrow('Product browse-window scheduler limit must be a positive integer');
 		await expect(
 			seedProductBrowseWindowSchedulerTask({ database: MOCK_DATABASE, limit: 0 })

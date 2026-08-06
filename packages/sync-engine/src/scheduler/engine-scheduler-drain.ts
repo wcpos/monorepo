@@ -228,6 +228,17 @@ export type RunEngineSchedulerDrainInput = {
 	/** Override for an explicitly requested foreground drain. Background drains
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
+	/**
+	 * The ONE browse-window lane key this drain is force-refreshing (#948/#957). That window
+	 * re-walks from page 1 instead of resuming from its covered prefix — the continuation
+	 * that makes ordinary scrolling cheap would otherwise make a refresh a no-op.
+	 *
+	 * A KEY, not a boolean: a drain executes every runnable persisted task, not only the one
+	 * just seeded, so a drain-wide flag would also strip the continuation from unrelated
+	 * browse windows already queued in the ledger — up to 50 extra requests each, for a
+	 * refresh the cashier asked of one grid.
+	 */
+	refreshBrowseWindowKey?: string;
 	onProgress?: (progress: { collection: string; documents: number; requests: number }) => void;
 	withCollectionActivity?: <T>(
 		collection: FetchTask['collection'],
@@ -245,7 +256,14 @@ export type RunEngineSchedulerTaskInput = Pick<
 function createEngineSchedulerFetcherRegistry(
 	input: Pick<
 		RunEngineSchedulerDrainInput,
-		'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'pullBatchSize' | 'diagnostics' | 'nowMs'
+		| 'db'
+		| 'coverage'
+		| 'baseUrl'
+		| 'fetcher'
+		| 'pullBatchSize'
+		| 'diagnostics'
+		| 'nowMs'
+		| 'refreshBrowseWindowKey'
 	>
 ) {
 	const db = input.db;
@@ -271,6 +289,9 @@ function createEngineSchedulerFetcherRegistry(
 		...(input.diagnostics !== undefined ? { diagnostics: input.diagnostics } : {}),
 		...(input.fetcher !== undefined ? { fetcher: input.fetcher } : {}),
 		...(input.pullBatchSize !== undefined ? { pullBatchSize: input.pullBatchSize } : {}),
+		...(input.refreshBrowseWindowKey !== undefined
+			? { refreshBrowseWindowKey: input.refreshBrowseWindowKey }
+			: {}),
 	};
 
 	return createSchedulerFetcherRegistry([

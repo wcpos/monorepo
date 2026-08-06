@@ -30,6 +30,12 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.apply_refetch');
 		case 'apply.refresh':
 			return t('health.logs.event.apply_refresh');
+		case 'browse-window.backstop-reached':
+			return t('health.logs.event.browse_window_backstop_reached');
+		case 'browse-window.page-budget-reached':
+			return t('health.logs.event.browse_window_page_budget_reached');
+		case 'browse-window.prefix-invalidated':
+			return t('health.logs.event.browse_window_prefix_invalidated');
 		case 'cadence.backoff':
 			return t('health.logs.event.cadence_backoff');
 		case 'cadence.reconfigured':

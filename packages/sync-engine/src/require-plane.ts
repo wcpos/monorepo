@@ -38,6 +38,7 @@ import {
 } from './collections/collection-descriptors';
 import { pullTargetedByIds, refreshCollection } from './change-signal/change-signal-handlers';
 import {
+	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
 	censusQueryKey,
 	emptyPersistedSchedulerTaskRunnerResult,
 	type FetchTask,
@@ -83,7 +84,11 @@ export type OrderBrowseDimensions = {
 	status?: string;
 	/** Raw cashier search text. Default ''. */
 	search?: string;
-	/** Result-window size. 'all' = ranged fetch-to-completion (Reports). Default 10. */
+	/**
+	 * Result-window size. 'all' = ranged fetch-to-completion (Reports). Default 10.
+	 * Quantized past one Woo page; uncapped otherwise (#957) — the old 200-record clamp
+	 * made every window past 200 collide on one lane key and dead-end the grid.
+	 */
 	limit?: number | 'all';
 	customerId?: number;
 	cashierId?: number;
@@ -98,7 +103,11 @@ export type OrderBrowseDimensions = {
 };
 
 export type ProductBrowseDimensions = {
-	/** Requested window size, raw — the engine quantizes (steps of 100, cap 1000). Default 100. */
+	/**
+	 * Requested window size, raw — the engine quantizes it to steps of 100. There is no
+	 * product ceiling (#948): the window grows for as long as the cashier scrolls, and only
+	 * the runaway backstop (BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT) refuses. Default 100.
+	 */
 	limit?: number;
 	/** Supported products orderby values. Both orderby and order, or neither. */
 	orderby?: ProductBrowseWindowOrderby;
@@ -298,6 +307,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			};
 
 			if (item.requirement.collection === 'orders' && item.requirement.kind === 'query') {
+				// Captured here: the guardWrite closure below loses this narrowing.
+				const browseQueryKey = item.requirement.queryKey;
 				const decision = parseOrderBrowserSchedulerDescriptor(item.requirement.queryKey ?? '');
 				if (!decision || 'skipReason' in decision) {
 					throw new Error(
@@ -324,6 +335,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						fetcher: boundFetch as never,
 						diagnostics: deps.diagnostics,
 						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+						// An explicit user sync must re-walk the window from page 1; without this the
+						// scroll continuation (#948/#957) would serve it straight back from coverage.
+						// An explicit user sync must re-walk THIS window from page 1; without it the
+						// scroll continuation (#948/#957) would serve it straight back from coverage.
+						// Scoped to the one lane key so a drain's other queued windows keep theirs.
+						...(item.requirement.forceRefresh ? { refreshBrowseWindowKey: browseQueryKey } : {}),
 						signal: item.abortController.signal,
 						onProgress: progressObserver(item.requirement),
 					});
@@ -372,6 +389,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				// grid's own limit and sort reach the wire — before it existed, an empty-selector
 				// products browse declared no demand at all, so infinite scroll past the cold
 				// 100-row seed fetched nothing and a sort change re-sorted the wrong local slice.
+				// Captured here: the guardWrite closure below loses this narrowing.
+				const browseQueryKey = item.requirement.queryKey;
 				const browseWindow = parseProductBrowseWindowDescriptor(item.requirement.queryKey ?? '');
 				if (!browseWindow) {
 					throw new Error(
@@ -403,6 +422,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						fetcher: boundFetch as never,
 						diagnostics: deps.diagnostics,
 						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+						// An explicit user sync must re-walk the window from page 1; without this the
+						// scroll continuation (#948/#957) would serve it straight back from coverage.
+						// An explicit user sync must re-walk THIS window from page 1; without it the
+						// scroll continuation (#948/#957) would serve it straight back from coverage.
+						// Scoped to the one lane key so a drain's other queued windows keep theirs.
+						...(item.requirement.forceRefresh ? { refreshBrowseWindowKey: browseQueryKey } : {}),
 						signal: item.abortController.signal,
 						onProgress: progressObserver(item.requirement),
 					});
@@ -941,6 +966,23 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	return {
 		hasPendingWork: () => running || queue.length > 0,
 		require: (requirement) => {
+			// The runaway backstop is the ONE ceiling left on a browse window (#948/#957),
+			// and it must never behave like the caps it replaced: it is announced, not
+			// swallowed, so a window that stops growing is legible in the logs as well as in
+			// the grid's footer count (which stops climbing with it).
+			if (
+				(requirement.kind === 'orders-browse' || requirement.kind === 'product-browse') &&
+				typeof requirement.limit === 'number' &&
+				requirement.limit > BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT
+			) {
+				deps.diagnostics({
+					type: 'browse-window.backstop-reached',
+					level: 'warn',
+					collection: requirement.collection,
+					message: `Browse window clamped to the ${BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT}-row runaway backstop (asked for ${requirement.limit})`,
+					fields: { requirementId: requirement.id, requested: requirement.limit },
+				});
+			}
 			const queryKey = (() => {
 				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {
