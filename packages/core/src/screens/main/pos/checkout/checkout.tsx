@@ -25,7 +25,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { WebViewHandle } from '@wcpos/components/webview';
 
-import { PaymentWebview } from './components/payment-webview';
+import { type PaymentFrameStatus, PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
 import { useT } from '../../../../contexts/translations';
@@ -67,6 +67,11 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	const t = useT();
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [legacyLoading, setLegacyLoading] = React.useState(false);
+	// `wcpos-process-payment` is fire-and-forget: no ack, no retry. Posted before
+	// the store's order-pay document has loaded, it is dropped silently and the
+	// cashier is left with a button that spins forever (#1024). The payment frame
+	// reports its load event; until then the footer stays gated.
+	const [frameStatus, setFrameStatus] = React.useState<PaymentFrameStatus>('loading');
 	const { loading, mode, error, startCheckout, handleStockRejection } = useCheckoutSession(
 		order as import('@wcpos/database').OrderDocument
 	);
@@ -86,6 +91,12 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	);
 	const paymentURL = useObservableEagerState(paymentURL$);
 	const paymentLinkMissing = mode === 'webview' && !paymentURL;
+	// Scoped to the legacy webview path — contract checkout posts nothing into a
+	// frame, so it has nothing to wait for. When the link is missing no frame is
+	// rendered at all, and `paymentLinkMissing` is already the reason shown.
+	const frameGateApplies = mode === 'webview' && !paymentLinkMissing;
+	const paymentFrameLoading = frameGateApplies && frameStatus === 'loading';
+	const paymentFrameFailed = frameGateApplies && frameStatus === 'failed';
 	const showStockRejection =
 		error === 'insufficient_stock' &&
 		stockRejection !== null &&
@@ -109,11 +120,18 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 			return;
 		}
 
+		// Refuse rather than post into a document that cannot be listening yet: the
+		// message would vanish with no ack and no retry. `disabled` covers the
+		// render; this covers a press that beats the re-render.
+		if (frameStatus !== 'ready') {
+			return;
+		}
+
 		setLegacyLoading(true);
 		if (webViewRef.current && webViewRef.current.postMessage) {
 			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
 		}
-	}, [blockIfDegraded, mode, order.id, order.uuid, startCheckout]);
+	}, [blockIfDegraded, frameStatus, mode, order.id, order.uuid, startCheckout]);
 
 	/**
 	 *
@@ -143,13 +161,15 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 								</Text>
 							</VStack>
 						) : null}
-						{paymentLinkMissing && !showStockRejection ? (
+						{(paymentLinkMissing || paymentFrameFailed) && !showStockRejection ? (
 							<VStack
 								space="xs"
 								className="border-destructive bg-destructive/10 rounded-md border p-3"
 							>
-								<Text className="text-destructive">
-									{t('pos_checkout.payment_form_unavailable')}
+								<Text testID="checkout-payment-form-unavailable" className="text-destructive">
+									{paymentLinkMissing
+										? t('pos_checkout.payment_form_unavailable')
+										: t('pos_checkout.payment_form_load_failed')}
 								</Text>
 							</VStack>
 						) : null}
@@ -158,6 +178,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 								order={order}
 								ref={webViewRef}
 								setLoading={setLegacyLoading}
+								setFrameStatus={setFrameStatus}
 								onStockRejection={handleStockRejection}
 							/>
 						) : (
@@ -212,13 +233,15 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 						<ModalAction
 							testID="process-payment-button"
 							onPress={handleProcessPayment}
-							loading={mode === 'contract' ? loading : legacyLoading}
+							loading={mode === 'contract' ? loading : legacyLoading || paymentFrameLoading}
 							disabled={
 								mode === 'pending' ||
 								storageDegraded ||
 								error === 'payment_gateways_fetch_failed' ||
 								paymentLinkMissing ||
-								(mode === 'contract' && loading)
+								(mode === 'contract' && loading) ||
+								paymentFrameLoading ||
+								paymentFrameFailed
 							}
 						>
 							{t('pos_checkout.process_payment')}

@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { Checkout } from './checkout';
 
@@ -20,6 +20,12 @@ jest.mock('../../hooks/use-storage-health', () => ({
 const mockUseObservableSuspense = jest.fn();
 const mockUseObservableEagerState = jest.fn();
 const mockIsRxDocument = jest.fn();
+const mockPostMessage = jest.fn();
+
+/** Props last handed to the (mocked) PaymentWebview, so a test can drive its load signal. */
+let paymentWebviewProps: Record<string, any> = {};
+/** Props last handed to the Process Payment ModalAction. */
+let processPaymentProps: Record<string, any> = {};
 
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (...args: unknown[]) => mockUseObservableSuspense(...args),
@@ -33,7 +39,18 @@ jest.mock('./hooks/use-checkout-session', () => ({
 	useCheckoutSession: (...args: unknown[]) => mockUseCheckoutSession(...args),
 }));
 
-jest.mock('./components/payment-webview', () => ({ PaymentWebview: () => null }));
+jest.mock('./components/payment-webview', () => ({
+	PaymentWebview: (props: Record<string, any>) => {
+		paymentWebviewProps = props;
+		// The real component forwards the ref through to the WebView, which exposes
+		// `postMessage`. Stand that in so the test can observe (or not observe) the
+		// fire-and-forget `wcpos-process-payment` post.
+		if (props.ref) {
+			props.ref.current = { postMessage: mockPostMessage };
+		}
+		return null;
+	},
+}));
 jest.mock('./components/title', () => ({ CheckoutTitle: () => null }));
 
 jest.mock('@wcpos/components/modal', () => ({
@@ -44,25 +61,31 @@ jest.mock('@wcpos/components/modal', () => ({
 	ModalBody: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	ModalFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 	ModalClose: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
-	ModalAction: ({
-		children,
-		disabled,
-		onPress,
-		testID,
-	}: {
-		children?: React.ReactNode;
-		disabled?: boolean;
-		onPress?: () => void;
-		testID?: string;
-	}) => (
-		<button data-testid={testID} disabled={disabled} onClick={onPress}>
-			{children}
-		</button>
-	),
+	// Superset of the mock #1019 introduced: it also captures the props so a test
+	// can invoke the handler directly, and exposes the `loading` affordance.
+	ModalAction: ({ children, ...props }: Record<string, any>) => {
+		if (props.testID === 'process-payment-button') {
+			processPaymentProps = props;
+		}
+		return (
+			<button
+				data-testid={props.testID}
+				disabled={!!props.disabled}
+				data-loading={props.loading ? 'true' : 'false'}
+				onClick={props.onPress}
+			>
+				{children}
+			</button>
+		);
+	},
 }));
 
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+	// Forwards testID so the inline reasons can be asserted by the same selector
+	// the app ships (and E2E would use), not just by their copy.
+	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 
 jest.mock('@wcpos/components/vstack', () => ({
@@ -176,5 +199,249 @@ describe('Checkout', () => {
 		fireEvent.click(button);
 		expect(mockBlockIfDegraded).toHaveBeenCalledWith('process-payment', expect.any(Object));
 		expect(startCheckout).not.toHaveBeenCalled();
+	});
+});
+
+/* -------------------------------------------------------------------------- */
+/* Payment-frame gate (#1024 follow-up)                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `wcpos-process-payment` is a fire-and-forget postMessage with no ack and no
+ * retry. Posted before the store's order-pay document has parsed, it is dropped
+ * silently and the button spins forever. The footer must therefore stay gated
+ * until the payment frame signals it has loaded.
+ */
+
+// Sentinel observables so the eager-state mock can answer per-subject rather
+// than by call order — the component re-renders when the gate flips, and a
+// call-order mock would go out of phase on the second render.
+const NUMBER$ = { __kind: 'number$' };
+const PAYMENT_URL$ = { __kind: 'paymentURL$' };
+
+const PAYMENT_URL = 'https://shop.example.com/wcpos-checkout/order-pay/42';
+
+function makeOrder() {
+	return {
+		uuid: 'order-1',
+		id: 42,
+		number$: NUMBER$,
+		links$: { pipe: () => PAYMENT_URL$ },
+		links: { payment: [{ href: PAYMENT_URL }] },
+	};
+}
+
+function renderCheckout({
+	mode,
+	error = null,
+	loading = false,
+	paymentURL = PAYMENT_URL,
+	startCheckout = jest.fn(),
+	storageDegraded = false,
+}: {
+	mode: string;
+	error?: string | null;
+	loading?: boolean;
+	paymentURL?: string;
+	startCheckout?: jest.Mock;
+	storageDegraded?: boolean;
+}) {
+	mockStorageDegraded = storageDegraded;
+	mockBlockIfDegraded.mockReturnValue(storageDegraded);
+	mockUseObservableSuspense.mockReturnValue(makeOrder());
+	mockIsRxDocument.mockReturnValue(true);
+	mockUseObservableEagerState.mockImplementation((observable: unknown) => {
+		if (observable === NUMBER$) return '100';
+		if (observable === PAYMENT_URL$) return paymentURL;
+		return null; // stockRejection$
+	});
+	mockUseCheckoutSession.mockReturnValue({
+		loading,
+		mode,
+		error,
+		startCheckout,
+		handleStockRejection: jest.fn(),
+	});
+
+	render(<Checkout resource={{} as never} />);
+
+	return screen.getByTestId('process-payment-button') as HTMLButtonElement;
+}
+
+describe('Checkout — Process Payment is gated on the payment frame', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockUseObservableEagerState.mockReset();
+		mockUseObservableSuspense.mockReset();
+		mockUseCheckoutSession.mockReset();
+		mockIsRxDocument.mockReset();
+		// `clearAllMocks` does not drop implementations, and the #1019 suite above
+		// leaves this returning true — reset it so each case states its own storage
+		// health rather than inheriting the previous describe's.
+		mockBlockIfDegraded.mockReset();
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockStorageDegraded = false;
+		paymentWebviewProps = {};
+		processPaymentProps = {};
+	});
+
+	it('disables Process Payment while the payment frame is still loading, and enables it on the load signal', () => {
+		const button = renderCheckout({ mode: 'webview' });
+
+		expect(button.disabled).toBe(true);
+		// Same affordance as the frame's own overlay — a spinner, not a new pattern.
+		expect(button.dataset.loading).toBe('true');
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('ready');
+		});
+
+		const loaded = screen.getByTestId('process-payment-button') as HTMLButtonElement;
+		expect(loaded.disabled).toBe(false);
+		expect(loaded.dataset.loading).toBe('false');
+	});
+
+	it('posts nothing when pressed before the frame has loaded', async () => {
+		renderCheckout({ mode: 'webview' });
+
+		// `disabled` stops the DOM click, so invoke the handler directly: the guard
+		// must hold even if the press wins the race against the re-render.
+		await act(async () => {
+			await processPaymentProps.onPress();
+		});
+
+		expect(mockPostMessage).not.toHaveBeenCalled();
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('ready');
+		});
+
+		await act(async () => {
+			await processPaymentProps.onPress();
+		});
+
+		expect(mockPostMessage).toHaveBeenCalledWith({ action: 'wcpos-process-payment' });
+	});
+
+	it('does not re-enable the button when another guard also applies', () => {
+		// The gate is additive: a loaded frame must never override an independent
+		// reason to keep the money path shut.
+		const button = renderCheckout({ mode: 'webview', error: 'payment_gateways_fetch_failed' });
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('ready');
+		});
+
+		expect((screen.getByTestId('process-payment-button') as HTMLButtonElement).disabled).toBe(true);
+		expect(button.dataset.loading).toBe('false');
+	});
+
+	/* ---------------------------------------------------------------------- */
+	/* Composition with the #163/R5 degraded-storage latch (#1019)            */
+	/* ---------------------------------------------------------------------- */
+
+	it('keeps the degraded-storage guard winning when both it and the frame gate apply', async () => {
+		// Both reasons block. The storage latch is the more urgent thing to tell a
+		// cashier — cash taken against an order that cannot persist — so it must be
+		// the one that speaks, and it must be the one that refuses the press.
+		const button = renderCheckout({ mode: 'webview', storageDegraded: true });
+
+		expect(button.disabled).toBe(true);
+		expect(screen.getByTestId('checkout-storage-unavailable')).toBeTruthy();
+
+		await act(async () => {
+			await processPaymentProps.onPress();
+		});
+
+		// `blockIfDegraded` ran, which pins the ordering: it sits ahead of the frame
+		// guard in the handler, so it refuses (and toasts) rather than the frame
+		// gate silently swallowing the press.
+		expect(mockBlockIfDegraded).toHaveBeenCalledWith('process-payment', expect.any(Object));
+		expect(mockPostMessage).not.toHaveBeenCalled();
+	});
+
+	it('keeps the degraded-storage guard winning even once the frame is ready', async () => {
+		// The sharper case: the frame gate would allow this press. Storage must not.
+		const button = renderCheckout({ mode: 'webview', storageDegraded: true });
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('ready');
+		});
+
+		expect(button.disabled).toBe(true);
+
+		await act(async () => {
+			await processPaymentProps.onPress();
+		});
+
+		expect(mockBlockIfDegraded).toHaveBeenCalledWith('process-payment', expect.any(Object));
+		expect(mockPostMessage).not.toHaveBeenCalled();
+	});
+
+	it('holds the frame gate on its own when storage is healthy', async () => {
+		// The converse: with the storage latch clear, the frame gate is still the
+		// thing keeping the money path shut — it does not lean on #1019.
+		const button = renderCheckout({ mode: 'webview', storageDegraded: false });
+
+		expect(button.disabled).toBe(true);
+		expect(button.dataset.loading).toBe('true');
+		expect(screen.queryByTestId('checkout-storage-unavailable')).toBeNull();
+
+		await act(async () => {
+			await processPaymentProps.onPress();
+		});
+
+		expect(mockBlockIfDegraded).toHaveBeenCalledWith('process-payment', expect.any(Object));
+		expect(mockPostMessage).not.toHaveBeenCalled();
+
+		// ...and it is the only thing: clearing it alone opens the button.
+		act(() => {
+			paymentWebviewProps.setFrameStatus('ready');
+		});
+
+		expect((screen.getByTestId('process-payment-button') as HTMLButtonElement).disabled).toBe(
+			false
+		);
+
+		await act(async () => {
+			await processPaymentProps.onPress();
+		});
+
+		expect(mockPostMessage).toHaveBeenCalledWith({ action: 'wcpos-process-payment' });
+	});
+
+	it('stops the spinner and says why when the payment frame fails to load', async () => {
+		// A gate with no failure state is worse than no gate: the button would sit
+		// disabled behind a spinner forever, waiting for a load event that a network
+		// error means will never arrive.
+		const button = renderCheckout({ mode: 'webview' });
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('failed');
+		});
+
+		expect(button.disabled).toBe(true);
+		expect(button.dataset.loading).toBe('false');
+		expect(screen.getByText('pos_checkout.payment_form_load_failed')).toBeTruthy();
+
+		await act(async () => {
+			await processPaymentProps.onPress();
+		});
+
+		expect(mockPostMessage).not.toHaveBeenCalled();
+	});
+
+	it('leaves contract-mode checkout untouched — there is no frame to wait for', async () => {
+		const startCheckout = jest.fn();
+		const button = renderCheckout({ mode: 'contract', startCheckout });
+
+		expect(button.disabled).toBe(false);
+
+		await act(async () => {
+			await processPaymentProps.onPress();
+		});
+
+		expect(startCheckout).toHaveBeenCalledTimes(1);
+		expect(mockPostMessage).not.toHaveBeenCalled();
 	});
 });

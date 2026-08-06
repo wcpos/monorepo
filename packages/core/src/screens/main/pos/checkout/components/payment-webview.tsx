@@ -21,9 +21,23 @@ const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
+/**
+ * Whether the store's payment document is in a position to receive
+ * `wcpos-process-payment`.
+ *
+ * - `loading` — no document yet, or the frame is navigating to a new one.
+ * - `ready` — a document finished loading in the frame.
+ * - `failed` — the load errored, so no load event is coming. Distinct from
+ *   `loading` because a gate with no failure state leaves the button disabled
+ *   behind a spinner forever, which is the very stall this gate exists to stop.
+ */
+export type PaymentFrameStatus = 'loading' | 'ready' | 'failed';
+
 export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: OrderDocument;
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
+	/** Reports frame readiness to the checkout footer, which gates on it. */
+	setFrameStatus: React.Dispatch<React.SetStateAction<PaymentFrameStatus>>;
 	onStockRejection: (error: unknown) => boolean;
 }
 
@@ -33,6 +47,7 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
 export function PaymentWebview({
 	order,
 	setLoading,
+	setFrameStatus,
 	onStockRejection,
 	...props
 }: PaymentWebviewProps) {
@@ -183,6 +198,13 @@ export function PaymentWebview({
 	 */
 	const onWebViewLoaded = React.useCallback(
 		(_event: unknown) => {
+			// The store's order-pay template registers its `wcpos-process-payment`
+			// listener in a synchronous <head> script, so the frame's load event is
+			// strictly after that listener exists. It is the strongest readiness
+			// signal either platform exposes — the template sends no ready message —
+			// so the checkout footer gates on it (#1024).
+			setFrameStatus('ready');
+
 			loadCountRef.current += 1;
 			if (loadCountRef.current < 2) {
 				return;
@@ -283,11 +305,63 @@ export function PaymentWebview({
 			uiSettings.autoShowReceipt,
 			router,
 			setLoading,
+			setFrameStatus,
 			orderLogger,
 			t,
 			refreshOrder,
 		]
 	);
+
+	/**
+	 * Navigating away — a gateway redirect, the post-payment hop — puts a document
+	 * under the frame that has no `wcpos-process-payment` listener until it, too,
+	 * has loaded. Re-gate so a second press cannot post into it.
+	 *
+	 * Native only: the web WebView renders an <iframe>, which exposes no
+	 * navigation-start event for a cross-origin document. Passing the prop there
+	 * is inert. That residual web gap is one of the reasons a store-side ack is
+	 * the real fix rather than this gate.
+	 */
+	const onWebViewLoadStart = React.useCallback(() => {
+		setFrameStatus('loading');
+	}, [setFrameStatus]);
+
+	/**
+	 * A load that errors produces no load event, so the gate has to be told or it
+	 * stays shut forever. Native surfaces this reliably; on web an <iframe> only
+	 * fires `error` for a hard failure (a 404 *page* still loads), which is one
+	 * more reason the honest readiness signal has to come from the store.
+	 */
+	const onWebViewError = React.useCallback(
+		(event: unknown) => {
+			setFrameStatus('failed');
+			const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)
+				?.nativeEvent;
+			orderLogger.warn('Payment form failed to load in the checkout frame', {
+				saveToDb: true,
+				context: {
+					description: nativeEvent?.description,
+					code: nativeEvent?.code,
+				},
+			});
+		},
+		[orderLogger, setFrameStatus]
+	);
+
+	/**
+	 * A new payment URL swaps the document under the frame, so the gate closes
+	 * until the replacement reports its own load. The unmount cleanup means a
+	 * remounted frame (mode change, stock rejection cleared) never starts open.
+	 *
+	 * The load counter resets with it: the fallback poll deliberately skips the
+	 * *first* load because a payment cannot have completed yet, and a re-hosted
+	 * document is a first load, not a post-payment navigation.
+	 */
+	React.useEffect(() => {
+		loadCountRef.current = 0;
+		setFrameStatus('loading');
+		return () => setFrameStatus('loading');
+	}, [paymentURLWithToken, setFrameStatus]);
 
 	React.useEffect(() => {
 		return () => {
@@ -304,6 +378,8 @@ export function PaymentWebview({
 					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
 					onLoad={onWebViewLoaded}
+					onLoadStart={onWebViewLoadStart}
+					onError={onWebViewError}
 					onMessage={(event) => {
 						const data = event?.nativeEvent?.data as Record<string, unknown> | undefined;
 						const payload = data?.payload as Record<string, unknown> | undefined;
