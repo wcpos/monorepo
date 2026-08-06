@@ -146,9 +146,9 @@ describe('compareOrderMoney — server-precision mode (the legacy rule)', () => 
 		const acked = clone(server2dp);
 		acked.cart_tax = '7';
 		expect(compareOrderMoney({ pushed: pos, acked, mode: 'server-precision' })).toBeNull();
-		// The shipped rule floors the tolerance at cents and reports it.
+		// The shipped rule preserves the wider POS width and reports it.
 		expect(compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' })?.fields).toEqual([
-			{ field: 'cart_tax', expected: '6.71', got: '7.00', decimals: 2 },
+			{ field: 'cart_tax', expected: '6.71328', got: '7.00000', decimals: 5 },
 		]);
 	});
 
@@ -367,6 +367,18 @@ describe('preserveEquivalentLocalPrecision (the adoption half of the mirror cont
 				mode: 'exact-6dp',
 			})?.fields
 		).toEqual([{ field: 'total', expected: '29.97', got: '30.00', decimals: 2 }]);
+	});
+
+	it('adopts a zero-decimal correction that collides at cents', () => {
+		const merged = preserveEquivalentLocalPrecision({ total: '6.9999' }, { total: '7' });
+		expect(merged.total).toBe('7');
+		expect(
+			compareOrderMoney({
+				pushed: { total: '6.9999' },
+				acked: { total: '7' },
+				mode: 'exact-6dp',
+			})?.fields
+		).toEqual([{ field: 'total', expected: '6.9999', got: '7.0000', decimals: 4 }]);
 	});
 
 	it('leaves non-monetary fields to the ack — identity and status are the server’s', () => {
