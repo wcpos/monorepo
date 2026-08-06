@@ -1,11 +1,12 @@
 /**
- * Customer scheduler fetcher — an ON-DEMAND collection (targeted include= fetch by id, or search-windowed
- * paginate). A thin spec over the shared targeted/search core (createTargetedSearchCollectionFetcher); only the
- * customer-specific deltas live here: uuid identity, the dual-id-space coverage key, the document-id target
- * parser, the customer:default born-local sentinel, and the search-lane queryKey grammar.
+ * Customer scheduler fetcher — an ON-DEMAND collection (targeted include= fetch by id, search-windowed
+ * paginate, or the sorted BROWSE WINDOW added by #951). The targeted/search halves are a thin spec over the
+ * shared core (createTargetedSearchCollectionFetcher); only the customer-specific deltas live here: uuid
+ * identity, the dual-id-space coverage key, the document-id target parser, the customer:default born-local
+ * sentinel, the search-lane queryKey grammar, and the browse-window walk.
  */
 
-import { customerDocumentId } from '@wcpos/sync-core';
+import { customerDocumentId, type SyncObserver } from '@wcpos/sync-core';
 
 import {
 	type LocalCustomerDocument,
@@ -13,16 +14,37 @@ import {
 } from '../collections/customer-schema';
 import { materializeTargeted } from '../materialization/record-materialization';
 import {
+	type CustomerBrowseWindowDescriptor,
+	parseCustomerBrowseWindowDescriptor,
+} from './customer-browse-window-descriptor';
+import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
+import { QUERY_TOTAL_FRESH_FOR_MS, type QueryTotalCacheEntry } from './query-total-requests';
+import {
 	type CollectionSchedulerCoverageRepository,
 	type CollectionSchedulerInput,
 	type CollectionTarget,
 	createTargetedSearchCollectionFetcher,
+	httpGet,
+	recordCoverage,
 } from './rx-scheduler-collection-fetcher';
-
-import type { FetchTask, SchedulerFetcher } from './replication-policy';
+// prettier-ignore
+import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
 export type CustomerSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
-export type CustomerSchedulerFetcherInput = CollectionSchedulerInput<LocalCustomerDocument>;
+
+/**
+ * Sink for the server's `X-WP-Total` on a browse window — the ONLY honest source for the
+ * grid's footer count on a sorted/filtered customer view (#894/#945: a resident count read as
+ * a total is the "false complete" bug). Optional so the playground/tests can omit it.
+ */
+export type CustomerQueryTotalRepository = {
+	upsert(entry: QueryTotalCacheEntry): Promise<void>;
+};
+
+export type CustomerSchedulerFetcherInput = CollectionSchedulerInput<LocalCustomerDocument> & {
+	queryTotalRepository?: CustomerQueryTotalRepository;
+	diagnostics?: SyncObserver;
+};
 
 function customerTargetFromDocumentId(id: string): CollectionTarget {
 	if (id === 'customer:default') {
@@ -69,10 +91,118 @@ function parseCustomerSearchQuery(task: FetchTask): { search: string; queryLimit
 	return { search: decodeURIComponent(match[1] ?? ''), queryLimit: Number(match[2]) };
 }
 
+/**
+ * Walk one customers browse window (#951).
+ *
+ * TWO INDEPENDENT SIZES (#908). `descriptor.limit` is the WINDOW — how many rows the grid
+ * wants, uncapped (R8). `pageSize` is the WIRE page — `per_page` on each request, governed by
+ * the Performance dial. The window is walked in ceil(limit / pageSize) pages, so a 500-row
+ * window at pullBatchSize=25 is twenty polite requests rather than one heavy one.
+ *
+ * `role=all` is sent EXPLICITLY. The v2 proxy already defaults an omitted role to `all`
+ * (#1379: the POS customer space is every WordPress user, matching 1.9), but the #850-era
+ * lesson is that the client must not depend on a server-side default it can state itself — a
+ * proxy that stopped applying it would silently narrow every browse to `role=customer` and
+ * look like missing data, not like a regression.
+ *
+ * The server's `X-WP-Total` for this exact sorted view is cached against the window's
+ * queryKey, so the grid footer can report the real total instead of the resident count. The
+ * coverage lane is recorded COMPLETE only when the server ran out before the window did —
+ * otherwise a 100-row lane over a 5,000-customer store would be read as "that's all of them".
+ */
+async function fetchCustomerBrowseWindow(
+	input: CustomerSchedulerFetcherInput,
+	task: FetchTask,
+	descriptor: CustomerBrowseWindowDescriptor,
+	pageSize: number,
+	context?: SchedulerFetcherContext
+): Promise<FetchTaskResult> {
+	const { limit } = descriptor;
+	const query = new URLSearchParams();
+	query.set('per_page', String(pageSize));
+	query.set('orderby', descriptor.orderby);
+	query.set('order', descriptor.order);
+	query.set('role', 'all');
+
+	const payloads: WooCustomerPayload[] = [];
+	let requestCount = 0;
+	let totalPages: number | null = null;
+	let totalRecords: number | null = null;
+	let exhausted = false;
+
+	while (payloads.length < limit) {
+		query.set('page', String(requestCount + 1));
+		const url = `${input.baseUrl}/customers?${query.toString()}`;
+		const response = await httpGet(input, url, context);
+		if (!response.ok) {
+			// A 400 here is almost always an `orderby` wc/v3 will not accept. Surface it as a
+			// labelled event so it is diagnosable from the Logs screen instead of showing up as
+			// a bare failed drain — see CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES.
+			if (response.status === 400) {
+				input.diagnostics?.({
+					type: 'customer.browse-window.sort-rejected',
+					level: 'warn',
+					collection: 'customers',
+					message: `Store rejected the customers browse sort "${descriptor.orderby} ${descriptor.order}"`,
+				});
+			}
+			throw new Error(`Woo REST customer browse request failed: ${response.status}`);
+		}
+		requestCount += 1;
+		const pagePayloads = JSON.parse(await response.text()) as WooCustomerPayload[];
+		payloads.push(...pagePayloads);
+		const headerTotal = Number(response.headers.get('X-WP-Total'));
+		if (Number.isSafeInteger(headerTotal) && headerTotal >= 0) totalRecords = headerTotal;
+		const headerPages = Number(response.headers.get('X-WP-TotalPages'));
+		if (Number.isSafeInteger(headerPages) && headerPages > 0) totalPages = headerPages;
+		if (pagePayloads.length < pageSize) {
+			exhausted = true;
+			break;
+		}
+		// A result set that is an exact multiple of pageSize never yields a short page, so a
+		// short page alone cannot detect exhaustion: without this the walk asks for one page
+		// past the last, which WP answers with a 400 and this turns into a failed browse. Same
+		// class as the products fix in the phase-1 loop of fetchProductBrowseWindow.
+		if (totalPages !== null && requestCount >= totalPages) {
+			exhausted = true;
+			break;
+		}
+	}
+
+	const windowPayloads = payloads.slice(0, limit);
+	const documents = windowPayloads.map(customerDocumentFromWooPayload);
+	await input.repository.upsertMany(documents);
+	// COMPLETE means "this lane holds every customer matching the query", which is true only
+	// when the server ran out inside the window. A truncated walk records an incomplete lane so
+	// projectTotal falls through to the cached server total rather than reporting the window
+	// size as the customer count (#894/#945).
+	await recordCoverage(
+		'customers',
+		input,
+		task,
+		documents.map(customerCoverageRecordId),
+		exhausted && payloads.length <= limit
+	);
+	if (input.queryTotalRepository && totalRecords !== null) {
+		const nowMs = input.nowMs?.() ?? Date.now();
+		await input.queryTotalRepository.upsert({
+			queryKey: task.queryKey,
+			totalMatchingRecords: totalRecords,
+			freshUntilMs: nowMs + QUERY_TOTAL_FRESH_FOR_MS,
+			updatedAtMs: nowMs,
+		});
+	}
+
+	return { taskId: task.id, documentCount: documents.length, requestCount, completed: true };
+}
+
 export function createCustomerSchedulerFetcher(
 	input: CustomerSchedulerFetcherInput
 ): SchedulerFetcher {
-	return createTargetedSearchCollectionFetcher<LocalCustomerDocument, WooCustomerPayload>(
+	const targetedSearchFetcher = createTargetedSearchCollectionFetcher<
+		LocalCustomerDocument,
+		WooCustomerPayload
+	>(
 		{
 			collection: 'customers',
 			endpoint: 'customers',
@@ -87,4 +217,33 @@ export function createCustomerSchedulerFetcher(
 		},
 		input
 	);
+
+	return async (task: FetchTask, context?: SchedulerFetcherContext): Promise<FetchTaskResult> => {
+		// The browse window is checked BEFORE delegating: it shares the `customers:` namespace
+		// with the targeted and search lanes, and only the descriptor parser can tell them apart.
+		// Targeted tasks still win — a task that names ids is a deep-link pull, never a browse.
+		if (!task.ids || task.ids.length === 0) {
+			const browseWindow = parseCustomerBrowseWindowDescriptor(task.queryKey);
+			if (browseWindow !== null) {
+				if (!Number.isSafeInteger(task.limit) || task.limit <= 0) {
+					throw new Error('Customer scheduler task limit must be a positive integer');
+				}
+				// The window limit is a coverage total, not a request size — the batch dial must
+				// not shrink it. The dial governs the WIRE page instead (#908).
+				const limit = Math.min(browseWindow.limit, task.limit);
+				const pageSize = Math.min(
+					pullRequestLimit({ ...task, limit }, input.pullBatchSize),
+					WOO_REST_MAX_PER_PAGE
+				);
+				return fetchCustomerBrowseWindow(
+					input,
+					task,
+					{ ...browseWindow, limit },
+					pageSize,
+					context
+				);
+			}
+		}
+		return targetedSearchFetcher(task, context);
+	};
 }

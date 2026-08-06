@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, type Mock, vi } from 'vitest';
 
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
 
@@ -19,12 +19,35 @@ function customerTask(overrides: Partial<FetchTask> = {}): FetchTask {
 	};
 }
 
-function response(payload: unknown[]): Response {
+function response(payload: unknown[], headers: Record<string, string> = {}): Response {
 	return new Response(JSON.stringify(payload), {
 		status: 200,
-		headers: { 'content-type': 'application/json' },
+		headers: { 'content-type': 'application/json', ...headers },
 	});
 }
+
+/** A browse-window task for `limit` rows in the given wire sort (default: the bare id-asc key). */
+function browseTask(limit: number, sort?: { orderby: string; order: string }): FetchTask {
+	const queryKey = sort
+		? `customers:browse-window:limit=${limit}:orderby=${sort.orderby}:order=${sort.order}`
+		: `customers:browse-window:limit=${limit}`;
+	return {
+		id: `${queryKey}:windowed`,
+		requirementId: `customers.browse-window.limit.${limit}`,
+		collection: 'customers',
+		queryKey,
+		limit,
+		priority: 500,
+		mode: 'windowed',
+	};
+}
+
+const customerPayload = (id: number) => ({
+	id,
+	email: `customer-${id}@example.test`,
+	date_modified_gmt: '2026-08-06T10:00:00',
+	meta_data: uuidMeta(id),
+});
 
 // Deterministic server-stamped uuid per Woo customer id (P0-1: every pulled customer arrives
 // carrying its _woocommerce_pos_uuid, re-injected by the catalog-proxy stamp_proxy_customers).
@@ -326,6 +349,139 @@ describe('createCustomerSchedulerFetcher', () => {
 			documentCount: 150,
 			requestCount: 2,
 			completed: true,
+		});
+	});
+
+	// #951 — the sorted customers browse window.
+	describe('browse window', () => {
+		const browseFetcher = (
+			fetcher: Mock<(url: string) => Promise<Response>>,
+			overrides: Record<string, unknown> = {}
+		) => {
+			const repository = {
+				upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
+			};
+			const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+			const queryTotalRepository = { upsert: vi.fn(async () => undefined) };
+			const schedulerFetcher = createCustomerSchedulerFetcher({
+				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+				repository,
+				fetcher,
+				coverageRepository,
+				queryTotalRepository,
+				nowMs: () => 10_000,
+				...overrides,
+			});
+			return { repository, coverageRepository, queryTotalRepository, schedulerFetcher };
+		};
+
+		it('asks the SERVER for the sorted window, with role=all (#1379/#850)', async () => {
+			const fetcher = vi.fn(async (_url: string) =>
+				response(
+					Array.from({ length: 25 }, (_, index) => customerPayload(index + 1)),
+					{ 'X-WP-Total': '4200', 'X-WP-TotalPages': '168' }
+				)
+			);
+			const kit = browseFetcher(fetcher);
+
+			const result = await kit.schedulerFetcher(
+				browseTask(25, { orderby: 'registered_date', order: 'desc' })
+			);
+
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			const url = new URL(fetcher.mock.calls[0]![0]);
+			expect(url.pathname).toBe('/wp-json/wcpos/v2/customers');
+			expect(url.searchParams.get('orderby')).toBe('registered_date');
+			expect(url.searchParams.get('order')).toBe('desc');
+			expect(url.searchParams.get('role')).toBe('all');
+			expect(url.searchParams.get('per_page')).toBe('25');
+			expect(url.searchParams.get('page')).toBe('1');
+			expect(kit.repository.upsertMany.mock.calls[0]?.[0]).toHaveLength(25);
+			expect(result).toMatchObject({ documentCount: 25, requestCount: 1, completed: true });
+		});
+
+		it('reports the SERVER total for the sorted view, not the resident count (#894/#945)', async () => {
+			const fetcher = vi.fn(async (_url: string) =>
+				response(
+					Array.from({ length: 100 }, (_, index) => customerPayload(index + 1)),
+					{ 'X-WP-Total': '4200', 'X-WP-TotalPages': '42' }
+				)
+			);
+			const kit = browseFetcher(fetcher);
+
+			await kit.schedulerFetcher(browseTask(100));
+
+			expect(kit.queryTotalRepository.upsert).toHaveBeenCalledWith({
+				queryKey: 'customers:browse-window:limit=100',
+				totalMatchingRecords: 4_200,
+				freshUntilMs: 10_000 + 300_000,
+				updatedAtMs: 10_000,
+			});
+			// 100 of 4,200 is NOT a complete lane — recording it as one is the false-complete bug.
+			expect(kit.coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+				expect.objectContaining({ complete: false })
+			);
+		});
+
+		it('completes the lane when the server runs out inside the window', async () => {
+			const fetcher = vi.fn(async (_url: string) =>
+				response(
+					Array.from({ length: 7 }, (_, index) => customerPayload(index + 1)),
+					{ 'X-WP-Total': '7', 'X-WP-TotalPages': '1' }
+				)
+			);
+			const kit = browseFetcher(fetcher);
+
+			await kit.schedulerFetcher(browseTask(100));
+
+			expect(kit.coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+				expect.objectContaining({ complete: true })
+			);
+		});
+
+		it('walks the window in Performance-dial pages, never one heavy request (#908)', async () => {
+			let served = 0;
+			const fetcher = vi.fn(async (_url: string) => {
+				const page = Array.from({ length: 25 }, (_, index) => customerPayload(served + index + 1));
+				served += 25;
+				return response(page, { 'X-WP-Total': '4200', 'X-WP-TotalPages': '168' });
+			});
+			const kit = browseFetcher(fetcher, { pullBatchSize: () => 25 });
+
+			const result = await kit.schedulerFetcher(browseTask(100));
+
+			expect(result).toMatchObject({ documentCount: 100, requestCount: 4 });
+			for (const call of fetcher.mock.calls) {
+				expect(new URL(call[0]).searchParams.get('per_page')).toBe('25');
+			}
+		});
+
+		it('stops at the advertised last page instead of asking for one past it', async () => {
+			const fetcher = vi.fn(async (_url: string) =>
+				response(
+					Array.from({ length: 50 }, (_, index) => customerPayload(index + 1)),
+					{ 'X-WP-Total': '50', 'X-WP-TotalPages': '1' }
+				)
+			);
+			const kit = browseFetcher(fetcher, { pullBatchSize: () => 50 });
+
+			await kit.schedulerFetcher(browseTask(200));
+
+			expect(fetcher).toHaveBeenCalledTimes(1);
+		});
+
+		it('leaves the targeted and search lanes untouched', async () => {
+			const fetcher = vi.fn(async (_url: string) => response([customerPayload(12)]));
+			const kit = browseFetcher(fetcher);
+
+			await kit.schedulerFetcher(
+				customerTask({ queryKey: 'customers:search=alex:limit=25', limit: 25 })
+			);
+
+			const url = new URL(fetcher.mock.calls[0]![0]);
+			expect(url.searchParams.get('search')).toBe('alex');
+			expect(url.searchParams.get('role')).toBeNull();
+			expect(kit.queryTotalRepository.upsert).not.toHaveBeenCalled();
 		});
 	});
 });

@@ -229,6 +229,73 @@ describe('requirementsForQuery extraction', () => {
 		).toMatchObject({ collection: 'customers', kind: 'search', term: 'ada' });
 	});
 
+	// #951. A cashier who sorts the customers grid expects to see THOSE customers, not the
+	// locally-resident slice the idle trickle happened to reach, re-ordered.
+	describe('customers browse window', () => {
+		const customerPlan = (overrides: Partial<RequirementInput> = {}) =>
+			plan({ collectionName: 'customers', selector: {}, ...overrides });
+		const customerRequirement = (overrides: Partial<RequirementInput> = {}) =>
+			onlyRequirement({ collectionName: 'customers', selector: {}, ...overrides });
+
+		it('declares NO demand for an unsorted browse — customers stay on-demand (#865)', () => {
+			expect(customerPlan({ sort: undefined })).toEqual({ requirements: [], represented: false });
+		});
+
+		it('sends a sort the wire can express to the server', () => {
+			expect(customerRequirement({ sort: [{ date_created_gmt: 'desc' }], limit: 10 })).toEqual({
+				id: 'q:customers-browse-window',
+				collection: 'customers',
+				kind: 'customer-browse',
+				limit: 10,
+				// 1.9 parity: hooks/customers.tsx mapped date_created → registered_date.
+				orderby: 'registered_date',
+				order: 'desc',
+			});
+			expect(customerRequirement({ sort: [{ id: 'asc' }] })).toMatchObject({
+				kind: 'customer-browse',
+				orderby: 'id',
+				order: 'asc',
+			});
+		});
+
+		// The v2 proxy forwards /customers to wc/v3, which rejects these with a 400. Requesting
+		// one per scroll tick is strictly worse than a local sort that admits it is local.
+		it.each(['last_name', 'first_name', 'email', 'role', 'username', 'date_modified_gmt'])(
+			'never puts the plugin-only sort %s on the wire',
+			(field) => {
+				expect(customerPlan({ sort: [{ [field]: 'asc' }] })).toEqual({
+					requirements: [],
+					represented: false,
+				});
+			}
+		);
+
+		it('carries the grid limit so scroll extension advances the window', () => {
+			const first = customerRequirement({ sort: [{ id: 'asc' }], limit: 10 });
+			const extended = customerRequirement({ sort: [{ id: 'asc' }], limit: 110 });
+			expect(first).toMatchObject({ limit: 10 });
+			expect(extended).toMatchObject({ limit: 110 });
+		});
+
+		it('still prefers search and targeted demand over the browse window', () => {
+			expect(
+				onlyRequirement({
+					collectionName: 'customers',
+					selector: { search: 'ada' },
+					sort: [{ id: 'asc' }],
+					limit: 25,
+				})
+			).toMatchObject({ kind: 'search' });
+			expect(
+				onlyRequirement({
+					collectionName: 'customers',
+					selector: { id: { $in: [7] } },
+					sort: [{ id: 'asc' }],
+				})
+			).toMatchObject({ kind: 'targeted-records' });
+		});
+	});
+
 	describe('orders browse dimensions', () => {
 		const orderPlan = (overrides: Partial<RequirementInput> = {}) =>
 			plan({ collectionName: 'orders', selector: {}, ...overrides });

@@ -19,6 +19,7 @@ export {
 } from './rx-order-scheduler-task-seeder';
 export { laneKeyFor, seedPosBootstrapLanes, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
 export { seedProductBrowseWindowSchedulerTask } from './rx-scheduler-product-task-seeder';
+export { seedCustomerBrowseWindowSchedulerTask } from './rx-scheduler-customer-task-seeder';
 export type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
 
 // Descriptors
@@ -33,6 +34,16 @@ export {
 	productBrowseWindowQueryKeyFromDimensions,
 	type ProductBrowseWindowOrderby,
 } from './product-browse-window-descriptor';
+export {
+	CUSTOMER_BROWSE_WINDOW_DEFAULT_LIMIT,
+	CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES,
+	CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES,
+	customerBrowseWindowQueryKey,
+	customerBrowseWindowQueryKeyFromDimensions,
+	isCustomerBrowseWindowQueryKey,
+	parseCustomerBrowseWindowDescriptor,
+	type CustomerBrowseWindowOrderby,
+} from './customer-browse-window-descriptor';
 export {
 	CENSUS_COLLECTIONS,
 	censusCollectionFromQueryKey,

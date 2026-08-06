@@ -39,11 +39,14 @@ import {
 import { pullTargetedByIds, refreshCollection } from './change-signal/change-signal-handlers';
 import {
 	censusQueryKey,
+	type CustomerBrowseWindowOrderby,
+	customerBrowseWindowQueryKeyFromDimensions,
 	emptyPersistedSchedulerTaskRunnerResult,
 	type FetchTask,
 	laneKeyFor,
 	ORDER_SCHEDULER_LEASE_FOR_MS,
 	orderBrowserQueryKey,
+	parseCustomerBrowseWindowDescriptor,
 	parseOrderBrowserSchedulerDescriptor,
 	parseProductBrowseWindowDescriptor,
 	type PersistedSchedulerTaskRunnerResult,
@@ -52,6 +55,7 @@ import {
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
 	type SchedulerDrainDatabase,
+	seedCustomerBrowseWindowSchedulerTask,
 	seedOrderFilterSchedulerTask,
 	seedOrderSchedulerTasks,
 	seedProductBrowseWindowSchedulerTask,
@@ -112,6 +116,20 @@ export type ProductBrowseDimensions = {
 };
 
 /**
+ * The customers browse window (#951). Demand-driven only — a mounted, sorted grid declares
+ * it; nothing seeds it at boot or on idle, so the customers-on-demand ruling (#865) stands.
+ * The window is UNCAPPED (R8): it grows with the grid's limit as the cashier scrolls, and the
+ * per-request cost stays bounded by the Performance dial instead.
+ */
+export type CustomerBrowseDimensions = {
+	/** Requested window size, raw — the engine quantizes into steps of 100. Default 100. */
+	limit?: number;
+	/** Supported customers orderby values. Both orderby and order, or neither. */
+	orderby?: CustomerBrowseWindowOrderby;
+	order?: 'asc' | 'desc';
+};
+
+/**
  * Dedicated search and browse kinds accept typed caller dimensions; callers never
  * construct their lane keys.
  */
@@ -123,6 +141,7 @@ export type EngineRequirement = EngineRequirementCommon &
 		| { kind: 'refresh'; collection: SyncCollectionName; limit?: number }
 		| ({ kind: 'orders-browse'; collection: 'orders' } & OrderBrowseDimensions)
 		| ({ kind: 'product-browse'; collection: 'products' } & ProductBrowseDimensions)
+		| ({ kind: 'customer-browse'; collection: 'customers' } & CustomerBrowseDimensions)
 	);
 
 export type CoverageOutcome = {
@@ -160,7 +179,7 @@ type InternalRequirement =
 	| EngineRequirement
 	| (EngineRequirementCommon & {
 			kind: 'query';
-			collection: 'orders' | 'products';
+			collection: 'orders' | 'products' | 'customers';
 			queryKey: string;
 	  });
 
@@ -438,6 +457,78 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					action: 'fetched',
 					missingRecordIds: [],
 					reason: `drained product browse window ${item.requirement.queryKey}`,
+					documents: drainResult.totalDocuments,
+					requests: drainResult.totalRequests,
+				};
+			}
+
+			if (item.requirement.collection === 'customers' && item.requirement.kind === 'query') {
+				// The customers BROWSE WINDOW (#951) — same durable shape as the products window
+				// above. This is what makes a SORTED customers grid reach the wire: before it
+				// existed, a customers browse declared no demand at all, so sorting by anything
+				// re-ordered whichever residents the idle trickle happened to have walked to.
+				const browseWindow = parseCustomerBrowseWindowDescriptor(item.requirement.queryKey ?? '');
+				if (!browseWindow) {
+					throw new Error(
+						`require: unsupported customer query (${item.requirement.queryKey ?? 'missing queryKey'})`
+					);
+				}
+				let drainResult = emptyDrainResult();
+				let skippedActive = false;
+				const applied = await bound.guardWrite(async () => {
+					const seedResult = await seedCustomerBrowseWindowSchedulerTask({
+						...browseWindow,
+						priority: item.priority,
+						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
+						database: database,
+					});
+					if (seedResult.skippedActive > 0) {
+						skippedActive = true;
+						return;
+					}
+					drainResult = await runEngineSchedulerDrain({
+						db: database as unknown as SchedulerDrainDatabase,
+						coverage,
+						baseUrl: deps.syncBaseUrl,
+						ownerId: 'require-plane',
+						fetcher: boundFetch as never,
+						diagnostics: deps.diagnostics,
+						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+						signal: item.abortController.signal,
+						onProgress: progressObserver(item.requirement),
+					});
+				});
+				if (applied === 'dropped')
+					throw new Error('require: scope moved mid-query (writes dropped)');
+				if (skippedActive)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'customer browse window already in progress',
+					};
+				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
+				// nothing was fetched, so release instead of reporting the requirement met.
+				if (drainResult.ledgerRebuilt)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'local sync bookkeeping was rebuilt mid-drain',
+					};
+				if (drainResult.failed > 0)
+					throw new Error(`require: scheduler drain failed ${drainResult.failed} task(s)`);
+				const lostCustomerClaims = drainLostOutcomeCount(drainResult);
+				if (lostCustomerClaims > 0)
+					return {
+						action: 'released',
+						missingRecordIds: [],
+						reason: 'claim lost to another owner',
+						documents: drainResult.totalDocuments,
+						requests: drainResult.totalRequests,
+					};
+				return {
+					action: 'fetched',
+					missingRecordIds: [],
+					reason: `drained customer browse window ${item.requirement.queryKey}`,
 					documents: drainResult.totalDocuments,
 					requests: drainResult.totalRequests,
 				};
@@ -946,6 +1037,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				if (requirement.kind === 'product-browse') {
 					return productBrowseWindowQueryKeyFromDimensions(requirement);
 				}
+				if (requirement.kind === 'customer-browse') {
+					return customerBrowseWindowQueryKeyFromDimensions(requirement);
+				}
 				if (requirement.kind === 'refresh') return laneKeyFor(requirement.collection);
 				return null;
 			})();
@@ -959,7 +1053,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// Browse requirements synchronously derive their lane identity, then delegate to
 			// the parser-based internal queued path used by the durable scheduler.
 			const queuedRequirement: InternalRequirement =
-				requirement.kind === 'orders-browse' || requirement.kind === 'product-browse'
+				requirement.kind === 'orders-browse' ||
+				requirement.kind === 'product-browse' ||
+				requirement.kind === 'customer-browse'
 					? {
 							id: requirement.id,
 							collection: requirement.collection,

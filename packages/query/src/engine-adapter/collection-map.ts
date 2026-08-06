@@ -1,4 +1,5 @@
 import type {
+	CustomerBrowseDimensions,
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 	SyncCollectionName,
@@ -110,7 +111,9 @@ export type EngineDocument = Record<string, unknown> & {
 export type FieldKind = 'promoted' | 'payload' | 'computed' | 'identifier';
 
 type WooOrderby = NonNullable<
-	OrderBrowseDimensions['orderby'] | ProductBrowseDimensions['orderby']
+	| OrderBrowseDimensions['orderby']
+	| ProductBrowseDimensions['orderby']
+	| CustomerBrowseDimensions['orderby']
 >;
 
 export type FieldMapEntry = {
@@ -475,6 +478,20 @@ export const collectionMap = {
 			},
 		},
 	},
+	/**
+	 * Customers (#951). Only the columns with a `wooOrderby` drive a SERVER-sorted browse
+	 * window; the rest keep sorting local residents, and the footer keeps saying so.
+	 *
+	 * The gap is a wire fact, not a preference. `syncBaseUrl` is the `wcpos/v2` namespace,
+	 * whose `/customers` route proxies to `wc/v3/customers`, and wc/v3 accepts only
+	 * `id | include | name | registered_date`. The WCPOS plugin DOES implement first_name,
+	 * last_name, email, role and username — but on its own `wcpos/v1/customers` controller,
+	 * which the v2 proxy bypasses. 1.9 talked to v1 directly, which is why 1.9 could sort the
+	 * customer list by last name server-side; see
+	 * CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES for the plugin change that closes it.
+	 * Requesting one anyway would be a `rest_invalid_param` 400 on every scroll tick, which is
+	 * strictly worse than a locally-sorted list that admits it is local.
+	 */
 	customers: {
 		engineCollection: 'customers',
 		fields: {
@@ -484,6 +501,14 @@ export const collectionMap = {
 				kind: 'identifier',
 				enginePath: 'wooCustomerId',
 				adapterDerived: false,
+				sort: { wooOrderby: 'id' },
+			},
+			/** 1.9 parity: `hooks/customers.tsx` mapped `date_created`/`date_created_gmt` here. */
+			date_created_gmt: {
+				legacy: 'date_created_gmt',
+				kind: 'payload',
+				enginePath: 'payload.date_created_gmt',
+				sort: { wooOrderby: 'registered_date' },
 			},
 		},
 	},
@@ -584,7 +609,9 @@ type WooOrderbyFor<C extends LegacyCollectionName> = C extends 'products'
 	? NonNullable<ProductBrowseDimensions['orderby']>
 	: C extends 'orders'
 		? NonNullable<OrderBrowseDimensions['orderby']>
-		: WooOrderby;
+		: C extends 'customers'
+			? NonNullable<CustomerBrowseDimensions['orderby']>
+			: WooOrderby;
 
 export function wooOrderbyFor<C extends LegacyCollectionName>(
 	collection: C,

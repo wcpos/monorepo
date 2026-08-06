@@ -310,8 +310,13 @@ function coverageProjection$(
 		shareReplay({ bufferSize: 1, refCount: true })
 	);
 	const lanes$ = coverageDocuments$<CoverageLaneDocument>(database$, 'coverageLanes');
+	// Collections whose browse lane caches the server's X-WP-Total against its queryKey. A
+	// windowed browse is almost never a COMPLETE coverage lane (that is the point — it holds
+	// the first N of a much larger set), so without the cached total the footer would fall
+	// back to the resident count and read as "that's all there is" (#894/#945). Customers
+	// joined orders here with the browse window in #951.
 	const totals$ =
-		descriptor.collection === 'orders'
+		descriptor.collection === 'orders' || descriptor.collection === 'customers'
 			? coverageDocuments$<QueryTotalCacheDocument>(database$, 'queryTotalCacheEntries')
 			: of([] as QueryTotalCacheDocument[]);
 	const coverage$ = combineLatest([lanes$, totals$]).pipe(

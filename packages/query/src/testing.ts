@@ -4,6 +4,7 @@ import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { Subject } from 'rxjs';
 
 import {
+	customerBrowseWindowQueryKeyFromDimensions,
 	engineSyncCollectionCreators,
 	memoryEngineStorage,
 	orderBrowserQueryKey,
@@ -97,6 +98,9 @@ const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 	if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 	if (requirement.kind === 'product-browse') {
 		return productBrowseWindowQueryKeyFromDimensions(requirement);
+	}
+	if (requirement.kind === 'customer-browse') {
+		return customerBrowseWindowQueryKeyFromDimensions(requirement);
 	}
 	if (requirement.kind === 'refresh') {
 		const refreshLaneKeys: Partial<Record<SyncCollectionName, string>> = {

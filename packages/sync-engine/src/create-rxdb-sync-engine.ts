@@ -131,6 +131,7 @@ import {
 
 export type {
 	CoverageOutcome,
+	CustomerBrowseDimensions,
 	EngineRequirement,
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
