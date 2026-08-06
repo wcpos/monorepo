@@ -24,7 +24,8 @@ import { RECORD_UUID_META_KEY } from './recordIdentity';
  *    nothing — modelling the server's `mutationId` dedupe, so a re-drain is safe. (404/409/400 are
  *    NOT memoised, so a retry after the record is seeded / the conflict resolved can still land.)
  *  - `seed()` pre-establishes an existing server record so update/delete flows can be exercised.
- *  - scriptable faults override the above: 409 conflict, transient 409 `in_progress` / `record_locked`,
+ *  - scriptable faults override the above: a permanent 400 `invalid_param` (the wc/v3 schema refusing
+ *    a payload — the #832 dead-letter shape), 409 conflict, transient 409 `in_progress` / `record_locked`,
  *    428 `precondition_required`, and the PERMANENT 409 `identity_ambiguous` (F4a fail-closed: the
  *    uuid resolves to more than one server record — a duplicated `_woocommerce_pos_uuid` needs the
  *    backfill collision repair, so no retry can ever succeed).
@@ -49,6 +50,13 @@ export type FakeWriteServerFault =
 	| { kind: 'record_locked' }
 	| { kind: 'precondition_required' }
 	| { kind: 'identity_ambiguous' }
+	/**
+	 * A plain permanent 400 from the wc/v3 schema — the shape that dead-lettered the
+	 * guest-checkout creates in the #786 / #832 incident (`rest_invalid_email` on an
+	 * empty `billing.email`). The body is the standard WP REST error envelope, so the
+	 * push adapter records both the machine code and the server's sentence.
+	 */
+	| { kind: 'invalid_param'; code?: string; message?: string }
 	| { kind: 'cannot_delete' }
 	| { kind: 'parent_required' }
 	| { kind: 'parent_mismatch' };
@@ -208,6 +216,15 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 						code: 'woo_rxdb_sync_identity_ambiguous',
 						message: `uuid ${env.recordId} resolves to more than one record; refusing to write to an arbitrary match.`,
 						data: { status: 409 },
+					},
+				};
+			case 'invalid_param':
+				return {
+					status: 400,
+					body: {
+						code: fault.code ?? 'rest_invalid_param',
+						message: fault.message ?? 'Invalid parameter(s): billing',
+						data: { status: 400 },
 					},
 				};
 			case 'cannot_delete':

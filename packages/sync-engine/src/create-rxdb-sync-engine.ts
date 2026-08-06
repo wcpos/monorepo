@@ -109,7 +109,10 @@ import {
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { createReconcilePorts } from './local-coverage/reconcile-port';
 import { enqueueWriteIntent, queueFor, type WriteIntent } from './write-path/write-intents';
-import { createConflictResolution } from './write-path/conflict-resolution';
+import {
+	type ConflictResolutionChoice,
+	createConflictResolution,
+} from './write-path/conflict-resolution';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 import { CHANGE_SIGNAL_STATE_ID } from './change-signal/change-signal-state-schema';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
@@ -140,6 +143,7 @@ export type {
 	QueryTotalCacheEvent,
 } from './maintenance/maintenance-lanes';
 export type { WriteIntent } from './write-path/write-intents';
+export type { ConflictResolutionChoice } from './write-path/conflict-resolution';
 export type { CensusTotal, CensusTotals } from './scheduler';
 
 export type EngineLane = EngineLaneName;
@@ -397,8 +401,11 @@ export type RxdbSyncEngine = {
 	 * precondition and no current revision could be determined) carry NO server
 	 * truth: `resolveConflict('retry-with-server-base')` FIRST refreshes the
 	 * revision from the server; 'rejected' rows are permanent-4xx dead letters
-	 * whose only resolution is 'discard'. Rows persist here until
-	 * `resolveConflict` settles them.
+	 * carrying the server's verdict (`rejectedStatus` / `rejectedReason` /
+	 * `rejectedMessage` / `rejectedAt`) and, once recovered at least once, their
+	 * requeue provenance (`requeuedFrom` / `requeueCount`) — they resolve by
+	 * 'requeue-rebuilt' or 'discard'. Rows persist here until `resolveConflict`
+	 * settles them.
 	 */
 	conflicts(): Promise<EngineConflict[]>;
 	/**
@@ -411,6 +418,18 @@ export type RxdbSyncEngine = {
 	 *    revision) first performs one targeted server refresh — if the refresh
 	 *    fails or finds no revision this THROWS and the row stays parked
 	 *    (re-runnable); it never re-pends on the same stale base;
+	 *  - 'requeue-rebuilt' (rejected ONLY — #832): the dead letter's payload is
+	 *    REBUILT from the record as it stands now and enqueued through the same
+	 *    pipeline a normal write uses, so every outbound sanitizer that has
+	 *    landed since the rejection applies; the replacement carries a FRESH
+	 *    mutationId plus `requeuedFrom` / `requeueCount` provenance, and the dead
+	 *    letter is removed once it is durably queued. Re-sending the rejected
+	 *    payload would earn the same 4xx forever, which is why 'requeue-rebuilt'
+	 *    and 'retry-with-server-base' are not interchangeable. Recovery is only
+	 *    ever explicit — a row that dead-letters again stays requeue-able with
+	 *    its count incremented, and nothing retries it automatically. THROWS,
+	 *    leaving the dead letter listed, when the record is no longer resident
+	 *    (nothing to rebuild from — discard instead);
 	 *  - 'discard': the server-truth re-pull is queued DURABLY (a persisted
 	 *    targeted scheduler task, orders with a known Woo id) BEFORE the
 	 *    mutation is removed and the record's pendingMutationIds/dirty
@@ -419,12 +438,10 @@ export type RxdbSyncEngine = {
 	 *    immediate completion is attempted; if it cannot complete now, the
 	 *    durable task self-heals on a later scheduler-drain tick (surfaced as a
 	 *    `queue.write.discard-repull-deferred` diagnostics event).
-	 * Throws for an unknown/non-terminal mutationId, or retry on a rejected row.
+	 * Throws for an unknown/non-terminal mutationId, for 'retry-with-server-base'
+	 * on a rejected row, or for 'requeue-rebuilt' on anything but a rejected row.
 	 */
-	resolveConflict(
-		mutationId: string,
-		resolution: 'retry-with-server-base' | 'discard'
-	): Promise<void>;
+	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
 	/** Component-declared data requirement (CONTEXT.md): coverage-aware ready
 	 * (serve-local without a fetch when every record is resident), priority
 	 * preemption over queued demand work, release() demotion. */
@@ -1310,6 +1327,7 @@ export function createRxdbSyncEngine(
 		activeDatabase,
 		fetcher,
 		ports,
+		mintUuid: uuid,
 		requirePlane,
 		diagnostics,
 		writeDrainLane,

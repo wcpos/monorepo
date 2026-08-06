@@ -85,7 +85,22 @@ export class RecordPushError extends Error {
 	 * even when the bare status (409) would otherwise look transient.
 	 */
 	public readonly permanent: boolean;
-	public constructor(mutation: RecordMutation, status: number, reason?: string, permanent = false) {
+	/**
+	 * The server's human-readable `message` from the error body, when it sent one
+	 * (WP REST errors are `{ code, message, data }`). `reason` is the machine code
+	 * — `rest_invalid_param` — while this is the sentence a cashier can act on —
+	 * "Invalid parameter(s): billing". The drain persists it on a dead-lettered
+	 * row so the recovery surface can say WHY the sale never reached the server
+	 * (#832); nothing branches on it.
+	 */
+	public readonly serverMessage?: string;
+	public constructor(
+		mutation: RecordMutation,
+		status: number,
+		reason?: string,
+		permanent = false,
+		serverMessage?: string
+	) {
 		super(
 			`push ${mutation.operation} ${mutation.collectionName}/${mutation.recordId} failed: ${status}${reason ? ` (${reason})` : ''}`
 		);
@@ -94,6 +109,7 @@ export class RecordPushError extends Error {
 		this.status = status;
 		this.reason = reason;
 		this.permanent = permanent;
+		this.serverMessage = serverMessage;
 	}
 }
 
@@ -230,7 +246,13 @@ export async function pushRecordMutation(input: {
 				collection: mutation.collectionName,
 				fields: { ...baseFields, status: 409, reason: 'identity-ambiguous' },
 			});
-			throw new RecordPushError(mutation, 409, 'identity-ambiguous', true);
+			throw new RecordPushError(
+				mutation,
+				409,
+				'identity-ambiguous',
+				true,
+				typeof body?.message === 'string' ? body.message : undefined
+			);
 		}
 		emit({
 			type: 'push.conflict',
@@ -266,7 +288,9 @@ export async function pushRecordMutation(input: {
 		throw new RecordPushError(
 			mutation,
 			428,
-			typeof body?.code === 'string' ? body.code : 'precondition-required'
+			typeof body?.code === 'string' ? body.code : 'precondition-required',
+			false,
+			typeof body?.message === 'string' ? body.message : undefined
 		);
 	}
 
@@ -283,7 +307,13 @@ export async function pushRecordMutation(input: {
 				...(reason !== undefined ? { reason } : {}),
 			},
 		});
-		throw new RecordPushError(mutation, response.status, reason, reason === WOO_REST_CANNOT_DELETE);
+		throw new RecordPushError(
+			mutation,
+			response.status,
+			reason,
+			reason === WOO_REST_CANNOT_DELETE,
+			typeof body?.message === 'string' ? body.message : undefined
+		);
 	}
 
 	const outcome = OUTCOME_BY_OP[mutation.operation];

@@ -306,6 +306,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "queue.write.requeue-rebuilt",
+		"domain": "SYNC",
+		"label": "Queued a refused change to send again",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "queue.write.reschedule-failed",
 		"domain": "SYNC",
 		"label": "Could not schedule another try for a change",

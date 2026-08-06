@@ -12,7 +12,18 @@ export type EngineMutationCounts = {
 	pending: number;
 	/** Pending mutations on the orders collection only — the "sales waiting to send" number. */
 	pendingOrders: number;
+	/** Every terminal row awaiting a decision: conflicted + needs-revision + rejected. */
 	conflicts: number;
+	/**
+	 * The DEAD LETTERS alone (#832) — writes the server permanently refused. They
+	 * are a subset of `conflicts`, but they need their own number: a 409 conflict
+	 * ("changed on the server while a till was editing") and a dead letter ("your
+	 * server refused this and nothing will retry it") are different problems with
+	 * different fixes, and lumping them made the callout lie about half of them.
+	 */
+	rejected: number;
+	/** Conflicted + needs-revision rows, observed independently from rejected rows. */
+	unresolvedConflicts: number;
 };
 
 type CountCollection = { count(): { $: Observable<number> } };
@@ -63,7 +74,14 @@ function subscribeToMutationCounts(
 	)
 		.pipe(
 			switchMap((database) => {
-				if (!database) return of({ pending: 0, pendingOrders: 0, conflicts: 0 });
+				if (!database)
+					return of({
+						pending: 0,
+						pendingOrders: 0,
+						conflicts: 0,
+						rejected: 0,
+						unresolvedConflicts: 0,
+					});
 				const mutations = database.collections[
 					MUTATION_QUEUE_RXDB_COLLECTION
 				] as unknown as MutationCollection;
@@ -77,11 +95,23 @@ function subscribeToMutationCounts(
 				const conflicts$ = mutations.find({
 					selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },
 				}).$;
-				return combineLatest([pending$, pendingOrders$, conflicts$]).pipe(
-					map(([pending, pendingOrders, conflicts]) => ({
+				const rejected$ = mutations.find({ selector: { status: { $in: ['rejected'] } } }).$;
+				const unresolvedConflicts$ = mutations.find({
+					selector: { status: { $in: ['conflicted', 'needs-revision'] } },
+				}).$;
+				return combineLatest([
+					pending$,
+					pendingOrders$,
+					conflicts$,
+					rejected$,
+					unresolvedConflicts$,
+				]).pipe(
+					map(([pending, pendingOrders, conflicts, rejected, unresolvedConflicts]) => ({
 						pending: pending.length,
 						pendingOrders: pendingOrders.length,
 						conflicts: conflicts.length,
+						rejected: rejected.length,
+						unresolvedConflicts: unresolvedConflicts.length,
 					}))
 				);
 			})
@@ -120,6 +150,8 @@ export function useMutationCounts(): EngineMutationCounts {
 		pending: 0,
 		pendingOrders: 0,
 		conflicts: 0,
+		rejected: 0,
+		unresolvedConflicts: 0,
 	});
 
 	React.useEffect(() => {

@@ -259,9 +259,40 @@ describe('RecordMutationQueue', () => {
 		const row = { ...mut({ mutationId: 'durable-v2' }), seq: 7, status: 'conflicted' as const };
 		expect(recordMutationQueueMigrationStrategies[3](row)).toEqual(row);
 	});
+
+	it('#832: the v3 → v4 migration passes a dead letter through untouched (additive fields only)', () => {
+		// A pre-#832 dead letter has no recorded reason and no requeue provenance —
+		// it must still arrive intact and requeue-able, because these are exactly the
+		// stranded sales the recovery path exists to rescue.
+		const row = { ...mut({ mutationId: 'stranded-v3' }), seq: 7, status: 'rejected' as const };
+		expect(recordMutationQueueMigrationStrategies[4](row)).toEqual(row);
+	});
 });
 
 describe('RecordMutationQueue — conditional (CAS) transitions (#507 P1-2)', () => {
+	it('#832: removeIfStatus settles a dead letter exactly once, so concurrent recoveries cannot both win', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		const row = await q.enqueue(mut({ mutationId: 'm-dead' }));
+		await q.replace({ ...row, status: 'rejected' });
+
+		// Both recoveries raced to here; only one may retire the row.
+		const [first, second] = await Promise.all([
+			q.removeIfStatus('m-dead', 'rejected'),
+			q.removeIfStatus('m-dead', 'rejected'),
+		]);
+		expect([first, second].filter(Boolean)).toHaveLength(1);
+		expect(await q.all()).toEqual([]);
+	});
+
+	it('#832: removeIfStatus refuses a row that is no longer in the expected status', async () => {
+		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
+		await q.enqueue(mut({ mutationId: 'm-pending' }));
+
+		expect(await q.removeIfStatus('m-pending', 'rejected')).toBe(false);
+		expect(await q.removeIfStatus('m-absent', 'rejected')).toBe(false);
+		expect((await q.all()).map((m) => m.mutationId)).toEqual(['m-pending']);
+	});
+
 	it('claim refuses a row that was removed after the scan — never resurrects it', async () => {
 		const q = new RecordMutationQueue(new InMemoryRecordMutationStorage());
 		const row = await q.enqueue(mut({ mutationId: 'm-annihilated' }));

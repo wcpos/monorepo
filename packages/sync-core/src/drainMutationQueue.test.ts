@@ -291,6 +291,34 @@ describe('drainMutationQueue', () => {
 		expect((await q.all())[0]).toMatchObject({ status: 'needs-revision' });
 	});
 
+	it('dead-letters an unrefreshable born-local 428 with the server message (#832)', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'm-create-428', operation: 'create', origin: 'minted', baseRevision: null })
+		);
+		const result = await drainMutationQueue({
+			queue: q,
+			push: (mutation) =>
+				pushRecordMutation({
+					mutation,
+					resolveEndpoint: () => ({ url: 'https://x/push/products', method: 'POST' }),
+					fetcher: async () =>
+						jsonResponse(428, {
+							code: 'woo_rxdb_sync_precondition_required',
+							message: 'A server revision is required.',
+						}),
+				}),
+			refreshRevision: async () => null,
+		});
+
+		expect(result.rejected.map(({ mutation }) => mutation.mutationId)).toEqual(['m-create-428']);
+		expect((await q.all())[0]).toMatchObject({
+			status: 'rejected',
+			rejectedStatus: 428,
+			rejectedReason: 'woo_rxdb_sync_precondition_required',
+			rejectedMessage: 'A server revision is required.',
+		});
+	});
+
 	it('dead-letters when the one post-refresh retry still returns 428', async () => {
 		const q = await queueWith(
 			mut({ mutationId: 'm-428-again', operation: 'update', baseRevision: null })
@@ -805,6 +833,49 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		expect((await q.all()).map((m) => ({ id: m.mutationId, status: m.status }))).toEqual([
 			{ id: 'm1', status: 'rejected' },
 		]);
+	});
+
+	it('writes the server verdict ONTO the dead-lettered row so the recovery surface can say why (#832)', async () => {
+		const q = await queueWith(mut({ mutationId: 'm1' }));
+		const push = vi.fn(async (mutation: RecordMutation) => {
+			throw new RecordPushError(
+				mutation,
+				400,
+				'rest_invalid_param',
+				false,
+				'Invalid parameter(s): billing'
+			);
+		});
+
+		await drainMutationQueue({ queue: q, push, now: () => 1_767_225_600_000 });
+
+		expect((await q.all())[0]).toMatchObject({
+			status: 'rejected',
+			rejectedStatus: 400,
+			rejectedReason: 'rest_invalid_param',
+			rejectedMessage: 'Invalid parameter(s): billing',
+			rejectedAt: '2026-01-01T00:00:00.000Z',
+		});
+	});
+
+	it('preserves requeue provenance when a REQUEUED row dead-letters again — the count is the UI story (#832)', async () => {
+		const q = await queueWith(mut({ mutationId: 'm-requeued', recordId: 'rec-A' }));
+		const row = (await q.all())[0];
+		if (!row) throw new Error('missing row');
+		await q.replace({ ...row, requeuedFrom: 'm-original', requeueCount: 2 });
+
+		await drainMutationQueue({
+			queue: q,
+			push: async () => {
+				throw Object.assign(new Error('still refused'), { status: 400 });
+			},
+		});
+
+		expect((await q.all())[0]).toMatchObject({
+			status: 'rejected',
+			requeuedFrom: 'm-original',
+			requeueCount: 2,
+		});
 	});
 
 	it('skips a row that left the queue between the scan and the claim — never resurrects or pushes it (#507 P1-2)', async () => {

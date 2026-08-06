@@ -1399,7 +1399,7 @@ describe('#507 offline write flows through the public handle', () => {
 		}
 	});
 
-	it('regression 4: a rejected mutation frees the record — a pull applies server truth; the dead letter resolves by discard', async () => {
+	it('regression 4: a rejected mutation frees the record — a pull applies server truth; the dead letter resolves by a rebuilt requeue or discard', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
 		server.script(() => ({ kind: 'identity_ambiguous' as const }));
@@ -1445,12 +1445,495 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(state.orderPulls).toEqual([[42]]);
 			expect((await orderJson(engine, UUID_A))?.status).toBe('on-hold');
 
-			// A rejected row's only resolution is discard.
+			// A rejected row can never re-pend its OWN payload: the server already
+			// refused that exact intent, so a fresher base changes nothing.
 			await expect(
 				engine.resolveConflict(receipt.mutationId, 'retry-with-server-base')
-			).rejects.toThrow(/only be discarded/i);
-			await engine.resolveConflict(receipt.mutationId, 'discard');
+			).rejects.toThrow(/discarded or requeued/i);
+			// It CAN be requeued (#832): the payload is rebuilt from the current
+			// resident and queued under a fresh mutationId with provenance.
+			await engine.resolveConflict(receipt.mutationId, 'requeue-rebuilt');
 			expect(await engine.conflicts()).toEqual([]);
+			const [requeued] = await queueRows(engine);
+			expect(requeued).toMatchObject({
+				status: 'pending',
+				requeuedFrom: receipt.mutationId,
+				requeueCount: 1,
+			});
+			// …and discard still settles a dead letter — re-reject the requeued row to prove it.
+			server.script(() => ({ kind: 'identity_ambiguous' as const }));
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
+			const [deadAgain] = await engine.conflicts();
+			expect(deadAgain).toMatchObject({ status: 'rejected', requeueCount: 1 });
+			await engine.resolveConflict(deadAgain.mutationId, 'discard');
+			expect(await engine.conflicts()).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	/**
+	 * #832 — dead-letter recovery. A permanently-rejected CREATE is a completed
+	 * sale that lives ONLY on this device: the server never saw it, and every
+	 * later update 404s. Recovery must REBUILD the payload from the record as it
+	 * stands now, through the same enqueue pipeline a normal write uses — a
+	 * replay of the frozen snapshot earns the identical 4xx forever.
+	 */
+	it('#832: requeue-rebuilt recovers a dead-lettered create from the CURRENT resident through outbound sanitization', async () => {
+		const server = createFakeWriteServer();
+		// The wc/v3 schema refusals that stranded guest checkouts before #786: an
+		// EMPTY billing email, and a non-string meta display_value.
+		server.script((env) => {
+			const payload = (env.payload ?? {}) as Record<string, unknown>;
+			const billing = payload.billing as { email?: unknown } | undefined;
+			if (billing?.email === '') {
+				return {
+					kind: 'invalid_param' as const,
+					code: 'rest_invalid_email',
+					message: 'Invalid parameter(s): billing',
+				};
+			}
+			const meta = payload.meta_data;
+			if (
+				Array.isArray(meta) &&
+				meta.some(
+					(entry) =>
+						typeof entry === 'object' &&
+						entry !== null &&
+						'display_value' in entry &&
+						typeof (entry as { display_value?: unknown }).display_value !== 'string'
+				)
+			) {
+				return {
+					kind: 'invalid_param' as const,
+					code: 'rest_invalid_param',
+					message: 'Invalid parameter(s): meta_data',
+				};
+			}
+			return undefined;
+		});
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			// The order as it stands on this device TODAY: a guest sale (email stored
+			// locally as ''), edited to 25.00 after the create was rejected.
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				billing: { first_name: 'Guest', email: '' },
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			// A dead letter frozen by an OLD build: the pre-sanitizer payload, at the
+			// total the order had back then. This is what dev-next still carries.
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: {
+					status: 'pos-paid',
+					total: '10.00',
+					billing: { first_name: 'Guest', email: '' },
+					meta_data: [
+						{ key: '_woocommerce_pos_uuid', value: UUID_A },
+						{ key: '_pos_display', value: 'x', display_value: { amount: 1 } },
+					],
+				},
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({
+				...stale,
+				status: 'rejected',
+				rejectedStatus: 400,
+				rejectedReason: 'rest_invalid_email',
+				rejectedMessage: 'Invalid parameter(s): billing',
+				rejectedAt: '2026-01-05T00:00:01.000Z',
+			});
+			expect(await engine.conflicts()).toHaveLength(1);
+
+			await engine.resolveConflict('stranded-create', 'requeue-rebuilt');
+
+			// The dead letter is retired and replaced by ONE pending row under a FRESH
+			// mutationId carrying provenance — the server replays by mutationId, so a
+			// rebuilt payload can never reuse the rejected one's id.
+			expect(await engine.conflicts()).toEqual([]);
+			const [requeued] = await queueRows(engine);
+			expect(requeued).toMatchObject({
+				status: 'pending',
+				operation: 'create',
+				requeuedFrom: 'stranded-create',
+				requeueCount: 1,
+			});
+			expect(requeued.mutationId).not.toBe('stranded-create');
+			// Requeuing the same dead letter twice never yields two live rows — the
+			// second resolution finds it already settled and refuses.
+			await expect(engine.resolveConflict('stranded-create', 'requeue-rebuilt')).rejects.toThrow();
+			expect(await queueRows(engine)).toHaveLength(1);
+
+			expect(await engine.sync('write-drain')).toMatchObject({
+				status: 'ran',
+				pushed: 1,
+				rejected: 0,
+			});
+			// REBUILT, not replayed: the envelope carries the CURRENT resident's total,
+			// and the enqueue pipeline's sanitizers removed both fields the server
+			// refuses — neither of which the frozen snapshot had lost.
+			expect(server.received).toHaveLength(1);
+			const sent = server.received[0].payload as Record<string, unknown>;
+			expect(sent.total).toBe('25.00');
+			expect(sent.billing).toEqual({ first_name: 'Guest' });
+			expect(sent.meta_data).toEqual([{ key: '_woocommerce_pos_uuid', value: UUID_A }]);
+			// The sale is finally on the server, reconciled onto the resident record.
+			const order = await orderJson(engine, UUID_A);
+			expect(order?.wooOrderId).toBe(500);
+			expect(order?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
+			expect(await queueRows(engine)).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832: a dead letter records the server verdict, and requeue → reject → requeue keeps working with a rising count', async () => {
+		const server = createFakeWriteServer();
+		let refuse = true;
+		server.script(() =>
+			refuse
+				? {
+						kind: 'invalid_param' as const,
+						code: 'rest_invalid_param',
+						message: 'Invalid parameter(s): line_items',
+					}
+				: undefined
+		);
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-paid' },
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
+
+			// The WHY is persisted on the row, not only in a long-gone event.
+			const [dead] = await engine.conflicts();
+			expect(dead).toMatchObject({
+				status: 'rejected',
+				rejectedStatus: 400,
+				rejectedReason: 'rest_invalid_param',
+				rejectedMessage: 'Invalid parameter(s): line_items',
+			});
+			expect(typeof dead.rejectedAt).toBe('string');
+
+			// Requeue #1 — the server has not been fixed, so it dead-letters again…
+			await engine.resolveConflict(dead.mutationId, 'requeue-rebuilt');
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
+			const [deadAgain] = await engine.conflicts();
+			// …and stays requeue-able, carrying how many recoveries it has survived.
+			expect(deadAgain).toMatchObject({
+				status: 'rejected',
+				requeuedFrom: dead.mutationId,
+				requeueCount: 1,
+			});
+
+			// Requeue #2, against a server that now accepts the payload.
+			await engine.resolveConflict(deadAgain.mutationId, 'requeue-rebuilt');
+			const [pending] = await queueRows(engine);
+			expect(pending).toMatchObject({ status: 'pending', requeueCount: 2 });
+			refuse = false;
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+			expect(await engine.conflicts()).toEqual([]);
+			expect((await orderJson(engine, UUID_A))?.wooOrderId).toBe(500);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832: requeue refuses a non-rejected row, and a dead letter whose record is gone (discard is then the honest answer)', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r2' });
+		const { fetch } = routedFetch(server, () => ({
+			number: '1042',
+			status: 'on-hold',
+			total: '10.00',
+			date_created_gmt: '2026-07-10T00:00:00',
+			date_modified_gmt: '2026-07-10T00:00:02',
+			customer_id: 0,
+			meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: UUID_A }],
+		}));
+		const engine = engineWith({ fetch });
+		try {
+			await engine.ready;
+			// A 409 stale-revision row is CONFLICTED, not rejected: its intent was
+			// never refused, so rebuilding it would discard the server's truth.
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const conflicted = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'completed' },
+			});
+			await engine.sync('write-drain');
+			expect(await engine.conflicts()).toHaveLength(1);
+			await expect(
+				engine.resolveConflict(conflicted.mutationId, 'requeue-rebuilt')
+			).rejects.toThrow(/only to rejected mutations/i);
+			await engine.resolveConflict(conflicted.mutationId, 'discard');
+
+			// A dead letter whose resident was removed locally has nothing left to
+			// rebuild from — requeue THROWS and leaves the row listed.
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const orphan = await queue.enqueue({
+				mutationId: 'orphan-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_MINT,
+				origin: 'minted',
+				payload: { status: 'pos-paid' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...orphan, status: 'rejected', rejectedStatus: 400 });
+			await expect(engine.resolveConflict('orphan-create', 'requeue-rebuilt')).rejects.toThrow(
+				/no longer on this device/i
+			);
+			expect((await engine.conflicts()).map((row) => row.mutationId)).toEqual(['orphan-create']);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832: a queued delete supersedes a dead letter — requeue refuses rather than cancelling the deletion', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+			// The cashier has since asked for the order to go away. That is the NEWER
+			// intent; recovering the old one would coalesce into it and silently
+			// replace the delete with an update.
+			await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+
+			await expect(engine.resolveConflict('refused-update', 'requeue-rebuilt')).rejects.toThrow(
+				/queued for deletion/i
+			);
+			// Nothing moved: the delete is intact and the dead letter is still listed.
+			const rows = await queueRows(engine);
+			expect(rows.filter((row) => row.operation === 'delete')).toHaveLength(1);
+			expect((await engine.conflicts()).map((row) => row.mutationId)).toEqual(['refused-update']);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832: requeuing a dead-lettered create absorbs the never-pushed edits queued behind it into ONE create', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-open', total: '10.00' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+			// An edit made after the create was rejected. It is pending and never
+			// pushed, so it must not end up ahead of the create it depends on.
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { customer_note: 'gift wrap' },
+			});
+
+			await engine.resolveConflict('stranded-create', 'requeue-rebuilt');
+
+			// ONE row, still a CREATE (the server has never seen this record), carrying
+			// the merged snapshot — never an update racing ahead of its create.
+			const rows = await queueRows(engine);
+			expect(rows).toHaveLength(1);
+			expect(rows[0]).toMatchObject({
+				status: 'pending',
+				operation: 'create',
+				requeuedFrom: 'stranded-create',
+				requeueCount: 1,
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+			expect(server.received).toHaveLength(1);
+			expect(server.received[0].operation).toBe('create');
+			expect(server.received[0].payload).toMatchObject({
+				total: '25.00',
+				customer_note: 'gift wrap',
+			});
+			expect((await orderJson(engine, UUID_A))?.wooOrderId).toBe(500);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832: requeue refuses while a same-record push is in flight, rather than queueing behind it', async () => {
+		const server = createFakeWriteServer();
+		let releasePush: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => {
+			releasePush = resolve;
+		});
+		let gated = false;
+		const engine = engineWith({
+			fetch: async (url, init) => {
+				// Hold the FIRST push open so its row stays durably 'claimed' while the
+				// requeue below runs — the real in-flight window, not a simulated one.
+				if (url.includes('/push/') && !gated) {
+					gated = true;
+					await gate;
+				}
+				return server.fetch(url, init as never);
+			},
+		});
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { customer_note: 'later edit' },
+			});
+			const draining = engine.sync('write-drain');
+			// Let the drain claim the successor and block inside its push.
+			await vi.waitFor(async () => {
+				const rows = await queueRows(engine);
+				expect(rows.some((row) => row.status === 'claimed')).toBe(true);
+			});
+
+			await expect(engine.resolveConflict('refused-update', 'requeue-rebuilt')).rejects.toThrow(
+				/being sent right now/i
+			);
+			// The dead letter is untouched and still recoverable once the push settles.
+			expect((await engine.conflicts()).map((row) => row.mutationId)).toEqual(['refused-update']);
+
+			releasePush();
+			await draining;
+		} finally {
+			releasePush();
+			await engine.dispose();
+		}
+	});
+
+	it('#832: a delete that lands DURING the rebuild still wins — the recovery refuses instead of coalescing over it', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			// Slip the delete in AFTER the pre-flight check has already passed: the
+			// resident read inside the rebuild is the last await before the enqueue
+			// decision, so enqueueing here lands the delete in exactly the window the
+			// pre-flight check cannot see. Coalescing takes the INCOMING operation, so
+			// without the in-loop guard the delete row would be swapped for an update
+			// and the cashier's deletion would vanish silently.
+			const orders = scope.database.collections.orders as unknown as {
+				findOne(id: string): { exec(): Promise<unknown> };
+			};
+			const realFindOne = orders.findOne.bind(orders);
+			let reads = 0;
+			orders.findOne = (id: string) => ({
+				exec: async () => {
+					const doc = await realFindOne(id).exec();
+					// The FIRST read is the recovery's own pre-flight; its delete check
+					// runs after it. The SECOND is inside enqueueWriteIntent's decision
+					// loop — past every pre-flight, which is precisely the window only
+					// the in-loop guard covers.
+					reads += 1;
+					if (reads === 2) {
+						await engine.write({ collection: 'orders', operation: 'delete', recordId: UUID_A });
+					}
+					return doc;
+				},
+			});
+
+			await expect(engine.resolveConflict('refused-update', 'requeue-rebuilt')).rejects.toThrow(
+				/queued for deletion/i
+			);
+			orders.findOne = realFindOne;
+
+			// The delete survived, and no rebuilt update replaced it.
+			const rows = await queueRows(engine);
+			expect(rows.filter((row) => row.operation === 'delete')).toHaveLength(1);
+			expect(rows.filter((row) => row.requeuedFrom !== undefined)).toEqual([]);
+			expect((await engine.conflicts()).map((row) => row.mutationId)).toEqual(['refused-update']);
 		} finally {
 			await engine.dispose();
 		}

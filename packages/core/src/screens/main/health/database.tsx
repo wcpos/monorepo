@@ -67,6 +67,7 @@ import {
 	stuckCountsByRow,
 	totalLocalRecords,
 } from './database-logic';
+import { RejectedMutationsPanel } from './rejected-mutations';
 import { useCollectionSizes } from './use-collection-sizes';
 import { useOtherScopes } from './use-other-scopes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
@@ -669,15 +670,25 @@ export function DatabaseScreen() {
 					) : null}
 				</VStack>
 
-				{/* Conflicts */}
-				{mutations.conflicts > 0 ? (
+				{/* Conflicts — 409s only. Dead letters are a different failure with a
+				    different fix, and they get their own actionable list below (#832). */}
+				{mutations.unresolvedConflicts > 0 ? (
 					<Callout tone="destructive">
 						<Text className="text-destructive text-sm">
 							{t('health.database.conflicts', {
-								n: mutations.conflicts,
+								n: mutations.unresolvedConflicts,
 							})}
 						</Text>
 					</Callout>
+				) : null}
+
+				{/* Dead letters — writes the server permanently refused (#832). Rendered
+				    only when the count says there are some, so the common (empty) case
+				    never mounts a Suspense boundary or queries the queue at all. */}
+				{mutations.rejected > 0 ? (
+					<React.Suspense fallback={<Loader size="sm" />}>
+						<RejectedMutationsPanel />
+					</React.Suspense>
 				) : null}
 
 				{/* Freshness station */}
