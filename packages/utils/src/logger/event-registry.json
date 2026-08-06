@@ -318,6 +318,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "push.dead-letter-unpersisted",
+		"domain": "SYNC",
+		"label": "A rejected change could not be recorded for recovery",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "push.error",
 		"domain": "SYNC",
 		"label": "Could not send a change to your store",

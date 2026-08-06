@@ -59,6 +59,7 @@ export const SYNC_EVENT_TYPES = [
 	'product.browse-window.brand-filter-ignored',
 	'push.aborted',
 	'push.conflict',
+	'push.dead-letter-unpersisted',
 	'push.error',
 	'push.in_progress',
 	'push.money-divergence',
@@ -468,6 +469,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.push_conflict',
 		label: 'A change clashed with an edit in your store',
+		introducedIn: '1.10.0',
+	},
+	'push.dead-letter-unpersisted': {
+		type: 'push.dead-letter-unpersisted',
+		domain: 'SYNC',
+		key: 'health.logs.event.push_dead_letter_unpersisted',
+		label: 'A rejected change could not be recorded for recovery',
 		introducedIn: '1.10.0',
 	},
 	'push.error': {

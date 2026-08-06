@@ -122,6 +122,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.push_aborted');
 		case 'push.conflict':
 			return t('health.logs.event.push_conflict');
+		case 'push.dead-letter-unpersisted':
+			return t('health.logs.event.push_dead_letter_unpersisted');
 		case 'push.error':
 			return t('health.logs.event.push_error');
 		case 'push.in_progress':
