@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { isRouteTeardownError, authenticatedTest as test } from './fixtures';
+import { isRouteTeardownError, authenticatedTest as test, tryAddProductBySku } from './fixtures';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
@@ -39,8 +39,16 @@ function digitsOf(value: string): string {
 	return value.replace(/\D/g, '');
 }
 
-/** Helper to add the first simple product to the cart. Works in both grid and table view. */
-async function addFirstProductToCart(page: Page) {
+/**
+ * Add the dedicated E2E product to the cart, falling back to the first simple
+ * product in the catalogue when the store does not carry the dedicated SKU.
+ * Works in both grid and table view.
+ */
+async function addTestProductToCart(page: Page) {
+	if (await tryAddProductBySku(page)) {
+		return;
+	}
+
 	const tile = page.getByTestId('product-tile').first();
 	const tableButton = page.getByTestId('add-to-cart-button').first();
 	const productMarker = tile.or(tableButton);
@@ -143,7 +151,7 @@ async function enableAutoReceiptSettings(page: Page) {
 
 test.describe('POS Cart - Order Actions', () => {
 	test('should save order to server', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		await page.getByTestId('save-to-server-button').click();
 
@@ -158,7 +166,7 @@ test.describe('POS Cart - Order Actions', () => {
 	});
 
 	test('should add order note', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		await page.getByTestId('order-note-button').click();
 
@@ -172,7 +180,7 @@ test.describe('POS Cart - Order Actions', () => {
 	});
 
 	test('should open order meta dialog', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		await page.getByTestId('order-meta-button').click();
 
@@ -182,7 +190,7 @@ test.describe('POS Cart - Order Actions', () => {
 
 test.describe('POS Cart - Multiple Orders', () => {
 	test('should create a new order via tab', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		// The new order button is a TabsTrigger with a plus icon
 		// It's a tab element with value="new" containing an Icon with name="plus"
@@ -209,13 +217,13 @@ test.describe('POS Cart - Multiple Orders', () => {
 
 test.describe('POS Checkout', () => {
 	test('should open checkout modal', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		await openCheckout(page);
 	});
 
 	test('should show order total in checkout', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		await openCheckout(page);
 
@@ -241,7 +249,7 @@ test.describe('POS Checkout', () => {
 	});
 
 	test('should cancel checkout and return to cart', async ({ posPage: page }) => {
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		await openCheckout(page);
 
@@ -256,7 +264,7 @@ test.describe('POS Checkout', () => {
 		posPage: page,
 	}) => {
 		await omitPaymentLinkFromPushAcks(page);
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		const gatewaysLoaded = gatewaysResponse(page);
 		await openCheckout(page);
@@ -273,7 +281,7 @@ test.describe('POS Checkout', () => {
 			timeout: 30_000,
 		});
 
-		await addFirstProductToCart(page);
+		await addTestProductToCart(page);
 
 		await openCheckout(page);
 		const orderIdMatch = page.url().match(/\/cart\/([^/]+)\/checkout$/);
@@ -308,7 +316,7 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 
 			const label = newRunLabel();
 
-			await addFirstProductToCart(page);
+			await addTestProductToCart(page);
 			await stampRunLabel(page, label);
 
 			const { orderId, sent } = await openCheckout(page, {
@@ -447,7 +455,7 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 	});
 
 	await omitPaymentLinkFromPushAcks(page);
-	await addFirstProductToCart(page);
+	await addTestProductToCart(page);
 	const gatewaysLoaded = gatewaysResponse(page);
 	await openCheckout(page);
 	await gatewaysLoaded;
@@ -479,7 +487,7 @@ test('falls back to the legacy webview when supports_checkout=false', async ({ p
 	});
 
 	await omitPaymentLinkFromPushAcks(page);
-	await addFirstProductToCart(page);
+	await addTestProductToCart(page);
 	const gatewaysLoaded = gatewaysResponse(page);
 	await openCheckout(page);
 	await gatewaysLoaded;

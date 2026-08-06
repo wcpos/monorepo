@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-import { getStoreVariant, authenticatedTest as test } from './fixtures';
+import { getStoreVariant, authenticatedTest as test, tryAddProductBySku } from './fixtures';
 import {
 	expectFullPrecision,
 	expectOrderPaid,
@@ -12,7 +12,15 @@ import {
 	stampRunLabel,
 } from './order-lifecycle';
 
-async function addFirstProductToCart(page: Page) {
+/**
+ * Add the dedicated E2E product to the cart. Falls back to the first catalogue
+ * product — and then to a misc product — on stores without the dedicated SKU.
+ */
+async function addTestProductToCart(page: Page) {
+	if (await tryAddProductBySku(page)) {
+		return;
+	}
+
 	const tile = page.getByTestId('product-tile').first();
 	const tableButton = page.getByTestId('add-to-cart-button').first();
 	const productMarker = tile.or(tableButton).first();
@@ -49,7 +57,7 @@ async function addFirstProductToCart(page: Page) {
  * the "completed order" they refund is a fixture, not a sale.
  */
 async function createRefundableOrder(page: Page) {
-	await addFirstProductToCart(page);
+	await addTestProductToCart(page);
 	const gatewaysLoaded = page.waitForResponse('**/wp-json/wcpos/v2/payment-gateways{,?*}', {
 		timeout: 90_000,
 	});
@@ -132,9 +140,10 @@ async function openRefundModalForNewOrder(page: Page) {
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
 		timeout: 30_000,
 	});
-	// The refund must not exceed the order total, and the order is built from
-	// whatever product happens to sort first in the store catalog — so keep the
-	// custom amount below any plausible product price.
+	// The refund must not exceed the order total. The order normally holds the
+	// dedicated E2E product, but stores without that SKU fall back to whatever
+	// sorts first in the catalog — so keep the custom amount below any plausible
+	// product price.
 	await page.getByTestId('refund-custom-amount').fill('1.00');
 }
 
@@ -275,7 +284,7 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			const label = newRunLabel();
 			const refundAmount = '1.00';
 
-			await addFirstProductToCart(page);
+			await addTestProductToCart(page);
 			await stampRunLabel(page, label);
 
 			const { orderId, uuid } = await openCheckout(page, {
