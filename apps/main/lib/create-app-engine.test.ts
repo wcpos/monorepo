@@ -775,7 +775,8 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(ports.multiInstance).toBe(true);
 		expect(ports.writePlaneOwner?.()).toBe(true);
 		expect(electWriteLeader).toHaveBeenCalledWith(
-			`wcpos-write-leader:${scopeDatabaseName(BASE_OPTIONS.scope)}`
+			`wcpos-write-leader:${scopeDatabaseName(BASE_OPTIONS.scope)}`,
+			expect.objectContaining({ onUnavailable: expect.any(Function) })
 		);
 	});
 
@@ -796,7 +797,8 @@ describe('createAppSyncEngine scope cache', () => {
 
 		expect(writeLeaders[0]?.dispose).toHaveBeenCalledTimes(1);
 		expect(electWriteLeader).toHaveBeenLastCalledWith(
-			`wcpos-write-leader:${scopeDatabaseName(targetScope)}`
+			`wcpos-write-leader:${scopeDatabaseName(targetScope)}`,
+			expect.objectContaining({ onUnavailable: expect.any(Function) })
 		);
 	});
 
@@ -805,16 +807,22 @@ describe('createAppSyncEngine scope cache', () => {
 			configurable: true,
 			value: {},
 		});
-		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine(
-			undefined,
-			true
-		);
+		const { createAppSyncEngine, createRxdbSyncEngine, electWriteLeader, appMetricsObserver } =
+			loadCreateAppEngine(undefined, true);
 
 		createAppSyncEngine({ ...BASE_OPTIONS, multiInstance: true });
 
 		const ports = createRxdbSyncEngine.mock.calls[0]![0];
 		expect(ports.multiInstance).toBe(false);
 		expect(ports.writePlaneOwner?.()).toBe(true);
+		// The degraded diagnostic is now the election module's responsibility (it
+		// fires onUnavailable — see web-write-leader.test.ts). Verify the host wires
+		// it: the callback it handed to electWriteLeader emits the warning.
+		const electArgs = electWriteLeader.mock.calls[0] as unknown as [
+			string,
+			{ onUnavailable: () => void },
+		];
+		electArgs[1].onUnavailable();
 		expect(appMetricsObserver).toHaveBeenCalledWith(
 			expect.objectContaining({ type: 'engine.write-leader.degraded', level: 'warn' })
 		);

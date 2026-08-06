@@ -77,7 +77,10 @@ type MutableFetcherOptions = Pick<
 	CreateAppSyncEngineOptions,
 	'credentials' | 'refreshAuth' | 'useJwtAsParam'
 >;
-type WriteLeaderState = { current: ReturnType<typeof electWriteLeader> };
+type WriteLeaderState = {
+	current: ReturnType<typeof electWriteLeader>;
+	onUnavailable: () => void;
+};
 
 type CachedEngine = {
 	key: string;
@@ -100,7 +103,9 @@ const pendingDisposals = new Map<string, Promise<void>>();
 function moveWriteLeader(entry: CachedEngine, databaseName: string): void {
 	if (!entry.writeLeader) return;
 	const previous = entry.writeLeader.current;
-	entry.writeLeader.current = electWriteLeader(`wcpos-write-leader:${databaseName}`);
+	entry.writeLeader.current = electWriteLeader(`wcpos-write-leader:${databaseName}`, {
+		onUnavailable: entry.writeLeader.onUnavailable,
+	});
 	previous.dispose();
 }
 
@@ -301,9 +306,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const clockSkew = { generation: 0, evaluated: false };
 	const webLocksAvailable =
 		isWeb && typeof navigator !== 'undefined' && navigator.locks !== undefined;
-	const writeLeader = isWeb
-		? { current: electWriteLeader(`wcpos-write-leader:${scopeDatabaseName(options.scope)}`) }
-		: undefined;
 
 	const emitTransport = (event: SyncEvent, durable = true): void => {
 		try {
@@ -344,6 +346,29 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		syncLogObserver.observe(event);
 		syncStatusObserver(event);
 	};
+
+	// When Web Locks cannot arbitrate leadership (absent, or a rejected request in
+	// a sandboxed/opaque/WebView context) the tab degrades to single-writer so it
+	// never becomes a follower that enqueues sales it can never drain. Surface it
+	// so a genuinely wedged multi-tab context is visible rather than silent.
+	const onWriteLeaderUnavailable = () =>
+		composeObservers(
+			appMetricsObserver,
+			guardedDiagnostics
+		)({
+			type: 'engine.write-leader.degraded',
+			level: 'warn',
+			message:
+				'Web Locks unavailable; falling back to single-writer (multi-tab coherence disabled for this browser context)',
+		});
+	const writeLeader: WriteLeaderState | undefined = isWeb
+		? {
+				current: electWriteLeader(`wcpos-write-leader:${scopeDatabaseName(options.scope)}`, {
+					onUnavailable: onWriteLeaderUnavailable,
+				}),
+				onUnavailable: onWriteLeaderUnavailable,
+			}
+		: undefined;
 
 	if (supersedesCachedEngine) {
 		// Defer the sync-status wipe instead of doing it now: this construction runs
@@ -386,15 +411,5 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		clockSkew,
 		...(writeLeader ? { writeLeader } : {}),
 	};
-	if (isWeb && !webLocksAvailable) {
-		composeObservers(
-			appMetricsObserver,
-			guardedDiagnostics
-		)({
-			type: 'engine.write-leader.degraded',
-			level: 'warn',
-			message: 'Web Locks unavailable; multi-tab sync is disabled for this browser',
-		});
-	}
 	return engine;
 }

@@ -49,4 +49,32 @@ describe('electWriteLeader', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 	});
+
+	it('degrades to single-writer when Web Locks are absent (never a stuck follower)', () => {
+		Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
+		const onUnavailable = jest.fn();
+		const leader = electWriteLeader('wcpos-write-leader:test', { onUnavailable });
+		// A tab that cannot elect must still own its write plane, or it would
+		// enqueue sales it never drains.
+		expect(leader.isLeader()).toBe(true);
+		expect(onUnavailable).toHaveBeenCalledTimes(1);
+		leader.dispose();
+	});
+
+	it('degrades to single-writer when the lock request REJECTS (restricted context)', async () => {
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: { locks: { request: jest.fn(() => Promise.reject(new Error('SecurityError'))) } },
+		});
+		const onUnavailable = jest.fn();
+		const leader = electWriteLeader('wcpos-write-leader:test', { onUnavailable });
+		// The rejection resolves on a microtask; this is the silent-no-sync bug the
+		// adversarial pass found — the tab must NOT stay a permanent follower.
+		for (let turn = 0; turn < 10 && !leader.isLeader(); turn += 1) {
+			await Promise.resolve();
+		}
+		expect(leader.isLeader()).toBe(true);
+		expect(onUnavailable).toHaveBeenCalledTimes(1);
+		leader.dispose();
+	});
 });
