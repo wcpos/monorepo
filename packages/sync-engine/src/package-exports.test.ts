@@ -15,6 +15,9 @@ describe('package exports', () => {
 				'engineDocumentIdFor',
 				'SYNC_COLLECTION_NAMES',
 				'MUTATION_QUEUE_RXDB_COLLECTION',
+				// The Store health panel must decide "does discard delete this record?"
+				// from the SAME rule the engine enforces (#832 follow-up, R7b).
+				'rejectionSuggestsServerRecord',
 			].sort()
 		);
 	});
