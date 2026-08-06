@@ -75,4 +75,6 @@ export type {
 	ScannerProfileDocument,
 	TemplatePrinterOverrideCollection,
 	TemplatePrinterOverrideDocument,
+	ReceiptEmailQueueCollection,
+	ReceiptEmailQueueDocument,
 } from './collections';
