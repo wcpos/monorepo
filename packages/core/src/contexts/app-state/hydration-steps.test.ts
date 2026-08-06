@@ -250,7 +250,11 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		};
 		const bulkInsert = jest.fn(async () => undefined);
 		const userDB = {
-			sites: { upsert: jest.fn(async () => siteDoc) },
+			sites: {
+				schema: { primaryPath: 'uuid' },
+				findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
+				insert: jest.fn(async () => siteDoc),
+			},
 			wp_credentials: { upsert: jest.fn(async () => wpCredentialsDoc) },
 			stores: {
 				findOne: jest

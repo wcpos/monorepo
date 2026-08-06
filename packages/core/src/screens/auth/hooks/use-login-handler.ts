@@ -7,6 +7,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
+import { linkCredentialsToSite } from '../../../utils/site-writes';
 
 const authLogger = getLogger(['wcpos', 'auth', 'login']);
 
@@ -124,12 +125,10 @@ export const useLoginHandler = (
 					});
 				}
 
-				// Link credentials to site if not already linked
-				const siteCredentials = site.wp_credentials || [];
-				if (!siteCredentials.includes(credentialsData.uuid)) {
-					await site.getLatest().incrementalPatch({
-						wp_credentials: [...siteCredentials, credentialsData.uuid],
-					});
+				// Link credentials to site if not already linked.
+				// Atomic append — see `linkCredentialsToSite` (#902).
+				const linked = await linkCredentialsToSite(site, credentialsData.uuid);
+				if (linked) {
 					authLogger.debug(`Linked ${credentialsData.display_name} to ${site.name}`);
 				}
 

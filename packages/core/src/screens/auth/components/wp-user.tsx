@@ -106,7 +106,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 
 	const handleRemoveWpUser = React.useCallback(async () => {
 		await wpUser.incrementalRemove();
-		await site.incrementalUpdate({
+		await site.getLatest().incrementalUpdate({
 			$pullAll: {
 				wp_credentials: [wpUser.uuid],
 			},

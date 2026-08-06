@@ -15,6 +15,7 @@ import {
 	normalizeStorePayload,
 	type ServerStorePayload,
 } from '../../utils/merge-stores';
+import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
@@ -306,8 +307,11 @@ const processInitialPropsStep: HydrationStep = {
 		const { initialProps, userDB, appState, user } = context;
 		const oldState = await appState.get('current');
 
-		// Upsert site and credentials
-		const siteDoc = await userDB.sites.upsert(initialProps.site);
+		// Upsert site and credentials.
+		// `upsertSiteData` merges instead of overwriting: a plain `upsert()` is a
+		// full-document write and would drop the locally-owned `wp_credentials`
+		// link array, which the embedded payload never carries (#902).
+		const siteDoc = await upsertSiteData(userDB.sites, initialProps.site);
 		const wpCredentialsDoc = await userDB.wp_credentials.upsert(
 			sanitizeWPCredentialsData(initialProps.wp_credentials)
 		);
