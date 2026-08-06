@@ -23,6 +23,8 @@ function delegateRevisioned(inner: InMemoryRecordMutationStorage) {
 	};
 }
 
+const iso = (ms: number): string => new Date(ms).toISOString();
+
 const mut = (over: Partial<RecordMutation> = {}): RecordMutation => ({
 	mutationId: 'm1',
 	collectionName: 'products',
@@ -636,6 +638,47 @@ describe('durable resolution claim across two instances (cross-process)', () => 
 
 		const [ra, rb] = await Promise.all([a.claim(claimed), b.claim(claimed)]);
 		expect([ra, rb].filter(Boolean)).toHaveLength(1);
+	});
+
+	it('a drain LEASE blocks a second window from re-claiming a live claimed row', async () => {
+		const { a, b } = shared();
+		const row = await a.enqueue(mut({ mutationId: 'm-push' }));
+		const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+
+		// Window A claims with a 60s lease.
+		expect(
+			await a.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-A', claimedUntil: iso(t0 + 60_000) },
+				t0
+			)
+		).toBe(true);
+		// Window B, draining, sees the row 'claimed' and tries to re-claim it — but the
+		// lease is live, so it is refused (before the lease it would have double-pushed).
+		expect(
+			await b.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-B', claimedUntil: iso(t0 + 90_000) },
+				t0 + 30_000
+			)
+		).toBe(false);
+	});
+
+	it('a crashed drain lease is STOLEN once it expires — recovery still works', async () => {
+		const { a, b } = shared();
+		const row = await a.enqueue(mut({ mutationId: 'm-push' }));
+		const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+		await a.claim(
+			{ ...row, status: 'claimed', claimedBy: 'window-A', claimedUntil: iso(t0 + 60_000) },
+			t0
+		);
+
+		// A crashed without acking or rescheduling. Past the lease, B reclaims and pushes.
+		expect(
+			await b.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-B', claimedUntil: iso(t0 + 120_000) },
+				t0 + 61_000
+			)
+		).toBe(true);
+		expect((await b.all())[0]).toMatchObject({ claimedBy: 'window-B' });
 	});
 
 	it('coalesceInto REFUSES an ever-pushed (attempts > 0) prior — never consumes a pushed mutation', async () => {

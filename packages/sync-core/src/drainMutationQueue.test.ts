@@ -946,4 +946,65 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		expect(await q.all()).toEqual([]); // and does NOT re-insert it
 		expect(result).toMatchObject({ pushed: 0, failed: 0, deferred: 0, rejected: [] });
 	});
+
+	describe('drain lease across two windows (task 43)', () => {
+		it('two windows draining one row push it EXACTLY once', async () => {
+			// Two RecordMutationQueue over one storage = two Electron windows. Both
+			// drain at the same time; the lease + revision-checked claim mean only one
+			// wins the row, so it is pushed once, not twice.
+			const storage = new InMemoryRecordMutationStorage();
+			const a = new RecordMutationQueue(storage);
+			const b = new RecordMutationQueue(storage);
+			await a.enqueue(mut({ mutationId: 'm-shared' }));
+			const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+
+			const pushA = vi.fn(async (m: RecordMutation) => ok(m));
+			const pushB = vi.fn(async (m: RecordMutation) => ok(m));
+			await Promise.all([
+				drainMutationQueue({ queue: a, push: pushA, drainInstanceId: 'window-A', now: () => t0 }),
+				drainMutationQueue({ queue: b, push: pushB, drainInstanceId: 'window-B', now: () => t0 }),
+			]);
+
+			expect(pushA.mock.calls.length + pushB.mock.calls.length).toBe(1);
+			expect(await a.all()).toEqual([]); // acked once, gone
+		});
+
+		it('a crashed window (claim never released) frees the row after the lease — the other window pushes it', async () => {
+			const storage = new InMemoryRecordMutationStorage();
+			const a = new RecordMutationQueue(storage);
+			const b = new RecordMutationQueue(storage);
+			const row = await a.enqueue(mut({ mutationId: 'm-stuck' }));
+			const t0 = Date.parse('2026-01-01T00:00:00.000Z');
+
+			// Window A claimed the row and then crashed — the row is durably 'claimed'
+			// under A's lease, never acked or rescheduled.
+			await a.claim(
+				{ ...row, status: 'claimed', claimedBy: 'window-A', claimedUntil: iso(t0 + 60_000) },
+				t0
+			);
+
+			// Within the lease, window B's drain leaves it alone…
+			const early = vi.fn(async (m: RecordMutation) => ok(m));
+			await drainMutationQueue({
+				queue: b,
+				push: early,
+				drainInstanceId: 'window-B',
+				now: () => t0 + 30_000,
+			});
+			expect(early).not.toHaveBeenCalled();
+
+			// …past the lease, B reclaims and pushes it — crashed-drain recovery.
+			const late = vi.fn(async (m: RecordMutation) => ok(m));
+			await drainMutationQueue({
+				queue: b,
+				push: late,
+				drainInstanceId: 'window-B',
+				now: () => t0 + 61_000,
+			});
+			expect(late).toHaveBeenCalledTimes(1);
+			expect(await b.all()).toEqual([]);
+		});
+	});
 });
+
+const iso = (ms: number): string => new Date(ms).toISOString();

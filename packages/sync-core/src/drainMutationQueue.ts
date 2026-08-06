@@ -99,6 +99,14 @@ function isNonRetryable(error: unknown): boolean {
 	return typeof status === 'number' && status >= 400 && status < 500 && !RETRYABLE_4XX.has(status);
 }
 
+/**
+ * How long a drain claim is honoured before another window may steal it (task 43
+ * follow-up). Comfortably longer than any single push (network timeouts are far
+ * shorter), so a live drain never loses its row; short enough that a CRASHED
+ * drain — one that never acked or rescheduled — frees the row within a minute.
+ */
+const DEFAULT_CLAIM_LEASE_MS = 60_000;
+
 export async function drainMutationQueue(input: {
 	queue: RecordMutationQueue;
 	/** Pushes one mutation. The host wraps `pushRecordMutation` (endpoint, scope guard, telemetry). */
@@ -119,6 +127,14 @@ export async function drainMutationQueue(input: {
 	currentRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
 	/** Leaves matching mutations pending without claiming, retrying, or backing off. */
 	shouldHold?: (mutation: QueuedMutation) => Promise<boolean>;
+	/**
+	 * This drain instance's id + how long its claim lease lasts (task 43 follow-up).
+	 * With both set, a claim carries a stealable lease so two windows draining
+	 * cannot both claim one row. Absent ⇒ no lease (single-process / legacy callers
+	 * behave exactly as before).
+	 */
+	drainInstanceId?: string;
+	claimLeaseMs?: number;
 	/** On a 428 precondition failure, performs one targeted server refresh and
 	 * returns the record's newly observed revision. The drain retries once with
 	 * that revision; a missing revision parks update/delete, while an unrefreshable
@@ -336,18 +352,29 @@ export async function drainMutationQueue(input: {
 		// re-anchored. Creates keep their null base: there is nothing to re-anchor.
 		const freshRevision =
 			mutation.operation === 'create' ? undefined : await input.currentRevision?.(mutation);
+		const lease =
+			input.drainInstanceId !== undefined
+				? {
+						claimedBy: input.drainInstanceId,
+						claimedUntil: new Date(
+							now() + (input.claimLeaseMs ?? DEFAULT_CLAIM_LEASE_MS)
+						).toISOString(),
+					}
+				: {};
 		const draining = {
 			...mutation,
 			baseRevision: freshRevision || mutation.baseRevision,
 			status: 'claimed' as const,
+			...lease,
 		};
 		// CONDITIONAL durable claim BEFORE the push (CAS): from here until this row
 		// settles, the write-intent layer refuses to coalesce it (an edit queues
 		// behind it). If the row left the queue between the scan and this claim —
 		// coalesced away or annihilated by a concurrent write intent — the claim
 		// refuses and this drain SKIPS it (an unconditional upsert would resurrect
-		// a row the write plane just removed and push a cancelled create).
-		if (!(await input.queue.claim(draining))) {
+		// a row the write plane just removed and push a cancelled create). The lease
+		// (task 43) additionally refuses a row another window is actively pushing.
+		if (!(await input.queue.claim(draining, now()))) {
 			continue;
 		}
 		attempted += 1;

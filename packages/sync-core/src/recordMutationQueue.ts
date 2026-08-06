@@ -113,6 +113,18 @@ export type QueuedMutation = RecordMutation & {
 	 */
 	readonly resolutionClaimBy?: string;
 	readonly resolutionClaimUntil?: string;
+	/**
+	 * DURABLE DRAIN LEASE (task 43 follow-up). The drain claim (`status: 'claimed'`)
+	 * was reclaimable by any process the instant it was set — so two Electron
+	 * windows draining could both claim one row and double-push. The lease mirrors
+	 * the resolution claim: `claimedBy` is the draining instance's id and
+	 * `claimedUntil` the deadline after which the claim may be STOLEN. Within the
+	 * lease exactly one window holds the row; past it — a crashed drain that never
+	 * acked or rescheduled — the row is reclaimable so recovery still works. Absent
+	 * on a row no drain currently holds.
+	 */
+	readonly claimedBy?: string;
+	readonly claimedUntil?: string;
 };
 
 /**
@@ -260,7 +272,7 @@ export class RecordMutationQueue {
 	 * scan and this claim — the drain must then SKIP the row; an unconditional
 	 * upsert here would RESURRECT a row a concurrent write intent just removed.
 	 */
-	async claim(next: QueuedMutation): Promise<boolean> {
+	async claim(next: QueuedMutation, nowMs: number = Date.now()): Promise<boolean> {
 		return this.transact(async () => {
 			const stored = (await this.storage.listStored()).find(
 				(item) => item.mutation.mutationId === next.mutationId
@@ -271,10 +283,25 @@ export class RecordMutationQueue {
 				(row.status !== undefined && row.status !== 'pending' && row.status !== 'claimed')
 			)
 				return false;
+			// DRAIN LEASE (task 43 follow-up): a row already 'claimed' by ANOTHER
+			// instance whose lease has not expired is being pushed right now — refuse,
+			// so two windows draining cannot both claim it and double-push. Our own
+			// claim is always re-takeable (a retry within one process), a pending row
+			// is free, and an EXPIRED claim is stealable so a crashed drain that never
+			// acked or rescheduled still recovers.
+			if (
+				row.status === 'claimed' &&
+				row.claimedBy !== undefined &&
+				row.claimedBy !== next.claimedBy
+			) {
+				const until = row.claimedUntil ? Date.parse(row.claimedUntil) : 0;
+				if (until > nowMs) return false;
+			}
 			// Revision-checked: two processes both draining can each SCAN the same
-			// pending row, but only one can claim it — the loser's write finds the row
-			// already at the winner's revision and is refused, so the row is never
-			// pushed twice. (#1046 spike: the old unconditional upsert let both win.)
+			// pending row (or both try to steal one expired claim), but only one can
+			// write it — the loser's write finds the row already at the winner's
+			// revision and is refused. (#1046 spike: the old unconditional upsert let
+			// both win.)
 			return this.storage.appendIfUnchanged(next, stored.rev);
 		});
 	}
@@ -810,6 +837,11 @@ export const recordMutationQueueSchema = {
 		// resolving simply has neither.
 		resolutionClaimBy: { type: 'string', maxLength: 64 },
 		resolutionClaimUntil: { type: 'string', maxLength: 32 },
+		// The durable DRAIN lease (task 43 follow-up) — optional; a row no drain
+		// holds has neither. Amended into v5 in place: v5 is unreleased (introduced
+		// by this change), so the house "amend an unreleased schema" rule applies.
+		claimedBy: { type: 'string', maxLength: 64 },
+		claimedUntil: { type: 'string', maxLength: 32 },
 	},
 	required: ['mutationId', 'recordId', 'collectionName', 'operation', 'payload', 'queuedAt'],
 } as const;
