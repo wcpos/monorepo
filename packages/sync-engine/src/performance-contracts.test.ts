@@ -7,6 +7,7 @@ import {
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
+import { forEachYielding } from './event-loop-yield';
 import { existenceManifestDocument } from './local-coverage/existence-manifest-schema';
 import { materializeTargeted } from './materialization/record-materialization';
 import { memoryEngineStorage } from './testing';
@@ -47,6 +48,14 @@ import type { RxDatabase } from 'rxdb';
  * The throughput cost is the price of the block-length win: paging the manifest scan runs ~30%
  * slower than one unbounded query, and each yield is a real macrotask hop. Percent-level, not a
  * multiple, and the budgets keep 10-15x headroom.
+ *
+ * Ported contracts measured 2026-08-06 on this branch, same host and storage, 3 runs:
+ *   - 10k product bulk apply ........................ 8.9-9.7 ms
+ *   - reset 5k products + product manifest cleanup . 125.3-173.4 ms
+ *   - forEachYielding over 50k items ................ 1.0-1.1 ms
+ *   - mixed 5k-local / 10k-server reconcile ........ 561.5-597.6 ms
+ *   - TTFR during 10k audits ........................ 7.1-10.3 ms
+ *   - TTFR during 50k audits ........................ 40.5-53.8 ms
  */
 
 setPremiumFlag();
@@ -115,6 +124,12 @@ const RECONCILE_BUDGET_MS: Readonly<Record<number, number>> = {
 	50_000: 3_000,
 };
 
+/** 11-18x the measured maxima above; CI applies the same additional x3 multiplier. */
+const BULK_APPLY_BUDGET_MS = 150;
+const COLLECTION_RESET_BUDGET_MS = 2_000;
+const YIELDING_WALK_BUDGET_MS = 20;
+const MIXED_RECONCILE_BUDGET_MS = 10_000;
+
 /**
  * Residents seeded into a throwaway engine before the measured runs. Without it the
  * first measured audit pays V8/RxDB/materialization cold-start and reads 4x slower
@@ -136,6 +151,16 @@ const TTFR_TIERS: readonly { residents: number; budgetMs: number }[] = [
 
 /** Documents the concurrent bulk apply writes while the TTFR query is in flight. */
 const CONCURRENT_APPLY_SIZE = 500;
+
+const AUDIT_TTFR_OVERLAYS: readonly {
+	residents: 0 | 1_000 | 5_000;
+	auditSize: number;
+}[] = [
+	{ residents: 0, auditSize: 10_000 },
+	{ residents: 0, auditSize: 50_000 },
+	{ residents: 1_000, auditSize: 10_000 },
+	{ residents: 5_000, auditSize: 50_000 },
+];
 
 /** Generous ceiling so a genuinely slow run reports a BUDGET failure, not a timeout. */
 const TEST_TIMEOUT_MS = 300_000;
@@ -224,19 +249,54 @@ function productPayload(wooId: number): Record<string, unknown> {
 	};
 }
 
-/** Seed N resident products plus their existence-manifest rows, in one bulk write each. */
-async function seedResidentProducts(database: RxDatabase, count: number): Promise<void> {
+function productDocuments(startWooId: number, count: number): Record<string, unknown>[] {
+	return Array.from(
+		{ length: count },
+		(_unused, index) =>
+			materializeTargeted('products', productPayload(startWooId + index)).storedDocument
+	);
+}
+
+function productManifestRows(
+	startWooId: number,
+	count: number
+): ReturnType<typeof existenceManifestDocument>[] {
+	return Array.from({ length: count }, (_unused, index) => {
+		const wooId = startWooId + index;
+		return existenceManifestDocument({
+			wooId,
+			objectType: 'product',
+			digest: digestFor(wooId),
+		});
+	});
+}
+
+async function seedProductManifestRange(
+	database: RxDatabase,
+	startWooId: number,
+	count: number
+): Promise<void> {
 	if (count === 0) return;
-	const documents: Record<string, unknown>[] = [];
-	const manifestRows: ReturnType<typeof existenceManifestDocument>[] = [];
-	for (let wooId = 1; wooId <= count; wooId += 1) {
-		documents.push(materializeTargeted('products', productPayload(wooId)).storedDocument);
-		manifestRows.push(
-			existenceManifestDocument({ wooId, objectType: 'product', digest: digestFor(wooId) })
-		);
-	}
-	await database.collections['products']!.bulkUpsert(documents as never[]);
-	await database.collections['existenceManifest']!.bulkUpsert(manifestRows as never[]);
+	await database.collections['existenceManifest']!.bulkUpsert(
+		productManifestRows(startWooId, count) as never[]
+	);
+}
+
+/** Seed N resident products plus their existence-manifest rows, in one bulk write each. */
+async function seedResidentProductRange(
+	database: RxDatabase,
+	startWooId: number,
+	count: number
+): Promise<void> {
+	if (count === 0) return;
+	await database.collections['products']!.bulkUpsert(
+		productDocuments(startWooId, count) as never[]
+	);
+	await seedProductManifestRange(database, startWooId, count);
+}
+
+async function seedResidentProducts(database: RxDatabase, count: number): Promise<void> {
+	await seedResidentProductRange(database, 1, count);
 }
 
 /**
@@ -261,6 +321,47 @@ function convergedBucketFetcher(residentCount: number) {
 		}
 		return json({ ids });
 	});
+}
+
+/** 5k local rows: 2.5k overlap plus 2.5k stale; server: 10k rows with 7.5k additions. */
+function mixedShapeFetcher(serverCount: number) {
+	return vi.fn(async (url: string) => {
+		const parsed = new URL(url);
+		if (parsed.pathname.endsWith('/integrity/bucket')) {
+			if (parsed.searchParams.get('collection') !== null) return json({ ids: [] });
+			const bucket = Number(parsed.searchParams.get('bucket'));
+			const bucketSize = Number(parsed.searchParams.get('bucket_size'));
+			const lo = bucket * bucketSize;
+			const hi = Math.min(lo + bucketSize, serverCount + 1);
+			return json({
+				ids: Array.from({ length: Math.max(0, hi - Math.max(lo, 1)) }, (_unused, index) => {
+					const wooId = Math.max(lo, 1) + index;
+					return {
+						id: wooId,
+						digest: digestFor(wooId),
+						object_type: 'product',
+					};
+				}),
+			});
+		}
+		if (parsed.pathname.endsWith('/products')) {
+			const ids = (parsed.searchParams.get('include') ?? '').split(',').filter(Boolean).map(Number);
+			return json(ids.map(productPayload));
+		}
+		return json({ ids: [] });
+	});
+}
+
+async function measureFirstPage(
+	database: RxDatabase,
+	residentCeiling: number
+): Promise<{ elapsedMs: number; hitCount: number }> {
+	const started = performance.now();
+	const page = await database.collections['products']!.find({
+		selector: { wooProductId: { $lte: residentCeiling } },
+		limit: 10,
+	}).exec();
+	return { elapsedMs: performance.now() - started, hitCount: page.length };
 }
 
 /**
@@ -443,25 +544,16 @@ describe('sync-engine performance contracts (#949)', () => {
 				// cashier's query still lands while the products collection is writing. The
 				// inserted IDs sit above the resident range queried below.
 				const concurrentApply = active.database.collections['products']!.bulkUpsert(
-					Array.from(
-						{ length: CONCURRENT_APPLY_SIZE },
-						(_unused, index) =>
-							materializeTargeted('products', productPayload(residents + index + 1)).storedDocument
-					) as never[]
+					productDocuments(residents + 1, CONCURRENT_APPLY_SIZE) as never[]
 				);
 
-				const started = performance.now();
-				const page = await active.database.collections['products']!.find({
-					selector: { wooProductId: { $lte: residents } },
-					limit: 10,
-				}).exec();
-				const elapsed = performance.now() - started;
+				const { elapsedMs, hitCount } = await measureFirstPage(active.database, residents);
 
 				const scaledBudget = budget(budgetMs);
-				report(`ttfr ${residents}`, elapsed, scaledBudget, ` hits=${page.length}`);
+				report(`ttfr ${residents}`, elapsedMs, scaledBudget, ` hits=${hitCount}`);
 
-				expect(page.length).toBe(Math.min(10, residents));
-				expect(elapsed).toBeLessThan(scaledBudget);
+				expect(hitCount).toBe(Math.min(10, residents));
+				expect(elapsedMs).toBeLessThan(scaledBudget);
 
 				await concurrentApply;
 				expect(await active.database.collections['products']!.count().exec()).toBe(
@@ -471,4 +563,222 @@ describe('sync-engine performance contracts (#949)', () => {
 			TEST_TIMEOUT_MS
 		);
 	}
+
+	// -------------------------------------------------------------------------
+	// Contract 4 — write/reset throughput and direct yielding utility
+	// -------------------------------------------------------------------------
+
+	it(
+		'applies 10,000 product records within budget',
+		async () => {
+			const recordCount = 10_000;
+			const engine = engineWith(convergedBucketFetcher(0));
+			const active = await engine.ready;
+			const documents = productDocuments(1, recordCount);
+
+			const started = performance.now();
+			await active.database.collections['products']!.bulkUpsert(documents as never[]);
+			const elapsed = performance.now() - started;
+
+			const budgetMs = budget(BULK_APPLY_BUDGET_MS);
+			report('bulk apply 10000', elapsed, budgetMs);
+			expect(await active.database.collections['products']!.count().exec()).toBe(recordCount);
+			expect(elapsed).toBeLessThan(budgetMs);
+		},
+		TEST_TIMEOUT_MS
+	);
+
+	it(
+		'resets a 5,000-record products collection within budget',
+		async () => {
+			const recordCount = 5_000;
+			const engine = engineWith(convergedBucketFetcher(recordCount));
+			const active = await engine.ready;
+			await seedResidentProducts(active.database, recordCount);
+
+			const started = performance.now();
+			const result = await engine.scope.resetCollection('products');
+			const elapsed = performance.now() - started;
+
+			const budgetMs = budget(COLLECTION_RESET_BUDGET_MS);
+			report('reset products 5000', elapsed, budgetMs);
+			expect(result).toBe('reset');
+			expect(await active.database.collections['products']!.count().exec()).toBe(0);
+			expect(await active.database.collections['existenceManifest']!.count().exec()).toBe(0);
+			expect(elapsed).toBeLessThan(budgetMs);
+		},
+		TEST_TIMEOUT_MS
+	);
+
+	it(
+		'processes 50,000 items with forEachYielding within budget without starving the event loop',
+		async () => {
+			const itemCount = 50_000;
+			const items = Array.from({ length: itemCount }, (_unused, index) => index);
+			let processed = 0;
+			let processingComplete = false;
+			let yieldedBeforeCompletion = false;
+			setImmediate(() => {
+				yieldedBeforeCompletion = !processingComplete;
+			});
+
+			const started = performance.now();
+			await forEachYielding(items, 5_000, () => {
+				processed += 1;
+			});
+			const elapsed = performance.now() - started;
+			processingComplete = true;
+
+			const budgetMs = budget(YIELDING_WALK_BUDGET_MS);
+			report('forEachYielding 50000', elapsed, budgetMs, ` yielded=${yieldedBeforeCompletion}`);
+			expect(processed).toBe(itemCount);
+			expect(yieldedBeforeCompletion).toBe(true);
+			expect(elapsed).toBeLessThan(budgetMs);
+		},
+		TEST_TIMEOUT_MS
+	);
+
+	// -------------------------------------------------------------------------
+	// Contract 5 — divergent audit throughput
+	// -------------------------------------------------------------------------
+
+	it(
+		'reconciles 5,000 local residents against a mixed 10,000-record server manifest within budget',
+		async () => {
+			const serverCount = 10_000;
+			const overlapCount = 2_500;
+			const deletedStart = 10_001;
+			const deletedCount = 2_500;
+			const fetcher = mixedShapeFetcher(serverCount);
+			const engine = engineWith(fetcher);
+			const active = await engine.ready;
+			await seedResidentProductRange(active.database, 1, overlapCount);
+			await seedResidentProductRange(active.database, deletedStart, deletedCount);
+
+			const started = performance.now();
+			const result = await engine.sync('existence-reconcile');
+			const elapsed = performance.now() - started;
+
+			const budgetMs = budget(MIXED_RECONCILE_BUDGET_MS);
+			report(
+				'mixed reconcile local=5000 server=10000',
+				elapsed,
+				budgetMs,
+				' overlap=2500 additions=7500 deletions=2500'
+			);
+			const bucketFetches = fetcher.mock.calls.filter(([url]) =>
+				new URL(url).pathname.endsWith('/integrity/bucket')
+			).length;
+			expect(result.status).toBe('ran');
+			expect(bucketFetches).toBe(13);
+			expect(await active.database.collections['products']!.count().exec()).toBe(serverCount);
+			expect(
+				await active.database.collections['products']!.findOne(uuidFor(5_000, 0)).exec()
+			).not.toBeNull();
+			expect(
+				await active.database.collections['products']!.findOne(uuidFor(deletedStart, 0)).exec()
+			).toBeNull();
+			expect(elapsed).toBeLessThan(budgetMs);
+		},
+		TEST_TIMEOUT_MS
+	);
+
+	// -------------------------------------------------------------------------
+	// Contract 6 — TTFR under audit and larger/repeated apply contention
+	// -------------------------------------------------------------------------
+
+	for (const { residents, auditSize } of AUDIT_TTFR_OVERLAYS) {
+		it(
+			`returns the ${residents.toLocaleString('en-US')}-resident first page within its tier budget while a ${auditSize.toLocaleString('en-US')}-record audit runs`,
+			async () => {
+				const bucketFetcher = convergedBucketFetcher(auditSize);
+				// `engine.sync()` first parks on readySettledForSync, so an unguarded
+				// measureFirstPage can finish before the audit does any work. Gate the
+				// TTFR timer on the audit's first bucket fetch so the contracts measure
+				// genuine contention, not a query racing an idle lane.
+				let signalAuditEntered!: () => void;
+				const auditEntered = new Promise<void>((resolve) => {
+					signalAuditEntered = resolve;
+				});
+				const fetcher = vi.fn(async (url: string) => {
+					signalAuditEntered();
+					return bucketFetcher(url);
+				});
+				const engine = engineWith(fetcher);
+				const active = await engine.ready;
+				await seedResidentProducts(active.database, residents);
+				await seedProductManifestRange(active.database, residents + 1, auditSize - residents);
+
+				const concurrentAudit = engine.sync('existence-reconcile');
+				await auditEntered;
+				const { elapsedMs, hitCount } = await measureFirstPage(active.database, residents);
+				const result = await concurrentAudit;
+
+				const tier = TTFR_TIERS.find((candidate) => candidate.residents === residents)!;
+				const budgetMs = budget(tier.budgetMs);
+				report(
+					`ttfr ${residents} during audit ${auditSize}`,
+					elapsedMs,
+					budgetMs,
+					` hits=${hitCount}`
+				);
+				expect(hitCount).toBe(Math.min(10, residents));
+				expect(elapsedMs).toBeLessThan(budgetMs);
+				expect(result.status).toBe('ran');
+				expect(fetcher.mock.calls.length).toBe(Math.floor(auditSize / 1_000) + 1);
+			},
+			TEST_TIMEOUT_MS
+		);
+	}
+
+	it(
+		'returns the empty-resident first page within its tier budget while 1,000 records apply',
+		async () => {
+			const recordCount = 1_000;
+			const engine = engineWith(convergedBucketFetcher(0));
+			const active = await engine.ready;
+			const concurrentApply = active.database.collections['products']!.bulkUpsert(
+				productDocuments(1, recordCount) as never[]
+			);
+
+			const { elapsedMs, hitCount } = await measureFirstPage(active.database, 0);
+			const budgetMs = budget(TTFR_TIERS[0]!.budgetMs);
+			report('ttfr 0 during bulk apply 1000', elapsedMs, budgetMs, ` hits=${hitCount}`);
+			expect(hitCount).toBe(0);
+			expect(elapsedMs).toBeLessThan(budgetMs);
+
+			await concurrentApply;
+			expect(await active.database.collections['products']!.count().exec()).toBe(recordCount);
+		},
+		TEST_TIMEOUT_MS
+	);
+
+	it(
+		'returns the empty-resident first page within its tier budget while five bulk applies run sequentially',
+		async () => {
+			const batchCount = 5;
+			const batchSize = 200;
+			const engine = engineWith(convergedBucketFetcher(0));
+			const active = await engine.ready;
+			const sequentialApplies = (async () => {
+				for (let batch = 0; batch < batchCount; batch += 1) {
+					await active.database.collections['products']!.bulkUpsert(
+						productDocuments(batch * batchSize + 1, batchSize) as never[]
+					);
+				}
+			})();
+
+			const { elapsedMs, hitCount } = await measureFirstPage(active.database, 0);
+			const budgetMs = budget(TTFR_TIERS[0]!.budgetMs);
+			report('ttfr 0 during 5x200 bulk applies', elapsedMs, budgetMs, ` hits=${hitCount}`);
+			expect(hitCount).toBe(0);
+			expect(elapsedMs).toBeLessThan(budgetMs);
+
+			await sequentialApplies;
+			expect(await active.database.collections['products']!.count().exec()).toBe(
+				batchCount * batchSize
+			);
+		},
+		TEST_TIMEOUT_MS
+	);
 });
