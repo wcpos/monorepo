@@ -232,6 +232,31 @@ describe('seedOrderSchedulerTasks', () => {
 		);
 	});
 
+	// Same normalization as orderBrowserQueryKey — see the sortPart note in the descriptor.
+	it('omits the default id-desc sort so both key doors agree', async () => {
+		arrangeBrowserOrderSeed();
+
+		await seedOrderFilterSchedulerTask({
+			database: MOCK_DATABASE,
+			status: 'processing',
+			search: '',
+			limit: 50,
+			orderby: 'id',
+			order: 'desc',
+			nowMs: 15_000,
+		});
+
+		expect(mocks.seedPersistedSchedulerTasks).toHaveBeenCalledWith(
+			expect.objectContaining({
+				tasks: [
+					expect.objectContaining({
+						queryKey: 'orders:browser:status=processing:search=:limit=50',
+					}),
+				],
+			})
+		);
+	});
+
 	function arrangeBrowserOrderSeed() {
 		const schedulerRepository = { readForTaskIds: vi.fn(), claimNew: vi.fn(), claim: vi.fn() };
 		const result = {

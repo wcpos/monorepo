@@ -45,6 +45,7 @@ import {
 	type Fetcher,
 	httpGet,
 	recordCoverage,
+	recordCoverageRecordsOnly,
 } from './rx-scheduler-collection-fetcher';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
@@ -594,7 +595,12 @@ async function tryProductBrowseWindowWalk(
 			collection: 'products',
 			message: `Product browse window ${descriptor.limit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 		});
-		await recordCoverage('products', input, task, deltaRecordIds, false);
+		// The lane claims NOTHING, not this pass's rows — they are a TAIL of the listing and
+		// readBrowseWindowContinuation would read them as its LEADING prefix. See the orders
+		// fetcher's matching branch. The rows' RECORD coverage still stands: they are real and
+		// already resident, it is only the window claim that is withdrawn.
+		await recordCoverageRecordsOnly('products', input, task, deltaRecordIds);
+		await recordCoverage('products', input, task, [], false);
 		return {
 			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
 			// The prefix is gone, so the next pass must re-walk from the top regardless; do not
@@ -643,7 +649,19 @@ async function tryProductBrowseWindowWalk(
 		input,
 		task,
 		brandsHonored ? laneRecordIds : [],
-		brandsHonored && !truncatedByPageBudget && filledTheWindow
+		brandsHonored && !truncatedByPageBudget && filledTheWindow,
+		// Re-check the carried prefix INSIDE the write. The guard above runs before the walk,
+		// but `withLedgerRecovery` replays this write verbatim after a rebuild drops
+		// `coverageLanes` — the one window that guard cannot close (#1030 residual).
+		continuation.covered > 0 && continuation.sourceQueryKey
+			? {
+					sourceQueryKey: continuation.sourceQueryKey,
+					recordIds: continuation.recordIds,
+					// Same brand gate as the primary write above: a superset from a server that
+					// ignored `brand` must not be recorded as coverage through the demotion path.
+					fallbackRecordIds: brandsHonored ? deltaRecordIds : [],
+				}
+			: undefined
 	);
 	// STRICTLY AFTER the write. The smaller lanes this window supersedes include the one the
 	// continuation resumed from, and the ancestry guard above re-reads exactly that lane —

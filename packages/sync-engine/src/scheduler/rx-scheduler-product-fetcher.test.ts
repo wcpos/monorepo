@@ -921,12 +921,15 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
-		// Only the delta is asserted, and the lane is honestly INCOMPLETE, so the next pass
-		// restarts the window from the top instead of trusting a prefix that is gone.
+		// The lane claims NOTHING and is honestly INCOMPLETE, so the next pass restarts the
+		// window from page 1. Recording the delta here would be worse than recording nothing:
+		// the pass resumed at an offset, so its rows are a TAIL of the listing, and
+		// readBrowseWindowContinuation reads a page-aligned incomplete lane as the LEADING
+		// prefix — the next pass would offset past 100 rows nobody ever fetched.
 		const recorded = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
 			{ records: { id: string }[]; complete: boolean },
 		];
-		expect(recorded[0].records).toHaveLength(100);
+		expect(recorded[0].records).toHaveLength(0);
 		expect(recorded[0].complete).toBe(false);
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({ type: 'browse-window.prefix-invalidated' })
@@ -1109,6 +1112,85 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(
 			coverageRepository.lanes.get('products:browse-window:limit=300')!.expectedRecordIds
 		).toHaveLength(300);
+	});
+
+	// The pre-walk guard cannot see a wipe that lands inside `withLedgerRecovery`'s replay of
+	// the write, so the write itself must be able to re-check. This pins that the fetcher
+	// actually hands the ancestry down — the persistence-side behaviour is covered by
+	// local-coverage/browse-window-prefix-ancestry.test.ts.
+	it('hands the carried prefix to the coverage write so a replay can re-check it', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 500 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const coverageRepository = statefulCoverage();
+		coverageRepository.lanes.set('products:browse-window:limit=200', {
+			complete: true,
+			expectedRecordIds: wooProductIds(1, 200),
+			updatedAtMs: 4_000,
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher: catalogServer(products, []),
+			pullBatchSize: () => 100,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		const write = coverageRepository.recordQueryResult.mock.calls.at(-1)![0] as {
+			prefixAncestry?: { sourceQueryKey: string; recordIds: string[]; fallbackRecordIds: string[] };
+		};
+		expect(write.prefixAncestry?.sourceQueryKey).toBe('products:browse-window:limit=200');
+		expect(write.prefixAncestry?.recordIds).toEqual(wooProductIds(1, 200));
+		// The fallback is the delta alone — what the lane must shrink to if the prefix is gone.
+		expect(write.prefixAncestry?.fallbackRecordIds).toEqual(wooProductIds(201, 100));
+	});
+
+	// A window that carried nothing has no ancestry to assert, so it must not send one.
+	it('sends no prefix ancestry when the window started from scratch', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const coverageRepository = statefulCoverage();
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher: catalogServer(
+				Array.from({ length: 50 }, (_, index) => ({ id: index + 1, menu_order: index })),
+				[]
+			),
+			pullBatchSize: () => 100,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=10:windowed',
+				queryKey: 'products:browse-window:limit=10',
+				limit: 10,
+			})
+		);
+
+		expect(coverageRepository.recordQueryResult.mock.calls.at(-1)![0]).not.toHaveProperty(
+			'prefixAncestry'
+		);
 	});
 
 	/**

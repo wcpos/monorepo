@@ -118,6 +118,51 @@ describe('orderBrowserQueryKey', () => {
 		}
 	);
 
+	// A fetch-to-completion range downloads the WHOLE range and always walks `date desc` on the
+	// wire (the dimension its resume cursor is expressed in — #954), so the grid's sort cannot
+	// change which records the lane holds. Carrying it in the key only forked the lane identity,
+	// making every re-sort of the reports grid re-download the entire range.
+	it('leaves sort out of a ranged (limit=all) lane key', () => {
+		const range = { afterSeconds: 1782864000, beforeSeconds: 1784073599, limit: 'all' } as const;
+		const sortless =
+			'orders:browser:status=all:after=1782864000:before=1784073599:search=:limit=all';
+
+		expect(orderBrowserQueryKey({ ...range, orderby: 'total', order: 'asc' })).toBe(sortless);
+		expect(orderBrowserQueryKey({ ...range, orderby: 'date', order: 'desc' })).toBe(sortless);
+		expect(orderBrowserQueryKey(range)).toBe(sortless);
+	});
+
+	// The window's sort decides WHICH records it holds (#909 sort-aware windows), so a windowed
+	// browse must keep forking its lane per sort — only the ranged family changes.
+	it('keeps sort in a windowed browse lane key', () => {
+		expect(orderBrowserQueryKey({ orderby: 'total', order: 'asc', limit: 10 })).toBe(
+			'orders:browser:status=all:orderby=total:order=asc:search=:limit=10'
+		);
+	});
+
+	// Both doors must agree byte-for-byte: the demand plane builds the key with
+	// orderBrowserQueryKey and the seeder rebuilds it, so the DEFAULT `id desc` sort has to be
+	// omitted by both or one browse gets two lane identities.
+	it('omits the default id-desc sort from a windowed lane key', () => {
+		expect(orderBrowserQueryKey({ orderby: 'id', order: 'desc', limit: 10 })).toBe(
+			'orders:browser:status=all:search=:limit=10'
+		);
+	});
+
+	// Lanes persisted before this change still carry the sort. They must keep parsing — the
+	// scheduler would otherwise refuse the task outright — but the descriptor is normalized so
+	// nothing downstream can act on a sort the ranged walk ignores anyway.
+	it('normalizes a legacy ranged key that still carries a sort', () => {
+		const decision = parseOrderBrowserSchedulerDescriptor(
+			'orders:browser:status=all:after=1782864000:orderby=total:order=asc:search=:limit=all'
+		);
+		expect(decision).toEqual({
+			descriptor: expect.objectContaining({ complete: true, afterSeconds: 1782864000 }),
+		});
+		expect(decision?.descriptor).not.toHaveProperty('orderby');
+		expect(decision?.descriptor).not.toHaveProperty('order');
+	});
+
 	it('matches bridge normalization and rejects invalid door invariants', () => {
 		expect(orderBrowserQueryKey({ limit: Number.NaN, store: 'NOT VALID' })).toBe(
 			'orders:browser:status=all:search=:limit=10'

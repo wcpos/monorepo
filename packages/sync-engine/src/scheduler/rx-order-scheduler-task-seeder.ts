@@ -126,9 +126,17 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 	const rangePart = `${
 		input.afterSeconds === undefined ? '' : `:after=${input.afterSeconds}`
 	}${input.beforeSeconds === undefined ? '' : `:before=${input.beforeSeconds}`}`;
-	const sortPart = `${input.orderby === undefined ? '' : `:orderby=${input.orderby}`}${
-		input.order === undefined ? '' : `:order=${input.order}`
-	}`;
+	// Byte-identical to orderBrowserQueryKey's sortPart, and it has to be: the demand plane
+	// builds the key there and this seeder rebuilds it here, so any divergence gives one browse
+	// two lane identities depending on which door it came through. Ranged (`limit=all`) lanes
+	// are sort-agnostic, and the DEFAULT `id desc` sort is omitted rather than encoded.
+	const defaultSort = input.orderby === 'id' && input.order === 'desc';
+	const sortPart =
+		input.complete || defaultSort
+			? ''
+			: `${input.orderby === undefined ? '' : `:orderby=${input.orderby}`}${
+					input.order === undefined ? '' : `:order=${input.order}`
+				}`;
 	const limitPart = input.complete ? 'all' : input.limit;
 	const queryKey = `orders:browser:status=${status}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:search=${search}:limit=${limitPart}`;
 	const descriptorDecision = parseOrderBrowserSchedulerDescriptor(queryKey);

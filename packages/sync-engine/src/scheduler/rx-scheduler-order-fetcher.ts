@@ -395,12 +395,14 @@ async function recordOrderFetchCoverage(
 	input: OrdersSchedulerFetcherInput,
 	task: FetchTask,
 	documentIds: string[],
-	complete: boolean
+	complete: boolean,
+	prefixAncestry?: BuildCoverageDocumentsFromQueryResultInput['prefixAncestry']
 ): Promise<void> {
 	if (!input.coverageRepository) return;
-	await input.coverageRepository.recordQueryResult(
-		orderCoverageInput(input, task, documentIds, complete)
-	);
+	await input.coverageRepository.recordQueryResult({
+		...orderCoverageInput(input, task, documentIds, complete),
+		...(prefixAncestry ? { prefixAncestry } : {}),
+	});
 }
 
 type RangedResumeSnapshot = {
@@ -843,10 +845,16 @@ async function fetchBrowserOrderQuery(
 			collection: 'orders',
 			message: `Orders browse window ${windowLimit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 		});
+		// The lane claims NOTHING, not this pass's rows: the walk resumed at an offset, so what
+		// it holds is a TAIL of the listing, and readBrowseWindowContinuation reads a
+		// page-aligned incomplete lane as the LEADING prefix — storing the tail would make the
+		// next pass offset past rows nobody fetched and splice the window permanently.
+		// The rows are real and already resident, so their RECORD coverage stands; only the
+		// window claim is withdrawn. This matches the persistence-path demotion, which keeps
+		// record coverage for the same reason.
+		await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
 		if (descriptor.search === '') {
-			await recordOrderFetchCoverage(input, task, fetchedDocumentIds, false);
-		} else {
-			await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
+			await recordOrderFetchCoverage(input, task, [], false);
 		}
 		return {
 			taskId: task.id,
@@ -896,7 +904,20 @@ async function fetchBrowserOrderQuery(
 			input,
 			task,
 			dimensionsHonored ? laneRecordIds : [],
-			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow
+			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow,
+			// Re-check the carried prefix INSIDE the write. The guard above runs before the
+			// walk, but `withLedgerRecovery` replays this write verbatim after a rebuild drops
+			// `coverageLanes` — the one window that guard cannot close (#1030 residual).
+			continuation.covered > 0 && continuation.sourceQueryKey
+				? {
+						sourceQueryKey: continuation.sourceQueryKey,
+						recordIds: continuation.recordIds,
+						// Same dimension gate as the primary write above: a superset from a server
+						// that ignored `pos_cashier`/`pos_store` must not be recorded as coverage
+						// through the demotion path either.
+						fallbackRecordIds: dimensionsHonored ? fetchedDocumentIds : [],
+					}
+				: undefined
 		);
 		// STRICTLY AFTER the write. The smaller lanes this window supersedes include the one
 		// the continuation resumed from, and the ancestry guard above re-reads exactly that

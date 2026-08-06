@@ -119,8 +119,16 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 	const dimension = (name: string, value: number | string | undefined): string =>
 		value === undefined ? '' : `:${name}=${value}`;
 	const store = dims.store && /^(?:\d+|[a-z0-9_-]+)$/.test(dims.store) ? dims.store : undefined;
+	// A RANGED (`limit=all`) lane is sort-agnostic. It fetches the whole range to completion and
+	// always walks `date desc` on the wire — the dimension its resume cursor is expressed in
+	// (#954) — so the grid's sort cannot change which records the lane ends up holding, and its
+	// `expectedRecordIds` is consumed only as a count. Carrying sort in the key forked the lane
+	// identity per sort, so every re-sort of the reports grid re-downloaded the entire range.
+	// A WINDOWED browse keeps it: there the sort decides which slice the window holds (#909).
 	const sortPart =
-		dims.orderby === undefined || (dims.orderby === 'id' && dims.order === 'desc')
+		dims.limit === 'all' ||
+		dims.orderby === undefined ||
+		(dims.orderby === 'id' && dims.order === 'desc')
 			? ''
 			: `:orderby=${dims.orderby}:order=${dims.order}`;
 	const limit =
@@ -208,10 +216,17 @@ export function parseOrderBrowserSchedulerDescriptor(
 			...(store !== undefined ? { store } : {}),
 			...(afterSeconds !== undefined ? { afterSeconds } : {}),
 			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
-			...(orderby !== undefined
+			// A ranged lane is sort-agnostic (see the sortPart note in orderBrowserQueryKey), so the
+			// sort is DROPPED here rather than rejected: lanes and queued tasks persisted before
+			// that change still carry it, and refusing them would strand the task instead of
+			// letting it run. Normalizing at the door means nothing downstream can act on a sort
+			// the ranged walk ignores anyway.
+			...(orderby !== undefined && !complete
 				? { orderby: orderby as OrderBrowserSchedulerDescriptor['orderby'] }
 				: {}),
-			...(order !== undefined ? { order: order as OrderBrowserSchedulerDescriptor['order'] } : {}),
+			...(order !== undefined && !complete
+				? { order: order as OrderBrowserSchedulerDescriptor['order'] }
+				: {}),
 			complete,
 			wooStatus: status === 'all' ? '' : status,
 		},

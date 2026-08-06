@@ -6,6 +6,7 @@ import {
 	type BuildCumulativeCoverageDocumentsFromQueryResultInput,
 	compactPersistedCoverageDocuments,
 	expectedRecordIdsForLane,
+	laneHoldsBrowseWindowPrefix,
 	type LocalCoverageState,
 	type LocalRecordCoverage,
 	mergePersistedCoverageWrites,
@@ -406,8 +407,47 @@ export class RxCoverageRepository {
 	}
 
 	async recordQueryResult(input: BuildCoverageDocumentsFromQueryResultInput): Promise<void> {
-		const nextDocuments = buildCoverageDocumentsFromQueryResult(input);
+		// PREFIX ANCESTRY, re-evaluated HERE rather than only ahead of the walk (#1030
+		// residual). The fetcher's `browseWindowPrefixSurvived` check and this write are two
+		// separate operations, and `withLedgerRecovery` re-invokes this method with the SAME
+		// arguments after a corruption refusal drops `coverageLanes` — replaying a prefix the
+		// pre-read already approved onto a store that no longer holds it. Asserting it then
+		// would resurrect a lane claiming coverage the rebuild deleted, and since a browse
+		// lane's `expectedRecordIds.length` IS the grid's footer total, the grid would report
+		// and believe rows it does not have. Because the read now lives inside the replayed
+		// call, the replay re-runs it and demotes to the delta instead.
+		// Note the guard rather than an unconditional await: a write with no carried prefix must
+		// not gain a microtask tick here, or it would reorder against concurrent coverage writes.
+		const nextDocuments = input.prefixAncestry
+			? await this.documentsWithPrefixAncestry(input)
+			: buildCoverageDocumentsFromQueryResult(input);
 		await this.writeCoverageDocumentsWithMerge(nextDocuments);
+	}
+
+	private async documentsWithPrefixAncestry(
+		input: BuildCoverageDocumentsFromQueryResultInput
+	): Promise<PersistedCoverageDocumentSet> {
+		const ancestry = input.prefixAncestry;
+		if (!ancestry) return buildCoverageDocumentsFromQueryResult(input);
+		const source = await this.readCoverageLane(input.collection, ancestry.sourceQueryKey);
+		if (laneHoldsBrowseWindowPrefix(source?.expectedRecordIds, ancestry.recordIds)) {
+			return buildCoverageDocumentsFromQueryResult(input);
+		}
+		const demoted = buildCoverageDocumentsFromQueryResult({
+			...input,
+			records: ancestry.fallbackRecordIds.map((id) => ({ id })),
+			complete: false,
+		});
+		// The lane claims NOTHING. Those rows are a TAIL of the listing — the pass resumed at an
+		// offset — and `readBrowseWindowContinuation` reads a page-aligned incomplete lane as the
+		// listing's LEADING prefix, so storing them would have the next pass offset past rows
+		// nobody fetched and splice the window permanently. An empty lane is what actually forces
+		// the restart this demotion exists for. Their RECORD coverage survives: the rows are real
+		// and already resident, it is only the window claim that is withdrawn.
+		return {
+			records: demoted.records,
+			lanes: demoted.lanes.map((lane) => ({ ...lane, expectedRecordIds: [] })),
+		};
 	}
 
 	async readCoverageDocuments(): Promise<PersistedCoverageDocumentSet> {
