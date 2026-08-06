@@ -15,6 +15,7 @@ import {
 	normalizeStorePayload,
 	type ServerStorePayload,
 } from '../../utils/merge-stores';
+import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
@@ -306,8 +307,11 @@ const processInitialPropsStep: HydrationStep = {
 		const { initialProps, userDB, appState, user } = context;
 		const oldState = await appState.get('current');
 
-		// Upsert site and credentials
-		const siteDoc = await userDB.sites.upsert(initialProps.site);
+		// Upsert site and credentials.
+		// `upsertSiteData` merges instead of overwriting: a plain `upsert()` is a
+		// full-document write and would drop the locally-owned `wp_credentials`
+		// link array, which the embedded payload never carries (#902).
+		const siteDoc = await upsertSiteData(userDB.sites, initialProps.site);
 		const wpCredentialsDoc = await userDB.wp_credentials.upsert(
 			sanitizeWPCredentialsData(initialProps.wp_credentials)
 		);
@@ -430,14 +434,23 @@ const testAuthorizationStep: HydrationStep = {
 
 		const result = await testAuthorizationMethod(wcposApiUrl, accessToken);
 
-		if (result && result.useJwtAsParam) {
-			// Update the site document to use JWT as query parameter
+		if (result) {
+			/**
+			 * Write the outcome both ways. The embedded payload never carries
+			 * `use_jwt_as_param`, and the site write above merges rather than
+			 * overwrites (#902), so a stale `true` from an earlier session would
+			 * otherwise keep JWTs in the query string forever.
+			 */
 			const siteDoc = await userDB.sites.findOne(initialProps.site.uuid).exec();
 			if (siteDoc) {
-				await siteDoc.incrementalPatch({ use_jwt_as_param: true });
-				appLogger.info('Site configured to use JWT as query parameter', {
-					context: { siteId: initialProps.site.uuid },
+				await siteDoc.getLatest().incrementalPatch({
+					use_jwt_as_param: !!result.useJwtAsParam,
 				});
+				if (result.useJwtAsParam) {
+					appLogger.info('Site configured to use JWT as query parameter', {
+						context: { siteId: initialProps.site.uuid },
+					});
+				}
 			}
 		}
 

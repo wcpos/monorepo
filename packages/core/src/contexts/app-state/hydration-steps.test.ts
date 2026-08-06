@@ -250,7 +250,11 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		};
 		const bulkInsert = jest.fn(async () => undefined);
 		const userDB = {
-			sites: { upsert: jest.fn(async () => siteDoc) },
+			sites: {
+				schema: { primaryPath: 'uuid' },
+				findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
+				incrementalUpsert: jest.fn(async () => siteDoc),
+			},
 			wp_credentials: { upsert: jest.fn(async () => wpCredentialsDoc) },
 			stores: {
 				findOne: jest
@@ -290,6 +294,46 @@ describe('PROCESS_INITIAL_PROPS', () => {
 				prevent_overselling: false,
 			}),
 		]);
+	});
+});
+
+describe('TEST_AUTHORIZATION', () => {
+	const fetchMock = jest.fn();
+
+	beforeEach(() => {
+		fetchMock.mockReset();
+		global.fetch = fetchMock as unknown as typeof fetch;
+	});
+
+	it('clears stale query parameter auth when Authorization headers work', async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: jest.fn(async () => ({ status: 'success' })),
+		});
+		const siteDoc = {
+			use_jwt_as_param: true,
+			incrementalPatch: jest.fn(async (patch: { use_jwt_as_param: boolean }) => {
+				Object.assign(siteDoc, patch);
+			}),
+			getLatest: jest.fn(),
+		};
+		siteDoc.getLatest.mockReturnValue(siteDoc);
+		const step = hydrationSteps.find(({ name }) => name === 'TEST_AUTHORIZATION');
+
+		await step!.execute({
+			userDB: { sites: documentLookup(siteDoc) } as never,
+			initialProps: {
+				site: {
+					uuid: 'site-1',
+					wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+				},
+				wp_credentials: { access_token: 'token' },
+				stores: [],
+			},
+		});
+
+		expect(siteDoc.incrementalPatch).toHaveBeenCalledWith({ use_jwt_as_param: false });
+		expect(siteDoc.use_jwt_as_param).toBe(false);
 	});
 });
 
