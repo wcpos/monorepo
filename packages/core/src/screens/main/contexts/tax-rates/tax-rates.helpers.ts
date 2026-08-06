@@ -40,21 +40,35 @@ function getMatchingPostcodes(pattern: string): string[] {
 	}
 }
 
+function postcodePatternMatches(normalizedPostcode: string, pattern: string): boolean {
+	const matchingPostcodes = getMatchingPostcodes(pattern);
+	return matchingPostcodes.some((pc) =>
+		pattern.endsWith('*') ? normalizedPostcode.startsWith(pc) : pc === normalizedPostcode
+	);
+}
+
 /**
  * Check if a given postcode matches any of the patterns in the provided list.
  */
 function postcodeMatcher(postcode: string, patterns: string[]): boolean {
 	const normalizedPostcode = normalizePostcode(postcode);
 
-	return some(patterns, (pattern) => {
-		const matchingPostcodes = getMatchingPostcodes(pattern);
-		return matchingPostcodes.some((pc) =>
-			pattern.endsWith('*') ? normalizedPostcode.startsWith(pc) : pc === normalizedPostcode
-		);
-	});
+	return some(patterns, (pattern) => postcodePatternMatches(normalizedPostcode, pattern));
 }
 
-function compareTaxRates(rate1: TaxRate, rate2: TaxRate): number {
+/**
+ * WooCommerce compares specificity by the number of location rows that MATCHED the
+ * customer's address (`COUNT(locations.location_id)` under the query criteria in
+ * `WC_Tax::get_matched_tax_rates`), not by how many postcodes/cities a rate lists.
+ */
+type MatchedLocationCounts = { postcodes: number; cities: number };
+
+/** Mirrors `WC_Tax::sort_rates_callback`: priority, then location specificity, then id. */
+function compareTaxRates(
+	rate1: TaxRate,
+	rate2: TaxRate,
+	matchedCounts: Map<TaxRate, MatchedLocationCounts>
+): number {
 	const priority1 = rate1.priority ?? 0;
 	const priority2 = rate2.priority ?? 0;
 	if (priority1 !== priority2) {
@@ -85,14 +99,14 @@ function compareTaxRates(rate1: TaxRate, rate2: TaxRate): number {
 		return state1 > state2 ? 1 : -1;
 	}
 
-	const postcodeCount1 = rate1.postcodes?.length ?? 0;
-	const postcodeCount2 = rate2.postcodes?.length ?? 0;
+	const postcodeCount1 = matchedCounts.get(rate1)?.postcodes ?? 0;
+	const postcodeCount2 = matchedCounts.get(rate2)?.postcodes ?? 0;
 	if (postcodeCount1 !== postcodeCount2) {
 		return postcodeCount1 < postcodeCount2 ? 1 : -1;
 	}
 
-	const cityCount1 = rate1.cities?.length ?? 0;
-	const cityCount2 = rate2.cities?.length ?? 0;
+	const cityCount1 = matchedCounts.get(rate1)?.cities ?? 0;
+	const cityCount2 = matchedCounts.get(rate2)?.cities ?? 0;
 	if (cityCount1 !== cityCount2) {
 		return cityCount1 < cityCount2 ? 1 : -1;
 	}
@@ -118,9 +132,23 @@ export function filterTaxRates(
 	city: string = ''
 ): TaxRate[] {
 	const taxRatesByClass = groupBy(taxRates, 'class');
+	const normalizedPostcode = normalizePostcode(postcode);
 	const filteredTaxRatesByClass = map(taxRatesByClass, (taxRatesInClass) => {
-		const sortedTaxRates = [...taxRatesInClass].sort(compareTaxRates);
 		const cityUpperCase = city.toUpperCase();
+		const matchedCounts = new Map<TaxRate, MatchedLocationCounts>(
+			taxRatesInClass.map((rate) => [
+				rate,
+				{
+					postcodes: (rate.postcodes ?? []).filter((pattern) =>
+						postcodePatternMatches(normalizedPostcode, pattern)
+					).length,
+					cities: (rate.cities ?? []).filter((c) => c.toUpperCase() === cityUpperCase).length,
+				},
+			])
+		);
+		const sortedTaxRates = [...taxRatesInClass].sort((rate1, rate2) =>
+			compareTaxRates(rate1, rate2, matchedCounts)
+		);
 		let foundMatchAtCurrentPriority = false;
 
 		return filter(sortedTaxRates, (rate, index) => {

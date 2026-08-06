@@ -217,8 +217,37 @@ describe('tax-rates.helpers', () => {
 					createTaxRate({ id: 4, country: 'US', priority: 1, order: 99 }),
 				];
 
-				// Deliberately diverges from WooCommerce's stored-order tie-break per dbdca89df.
+				// Matches modern WooCommerce (WC_Tax::sort_rates_callback): stored order plays
+				// no part in matching; equal specificity falls through to the id tie-break.
 				expect(filterTaxRates(rates, 'US')).toEqual([rates[1]]);
+			});
+
+			it('compares specificity by MATCHING postcodes, not by how many a rate lists (WC parity)', () => {
+				const rates = [
+					createTaxRate({
+						id: 5,
+						country: 'US',
+						priority: 1,
+						postcodes: ['10001', '10002', '10003'],
+					}),
+					createTaxRate({ id: 2, country: 'US', priority: 1, postcodes: ['10001'] }),
+				];
+
+				// Both rates match 10001 with exactly one postcode row, so WooCommerce ties on
+				// specificity (COUNT of matched location rows) and falls to the lower id — the
+				// three unrelated postcodes on id 5 must not win the tie.
+				expect(filterTaxRates(rates, 'US', '', '10001')).toEqual([rates[1]]);
+			});
+
+			it('ranks a rate higher when several of its postcode patterns match the customer', () => {
+				const rates = [
+					createTaxRate({ id: 1, country: 'US', priority: 1, postcodes: ['90210'] }),
+					createTaxRate({ id: 9, country: 'US', priority: 1, postcodes: ['90210', '902*'] }),
+				];
+
+				// Two matched rows beat one, as in WooCommerce's matched-row COUNT, so the
+				// higher id still wins here.
+				expect(filterTaxRates(rates, 'US', '', '90210')).toEqual([rates[1]]);
 			});
 
 			it('should prefer a country-specific rate over a wildcard rate at the same priority', () => {
