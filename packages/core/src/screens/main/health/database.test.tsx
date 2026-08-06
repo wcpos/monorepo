@@ -87,6 +87,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
 jest.mock('./rejected-mutations', () => ({ RejectedMutationsPanel: () => null }));
+jest.mock('./queued-emails', () => ({ QueuedEmailsPanel: () => null }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
 		'../../../../jest/translate'
