@@ -228,6 +228,12 @@ export type RunEngineSchedulerDrainInput = {
 	/** Override for an explicitly requested foreground drain. Background drains
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
+	/**
+	 * This drain serves an explicitly user-driven sync (#948/#957). Browse windows then
+	 * re-walk from page 1 instead of resuming from their covered prefix — the continuation
+	 * that makes ordinary scrolling cheap would otherwise make a refresh a no-op.
+	 */
+	refreshBrowseWindows?: boolean;
 	onProgress?: (progress: { collection: string; documents: number; requests: number }) => void;
 	withCollectionActivity?: <T>(
 		collection: FetchTask['collection'],
@@ -245,7 +251,14 @@ export type RunEngineSchedulerTaskInput = Pick<
 function createEngineSchedulerFetcherRegistry(
 	input: Pick<
 		RunEngineSchedulerDrainInput,
-		'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'pullBatchSize' | 'diagnostics' | 'nowMs'
+		| 'db'
+		| 'coverage'
+		| 'baseUrl'
+		| 'fetcher'
+		| 'pullBatchSize'
+		| 'diagnostics'
+		| 'nowMs'
+		| 'refreshBrowseWindows'
 	>
 ) {
 	const db = input.db;
@@ -271,6 +284,9 @@ function createEngineSchedulerFetcherRegistry(
 		...(input.diagnostics !== undefined ? { diagnostics: input.diagnostics } : {}),
 		...(input.fetcher !== undefined ? { fetcher: input.fetcher } : {}),
 		...(input.pullBatchSize !== undefined ? { pullBatchSize: input.pullBatchSize } : {}),
+		...(input.refreshBrowseWindows !== undefined
+			? { refreshBrowseWindows: input.refreshBrowseWindows }
+			: {}),
 	};
 
 	return createSchedulerFetcherRegistry([

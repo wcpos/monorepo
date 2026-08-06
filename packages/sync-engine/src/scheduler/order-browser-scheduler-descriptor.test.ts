@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	browserOrderSchedulerDescriptorLimitError,
-	ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS,
+	normalizeOrderBrowseWindowLimit,
+	ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS,
+	orderBrowserPredecessorWindow,
 	orderBrowserQueryKey,
 	parseOrderBrowserSchedulerDescriptor,
 } from './order-browser-scheduler-descriptor';
@@ -62,9 +64,11 @@ describe('orderBrowserQueryKey', () => {
 			parsed: { afterSeconds: 1782864000, beforeSeconds: 1784073599, complete: true },
 		},
 		{
+			// #957: quantized to the next 100-row step, NOT clamped to 200. The clamp is
+			// what collapsed every deeper window onto one deduped key.
 			dims: { orderby: 'id', order: 'desc', limit: 999 },
-			queryKey: 'orders:browser:status=all:search=:limit=200',
-			parsed: { limit: 200 },
+			queryKey: 'orders:browser:status=all:search=:limit=1000',
+			parsed: { limit: 1000 },
 		},
 		{
 			dims: { orderby: 'date', order: 'desc', limit: 25 },
@@ -283,7 +287,7 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 				queryKey: 'orders:browser:status=all:after=1782864000:search=x:before=9:limit=all',
 				status: 'all',
 				search: 'x:before=9',
-				limit: ORDER_BROWSER_SCHEDULER_DESCRIPTOR_MAX_RECORDS,
+				limit: ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS,
 				afterSeconds: 1782864000,
 				complete: true,
 				wooStatus: '',
@@ -409,11 +413,93 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 				skipReason: 'descriptor is not supported',
 			}
 		);
+		// #957: 201 is now an ORDINARY window — the old 200-record refusal is deliberately
+		// flipped (Paul, 2026-08-06). Only the runaway backstop still refuses.
 		expect(
 			parseOrderBrowserSchedulerDescriptor('orders:browser:status=processing:search=:limit=201')
 		).toEqual({
+			descriptor: expect.objectContaining({ limit: 201 }),
+		});
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=processing:search=:limit=100001')
+		).toEqual({
 			skipReason: browserOrderSchedulerDescriptorLimitError(),
 		});
+	});
+
+	/**
+	 * #957 — the killer mechanism, pinned.
+	 *
+	 * The old code clamped the limit to 200 INSIDE the key, so `extendLimit` past 200
+	 * produced the IDENTICAL query key; the scheduler deduped it as work it had already
+	 * done, so no later window was ever requested and the cashier's scroll dead-ended in
+	 * silence. Successive windows must be DISTINCT keys.
+	 */
+	it('mints a distinct lane key for every window past the old 200-record ceiling', () => {
+		const keys = [200, 300, 400, 2_000].map((limit) =>
+			orderBrowserQueryKey({ status: 'all', search: '', limit })
+		);
+		expect(keys).toEqual([
+			'orders:browser:status=all:search=:limit=200',
+			'orders:browser:status=all:search=:limit=300',
+			'orders:browser:status=all:search=:limit=400',
+			'orders:browser:status=all:search=:limit=2000',
+		]);
+		expect(new Set(keys).size).toBe(keys.length);
+		// …and every one of them is a descriptor the fetcher will actually run.
+		for (const queryKey of keys) {
+			expect(parseOrderBrowserSchedulerDescriptor(queryKey)).toMatchObject({
+				descriptor: { queryKey },
+			});
+		}
+	});
+
+	// #957 — the cap is gone on every dimension, not just the unfiltered browse.
+	it('carries an uncapped window on every scoped dimension', () => {
+		expect(
+			orderBrowserQueryKey({
+				status: 'completed',
+				search: '',
+				limit: 900,
+				customerId: 42,
+				cashierId: 7,
+				store: 'woocommerce-pos',
+				afterSeconds: 1782864000,
+				beforeSeconds: 1785456000,
+				orderby: 'total',
+				order: 'asc',
+			})
+		).toBe(
+			'orders:browser:status=completed:customer=42:cashier=7:store=woocommerce-pos:after=1782864000:before=1785456000:orderby=total:order=asc:search=:limit=900'
+		);
+	});
+
+	// #957 — quantized past one Woo page so scrolling to row 5,000 mints ~50 coverage
+	// lanes rather than 500; verbatim below it so a cold grid still asks for 10 rows.
+	it('quantizes the window past one Woo page and never clamps it', () => {
+		expect(normalizeOrderBrowseWindowLimit(10)).toBe(10);
+		expect(normalizeOrderBrowseWindowLimit(100)).toBe(100);
+		expect(normalizeOrderBrowseWindowLimit(110)).toBe(200);
+		expect(normalizeOrderBrowseWindowLimit(200)).toBe(200);
+		expect(normalizeOrderBrowseWindowLimit(210)).toBe(300);
+		expect(normalizeOrderBrowseWindowLimit(4_999)).toBe(5_000);
+		expect(normalizeOrderBrowseWindowLimit(Number.MAX_SAFE_INTEGER)).toBe(100_000);
+	});
+
+	// #957 — the lane a growing window resumes from, so 200 → 300 fetches the delta.
+	it('names the predecessor window, preserving every other dimension', () => {
+		expect(
+			orderBrowserPredecessorWindow('orders:browser:status=all:customer=42:search=x:limit=300', 300)
+		).toEqual({ queryKey: 'orders:browser:status=all:customer=42:search=x:limit=200', limit: 200 });
+		expect(orderBrowserPredecessorWindow('orders:browser:status=all:search=:limit=20', 20)).toEqual(
+			{
+				queryKey: 'orders:browser:status=all:search=:limit=10',
+				limit: 10,
+			}
+		);
+		expect(
+			orderBrowserPredecessorWindow('orders:browser:status=all:search=:limit=10', 10)
+		).toBeNull();
 	});
 
 	it('ignores query keys owned by other scheduler descriptor families', () => {

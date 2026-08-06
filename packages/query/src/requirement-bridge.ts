@@ -74,8 +74,9 @@ const ORDER_SCOPED_QUERY_PRIORITY = 700;
  * The "give me every result" sentinel a screen passes when it wants a ranged fetch run to
  * completion. Reports is the only such screen (`REPORTS_ALL_RESULTS_LIMIT =
  * Number.MAX_SAFE_INTEGER`); ordinary grids extend their limit one page at a time (orders:
- * 10, 20 … 200, 210 …) and must stay windowed even once they climb past the browse cap,
- * per the ruling that Reports is the ONLY fetch-to-completion case.
+ * 10, 20 … 200, 210 …) and stay WINDOWED however far they climb — the window keeps growing
+ * and the engine keeps paging it (#948/#957), but growth is scroll-driven demand, not a
+ * fetch-to-completion. Reports remains the ONLY fetch-to-completion case.
  */
 const ORDER_COMPLETE_REQUEST_LIMIT = Number.MAX_SAFE_INTEGER;
 

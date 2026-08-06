@@ -42,6 +42,24 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "browse-window.backstop-reached",
+		"domain": "SYNC",
+		"label": "This list has reached its maximum size",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "browse-window.page-budget-reached",
+		"domain": "SYNC",
+		"label": "Loading more of this list will continue shortly",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "browse-window.prefix-invalidated",
+		"domain": "SYNC",
+		"label": "This list is being reloaded after a data reset",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "cadence.backoff",
 		"domain": "SYNC",
 		"label": "Slowed down to protect your store",

@@ -623,6 +623,316 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(result.documentCount).toBe(300);
 	});
 
+	// -------------------------------------------------------------------------
+	// #948 — windows page indefinitely, and grow by their DELTA
+	// -------------------------------------------------------------------------
+
+	/** A coverage repository that can answer "what does this lane already hold?". */
+	function coverageWithLanes(lanes: Record<string, { complete: boolean; ids: string[] }>) {
+		return {
+			recordQueryResult: vi.fn(async () => undefined),
+			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
+				const lane = lanes[queryKey];
+				return lane ? { complete: lane.complete, fresh: true, expectedRecordIds: lane.ids } : null;
+			}),
+		};
+	}
+
+	const wooProductIds = (from: number, count: number) =>
+		Array.from({ length: count }, (_, index) => `woo-product:${from + index}`);
+
+	/**
+	 * #948 — the ruling, pinned at the wire.
+	 *
+	 * A 1,100-row window is PAST the old `PRODUCT_BROWSE_WINDOW_MAX_LIMIT = 1_000`. It used
+	 * to be unreachable twice over: the parser rejected the key, and the encoder clamped
+	 * every deeper limit onto `limit=1000` so the scheduler deduped it away. Now it runs —
+	 * and it runs as a CONTINUATION: page 11 onwards, one step's worth of records, not a
+	 * re-download of the first thousand.
+	 */
+	it('pages past the old 1,000-row ceiling, fetching only the uncovered delta', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 2_000 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const pagesSeen: number[] = [];
+		const catalog = catalogServer(products, []);
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			pagesSeen.push(Number(new URL(String(request)).searchParams.get('page')));
+			return catalog(request);
+		});
+		const coverageRepository = coverageWithLanes({
+			// What the previous scroll tick left behind.
+			'products:browse-window:limit=1000': { complete: true, ids: wooProductIds(1, 1_000) },
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+
+		const result = await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=1100:windowed',
+				requirementId: 'products.browse-window.limit.1100',
+				queryKey: 'products:browse-window:limit=1100',
+				limit: 1_100,
+			})
+		);
+
+		// THE DELTA PROPERTY: the walk resumes at page 11 (records 1,000+), never page 1.
+		// Two requests — the step's page plus the usual boundary probe — where a
+		// re-download would have cost eleven.
+		expect(pagesSeen).toEqual([11, 12]);
+		expect(result.documentCount).toBe(100);
+		const upserted = repository.upsertMany.mock.calls as unknown as [{ wooProductId: number }[]][];
+		expect(upserted[0]?.[0].map(({ wooProductId }) => wooProductId)).toEqual(
+			Array.from({ length: 100 }, (_, index) => 1_001 + index)
+		);
+		// The lane still describes the WHOLE window, prefix unioned with delta — the grid's
+		// footer total reads this length, so a delta-only lane would report 100, not 1,100.
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey: 'products:browse-window:limit=1100',
+				records: wooProductIds(1, 1_100).map((id) => ({ id })),
+				complete: true,
+			})
+		);
+	});
+
+	// #948 — the continuation is dimension-aware: a filtered window continues from ITS own
+	// predecessor, never from the unfiltered one.
+	it('continues a filtered window from the filtered predecessor lane', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 1_000 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const fetcher = catalogServer(products, []);
+		const coverageRepository = coverageWithLanes({
+			// The UNFILTERED lane is fresh and complete, and must be ignored.
+			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
+			'products:browse-window:limit=200:category=9': {
+				complete: true,
+				ids: wooProductIds(1, 200),
+			},
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:category=9:windowed',
+				queryKey: 'products:browse-window:limit=300:category=9',
+				limit: 300,
+			})
+		);
+
+		expect(coverageRepository.readLocalLaneCoverage).toHaveBeenCalledWith(
+			'products',
+			'products:browse-window:limit=200:category=9',
+			expect.any(Number)
+		);
+		expect(coverageRepository.readLocalLaneCoverage).not.toHaveBeenCalledWith(
+			'products',
+			'products:browse-window:limit=200',
+			expect.any(Number)
+		);
+		expect(fetcher.mock.calls.every(([url]) => String(url).includes('category=9'))).toBe(true);
+	});
+
+	// #948 — without a covered prefix the walk is unchanged: a cold deep window still
+	// pages from the top, so removing the cap never depends on coverage being present.
+	it('walks a deep window from page 1 when nothing is covered yet', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 2_000 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const pagesSeen: number[] = [];
+		const catalog = catalogServer(products, []);
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			pagesSeen.push(Number(new URL(String(request)).searchParams.get('page')));
+			return catalog(request);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+
+		const result = await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=1100:windowed',
+				queryKey: 'products:browse-window:limit=1100',
+				limit: 1_100,
+			})
+		);
+
+		expect(pagesSeen.slice(0, 3)).toEqual([1, 2, 3]);
+		expect(result.documentCount).toBe(1_100);
+	});
+
+	// #948 — a fresh, complete lane for this exact window is served local. This is what
+	// stops the seeder's 30s completed-dedupe from re-walking a deep window twice a minute.
+	it('serves a fresh, complete window from coverage without touching the wire', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async () => response([]));
+		const coverageRepository = coverageWithLanes({
+			'products:browse-window:limit=1100': { complete: true, ids: wooProductIds(1, 1_100) },
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=1100:windowed',
+				queryKey: 'products:browse-window:limit=1100',
+				limit: 1_100,
+			})
+		);
+
+		expect(fetcher).not.toHaveBeenCalled();
+		// No coverage rewrite either: the lane must keep its own expiry, or the window
+		// would be pinned fresh forever and never see a new product.
+		expect(coverageRepository.recordQueryResult).not.toHaveBeenCalled();
+		expect(result).toEqual({
+			taskId: 'products:browse-window:limit=1100:windowed',
+			documentCount: 0,
+			requestCount: 0,
+			completed: true,
+		});
+	});
+
+	// #948 — an explicit user sync must not be answered from the prefix it is refreshing.
+	it('re-walks from page 1 for an explicitly requested refresh', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 1_000 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const pagesSeen: number[] = [];
+		const catalog = catalogServer(products, []);
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			pagesSeen.push(Number(new URL(String(request)).searchParams.get('page')));
+			return catalog(request);
+		});
+		const coverageRepository = coverageWithLanes({
+			'products:browse-window:limit=300': { complete: true, ids: wooProductIds(1, 300) },
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+			pullBatchSize: () => 100,
+			refreshBrowseWindows: true,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		expect(pagesSeen[0]).toBe(1);
+	});
+
+	/**
+	 * #948 + the ancestry lesson from #1023.
+	 *
+	 * Reading the prefix and writing the union are not atomic, and `coverageLanes` rows are
+	 * bulk-removed mid-drain by Clear & Sync (`registerCursorInvalidator`) and dropped whole
+	 * by a ledger rebuild (#956/#959). Asserting the prefix anyway would resurrect coverage
+	 * for a thousand products the wipe just deleted — and since a browse lane's
+	 * `expectedRecordIds.length` IS the grid's footer total, and a complete+fresh lane is a
+	 * serve-local answer, the grid would both report and believe coverage it does not hold.
+	 */
+	it('refuses to resurrect a prefix that was wiped mid-walk', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 2_000 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const fetcher = catalogServer(products, []);
+		const diagnostics = vi.fn();
+		let reads = 0;
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+			// First read (the continuation) sees the predecessor lane; the re-read at write
+			// time sees nothing, exactly as a Clear & Sync landing mid-walk would leave it.
+			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
+				if (queryKey !== 'products:browse-window:limit=1000') return null;
+				reads += 1;
+				return reads === 1
+					? { complete: true, fresh: true, expectedRecordIds: wooProductIds(1, 1_000) }
+					: null;
+			}),
+		};
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			diagnostics,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=1100:windowed',
+				queryKey: 'products:browse-window:limit=1100',
+				limit: 1_100,
+			})
+		);
+
+		// Only the delta is asserted, and the lane is honestly INCOMPLETE, so the next pass
+		// restarts the window from the top instead of trusting a prefix that is gone.
+		const recorded = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
+			{ records: { id: string }[]; complete: boolean },
+		];
+		expect(recorded[0].records).toHaveLength(100);
+		expect(recorded[0].complete).toBe(false);
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'browse-window.prefix-invalidated' })
+		);
+	});
+
 	it('resolves the id tiebreak across a page seam when the dial splits the window', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),

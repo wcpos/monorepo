@@ -6,10 +6,11 @@ import {
 	parseProductBrowseWindowDescriptor,
 	parseProductBrowseWindowLimit,
 	PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT,
-	PRODUCT_BROWSE_WINDOW_MAX_LIMIT,
+	productBrowseWindowPredecessorQueryKey,
 	productBrowseWindowQueryKey,
 	productBrowseWindowQueryKeyFromDimensions,
 } from './product-browse-window-descriptor';
+import { BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT } from './browse-window-continuation';
 
 import type { ProductBrowseDimensions } from '../require-plane';
 
@@ -85,11 +86,65 @@ describe('product browse-window descriptor', () => {
 	});
 
 	// #909 — the key carries the window the grid actually asked for.
-	it('carries windows past a single Woo page, up to the window ceiling', () => {
+	// #948 — and it keeps carrying it. This test used to pin the OPPOSITE contract
+	// (`limit=1001` → null, `PRODUCT_BROWSE_WINDOW_MAX_LIMIT === 1000`). Paul overturned
+	// that on 2026-08-06: “If a cashier wants to scroll past 200 orders, they better be
+	// allowed to scroll past 200 orders.” The 1,000-row refusal is deliberately flipped —
+	// a window is whatever the grid has scrolled to, and only the runaway backstop refuses.
+	it('carries windows as far as the cashier scrolls, refusing only the runaway backstop', () => {
 		expect(parseProductBrowseWindowLimit('products:browse-window:limit=300')).toBe(300);
-		expect(parseProductBrowseWindowLimit(`products:browse-window:limit=1000`)).toBe(1000);
-		expect(parseProductBrowseWindowLimit('products:browse-window:limit=1001')).toBeNull();
-		expect(PRODUCT_BROWSE_WINDOW_MAX_LIMIT).toBe(1000);
+		expect(parseProductBrowseWindowLimit('products:browse-window:limit=1000')).toBe(1000);
+		expect(parseProductBrowseWindowLimit('products:browse-window:limit=1100')).toBe(1100);
+		expect(parseProductBrowseWindowLimit('products:browse-window:limit=25000')).toBe(25_000);
+		expect(
+			parseProductBrowseWindowLimit(
+				`products:browse-window:limit=${BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT}`
+			)
+		).toBe(BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT);
+		expect(
+			parseProductBrowseWindowLimit(
+				`products:browse-window:limit=${BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT + 1}`
+			)
+		).toBeNull();
+	});
+
+	// #948 — the killer property. Every scroll tick past the old ceiling has to mint a
+	// DISTINCT key; a clamped key is deduped by the scheduler as work already done, which
+	// is exactly how the grid used to dead-end in silence.
+	it('mints a distinct key for every window past the old 1,000-row ceiling', () => {
+		const keys = [1000, 1100, 1200, 4300].map((limit) =>
+			productBrowseWindowQueryKeyFromDimensions({ limit })
+		);
+		expect(keys).toEqual([
+			'products:browse-window:limit=1000',
+			'products:browse-window:limit=1100',
+			'products:browse-window:limit=1200',
+			'products:browse-window:limit=4300',
+		]);
+		expect(new Set(keys).size).toBe(keys.length);
+		expect(keys.every((key) => parseProductBrowseWindowDescriptor(key) !== null)).toBe(true);
+	});
+
+	// #948 — the lane a growing window resumes from.
+	it('names the predecessor window, preserving every other dimension', () => {
+		expect(
+			productBrowseWindowPredecessorQueryKey({ limit: 300, orderby: 'menu_order', order: 'asc' })
+		).toBe('products:browse-window:limit=200');
+		expect(
+			productBrowseWindowPredecessorQueryKey({
+				limit: 1100,
+				orderby: 'price',
+				order: 'desc',
+				category: [2, 7],
+				stock_status: 'instock',
+			})
+		).toBe(
+			'products:browse-window:limit=1000:orderby=price:order=desc:category=2,7:stock_status=instock'
+		);
+		// The first window has nothing to continue from.
+		expect(
+			productBrowseWindowPredecessorQueryKey({ limit: 100, orderby: 'menu_order', order: 'asc' })
+		).toBeNull();
 	});
 
 	// #909 — the key carries the SORT, so a sort change re-seeds a server-sorted window.
@@ -204,7 +259,12 @@ describe('product browse-window descriptor', () => {
 		expect(normalizeProductBrowseWindowLimit(100)).toBe(100);
 		expect(normalizeProductBrowseWindowLimit(101)).toBe(200);
 		expect(normalizeProductBrowseWindowLimit(250)).toBe(300);
-		expect(normalizeProductBrowseWindowLimit(99_999)).toBe(PRODUCT_BROWSE_WINDOW_MAX_LIMIT);
+		// #948: quantized, NOT clamped — 99,999 rows of demand is 100,000 rows of window,
+		// not 1,000.
+		expect(normalizeProductBrowseWindowLimit(99_999)).toBe(100_000);
+		expect(normalizeProductBrowseWindowLimit(Number.MAX_SAFE_INTEGER)).toBe(
+			BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT
+		);
 		expect(normalizeProductBrowseWindowLimit(undefined)).toBe(PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT);
 	});
 });

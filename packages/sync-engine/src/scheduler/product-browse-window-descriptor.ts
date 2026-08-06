@@ -1,14 +1,19 @@
+import {
+	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
+	clampToBrowseWindowBackstop,
+	isBrowseWindowLimit,
+} from './browse-window-continuation';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 
 import type { ProductBrowseDimensions } from '../require-plane';
 
 /**
  * The products BROWSE-WINDOW descriptor (ADR 0027 §2) — the products mirror of the
- * orders open-recent window (orderBrowserSchedulerDescriptor.ts): one bounded result
- * window over the servable set. It exists so a cold grid shows products without a search;
- * it is a seed, not a query engine.
+ * orders open-recent window (orderBrowserSchedulerDescriptor.ts): the result window the
+ * grid is currently showing, expressed as a lane identity.
  *
- * §2, revised (#909): the window is no longer single-sort and no longer single-page.
+ * §2, revised (#909, then #948): the window is no longer single-sort, no longer
+ * single-page, and no longer capped.
  *
  *  - **Sort.** The seed used to serve exactly one sort (menu_order asc) and the UI locally
  *    re-sorted that slice for every other column — which is the WRONG slice of the catalog
@@ -16,15 +21,20 @@ import type { ProductBrowseDimensions } from '../require-plane';
  *    sort): plausible-looking, silently wrong data. The window now carries `orderby`/
  *    `order`, so a non-default sort RE-SEEDS a server-sorted window. Only sorts inside the
  *    supported products `orderby` enum are expressible; the rest fall back to the default
- *    window (the caller maps them — see requirementsForQuery). The window remains bounded
- *    and travels with the sort the grid is actually showing.
+ *    window (the caller maps them — see requirementsForQuery).
  *  - **Size.** The window grows with the grid's limit (infinite scroll) in
- *    {@link PRODUCT_BROWSE_WINDOW_STEP} steps up to {@link PRODUCT_BROWSE_WINDOW_MAX_LIMIT},
- *    quantized so a 10-row scroll tick does not mint a new coverage lane every time.
+ *    {@link PRODUCT_BROWSE_WINDOW_STEP} steps, quantized so a 10-row scroll tick does not
+ *    mint a new coverage lane every time. It does NOT stop. The old
+ *    `PRODUCT_BROWSE_WINDOW_MAX_LIMIT = 1_000` — and the “browse is a seed, not a query
+ *    engine; past this, narrow with search or filters” philosophy behind it — was
+ *    OVERTURNED by Paul on 2026-08-06 (#948): a cashier who scrolls past row 1,000 gets
+ *    row 1,001, as 1.9 did. Growth stays cheap because the fetcher resumes each step from
+ *    the covered prefix instead of re-walking the window (browse-window-continuation.ts);
+ *    the only ceiling left is the runaway backstop
+ *    {@link BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT}.
  *  - **Filters.** The old “filtered browse = local residents only” ruling was overturned
  *    by Paul on 2026-08-04 (wayfinder: reports-date-range-demand-wayfinder). Representable
- *    cashier-applied filters now create wired, WINDOWED demand. The window remains bounded
- *    (G3); fetch-to-completion remains an orders/reports concept.
+ *    cashier-applied filters now create wired, WINDOWED demand.
  *
  * WINDOW SIZE IS NOT WIRE PAGE SIZE (#908). The limit here is a coverage total — how many
  * rows the grid seeds, a UX choice. How many records travel per HTTP request is the
@@ -81,11 +91,6 @@ export const PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT = PRODUCT_BROWSE_WINDOW_LIMIT;
  * 300 …) instead of minting a lane per scroll tick.
  */
 export const PRODUCT_BROWSE_WINDOW_STEP = 100;
-/**
- * Hard ceiling on the seeded window. Browse is a seed, not a query engine — past this,
- * narrow with search or filters rather than keep scrolling.
- */
-export const PRODUCT_BROWSE_WINDOW_MAX_LIMIT = 1_000;
 export const PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX = 'products:browse-window:';
 
 function isDefaultSort(orderby: string, order: string): boolean {
@@ -100,15 +105,22 @@ export function isProductBrowseWindowOrderby(value: unknown): value is ProductBr
 }
 
 /**
- * Round a requested grid limit up to the next window step, clamped to the ceiling.
- * A grid asking for 10 rows still seeds the standard 100-row window.
+ * Round a requested grid limit up to the next window step. A grid asking for 10 rows
+ * still seeds the standard 100-row window; a grid asking for 4,250 gets 4,300.
+ *
+ * There is no product ceiling here any more (#948) — only the runaway backstop, which a
+ * cashier cannot reach by scrolling. Quantizing is what keeps the coverage-lane and
+ * queryKey space small as the window grows: one lane per 100 rows scrolled, not one per
+ * 10-row tick.
  */
 export function normalizeProductBrowseWindowLimit(limit: number | undefined): number {
 	if (limit === undefined || !Number.isFinite(limit) || limit <= 0) {
 		return PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT;
 	}
-	const stepped = Math.ceil(limit / PRODUCT_BROWSE_WINDOW_STEP) * PRODUCT_BROWSE_WINDOW_STEP;
-	return Math.min(Math.max(stepped, PRODUCT_BROWSE_WINDOW_STEP), PRODUCT_BROWSE_WINDOW_MAX_LIMIT);
+	const stepped =
+		Math.ceil(Math.min(limit, BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT) / PRODUCT_BROWSE_WINDOW_STEP) *
+		PRODUCT_BROWSE_WINDOW_STEP;
+	return clampToBrowseWindowBackstop(Math.max(stepped, PRODUCT_BROWSE_WINDOW_STEP));
 }
 
 /** The filter dimensions, in the one order the grammar admits. */
@@ -204,10 +216,11 @@ function parseCanonicalIds(value: string | undefined): number[] | null | undefin
 }
 
 /**
- * Parse a browse-window queryKey. The limit is a positive integer within
- * {@link PRODUCT_BROWSE_WINDOW_MAX_LIMIT}; the sort, when present, must be inside the
- * supported products orderby enum and must not restate the default (one key per window).
- * Returns null when the queryKey is not a supported browse-window descriptor.
+ * Parse a browse-window queryKey. The limit is any positive integer up to the runaway
+ * backstop {@link BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT} — a scrolled-to window of 4,300 rows
+ * is as valid a descriptor as the 100-row seed (#948). The sort, when present, must be
+ * inside the supported products orderby enum and must not restate the default (one key
+ * per window). Returns null when the queryKey is not a supported browse-window descriptor.
  */
 export function parseProductBrowseWindowDescriptor(
 	queryKey: string
@@ -215,7 +228,7 @@ export function parseProductBrowseWindowDescriptor(
 	const match = QUERY_KEY_PATTERN.exec(queryKey);
 	if (!match) return null;
 	const limit = Number(match[1]);
-	if (!Number.isSafeInteger(limit) || limit <= 0 || limit > PRODUCT_BROWSE_WINDOW_MAX_LIMIT) {
+	if (!isBrowseWindowLimit(limit)) {
 		return null;
 	}
 	const orderby = match[2] ?? PRODUCT_BROWSE_WINDOW_ORDERBY;
@@ -241,6 +254,28 @@ export function parseProductBrowseWindowDescriptor(
 /** The window's limit, or null when the queryKey is not a browse-window descriptor. */
 export function parseProductBrowseWindowLimit(queryKey: string): number | null {
 	return parseProductBrowseWindowDescriptor(queryKey)?.limit ?? null;
+}
+
+/**
+ * The lane identity of the window ONE GROWTH STEP smaller than this one — the lane the
+ * previous scroll tick wrote, and therefore the prefix a growing window resumes from
+ * (#948; see browse-window-continuation.ts). Null for the first window, which has no
+ * predecessor to continue.
+ *
+ * Every dimension except the limit is preserved verbatim by re-encoding through
+ * {@link productBrowseWindowQueryKey}, so a filtered or non-default-sorted window
+ * continues from ITS OWN predecessor and never from the unfiltered one.
+ */
+export function productBrowseWindowPredecessorQueryKey(
+	descriptor: ProductBrowseWindowDescriptor
+): string | null {
+	const previous = descriptor.limit - PRODUCT_BROWSE_WINDOW_STEP;
+	if (previous < PRODUCT_BROWSE_WINDOW_STEP) return null;
+	return productBrowseWindowQueryKey(
+		previous,
+		{ orderby: descriptor.orderby, order: descriptor.order },
+		descriptor
+	);
 }
 
 export { WOO_REST_MAX_PER_PAGE };

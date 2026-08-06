@@ -15,9 +15,12 @@
  */
 
 import {
+	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
+	isBrowseWindowLimit,
+} from './browse-window-continuation';
+import {
 	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT,
-	PRODUCT_BROWSE_WINDOW_MAX_LIMIT,
 	PRODUCT_BROWSE_WINDOW_ORDER,
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
 	productBrowseWindowFilterPart,
@@ -92,16 +95,18 @@ export type SeedProductBrowseWindowSchedulerTaskInput = ProductBrowseWindowFilte
  * the filtered demand that asked for it can never be satisfied. Each filter set therefore
  * gets its own task id, requirementId and coverage lane.
  *
- * The limit is a WINDOW, capped at PRODUCT_BROWSE_WINDOW_MAX_LIMIT — it may exceed a single
- * Woo page, because the fetcher walks the window in Performance-dial-sized pages (#908).
+ * The limit is a WINDOW, not a request size: it may exceed a single Woo page, because the
+ * fetcher walks the window in Performance-dial-sized pages (#908), and it has no product
+ * ceiling (#948) — only the runaway backstop. Growth stays cheap because the fetcher
+ * resumes each window from the covered prefix (browse-window-continuation.ts).
  */
 export async function seedProductBrowseWindowSchedulerTask(
 	input: SeedProductBrowseWindowSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	const limit = input.limit ?? PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT;
-	if (!Number.isSafeInteger(limit) || limit <= 0 || limit > PRODUCT_BROWSE_WINDOW_MAX_LIMIT) {
+	if (!isBrowseWindowLimit(limit)) {
 		throw new Error(
-			`Product browse-window scheduler limit must be a positive integer within the window ceiling (${PRODUCT_BROWSE_WINDOW_MAX_LIMIT})`
+			`Product browse-window scheduler limit must be a positive integer within the runaway backstop (${BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT})`
 		);
 	}
 	const orderby = input.orderby ?? PRODUCT_BROWSE_WINDOW_ORDERBY;

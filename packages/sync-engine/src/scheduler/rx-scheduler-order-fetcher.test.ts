@@ -1257,6 +1257,163 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 	});
 
+	// -------------------------------------------------------------------------
+	// #957 — windows page indefinitely, and grow by their DELTA
+	// -------------------------------------------------------------------------
+
+	const orderPage = (from: number, count: number) =>
+		Array.from({ length: count }, (_, index) => ({
+			id: from - index,
+			status: 'processing',
+			date_modified_gmt: '2026-05-20T10:12:00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(from - index) }],
+		}));
+
+	function coverageWithLanes(lanes: Record<string, { complete: boolean; ids: string[] }>) {
+		return {
+			recordQueryResult: vi.fn(async () => undefined),
+			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
+				const lane = lanes[queryKey];
+				return lane ? { complete: lane.complete, fresh: true, expectedRecordIds: lane.ids } : null;
+			}),
+		};
+	}
+
+	/**
+	 * #957 — the ruling, pinned at the wire.
+	 *
+	 * `extendLimit` from 200 to 300 used to be a no-op: the encoder clamped both to
+	 * `:limit=200`, the scheduler saw a key it had already run, and the grid dead-ended.
+	 * Now 300 is its own descriptor — and the fetch is the DELTA: page 3, one hundred
+	 * orders, not a re-download of the first two hundred.
+	 */
+	it('extends 200 → 300 as a new lane and fetches only the uncovered delta', async () => {
+		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const coverageRepository = coverageWithLanes({
+			'orders:browser:status=processing:search=:limit=200': {
+				complete: false,
+				ids: Array.from({ length: 200 }, (_, index) => `woo-order:${1_000 - index}`),
+			},
+		});
+		const pagesSeen: number[] = [];
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			const params = new URL(String(request)).searchParams;
+			const page = Number(params.get('page'));
+			pagesSeen.push(page);
+			return response(orderPage(1_000 - (page - 1) * 100, 100));
+		});
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 120_000,
+			nowMs: () => 7_500,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			orderTask({
+				id: 'orders:browser:processing-300:windowed',
+				requirementId: 'orders.browser.processing.300',
+				queryKey: 'orders:browser:status=processing:search=:limit=300',
+				limit: 300,
+				mode: 'windowed',
+			})
+		);
+
+		// A REQUEST IS ISSUED (the dedupe collapse is gone) and it is page 3 — the delta.
+		expect(pagesSeen).toEqual([3]);
+		expect(result).toMatchObject({ documentCount: 100, requestCount: 1, completed: true });
+		// The lane describes the whole 300-row window: prefix ∪ delta.
+		const [recorded] = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
+			{ queryKey: string; records: { id: string }[] },
+		];
+		expect(recorded.queryKey).toBe('orders:browser:status=processing:search=:limit=300');
+		expect(recorded.records).toHaveLength(300);
+		expect(recorded.records[0]).toEqual({ id: 'woo-order:1000' });
+		expect(recorded.records[299]).toEqual({ id: 'woo-order:701' });
+	});
+
+	// #957 — the cap applied to every dimension equally, so the fix must too.
+	it('extends a customer-scoped window past 200 and continues from its own lane', async () => {
+		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const coverageRepository = coverageWithLanes({
+			'orders:browser:status=all:customer=42:search=:limit=200': {
+				complete: false,
+				ids: Array.from({ length: 200 }, (_, index) => `woo-order:${1_000 - index}`),
+			},
+		});
+		const urlsSeen: string[] = [];
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			urlsSeen.push(String(request));
+			const page = Number(new URL(String(request)).searchParams.get('page'));
+			return response(orderPage(1_000 - (page - 1) * 100, 100));
+		});
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			nowMs: () => 7_500,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+
+		await schedulerFetcher(
+			orderTask({
+				id: 'orders:browser:customer-42-300:windowed',
+				queryKey: 'orders:browser:status=all:customer=42:search=:limit=300',
+				limit: 300,
+				mode: 'windowed',
+			})
+		);
+
+		expect(urlsSeen).toHaveLength(1);
+		expect(urlsSeen[0]).toContain('customer=42');
+		expect(urlsSeen[0]).toContain('page=3');
+	});
+
+	// #957 — a fresh lane already holding the whole window costs nothing.
+	it('serves a fresh, filled orders window from coverage without touching the wire', async () => {
+		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const coverageRepository = coverageWithLanes({
+			'orders:browser:status=processing:search=:limit=300': {
+				complete: false,
+				ids: Array.from({ length: 300 }, (_, index) => `woo-order:${1_000 - index}`),
+			},
+		});
+		const fetcher = vi.fn(async () => response([]));
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+
+		const result = await schedulerFetcher(
+			orderTask({
+				id: 'orders:browser:processing-300:windowed',
+				queryKey: 'orders:browser:status=processing:search=:limit=300',
+				limit: 300,
+				mode: 'windowed',
+			})
+		);
+
+		expect(fetcher).not.toHaveBeenCalled();
+		expect(coverageRepository.recordQueryResult).not.toHaveBeenCalled();
+		expect(result).toMatchObject({ documentCount: 0, requestCount: 0 });
+	});
+
 	it('records browser order query coverage across fetched Woo REST pages', async () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
