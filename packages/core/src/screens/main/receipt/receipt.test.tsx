@@ -331,3 +331,45 @@ describe('Receipt PDF download action', () => {
 		);
 	});
 });
+
+describe('Receipt email action', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockSuspenseValue = mockOrder;
+		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+	});
+
+	const emailButton = () => screen.getByTestId('receipt-email-button') as HTMLButtonElement;
+
+	it('opens the email dialog when the store is reachable', () => {
+		render(<Receipt resource={{} as never} />);
+
+		expect(emailButton().disabled).toBe(false);
+		expect(screen.getByText('Email form')).toBeTruthy();
+	});
+
+	it('still opens the email dialog when offline — queuing IS the offline path (#165)', () => {
+		// The 2026-03-06 stopgap (ba8729a77) rendered a disabled button here
+		// instead of the dialog. That predates the durable queue: it left a
+		// cashier finishing a sale offline with no way to send the receipt at
+		// all, which is the exact scenario #165 exists to fix. EmailForm owns
+		// the offline behaviour now — notice, label, and skip-the-round-trip
+		// enqueue — so the entry point must reach it.
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, isOffline: true });
+
+		render(<Receipt resource={{} as never} />);
+
+		expect(emailButton().disabled).toBe(false);
+		expect(screen.getByText('Email form')).toBeTruthy();
+	});
+
+	it('keeps the PDF download disabled offline — that one still needs the server', () => {
+		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, isOffline: true });
+
+		render(<Receipt resource={{} as never} />);
+
+		expect((screen.getByTestId('receipt-download-pdf-button') as HTMLButtonElement).disabled).toBe(
+			true
+		);
+	});
+});
