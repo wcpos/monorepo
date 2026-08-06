@@ -74,16 +74,43 @@ export const useOrderTotals = () => {
 	 * source of truth, so re-asserting the till's number here would push it back
 	 * over the server's, and provoke the identical divergence on the next drain.
 	 *
-	 * Held per order, so a divergence on one open tab never freezes another.
-	 * Released when the cashier dismisses the alert or a later clean ack retires
-	 * it — at which point the cart is free to converge again.
+	 * The suppression is LATCHED ON THE ARITHMETIC, not on the banner. Keying it
+	 * to `divergence` alone made dismissing the alert — or any later clean save
+	 * retiring it — flip the guard off while the cart still computed the same
+	 * overruled numbers, and the very next effect run pushed them straight back:
+	 * the loop again, one click later. So the overruled totals are remembered,
+	 * and stay suppressed until the cart inputs actually change. A real edit
+	 * produces different arithmetic, clears the latch, and converges as normal.
+	 *
+	 * Latched per order, so a divergence on one open tab never freezes another.
 	 */
 	const { divergence } = useOrderMoneyDivergence(
 		(currentOrder as unknown as { uuid?: string } | undefined)?.uuid
 	);
+	const overruledTotals = React.useRef<string | null>(null);
 
 	useDeepCompareEffect(() => {
-		if (divergence) return;
+		const newTotals = pick(totals, [
+			'discount_tax',
+			'discount_total',
+			'shipping_tax',
+			'shipping_total',
+			'cart_tax',
+			'total_tax',
+			'total',
+			'tax_lines',
+		]);
+		const computed = JSON.stringify(newTotals);
+
+		if (divergence) {
+			overruledTotals.current = computed;
+			return;
+		}
+		// Same arithmetic the server already overruled — the banner's visibility
+		// says nothing about whether re-pushing it is safe.
+		if (overruledTotals.current === computed) return;
+		overruledTotals.current = null;
+
 		const currentTotals = pick(currentOrder, [
 			'discount_tax',
 			'discount_total',
@@ -95,18 +122,7 @@ export const useOrderTotals = () => {
 			'tax_lines',
 		]);
 
-		const newTotals = pick(totals, [
-			'discount_tax',
-			'discount_total',
-			'shipping_tax',
-			'shipping_total',
-			'cart_tax',
-			'total_tax',
-			'total',
-			'tax_lines',
-		]);
-
-		if (JSON.stringify(currentTotals) === JSON.stringify(newTotals)) {
+		if (JSON.stringify(currentTotals) === computed) {
 			return;
 		}
 

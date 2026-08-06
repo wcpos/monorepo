@@ -77,6 +77,10 @@ jest.mock('./components/payment-webview', () => ({
 	},
 }));
 jest.mock('./components/title', () => ({ CheckoutTitle: () => null }));
+// The R1 banner has its own suite (cart/totals-changed-banner.test.tsx); here it
+// is only a child, and rendering it for real drags @wcpos/components/icon-button
+// → expo-haptics into a suite that transforms neither.
+jest.mock('../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
 
 jest.mock('@wcpos/components/modal', () => ({
 	Modal: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,

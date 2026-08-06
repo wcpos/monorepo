@@ -13,8 +13,7 @@ import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
 /**
  * "Your store changed this order's totals" — the cashier-facing half of R1.
  *
- * Placed inline, directly above the totals block, and NOT as a toast or a
- * modal. Three deliberate choices:
+ * Rendered INLINE, and NOT as a toast or a modal. Three deliberate choices:
  *
  *  - INLINE, not a toast. A toast auto-dismisses while the cashier is looking
  *    at the customer, and the one thing this alert must do is still be there
@@ -28,10 +27,19 @@ import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
  *
  * It renders nothing on the overwhelmingly common path: a 2dp ack of the same
  * money is not divergence (#946), so this is silent on ordinary sales.
+ *
+ * `orderId` is explicit rather than read from the current-order context because
+ * the banner has TWO mounts: the cart, and the checkout modal — which covers
+ * the cart at exactly the moment the ruling cares about, "before handing over
+ * goods", and which is handed its order directly.
  */
-export function TotalsChangedBanner() {
-	const { currentOrder } = useCurrentOrder();
-	const orderId = (currentOrder as unknown as { uuid?: string } | undefined)?.uuid;
+export function TotalsChangedBanner({
+	orderId,
+	testID = 'order-totals-changed-banner',
+}: {
+	orderId: string | undefined;
+	testID?: string;
+}) {
 	const { divergence, dismiss } = useOrderMoneyDivergence(orderId);
 	const t = useT();
 
@@ -41,16 +49,13 @@ export function TotalsChangedBanner() {
 	const otherCount = divergence.fields.length - (totalChange ? 1 : 0);
 
 	return (
-		<View
-			testID="order-totals-changed-banner"
-			className="border-attention/50 bg-attention/10 m-2 rounded-md border p-2"
-		>
+		<View testID={testID} className="border-attention/50 bg-attention/10 m-2 rounded-md border p-2">
 			<HStack className="items-start gap-2">
 				<VStack className="flex-1 gap-1">
 					<Text className="text-sm font-medium">{t('pos_cart.totals_changed_title')}</Text>
 					<Text className="text-muted-foreground text-sm">{t('pos_cart.totals_changed_body')}</Text>
 					{totalChange ? (
-						<Text testID="order-totals-changed-total" className="text-sm font-medium">
+						<Text testID={`${testID}-total`} className="text-sm font-medium">
 							{t('pos_cart.totals_changed_total', {
 								before: totalChange.expected,
 								after: totalChange.got,
@@ -58,15 +63,13 @@ export function TotalsChangedBanner() {
 						</Text>
 					) : null}
 					{otherCount > 0 ? (
-						<Text testID="order-totals-changed-other" className="text-muted-foreground text-xs">
-							{t('pos_cart.totals_changed_other_amounts', {
-								count: otherCount,
-							})}
+						<Text testID={`${testID}-other`} className="text-muted-foreground text-xs">
+							{t('pos_cart.totals_changed_other_amounts', { count: otherCount })}
 						</Text>
 					) : null}
 				</VStack>
 				<IconButton
-					testID="order-totals-changed-dismiss"
+					testID={`${testID}-dismiss`}
 					name="xmark"
 					size="sm"
 					accessibilityLabel={t('pos_cart.totals_changed_dismiss')}
@@ -74,5 +77,15 @@ export function TotalsChangedBanner() {
 				/>
 			</HStack>
 		</View>
+	);
+}
+
+/** The cart mount: the current order, read from context. */
+export function CartTotalsChangedBanner() {
+	const { currentOrder } = useCurrentOrder();
+	return (
+		<TotalsChangedBanner
+			orderId={(currentOrder as unknown as { uuid?: string } | undefined)?.uuid}
+		/>
 	);
 }

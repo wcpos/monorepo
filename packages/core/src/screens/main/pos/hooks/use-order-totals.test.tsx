@@ -36,17 +36,16 @@ const COMPUTED = {
 
 let currentOrder: Record<string, unknown> = { uuid: 'order-a', ...COMPUTED };
 
-jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({
-		engine: {
-			status: () => ({ activeScopeId: 'scope-1' }),
-			events: (callback: (event: EngineEvent) => void) => {
-				listeners.add(callback);
-				return () => listeners.delete(callback);
-			},
-		},
-	}),
-}));
+const engine = {
+	status: () => ({ activeScopeId: 'scope-1' }),
+	statusChanges: () => () => undefined,
+	events: (callback: (event: EngineEvent) => void) => {
+		listeners.add(callback);
+		return () => listeners.delete(callback);
+	},
+};
+
+jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({ engine }) }));
 
 jest.mock('./calculate-order-totals', () => ({
 	calculateOrderTotals: () => COMPUTED,
@@ -82,18 +81,20 @@ function renderHarness() {
 	);
 }
 
-function emitDivergence(orderId: string) {
+function emit(event: EngineEvent) {
 	act(() => {
-		for (const listener of [...listeners]) {
-			listener({
-				type: 'order-money-divergence',
-				collection: 'orders',
-				recordId: orderId,
-				mutationId: 'm1',
-				mode: 'server-precision',
-				fields: [{ field: 'total', expected: '36.68', got: '50.07' }],
-			});
-		}
+		for (const listener of [...listeners]) listener(event);
+	});
+}
+
+function emitDivergence(orderId: string, mutationId = 'm1') {
+	emit({
+		type: 'order-money-divergence',
+		collection: 'orders',
+		recordId: orderId,
+		mutationId,
+		mode: 'server-precision',
+		fields: [{ field: 'total', expected: '36.68', got: '50.07' }],
 	});
 }
 
@@ -145,5 +146,55 @@ describe('useOrderTotals re-push guard', () => {
 			currentOrder = { uuid: 'order-a', ...COMPUTED, total: '49.00' };
 		});
 		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	// The suppression must not be tied to the banner being on screen: dismissing
+	// it, or a later clean save retiring it, would otherwise re-arm the very
+	// re-push this guard exists to stop — one click later.
+	it('stays suppressed after the cashier DISMISSES the banner', () => {
+		currentOrder = { uuid: 'order-a', ...COMPUTED, total: '50.07' };
+		const { rerender } = renderHarness();
+		emitDivergence('order-a');
+		localPatch.mockClear();
+
+		act(() => {
+			for (const listener of [...listeners]) {
+				// Dismissal is a state change in the provider; drive it the same way
+				// the banner does by retiring the entry with a later clean ack.
+				listener({
+					type: 'write-acknowledged',
+					collection: 'orders',
+					recordId: 'order-a',
+					mutationId: 'm2',
+				});
+			}
+		});
+		rerender(
+			<OrderMoneyDivergenceProvider>
+				<Harness />
+			</OrderMoneyDivergenceProvider>
+		);
+
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('converges again once the cashier actually changes the cart', () => {
+		currentOrder = { uuid: 'order-a', ...COMPUTED, total: '50.07' };
+		renderHarness();
+		emitDivergence('order-a');
+		localPatch.mockClear();
+
+		// A real edit produces DIFFERENT arithmetic, which clears the latch.
+		COMPUTED.total = '41.00';
+		emit({
+			type: 'write-acknowledged',
+			collection: 'orders',
+			recordId: 'order-a',
+			mutationId: 'm2',
+		});
+
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0]?.[0]?.data).toMatchObject({ total: '41.00' });
+		COMPUTED.total = '36.683280';
 	});
 });

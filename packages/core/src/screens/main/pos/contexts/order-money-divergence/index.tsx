@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
 
+import { useEngineStatus } from '../../../hooks/use-engine-monitor';
+
 /**
  * The save-time money mirror, held for the cashier (R1).
  *
@@ -57,37 +59,34 @@ type DivergenceEvent = {
 	fields?: OrderMoneyDivergenceField[];
 };
 
-type ScopedState = {
-	/** The store scope the held divergences belong to. */
-	scopeId: string | null;
-	byOrderId: Record<string, OrderMoneyDivergence>;
-};
-
-const NOTHING_HELD: Record<string, OrderMoneyDivergence> = {};
-
 /** Write outcomes that prove the server ACCEPTED a later write for the record. */
 const CLEAN_ACK_EVENTS = new Set(['write-acknowledged', 'write-ack-rematerialized']);
 
-export function OrderMoneyDivergenceProvider({ children }: { children: React.ReactNode }) {
-	const { engine } = useQueryRuntime();
-	// Held divergences carry the SCOPE they were observed on, not the engine: a
-	// same-site store switch deliberately KEEPS the engine instance, so keying on
-	// engine identity would carry one store's alerts into the next. The scope is
-	// derived at read time rather than cleared by a setState inside an effect —
-	// which the React compiler rightly rejects as a cascading render, and which
-	// loops outright if the engine reference is ever unstable.
-	const activeScopeId = engine.status().activeScopeId;
-	const [state, setState] = React.useState<ScopedState>(() => ({
-		scopeId: activeScopeId,
-		byOrderId: {},
-	}));
+/**
+ * The retained store for ONE store scope.
+ *
+ * Scope isolation is a REMOUNT, not a filter. Hiding a foreign scope's entries
+ * behind a read-time check leaves them sitting in state, so a cashier who moves
+ * store A → B → A watches A's stale banners come back from the dead. Remounting
+ * on the scope key throws the state away for real and rebinds the subscription
+ * — and does so without a setState in render or in an effect, both of which the
+ * React compiler rejects (and the effect form loops outright whenever the
+ * engine reference is not stable).
+ */
+function ScopedOrderMoneyDivergenceProvider({
+	engine,
+	children,
+}: {
+	engine: ReturnType<typeof useQueryRuntime>['engine'];
+	children: React.ReactNode;
+}) {
+	const [byOrderId, setByOrderId] = React.useState<Record<string, OrderMoneyDivergence>>({});
 
 	React.useEffect(() => {
 		return engine.events((event) => {
 			const message = event as DivergenceEvent;
 			const orderId = message.recordId;
 			if (typeof orderId !== 'string' || orderId === '') return;
-			const scopeId = engine.status().activeScopeId;
 
 			if (message.type === 'order-money-divergence') {
 				const held: OrderMoneyDivergence = {
@@ -95,16 +94,9 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 					mutationId: typeof message.mutationId === 'string' ? message.mutationId : '',
 					fields: message.fields ?? [],
 				};
-				setState((current) => ({
-					scopeId,
-					// Last write wins: a second save of the same order re-states the
-					// mirror, and the newest comparison is the one worth reviewing.
-					// Anything held from another scope is dropped, not carried over.
-					byOrderId:
-						current.scopeId === scopeId
-							? { ...current.byOrderId, [orderId]: held }
-							: { [orderId]: held },
-				}));
+				// Last write wins: a second save of the same order re-states the
+				// mirror, and the newest comparison is the one worth reviewing.
+				setByOrderId((current) => ({ ...current, [orderId]: held }));
 				return;
 			}
 
@@ -116,24 +108,22 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 			// This is also the store's only automatic eviction path, so it cannot
 			// grow without bound across a shift.
 			if (message.collection !== 'orders' || !CLEAN_ACK_EVENTS.has(message.type)) return;
-			setState((current) => {
-				const held = current.byOrderId[orderId];
+			setByOrderId((current) => {
+				const held = current[orderId];
 				if (!held || held.mutationId === message.mutationId) return current;
-				const { [orderId]: _retired, ...rest } = current.byOrderId;
-				return { scopeId: current.scopeId, byOrderId: rest };
+				const { [orderId]: _retired, ...rest } = current;
+				return rest;
 			});
 		});
 	}, [engine]);
 
 	const dismiss = React.useCallback((orderId: string) => {
-		setState((current) => {
-			if (!(orderId in current.byOrderId)) return current;
-			const { [orderId]: _dismissed, ...rest } = current.byOrderId;
-			return { scopeId: current.scopeId, byOrderId: rest };
+		setByOrderId((current) => {
+			if (!(orderId in current)) return current;
+			const { [orderId]: _dismissed, ...rest } = current;
+			return rest;
 		});
 	}, []);
-
-	const byOrderId = state.scopeId === activeScopeId ? state.byOrderId : NOTHING_HELD;
 
 	const value = React.useMemo<DivergenceStore>(
 		() => ({ byOrderId, dismiss }),
@@ -144,6 +134,22 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 		<OrderMoneyDivergenceContext.Provider value={value}>
 			{children}
 		</OrderMoneyDivergenceContext.Provider>
+	);
+}
+
+export function OrderMoneyDivergenceProvider({ children }: { children: React.ReactNode }) {
+	const { engine } = useQueryRuntime();
+	// A same-site store switch deliberately KEEPS the engine instance and only
+	// moves the active scope, so the engine reference is not what changes — the
+	// scope is, and it has to be read REACTIVELY. A bare `engine.status()` during
+	// render is only ever as fresh as the next re-render, which nothing here
+	// guarantees.
+	const { activeScopeId } = useEngineStatus();
+
+	return (
+		<ScopedOrderMoneyDivergenceProvider key={activeScopeId ?? 'no-scope'} engine={engine}>
+			{children}
+		</ScopedOrderMoneyDivergenceProvider>
 	);
 }
 

@@ -71,14 +71,18 @@ export default function POSLayout() {
 	 */
 	const resource = useOpenOrdersResource(cashierID, storeID);
 
+	// The divergence store sits OUTSIDE the Suspense boundary, deliberately (R1).
+	// A save-time money divergence can be acked for an order in a background tab,
+	// or while the cart screen is unmounted on a small layout — so the
+	// subscription has to outlive them, and the store is keyed by order uuid so
+	// the alert surfaces on the tab it belongs to. It must also outlive the
+	// BOUNDARY itself: while CurrentOrderProvider suspends on its open-orders
+	// resource React never commits effects inside that boundary, and
+	// `engine.events()` does not replay, so a drain landing during the initial
+	// load would be missed for good.
 	return (
-		<Suspense>
-			{/* Above CurrentOrderProvider on purpose: a save-time money divergence (R1)
-			    can be acked for an order in a background tab, or while the cart screen
-			    itself is unmounted on a small layout. The subscription has to outlive
-			    both, and the store is keyed by order uuid so the alert surfaces on the
-			    tab it belongs to. */}
-			<OrderMoneyDivergenceProvider>
+		<OrderMoneyDivergenceProvider>
+			<Suspense>
 				<CurrentOrderProvider resource={resource} currentOrderUUID={orderId}>
 					<ErrorBoundary>
 						<Suspense>
@@ -86,8 +90,8 @@ export default function POSLayout() {
 						</Suspense>
 					</ErrorBoundary>
 				</CurrentOrderProvider>
-			</OrderMoneyDivergenceProvider>
-		</Suspense>
+			</Suspense>
+		</OrderMoneyDivergenceProvider>
 	);
 }
 

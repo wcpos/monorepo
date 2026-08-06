@@ -9,11 +9,12 @@ import {
 	OrderMoneyDivergenceProvider,
 	useOrderMoneyDivergence,
 } from '../contexts/order-money-divergence';
-import { TotalsChangedBanner } from './totals-changed-banner';
+import { CartTotalsChangedBanner, TotalsChangedBanner } from './totals-changed-banner';
 
 type EngineEvent = Record<string, unknown> & { type: string };
 
 const listeners = new Set<(event: EngineEvent) => void>();
+const statusListeners = new Set<(status: { activeScopeId: string }) => void>();
 let activeScopeId = 'scope-1';
 let currentOrderUuid: string | undefined = 'order-a';
 
@@ -23,10 +24,22 @@ function emit(event: EngineEvent) {
 	});
 }
 
+/** Move the ACTIVE SCOPE the way a same-site store switch does. */
+function switchScope(next: string) {
+	activeScopeId = next;
+	act(() => {
+		for (const listener of [...statusListeners]) listener({ activeScopeId: next });
+	});
+}
+
 // Mirrors the real engine: a SAME-SITE store switch keeps this instance and only
 // changes the active scope, which is why the provider must key on the scope.
 const engine = {
 	status: () => ({ activeScopeId }),
+	statusChanges: (callback: (status: { activeScopeId: string }) => void) => {
+		statusListeners.add(callback);
+		return () => statusListeners.delete(callback);
+	},
 	events: (callback: (event: EngineEvent) => void) => {
 		listeners.add(callback);
 		return () => listeners.delete(callback);
@@ -89,13 +102,14 @@ function acknowledged(recordId: string, mutationId: string) {
 function renderBanner() {
 	return render(
 		<OrderMoneyDivergenceProvider>
-			<TotalsChangedBanner />
+			<CartTotalsChangedBanner />
 		</OrderMoneyDivergenceProvider>
 	);
 }
 
 beforeEach(() => {
 	listeners.clear();
+	statusListeners.clear();
 	activeScopeId = 'scope-1';
 	currentOrderUuid = 'order-a';
 });
@@ -113,10 +127,10 @@ describe('TotalsChangedBanner', () => {
 		expect(screen.getByTestId('order-totals-changed-banner').textContent).toContain(
 			"Your store changed this order's totals"
 		);
-		expect(screen.getByTestId('order-totals-changed-total').textContent).toBe(
+		expect(screen.getByTestId('order-totals-changed-banner-total').textContent).toBe(
 			'Total: 36.68 → 50.07'
 		);
-		expect(screen.queryByTestId('order-totals-changed-other')).toBeNull();
+		expect(screen.queryByTestId('order-totals-changed-banner-other')).toBeNull();
 	});
 
 	it('counts the other amounts that moved without listing payload paths at a cashier', () => {
@@ -129,7 +143,7 @@ describe('TotalsChangedBanner', () => {
 			])
 		);
 
-		expect(screen.getByTestId('order-totals-changed-other').textContent).toBe(
+		expect(screen.getByTestId('order-totals-changed-banner-other').textContent).toBe(
 			'2 other amounts also changed'
 		);
 	});
@@ -139,8 +153,8 @@ describe('TotalsChangedBanner', () => {
 		emit(divergence('order-a', [{ field: 'total_tax', expected: '6.71', got: '11.10' }]));
 
 		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
-		expect(screen.queryByTestId('order-totals-changed-total')).toBeNull();
-		expect(screen.getByTestId('order-totals-changed-other').textContent).toBe(
+		expect(screen.queryByTestId('order-totals-changed-banner-total')).toBeNull();
+		expect(screen.getByTestId('order-totals-changed-banner-other').textContent).toBe(
 			'1 other amount also changed'
 		);
 	});
@@ -149,7 +163,7 @@ describe('TotalsChangedBanner', () => {
 		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
 
-		fireEvent.click(screen.getByTestId('order-totals-changed-dismiss'));
+		fireEvent.click(screen.getByTestId('order-totals-changed-banner-dismiss'));
 		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
 	});
 
@@ -179,11 +193,11 @@ describe('multi-tab scoping', () => {
 		currentOrderUuid = 'order-b';
 		rerender(
 			<OrderMoneyDivergenceProvider>
-				<TotalsChangedBanner />
+				<CartTotalsChangedBanner />
 			</OrderMoneyDivergenceProvider>
 		);
 
-		expect(screen.getByTestId('order-totals-changed-total').textContent).toBe(
+		expect(screen.getByTestId('order-totals-changed-banner-total').textContent).toBe(
 			'Total: 10.00 → 12.00'
 		);
 	});
@@ -195,17 +209,17 @@ describe('multi-tab scoping', () => {
 		}
 		const { rerender } = render(
 			<OrderMoneyDivergenceProvider>
-				<TotalsChangedBanner />
+				<CartTotalsChangedBanner />
 				<Probe />
 			</OrderMoneyDivergenceProvider>
 		);
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		emit(divergence('order-b', [{ field: 'total', expected: '3.00', got: '4.00' }]));
 
-		fireEvent.click(screen.getByTestId('order-totals-changed-dismiss'));
+		fireEvent.click(screen.getByTestId('order-totals-changed-banner-dismiss'));
 		rerender(
 			<OrderMoneyDivergenceProvider>
-				<TotalsChangedBanner />
+				<CartTotalsChangedBanner />
 				<Probe />
 			</OrderMoneyDivergenceProvider>
 		);
@@ -228,7 +242,9 @@ describe('lifecycle', () => {
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		emit(divergence('order-a', [{ field: 'total', expected: '2.00', got: '3.00' }]));
 
-		expect(screen.getByTestId('order-totals-changed-total').textContent).toBe('Total: 2.00 → 3.00');
+		expect(screen.getByTestId('order-totals-changed-banner-total').textContent).toBe(
+			'Total: 2.00 → 3.00'
+		);
 	});
 
 	it('retires the alert when a LATER save of the same order comes back clean', () => {
@@ -254,16 +270,23 @@ describe('lifecycle', () => {
 		// A SAME-SITE store switch keeps the engine instance and only moves the
 		// scope, so keying on engine identity would carry one store's alerts into
 		// the next.
-		const { rerender } = renderBanner();
+		renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
 
-		activeScopeId = 'scope-2';
-		rerender(
-			<OrderMoneyDivergenceProvider>
-				<TotalsChangedBanner />
-			</OrderMoneyDivergenceProvider>
-		);
+		switchScope('scope-2');
+		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
+	});
+
+	it('does not resurrect them when the cashier switches BACK', () => {
+		// Merely hiding a foreign scope's entries behind a read-time filter leaves
+		// them in state: store A → B → A and the dead banner walks again. The
+		// scope key has to throw the state away, not mask it.
+		renderBanner();
+		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
+
+		switchScope('scope-2');
+		switchScope('scope-1');
 
 		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
 	});
@@ -283,6 +306,50 @@ describe('lifecycle', () => {
 			recordId: 'order-a',
 		});
 		emit({ type: 'lane-finish', lane: 'write-drain' });
+		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
+	});
+});
+
+describe('the checkout mount', () => {
+	// The Pay button's own save is usually the write that diverges, and it opens
+	// a full-height modal over the cart the instant the ack lands. Without a
+	// mount inside that modal the cashier can take payment having never seen it —
+	// the one moment the ruling names, "before goods change hands".
+	function renderCheckout(orderId: string) {
+		return render(
+			<OrderMoneyDivergenceProvider>
+				<CartTotalsChangedBanner />
+				<TotalsChangedBanner orderId={orderId} testID="checkout-totals-changed-banner" />
+			</OrderMoneyDivergenceProvider>
+		);
+	}
+
+	it('shows the held divergence inside checkout, under its own testID', () => {
+		renderCheckout('order-a');
+		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
+
+		expect(screen.getByTestId('checkout-totals-changed-banner')).toBeTruthy();
+		expect(screen.getByTestId('checkout-totals-changed-banner-total').textContent).toBe(
+			'Total: 36.68 → 50.07'
+		);
+		// Both mounts are live at once (the cart sits behind the modal), so their
+		// selectors must not collide for E2E.
+		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
+	});
+
+	it('is silent in checkout for an order that did not diverge', () => {
+		renderCheckout('order-a');
+		emit(divergence('order-b', [{ field: 'total', expected: '1.00', got: '2.00' }]));
+		expect(screen.queryByTestId('checkout-totals-changed-banner')).toBeNull();
+	});
+
+	it('dismisses from checkout without leaving the cart copy behind', () => {
+		renderCheckout('order-a');
+		emit(divergence('order-a', [{ field: 'total', expected: '36.68', got: '50.07' }]));
+
+		fireEvent.click(screen.getByTestId('checkout-totals-changed-banner-dismiss'));
+
+		expect(screen.queryByTestId('checkout-totals-changed-banner')).toBeNull();
 		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
 	});
 });
