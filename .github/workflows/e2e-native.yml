@@ -132,10 +132,12 @@ jobs:
         run: |
           curl -fsSL -o /tmp/maestro.zip \
             https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip
+          echo "${MAESTRO_SHA256}  /tmp/maestro.zip" | shasum -a 256 -c -
           unzip -q /tmp/maestro.zip -d "$HOME/.maestro-cli"
           echo "$HOME/.maestro-cli/maestro/bin" >> "$GITHUB_PATH"
         env:
           MAESTRO_VERSION: 2.6.1
+          MAESTRO_SHA256: 3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b
 
       - name: 🔓 Enable KVM
         run: |
@@ -196,10 +198,12 @@ jobs:
         run: |
           curl -fsSL -o /tmp/maestro.zip \
             https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip
+          echo "${MAESTRO_SHA256}  /tmp/maestro.zip" | shasum -a 256 -c -
           unzip -q /tmp/maestro.zip -d "$HOME/.maestro-cli"
           echo "$HOME/.maestro-cli/maestro/bin" >> "$GITHUB_PATH"
         env:
           MAESTRO_VERSION: 2.6.1
+          MAESTRO_SHA256: 3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b
 
       - name: 🌱 Seed test store
         env:
