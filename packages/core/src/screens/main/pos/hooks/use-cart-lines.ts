@@ -28,20 +28,25 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
  * call, so `getLatest() !== captured` is true even when nothing changed. Compare the state
  * instead.
  *
- * `status` and `date_modified_gmt` are in the key on purpose, not just the lines the replay
- * reads: ANY write to the order moves them — a newer cart edit, a checkout push writing the
- * server response back, a status transition out of `pos-open`. A replay computed before such a
+ * `id`, `status` and `date_modified_gmt` are in the key on purpose, not just the lines the
+ * replay reads: ANY write to the order moves one of them — a newer cart edit, a status
+ * transition out of `pos-open`, or a checkout push (the ack adopts the server payload, and a
+ * create-ack grafts the Woo id onto an order that had none). A replay computed before such a
  * write must never land on top of it.
  */
 function replayStateKey(order: OrderDocument): string {
 	return JSON.stringify([
 		order.uuid ?? null,
+		order.id ?? null,
 		order.status ?? null,
 		order.date_modified_gmt ?? null,
 		order.line_items ?? [],
 		order.coupon_lines ?? [],
 	]);
 }
+
+/** The only status a POS cart is editable in — see use-open-orders-resource / use-new-order. */
+const POS_OPEN_STATUS = 'pos-open';
 
 /**
  * The off-critical-path coupon replay armed when the foreground reference barrier expires (#963).
@@ -246,10 +251,15 @@ export const useCartLines = () => {
 					cartLogger.debug('Coupon reference wait expired without settling; replay abandoned');
 					return;
 				}
+				const latest = currentOrder.getLatest();
+				// Belt to the state key's braces: a delayed write must never reach an order that
+				// is no longer an editable cart, whatever else moved. The foreground replay does
+				// not need this — it is driven by an edit the cashier just made.
+				if (latest.status !== POS_OPEN_STATUS) return;
 				// The order moved on — a newer edit, a checkout push, or a status change. That
 				// write owns the order now; a replay computed against the old state must not
 				// land on top of it.
-				if (replayStateKey(currentOrder.getLatest()) !== continuation.stateKey) return;
+				if (replayStateKey(latest) !== continuation.stateKey) return;
 				await replayCoupons(continuation.order);
 			})().catch((error) => cartLogger.error(String(error)));
 		},

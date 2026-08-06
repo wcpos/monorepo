@@ -354,13 +354,32 @@ describe('useCartLines background coupon replay (#963)', () => {
 			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
 		});
 
-		// Checkout pushes the order and the server response lands back on the resident: the
-		// lines are untouched but the order has moved on. Replaying the pre-push discounts now
-		// would change the totals of an order that has already been submitted.
-		revision = buildRevision({
-			status: 'completed',
-			date_modified_gmt: '2026-08-06T10:00:00',
+		// Checkout completed: only the status moved — same lines, same timestamp, no Woo id.
+		// Replaying the pre-checkout discounts now would change the totals of an order that has
+		// already been submitted.
+		revision = buildRevision({ status: 'completed' });
+
+		await act(async () => {
+			background.settle();
 		});
+
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('does not replay after a checkout push grafted the Woo id onto the order', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		// Pay pushes the cart. The create-ack grafts the server's order id onto a resident that
+		// had none — status is still `pos-open` and the lines are untouched, so the remote id is
+		// the signal that this order now exists on the server.
+		revision = buildRevision({ id: 4711 });
 
 		await act(async () => {
 			background.settle();
