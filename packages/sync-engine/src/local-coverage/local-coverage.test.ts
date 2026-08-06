@@ -360,4 +360,104 @@ describe('LocalCoverage interface', () => {
 		expect(coverage.primeManifest).toEqual(expect.any(Function));
 		expect(coverage.reconcilePass).toEqual(expect.any(Function));
 	});
+
+	/**
+	 * BROWSE-WINDOW LANE EVICTION (#948/#957 follow-up). The facade's one targeted removal.
+	 * It is a COMPARE-AND-DELETE: containment is evaluated against the lane as stored at the
+	 * moment of deletion, so a walk that rewrites the lane between the plan and the delete
+	 * cannot have its coverage thrown away.
+	 */
+	describe('lane eviction', () => {
+		const seed = async (coverage: LocalCoverage, queryKey: string, ids: string[]) =>
+			coverage.recordQueryResult({
+				collection: 'products',
+				queryKey,
+				records: ids.map((id) => ({ id })),
+				complete: true,
+			});
+
+		it('deletes a lane whose ids a larger lane has absorbed', async () => {
+			const coverage = createLocalCoverage({
+				database: coverageDatabase() as never,
+				now: () => 1_000,
+				freshForMs: 500,
+			});
+			await seed(coverage, 'products:browse-window:limit=100', ['a', 'b']);
+			await seed(coverage, 'products:browse-window:limit=200', ['a', 'b', 'c']);
+
+			await expect(
+				coverage.removeLaneIfContained({
+					collection: 'products',
+					queryKey: 'products:browse-window:limit=100',
+					containedIn: ['a', 'b', 'c'],
+				})
+			).resolves.toBe(true);
+			await expect(
+				coverage.readLane('products', 'products:browse-window:limit=100')
+			).resolves.toBeNull();
+			// The survivor is untouched — it is what the grid footer reads.
+			await expect(
+				coverage.readLane('products', 'products:browse-window:limit=200')
+			).resolves.toMatchObject({ expectedRecordIds: ['a', 'b', 'c'] });
+		});
+
+		it('refuses to delete a lane holding an id the superseding lane does not', async () => {
+			const coverage = createLocalCoverage({
+				database: coverageDatabase() as never,
+				now: () => 1_000,
+				freshForMs: 500,
+			});
+			await seed(coverage, 'products:browse-window:limit=100', ['a', 'z']);
+
+			await expect(
+				coverage.removeLaneIfContained({
+					collection: 'products',
+					queryKey: 'products:browse-window:limit=100',
+					containedIn: ['a', 'b', 'c'],
+				})
+			).resolves.toBe(false);
+			await expect(
+				coverage.readLane('products', 'products:browse-window:limit=100')
+			).resolves.not.toBeNull();
+		});
+
+		/** A lane a wipe already removed is not an error — absent IS the target state. */
+		it('reports no deletion for a lane that is already gone', async () => {
+			const coverage = createLocalCoverage({
+				database: coverageDatabase() as never,
+				now: () => 1_000,
+				freshForMs: 500,
+			});
+			await expect(
+				coverage.removeLaneIfContained({
+					collection: 'products',
+					queryKey: 'products:browse-window:limit=100',
+					containedIn: ['a'],
+				})
+			).resolves.toBe(false);
+		});
+
+		it('lists a collection lanes for the eviction sweep', async () => {
+			const coverage = createLocalCoverage({
+				database: coverageDatabase() as never,
+				now: () => 1_000,
+				freshForMs: 500,
+			});
+			await seed(coverage, 'products:browse-window:limit=100', ['a']);
+			await seed(coverage, 'products:browse-window:limit=200', ['a', 'b']);
+
+			await expect(coverage.listLanes('products')).resolves.toEqual([
+				{
+					queryKey: 'products:browse-window:limit=100',
+					complete: true,
+					expectedRecordIds: ['a'],
+				},
+				{
+					queryKey: 'products:browse-window:limit=200',
+					complete: true,
+					expectedRecordIds: ['a', 'b'],
+				},
+			]);
+		});
+	});
 });

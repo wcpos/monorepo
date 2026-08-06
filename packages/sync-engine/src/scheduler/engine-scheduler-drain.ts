@@ -291,6 +291,12 @@ function createEngineSchedulerFetcherRegistry(
 		) => input.coverage.recordCumulativeQueryResult(value),
 		readLocalLaneCoverage: (collection: string, queryKey: string) =>
 			input.coverage.readLane(collection, queryKey),
+		// Browse-window lane eviction (#948/#957 follow-up): a completed window deletes the
+		// smaller windows of the same view that it contains, so bookkeeping stays ~1x the
+		// deepest window instead of quadratic in scroll depth.
+		listCoverageLanes: (collection: string) => input.coverage.listLanes(collection),
+		removeCoverageLaneIfContained: (value: Parameters<LocalCoverage['removeLaneIfContained']>[0]) =>
+			input.coverage.removeLaneIfContained(value),
 	};
 	const shared = {
 		baseUrl: input.baseUrl,

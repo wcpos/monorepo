@@ -467,6 +467,56 @@ export class RxCoverageRepository {
 		return document ? fromLaneDocument(toJson(document)) : null;
 	}
 
+	/**
+	 * Every lane of ONE collection. Deliberately not `readCoverageDocuments()`, which also
+	 * reads every coverage RECORD — thousands of rows — where the browse-window eviction
+	 * sweep needs only the handful of lanes for one collection. Served by the
+	 * `['collectionName','queryKey']` index.
+	 */
+	async listCoverageLanesForCollection(collection: string): Promise<PersistedCoverageLane[]> {
+		// The sort mirrors `readCoverageDocuments` exactly — `['collectionName','queryKey']` is
+		// the declared index, and RxDB's dev-mode rejects a sort it cannot serve from one.
+		const documents = await this.coverageLanes
+			.find({
+				selector: { collectionName: collection },
+				sort: [{ collectionName: 'asc' }, { queryKey: 'asc' }],
+			})
+			.exec();
+		return documents.map((document) => fromLaneDocument(toJson(document)));
+	}
+
+	/**
+	 * COMPARE-AND-DELETE a lane whose coverage a larger lane has absorbed (browse-window
+	 * eviction, #948/#957 follow-up).
+	 *
+	 * The containment test runs INSIDE `incrementalModify`, against the current revision —
+	 * not against the snapshot the caller planned from. That is what makes eviction safe
+	 * against a walk that writes this lane between the plan and the delete: a lane that grew
+	 * into something `containedIn` no longer covers is left alone, so the sweep can never
+	 * delete coverage the superseding lane does not hold.
+	 *
+	 * Returns whether it deleted.
+	 */
+	async removeCoverageLaneIfContained(input: {
+		collection: string;
+		queryKey: string;
+		containedIn: readonly string[];
+	}): Promise<boolean> {
+		const document = await this.coverageLanes
+			.findOne(coverageLaneKey(input.collection, input.queryKey))
+			.exec();
+		if (!document) return false;
+
+		const containedIn = new Set(input.containedIn);
+		let removed = false;
+		await document.incrementalModify((currentDocument) => {
+			const currentLane = fromLaneDocument(currentDocument);
+			removed = currentLane.expectedRecordIds.every((id) => containedIn.has(id));
+			return removed ? { ...currentDocument, _deleted: true } : currentDocument;
+		});
+		return removed;
+	}
+
 	async expectedRecordIdsForLane(
 		collection: string,
 		queryKey: string,

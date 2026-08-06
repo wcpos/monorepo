@@ -24,6 +24,11 @@ import {
 	NO_BROWSE_WINDOW_CONTINUATION,
 	readBrowseWindowContinuation,
 } from './browse-window-continuation';
+import {
+	type BrowseWindowLaneEvictionRepository,
+	evictSupersededBrowseWindowLanes,
+	productBrowseWindowLaneIdentity,
+} from './browse-window-lane-eviction';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import {
 	parseProductBrowseWindowDescriptor,
@@ -53,15 +58,16 @@ export type ProductSchedulerRepository = {
 	removeMany(documents: StoredProductDocument[]): Promise<void>;
 };
 
-export type ProductSchedulerCoverageRepository = CollectionSchedulerCoverageRepository & {
-	/**
-	 * Optional lane read used by the browse-window CONTINUATION (#948): it tells the walk
-	 * how much of this window is already covered so growing 200 → 300 fetches one page
-	 * instead of three. Optional so a host without coverage still gets a correct (just
-	 * un-resumed) full walk.
-	 */
-	readLocalLaneCoverage?: BrowseWindowLaneReader;
-};
+export type ProductSchedulerCoverageRepository = CollectionSchedulerCoverageRepository &
+	BrowseWindowLaneEvictionRepository & {
+		/**
+		 * Optional lane read used by the browse-window CONTINUATION (#948): it tells the walk
+		 * how much of this window is already covered so growing 200 → 300 fetches one page
+		 * instead of three. Optional so a host without coverage still gets a correct (just
+		 * un-resumed) full walk.
+		 */
+		readLocalLaneCoverage?: BrowseWindowLaneReader;
+	};
 
 export type ProductsSchedulerFetcherInput = {
 	baseUrl: string;
@@ -639,6 +645,17 @@ async function tryProductBrowseWindowWalk(
 		brandsHonored ? laneRecordIds : [],
 		brandsHonored && !truncatedByPageBudget && filledTheWindow
 	);
+	// STRICTLY AFTER the write. The smaller lanes this window supersedes include the one the
+	// continuation resumed from, and the ancestry guard above re-reads exactly that lane —
+	// evicting before the write would make the pass demote itself to an incomplete delta.
+	await evictSupersededBrowseWindowLanes({
+		collection: 'products',
+		triggerQueryKey: task.queryKey,
+		identify: productBrowseWindowLaneIdentity,
+		repository: input.coverageRepository,
+		nowMs: input.nowMs?.() ?? Date.now(),
+		diagnostics: input.diagnostics,
+	});
 
 	return {
 		result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },

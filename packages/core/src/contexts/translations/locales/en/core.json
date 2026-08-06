@@ -1102,6 +1102,8 @@
 	"health.logs.event.apply_refetch": "Fetched records again for missing details",
 	"health.logs.event.apply_refresh": "Refreshed a list from your store",
 	"health.logs.event.browse_window_backstop_reached": "This list has reached its maximum size",
+	"health.logs.event.browse_window_eviction_skipped": "Left list bookkeeping in place after a data reset",
+	"health.logs.event.browse_window_lanes_evicted": "Tidied up bookkeeping for a list you scrolled",
 	"health.logs.event.browse_window_page_budget_reached": "Loading more of this list will continue shortly",
 	"health.logs.event.browse_window_prefix_invalidated": "This list is being reloaded after a data reset",
 	"health.logs.event.cadence_backoff": "Slowed down to protect your store",

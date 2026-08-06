@@ -933,6 +933,180 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 	});
 
+	// -------------------------------------------------------------------------
+	// #948/#957 follow-up — a completed window EVICTS the smaller ones it contains
+	// -------------------------------------------------------------------------
+
+	/**
+	 * A coverage store that actually APPLIES the writes, so a scroll can be replayed as three
+	 * real passes and the lanes inspected afterwards. The three eviction members mirror the
+	 * Rx repository's semantics, including the compare-and-delete containment check.
+	 */
+	function statefulCoverage() {
+		const lanes = new Map<string, { complete: boolean; expectedRecordIds: string[] }>();
+		return {
+			lanes,
+			recordQueryResult: vi.fn(
+				async (input: { queryKey: string; records: { id: string }[]; complete: boolean }) => {
+					lanes.set(input.queryKey, {
+						complete: input.complete,
+						expectedRecordIds: input.records.map((record) => record.id),
+					});
+				}
+			),
+			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
+				const lane = lanes.get(queryKey);
+				return lane
+					? { complete: lane.complete, fresh: true, expectedRecordIds: [...lane.expectedRecordIds] }
+					: null;
+			}),
+			listCoverageLanes: vi.fn(async () =>
+				[...lanes.entries()].map(([queryKey, lane]) => ({ queryKey, ...lane }))
+			),
+			removeCoverageLaneIfContained: vi.fn(
+				async (input: { queryKey: string; containedIn: readonly string[] }) => {
+					const lane = lanes.get(input.queryKey);
+					if (!lane) return false;
+					const containedIn = new Set(input.containedIn);
+					if (!lane.expectedRecordIds.every((id) => containedIn.has(id))) return false;
+					lanes.delete(input.queryKey);
+					return true;
+				}
+			),
+		};
+	}
+
+	/**
+	 * THE RULING, replayed as a scroll (Paul, 2026-08-06).
+	 *
+	 * Three passes at limit=100, 200 then 400. Without eviction the store keeps all three
+	 * lanes — 700 record ids to describe a 400-row window, and quadratic from there. With
+	 * it, only the deepest window survives.
+	 *
+	 * The footer assertion is the one that matters most: `projectTotal` reads
+	 * `expectedRecordIds.length` for the grid's EXACT current lane key, so the surviving
+	 * largest lane must still carry the whole window.
+	 */
+	it('evicts the smaller windows a scrolled-to window contains, leaving the deepest intact', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 500 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const fetcher = catalogServer(products, []);
+		const coverageRepository = statefulCoverage();
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+
+		for (const limit of [100, 200, 400]) {
+			await schedulerFetcher(
+				browseTask({
+					id: `products:browse-window:limit=${limit}:windowed`,
+					queryKey: `products:browse-window:limit=${limit}`,
+					limit,
+				})
+			);
+			// After each tick, exactly one lane remains: the window the cashier is looking at.
+			expect([...coverageRepository.lanes.keys()]).toEqual([
+				`products:browse-window:limit=${limit}`,
+			]);
+		}
+
+		// The survivor still describes the WHOLE window — the grid's footer total is unchanged
+		// by eviction.
+		expect(coverageRepository.lanes.get('products:browse-window:limit=400')).toMatchObject({
+			complete: true,
+		});
+		expect(
+			coverageRepository.lanes.get('products:browse-window:limit=400')!.expectedRecordIds
+		).toHaveLength(400);
+	});
+
+	/**
+	 * Eviction must run STRICTLY AFTER the lane write. The lane a growing window resumes from
+	 * is the very lane it supersedes, and `browseWindowPrefixSurvived` re-reads it to decide
+	 * whether the pass may assert its prefix — so evicting first would make every growth step
+	 * demote itself to an incomplete delta and re-walk the window forever.
+	 */
+	it('still asserts the continued prefix on the pass that evicts the lane it came from', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 500 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const diagnostics = vi.fn();
+		const coverageRepository = statefulCoverage();
+		coverageRepository.lanes.set('products:browse-window:limit=200', {
+			complete: true,
+			expectedRecordIds: wooProductIds(1, 200),
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			diagnostics,
+			fetcher: catalogServer(products, []),
+			pullBatchSize: () => 100,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		expect(diagnostics).not.toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'browse-window.prefix-invalidated' })
+		);
+		expect([...coverageRepository.lanes.keys()]).toEqual(['products:browse-window:limit=300']);
+		expect(
+			coverageRepository.lanes.get('products:browse-window:limit=300')!.expectedRecordIds
+		).toHaveLength(300);
+	});
+
+	/**
+	 * A HOST WITHOUT THE EVICTION SURFACE keeps working. Older coverage repositories (the
+	 * playground, every test above) expose only `recordQueryResult`, so the sweep is a no-op
+	 * and lanes reclaim on the 15-minute expiry exactly as before.
+	 */
+	it('leaves lanes alone when the coverage repository cannot evict', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 200 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher: catalogServer(products, []),
+			pullBatchSize: () => 100,
+		});
+
+		await expect(schedulerFetcher(browseTask())).resolves.toMatchObject({ completed: true });
+	});
+
 	/**
 	 * REGRESSION — the tie-heavy catalogue (#948 review findings, HIGH ×2).
 	 *
