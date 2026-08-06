@@ -75,7 +75,6 @@ jobs:
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
-          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
       # EAS artifacts expire after ~2 weeks (observed in #696), so finished
       # builds are cached on the GHA side. Nights where next hasn't moved hit
