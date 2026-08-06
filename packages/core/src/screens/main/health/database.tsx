@@ -36,6 +36,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 
 import { AttentionPanel } from './attention-panel';
+import { mergeStuckRecords, useDeadLetterStuckRecords } from './use-dead-letter-attention';
 import { useT } from '../../../contexts/translations';
 import { formatSkewMagnitude } from '../logs/logs-logic';
 import { useLogStats } from '../logs/use-log-stats';
@@ -529,12 +530,15 @@ export function DatabaseScreen() {
 	const relative = useRelativeTime();
 
 	const stats = useLogStats();
+	// Durable, so it survives the restart that clears `stats` (#832 follow-up).
+	const deadLetterStuck = useDeadLetterStuckRecords();
 	const otherScopes = useOtherScopes();
 
 	const rows = deriveRows(ROW_ORDER, counts, census);
 	const totalRecords = totalLocalRecords(counts);
 	const storageText = formatBytes(storageBytes);
-	const stuckByRow = stuckCountsByRow(stats.stuck);
+	const stuck = mergeStuckRecords(deadLetterStuck, stats.stuck);
+	const stuckByRow = stuckCountsByRow(stuck);
 	const everythingElseText = formatBytes(
 		deriveEverythingElseBytes(
 			storageBytes,
@@ -590,7 +594,11 @@ export function DatabaseScreen() {
 					/>
 				</StatHeader>
 
-				<AttentionPanel stuck={stats.stuck} />
+				{/* Durable dead letters FIRST, then this session's log-derived stuck
+				    records (#832 follow-up). The log feed resets on restart, so a banner
+				    built from it alone hid a refused sale the moment the app was quit —
+				    while the queue row was still there. */}
+				<AttentionPanel stuck={stuck} />
 
 				{stats.clockSkew ? (
 					<Callout tone="warning" testID="db-clock-skew">

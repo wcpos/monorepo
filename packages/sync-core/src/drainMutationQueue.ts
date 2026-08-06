@@ -224,18 +224,6 @@ export async function drainMutationQueue(input: {
 			reason?: string;
 			serverMessage?: string;
 		};
-		rejected.push({ mutation, status, reason });
-		emit({
-			type: 'push.rejected',
-			level: 'warn',
-			collection: mutation.collectionName,
-			fields: {
-				recordId: mutation.recordId,
-				mutationId: mutation.mutationId,
-				status,
-				reason,
-			},
-		});
 		try {
 			// Persist the WHY ON the row (#832), not just in the event: the event is
 			// long gone by the time anyone looks, and a dead letter with no stated
@@ -251,8 +239,59 @@ export async function drainMutationQueue(input: {
 				...(serverMessage !== undefined ? { rejectedMessage: serverMessage } : {}),
 				rejectedAt: new Date(now()).toISOString(),
 			});
-		} catch {
-			// couldn't mark it now — the next drain re-dead-letters it harmlessly.
+			// Counted ONLY once the verdict is durable. A dead letter that exists
+			// solely in this drain's return value is not a dead letter: `rejected`
+			// feeds the drain log AND the Store health gate that mounts the recovery
+			// panel, so counting an unpersisted one tells every surface the row was
+			// dead-lettered while storage still holds it as claimed/pending — the row
+			// is then invisible to recovery and to anyone reading the logs.
+			rejected.push({ mutation, status, reason });
+			// Emitted only once the verdict is DURABLE, for the same reason. The log
+			// pipeline classifies `push.rejected` as a terminal rejection and the
+			// health banner reads that classification, so emitting it on a failed
+			// write would put the row back on the very surface this change exists to
+			// keep honest — reporting a dead letter the queue does not hold.
+			emit({
+				type: 'push.rejected',
+				level: 'warn',
+				collection: mutation.collectionName,
+				fields: {
+					recordId: mutation.recordId,
+					mutationId: mutation.mutationId,
+					status,
+					reason,
+				},
+			});
+		} catch (error) {
+			// LOUD, not swallowed (#832 follow-up). The previous bare `catch {}` is
+			// how the 2026-08-06 dev-next smoke became undiagnosable: the drain
+			// reported `rejected: 1`, the log agreed, and the durable row was still
+			// pending — so the recovery panel never mounted and nothing anywhere said
+			// why. The next drain does re-dead-letter the row (its claim is stale, so
+			// it is re-claimable), but a failure that keeps recurring must be visible
+			// rather than a silent retry loop.
+			emit({
+				type: 'push.dead-letter-unpersisted',
+				level: 'error',
+				collection: mutation.collectionName,
+				message: `dead-letter verdict could not be written to the queue: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+				fields: {
+					recordId: mutation.recordId,
+					mutationId: mutation.mutationId,
+					status,
+					reason,
+				},
+			});
+			// Counted as a FAILURE and put behind the backoff gate. Without both, the
+			// drain returns `failed: 0, rejected: 0` — a clean-looking tick — while
+			// the row stays instantly re-claimable, so the write-drain lane retries it
+			// every cycle and the error event repeats forever. This is a double fault
+			// (the server refused it AND the queue would not record that), so it gets
+			// the same treatment as any other failed write: visible, and slowed down.
+			failed += 1;
+			await applyBackoff(mutation);
 		}
 		blockedRecords.add(mutation.recordId);
 	};

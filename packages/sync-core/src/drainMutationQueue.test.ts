@@ -858,6 +858,57 @@ describe('drainMutationQueue — #507 claim + conflict lifecycle', () => {
 		});
 	});
 
+	/**
+	 * The dead-letter verdict write used to fail into a bare `catch {}` while the
+	 * drain had ALREADY counted the row as rejected and emitted `push.rejected`.
+	 * Live (dev-next smoke, 2026-08-06) that produced the worst possible shape: the
+	 * log said `rejected: 1`, so everyone believed the engine had dead-lettered —
+	 * while the durable row was still `pending`, `rejected` counted 0 in the Store
+	 * health gate, and the recovery panel never mounted. The failure was invisible
+	 * from every surface a person can actually look at.
+	 *
+	 * A dead letter that is not durable is not a dead letter. It must not be
+	 * counted as one, and the write failure has to be loud.
+	 */
+	it('does NOT report a dead letter whose verdict could not be persisted — and says so loudly (#832 follow-up)', async () => {
+		const q = await queueWith(mut({ mutationId: 'm1' }));
+		const events: { type: string; level?: string; fields?: Record<string, unknown> }[] = [];
+		// The storage refuses the status write — a worker/schema/conflict failure,
+		// exactly the class the live incident looked like.
+		const realReplace = q.replace.bind(q);
+		q.replace = async (mutation) => {
+			if (mutation.status === 'rejected') throw new Error('mutation queue append failed');
+			return realReplace(mutation);
+		};
+
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (mutation) => {
+				throw new RecordPushError(mutation, 400, 'rest_invalid_param', false, 'Invalid billing');
+			},
+			observe: (event) => events.push(event as never),
+			now: () => 1_767_225_600_000,
+		});
+
+		// The row is NOT durably rejected…
+		expect((await q.all())[0]).toMatchObject({ status: 'claimed' });
+		// …so the drain must not claim it was, on any surface: not the result…
+		expect(result.rejected).toEqual([]);
+		// …and not the event the log pipeline classifies as a terminal rejection.
+		expect(events.some((event) => event.type === 'push.rejected')).toBe(false);
+		// It counts as a FAILURE and takes the backoff gate, or the lane reports a
+		// clean tick and re-claims the row every cycle — an unbounded retry+log loop.
+		expect(result.failed).toBe(1);
+		expect((await q.all())[0]).toMatchObject({ attempts: 1 });
+		expect(typeof (await q.all())[0]?.nextAttemptAt).toBe('string');
+		// …and the failure is reported at error level, naming the row, instead of
+		// being swallowed into a silence nobody can see.
+		const unpersisted = events.find((event) => event.type === 'push.dead-letter-unpersisted');
+		expect(unpersisted).toBeDefined();
+		expect(unpersisted?.level).toBe('error');
+		expect(unpersisted?.fields).toMatchObject({ mutationId: 'm1' });
+	});
+
 	it('preserves requeue provenance when a REQUEUED row dead-letters again — the count is the UI story (#832)', async () => {
 		const q = await queueWith(mut({ mutationId: 'm-requeued', recordId: 'rec-A' }));
 		const row = (await q.all())[0];
