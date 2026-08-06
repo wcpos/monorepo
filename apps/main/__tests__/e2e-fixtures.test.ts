@@ -156,9 +156,9 @@ describe('tryAddProductBySku', () => {
 			waitForTimeout: jest.fn().mockResolvedValue(undefined),
 		};
 
-		await expect(tryAddProductBySku(page as never, 'woo-belt')).resolves.toBe(true);
+		await expect(tryAddProductBySku(page as never, 'woo-belt')).resolves.toBe('added');
 
-		expect(variableTiles.count).toHaveBeenCalledTimes(2);
+		expect(variableTiles.count).toHaveBeenCalledTimes(3);
 		expect(tiles.click).toHaveBeenCalledTimes(1);
 	});
 
@@ -169,10 +169,93 @@ describe('tryAddProductBySku', () => {
 			}),
 		};
 
-		await expect(tryAddProductBySku(page as never)).resolves.toBe(false);
+		await expect(tryAddProductBySku(page as never)).resolves.toBe('unavailable');
 
 		expect(log.info).toHaveBeenCalledWith(
 			'[product] search unavailable — falling back to first catalogue product'
 		);
+	});
+
+	it('treats a variable-only SKU match as unavailable without clicking it', async () => {
+		const search = {
+			waitFor: jest.fn().mockResolvedValue(undefined),
+			fill: jest.fn().mockResolvedValue(undefined),
+			clear: jest.fn().mockResolvedValue(undefined),
+		};
+		const tile = { isVisible: jest.fn().mockResolvedValue(false) };
+		const tiles = {
+			count: jest.fn().mockResolvedValue(0),
+			first: jest.fn().mockReturnValue(tile),
+		};
+		const variableTiles = { count: jest.fn().mockResolvedValue(1) };
+		const rowButton = { click: jest.fn().mockRejectedValue(new Error('missing row button')) };
+		const rowButtons = {
+			count: jest.fn().mockResolvedValue(0),
+			first: jest.fn().mockReturnValue(rowButton),
+		};
+		const page = {
+			getByTestId: jest.fn((testId: string) => {
+				switch (testId) {
+					case 'search-products':
+						return search;
+					case 'data-table-count':
+						return { textContent: jest.fn().mockResolvedValueOnce('10').mockResolvedValue('1') };
+					case 'product-tile':
+						return tiles;
+					case 'variable-product-tile':
+						return variableTiles;
+					case 'add-to-cart-button':
+						return rowButtons;
+					default:
+						throw new Error(`Unexpected test ID: ${testId}`);
+				}
+			}),
+			waitForTimeout: jest.fn().mockResolvedValue(undefined),
+		};
+
+		await expect(tryAddProductBySku(page as never, 'variable-sku')).resolves.toBe('unavailable');
+
+		expect(search.clear).toHaveBeenCalledTimes(1);
+		expect(rowButton.click).not.toHaveBeenCalled();
+		expect(log.info).toHaveBeenCalledWith(
+			'[product] SKU "variable-sku" is variable — falling back to first catalogue product'
+		);
+	});
+
+	it('distinguishes a matched SKU that never reaches the cart', async () => {
+		const search = {
+			waitFor: jest.fn().mockResolvedValue(undefined),
+			fill: jest.fn().mockResolvedValue(undefined),
+			clear: jest.fn().mockResolvedValue(undefined),
+		};
+		const tile = {
+			isVisible: jest.fn().mockResolvedValue(true),
+			click: jest.fn().mockResolvedValue(undefined),
+		};
+		const page = {
+			getByTestId: jest.fn((testId: string) => {
+				switch (testId) {
+					case 'search-products':
+						return search;
+					case 'data-table-count':
+						return { textContent: jest.fn().mockResolvedValueOnce('10').mockResolvedValue('1') };
+					case 'product-tile':
+						return {
+							count: jest.fn().mockResolvedValue(1),
+							first: jest.fn().mockReturnValue(tile),
+						};
+					case 'variable-product-tile':
+					case 'add-to-cart-button':
+						return { count: jest.fn().mockResolvedValue(0) };
+					case 'checkout-button':
+						return { waitFor: jest.fn().mockRejectedValue(new Error('not visible')) };
+					default:
+						throw new Error(`Unexpected test ID: ${testId}`);
+				}
+			}),
+			waitForTimeout: jest.fn().mockResolvedValue(undefined),
+		};
+
+		await expect(tryAddProductBySku(page as never, 'broken-sku')).resolves.toBe('add_failed');
 	});
 });

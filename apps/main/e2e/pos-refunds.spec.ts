@@ -17,8 +17,12 @@ import {
  * product — and then to a misc product — on stores without the dedicated SKU.
  */
 async function addTestProductToCart(page: Page) {
-	if (await tryAddProductBySku(page)) {
+	const skuResult = await tryAddProductBySku(page);
+	if (skuResult === 'added') {
 		return;
+	}
+	if (skuResult === 'add_failed') {
+		throw new Error('Dedicated E2E SKU matched but did not reach the cart');
 	}
 
 	const tile = page.getByTestId('product-tile').first();
@@ -75,6 +79,7 @@ async function createRefundableOrder(page: Page) {
 async function interceptRefundDependencies(page: Page) {
 	const unsupportedProviderRefundGatewayId = 'unsupported_provider_refunds';
 	let orderRevision = 0;
+	const capturedOrder = { total: 0 };
 	const gatewayIds = [
 		unsupportedProviderRefundGatewayId,
 		'stripe_terminal_for_woocommerce',
@@ -121,6 +126,9 @@ async function interceptRefundDependencies(page: Page) {
 			payload: Record<string, unknown>;
 		};
 		const currentRevision = `sha256:e2e-refund-${++orderRevision}`;
+		if (mutation.operation === 'create') {
+			capturedOrder.total = Number(mutation.payload.total);
+		}
 
 		await route.fulfill({
 			status: mutation.operation === 'create' ? 201 : 200,
@@ -131,20 +139,19 @@ async function interceptRefundDependencies(page: Page) {
 			}),
 		});
 	});
+
+	return capturedOrder;
 }
 
 async function openRefundModalForNewOrder(page: Page) {
-	await interceptRefundDependencies(page);
+	const capturedOrder = await interceptRefundDependencies(page);
 	const orderUuid = await createRefundableOrder(page);
 	await page.goto(`/orders/refund/${orderUuid}`);
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
 		timeout: 30_000,
 	});
-	// The refund must not exceed the order total. The order normally holds the
-	// dedicated E2E product, but stores without that SKU fall back to whatever
-	// sorts first in the catalog — so keep the custom amount below any plausible
-	// product price.
-	await page.getByTestId('refund-custom-amount').fill('1.00');
+	expect(capturedOrder.total, 'stubbed order must have a refundable total').toBeGreaterThan(0);
+	await page.getByTestId('refund-custom-amount').fill(Math.min(capturedOrder.total, 1).toFixed(2));
 }
 
 /** The refund body the POS submits — see `buildRefundPayload` in use-refund-mutation.ts. */

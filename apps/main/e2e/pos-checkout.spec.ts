@@ -45,8 +45,12 @@ function digitsOf(value: string): string {
  * Works in both grid and table view.
  */
 async function addTestProductToCart(page: Page) {
-	if (await tryAddProductBySku(page)) {
+	const skuResult = await tryAddProductBySku(page);
+	if (skuResult === 'added') {
 		return;
+	}
+	if (skuResult === 'add_failed') {
+		throw new Error('Dedicated E2E SKU matched but did not reach the cart');
 	}
 
 	const tile = page.getByTestId('product-tile').first();

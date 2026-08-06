@@ -112,20 +112,22 @@ async function becomesVisible(locator: Locator, timeout: number): Promise<boolea
 /**
  * Try to add the dedicated E2E product to the cart by searching for its SKU.
  *
- * Returns `true` when the product was found and landed in the cart. Returns
- * `false` when the store does not carry the SKU (or the match did not reach the
- * cart) so the caller can fall back to its own product pick — the suite must
- * keep working against stores without the dedicated product.
+ * Returns `added` when the product landed in the cart, `unavailable` when the
+ * store cannot add the SKU directly, and `add_failed` when a simple product
+ * matched but did not reach the cart.
  *
  * The search box is always left cleared so the caller sees an unfiltered POS.
  */
-export async function tryAddProductBySku(page: Page, sku = E2E_PRODUCT_SKU): Promise<boolean> {
+export async function tryAddProductBySku(
+	page: Page,
+	sku = E2E_PRODUCT_SKU
+): Promise<'added' | 'unavailable' | 'add_failed'> {
 	// `waitFor`, not `isVisible` — `isVisible()` samples the DOM once and returns
 	// immediately, so it would report "missing" on anything still rendering.
 	const search = page.getByTestId('search-products');
 	if (!(await becomesVisible(search, 30_000))) {
 		log.info('[product] search unavailable — falling back to first catalogue product');
-		return false;
+		return 'unavailable';
 	}
 
 	const resultCount = page.getByTestId('data-table-count');
@@ -165,15 +167,17 @@ export async function tryAddProductBySku(page: Page, sku = E2E_PRODUCT_SKU): Pro
 		log.info(`[product] SKU "${sku}" not in this store — falling back to first catalogue product`);
 		await search.clear();
 		await page.waitForTimeout(1_000);
-		return false;
+		return 'unavailable';
 	}
 
-	if (
-		await tiles
-			.first()
-			.isVisible()
-			.catch(() => false)
-	) {
+	if (await variableTiles.count()) {
+		log.info(`[product] SKU "${sku}" is variable — falling back to first catalogue product`);
+		await search.clear();
+		await page.waitForTimeout(1_000);
+		return 'unavailable';
+	}
+
+	if (await tiles.count()) {
 		await tiles.first().click();
 	} else {
 		await rowButtons.first().click();
@@ -185,12 +189,12 @@ export async function tryAddProductBySku(page: Page, sku = E2E_PRODUCT_SKU): Pro
 	await page.waitForTimeout(1_000);
 
 	if (!inCart) {
-		log.info(`[product] SKU "${sku}" matched but never reached the cart — falling back`);
-		return false;
+		log.info(`[product] SKU "${sku}" matched but never reached the cart`);
+		return 'add_failed';
 	}
 
 	log.info(`[product] added dedicated SKU "${sku}" to the cart`);
-	return true;
+	return 'added';
 }
 
 export function isRouteTeardownError(error: unknown): boolean {
