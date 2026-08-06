@@ -8,6 +8,7 @@ import { useCartLines } from './use-cart-lines';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
+import { useOrderMoneyDivergence } from '../contexts/order-money-divergence';
 
 type Totals = ReturnType<typeof calculateOrderTotals>;
 
@@ -66,9 +67,23 @@ export const useOrderTotals = () => {
 	}, [totals, hasCoupons]);
 
 	/**
+	 * R1 re-push guard. This effect writes the cart's arithmetic onto the order,
+	 * and for an engine-backed order that write ENQUEUES A SERVER UPDATE. That is
+	 * right while the cashier is building a sale and wrong once the server has
+	 * already answered with different money: WooCommerce's calculation is the
+	 * source of truth, so re-asserting the till's number here would push it back
+	 * over the server's, and provoke the identical divergence on the next drain.
 	 *
+	 * Held per order, so a divergence on one open tab never freezes another.
+	 * Released when the cashier dismisses the alert or a later clean ack retires
+	 * it — at which point the cart is free to converge again.
 	 */
+	const { divergence } = useOrderMoneyDivergence(
+		(currentOrder as unknown as { uuid?: string } | undefined)?.uuid
+	);
+
 	useDeepCompareEffect(() => {
+		if (divergence) return;
 		const currentTotals = pick(currentOrder, [
 			'discount_tax',
 			'discount_total',
@@ -110,7 +125,7 @@ export const useOrderTotals = () => {
 				>,
 			},
 		});
-	}, [totals]);
+	}, [totals, { diverged: divergence !== null }]);
 
 	return hasCoupons ? stableTotals : totals;
 };

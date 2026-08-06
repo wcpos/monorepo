@@ -37,6 +37,8 @@ export type OrderMoneyDivergenceField = {
 
 export type OrderMoneyDivergence = {
 	orderId: string;
+	/** The write whose ack broke the mirror — the retirement key below. */
+	mutationId: string;
 	fields: OrderMoneyDivergenceField[];
 };
 
@@ -51,48 +53,75 @@ type DivergenceEvent = {
 	type: string;
 	collection?: string;
 	recordId?: string;
+	mutationId?: string;
 	fields?: OrderMoneyDivergenceField[];
 };
 
 type ScopedState = {
-	/** The engine the held divergences belong to. */
-	engine: unknown;
+	/** The store scope the held divergences belong to. */
+	scopeId: string | null;
 	byOrderId: Record<string, OrderMoneyDivergence>;
 };
 
 const NOTHING_HELD: Record<string, OrderMoneyDivergence> = {};
 
+/** Write outcomes that prove the server ACCEPTED a later write for the record. */
+const CLEAN_ACK_EVENTS = new Set(['write-acknowledged', 'write-ack-rematerialized']);
+
 export function OrderMoneyDivergenceProvider({ children }: { children: React.ReactNode }) {
 	const { engine } = useQueryRuntime();
-	// The held divergences carry the engine they were observed on, so a store
-	// switch is DERIVED at read time rather than cleared by a setState inside an
-	// effect — which the React compiler rightly rejects as a cascading render,
-	// and which loops outright if the engine reference is ever unstable.
+	// Held divergences carry the SCOPE they were observed on, not the engine: a
+	// same-site store switch deliberately KEEPS the engine instance, so keying on
+	// engine identity would carry one store's alerts into the next. The scope is
+	// derived at read time rather than cleared by a setState inside an effect —
+	// which the React compiler rightly rejects as a cascading render, and which
+	// loops outright if the engine reference is ever unstable.
+	const activeScopeId = engine.status().activeScopeId;
 	const [state, setState] = React.useState<ScopedState>(() => ({
-		engine,
+		scopeId: activeScopeId,
 		byOrderId: {},
 	}));
 
 	React.useEffect(() => {
 		return engine.events((event) => {
-			const divergence = event as DivergenceEvent;
-			if (divergence.type !== 'order-money-divergence') return;
-			const orderId = divergence.recordId;
+			const message = event as DivergenceEvent;
+			const orderId = message.recordId;
 			if (typeof orderId !== 'string' || orderId === '') return;
-			const held: OrderMoneyDivergence = {
-				orderId,
-				fields: divergence.fields ?? [],
-			};
-			setState((current) => ({
-				engine,
-				// Last write wins: a second save of the same order re-states the
-				// mirror, and the newest comparison is the one worth reviewing.
-				// Anything held from a previous scope is dropped, not carried over.
-				byOrderId:
-					current.engine === engine
-						? { ...current.byOrderId, [orderId]: held }
-						: { [orderId]: held },
-			}));
+			const scopeId = engine.status().activeScopeId;
+
+			if (message.type === 'order-money-divergence') {
+				const held: OrderMoneyDivergence = {
+					orderId,
+					mutationId: typeof message.mutationId === 'string' ? message.mutationId : '',
+					fields: message.fields ?? [],
+				};
+				setState((current) => ({
+					scopeId,
+					// Last write wins: a second save of the same order re-states the
+					// mirror, and the newest comparison is the one worth reviewing.
+					// Anything held from another scope is dropped, not carried over.
+					byOrderId:
+						current.scopeId === scopeId
+							? { ...current.byOrderId, [orderId]: held }
+							: { [orderId]: held },
+				}));
+				return;
+			}
+
+			// A LATER write the server accepted without changing the money retires
+			// the alert: the mirror is whole again, and a banner still quoting the
+			// old amounts would be telling the cashier something untrue. The
+			// mutationId guard is what keeps the divergence's OWN acknowledgement —
+			// emitted in the same flush, immediately after it — from retiring it.
+			// This is also the store's only automatic eviction path, so it cannot
+			// grow without bound across a shift.
+			if (message.collection !== 'orders' || !CLEAN_ACK_EVENTS.has(message.type)) return;
+			setState((current) => {
+				const held = current.byOrderId[orderId];
+				if (!held || held.mutationId === message.mutationId) return current;
+				const { [orderId]: _retired, ...rest } = current.byOrderId;
+				return { scopeId: current.scopeId, byOrderId: rest };
+			});
 		});
 	}, [engine]);
 
@@ -100,11 +129,11 @@ export function OrderMoneyDivergenceProvider({ children }: { children: React.Rea
 		setState((current) => {
 			if (!(orderId in current.byOrderId)) return current;
 			const { [orderId]: _dismissed, ...rest } = current.byOrderId;
-			return { engine: current.engine, byOrderId: rest };
+			return { scopeId: current.scopeId, byOrderId: rest };
 		});
 	}, []);
 
-	const byOrderId = state.engine === engine ? state.byOrderId : NOTHING_HELD;
+	const byOrderId = state.scopeId === activeScopeId ? state.byOrderId : NOTHING_HELD;
 
 	const value = React.useMemo<DivergenceStore>(
 		() => ({ byOrderId, dismiss }),

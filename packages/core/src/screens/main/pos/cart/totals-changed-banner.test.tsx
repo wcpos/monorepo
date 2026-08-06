@@ -14,7 +14,7 @@ import { TotalsChangedBanner } from './totals-changed-banner';
 type EngineEvent = Record<string, unknown> & { type: string };
 
 const listeners = new Set<(event: EngineEvent) => void>();
-let engineGeneration = 0;
+let activeScopeId = 'scope-1';
 let currentOrderUuid: string | undefined = 'order-a';
 
 function emit(event: EngineEvent) {
@@ -23,20 +23,18 @@ function emit(event: EngineEvent) {
 	});
 }
 
-const mockEvents = (callback: (event: EngineEvent) => void) => {
-	listeners.add(callback);
-	return () => listeners.delete(callback);
+// Mirrors the real engine: a SAME-SITE store switch keeps this instance and only
+// changes the active scope, which is why the provider must key on the scope.
+const engine = {
+	status: () => ({ activeScopeId }),
+	events: (callback: (event: EngineEvent) => void) => {
+		listeners.add(callback);
+		return () => listeners.delete(callback);
+	},
 };
 
-// Mirrors QueryProvider: the runtime is memoized, so the engine reference is
-// STABLE across renders and only changes when the scope does.
-const engines = [
-	{ id: 0, events: mockEvents },
-	{ id: 1, events: mockEvents },
-];
-
 jest.mock('@wcpos/query', () => ({
-	useQueryRuntime: () => ({ engine: engines[engineGeneration] }),
+	useQueryRuntime: () => ({ engine }),
 }));
 
 jest.mock('@wcpos/components/text', () => {
@@ -69,15 +67,23 @@ jest.mock('../../../../contexts/translations', () => {
 	return { useT: () => createTestT() };
 });
 
-function divergence(recordId: string, fields: { field: string; expected: string; got: string }[]) {
+function divergence(
+	recordId: string,
+	fields: { field: string; expected: string; got: string }[],
+	mutationId = 'm1'
+) {
 	return {
 		type: 'order-money-divergence',
 		collection: 'orders',
 		recordId,
-		mutationId: 'm1',
+		mutationId,
 		mode: 'server-precision',
 		fields,
 	};
+}
+
+function acknowledged(recordId: string, mutationId: string) {
+	return { type: 'write-acknowledged', collection: 'orders', recordId, mutationId };
 }
 
 function renderBanner() {
@@ -90,7 +96,7 @@ function renderBanner() {
 
 beforeEach(() => {
 	listeners.clear();
-	engineGeneration = 0;
+	activeScopeId = 'scope-1';
 	currentOrderUuid = 'order-a';
 });
 
@@ -225,12 +231,34 @@ describe('lifecycle', () => {
 		expect(screen.getByTestId('order-totals-changed-total').textContent).toBe('Total: 2.00 → 3.00');
 	});
 
+	it('retires the alert when a LATER save of the same order comes back clean', () => {
+		renderBanner();
+		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm1'));
+		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
+
+		// The cashier corrected the sale and saved again; the server kept the money
+		// this time. A banner still quoting the old amounts would be a lie.
+		emit(acknowledged('order-a', 'm2'));
+		expect(screen.queryByTestId('order-totals-changed-banner')).toBeNull();
+	});
+
+	it('is NOT retired by its own acknowledgement — both ride the same drain flush', () => {
+		renderBanner();
+		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }], 'm1'));
+		emit(acknowledged('order-a', 'm1'));
+
+		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
+	});
+
 	it('drops everything on a store switch — the orders belong to the previous till', () => {
+		// A SAME-SITE store switch keeps the engine instance and only moves the
+		// scope, so keying on engine identity would carry one store's alerts into
+		// the next.
 		const { rerender } = renderBanner();
 		emit(divergence('order-a', [{ field: 'total', expected: '1.00', got: '2.00' }]));
 		expect(screen.getByTestId('order-totals-changed-banner')).toBeTruthy();
 
-		engineGeneration += 1;
+		activeScopeId = 'scope-2';
 		rerender(
 			<OrderMoneyDivergenceProvider>
 				<TotalsChangedBanner />

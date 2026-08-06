@@ -53,6 +53,14 @@ export type MoneyPrecisionMode = 'server-precision' | 'exact-6dp';
  * side). Until then a 2dp ack is the CONTRACT, not a defect, and comparing at
  * six decimals would alert on every sale. `order-money-divergence.test.ts` pins
  * both modes so the flip is a one-line change with its evidence already written.
+ *
+ * What flipping it EARLY looks like, stated so nobody has to guess: every order
+ * carrying a sub-cent component (any compound tax, any percentage discount)
+ * alerts immediately and logs at error — loud, and loud on the first sale, not
+ * days later. An order whose money is exact at display decimals stays silent,
+ * because at six decimals it genuinely does not differ; that is a correct
+ * answer, not a swallowed one. So the failure signature is "suddenly alerting
+ * on most sales", never "quietly stopped checking".
  */
 export const ORDER_MONEY_PRECISION_MODE: MoneyPrecisionMode = 'server-precision';
 
@@ -115,16 +123,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const DECIMAL_LITERAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
 
 /**
- * A monetary value as a decimal STRING, or null when the slot holds nothing to
- * compare. An empty string is Woo's "unset", not a zero, so it reads as absent.
- * A number is accepted (some payload shapes carry `price` numerically) and
- * rendered through `String`, which is exact for every value Woo can serve.
+ * Expand an exponent-form decimal (`1e-7`, `1.5E+3`) into plain notation.
+ *
+ * `String(number)` switches to exponent form below 1e-6 and at/above 1e21, and a
+ * payload MAY carry money numerically. Without this the value reads as
+ * unparseable and the comparator reports a divergence between two identical
+ * numbers — a false alert, the one failure mode this feature cannot afford.
+ *
+ * @returns The plain decimal string, or null when `value` is not exponent form.
+ */
+function expandExponent(value: string): string | null {
+	const match = /^([+-]?)(\d+)(?:\.(\d*))?[eE]([+-]?\d+)$/.exec(value);
+	if (!match) return null;
+	const [, sign = '', intPart = '', fracPart = '', rawExponent = '0'] = match;
+	const exponent = Number(rawExponent);
+	const digits = intPart + fracPart;
+	// Where the decimal point lands once the exponent is applied.
+	const pointAt = intPart.length + exponent;
+	if (pointAt <= 0) return `${sign}0.${'0'.repeat(-pointAt)}${digits}`;
+	if (pointAt >= digits.length) return `${sign}${digits}${'0'.repeat(pointAt - digits.length)}`;
+	return `${sign}${digits.slice(0, pointAt)}.${digits.slice(pointAt)}`;
+}
+
+/**
+ * A monetary value as a plain decimal STRING, or null when the slot holds
+ * nothing to compare. An empty string is Woo's "unset", not a zero, so it reads
+ * as absent. Numbers are accepted (some payload shapes carry `price`
+ * numerically) and expanded out of exponent form.
  */
 function moneyString(value: unknown): string | null {
-	if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+	if (typeof value === 'number') {
+		if (!Number.isFinite(value)) return null;
+		const rendered = String(value);
+		return expandExponent(rendered) ?? rendered;
+	}
 	if (typeof value !== 'string') return null;
 	const trimmed = value.trim();
-	return trimmed === '' ? null : trimmed;
+	if (trimmed === '') return null;
+	return expandExponent(trimmed) ?? trimmed;
 }
 
 /** Decimal places carried by a decimal string, or null when it is not one. */
@@ -162,7 +198,9 @@ export function roundDecimalString(value: string, decimals: number): string | nu
 	if (typeof value !== 'string') return null;
 	const trimmed = value.trim();
 	if (!DECIMAL_LITERAL.test(trimmed)) return null;
-	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 20) return null;
+	// The bound only exists to stop a pathological `'0'.repeat()`; it is far above
+	// any width a store can configure, so no real ack can be refused by it.
+	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 100) return null;
 
 	const negative = trimmed.startsWith('-');
 	const unsigned = negative || trimmed.startsWith('+') ? trimmed.slice(1) : trimmed;

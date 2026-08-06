@@ -48,6 +48,19 @@ describe('roundDecimalString', () => {
 		expect(roundDecimalString(value, decimals)).toBe(expected);
 	});
 
+	it.each([
+		// Exponent forms are expanded by `moneyString` before they reach the
+		// rounder, so the rounder itself only ever sees plain decimals.
+		['0.0000001', 6, '0.000000'],
+		['1000000000000000000000', 2, '1000000000000000000000.00'],
+	])('rounds the expanded %s at %i decimals to %s', (value, decimals, expected) => {
+		expect(roundDecimalString(value, decimals)).toBe(expected);
+	});
+
+	it('accepts a width no store would ever configure rather than refusing it', () => {
+		expect(roundDecimalString('1.5', 30)).toBe(`1.5${'0'.repeat(29)}`);
+	});
+
 	it.each(['', '  ', 'abc', '1.2.3', '1,00', '£1.00', 'NaN', 'Infinity'])(
 		'refuses the non-decimal %j rather than guessing a number',
 		(value) => {
@@ -153,6 +166,23 @@ describe('compareOrderMoney — server-precision mode (the #946 reality)', () =>
 		const acked = clone(server2dp);
 		lineOf(acked).total = '19.98';
 		expect(compareOrderMoney({ pushed, acked, mode: 'server-precision' })).toBeNull();
+	});
+
+	it('does not mistake exponent notation for a divergence', () => {
+		// `String(0.0000001)` is `'1e-7'`. A payload carrying money NUMERICALLY
+		// would otherwise read as unparseable and alert against itself.
+		expect(
+			compareOrderMoney({
+				pushed: { total: 0.0000001 },
+				acked: { total: '0.0000001' },
+				mode: 'exact-6dp',
+			})
+		).toBeNull();
+	});
+
+	it('compares numeric money against its string form without complaint', () => {
+		const pushed = { ...clone(pos), total: 36.68328 };
+		expect(compareOrderMoney({ pushed, acked: server2dp, mode: 'server-precision' })).toBeNull();
 	});
 
 	it('flags an unparseable ack value instead of silently passing it', () => {
