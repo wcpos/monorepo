@@ -921,12 +921,15 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
-		// Only the delta is asserted, and the lane is honestly INCOMPLETE, so the next pass
-		// restarts the window from the top instead of trusting a prefix that is gone.
+		// The lane claims NOTHING and is honestly INCOMPLETE, so the next pass restarts the
+		// window from page 1. Recording the delta here would be worse than recording nothing:
+		// the pass resumed at an offset, so its rows are a TAIL of the listing, and
+		// readBrowseWindowContinuation reads a page-aligned incomplete lane as the LEADING
+		// prefix — the next pass would offset past 100 rows nobody ever fetched.
 		const recorded = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
 			{ records: { id: string }[]; complete: boolean },
 		];
-		expect(recorded[0].records).toHaveLength(100);
+		expect(recorded[0].records).toHaveLength(0);
 		expect(recorded[0].complete).toBe(false);
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({ type: 'browse-window.prefix-invalidated' })

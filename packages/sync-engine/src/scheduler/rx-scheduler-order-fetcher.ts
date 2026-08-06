@@ -845,8 +845,12 @@ async function fetchBrowserOrderQuery(
 			collection: 'orders',
 			message: `Orders browse window ${windowLimit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 		});
+		// The lane claims NOTHING, not this pass's rows: the walk resumed at an offset, so what
+		// it holds is a TAIL of the listing, and readBrowseWindowContinuation reads a
+		// page-aligned incomplete lane as the LEADING prefix — storing the tail would make the
+		// next pass offset past rows nobody fetched and splice the window permanently.
 		if (descriptor.search === '') {
-			await recordOrderFetchCoverage(input, task, fetchedDocumentIds, false);
+			await recordOrderFetchCoverage(input, task, [], false);
 		} else {
 			await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
 		}
@@ -906,7 +910,10 @@ async function fetchBrowserOrderQuery(
 				? {
 						sourceQueryKey: continuation.sourceQueryKey,
 						recordIds: continuation.recordIds,
-						fallbackRecordIds: fetchedDocumentIds,
+						// Same dimension gate as the primary write above: a superset from a server
+						// that ignored `pos_cashier`/`pos_store` must not be recorded as coverage
+						// through the demotion path either.
+						fallbackRecordIds: dimensionsHonored ? fetchedDocumentIds : [],
 					}
 				: undefined
 		);

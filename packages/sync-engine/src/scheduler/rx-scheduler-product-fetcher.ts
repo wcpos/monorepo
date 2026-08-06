@@ -594,7 +594,10 @@ async function tryProductBrowseWindowWalk(
 			collection: 'products',
 			message: `Product browse window ${descriptor.limit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 		});
-		await recordCoverage('products', input, task, deltaRecordIds, false);
+		// The lane claims NOTHING, not this pass's rows — they are a TAIL of the listing and
+		// readBrowseWindowContinuation would read them as its LEADING prefix. See the orders
+		// fetcher's matching branch.
+		await recordCoverage('products', input, task, [], false);
 		return {
 			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
 			// The prefix is gone, so the next pass must re-walk from the top regardless; do not
@@ -651,7 +654,9 @@ async function tryProductBrowseWindowWalk(
 			? {
 					sourceQueryKey: continuation.sourceQueryKey,
 					recordIds: continuation.recordIds,
-					fallbackRecordIds: deltaRecordIds,
+					// Same brand gate as the primary write above: a superset from a server that
+					// ignored `brand` must not be recorded as coverage through the demotion path.
+					fallbackRecordIds: brandsHonored ? deltaRecordIds : [],
 				}
 			: undefined
 	);

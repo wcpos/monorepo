@@ -101,23 +101,39 @@ describe('browse-window prefix ancestry', () => {
 	});
 
 	// The replay: identical arguments, but the rebuild dropped the lanes in between.
-	it('records the delta alone when the source lane vanished before the write', async () => {
+	// The demoted lane must claim NOTHING, not the delta. This pass's rows are a TAIL of the
+	// listing (it resumed at an offset), and `readBrowseWindowContinuation` reads a
+	// page-aligned incomplete lane as the listing's LEADING prefix — so storing the tail
+	// would have the next pass offset past rows nobody ever fetched and splice the window.
+	// An empty lane is what actually forces the restart the demotion is for.
+	it('claims nothing when the source lane vanished before the write', async () => {
 		await seedSourceLane(PREFIX);
 		await db.collections.coverageLanes.findOne(`products::${SOURCE_KEY}`).remove();
 
 		await writeGrownWindow();
 
-		// Asserting the prefix here would have the grid believe — and report — coverage for
-		// three products the wipe just deleted.
-		expect(await grown()).toMatchObject({ complete: false, expectedRecordIds: DELTA });
+		expect(await grown()).toMatchObject({ complete: false, expectedRecordIds: [] });
 	});
 
-	it('records the delta alone when another writer moved the source lane on', async () => {
+	// The rows themselves are real and already upserted, so their RECORD coverage survives —
+	// only the lane's claim about what window they form is dropped.
+	it('keeps record-level coverage for the delta it demoted', async () => {
+		await seedSourceLane(PREFIX);
+		await db.collections.coverageLanes.findOne(`products::${SOURCE_KEY}`).remove();
+
+		await writeGrownWindow();
+
+		await expect(
+			repository.readLocalRecordCoverage('products', DELTA[0], 0)
+		).resolves.toMatchObject({ id: DELTA[0] });
+	});
+
+	it('claims nothing when another writer moved the source lane on', async () => {
 		await seedSourceLane(['woo-product:9', ...PREFIX]);
 
 		await writeGrownWindow();
 
-		expect(await grown()).toMatchObject({ complete: false, expectedRecordIds: DELTA });
+		expect(await grown()).toMatchObject({ complete: false, expectedRecordIds: [] });
 	});
 
 	// A prefix is a PREFIX: the source lane growing past it is fine, reordering it is not.

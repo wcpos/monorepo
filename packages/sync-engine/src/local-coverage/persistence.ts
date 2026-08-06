@@ -418,25 +418,35 @@ export class RxCoverageRepository {
 		// call, the replay re-runs it and demotes to the delta instead.
 		// Note the guard rather than an unconditional await: a write with no carried prefix must
 		// not gain a microtask tick here, or it would reorder against concurrent coverage writes.
-		const nextDocuments = buildCoverageDocumentsFromQueryResult(
-			input.prefixAncestry ? await this.withPrefixAncestry(input) : input
-		);
+		const nextDocuments = input.prefixAncestry
+			? await this.documentsWithPrefixAncestry(input)
+			: buildCoverageDocumentsFromQueryResult(input);
 		await this.writeCoverageDocumentsWithMerge(nextDocuments);
 	}
 
-	private async withPrefixAncestry(
+	private async documentsWithPrefixAncestry(
 		input: BuildCoverageDocumentsFromQueryResultInput
-	): Promise<BuildCoverageDocumentsFromQueryResultInput> {
+	): Promise<PersistedCoverageDocumentSet> {
 		const ancestry = input.prefixAncestry;
-		if (!ancestry) return input;
+		if (!ancestry) return buildCoverageDocumentsFromQueryResult(input);
 		const source = await this.readCoverageLane(input.collection, ancestry.sourceQueryKey);
-		if (laneHoldsBrowseWindowPrefix(source?.expectedRecordIds, ancestry.recordIds)) return input;
-		// Restart the window from the top next pass rather than freeze a lane around a prefix
-		// nobody holds — wasteful, always safe.
-		return {
+		if (laneHoldsBrowseWindowPrefix(source?.expectedRecordIds, ancestry.recordIds)) {
+			return buildCoverageDocumentsFromQueryResult(input);
+		}
+		const demoted = buildCoverageDocumentsFromQueryResult({
 			...input,
 			records: ancestry.fallbackRecordIds.map((id) => ({ id })),
 			complete: false,
+		});
+		// The lane claims NOTHING. Those rows are a TAIL of the listing — the pass resumed at an
+		// offset — and `readBrowseWindowContinuation` reads a page-aligned incomplete lane as the
+		// listing's LEADING prefix, so storing them would have the next pass offset past rows
+		// nobody fetched and splice the window permanently. An empty lane is what actually forces
+		// the restart this demotion exists for. Their RECORD coverage survives: the rows are real
+		// and already resident, it is only the window claim that is withdrawn.
+		return {
+			records: demoted.records,
+			lanes: demoted.lanes.map((lane) => ({ ...lane, expectedRecordIds: [] })),
 		};
 	}
 
