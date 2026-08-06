@@ -172,6 +172,14 @@ describe('EmailForm', () => {
 		await send();
 
 		expect(queueRows).toHaveLength(1);
+		expect(queueRows[0]).toMatchObject({
+			attempts: 1,
+			lastError: 'Network Error',
+			lastErrorCode: 'ERR_NETWORK',
+		});
+		expect(Date.parse(queueRows[0].nextAttemptAt ?? '')).toBeGreaterThan(
+			Date.parse(queueRows[0].lastAttemptAt ?? '')
+		);
 		expect(mockLoggerError).not.toHaveBeenCalled();
 	});
 

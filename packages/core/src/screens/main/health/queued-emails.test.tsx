@@ -110,6 +110,10 @@ describe('QueuedEmailsPanel', () => {
 
 		expect(screen.getByTestId('db-queued-email-failed-row-1')).toBeTruthy();
 		expect(screen.getByText('Invalid email address.')).toBeTruthy();
+		expect(
+			screen.getByText(/remove it, correct the order, then resend from the order/i)
+		).toBeTruthy();
+		expect(screen.getByText(/Send again retries the saved address/i)).toBeTruthy();
 	});
 
 	it('requeues through the shared drain, so a retry cannot double-send', async () => {

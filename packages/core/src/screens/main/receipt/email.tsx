@@ -18,7 +18,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
-import { classifyEmailSendError } from './email-queue/classify';
+import { classifyEmailSendError, type EmailSendFailure } from './email-queue/classify';
 import { enqueueReceiptEmail, type ReceiptEmailQueuePort } from './email-queue/queue';
 import { useReceiptEmailQueueCollection } from './email-queue/use-receipt-email-queue-collection';
 
@@ -66,7 +66,12 @@ export function EmailForm({ order }: Props) {
 	 * database yet), so the caller can fall back to surfacing the error.
 	 */
 	const queueEmail = React.useCallback(
-		async (email: string, saveEmail: boolean, reason: string): Promise<boolean> => {
+		async (
+			email: string,
+			saveEmail: boolean,
+			reason: string,
+			failure?: EmailSendFailure
+		): Promise<boolean> => {
 			if (!queue || typeof orderID !== 'number') return false;
 			try {
 				await enqueueReceiptEmail(
@@ -76,6 +81,7 @@ export function EmailForm({ order }: Props) {
 						orderNumber: typeof orderNumber === 'string' ? orderNumber : undefined,
 						email,
 						saveTo: saveEmail ? 'billing' : '',
+						...(failure ? { failure } : {}),
 					}
 				);
 				Toast.show({
@@ -134,7 +140,7 @@ export function EmailForm({ order }: Props) {
 					const failure = classifyEmailSendError(error);
 					if (
 						failure.kind === 'connectivity' &&
-						(await queueEmail(email, saveEmail, 'send-failed'))
+						(await queueEmail(email, saveEmail, 'send-failed', failure))
 					) {
 						return;
 					}

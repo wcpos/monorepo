@@ -25,7 +25,10 @@ function createFakeCollection(seed: ReceiptEmailRow[] = []) {
 	const docs: ReceiptEmailDoc[] = [];
 
 	const wrap = (row: ReceiptEmailRow): ReceiptEmailDoc => {
-		const doc = { ...row } as ReceiptEmailDoc & { getLatest(): ReceiptEmailDoc };
+		const doc = { ...row, deleted: false } as ReceiptEmailDoc & {
+			deleted: boolean;
+			getLatest(): ReceiptEmailDoc;
+		};
 		doc.incrementalPatch = async (patch: Partial<ReceiptEmailRow>) => {
 			if (!docs.includes(doc)) throw new Error('RxError: document is removed');
 			Object.assign(doc, patch);
@@ -34,6 +37,7 @@ function createFakeCollection(seed: ReceiptEmailRow[] = []) {
 		doc.remove = async () => {
 			const index = docs.indexOf(doc);
 			if (index >= 0) docs.splice(index, 1);
+			doc.deleted = true;
 			return doc;
 		};
 		// RxDB hands callers the freshest revision through getLatest(); the fake
@@ -53,7 +57,12 @@ function createFakeCollection(seed: ReceiptEmailRow[] = []) {
 		},
 		find: (query: { selector: Record<string, unknown> }) => {
 			const status = (query.selector.status as { $eq?: string } | undefined)?.$eq;
-			const matching = () => docs.filter((doc) => (status ? doc.status === status : true));
+			const localID = (query.selector.localID as { $eq?: string } | undefined)?.$eq;
+			const matching = () =>
+				docs.filter(
+					(doc) =>
+						(status ? doc.status === status : true) && (localID ? doc.localID === localID : true)
+				);
 			return { exec: async () => matching(), $: of(matching()) };
 		},
 	};
@@ -500,6 +509,52 @@ describe('drain hardening (adversarial findings)', () => {
 
 		expect(summary.sent).toBe(1);
 		expect(collection.docs).toHaveLength(0);
+	});
+
+	it('skips a later row removed during the spacing delay', async () => {
+		const collection = createFakeCollection([
+			pendingRow({ localID: 'a', queuedAt: '2026-08-06T09:00:00.000Z' }),
+			pendingRow({ localID: 'b', queuedAt: '2026-08-06T09:30:00.000Z', email: 'b@example.com' }),
+		]);
+		const removed = collection.docs[1];
+		const post = jest.fn(async () => ({ data: { success: true } }));
+
+		const summary = await drainReceiptEmailQueue({
+			collection,
+			post,
+			logger: silentLogger(),
+			now: () => Date.parse('2026-08-06T10:00:00.000Z'),
+			sleep: async () => {
+				await removed.remove();
+			},
+		});
+
+		expect(post).toHaveBeenCalledTimes(1);
+		expect(post).toHaveBeenCalledWith(expect.objectContaining({ localID: 'a' }));
+		expect(summary.sent).toBe(1);
+	});
+
+	it('propagates an unexpected queue state write failure', async () => {
+		const collection = createFakeCollection([pendingRow()]);
+		const doc = collection.docs[0];
+		const incrementalPatch = doc.incrementalPatch;
+		const storageError = new Error('storage unavailable');
+		let writes = 0;
+		doc.incrementalPatch = async (changes) => {
+			writes += 1;
+			if (writes === 1) throw storageError;
+			return incrementalPatch(changes);
+		};
+
+		await expect(
+			drainReceiptEmailQueue({
+				collection,
+				post: async () => ({ data: { success: true } }),
+				logger: silentLogger(),
+				now: () => Date.parse('2026-08-06T10:00:00.000Z'),
+				sleep: async () => undefined,
+			})
+		).rejects.toBe(storageError);
 	});
 
 	it('does not run another pass after the transport went down', async () => {

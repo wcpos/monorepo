@@ -48,6 +48,7 @@ export interface ReceiptEmailRow {
  * a real storage engine.
  */
 export interface ReceiptEmailDoc extends ReceiptEmailRow {
+	readonly deleted: boolean;
 	incrementalPatch(patch: Partial<ReceiptEmailRow>): Promise<unknown>;
 	remove(): Promise<unknown>;
 }
@@ -85,6 +86,7 @@ export interface EnqueueReceiptEmailInput {
 	orderNumber?: string;
 	email: string;
 	saveTo?: string;
+	failure?: EmailSendFailure;
 }
 
 export interface EnqueueDeps {
@@ -181,15 +183,25 @@ async function enqueueOnce(
 		return { localID: duplicate.localID, deduplicated: true };
 	}
 
+	const queuedAt = now();
+	const attempts = input.failure?.attempted ? 1 : 0;
 	const row: ReceiptEmailRow = {
 		localID: uuid(),
 		orderId: input.orderId,
 		email: input.email,
 		saveTo,
 		status: 'pending',
-		queuedAt: iso(now()),
-		attempts: 0,
+		queuedAt: iso(queuedAt),
+		attempts,
 		...(input.orderNumber ? { orderNumber: input.orderNumber } : {}),
+		...(input.failure?.attempted
+			? {
+					lastAttemptAt: iso(queuedAt),
+					nextAttemptAt: iso(queuedAt + backoffMs(attempts)),
+					lastError: input.failure.reason,
+					lastErrorCode: input.failure.code ?? '',
+				}
+			: {}),
 	};
 	await deps.collection.insert(row);
 	deps.logger?.info('Receipt email queued for sending', {
@@ -315,8 +327,8 @@ async function drainOnce(deps: DrainDeps): Promise<DrainPass> {
 	if (rows.length === 0) return { summary, transportDown: false };
 
 	let posted = 0;
-	for (const doc of rows) {
-		if (doc.nextAttemptAt && Date.parse(doc.nextAttemptAt) > now()) {
+	for (const snapshot of rows) {
+		if (snapshot.nextAttemptAt && Date.parse(snapshot.nextAttemptAt) > now()) {
 			summary.deferred += 1;
 			continue;
 		}
@@ -325,10 +337,28 @@ async function drainOnce(deps: DrainDeps): Promise<DrainPass> {
 		// would hit a server that has just come back up with exactly the traffic
 		// spike it can least afford.
 		if (posted > 0) await sleep(spacingMs);
+
+		// The Store health panel can remove a row while this pass is sleeping or
+		// posting an earlier one. Re-read immediately before POST so a stale
+		// snapshot can never send a discarded email.
+		const [doc] = await deps.collection
+			.find({
+				selector: {
+					localID: { $eq: snapshot.localID },
+					status: { $eq: 'pending' },
+				},
+			})
+			.exec();
+		if (!doc) continue;
+		if (doc.nextAttemptAt && Date.parse(doc.nextAttemptAt) > now()) {
+			summary.deferred += 1;
+			continue;
+		}
 		posted += 1;
 
 		const attempt = doc.attempts + 1;
 		const attemptedAt = iso(now());
+		let failure: EmailSendFailure | undefined;
 		try {
 			const response = await deps.post(doc);
 			if (response?.data?.success !== true) {
@@ -336,6 +366,11 @@ async function drainOnce(deps: DrainDeps): Promise<DrainPass> {
 				// transport failure, so it does not earn a retry.
 				throw asPermanent(response?.data?.message ?? 'The server did not send the email.');
 			}
+		} catch (error) {
+			failure = permanentOf(error) ?? classifyEmailSendError(error);
+		}
+
+		if (!failure) {
 			await patch(deps, doc, {
 				status: 'sent',
 				attempts: attempt,
@@ -359,66 +394,65 @@ async function drainOnce(deps: DrainDeps): Promise<DrainPass> {
 			// row between the two writes sees a terminal state, never a pending one.
 			await forget(deps, doc);
 			continue;
-		} catch (error) {
-			const failure = permanentOf(error) ?? classifyEmailSendError(error);
-			// A block that never left the device is not evidence the send is futile,
-			// so it must not spend an attempt: a till asleep overnight would burn the
-			// whole budget without one request reaching the store.
-			const attemptsAfter = failure.attempted ? attempt : doc.attempts;
-			const exhausted =
-				failure.kind === 'connectivity' && failure.attempted && attemptsAfter >= maxAttempts;
+		}
 
-			if (failure.kind === 'permanent' || exhausted) {
-				await patch(deps, doc, {
-					status: 'failed',
-					attempts: attemptsAfter,
-					lastAttemptAt: attemptedAt,
-					lastError: exhausted
-						? `${failure.reason} (gave up after ${attemptsAfter} tries)`
-						: failure.reason,
-					lastErrorCode: failure.code ?? '',
-				});
-				summary.failed += 1;
-				deps.logger.error('Queued receipt email failed permanently', {
-					context: {
-						type: 'email.queue.failed',
-						localID: doc.localID,
-						orderId: doc.orderId,
-						attempts: attemptsAfter,
-						status: failure.status,
-						errorCode: failure.code,
-						error: failure.reason,
-						exhausted,
-					},
-				});
-				// A refusal aimed at this row says nothing about the next one.
-				continue;
-			}
+		// A block that never left the device is not evidence the send is futile,
+		// so it must not spend an attempt: a till asleep overnight would burn the
+		// whole budget without one request reaching the store.
+		const attemptsAfter = failure.attempted ? attempt : doc.attempts;
+		const exhausted =
+			failure.kind === 'connectivity' && failure.attempted && attemptsAfter >= maxAttempts;
 
+		if (failure.kind === 'permanent' || exhausted) {
 			await patch(deps, doc, {
+				status: 'failed',
 				attempts: attemptsAfter,
 				lastAttemptAt: attemptedAt,
-				nextAttemptAt: iso(now() + backoffMs(Math.max(1, attemptsAfter))),
-				lastError: failure.reason,
+				lastError: exhausted
+					? `${failure.reason} (gave up after ${attemptsAfter} tries)`
+					: failure.reason,
 				lastErrorCode: failure.code ?? '',
 			});
-			summary.deferred += 1;
-			deps.logger.warn('Queued receipt email deferred', {
+			summary.failed += 1;
+			deps.logger.error('Queued receipt email failed permanently', {
 				context: {
-					type: 'email.queue.deferred',
+					type: 'email.queue.failed',
 					localID: doc.localID,
 					orderId: doc.orderId,
 					attempts: attemptsAfter,
-					backoffMs: backoffMs(Math.max(1, attemptsAfter)),
+					status: failure.status,
+					errorCode: failure.code,
 					error: failure.reason,
+					exhausted,
 				},
 			});
-			// The transport is down. Every remaining row would fail the same way,
-			// burn an attempt against its own budget, and add load a struggling
-			// server does not need. Stop the pass; the next trigger picks it up.
-			summary.deferred += rows.length - rows.indexOf(doc) - 1;
-			return { summary, transportDown: true };
+			// A refusal aimed at this row says nothing about the next one.
+			continue;
 		}
+
+		await patch(deps, doc, {
+			attempts: attemptsAfter,
+			lastAttemptAt: attemptedAt,
+			nextAttemptAt: iso(now() + backoffMs(Math.max(1, attemptsAfter))),
+			lastError: failure.reason,
+			lastErrorCode: failure.code ?? '',
+		});
+		summary.deferred += 1;
+		deps.logger.warn('Queued receipt email deferred', {
+			context: {
+				type: 'email.queue.deferred',
+				localID: doc.localID,
+				orderId: doc.orderId,
+				attempts: attemptsAfter,
+				backoffMs: backoffMs(Math.max(1, attemptsAfter)),
+				error: failure.reason,
+			},
+		});
+		// The transport is down. Every remaining row would fail the same way,
+		// burn an attempt against its own budget, and add load a struggling
+		// server does not need. Stop the pass; the next trigger picks it up.
+		summary.deferred += rows.length - rows.indexOf(snapshot) - 1;
+		return { summary, transportDown: true };
 	}
 
 	return { summary, transportDown: false };
@@ -459,6 +493,7 @@ async function patch(
 	try {
 		await doc.incrementalPatch(safe);
 	} catch (error) {
+		if (!doc.deleted) throw error;
 		deps.logger.warn('Could not record a receipt email outcome', {
 			context: {
 				localID: doc.localID,
