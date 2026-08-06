@@ -6,11 +6,19 @@ import * as React from 'react';
 import { act, render } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
+import {
+	clearStorageDegradation,
+	wrappedErrorHandlerStorage,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { EditOrderForm } from './form';
 
 const testLogger = getLogger(['test']);
+
+const mockPushDocument = jest.fn();
+const mockLocalPatch = jest.fn();
+const modalActions = new Map<string, { onPress?: () => unknown; disabled: boolean }>();
 
 type Customer = {
 	id: number;
@@ -80,7 +88,21 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/modal', () => ({
-	ModalAction: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	ModalAction: ({
+		children,
+		onPress,
+		disabled,
+		testID,
+	}: React.PropsWithChildren<{
+		onPress?: () => unknown;
+		disabled?: boolean;
+		testID?: string;
+	}>) => {
+		if (testID) {
+			modalActions.set(testID, { onPress, disabled: !!disabled });
+		}
+		return <>{children}</>;
+	},
 	ModalClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	ModalFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
@@ -115,9 +137,9 @@ jest.mock('../../components/shipping-address-form', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
-jest.mock('../../contexts/use-push-document', () => ({ usePushDocument: () => jest.fn() }));
+jest.mock('../../contexts/use-push-document', () => ({ usePushDocument: () => mockPushDocument }));
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: jest.fn() }),
+	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 jest.mock('../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Customer' }),
@@ -152,6 +174,43 @@ function customer(id: number): Customer {
 		shipping: { first_name: `Shipping ${id}` },
 		tax_ids: [{ id }],
 	};
+}
+
+async function degradeStorage(databaseName: string) {
+	const instance = {
+		schema: { version: 0, type: 'object', properties: {}, primaryKey: 'id' },
+		findDocumentsById: jest.fn(),
+		bulkWrite: jest
+			.fn()
+			.mockRejectedValue(
+				new Error(
+					'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
+				)
+			),
+		query: jest.fn(),
+		count: jest.fn(),
+		getAttachmentData: jest.fn(),
+		getChangedDocumentsSince: jest.fn(),
+		changeStream: jest.fn(),
+		cleanup: jest.fn(),
+		close: jest.fn().mockResolvedValue(undefined),
+		remove: jest.fn(),
+		collectionName: 'orders',
+		databaseName,
+		internals: {},
+		options: {},
+	};
+	const wrapped = await wrappedErrorHandlerStorage({
+		storage: {
+			name: 'mock-storage',
+			rxdbVersion: '17.4.0',
+			createStorageInstance: jest.fn().mockResolvedValue(instance),
+		} as never,
+	}).createStorageInstance({ databaseName } as never);
+
+	await act(async () => {
+		await expect(wrapped.bulkWrite([{ document: { id: '1' } }] as never, 'test')).rejects.toThrow();
+	});
 }
 
 describe('EditOrderForm customer lookup', () => {
@@ -203,5 +262,64 @@ describe('EditOrderForm customer lookup', () => {
 			context: expect.objectContaining({ customerId: 3, error: 'orders.customer_not_found' }),
 		});
 		expect(setValue).not.toHaveBeenCalledWith('billing', expect.anything(), expect.anything());
+	});
+});
+
+/**
+ * #163 ruling R5: the Orders-screen edit form is an order save. `localPatch`
+ * swallows storage failures, so without the guard the push would go out built on
+ * a local patch that never landed.
+ */
+describe('EditOrderForm while storage is degraded', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		modalActions.clear();
+		customerResources.clear();
+		customerResources.set(0, {
+			valueRef$$: new BehaviorSubject<CustomerValueRef>({ current: null }),
+		});
+	});
+
+	afterEach(() => {
+		act(() => clearStorageDegradation());
+	});
+
+	it('disables save and refuses the write', async () => {
+		render(<EditOrderForm order={order} />);
+		expect(modalActions.get('order-edit-save-button')?.disabled).toBe(false);
+
+		await degradeStorage('degraded-order-edit');
+
+		expect(modalActions.get('order-edit-save-button')?.disabled).toBe(true);
+
+		await act(async () => {
+			await modalActions.get('order-edit-save-button')!.onPress!();
+		});
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+	});
+
+	it('stops before pushing when storage degrades during the local patch', async () => {
+		let resolveLocalPatch!: () => void;
+		mockLocalPatch.mockImplementation(
+			() => new Promise<void>((resolve) => (resolveLocalPatch = resolve))
+		);
+		mockPushDocument.mockResolvedValue(undefined);
+		render(<EditOrderForm order={order} />);
+
+		let savePromise!: Promise<unknown>;
+		act(() => {
+			savePromise = modalActions.get('order-edit-save-button')!.onPress!() as Promise<unknown>;
+		});
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+
+		await degradeStorage('degraded-order-edit-during-patch');
+		await act(async () => {
+			resolveLocalPatch();
+			await savePromise;
+		});
+
+		expect(mockPushDocument).not.toHaveBeenCalled();
 	});
 });

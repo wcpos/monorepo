@@ -50,6 +50,18 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.coverage_require_outcome');
 		case 'demand.activity-counter-underflow':
 			return t('health.logs.event.demand_activity_counter_underflow');
+		case 'email.queue.deferred':
+			return t('health.logs.event.email_queue_deferred');
+		case 'email.queue.discarded':
+			return t('health.logs.event.email_queue_discarded');
+		case 'email.queue.failed':
+			return t('health.logs.event.email_queue_failed');
+		case 'email.queue.queued':
+			return t('health.logs.event.email_queue_queued');
+		case 'email.queue.retry':
+			return t('health.logs.event.email_queue_retry');
+		case 'email.queue.sent':
+			return t('health.logs.event.email_queue_sent');
 		case 'engine.barcode-selector-hydrate-failed':
 			return t('health.logs.event.engine_barcode_selector_hydrate_failed');
 		case 'engine.collection-reset':

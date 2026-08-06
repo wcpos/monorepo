@@ -13,6 +13,7 @@ import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
 import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status-logger';
+import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { DeviceScanProvider } from '@wcpos/core/screens/main/hooks/barcodes/device-scan-context';
@@ -122,6 +123,10 @@ function AppStack() {
 	return (
 		<QueryProvider localDB={storeDB} engine={engine} locale={locale}>
 			<SyncConfigBridge />
+			{/* Receipt emails queued while offline drain from here (#165) — above the
+			    screens, because the promise made at the Send button has to be kept
+			    whether or not the receipt modal is still open. */}
+			<ReceiptEmailQueueBridge />
 			<UISettingsProvider>
 				<CompatGate>
 					<DeviceScanProvider>

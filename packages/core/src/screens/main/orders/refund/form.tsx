@@ -54,6 +54,7 @@ import {
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentGateways } from '../../hooks/use-payment-gateways';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { isStorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
 
@@ -117,6 +118,7 @@ export function RefundOrderForm({ order }: Props) {
 	const t = useT();
 	const { store } = useAppState();
 	const refundMutation = useRefundMutation();
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const http = useRestHttpClient();
 	const router = useRouter();
 	const taxRates = React.useContext(TaxRatesContext);
@@ -307,6 +309,12 @@ export function RefundOrderForm({ order }: Props) {
 	const handleSubmit = React.useCallback(async () => {
 		if (loading || refundDetailsLoading) return;
 		if (!order.id) return;
+		// #163 follow-up ruling: the latch can fire while the confirm dialog sits
+		// open, so re-read it here rather than trusting the rendered disabled state.
+		if (blockIfDegraded('refund', { orderId: order.id })) {
+			setConfirmOpen(false);
+			return;
+		}
 		const valid = await form.trigger();
 		if (!valid) return;
 		setConfirmOpen(false);
@@ -370,6 +378,10 @@ export function RefundOrderForm({ order }: Props) {
 
 			router.back();
 		} catch (err: any) {
+			// The mutation's own guard already surfaced the reason — don't stack a
+			// generic "refund failed" toast on top of it.
+			if (isStorageBlockedError(err)) return;
+
 			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
 			refundLogger.error(serverMessage, {
 				showToast: true,
@@ -383,7 +395,7 @@ export function RefundOrderForm({ order }: Props) {
 		} finally {
 			setLoading(false);
 		}
-	}, [loading, refundDetailsLoading, form, order, refundMutation, router, t, dp]);
+	}, [blockIfDegraded, loading, refundDetailsLoading, form, order, refundMutation, router, t, dp]);
 
 	return (
 		<Form {...form}>
@@ -530,7 +542,7 @@ export function RefundOrderForm({ order }: Props) {
 					<ModalAction
 						testID="process-refund-button"
 						loading={loading}
-						disabled={!isValid}
+						disabled={!isValid || storageDegraded}
 						onPress={() => setConfirmOpen(true)}
 					>
 						{t('orders.process_refund')}
@@ -555,7 +567,7 @@ export function RefundOrderForm({ order }: Props) {
 							variant="destructive"
 							testID="confirm-process-refund-button"
 							onPress={handleSubmit}
-							disabled={loading}
+							disabled={loading || storageDegraded}
 						>
 							{t('orders.process_refund')}
 						</AlertDialogAction>

@@ -67,6 +67,7 @@ import {
 	stuckCountsByRow,
 	totalLocalRecords,
 } from './database-logic';
+import { QueuedEmailsPanel } from './queued-emails';
 import { RejectedMutationsPanel } from './rejected-mutations';
 import { useCollectionSizes } from './use-collection-sizes';
 import { useOtherScopes } from './use-other-scopes';
@@ -690,6 +691,14 @@ export function DatabaseScreen() {
 						<RejectedMutationsPanel />
 					</React.Suspense>
 				) : null}
+
+				{/* Receipt emails that have not gone out yet (#165). Unlike the dead
+				    letters above there is no cheap precomputed count to gate on, so the
+				    panel mounts and renders nothing when the queue is empty — it reads a
+				    local-only collection that holds at most a handful of rows. */}
+				<React.Suspense fallback={<Loader size="sm" />}>
+					<QueuedEmailsPanel />
+				</React.Suspense>
 
 				{/* Freshness station */}
 				<HStack className="flex-wrap items-end justify-between gap-3 pt-1">

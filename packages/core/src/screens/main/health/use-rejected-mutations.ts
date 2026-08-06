@@ -4,8 +4,8 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from, Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
-import { useQueryRuntime } from '@wcpos/query';
-import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
+import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
+import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 /**
@@ -39,7 +39,42 @@ export type RejectedMutation = {
 	requeueCount: number;
 	/** The record is no longer on this device — there is nothing to rebuild from. */
 	residentMissing: boolean;
+	/**
+	 * Discarding this row DESTROYS the local record (#832 follow-up, R7b): a
+	 * born-local create never reached the server, so there is no server version to
+	 * fall back on and nothing will ever sync it — keeping it would leave an
+	 * unsyncable ghost. The confirm copy must say so; every other row keeps its
+	 * record, which is server truth.
+	 */
+	destroysRecord: boolean;
+	/**
+	 * Discarding MIGHT delete the record: the engine re-fetches the server document
+	 * for a non-order row first, and removes the resident when the server no longer
+	 * has it (`discardRemovesResident`). The client cannot know the answer without
+	 * making that request, so the confirm says "if your server no longer has it"
+	 * rather than promising either outcome (PR #1016 review — the old copy promised
+	 * the record would be kept and then deleted it).
+	 */
+	mayDestroyRecord: boolean;
+	/**
+	 * The resident read FAILED — the record's state is unknown, so whether discard
+	 * destroys it is unknowable too. Discard is disabled rather than shown behind a
+	 * confirm that might be describing the wrong outcome (PR #1016 review). Distinct
+	 * from `residentMissing`, which is a successful read finding nothing.
+	 */
+	residentUnknown: boolean;
 };
+
+/**
+ * The record's server-identity column per collection ("wooOrderId", "wooId", …),
+ * derived exactly like `usePushDocument` derives it: the legacy `id` field's
+ * engine path. A resident with no value there has never existed server-side.
+ */
+const REMOTE_ID_FIELD = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY)
+		.filter(([, row]) => row.writeable)
+		.map(([name, row]) => [name, resolveLegacyField(row.legacyName, 'id').enginePath])
+) as Record<string, string | undefined>;
 
 type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
 type MutationRow = EngineConflict | { toJSON(): EngineConflict };
@@ -95,6 +130,26 @@ async function describe(
 			} catch {
 				readFailed = true;
 			}
+			const remoteIdField = REMOTE_ID_FIELD[entry.collectionName];
+			// The engine's OWN resolution order, mirrored exactly
+			// (`conflict-resolution.ts`): the resident's column, then — for a
+			// non-order, which is the only kind it pre-fetches for — the queued
+			// payload's `id` and the conflict document's. A create whose payload names
+			// a server record is NOT born-local, and the engine will fetch and keep it;
+			// reading only the column made the dialog promise a deletion that never
+			// happened (PR #1016 review).
+			const columnRemoteId = remoteIdField ? resident?.[remoteIdField] : undefined;
+			const queuedRemoteId =
+				entry.collectionName === 'orders'
+					? undefined
+					: ((entry.payload as Record<string, unknown> | undefined)?.id ??
+						(entry.conflictDocument as Record<string, unknown> | undefined)?.id);
+			const remoteId = typeof columnRemoteId === 'number' ? columnRemoteId : queuedRemoteId;
+			// A non-order row WITH a server identity is the engine's other destructive
+			// branch: it fetches the server document and removes the resident when the
+			// server 404s. Orders skip that fetch entirely, so they never take it.
+			const mayDestroyRecord =
+				entry.collectionName !== 'orders' && resident !== null && typeof remoteId === 'number';
 			return {
 				mutationId: entry.mutationId,
 				collectionName: entry.collectionName,
@@ -107,6 +162,19 @@ async function describe(
 				rejectedAt: entry.rejectedAt ?? null,
 				requeueCount: entry.requeueCount ?? 0,
 				residentMissing: resident === null && !readFailed,
+				residentUnknown: readFailed,
+				// Born-local CREATE ⇒ discard deletes the record. A read failure says
+				// nothing about the record, so it never claims destruction — and neither
+				// does a verdict that says the SERVER matched this record's uuid
+				// (`identity-ambiguous`): the engine keeps the resident in that case, so
+				// promising deletion here would be a lie the confirm dialog tells.
+				destroysRecord:
+					entry.operation === 'create' &&
+					resident !== null &&
+					!readFailed &&
+					typeof remoteId !== 'number' &&
+					!rejectionSuggestsServerRecord(entry.rejectedReason),
+				mayDestroyRecord: mayDestroyRecord && !readFailed,
 			};
 		})
 	);

@@ -128,21 +128,30 @@ export class EngineOrderRepository {
 	 * `local.dirty`), which stays resident so an offline POS edit is never clobbered by an upstream
 	 * delete (mirrors the pull-apply guard). Born-local orders (null wooOrderId) are never matched.
 	 * Full-scan census like deleteProducts — order fields live in an unindexable payload blob.
+	 *
+	 * A PROTECTED order keeps its manifest row too. Dropping the row while the document survives
+	 * would leave the order invisible to the existence reconcile — the manifest is the local side
+	 * of that diff — so it could never be pruned again once its local work was pushed, until a
+	 * boot prime happened to repair it. This mirrors removeTargeted's protected-id filter (#949).
 	 */
 	async removeDeletedOrders(
 		wooOrderIds: number[],
 		pendingMutationOrderIds?: ReadonlySet<string | number>
 	): Promise<void> {
 		if (wooOrderIds.length === 0) return;
-		const docs = await this.unprotectedOrders(pendingMutationOrderIds);
-		const storageIds = orderStorageIdsForWooDeletes(docs, wooOrderIds);
+		const { unprotected, protectedWooOrderIds } = await this.orderCensus(pendingMutationOrderIds);
+		const storageIds = orderStorageIdsForWooDeletes(unprotected, wooOrderIds);
 		if (storageIds.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(storageIds),
 				'engine-order-repository remove'
 			);
-		// Leg-3 maintenance invariant (ADR 0015): depurate the deleted wooOrderIds from the order manifest.
-		await removeManifestByWooIds(this.db.existenceManifestOrders, wooOrderIds);
+		// Leg-3 maintenance invariant (ADR 0015): depurate the deleted wooOrderIds from the order
+		// manifest — except the ones whose document we just declined to remove.
+		await removeManifestByWooIds(
+			this.db.existenceManifestOrders,
+			wooOrderIds.filter((wooId) => !protectedWooOrderIds.has(wooId))
+		);
 	}
 
 	/**
@@ -170,15 +179,37 @@ export class EngineOrderRepository {
 	private async unprotectedOrders(
 		pendingMutationOrderIds?: ReadonlySet<string | number>
 	): Promise<OrderDocument[]> {
+		return (await this.orderCensus(pendingMutationOrderIds)).unprotected;
+	}
+
+	/**
+	 * The same census, but keeping BOTH sides: the removable orders and the Woo ids of the ones the
+	 * guard protected. The delete channel needs the protected ids so it can leave their manifest
+	 * rows intact — one scan, both answers.
+	 */
+	private async orderCensus(
+		pendingMutationOrderIds?: ReadonlySet<string | number>
+	): Promise<{ unprotected: OrderDocument[]; protectedWooOrderIds: Set<number> }> {
 		const docs = (await this.db.orders.find().exec()).map(
 			(doc) => doc.toJSON() as unknown as OrderDocument
 		);
-		return docs.filter((doc) => {
-			if (hasPendingLocalWork(doc)) return false;
-			if (pendingMutationOrderIds?.has(doc.id)) return false;
-			if (doc.wooOrderId !== null && pendingMutationOrderIds?.has(doc.wooOrderId)) return false;
-			return true;
+		const protectedWooOrderIds = new Set<number>();
+		const unprotected = docs.filter((doc) => {
+			if (this.isUnprotectedOrder(doc, pendingMutationOrderIds)) return true;
+			if (doc.wooOrderId !== null) protectedWooOrderIds.add(doc.wooOrderId);
+			return false;
 		});
+		return { unprotected, protectedWooOrderIds };
+	}
+
+	private isUnprotectedOrder(
+		doc: OrderDocument,
+		pendingMutationOrderIds?: ReadonlySet<string | number>
+	): boolean {
+		if (hasPendingLocalWork(doc)) return false;
+		if (pendingMutationOrderIds?.has(doc.id)) return false;
+		if (doc.wooOrderId !== null && pendingMutationOrderIds?.has(doc.wooOrderId)) return false;
+		return true;
 	}
 
 	async firstPageForDisplay(limit = 100): Promise<OrderDocument[]> {

@@ -51,12 +51,12 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
 
-const makeOrder = () =>
+const makeOrder = (href = 'https://shop.example.com/wcpos-checkout/order-pay/42') =>
 	({
 		id: 42,
 		uuid: 'uuid-42',
 		number: '42',
-		links: { payment: [{ href: 'https://shop.example.com/wcpos-checkout/order-pay/42' }] },
+		links: { payment: [{ href }] },
 		links$: { pipe: () => ({}) },
 		getLatest: () => ({ status: 'pos-open', links: {}, line_items: [] }),
 	}) as never;
@@ -83,7 +83,12 @@ describe('PaymentWebview fallback order refresh', () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 		render(
-			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
 		);
 
 		await act(async () => {
@@ -122,7 +127,12 @@ describe('PaymentWebview fallback order refresh', () => {
 	it('does not poll on the initial page load (payment cannot have completed yet)', async () => {
 		jest.useFakeTimers();
 		render(
-			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
 		);
 
 		await act(async () => {
@@ -147,6 +157,7 @@ describe('PaymentWebview fallback order refresh', () => {
 			<PaymentWebview
 				order={makeOrder()}
 				setLoading={setLoading}
+				setFrameStatus={jest.fn()}
 				onStockRejection={onStockRejection}
 			/>
 		);
@@ -166,7 +177,12 @@ describe('PaymentWebview fallback order refresh', () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 		render(
-			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
 		);
 
 		await act(async () => {
@@ -197,7 +213,12 @@ describe('PaymentWebview fallback order refresh', () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 		render(
-			<PaymentWebview order={makeOrder()} setLoading={jest.fn()} onStockRejection={() => false} />
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
 		);
 
 		await act(async () => {
@@ -211,5 +232,147 @@ describe('PaymentWebview fallback order refresh', () => {
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: 'cart' });
 		jest.useRealTimers();
+	});
+});
+
+/**
+ * The app posts `wcpos-process-payment` fire-and-forget, with no ack and no
+ * retry — so the checkout footer has to know when the store document is there
+ * to receive it. The frame's load event is the strongest readiness signal
+ * either platform exposes (#1024 follow-up).
+ */
+describe('PaymentWebview frame-status signal', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		jest.useRealTimers();
+		webViewProps = {};
+		autoShowReceipt = false;
+		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+	});
+
+	it('reports the frame as loading on mount, then ready on the load event', async () => {
+		const setFrameStatus = jest.fn();
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+
+		expect(setFrameStatus).toHaveBeenCalledWith('loading');
+		expect(setFrameStatus).not.toHaveBeenCalledWith('ready');
+
+		await act(async () => {
+			webViewProps.onLoad({});
+		});
+
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+	});
+
+	it('re-gates when the frame starts navigating away from the order-pay page', async () => {
+		const setFrameStatus = jest.fn();
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoad({});
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+
+		// A gateway redirect swaps the document under the frame; the new one has no
+		// `wcpos-process-payment` listener until it, too, has loaded.
+		await act(async () => {
+			webViewProps.onLoadStart({});
+		});
+
+		expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+	});
+
+	it('re-gates when the payment URL changes', async () => {
+		const setFrameStatus = jest.fn();
+
+		const { rerender } = render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoad({});
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+
+		await act(async () => {
+			rerender(
+				<PaymentWebview
+					order={makeOrder('https://shop.example.com/wcpos-checkout/order-pay/43')}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+		});
+
+		expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+	});
+
+	it('re-gates on unmount so a remounted frame never starts enabled', async () => {
+		const setFrameStatus = jest.fn();
+
+		const { unmount } = render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoad({});
+		});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+
+		await act(async () => {
+			unmount();
+		});
+
+		expect(setFrameStatus).toHaveBeenLastCalledWith('loading');
+	});
+
+	it('reports a failed load instead of waiting for a load event that will never arrive', async () => {
+		const setFrameStatus = jest.fn();
+
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+
+		await act(async () => {
+			webViewProps.onLoadStart({});
+			webViewProps.onError({ nativeEvent: { description: 'net::ERR_NAME_NOT_RESOLVED' } });
+		});
+
+		// Without this the gate would close on load start and never reopen, leaving
+		// the cashier with a button that spins forever — the exact failure the gate
+		// exists to prevent, moved one step earlier.
+		expect(setFrameStatus).toHaveBeenLastCalledWith('failed');
 	});
 });

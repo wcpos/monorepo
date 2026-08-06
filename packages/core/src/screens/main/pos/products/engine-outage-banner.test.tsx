@@ -9,8 +9,13 @@ import { EngineOutageBanner } from './engine-outage-banner';
 
 const mockPush = jest.fn();
 const mockUseEngineStatus = jest.fn();
+const mockReloadApp = jest.fn();
 let mockOnlineStatus = 'online-website-available';
 let mockStorageDegraded = false;
+
+jest.mock('../../../../utils/reload-app', () => ({
+	reloadApp: () => mockReloadApp(),
+}));
 
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush }),
@@ -111,6 +116,28 @@ describe('EngineOutageBanner', () => {
 		);
 		fireEvent.click(screen.getByTestId('scan-outage-view-status'));
 		expect(mockPush).toHaveBeenCalledWith('/health/database');
+	});
+
+	// #163 ruling R5: reload is the real recovery for a dead worker, so the banner
+	// carries the action rather than only describing it.
+	it('offers a reload call-to-action while the local database is degraded', () => {
+		mockUseEngineStatus.mockReturnValue({ connectivity: 'online', gatedBy: null });
+		mockStorageDegraded = true;
+
+		render(<EngineOutageBanner />);
+
+		expect(screen.getByTestId('storage-outage-banner').textContent).toContain('are blocked');
+		fireEvent.click(screen.getByTestId('storage-outage-reload'));
+		expect(mockReloadApp).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not offer reload for an engine-only outage', () => {
+		mockOnlineStatus = 'offline';
+		mockUseEngineStatus.mockReturnValue({ connectivity: 'offline', gatedBy: 'offline' });
+
+		render(<EngineOutageBanner />);
+
+		expect(screen.queryByTestId('storage-outage-reload')).toBeNull();
 	});
 
 	it('prefers the storage outage message over a concurrent engine outage', () => {

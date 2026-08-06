@@ -102,6 +102,42 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "email.queue.deferred",
+		"domain": "PRINT",
+		"label": "Could not email a receipt yet — will try again",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "email.queue.discarded",
+		"domain": "PRINT",
+		"label": "Removed a receipt email from the queue",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "email.queue.failed",
+		"domain": "PRINT",
+		"label": "A receipt email could not be sent",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "email.queue.queued",
+		"domain": "PRINT",
+		"label": "Saved a receipt email to send when back online",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "email.queue.retry",
+		"domain": "PRINT",
+		"label": "Trying a refused receipt email again",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "email.queue.sent",
+		"domain": "PRINT",
+		"label": "Sent a queued receipt email",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "engine.barcode-selector-hydrate-failed",
 		"domain": "SYNC",
 		"label": "Barcode settings could not be loaded",
