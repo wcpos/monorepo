@@ -67,7 +67,10 @@
  *     order. Containment is what justifies the delete; ordering is not.
  *
  * Condition 4 is re-checked against the STORED lane at delete time, not against the copy the
- * plan was built from — see {@link evictSupersededBrowseWindowLanes}.
+ * plan was built from, and the delete adds a fifth condition the plan cannot see: the lane
+ * must not have been REWRITTEN since the survivor was. Eviction is a claim about stale
+ * knowledge, and a lane a live walk just produced is not stale — see
+ * {@link evictSupersededBrowseWindowLanes}.
  *
  * ## Why eviction is TRIGGERED BY, and scoped to, the pass that just completed
  *
@@ -87,10 +90,12 @@
  * The same rule bounds the in-flight-walk race. A smaller window's walk that was already in
  * flight when the deeper one settled writes its lane AFTER the eviction ran, resurrecting
  * it. That resurrected lane is NOT re-evicted by its own pass (it is not the deepest), so it
- * survives until either the next growth step settles or it expires — one extra window's
- * worth of ids, transiently. That is the deliberate cost of never deleting a lane a live
- * pass might be about to write; the alternative (evicting on every write) is the oscillation
- * above.
+ * survives until the next growth step settles or it expires. Be precise about the bound: it
+ * is one window per CONCURRENTLY IN-FLIGHT smaller walk, not one in total — a drain holding
+ * claims on the 100, 200 and 300 tasks when 400 settles resurrects all three. Transient, and
+ * no worse than the pre-eviction steady state for those lanes. That is the deliberate cost
+ * of never deleting a lane a live pass is about to write; the alternative (evicting on every
+ * write) is the oscillation above.
  *
  * ## The one accepted cost: two grids on the same view at different depths
  *
@@ -118,6 +123,12 @@ export type BrowseWindowLaneSnapshot = {
 	queryKey: string;
 	complete: boolean;
 	expectedRecordIds: readonly string[];
+	/**
+	 * When the lane was last written. Eviction is a claim about STALE knowledge — "a deeper
+	 * window already knows everything this one did" — so a lane written AFTER the survivor is
+	 * not superseded by it, whatever its ids say. See `removeCoverageLaneIfContained`.
+	 */
+	updatedAtMs: number;
 };
 
 /** A browse-window lane key split into "which view" and "how deep". */
@@ -181,7 +192,10 @@ export const orderBrowseWindowLaneIdentity: BrowseWindowLaneIdentifier = (queryK
  * window to its own size. Only a settled window supersedes anything — see condition 3 in the
  * module docblock for why `complete` alone is not the test.
  */
-export function isSettledBrowseWindowLane(lane: BrowseWindowLaneSnapshot, limit: number): boolean {
+export function isSettledBrowseWindowLane(
+	lane: Pick<BrowseWindowLaneSnapshot, 'complete' | 'expectedRecordIds'>,
+	limit: number
+): boolean {
 	return lane.complete || lane.expectedRecordIds.length >= limit;
 }
 
@@ -235,13 +249,15 @@ export type BrowseWindowLaneEvictionRepository = {
 	listCoverageLanes?: (collection: string) => Promise<BrowseWindowLaneSnapshot[]>;
 	/**
 	 * Delete a lane IF, at the moment of deletion, the stored lane's ids are still contained
-	 * by `containedIn`. Compare-and-delete against the current revision — the guard that makes
-	 * this safe against writers racing the sweep. Returns whether it deleted.
+	 * by `containedIn` AND it has not been rewritten since `supersededAtMs`. Compare-and-delete
+	 * against the current revision — the guard that makes this safe against writers racing the
+	 * sweep. Returns whether it deleted.
 	 */
 	removeCoverageLaneIfContained?: (input: {
 		collection: string;
 		queryKey: string;
 		containedIn: readonly string[];
+		supersededAtMs: number;
 	}) => Promise<boolean>;
 	readLocalLaneCoverage?: BrowseWindowLaneReader;
 };
@@ -262,15 +278,19 @@ export type BrowseWindowLaneEvictionRepository = {
  *
  * **A smaller window's walk writes its lane between the plan and the delete.** The delete is
  * a compare-and-delete on the CURRENT revision: `removeCoverageLaneIfContained` re-evaluates
- * containment inside the storage layer's read-modify-write. A lane that grew into something
- * the survivor does not contain survives; a lane still contained is still superseded and
- * goes. Neither outcome can delete coverage the survivor does not hold.
+ * BOTH conditions inside the storage layer's read-modify-write. A lane that grew into
+ * something the survivor does not contain survives. So does a lane written AFTER the
+ * survivor — eviction is a claim about stale knowledge, and a rewrite is not stale, so the
+ * sweep cannot delete a lane a live walk just produced and something is therefore demanding.
+ * Without that second condition the re-written lane looks identical to the one that was
+ * planned for deletion (same window, same ids) and would be deleted out from under its own
+ * pass, dropping the grid's footer to the local count for no reason.
  *
  * **A smaller window's walk writes its lane AFTER the delete** (resurrection). Not prevented
- * — deliberately. See the module docblock: preventing it would mean evicting on every
- * completion, which turns a grid parked below its deepest window into a fetch loop. The
- * resurrected lane is one window's worth of ids and is collected by the next growth step or
- * by expiry.
+ * — deliberately. See the module docblock: preventing it would mean evicting on every write,
+ * which turns a grid parked below its deepest window into a fetch loop. One window's worth
+ * of ids per concurrently in-flight smaller walk survives until the next growth step or
+ * expiry collects it.
  *
  * **The survivor evicts itself.** Cannot happen: only strictly smaller limits are planned.
  */
@@ -313,6 +333,7 @@ export async function evictSupersededBrowseWindowLanes(input: {
 			collection: input.collection,
 			queryKey: eviction.queryKey,
 			containedIn: survivor.expectedRecordIds,
+			supersededAtMs: survivor.updatedAtMs,
 		});
 		if (removed) evicted.push(eviction.queryKey);
 	}
@@ -347,10 +368,7 @@ async function survivorStillHolds(
 	if (!current) return false;
 	const currentIds = current.expectedRecordIds ?? [];
 	if (
-		!isSettledBrowseWindowLane(
-			{ queryKey: planned.queryKey, complete: current.complete, expectedRecordIds: currentIds },
-			limit
-		)
+		!isSettledBrowseWindowLane({ complete: current.complete, expectedRecordIds: currentIds }, limit)
 	) {
 		return false;
 	}

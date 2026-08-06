@@ -390,6 +390,7 @@ describe('LocalCoverage interface', () => {
 					collection: 'products',
 					queryKey: 'products:browse-window:limit=100',
 					containedIn: ['a', 'b', 'c'],
+					supersededAtMs: 1_000,
 				})
 			).resolves.toBe(true);
 			await expect(
@@ -414,6 +415,7 @@ describe('LocalCoverage interface', () => {
 					collection: 'products',
 					queryKey: 'products:browse-window:limit=100',
 					containedIn: ['a', 'b', 'c'],
+					supersededAtMs: 1_000,
 				})
 			).resolves.toBe(false);
 			await expect(
@@ -433,6 +435,7 @@ describe('LocalCoverage interface', () => {
 					collection: 'products',
 					queryKey: 'products:browse-window:limit=100',
 					containedIn: ['a'],
+					supersededAtMs: 1_000,
 				})
 			).resolves.toBe(false);
 		});
@@ -446,16 +449,20 @@ describe('LocalCoverage interface', () => {
 			await seed(coverage, 'products:browse-window:limit=100', ['a']);
 			await seed(coverage, 'products:browse-window:limit=200', ['a', 'b']);
 
+			// `updatedAtMs` rides along because eviction refuses to delete a lane rewritten
+			// after the one superseding it.
 			await expect(coverage.listLanes('products')).resolves.toEqual([
 				{
 					queryKey: 'products:browse-window:limit=100',
 					complete: true,
 					expectedRecordIds: ['a'],
+					updatedAtMs: 1_000,
 				},
 				{
 					queryKey: 'products:browse-window:limit=200',
 					complete: true,
 					expectedRecordIds: ['a', 'b'],
+					updatedAtMs: 1_000,
 				},
 			]);
 		});

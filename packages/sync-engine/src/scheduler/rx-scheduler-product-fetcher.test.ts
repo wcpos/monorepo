@@ -943,14 +943,23 @@ describe('createProductsSchedulerFetcher', () => {
 	 * Rx repository's semantics, including the compare-and-delete containment check.
 	 */
 	function statefulCoverage() {
-		const lanes = new Map<string, { complete: boolean; expectedRecordIds: string[] }>();
+		const lanes = new Map<
+			string,
+			{ complete: boolean; expectedRecordIds: string[]; updatedAtMs: number }
+		>();
 		return {
 			lanes,
 			recordQueryResult: vi.fn(
-				async (input: { queryKey: string; records: { id: string }[]; complete: boolean }) => {
+				async (input: {
+					queryKey: string;
+					records: { id: string }[];
+					complete: boolean;
+					nowMs: number;
+				}) => {
 					lanes.set(input.queryKey, {
 						complete: input.complete,
 						expectedRecordIds: input.records.map((record) => record.id),
+						updatedAtMs: input.nowMs,
 					});
 				}
 			),
@@ -964,9 +973,13 @@ describe('createProductsSchedulerFetcher', () => {
 				[...lanes.entries()].map(([queryKey, lane]) => ({ queryKey, ...lane }))
 			),
 			removeCoverageLaneIfContained: vi.fn(
-				async (input: { queryKey: string; containedIn: readonly string[] }) => {
+				async (input: {
+					queryKey: string;
+					containedIn: readonly string[];
+					supersededAtMs: number;
+				}) => {
 					const lane = lanes.get(input.queryKey);
-					if (!lane) return false;
+					if (!lane || lane.updatedAtMs > input.supersededAtMs) return false;
 					const containedIn = new Set(input.containedIn);
 					if (!lane.expectedRecordIds.every((id) => containedIn.has(id))) return false;
 					lanes.delete(input.queryKey);
@@ -983,9 +996,15 @@ describe('createProductsSchedulerFetcher', () => {
 	 * lanes — 700 record ids to describe a 400-row window, and quadratic from there. With
 	 * it, only the deepest window survives.
 	 *
-	 * The footer assertion is the one that matters most: `projectTotal` reads
-	 * `expectedRecordIds.length` for the grid's EXACT current lane key, so the surviving
-	 * largest lane must still carry the whole window.
+	 * Two assertions carry the weight:
+	 *
+	 *  - the footer: `projectTotal` reads `expectedRecordIds.length` for the grid's EXACT
+	 *    current lane key, so the surviving lane must still carry the whole window; and
+	 *  - the CONTINUATION CHAIN: each tick still costs ONE page. Eviction deletes everything
+	 *    strictly below the window just filled, but the next tick only ever needs the lane
+	 *    that just became the survivor — so #1030's "growth is a delta, not a re-download"
+	 *    property survives eviction. A broken chain would show up here as four pages instead
+	 *    of one.
 	 */
 	it('evicts the smaller windows a scrolled-to window contains, leaving the deepest intact', async () => {
 		const repository = {
@@ -996,7 +1015,12 @@ describe('createProductsSchedulerFetcher', () => {
 			id: index + 1,
 			menu_order: index,
 		}));
-		const fetcher = catalogServer(products, []);
+		const catalog = catalogServer(products, []);
+		let pagesSeen: number[] = [];
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			pagesSeen.push(Number(new URL(String(request)).searchParams.get('page')));
+			return catalog(request);
+		});
 		const coverageRepository = statefulCoverage();
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -1008,7 +1032,8 @@ describe('createProductsSchedulerFetcher', () => {
 			pullBatchSize: () => 100,
 		});
 
-		for (const limit of [100, 200, 400]) {
+		for (const [tick, limit] of [100, 200, 300, 400].entries()) {
+			pagesSeen = [];
 			await schedulerFetcher(
 				browseTask({
 					id: `products:browse-window:limit=${limit}:windowed`,
@@ -1020,6 +1045,10 @@ describe('createProductsSchedulerFetcher', () => {
 			expect([...coverageRepository.lanes.keys()]).toEqual([
 				`products:browse-window:limit=${limit}`,
 			]);
+			// …and the tick RESUMED at its own step rather than restarting at page 1, then cost
+			// a constant one page plus at most the menu_order boundary probe.
+			expect(pagesSeen[0]).toBe(tick + 1);
+			expect(pagesSeen.length).toBeLessThanOrEqual(2);
 		}
 
 		// The survivor still describes the WHOLE window — the grid's footer total is unchanged
@@ -1052,6 +1081,7 @@ describe('createProductsSchedulerFetcher', () => {
 		coverageRepository.lanes.set('products:browse-window:limit=200', {
 			complete: true,
 			expectedRecordIds: wooProductIds(1, 200),
+			updatedAtMs: 4_000,
 		});
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',

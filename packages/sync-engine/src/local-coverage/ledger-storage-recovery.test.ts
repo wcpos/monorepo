@@ -394,6 +394,7 @@ describe('coverage ledger recovery', () => {
 				collection: 'products',
 				queryKey: window(100),
 				containedIn: survivorIds,
+				supersededAtMs: 1_000,
 			})
 		).resolves.toBe(true);
 

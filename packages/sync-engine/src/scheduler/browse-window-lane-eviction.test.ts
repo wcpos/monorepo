@@ -14,11 +14,16 @@ const ids = (count: number, from = 1) =>
 
 const productWindow = (limit: number): string => `products:browse-window:limit=${limit}`;
 
-/** A completed products window holding exactly `limit` ids from the head of the catalogue. */
+/**
+ * A completed products window holding exactly `limit` ids from the head of the catalogue.
+ * `updatedAtMs` ascends with the limit, which is the real scroll order: each window is
+ * written after the one it grew from.
+ */
 const filled = (limit: number, complete = true): BrowseWindowLaneSnapshot => ({
 	queryKey: productWindow(limit),
 	complete,
 	expectedRecordIds: ids(limit),
+	updatedAtMs: limit,
 });
 
 const evictedKeys = (result: { queryKey: string }[]) =>
@@ -55,6 +60,7 @@ describe('planBrowseWindowLaneEviction', () => {
 			queryKey: productWindow(500),
 			complete: false,
 			expectedRecordIds: ids(120),
+			updatedAtMs: 500,
 		};
 		const result = planBrowseWindowLaneEviction({
 			lanes: [filled(100), filled(400), inFlightDeeper],
@@ -74,6 +80,7 @@ describe('planBrowseWindowLaneEviction', () => {
 			queryKey: `products:browse-window:limit=${limit}:orderby=price:order=desc`,
 			complete: true,
 			expectedRecordIds: ids(limit),
+			updatedAtMs: limit,
 		});
 		expect(
 			planBrowseWindowLaneEviction({
@@ -89,6 +96,7 @@ describe('planBrowseWindowLaneEviction', () => {
 			queryKey: 'products:browse-window:limit=400:category=7',
 			complete: true,
 			expectedRecordIds: ids(400),
+			updatedAtMs: 400,
 		};
 		expect(
 			planBrowseWindowLaneEviction({
@@ -109,6 +117,7 @@ describe('planBrowseWindowLaneEviction', () => {
 			queryKey: productWindow(400),
 			complete: true,
 			expectedRecordIds: [...ids(400)].reverse(),
+			updatedAtMs: 400,
 		};
 		expect(
 			evictedKeys(
@@ -127,6 +136,7 @@ describe('planBrowseWindowLaneEviction', () => {
 			queryKey: productWindow(100),
 			complete: true,
 			expectedRecordIds: [...ids(99), 'woo-product:deleted-since'],
+			updatedAtMs: 100,
 		};
 		expect(
 			planBrowseWindowLaneEviction({
@@ -146,6 +156,7 @@ describe('planBrowseWindowLaneEviction', () => {
 			queryKey: productWindow(400),
 			complete: false,
 			expectedRecordIds: ids(250),
+			updatedAtMs: 400,
 		};
 		expect(
 			planBrowseWindowLaneEviction({
@@ -195,7 +206,12 @@ describe('planBrowseWindowLaneEviction', () => {
 		expect(
 			planBrowseWindowLaneEviction({
 				lanes: [
-					{ queryKey: 'products:search:widget', complete: true, expectedRecordIds: ids(5) },
+					{
+						queryKey: 'products:search:widget',
+						complete: true,
+						expectedRecordIds: ids(5),
+						updatedAtMs: 1,
+					},
 					filled(400),
 				],
 				triggerQueryKey: productWindow(400),
@@ -222,6 +238,7 @@ describe('orderBrowseWindowLaneIdentity', () => {
 			queryKey: orderWindow(limit),
 			complete: true,
 			expectedRecordIds: ids(limit),
+			updatedAtMs: limit,
 		}));
 		expect(
 			evictedKeys(
@@ -256,8 +273,14 @@ describe('orderBrowseWindowLaneIdentity', () => {
 						queryKey: orderWindow(100, ':customer=12'),
 						complete: true,
 						expectedRecordIds: ids(100),
+						updatedAtMs: 100,
 					},
-					{ queryKey: orderWindow(200), complete: true, expectedRecordIds: ids(200) },
+					{
+						queryKey: orderWindow(200),
+						complete: true,
+						expectedRecordIds: ids(200),
+						updatedAtMs: 200,
+					},
 				],
 				triggerQueryKey: orderWindow(200),
 				identify: orderBrowseWindowLaneIdentity,
@@ -278,11 +301,17 @@ function fakeRepository(initial: BrowseWindowLaneSnapshot[]) {
 				? { complete: lane.complete, fresh: true, expectedRecordIds: [...lane.expectedRecordIds] }
 				: null;
 		}),
-		// Compare-and-delete against the CURRENT stored lane, like the Rx repository does.
+		// Compare-and-delete against the CURRENT stored lane, like the Rx repository does —
+		// both conditions, containment AND "not rewritten since the survivor".
 		removeCoverageLaneIfContained: vi.fn(
-			async (input: { queryKey: string; containedIn: readonly string[] }) => {
+			async (input: {
+				queryKey: string;
+				containedIn: readonly string[];
+				supersededAtMs: number;
+			}) => {
 				const lane = lanes.get(input.queryKey);
 				if (!lane) return false;
+				if (lane.updatedAtMs > input.supersededAtMs) return false;
 				const containedIn = new Set(input.containedIn);
 				if (!lane.expectedRecordIds.every((id) => containedIn.has(id))) return false;
 				lanes.delete(input.queryKey);
@@ -381,6 +410,7 @@ describe('evictSupersededBrowseWindowLanes', () => {
 				queryKey: input.queryKey,
 				complete: true,
 				expectedRecordIds: [...ids(100), 'woo-product:written-by-a-racing-walk'],
+				updatedAtMs: 100,
 			});
 			const lane = repository.lanes.get(input.queryKey)!;
 			const containedIn = new Set(input.containedIn);
@@ -388,6 +418,30 @@ describe('evictSupersededBrowseWindowLanes', () => {
 		});
 		expect(await sweep(repository)).toEqual([]);
 		expect(repository.lanes.has(productWindow(100))).toBe(true);
+	});
+
+	/**
+	 * REGRESSION — deleting a lane a walk JUST WROTE (adversarial review, 2026-08-06).
+	 *
+	 * The limit=100 walk finishes between the sweep planning its deletion and the delete
+	 * landing. Its lane holds the SAME window and the SAME ids, so containment alone cannot
+	 * tell it apart from the stale one that was planned for deletion — and deleting it would
+	 * strip the coverage of a window something is actively demanding, dropping the grid's
+	 * footer to the local count and forcing another walk. `updatedAtMs > supersededAtMs` is
+	 * what tells them apart: a rewrite is not stale knowledge.
+	 */
+	it('refuses to delete a lane rewritten after the survivor', async () => {
+		const repository = fakeRepository([filled(100), filled(400)]);
+		repository.removeCoverageLaneIfContained.mockImplementationOnce(async (input) => {
+			// The 100 walk lands, rewriting the identical window at a LATER timestamp.
+			repository.lanes.set(input.queryKey, { ...filled(100), updatedAtMs: 401 });
+			const lane = repository.lanes.get(input.queryKey)!;
+			if (lane.updatedAtMs > input.supersededAtMs) return false;
+			repository.lanes.delete(input.queryKey);
+			return true;
+		});
+		expect(await sweep(repository)).toEqual([]);
+		expect(repository.lanes.get(productWindow(100))!.expectedRecordIds).toHaveLength(100);
 	});
 
 	/**

@@ -132,13 +132,15 @@ export interface LocalCoverage {
 	/**
 	 * Delete a lane whose ids a larger lane has absorbed — compare-and-delete against the
 	 * stored revision, so a walk that rewrites the lane between plan and delete cannot lose
-	 * coverage. The one targeted removal on this facade; everything else reclaims by expiry
-	 * through {@link LocalCoverage.compact}.
+	 * coverage. `supersededAtMs` is the superseding lane's `updatedAtMs`: a lane rewritten
+	 * after it is not stale and survives. The one targeted removal on this facade; everything
+	 * else reclaims by expiry through {@link LocalCoverage.compact}.
 	 */
 	removeLaneIfContained(input: {
 		collection: string;
 		queryKey: string;
 		containedIn: readonly string[];
+		supersededAtMs: number;
 	}): Promise<boolean>;
 	compact(): Promise<number>;
 	maintainCompaction(input: {
@@ -217,6 +219,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 				queryKey: lane.queryKey,
 				complete: lane.complete,
 				expectedRecordIds: lane.expectedRecordIds,
+				updatedAtMs: lane.updatedAtMs,
 			})),
 		removeLaneIfContained: (input) => repository.removeCoverageLaneIfContained(input),
 		compact: async () => {

@@ -1486,19 +1486,30 @@ describe('createOrdersSchedulerFetcher', () => {
 		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
 		const wooOrderIds = (count: number) =>
 			Array.from({ length: count }, (_, index) => `woo-order:${1_000 - index}`);
-		const lanes = new Map<string, { complete: boolean; expectedRecordIds: string[] }>();
+		const lanes = new Map<
+			string,
+			{ complete: boolean; expectedRecordIds: string[]; updatedAtMs: number }
+		>();
 		for (const limit of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
 			lanes.set(`orders:browser:status=processing:search=:limit=${limit}`, {
 				complete: true,
 				expectedRecordIds: wooOrderIds(limit),
+				// Written by earlier scroll ticks, i.e. before the 100-row window settles.
+				updatedAtMs: 7_000 + limit,
 			});
 		}
 		const coverageRepository = {
 			recordQueryResult: vi.fn(
-				async (input: { queryKey: string; records: { id: string }[]; complete: boolean }) => {
+				async (input: {
+					queryKey: string;
+					records: { id: string }[];
+					complete: boolean;
+					nowMs: number;
+				}) => {
 					lanes.set(input.queryKey, {
 						complete: input.complete,
 						expectedRecordIds: input.records.map((record) => record.id),
+						updatedAtMs: input.nowMs,
 					});
 				}
 			),
@@ -1512,9 +1523,13 @@ describe('createOrdersSchedulerFetcher', () => {
 				[...lanes.entries()].map(([queryKey, lane]) => ({ queryKey, ...lane }))
 			),
 			removeCoverageLaneIfContained: vi.fn(
-				async (input: { queryKey: string; containedIn: readonly string[] }) => {
+				async (input: {
+					queryKey: string;
+					containedIn: readonly string[];
+					supersededAtMs: number;
+				}) => {
 					const lane = lanes.get(input.queryKey);
-					if (!lane) return false;
+					if (!lane || lane.updatedAtMs > input.supersededAtMs) return false;
 					const containedIn = new Set(input.containedIn);
 					if (!lane.expectedRecordIds.every((id) => containedIn.has(id))) return false;
 					lanes.delete(input.queryKey);

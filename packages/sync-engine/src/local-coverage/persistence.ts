@@ -489,11 +489,18 @@ export class RxCoverageRepository {
 	 * COMPARE-AND-DELETE a lane whose coverage a larger lane has absorbed (browse-window
 	 * eviction, #948/#957 follow-up).
 	 *
-	 * The containment test runs INSIDE `incrementalModify`, against the current revision —
-	 * not against the snapshot the caller planned from. That is what makes eviction safe
-	 * against a walk that writes this lane between the plan and the delete: a lane that grew
-	 * into something `containedIn` no longer covers is left alone, so the sweep can never
-	 * delete coverage the superseding lane does not hold.
+	 * BOTH conditions run INSIDE `incrementalModify`, against the current revision — not
+	 * against the snapshot the caller planned from. That is what makes eviction safe against
+	 * a walk that writes this lane between the plan and the delete:
+	 *
+	 *  - a lane that grew into something `containedIn` no longer covers is left alone, so the
+	 *    sweep can never delete coverage the superseding lane does not hold; and
+	 *  - a lane REWRITTEN since `supersededAtMs` is left alone. Eviction is a claim about
+	 *    stale knowledge — "a deeper window already knows everything this one did" — and a
+	 *    rewrite is not stale. Without this the re-written lane is indistinguishable from the
+	 *    one that was planned for deletion (same window, same ids), so a walk that finished
+	 *    just after the sweep planned would have its lane deleted out from under it and the
+	 *    grid's footer would drop to the local count for no reason.
 	 *
 	 * Returns whether it deleted.
 	 */
@@ -501,6 +508,7 @@ export class RxCoverageRepository {
 		collection: string;
 		queryKey: string;
 		containedIn: readonly string[];
+		supersededAtMs: number;
 	}): Promise<boolean> {
 		const document = await this.coverageLanes
 			.findOne(coverageLaneKey(input.collection, input.queryKey))
@@ -511,7 +519,9 @@ export class RxCoverageRepository {
 		let removed = false;
 		await document.incrementalModify((currentDocument) => {
 			const currentLane = fromLaneDocument(currentDocument);
-			removed = currentLane.expectedRecordIds.every((id) => containedIn.has(id));
+			removed =
+				currentLane.updatedAtMs <= input.supersededAtMs &&
+				currentLane.expectedRecordIds.every((id) => containedIn.has(id));
 			return removed ? { ...currentDocument, _deleted: true } : currentDocument;
 		});
 		return removed;
