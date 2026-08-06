@@ -691,13 +691,26 @@ describe('sync-engine performance contracts (#949)', () => {
 		it(
 			`returns the ${residents.toLocaleString('en-US')}-resident first page within its tier budget while a ${auditSize.toLocaleString('en-US')}-record audit runs`,
 			async () => {
-				const fetcher = convergedBucketFetcher(auditSize);
+				const bucketFetcher = convergedBucketFetcher(auditSize);
+				// `engine.sync()` first parks on readySettledForSync, so an unguarded
+				// measureFirstPage can finish before the audit does any work. Gate the
+				// TTFR timer on the audit's first bucket fetch so the contracts measure
+				// genuine contention, not a query racing an idle lane.
+				let signalAuditEntered!: () => void;
+				const auditEntered = new Promise<void>((resolve) => {
+					signalAuditEntered = resolve;
+				});
+				const fetcher = vi.fn(async (url: string) => {
+					signalAuditEntered();
+					return bucketFetcher(url);
+				});
 				const engine = engineWith(fetcher);
 				const active = await engine.ready;
 				await seedResidentProducts(active.database, residents);
 				await seedProductManifestRange(active.database, residents + 1, auditSize - residents);
 
 				const concurrentAudit = engine.sync('existence-reconcile');
+				await auditEntered;
 				const { elapsedMs, hitCount } = await measureFirstPage(active.database, residents);
 				const result = await concurrentAudit;
 
