@@ -1,8 +1,6 @@
-import * as React from 'react';
-
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from, Observable, of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { catchError, switchMap } from 'rxjs/operators';
 
 import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
@@ -194,21 +192,62 @@ function rejected$(engine: RxdbSyncEngine): Observable<RejectedMutation[]> {
 			return mutations
 				.find({ selector: { status: { $eq: 'rejected' } } })
 				.$.pipe(switchMap((rows) => from(describe(database, rows))));
-		})
+		}),
+		// The resource is cached for the engine's whole life (that is the fix), so a
+		// stream error must never be able to POISON it: `ObservableResource` latches
+		// the error and `read()` would then throw forever, on every remount and every
+		// scope switch, with no path to recovery. `describe()` already swallows a
+		// failing resident read, but the RxDB query itself can still error on a
+		// storage fault — degrade that to an empty list (the panel simply shows
+		// nothing) rather than wedge the whole Database health screen permanently.
+		catchError(() => of<RejectedMutation[]>([]))
 	);
+}
+
+/**
+ * The resource MUST outlive the render that suspends on it (#40 / #832 — the
+ * panel-hang this file exists to prevent). The house pattern —
+ * `useMemo(() => new ObservableResource(…))` released in a `useEffect` cleanup —
+ * is quietly broken for a panel that suspends BEFORE it ever commits: a
+ * suspending render never runs its effects, so the resource is never registered
+ * for cleanup, and — worse — React throws the memoized value away when it
+ * discards the aborted render, so every Suspense retry builds a FRESH resource
+ * that suspends again on its own async first emission. The panel spins forever.
+ *
+ * `useQueuedEmails` gets away with the same pattern only because its observable
+ * emits `of([])` SYNCHRONOUSLY on the first render (its collection is initially
+ * undefined), so it commits once and its memo is preserved thereafter. This panel
+ * mounts only behind the `rejected > 0` gate — a live database with rejected rows
+ * — so it ALWAYS takes the async `describe()` path and ALWAYS suspends first.
+ *
+ * The fix is to hold the resource OUTSIDE the component's render/commit
+ * lifecycle: one per engine in a module-scoped WeakMap. Every Suspense retry
+ * reads the SAME resource, whose first emission (once it lands) has already
+ * cleared the suspender — so `read()` returns the value and the panel commits.
+ * Keyed on the engine so a scope switch (the engine re-emits via `db$`) is
+ * followed by the one live subscription, and the entry is released when the
+ * engine is disposed and garbage-collected. There is nothing to tear down in an
+ * effect: a single query subscription per engine is the correct lifetime, and
+ * tying it to a never-committing render is exactly the bug.
+ */
+const resourceByEngine = new WeakMap<RxdbSyncEngine, ObservableResource<RejectedMutation[]>>();
+
+function rejectedResource(engine: RxdbSyncEngine): ObservableResource<RejectedMutation[]> {
+	let resource = resourceByEngine.get(engine);
+	if (!resource) {
+		resource = new ObservableResource(rejected$(engine));
+		resourceByEngine.set(engine, resource);
+	}
+	return resource;
 }
 
 /**
  * Suspends until the first emission, then re-renders on every queue change — the
  * house data-flow (ObservableResource + Suspense), so there is no loading branch
- * to get wrong. Keyed on the engine so a scope switch rebuilds the resource.
+ * to get wrong. The resource is cached per engine (see above) so it survives the
+ * suspend-before-commit that would otherwise hang the panel.
  */
 export function useRejectedMutations(): RejectedMutation[] {
 	const { engine } = useQueryRuntime();
-	const resource = React.useMemo(() => new ObservableResource(rejected$(engine)), [engine]);
-	React.useEffect(() => {
-		// ObservableResource owns the db$/RxDB subscriptions and must release them on rebind/unmount.
-		return () => resource.destroy();
-	}, [resource]);
-	return useObservableSuspense(resource);
+	return useObservableSuspense(rejectedResource(engine));
 }

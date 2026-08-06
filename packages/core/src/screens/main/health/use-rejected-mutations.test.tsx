@@ -31,16 +31,24 @@ describe('useRejectedMutations', () => {
 		mockResources.length = 0;
 	});
 
-	it('destroys each observable resource on engine replacement and unmount', () => {
-		const { rerender, unmount } = renderHook(() => useRejectedMutations());
+	it('reuses ONE resource per engine across re-renders — never a fresh one each render', () => {
+		// The heart of the #40/#832 fix: the resource must survive across renders
+		// (and Suspense retries), so a re-render with the SAME engine must not build
+		// a second one. A per-render resource is exactly what hung the panel.
+		const { rerender } = renderHook(() => useRejectedMutations());
+		expect(mockResources).toHaveLength(1);
+
+		rerender();
+		rerender();
+		expect(mockResources).toHaveLength(1);
+	});
+
+	it('builds a distinct resource for a different engine (scope switch)', () => {
+		const { rerender } = renderHook(() => useRejectedMutations());
 		expect(mockResources).toHaveLength(1);
 
 		mockEngine = {};
 		rerender();
 		expect(mockResources).toHaveLength(2);
-		expect(mockResources[0]?.destroy).toHaveBeenCalledTimes(1);
-
-		unmount();
-		expect(mockResources[1]?.destroy).toHaveBeenCalledTimes(1);
 	});
 });
