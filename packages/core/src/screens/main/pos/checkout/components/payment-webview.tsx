@@ -37,7 +37,7 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
 	order: OrderDocument;
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 	/** Reports frame readiness to the checkout footer, which gates on it. */
-	setFrameStatus: React.Dispatch<React.SetStateAction<PaymentFrameStatus>>;
+	setFrameStatus: (status: PaymentFrameStatus) => void;
 	onStockRejection: (error: unknown) => boolean;
 }
 
@@ -356,8 +356,14 @@ export function PaymentWebview({
 	 * The load counter resets with it: the fallback poll deliberately skips the
 	 * *first* load because a payment cannot have completed yet, and a re-hosted
 	 * document is a first load, not a post-payment navigation.
+	 *
+	 * `useLayoutEffect`, not `useEffect`: the new `src` is committed to the DOM in
+	 * the same commit, and a passive effect would leave the gate reporting `ready`
+	 * against the replacement document until after paint — a window in which a
+	 * press posts into a document that is still loading. This closes it before the
+	 * cashier can see, let alone touch, the frame.
 	 */
-	React.useEffect(() => {
+	React.useLayoutEffect(() => {
 		loadCountRef.current = 0;
 		setFrameStatus('loading');
 		return () => setFrameStatus('loading');

@@ -7,6 +7,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { Checkout } from './checkout';
 
+import type { PaymentFrameStatus } from './components/payment-webview';
+
 const mockUseCheckoutSession = jest.fn();
 const mockBlockIfDegraded = jest.fn(() => false);
 let mockStorageDegraded = false;
@@ -22,10 +24,33 @@ const mockUseObservableEagerState = jest.fn();
 const mockIsRxDocument = jest.fn();
 const mockPostMessage = jest.fn();
 
+interface MockPaymentWebviewProps {
+	setFrameStatus: (status: PaymentFrameStatus) => void;
+	setLoading?: (loading: boolean) => void;
+	onStockRejection?: (error: unknown) => boolean;
+	ref?: React.RefObject<{ postMessage: (message: unknown) => void } | null>;
+}
+
+interface MockModalActionProps {
+	children?: React.ReactNode;
+	testID?: string;
+	disabled?: boolean;
+	loading?: boolean;
+	onPress?: () => void | Promise<void>;
+}
+
+const notRendered = (name: string) => () => {
+	throw new Error(`${name} was not rendered`);
+};
+
 /** Props last handed to the (mocked) PaymentWebview, so a test can drive its load signal. */
-let paymentWebviewProps: Record<string, any> = {};
+let paymentWebviewProps: MockPaymentWebviewProps = {
+	setFrameStatus: notRendered('PaymentWebview'),
+};
 /** Props last handed to the Process Payment ModalAction. */
-let processPaymentProps: Record<string, any> = {};
+let processPaymentProps: MockModalActionProps = {
+	onPress: notRendered('process-payment-button'),
+};
 
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: (...args: unknown[]) => mockUseObservableSuspense(...args),
@@ -40,7 +65,7 @@ jest.mock('./hooks/use-checkout-session', () => ({
 }));
 
 jest.mock('./components/payment-webview', () => ({
-	PaymentWebview: (props: Record<string, any>) => {
+	PaymentWebview: (props: MockPaymentWebviewProps) => {
 		paymentWebviewProps = props;
 		// The real component forwards the ref through to the WebView, which exposes
 		// `postMessage`. Stand that in so the test can observe (or not observe) the
@@ -63,7 +88,7 @@ jest.mock('@wcpos/components/modal', () => ({
 	ModalClose: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
 	// Superset of the mock #1019 introduced: it also captures the props so a test
 	// can invoke the handler directly, and exposes the `loading` affordance.
-	ModalAction: ({ children, ...props }: Record<string, any>) => {
+	ModalAction: ({ children, ...props }: MockModalActionProps) => {
 		if (props.testID === 'process-payment-button') {
 			processPaymentProps = props;
 		}
@@ -281,8 +306,8 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		mockBlockIfDegraded.mockReset();
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockStorageDegraded = false;
-		paymentWebviewProps = {};
-		processPaymentProps = {};
+		paymentWebviewProps = { setFrameStatus: notRendered('PaymentWebview') };
+		processPaymentProps = { onPress: notRendered('process-payment-button') };
 	});
 
 	it('disables Process Payment while the payment frame is still loading, and enables it on the load signal', () => {
@@ -307,7 +332,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		// `disabled` stops the DOM click, so invoke the handler directly: the guard
 		// must hold even if the press wins the race against the re-render.
 		await act(async () => {
-			await processPaymentProps.onPress();
+			await processPaymentProps.onPress?.();
 		});
 
 		expect(mockPostMessage).not.toHaveBeenCalled();
@@ -317,7 +342,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		});
 
 		await act(async () => {
-			await processPaymentProps.onPress();
+			await processPaymentProps.onPress?.();
 		});
 
 		expect(mockPostMessage).toHaveBeenCalledWith({ action: 'wcpos-process-payment' });
@@ -336,6 +361,31 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(button.dataset.loading).toBe('false');
 	});
 
+	it('refuses a press held over from before the frame was re-gated', async () => {
+		// The frame's src is swapped after it went ready — a JWT refresh or a new
+		// payment link. The press already in flight carries the closure from the
+		// ready render, so a guard that reads that closure would post into a
+		// document that is loading again, recreating the exact silent stall this
+		// change exists to prevent. The guard has to read live state.
+		renderCheckout({ mode: 'webview' });
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('ready');
+		});
+		const pressFromReadyRender = processPaymentProps.onPress;
+		expect(pressFromReadyRender).toBeDefined();
+
+		act(() => {
+			paymentWebviewProps.setFrameStatus('loading');
+		});
+
+		await act(async () => {
+			await pressFromReadyRender?.();
+		});
+
+		expect(mockPostMessage).not.toHaveBeenCalled();
+	});
+
 	/* ---------------------------------------------------------------------- */
 	/* Composition with the #163/R5 degraded-storage latch (#1019)            */
 	/* ---------------------------------------------------------------------- */
@@ -350,7 +400,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(screen.getByTestId('checkout-storage-unavailable')).toBeTruthy();
 
 		await act(async () => {
-			await processPaymentProps.onPress();
+			await processPaymentProps.onPress?.();
 		});
 
 		// `blockIfDegraded` ran, which pins the ordering: it sits ahead of the frame
@@ -371,7 +421,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(button.disabled).toBe(true);
 
 		await act(async () => {
-			await processPaymentProps.onPress();
+			await processPaymentProps.onPress?.();
 		});
 
 		expect(mockBlockIfDegraded).toHaveBeenCalledWith('process-payment', expect.any(Object));
@@ -388,7 +438,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(screen.queryByTestId('checkout-storage-unavailable')).toBeNull();
 
 		await act(async () => {
-			await processPaymentProps.onPress();
+			await processPaymentProps.onPress?.();
 		});
 
 		expect(mockBlockIfDegraded).toHaveBeenCalledWith('process-payment', expect.any(Object));
@@ -404,7 +454,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		);
 
 		await act(async () => {
-			await processPaymentProps.onPress();
+			await processPaymentProps.onPress?.();
 		});
 
 		expect(mockPostMessage).toHaveBeenCalledWith({ action: 'wcpos-process-payment' });
@@ -425,7 +475,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(screen.getByText('pos_checkout.payment_form_load_failed')).toBeTruthy();
 
 		await act(async () => {
-			await processPaymentProps.onPress();
+			await processPaymentProps.onPress?.();
 		});
 
 		expect(mockPostMessage).not.toHaveBeenCalled();
@@ -438,7 +488,7 @@ describe('Checkout — Process Payment is gated on the payment frame', () => {
 		expect(button.disabled).toBe(false);
 
 		await act(async () => {
-			await processPaymentProps.onPress();
+			await processPaymentProps.onPress?.();
 		});
 
 		expect(startCheckout).toHaveBeenCalledTimes(1);

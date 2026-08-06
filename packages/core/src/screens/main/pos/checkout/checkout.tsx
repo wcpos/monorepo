@@ -71,7 +71,18 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	// the store's order-pay document has loaded, it is dropped silently and the
 	// cashier is left with a button that spins forever (#1024). The payment frame
 	// reports its load event; until then the footer stays gated.
+	//
+	// The status is mirrored into a ref because the render state alone cannot be
+	// trusted by the handler: when the frame's src is swapped (JWT refresh, a new
+	// payment link) the press already in flight still carries the closure from the
+	// render that said `ready`. The ref is written the moment the frame re-gates,
+	// so the guard reads live state rather than a snapshot.
 	const [frameStatus, setFrameStatus] = React.useState<PaymentFrameStatus>('loading');
+	const frameStatusRef = React.useRef<PaymentFrameStatus>('loading');
+	const reportFrameStatus = React.useCallback((next: PaymentFrameStatus) => {
+		frameStatusRef.current = next;
+		setFrameStatus(next);
+	}, []);
 	const { loading, mode, error, startCheckout, handleStockRejection } = useCheckoutSession(
 		order as import('@wcpos/database').OrderDocument
 	);
@@ -122,8 +133,9 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 
 		// Refuse rather than post into a document that cannot be listening yet: the
 		// message would vanish with no ack and no retry. `disabled` covers the
-		// render; this covers a press that beats the re-render.
-		if (frameStatus !== 'ready') {
+		// render; the ref covers a press that beats the re-render, including one
+		// held over from before the frame's src was swapped.
+		if (frameStatusRef.current !== 'ready') {
 			return;
 		}
 
@@ -131,7 +143,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 		if (webViewRef.current && webViewRef.current.postMessage) {
 			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
 		}
-	}, [blockIfDegraded, frameStatus, mode, order.id, order.uuid, startCheckout]);
+	}, [blockIfDegraded, mode, order.id, order.uuid, startCheckout]);
 
 	/**
 	 *
@@ -178,7 +190,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 								order={order}
 								ref={webViewRef}
 								setLoading={setLegacyLoading}
-								setFrameStatus={setFrameStatus}
+								setFrameStatus={reportFrameStatus}
 								onStockRejection={handleStockRejection}
 							/>
 						) : (
