@@ -10,6 +10,7 @@ import {
 	degradedStorage$,
 	isStorageDegraded,
 	isStorageWorkerFailure,
+	resetReportedCleanupFailures,
 	STORAGE_RPC_WATCHDOG_MS,
 	wrappedErrorHandlerStorage,
 } from './wrapped-error-handler-storage';
@@ -1178,6 +1179,258 @@ describe('wrappedErrorHandlerStorage', () => {
 			await wrappedInstance.query({} as any);
 
 			expect(jest.getTimerCount()).toBe(before);
+		});
+	});
+	/**
+	 * RxDB starts cleanup from an un-awaited `createRxCollection` hook and chains
+	 * every collection of every database onto one process-wide promise
+	 * (RXSTORAGE_CLEANUP_QUEUE). A rejection there is both an unhandled rejection
+	 * — which raises the dev LogBox overlay — and a poison pill that ends cleanup
+	 * for the whole app, so tombstones and the OPFS documents file grow forever.
+	 * The wrapper therefore reports cleanup failures and resolves.
+	 */
+	describe('cleanup containment', () => {
+		const workerLoss = () =>
+			new Error(
+				'could not requestRemote: {"methodName":"cleanup","error":{"message":"worker gone"}}'
+			);
+
+		beforeEach(() => {
+			clearStorageDegradation();
+			resetReportedCleanupFailures();
+		});
+
+		afterEach(() => {
+			clearStorageDegradation();
+			resetReportedCleanupFailures();
+		});
+
+		it('passes a successful cleanup result through unchanged', async () => {
+			const innerCleanup = jest.fn().mockResolvedValue(false);
+			const instance = createMockStorageInstance({ cleanup: innerCleanup });
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'cleanup-ok-db' } as any);
+
+			// `false` means "more to do" — swallowing it would stall compaction.
+			await expect(wrappedInstance.cleanup(1000)).resolves.toBe(false);
+			expect(innerCleanup).toHaveBeenCalledWith(1000);
+		});
+
+		it('resolves done instead of rejecting when cleanup throws', async () => {
+			const opfsWhitespaceRow = new Error(
+				'could not requestRemote: {"methodName":"cleanup","error":{"name":"TypeError","message":"Cannot read properties of undefined (reading \'_deleted\')"}}'
+			);
+			const instance = createMockStorageInstance({
+				cleanup: jest.fn().mockRejectedValue(opfsWhitespaceRow),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'cleanup-fail-db' } as any);
+
+			// `true` ends this round; RxDB retries on its next cleanup cycle
+			// rather than spinning on a failing call.
+			await expect(wrappedInstance.cleanup(1000)).resolves.toBe(true);
+			expect(mockLoggerInstance.error).toHaveBeenCalled();
+		});
+
+		it('reports a failing collection once instead of every cleanup cycle', async () => {
+			const instance = createMockStorageInstance({
+				cleanup: jest.fn().mockRejectedValue(new Error('cleanup exploded')),
+				collectionName: 'products',
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'cleanup-noisy-db' } as any);
+
+			await expect(wrappedInstance.cleanup(1000)).resolves.toBe(true);
+			await expect(wrappedInstance.cleanup(1000)).resolves.toBe(true);
+			await expect(wrappedInstance.cleanup(1000)).resolves.toBe(true);
+
+			// Every failure writes a log document, whose insert schedules the next
+			// cleanup round — reporting each one would feed itself.
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+		});
+
+		it('re-arms reporting once cleanup completes a round', async () => {
+			const innerCleanup = jest
+				.fn()
+				.mockRejectedValueOnce(new Error('cleanup exploded'))
+				.mockResolvedValueOnce(true)
+				.mockRejectedValueOnce(new Error('cleanup exploded again'));
+			const instance = createMockStorageInstance({ cleanup: innerCleanup });
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'cleanup-rearm-db' } as any);
+
+			await wrappedInstance.cleanup(1000);
+			await wrappedInstance.cleanup(1000);
+			await wrappedInstance.cleanup(1000);
+
+			// The whitespace-row recovery repairs in place, so a later failure is
+			// genuinely new information rather than the same one echoing.
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+		});
+
+		it('does not treat mid-round progress as a completed round', async () => {
+			// The realistic shape of a failing round. RxDB loops while cleanup
+			// returns false, and rxdb-premium returns false whenever it relocated
+			// documents or drained changelog operations — so the throw arrives
+			// after one or more `false`s. Treating those as success would re-arm
+			// reporting every round, forever.
+			const innerCleanup = jest
+				.fn()
+				.mockResolvedValueOnce(false)
+				.mockResolvedValueOnce(false)
+				.mockRejectedValueOnce(new Error('cleanup exploded'))
+				.mockResolvedValueOnce(false)
+				.mockRejectedValueOnce(new Error('cleanup exploded'));
+			const instance = createMockStorageInstance({ cleanup: innerCleanup });
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'cleanup-progress-db' } as any);
+
+			for (let round = 0; round < 5; round += 1) {
+				await wrappedInstance.cleanup(1000);
+			}
+
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+		});
+
+		it.each(['close', 'remove'] as const)(
+			'forgets the report on %s so a re-added collection reports again',
+			async (teardown) => {
+				const build = async () => {
+					const instance = createMockStorageInstance({
+						cleanup: jest.fn().mockRejectedValue(new Error('cleanup exploded')),
+						close: jest.fn().mockResolvedValue(undefined),
+						remove: jest.fn().mockResolvedValue(undefined),
+					});
+					return wrappedErrorHandlerStorage({
+						storage: createMockStorage(instance),
+					}).createStorageInstance({ databaseName: `cleanup-${teardown}-db` } as any);
+				};
+
+				const before = await build();
+				await before.cleanup(1000);
+				// Clear & Sync / a store switch tears the instance down and re-adds
+				// the same database+collection name — and Clear & Sync is exactly the
+				// remedy a cashier runs for this failure.
+				await before[teardown]();
+
+				const after = await build();
+				await after.cleanup(1000);
+
+				expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+			}
+		);
+
+		it('reports each failing collection separately', async () => {
+			const products = createMockStorageInstance({
+				cleanup: jest.fn().mockRejectedValue(new Error('cleanup exploded')),
+				collectionName: 'products',
+			});
+			const orders = createMockStorageInstance({
+				cleanup: jest.fn().mockRejectedValue(new Error('cleanup exploded')),
+				collectionName: 'orders',
+			});
+			const wrapProducts = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(products),
+			}).createStorageInstance({ databaseName: 'cleanup-multi-db' } as any);
+			const wrapOrders = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(orders),
+			}).createStorageInstance({ databaseName: 'cleanup-multi-db' } as any);
+
+			await wrapProducts.cleanup(1000);
+			await wrapOrders.cleanup(1000);
+
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+		});
+
+		it('still raises the degraded-storage signal when cleanup loses the worker', async () => {
+			const instance = createMockStorageInstance({
+				cleanup: jest.fn().mockRejectedValue(workerLoss()),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'cleanup-degraded-db' } as any);
+
+			await expect(wrappedInstance.cleanup(1000)).resolves.toBe(true);
+
+			expect(isStorageDegraded('cleanup-degraded-db')).toBe(true);
+		});
+
+		/**
+		 * Composition with the dead-worker watchdog (#1040). `cleanup` is
+		 * deliberately absent from `WATCHDOG_WATCHED_METHODS` — it is unbounded by
+		 * design and arming it would false-trip mid-Clear&Sync — so a slow cleanup
+		 * must never be condemned by the clock. Pinned here because the two
+		 * mechanisms meet on this method: if cleanup were ever added to that set,
+		 * the containment below would silently swallow every dead-worker timeout
+		 * on it, and that has to be a deliberate choice rather than a side effect.
+		 */
+		it('never lets the RPC watchdog condemn a slow cleanup', async () => {
+			jest.useFakeTimers();
+			__resetStorageLivenessForTests();
+			try {
+				const instance = createMockStorageInstance({
+					cleanup: jest.fn(() => new Promise(() => undefined)),
+				});
+				const wrappedInstance = await wrappedErrorHandlerStorage({
+					storage: createMockStorage(instance),
+				}).createStorageInstance({ databaseName: 'cleanup-unwatched-db' } as any);
+
+				let settled = false;
+				void wrappedInstance.cleanup(1000).then(() => {
+					settled = true;
+				});
+				await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 4);
+
+				// A long compaction is not a dead worker.
+				expect(settled).toBe(false);
+				expect(isStorageDegraded('cleanup-unwatched-db')).toBe(false);
+				expect(mockLoggerInstance.error).not.toHaveBeenCalled();
+			} finally {
+				jest.useRealTimers();
+			}
+		});
+
+		it('contains the disposal-deadline rejection without calling it a storage failure', async () => {
+			const instance = createMockStorageInstance({
+				cleanup: jest.fn(() => new Promise(() => undefined)),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'cleanup-disposing-db' } as any);
+			const cleaning = wrappedInstance.cleanup(1000);
+
+			terminalFailureApi.markStorageTerminallyFailed!('cleanup-disposing-db', 'disposal');
+
+			await expect(cleaning).resolves.toBe(true);
+			// markStorageTerminallyFailed logs the disposal itself; the background
+			// cleanup that lost its race must not add a second report.
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+		});
+
+		it('stays quiet when cleanup loses its race against a deliberate teardown', async () => {
+			let rejectCleanup: ((error: Error) => void) | undefined;
+			const instance = createMockStorageInstance({
+				cleanup: jest.fn(() => new Promise((_resolve, reject) => (rejectCleanup = reject))),
+				close: jest.fn().mockResolvedValue(undefined),
+			});
+			const wrappedInstance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(instance),
+			}).createStorageInstance({ databaseName: 'cleanup-teardown-db' } as any);
+
+			// A background cleanup is mid-flight when the store switch begins.
+			const cleaning = wrappedInstance.cleanup(1000);
+			const closed = wrappedInstance.close();
+			rejectCleanup!(new Error('instance is closed cleanup-teardown-db-products'));
+
+			await expect(cleaning).resolves.toBe(true);
+			await closed;
+
+			expect(mockLoggerInstance.error).not.toHaveBeenCalled();
 		});
 	});
 });

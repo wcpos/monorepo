@@ -2,7 +2,229 @@ import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import test from "node:test";
 
+import { getIndexableStringMonad } from "rxdb/plugins/core";
+
 import { withTargetedOpfsRecovery } from "./opfs-targeted-recovery.mjs";
+
+const SCHEMA = {
+  version: 0,
+  primaryKey: "id",
+  type: "object",
+  properties: {
+    id: { type: "string", maxLength: 4 },
+    name: { type: "string", maxLength: 4 },
+    _deleted: { type: "boolean" },
+    _meta: {
+      type: "object",
+      properties: {
+        lwt: {
+          type: "number",
+          minimum: 1,
+          maximum: 1000000000000000,
+          multipleOf: 0.01,
+        },
+      },
+    },
+  },
+};
+
+/**
+ * A miniature of the rxdb-premium abstract-filesystem storage: a documents byte
+ * buffer plus index rows of `[indexableString, start, end]`.
+ *
+ The index set is the one production actually builds. RxDB's
+ * `fillWithDefaultSettings` prefixes `_deleted` to every schema index, and
+ * premium's `getIndexesFromSchema` then appends `['_meta.lwt', primaryPath]`
+ * and the cleanup index — verified against the installed packages:
+ *
+ *   [["_deleted","name","id"], ["_meta.lwt","id"], ["_deleted","_meta.lwt","id"]]
+ *
+ * That is why `indexStates[0]` is `_deleted`-first, and why the production
+ * stack throws reading `_deleted` rather than `_meta`.
+ *
+ * `cleanup` reproduces `cleanupDocumentJsonFile` (rxdb-premium 17.4.0,
+ * plugins/storage-abstract-filesystem/cleanup.js): it walks the two-element
+ * `_meta.lwt` index in row order, skips any row already flush against the write
+ * cursor (`w === g`), and for a row preceded by a gap reads the bytes, parses
+ * them as a JSON array, takes element 0 and feeds it to
+ * `changeDocumentPosition` -> `getIndexableString` for every index. It returns
+ * `false` while it is still relocating documents, matching the real contract.
+ *
+ * A row whose bytes are whitespace parses to `[]`, so element 0 is `undefined`
+ * and the index-key derivation throws `TypeError: Cannot read properties of
+ * undefined (reading '_deleted')`. That is the shape observed in production;
+ * the gap that makes premium look at the row at all is modelled here rather
+ * than assumed.
+ */
+function createFakeOpfsInstance({ documents, corruptId, gapBefore }) {
+  const indexes = [
+    ["_deleted", "name", "id"],
+    ["_meta.lwt", "id"],
+    ["_deleted", "_meta.lwt", "id"],
+  ];
+  let cursor = 0;
+  const chunks = [];
+  const positions = new Map();
+  for (const document of documents) {
+    if (document.id === gapBefore) {
+      // Dead space left by an earlier compaction — this is what makes premium
+      // relocate the next row instead of skipping it.
+      chunks.push(Buffer.alloc(8, 0x20));
+      cursor += 8;
+    }
+    const encoded = Buffer.from(JSON.stringify(document));
+    const bytes =
+      document.id === corruptId
+        ? Buffer.alloc(encoded.byteLength, 0x20)
+        : encoded;
+    chunks.push(bytes);
+    positions.set(document.id, [cursor, cursor + bytes.byteLength]);
+    cursor += bytes.byteLength;
+  }
+  const documentBytes = Buffer.concat(chunks);
+
+  const indexStates = indexes.map((index, indexId) => {
+    const getIndexableString = getIndexableStringMonad(SCHEMA, index);
+    return {
+      indexId,
+      getIndexableString,
+      rows: documents
+        .map((document) => [
+          getIndexableString(document),
+          ...positions.get(document.id),
+        ])
+        .sort((left, right) => (left[0] < right[0] ? -1 : 1)),
+      runChangelogOperation([, position, operation]) {
+        assert.equal(operation, "D");
+        this.rows.splice(position, 1);
+      },
+    };
+  });
+  // The real function selects the two-element `['_meta.lwt', primaryPath]`
+  // index as the compaction driver, not `indexStates[0]`.
+  const lwtIndex = indexStates[indexes.findIndex(
+    (index) => index.length === 2 && index[0] === "_meta.lwt" && index[1] === "id",
+  )];
+
+  const changelogOperations = [];
+  const accessHandle = {
+    read: async (start, end) => documentBytes.subarray(start, end),
+  };
+
+  return {
+    changelogOperations,
+    indexStates,
+    instance: {
+      primaryPath: "id",
+      findDocumentsById: async () => "[]",
+      bulkWrite: async () => ({ error: [] }),
+      query: async () => JSON.stringify({ documents: [] }),
+      getChangedDocumentsSince: async () => JSON.stringify({ documents: [] }),
+      cleanup: async () => {
+        let writeCursor = 0;
+        let relocated = 0;
+        for (const [, start, end] of lwtIndex.rows) {
+          if (start === writeCursor) {
+            writeCursor = end;
+            continue;
+          }
+          const document = JSON.parse(
+            `[${documentBytes.subarray(start, end).toString()}]`,
+          )[0];
+          for (const indexState of indexStates) {
+            indexState.getIndexableString(document);
+          }
+          relocated += 1;
+          writeCursor += end - start;
+        }
+        // Premium reports "not done" while it is still moving documents.
+        return relocated === 0;
+      },
+      internals: {
+        statePromise: Promise.resolve({
+          documentFileHandle: { createAccessHandle: async () => accessHandle },
+          indexStates,
+          changelog: {
+            addChangelogOperations: async (_runState, operations) => {
+              changelogOperations.push(...operations);
+            },
+          },
+        }),
+      },
+      taskQueue: {
+        runCleanup: async (operation) =>
+          operation({ accessHandlers: new Map() }),
+      },
+      _decode: (bytes) => bytes.toString(),
+    },
+  };
+}
+
+const DOCUMENTS = [
+  { id: "aaa", name: "a", _deleted: false, _meta: { lwt: 100 } },
+  { id: "bbb", name: "b", _deleted: false, _meta: { lwt: 200 } },
+  { id: "ccc", name: "c", _deleted: false, _meta: { lwt: 300 } },
+];
+
+test("recovers the cleanup storm: a whitespace row is dropped and cleanup retried", async () => {
+  const { instance, indexStates, changelogOperations } =
+    createFakeOpfsInstance({
+      documents: DOCUMENTS,
+      corruptId: "bbb",
+      gapBefore: "bbb",
+    });
+
+  // Guard the premise: the modelled path produces the exact production error.
+  await assert.rejects(
+    () => instance.cleanup(0),
+    (error) =>
+      error instanceof TypeError &&
+      /reading '_deleted'/.test(error.message) === true,
+  );
+
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance({ multiInstance: false });
+
+  // Recovery makes the retry complete instead of throwing. It reports `false`
+  // — the real "still relocating, call me again" signal — which is exactly why
+  // the containment in wrapped-error-handler-storage must not read a `false`
+  // as a completed round.
+  assert.equal(await recovering.cleanup(0), false);
+
+  // The dangling pointer is gone from every index — one delete per index — and
+  // the two surviving documents are untouched.
+  for (const indexState of indexStates) {
+    assert.equal(indexState.rows.length, 2);
+  }
+  assert.equal(changelogOperations.length, indexStates.length);
+
+  // The damage is repaired, not merely survived: the raw storage no longer
+  // throws on the row that poisoned the cleanup queue.
+  await assert.doesNotReject(() => recovering.cleanup(0));
+});
+
+test("refuses whitespace-row recovery when another instance holds the storage", async () => {
+  const { instance, indexStates } = createFakeOpfsInstance({
+    documents: DOCUMENTS,
+    corruptId: "bbb",
+    gapBefore: "bbb",
+  });
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance({ multiInstance: true });
+
+  // A peer's stale in-memory rows could persist over the drop, so the refusal
+  // is correct — it must simply never be the only outcome available on a
+  // platform that is always single-instance (see adapters/default/index.web).
+  await assert.rejects(
+    () => recovering.cleanup(0),
+    (error) => /targeted recovery refused: multi-instance/.test(error.message),
+  );
+  for (const indexState of indexStates) {
+    assert.equal(indexState.rows.length, 3);
+  }
+});
 
 test("propagates a persistent cleanup error after recovery retries", async () => {
   const persistentError = new Error("quota exceeded");
