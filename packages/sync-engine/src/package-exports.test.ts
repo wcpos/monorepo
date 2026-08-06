@@ -26,6 +26,7 @@ describe('package exports', () => {
 		const testing = await import('./testing');
 		expect(Object.keys(testing).sort()).toEqual([
 			'coverageLaneSchema',
+			'customerBrowseWindowQueryKeyFromDimensions',
 			'engineSyncCollectionCreators',
 			'existenceManifestDocument',
 			'existenceManifestSchema',

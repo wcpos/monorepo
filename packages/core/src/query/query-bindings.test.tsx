@@ -855,6 +855,90 @@ describe('query bindings', () => {
 		expect(engine.searchRequireCalls).toHaveLength(1);
 	});
 
+	// #951. A sorted customers grid declares a browse window, and its footer must report the
+	// SERVER's count for that view — a windowed browse is deliberately incomplete, so reading
+	// the resident count as the total is the false-complete bug (#894/#945).
+	it('reports the server total for a sorted customers browse, not the resident count', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.customers.insert({
+			id: 'customer-ada',
+			wooCustomerId: 103,
+			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
+			sync: { revision: '1', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		await engineDB.collections.queryTotalCacheEntries.insert({
+			queryKey: 'customers:browse-window:limit=100:orderby=registered_date:order=desc',
+			totalMatchingRecords: 4_200,
+			freshUntilMs: Date.now() + 60_000,
+			updatedAtMs: Date.now(),
+			schemaVersion: 1,
+		});
+
+		const state: QueryStateOf<'customers'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 10,
+		};
+		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		expect(engine.requireCalls).toContainEqual(
+			expect.objectContaining({
+				collection: 'customers',
+				kind: 'customer-browse',
+				orderby: 'registered_date',
+				order: 'desc',
+				limit: 10,
+			})
+		);
+		await expect(
+			firstValueFrom(result.current.total$.pipe(filter((total) => total === 4_200)))
+		).resolves.toBe(4_200);
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'coverage')))
+		).resolves.toBe('coverage');
+	});
+
+	// The columns the v2 read surface cannot sort keep the honest local footer rather than
+	// putting a `rest_invalid_param` on the wire once per scroll tick.
+	it('declares no browse demand for a customers sort the wire cannot express', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.customers.insert({
+			id: 'customer-ada',
+			wooCustomerId: 103,
+			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
+			sync: { revision: '1', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		const state: QueryStateOf<'customers'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 10,
+		};
+		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		expect(
+			engine.requireCalls.filter((requirement) => requirement.kind === 'customer-browse')
+		).toHaveLength(0);
+		await expect(
+			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
+		).resolves.toBe('local');
+	});
+
 	it('releases direct search demand when its binding unmounts', async () => {
 		const state: QueryStateOf<'customers'> = {
 			search: 'ada',

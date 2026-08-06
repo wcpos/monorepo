@@ -1117,6 +1117,7 @@
 	"health.logs.event.coverage_require_error": "Could not load the records this screen needs",
 	"health.logs.event.coverage_require_log": "Record loading detail",
 	"health.logs.event.coverage_require_outcome": "Loaded the records this screen needs",
+	"health.logs.event.customer_browse_window_sort_rejected": "Your store cannot sort the customer list this way",
 	"health.logs.event.demand_activity_counter_underflow": "Sync activity tracking corrected itself",
 	"health.logs.event.email_queue_deferred": "Could not email a receipt yet — will try again",
 	"health.logs.event.email_queue_discarded": "Removed a receipt email from the queue",

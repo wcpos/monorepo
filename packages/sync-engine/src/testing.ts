@@ -72,7 +72,10 @@ export {
 	type ExistenceManifestDocument,
 } from './local-coverage/existence-manifest-schema';
 export { orderBrowserQueryKey } from './scheduler';
-export { productBrowseWindowQueryKeyFromDimensions } from './scheduler';
+export {
+	customerBrowseWindowQueryKeyFromDimensions,
+	productBrowseWindowQueryKeyFromDimensions,
+} from './scheduler';
 export { queryTotalCacheSchema } from './scheduler';
 export {
 	schedulerTaskStateKey,

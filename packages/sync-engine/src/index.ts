@@ -10,6 +10,7 @@ export {
 	type EngineEvent,
 	type EngineRequirement,
 	type EngineStatus,
+	type CustomerBrowseDimensions,
 	type OrderBrowseDimensions,
 	type ProductBrowseDimensions,
 	type RequirementHandle,

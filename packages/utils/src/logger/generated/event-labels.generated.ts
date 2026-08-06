@@ -29,6 +29,7 @@ export const SYNC_EVENT_TYPES = [
 	'coverage.require.error',
 	'coverage.require.log',
 	'coverage.require.outcome',
+	'customer.browse-window.sort-rejected',
 	'demand.activity-counter-underflow',
 	'email.queue.deferred',
 	'email.queue.discarded',
@@ -254,6 +255,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.coverage_require_outcome',
 		label: 'Loaded the records this screen needs',
+		introducedIn: '1.10.0',
+	},
+	'customer.browse-window.sort-rejected': {
+		type: 'customer.browse-window.sort-rejected',
+		domain: 'SYNC',
+		key: 'health.logs.event.customer_browse_window_sort_rejected',
+		label: 'Your store cannot sort the customer list this way',
 		introducedIn: '1.10.0',
 	},
 	'demand.activity-counter-underflow': {

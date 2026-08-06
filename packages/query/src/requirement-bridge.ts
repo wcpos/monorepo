@@ -26,6 +26,7 @@
 
 import { getLogger } from '@wcpos/utils/logger';
 import type {
+	CustomerBrowseDimensions,
 	EngineRequirement,
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
@@ -428,6 +429,30 @@ function productBrowseWindowFilters(selector: Record<string, unknown> | undefine
 	return { filters, residual };
 }
 
+/**
+ * Extract the customers browse window's dimensions (#951). The customers grid exposes NO
+ * filter UI today (`query-state-types` gives it an empty filter record), so `sort` and `limit`
+ * are the whole vocabulary — a `role` dimension would be a setting with no consumer. Anything
+ * present in the selector is therefore a residual the local query still enforces.
+ */
+function customerBrowseDimensions(
+	selector: Record<string, unknown> | undefined,
+	limit: number | undefined,
+	sort: readonly RequirementSortPart[] | undefined
+): { dimensions: CustomerBrowseDimensions; residual: boolean } {
+	const dimensions: CustomerBrowseDimensions = {};
+	if (limit !== undefined) dimensions.limit = limit;
+	const [primary] = sort ?? [];
+	const [field, direction] = Object.entries(primary ?? {})[0] ?? [];
+	const orderby = field ? wooOrderbyFor('customers', field) : undefined;
+	if (orderby !== undefined && direction !== undefined) {
+		dimensions.orderby = orderby;
+		dimensions.order = direction;
+	}
+	const residual = Object.keys(selector ?? {}).length > 0;
+	return { dimensions, residual };
+}
+
 export interface RequirementInput {
 	id: string;
 	collectionName: string;
@@ -529,6 +554,47 @@ export function requirementsForQuery(input: RequirementInput): RequirementPlan {
 				},
 			],
 			represented: !extraction.residual,
+		};
+	}
+
+	// Customers browse → the customers browse window (#951). Customers stay ON-DEMAND: an
+	// unsorted browse still declares nothing, so the no-eager-seed ruling (#865) is intact. But
+	// once the cashier picks a sort the wire can express, that sort becomes SERVER demand —
+	// Paul's ruling (2026-08-06): "you change the sorting … you expect to see those customers."
+	//
+	// The gate is deliberately the wire's own vocabulary. Most customers columns (last_name,
+	// first_name, email, role, username) are NOT expressible through the v2 proxy's wc/v3
+	// forward, and sending one would 400 on every scroll tick rather than degrade — so those
+	// keep sorting local residents and the footer keeps admitting it is local. See
+	// CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES for the plugin change that widens this.
+	if (engineCollection === 'customers') {
+		// A selector carrying an `id` predicate is a targeted LOOKUP, never a browse. When it
+		// names ids the targeted branch above already returned; when it resolves to the EMPTY
+		// set it must still declare nothing. `use-default-customer.ts` relies on exactly that:
+		// it passes `wooIds: []` for the guest (id 0) so no request is made — passing `[0]` once
+		// jammed the customers cursor on every boot (#850) — and its own comment records that
+		// "no fetch is ever declared". Falling through to the browse would read that hook's
+		// `id asc` sort and pull a 100-row window on every cold POS mount, which is precisely
+		// the eager customer seed #865 rules out.
+		if (selector?.id !== undefined) {
+			return { requirements: [], represented: false };
+		}
+		const { dimensions, residual } = customerBrowseDimensions(selector, limit, input.sort);
+		if (dimensions.orderby === undefined) {
+			return { requirements: [], represented: false };
+		}
+		return {
+			requirements: [
+				{
+					id: `${input.id}:customers-browse-window`,
+					collection: 'customers',
+					kind: 'customer-browse',
+					...dimensions,
+					...(input.priority !== undefined ? { priority: input.priority } : {}),
+					...(input.forceRefresh ? { forceRefresh: true } : {}),
+				},
+			],
+			represented: !residual,
 		};
 	}
 

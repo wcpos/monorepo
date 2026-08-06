@@ -21,6 +21,8 @@ import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 import { createProductsSchedulerFetcher } from './rx-scheduler-product-fetcher';
 import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
+import { parseCustomerBrowseWindowDescriptor } from './customer-browse-window-descriptor';
+import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { createTaxRateSchedulerFetcher } from './rx-scheduler-tax-rate-fetcher';
 import {
 	BRAND_REFERENCE_CONFIG,
@@ -119,6 +121,13 @@ function isSupportedCustomerSchedulerTask(task: SchedulerTaskSupportCandidate): 
 	if (task.collection !== 'customers') return false;
 	if (task.queryKey.startsWith(SUPPORTED_TARGETED_CUSTOMER_QUERY_KEY_PREFIX)) {
 		return hasTargetedIds(task);
+	}
+	// The browse window (#951). Its limit is the WINDOW size and must match the key, the same
+	// contract the search lane holds — a task whose limit disagrees with its key would fetch a
+	// different number of rows than the coverage lane it writes claims to hold.
+	const browseWindow = parseCustomerBrowseWindowDescriptor(task.queryKey);
+	if (browseWindow !== null) {
+		return task.limit === browseWindow.limit && task.mode === 'windowed' && hasNoTargetedIds(task);
 	}
 	return isSupportedCustomerSearchTask(task);
 }
@@ -225,6 +234,8 @@ export type RunEngineSchedulerDrainInput = {
 	diagnostics?: SyncObserver;
 	signal?: AbortSignal;
 	nowMs?: number;
+	/** Restrict an explicitly requested foreground drain to one seeded task. */
+	taskId?: string;
 	/** Override for an explicitly requested foreground drain. Background drains
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
@@ -325,6 +336,9 @@ function createEngineSchedulerFetcherRegistry(
 					collectionSchedulerRepository(db.customers) as never,
 					db.existenceManifestCustomers
 				),
+				// #951: the browse window caches the server's X-WP-Total for its sorted view so the
+				// grid footer reports the real customer count, not the resident count.
+				queryTotalRepository: new RxQueryTotalCacheRepository(db as never),
 			}),
 		},
 		{
@@ -399,9 +413,21 @@ export async function runEngineSchedulerDrain(
 		run: () => {
 			const schedulerRepository = new RxSchedulerTaskStateRepository(db);
 			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input);
+			const supportedRepository = fetcherRegistry.supportedRepository(schedulerRepository);
+			const taskId = input.taskId;
+			const repository =
+				taskId === undefined
+					? supportedRepository
+					: {
+							...supportedRepository,
+							readRunnable: async (readAtMs: number) =>
+								(await supportedRepository.readRunnable(readAtMs)).filter(
+									(state) => state.taskId === taskId
+								),
+						};
 
 			return runPersistedSchedulerTasks({
-				repository: fetcherRegistry.supportedRepository(schedulerRepository),
+				repository,
 				fetcher: fetcherRegistry.fetcher,
 				...(input.withCollectionActivity !== undefined
 					? {

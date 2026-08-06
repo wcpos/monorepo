@@ -138,6 +138,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "customer.browse-window.sort-rejected",
+		"domain": "SYNC",
+		"label": "Your store cannot sort the customer list this way",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "demand.activity-counter-underflow",
 		"domain": "SYNC",
 		"label": "Sync activity tracking corrected itself",
