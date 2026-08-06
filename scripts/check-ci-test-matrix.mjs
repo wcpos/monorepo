@@ -229,7 +229,11 @@ export function detectLanes(sources, packages) {
     );
   };
 
-  for (const [source, text] of sources) {
+  for (const [source, rawText] of sources) {
+    // Stripped here as well as in readLaneSources: the invariant "a commented
+    // command is not a lane" has to hold for every caller, and stripping twice
+    // is a no-op.
+    const text = stripComments(rawText);
     // Shape 1 — `for pkg in core components database; do`
     for (const match of text.matchAll(
       /for\s+\w+\s+in\s+([^;\n]+);\s*do\b([\s\S]*?)\bdone\b/g,
@@ -265,6 +269,27 @@ export function detectLanes(sources, packages) {
   return evidence;
 }
 
+/**
+ * Workflow text with comment bodies blanked out.
+ *
+ * Every shape below is a text scan, so the words that prove a lane exists are
+ * still sitting in the file after somebody comments the command out — and
+ * commenting a command out is the cheapest possible way to turn a suite off.
+ * A commented invocation must therefore read as NO invocation.
+ *
+ * `#` opens a comment only at the start of a line or after whitespace, which is
+ * true in YAML and in the shell inside a `run:` block alike. That guard is what
+ * keeps `echo "## 📊 Test Coverage Summary"` — a real line in test.yml — from
+ * blanking the rest of the step. Newlines survive so line-oriented patterns and
+ * the shape-3 window still see the original structure.
+ */
+export function stripComments(text) {
+  return text.replace(
+    /(^|[ \t])#[^\n]*/gm,
+    (match, lead) => lead + " ".repeat(match.length - lead.length),
+  );
+}
+
 /** The workflow files and root package.json scripts that can run tests. */
 export function readLaneSources(root = repoRoot) {
   const workflowDir = path.join(root, ".github/workflows");
@@ -272,7 +297,7 @@ export function readLaneSources(root = repoRoot) {
     .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
     .map((name) => [
       `.github/workflows/${name}`,
-      readFileSync(path.join(workflowDir, name), "utf8"),
+      stripComments(readFileSync(path.join(workflowDir, name), "utf8")),
     ]);
   const manifest = JSON.parse(
     readFileSync(path.join(root, "package.json"), "utf8"),

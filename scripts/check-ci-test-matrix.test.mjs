@@ -282,6 +282,73 @@ test("root script names are escaped before workflow matching", (t) => {
   );
 });
 
+test("a commented-out command is not a lane", () => {
+  // Deleting the executable line but leaving the comment behind is the cheapest
+  // possible way to turn a suite off, and it leaves the words a text scan looks
+  // for sitting right there in the file.
+  const commentedLoop = detectLanes(
+    [
+      [
+        "test.yml",
+        "# for pkg in core order-math; do\n#   npx jest --ci\n# done",
+      ],
+    ],
+    PACKAGES,
+  );
+  assert.ok(!commentedLoop.has("packages/core"));
+  assert.ok(!commentedLoop.has("packages/order-math"));
+
+  const commentedFilter = detectLanes(
+    [["test.yml", "  # pnpm --filter @wcpos/printer test"]],
+    PACKAGES,
+  );
+  assert.ok(!commentedFilter.has("packages/printer"));
+
+  const commentedCd = detectLanes(
+    [["test.yml", "# cd packages/query\n# npx jest --config jest.config.cjs"]],
+    PACKAGES,
+  );
+  assert.ok(!commentedCd.has("packages/query"));
+
+  // A `#` that is not opening a comment must survive — `"## 📊 Coverage"` is a
+  // real line in test.yml, and blanking from it would eat the rest of the step.
+  const stillCounts = detectLanes(
+    [["test.yml", 'echo "## report" && pnpm --filter @wcpos/printer test']],
+    PACKAGES,
+  );
+  assert.ok(stillCounts.has("packages/printer"));
+});
+
+for (const lane of ["playwright", "maestro"]) {
+  test(`the ${lane} lane check rejects a commented-out invocation`, (t) => {
+    const tree = makeTree();
+    t.after(() => rmSync(tree.root, { recursive: true, force: true }));
+    tree.write("pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n');
+    tree.write("package.json", JSON.stringify({ scripts: {} }));
+    tree.pkg("packages/core", "@wcpos/core", { test: "jest" });
+    tree.write("packages/core/src/core.test.ts", "");
+    tree.write(
+      ".github/workflows/test.yml",
+      "pnpm --filter @wcpos/core exec jest --ci\n",
+    );
+    const playwright = "run: cd apps/main && npx playwright test\n";
+    const maestro = "run: maestro test apps/main/.maestro\n";
+    tree.write(
+      ".github/workflows/deploy.yml",
+      lane === "playwright" ? `      # ${playwright}` : playwright,
+    );
+    tree.write(
+      ".github/workflows/e2e-native.yml",
+      lane === "maestro" ? `      # ${maestro}` : maestro,
+    );
+
+    assert.throws(
+      () => checkCiTestMatrix(tree.root),
+      new RegExp(`${lane}.*NO CI lane`, "i"),
+    );
+  });
+}
+
 test("a package mentioned nowhere is dark", () => {
   const lanes = detectLanes(
     [["test.yml", "for pkg in core; do x; done"]],
