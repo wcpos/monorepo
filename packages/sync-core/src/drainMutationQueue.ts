@@ -187,9 +187,24 @@ export async function drainMutationQueue(input: {
 	let deferred = 0;
 	let attempted = 0;
 
+	// LEASE FENCE (task 43): a settlement write is safe only while THIS drain still
+	// holds the row's lease. If another window stole it — our push outlived the
+	// lease — the stored row now carries the thief's `claimedBy` (or is gone, acked
+	// by the thief). An unconditional reschedule/replace/ack here would overwrite,
+	// delete, or RESURRECT the thief's row, so every settlement path checks this
+	// first and no-ops when the lease is no longer ours. With no `drainInstanceId`
+	// (single-process / legacy) there is no lease and this is always true — settle
+	// exactly as before.
+	const stillOwnLease = async (mutationId: string): Promise<boolean> => {
+		if (input.drainInstanceId === undefined) return true;
+		const row = (await input.queue.all()).find((item) => item.mutationId === mutationId);
+		return row?.claimedBy === input.drainInstanceId;
+	};
+
 	// Bump the attempt count + set the backoff gate after a failed push OR a failed ack, so the next
 	// drain waits before re-pushing (ADR 0012) — the same policy for both failure kinds.
 	const applyBackoff = async (mutation: QueuedMutation): Promise<void> => {
+		if (!(await stillOwnLease(mutation.mutationId))) return;
 		const attempts = (mutation.attempts ?? 0) + 1;
 		const delayMs = computeRetryBackoffMs(attempts, backoff, retryJitterSeed(mutation.mutationId));
 		try {
@@ -217,6 +232,7 @@ export async function drainMutationQueue(input: {
 	// row, no same-base retry loop). Only an explicit resolution moves it:
 	// retry-with-server-base first refreshes the revision; discard works as-is.
 	const parkNeedsRevision = async (mutation: QueuedMutation): Promise<void> => {
+		if (!(await stillOwnLease(mutation.mutationId))) return;
 		conflicts.push({
 			outcome: 'conflict',
 			mutation,
@@ -235,6 +251,7 @@ export async function drainMutationQueue(input: {
 	};
 
 	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void> => {
+		if (!(await stillOwnLease(mutation.mutationId))) return;
 		const { status, reason, serverMessage } = error as {
 			status?: number;
 			reason?: string;
@@ -352,6 +369,12 @@ export async function drainMutationQueue(input: {
 		// re-anchored. Creates keep their null base: there is nothing to re-anchor.
 		const freshRevision =
 			mutation.operation === 'create' ? undefined : await input.currentRevision?.(mutation);
+		// Never INHERIT a foreign lease: strip any `claimedBy`/`claimedUntil` the
+		// scanned row carried before stamping our own (or none). Without this, a
+		// caller with no `drainInstanceId` would spread a foreign holder into
+		// `draining` and `claim()` would read it as its OWN claim, bypassing the
+		// live-lease check (adversarial P2).
+		const { claimedBy: _priorBy, claimedUntil: _priorUntil, ...bare } = mutation;
 		const lease =
 			input.drainInstanceId !== undefined
 				? {
@@ -362,7 +385,7 @@ export async function drainMutationQueue(input: {
 					}
 				: {};
 		const draining = {
-			...mutation,
+			...bare,
 			baseRevision: freshRevision || mutation.baseRevision,
 			status: 'claimed' as const,
 			...lease,
@@ -375,6 +398,21 @@ export async function drainMutationQueue(input: {
 		// a row the write plane just removed and push a cancelled create). The lease
 		// (task 43) additionally refuses a row another window is actively pushing.
 		if (!(await input.queue.claim(draining, now()))) {
+			// A row another window is actively pushing (live foreign lease) must also
+			// HOLD this record's later mutations — otherwise we would skip the leased
+			// predecessor and push a successor out of FIFO order (an update before its
+			// create reaches the server). A row that is merely gone needs no block.
+			const current = (await input.queue.all()).find(
+				(item) => item.mutationId === mutation.mutationId
+			);
+			if (
+				current?.status === 'claimed' &&
+				current.claimedBy !== undefined &&
+				current.claimedBy !== input.drainInstanceId &&
+				(current.claimedUntil ? Date.parse(current.claimedUntil) : 0) > now()
+			) {
+				blockedRecords.add(mutation.recordId);
+			}
 			continue;
 		}
 		attempted += 1;
@@ -457,6 +495,16 @@ export async function drainMutationQueue(input: {
 				await applyBackoff({ ...draining, status: 'pending' });
 				continue;
 			}
+		}
+
+		// LEASE FENCE (task 43): the push (and any 428 refresh/retry) is where a slow
+		// drain outlives its lease. Before recording the outcome — a conflict
+		// transition, a born-twice follow-up, or the acknowledge that REMOVES the row
+		// — confirm the lease is still ours. If a window stole it mid-push, the row is
+		// theirs now (they will re-push and settle, the server deduping on
+		// mutationId); recording our outcome would delete or resurrect their row.
+		if (!(await stillOwnLease(mutation.mutationId))) {
+			continue;
 		}
 
 		if (result.outcome === 'conflict') {
