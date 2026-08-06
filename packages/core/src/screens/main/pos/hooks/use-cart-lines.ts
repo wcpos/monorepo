@@ -14,6 +14,7 @@ import { getUuidFromLineItem } from './utils';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
+import { useT } from '../../../../contexts/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
@@ -77,6 +78,7 @@ export const useCartLines = () => {
 	const { localPatch } = useLocalMutation();
 	const { recalculate } = useRecalculateCoupons();
 	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxRates();
+	const t = useT();
 
 	/**
 	 * We need to filter out any items that have been 'removed', eg: product_id === null.
@@ -256,8 +258,14 @@ export const useCartLines = () => {
 				if (continuationRef.current !== continuation || continuation.abort.signal.aborted) return;
 				continuationRef.current = null;
 				if (!settled) {
-					// Capped out. Give up silently; the next cart edit re-runs the replay.
-					cartLogger.debug('Coupon reference wait expired without settling; replay abandoned');
+					// Capped out. The next cart edit re-runs the replay, but the cashier must
+					// hear about it NOW: the cart is showing totals the engine knows it could
+					// not refresh (cashier-full-information ruling, 2026-08-07).
+					cartLogger.warn(t('pos_cart.coupon_refresh_timeout'), {
+						showToast: true,
+						saveToDb: true,
+						context: { generation: continuation.generation },
+					});
 					return;
 				}
 				const latest = currentOrder.getLatest();
@@ -280,6 +288,7 @@ export const useCartLines = () => {
 			currentOrder,
 			disarmReplayContinuation,
 			replayCoupons,
+			t,
 			whenCouponReferencesSettledInBackground,
 		]
 	);

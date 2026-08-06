@@ -1,6 +1,6 @@
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from, Observable, of } from 'rxjs';
-import { catchError, switchMap } from 'rxjs/operators';
+import { catchError, map, switchMap } from 'rxjs/operators';
 
 import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
@@ -180,27 +180,37 @@ async function describe(
 	return described.sort((a, b) => (b.rejectedAt ?? '').localeCompare(a.rejectedAt ?? ''));
 }
 
-function rejected$(engine: RxdbSyncEngine): Observable<RejectedMutation[]> {
+/**
+ * What the panel renders: the dead-letter rows, or the fact that they could not
+ * be read. `readError` exists because "no rejected sales" and "cannot read
+ * rejected sales" must never look the same to a cashier — an error rendered as
+ * an empty panel hides exactly the unsynced sales this feed exists to surface.
+ */
+export type RejectedMutationsRead = { rows: RejectedMutation[]; readError: boolean };
+
+function rejected$(engine: RxdbSyncEngine): Observable<RejectedMutationsRead> {
 	return new Observable<EngineDatabase | null>((subscriber) =>
 		engine.db$((database) => subscriber.next(database))
 	).pipe(
 		switchMap((database) => {
-			if (!database) return of<RejectedMutation[]>([]);
+			if (!database) return of<RejectedMutationsRead>({ rows: [], readError: false });
 			const mutations = database.collections[
 				MUTATION_QUEUE_RXDB_COLLECTION
 			] as unknown as MutationCollection;
-			return mutations
-				.find({ selector: { status: { $eq: 'rejected' } } })
-				.$.pipe(switchMap((rows) => from(describe(database, rows))));
+			return mutations.find({ selector: { status: { $eq: 'rejected' } } }).$.pipe(
+				switchMap((rows) => from(describe(database, rows))),
+				map((rows) => ({ rows, readError: false }))
+			);
 		}),
 		// The resource is cached for the engine's whole life (that is the fix), so a
 		// stream error must never be able to POISON it: `ObservableResource` latches
 		// the error and `read()` would then throw forever, on every remount and every
 		// scope switch, with no path to recovery. `describe()` already swallows a
 		// failing resident read, but the RxDB query itself can still error on a
-		// storage fault — degrade that to an empty list (the panel simply shows
-		// nothing) rather than wedge the whole Database health screen permanently.
-		catchError(() => of<RejectedMutation[]>([]))
+		// storage fault — degrade to a NON-throwing read-error emission so the
+		// Database health screen stays usable while telling the cashier the panel
+		// could not be read (never a silent empty state).
+		catchError(() => of<RejectedMutationsRead>({ rows: [], readError: true }))
 	);
 }
 
@@ -230,9 +240,9 @@ function rejected$(engine: RxdbSyncEngine): Observable<RejectedMutation[]> {
  * effect: a single query subscription per engine is the correct lifetime, and
  * tying it to a never-committing render is exactly the bug.
  */
-const resourceByEngine = new WeakMap<RxdbSyncEngine, ObservableResource<RejectedMutation[]>>();
+const resourceByEngine = new WeakMap<RxdbSyncEngine, ObservableResource<RejectedMutationsRead>>();
 
-function rejectedResource(engine: RxdbSyncEngine): ObservableResource<RejectedMutation[]> {
+function rejectedResource(engine: RxdbSyncEngine): ObservableResource<RejectedMutationsRead> {
 	let resource = resourceByEngine.get(engine);
 	if (!resource) {
 		resource = new ObservableResource(rejected$(engine));
@@ -247,7 +257,7 @@ function rejectedResource(engine: RxdbSyncEngine): ObservableResource<RejectedMu
  * to get wrong. The resource is cached per engine (see above) so it survives the
  * suspend-before-commit that would otherwise hang the panel.
  */
-export function useRejectedMutations(): RejectedMutation[] {
+export function useRejectedMutations(): RejectedMutationsRead {
 	const { engine } = useQueryRuntime();
 	return useObservableSuspense(rejectedResource(engine));
 }

@@ -11,6 +11,21 @@ let whenSettled = jest.fn(async () => true);
 let whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 let referenceGeneration = 0;
 
+const mockCartWarn = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({
+		debug: jest.fn(),
+		info: jest.fn(),
+		warn: (...args: unknown[]) => mockCartWarn(...args),
+		error: jest.fn(),
+		success: jest.fn(),
+	}),
+}));
+jest.mock('../../../../contexts/translations', () => {
+	const { createTestT } = require('../../../../../jest/translate');
+	return { useT: () => createTestT() };
+});
+
 jest.mock('../../../../query', () => ({
 	useAppliedCouponReferenceDemand: (enabled: boolean) => {
 		appliedCouponReferenceDemand(enabled);
@@ -579,7 +594,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		expect(localPatch).not.toHaveBeenCalled();
 	});
 
-	it('gives up silently when the background wait hits its cap, and the next edit still heals', async () => {
+	it('warns the cashier when the background wait hits its cap, and the next edit still heals', async () => {
 		const background = deferredBackgroundWait();
 		applyCoupon([{ code: 'bonus' }]);
 		renderHook(() => useCartLines());
@@ -592,6 +607,12 @@ describe('useCartLines background coupon replay (#963)', () => {
 		});
 		expect(recalculate).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
+		// Not silent anymore: the cashier is told the shown totals may be stale
+		// (cashier-full-information ruling, 2026-08-07).
+		expect(mockCartWarn).toHaveBeenCalledWith(
+			expect.stringContaining('out of date'),
+			expect.objectContaining({ showToast: true })
+		);
 
 		// The next cart edit remains the ultimate self-heal.
 		whenSettled = jest.fn(async () => true);
