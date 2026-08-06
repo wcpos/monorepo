@@ -4,10 +4,16 @@
 import { act, renderHook } from '@testing-library/react';
 
 import {
+	clearStorageDegradation,
+	wrappedErrorHandlerStorage,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
+
+import {
 	buildRefundPayload,
 	createRefundIdempotencyKey,
 	useRefundMutation,
 } from './use-refund-mutation';
+import { StorageBlockedError } from '../../hooks/use-storage-health';
 
 const mockPost = jest.fn();
 const mockEngineRequire = jest.fn();
@@ -29,6 +35,8 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ error: jest.fn(), warn: jest.fn() }),
 }));
+
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
 describe('buildRefundPayload', () => {
 	it('maps explicit cash destination to refund_destination=cash and api_refund=false', () => {
@@ -234,5 +242,67 @@ describe('useRefundMutation', () => {
 describe('createRefundIdempotencyKey', () => {
 	it('builds a deterministic prefix for refund requests', () => {
 		expect(createRefundIdempotencyKey(42)).toBe('refund-42-mock-uuid');
+	});
+});
+
+/**
+ * #163 follow-up ruling: refunds are a money path too. Cash handed BACK to a
+ * customer with no persistable record is the same hazard as checkout, so the
+ * mutation refuses at the last synchronous point before the POST.
+ */
+describe('useRefundMutation while storage is degraded', () => {
+	afterEach(() => {
+		clearStorageDegradation();
+	});
+
+	it('throws before posting the refund', async () => {
+		const instance = {
+			schema: { version: 0, type: 'object', properties: {}, primaryKey: 'id' },
+			findDocumentsById: jest.fn(),
+			bulkWrite: jest
+				.fn()
+				.mockRejectedValue(
+					new Error(
+						'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
+					)
+				),
+			query: jest.fn(),
+			count: jest.fn(),
+			getAttachmentData: jest.fn(),
+			getChangedDocumentsSince: jest.fn(),
+			changeStream: jest.fn(),
+			cleanup: jest.fn(),
+			close: jest.fn().mockResolvedValue(undefined),
+			remove: jest.fn(),
+			collectionName: 'orders',
+			databaseName: 'degraded-refund',
+			internals: {},
+			options: {},
+		};
+		const wrapped = await wrappedErrorHandlerStorage({
+			storage: {
+				name: 'mock-storage',
+				rxdbVersion: '17.4.0',
+				createStorageInstance: jest.fn().mockResolvedValue(instance),
+			} as never,
+		}).createStorageInstance({ databaseName: 'degraded-refund' } as never);
+		await expect(wrapped.bulkWrite([{ document: { id: '1' } }] as never, 'test')).rejects.toThrow();
+
+		const { result } = renderHook(() => useRefundMutation());
+
+		await act(async () => {
+			await expect(
+				result.current({
+					order: { id: 42 } as never,
+					amount: '10.00',
+					reason: '',
+					lineItems: [],
+					refundDestination: 'cash',
+				})
+			).rejects.toBeInstanceOf(StorageBlockedError);
+		});
+
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockEngineRequire).not.toHaveBeenCalled();
 	});
 });

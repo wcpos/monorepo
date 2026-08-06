@@ -29,6 +29,7 @@ import { PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
 import { useT } from '../../../../contexts/translations';
+import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 import { stockRejection$ } from '../hooks/stock-rejection';
 
 interface Props {
@@ -69,6 +70,10 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 	const { loading, mode, error, startCheckout, handleStockRejection } = useCheckoutSession(
 		order as import('@wcpos/database').OrderDocument
 	);
+	// #163 ruling R5. This modal is where a checkout already in progress is caught:
+	// it was opened while storage was healthy, and the worker can die at any point
+	// before the cashier presses Process Payment.
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	// The legacy webview can only process a payment when the server has supplied a
 	// payment link; without it the modal body shows an error and processing must stay
 	// disabled (a click would otherwise post into a null webview ref and spin forever).
@@ -95,6 +100,10 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 			return;
 		}
 
+		if (blockIfDegraded('process-payment', { orderId: order.uuid ?? order.id })) {
+			return;
+		}
+
 		if (mode === 'contract') {
 			await startCheckout();
 			return;
@@ -104,7 +113,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 		if (webViewRef.current && webViewRef.current.postMessage) {
 			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
 		}
-	}, [mode, startCheckout]);
+	}, [blockIfDegraded, mode, order.id, order.uuid, startCheckout]);
 
 	/**
 	 *
@@ -124,6 +133,16 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
+						{storageDegraded && !showStockRejection ? (
+							<VStack
+								space="xs"
+								className="border-destructive bg-destructive/10 rounded-md border p-3"
+							>
+								<Text testID="checkout-storage-unavailable" className="text-destructive">
+									{t('pos_checkout.storage_unavailable')}
+								</Text>
+							</VStack>
+						) : null}
 						{paymentLinkMissing && !showStockRejection ? (
 							<VStack
 								space="xs"
@@ -196,6 +215,7 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 							loading={mode === 'contract' ? loading : legacyLoading}
 							disabled={
 								mode === 'pending' ||
+								storageDegraded ||
 								error === 'payment_gateways_fetch_failed' ||
 								paymentLinkMissing ||
 								(mode === 'contract' && loading)

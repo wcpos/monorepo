@@ -38,6 +38,7 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useEngineDocumentByWooId } from '../../hooks/use-engine-document';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
+import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 
@@ -68,6 +69,7 @@ export function EditOrderForm({ order }: Props) {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const { format } = useCustomerNameFormat();
 	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
 	const customerIdForLookup = customerIdToLoad ?? 0;
@@ -143,12 +145,18 @@ export function EditOrderForm({ order }: Props) {
 	 */
 	const handleSaveToServer = React.useCallback(
 		async (data: z.infer<typeof formSchema>) => {
+			// #163 ruling R5: this is an order save. `localPatch` swallows storage
+			// failures, so without this guard the push would go out built on a local
+			// patch that never landed.
+			if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
+
 			setLoading(true);
 			try {
 				await localPatch({
 					document: order,
 					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
 				});
+				if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
 				await pushDocument(order).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						const doc = savedDoc as unknown as { id?: number; number?: string };
@@ -177,7 +185,7 @@ export function EditOrderForm({ order }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, order, pushDocument, t]
+		[blockIfDegraded, localPatch, order, pushDocument, t]
 	);
 
 	/**
@@ -411,7 +419,12 @@ export function EditOrderForm({ order }: Props) {
 				</VStack>
 				<ModalFooter className="px-0">
 					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction loading={loading} onPress={onSave}>
+					<ModalAction
+						testID="order-edit-save-button"
+						loading={loading}
+						onPress={onSave}
+						disabled={storageDegraded}
+					>
 						{t('common.save')}
 					</ModalAction>
 				</ModalFooter>

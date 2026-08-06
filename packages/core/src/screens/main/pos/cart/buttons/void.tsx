@@ -15,6 +15,7 @@ import {
 	patchAndEnqueueEngineResident,
 	patchEngineResident,
 } from '../../../hooks/mutations/use-local-mutation';
+import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
@@ -35,6 +36,7 @@ export function VoidButton() {
 	const router = useRouter();
 	const manager = useQueryRuntime();
 	const t = useT();
+	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 
 	/**
 	 *
@@ -93,6 +95,13 @@ export function VoidButton() {
 	 *
 	 */
 	const handleRemove = React.useCallback(async () => {
+		// #163 ruling R5: voiding writes a delete (or a status change) that must be
+		// recorded locally. With the worker dead the order's fate is unknowable from
+		// this device, and the undo path below could not restore it either.
+		if (blockIfDegraded('void', { orderId: currentOrder.uuid ?? currentOrder.id })) {
+			return;
+		}
+
 		const orderJson = currentOrder.toMutableJSON();
 		const recordId = currentOrder.uuid!;
 		let undone = false;
@@ -184,7 +193,7 @@ export function VoidButton() {
 				}
 			}
 		}
-	}, [currentOrder, manager, t, undoRemove]);
+	}, [blockIfDegraded, currentOrder, manager, t, undoRemove]);
 
 	/**
 	 *
@@ -196,6 +205,7 @@ export function VoidButton() {
 			onPress={handleRemove}
 			variant="destructive"
 			className="flex-1 rounded-t-none rounded-br-none"
+			disabled={storageDegraded}
 		>
 			{t('pos_cart.void')}
 		</Button>

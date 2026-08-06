@@ -15,6 +15,7 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
+import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import {
 	clearStockRejection,
 	parseInsufficientStockError,
@@ -64,6 +65,7 @@ export function useCheckoutSession(order: OrderDocument) {
 	const router = useRouter();
 	const t = useT();
 	const { resolveStockOwnerId } = useCartStockGuard();
+	const { blockIfDegraded } = useStorageMoneyPathGuard();
 	const [loading, setLoading] = React.useState(false);
 	// Error raised by the checkout flow itself (set imperatively in handlers).
 	const [checkoutError, setError] = React.useState<string | null>(null);
@@ -176,6 +178,7 @@ export function useCheckoutSession(order: OrderDocument) {
 
 	const startCheckout = React.useCallback(async () => {
 		if (!order.id || !gatewayResolved) return;
+		if (blockIfDegraded('process-payment', { orderId: order.id })) return;
 		setLoading(true);
 		setError(null);
 
@@ -197,6 +200,13 @@ export function useCheckoutSession(order: OrderDocument) {
 			await http.post(`payment-gateways/${resolvedGateway.id}/bootstrap`, {
 				context: { order_id: order.id },
 			});
+
+			// Last point at which no money has moved (#163 ruling R5). The gateway
+			// refetch and the bootstrap POST above are both awaits the worker can die
+			// under, so re-read the latch here rather than trusting the check made
+			// when Process Payment was pressed. Past this POST the payment is with
+			// the gateway and the client cannot recall it — see the PR body.
+			if (blockIfDegraded('process-payment', { orderId: order.id })) return;
 
 			const response = await http.post(
 				`orders/${order.id}/checkout`,
@@ -274,6 +284,7 @@ export function useCheckoutSession(order: OrderDocument) {
 			setLoading(false);
 		}
 	}, [
+		blockIfDegraded,
 		completeOrderFlow,
 		gateway,
 		gatewayId,
