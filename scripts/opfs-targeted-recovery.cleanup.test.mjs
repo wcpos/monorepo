@@ -102,9 +102,13 @@ function createFakeOpfsInstance({ documents, corruptId, gapBefore }) {
   });
   // The real function selects the two-element `['_meta.lwt', primaryPath]`
   // index as the compaction driver, not `indexStates[0]`.
-  const lwtIndex = indexStates[indexes.findIndex(
-    (index) => index.length === 2 && index[0] === "_meta.lwt" && index[1] === "id",
-  )];
+  const lwtIndex =
+    indexStates[
+      indexes.findIndex(
+        (index) =>
+          index.length === 2 && index[0] === "_meta.lwt" && index[1] === "id",
+      )
+    ];
 
   const changelogOperations = [];
   const accessHandle = {
@@ -167,12 +171,13 @@ const DOCUMENTS = [
 ];
 
 test("recovers the cleanup storm: a whitespace row is dropped and cleanup retried", async () => {
-  const { instance, indexStates, changelogOperations } =
-    createFakeOpfsInstance({
+  const { instance, indexStates, changelogOperations } = createFakeOpfsInstance(
+    {
       documents: DOCUMENTS,
       corruptId: "bbb",
       gapBefore: "bbb",
-    });
+    },
+  );
 
   // Guard the premise: the modelled path produces the exact production error.
   await assert.rejects(
@@ -204,26 +209,37 @@ test("recovers the cleanup storm: a whitespace row is dropped and cleanup retrie
   await assert.doesNotReject(() => recovering.cleanup(0));
 });
 
-test("refuses whitespace-row recovery when another instance holds the storage", async () => {
-  const { instance, indexStates } = createFakeOpfsInstance({
-    documents: DOCUMENTS,
-    corruptId: "bbb",
-    gapBefore: "bbb",
-  });
+test("recovers and broadcasts whitespace-row drops in multi-instance mode", async () => {
+  const { instance, indexStates, changelogOperations } = createFakeOpfsInstance(
+    {
+      documents: DOCUMENTS,
+      corruptId: "bbb",
+      gapBefore: "bbb",
+    },
+  );
+  const broadcastMessages = [];
+  const state = await instance.internals.statePromise;
+  state.params = { databaseName: "scope-db", collectionName: "orders" };
+  state.broadcastChannel = {
+    postMessage: (message) => broadcastMessages.push(message),
+  };
   const recovering = await withTargetedOpfsRecovery({
     createStorageInstance: async () => instance,
   }).createStorageInstance({ multiInstance: true });
 
-  // A peer's stale in-memory rows could persist over the drop, so the refusal
-  // is correct — it must simply never be the only outcome available on a
-  // platform that is always single-instance (see adapters/default/index.web).
-  await assert.rejects(
-    () => recovering.cleanup(0),
-    (error) => /targeted recovery refused: multi-instance/.test(error.message),
-  );
+  assert.equal(await recovering.cleanup(0), false);
   for (const indexState of indexStates) {
-    assert.equal(indexState.rows.length, 3);
+    assert.equal(indexState.rows.length, 2);
   }
+  assert.equal(broadcastMessages.length, changelogOperations.length);
+  assert.deepEqual(
+    broadcastMessages.map((message) => message.changelogOperations[0]),
+    changelogOperations,
+  );
+  assert.deepEqual(broadcastMessages[0].info, {
+    db: "scope-db",
+    col: "orders",
+  });
 });
 
 test("propagates a persistent cleanup error after recovery retries", async () => {
