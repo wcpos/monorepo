@@ -1,10 +1,76 @@
 import { describe, expect, it } from 'vitest';
 
+import { createFakeMutationCollection } from '@wcpos/sync-core/testing';
 import type { QueuedMutation, RxRecordMutationCollection } from '@wcpos/sync-core';
 
 import { enqueueWriteIntent, requeueBornTwiceSnapshot } from './write-intents';
 
 import type { RxDatabase } from 'rxdb';
+
+/**
+ * Wrap a pre-seeded `queued` Map in the revision-checked RxDB-like contract, so a
+ * test that builds its starting rows as a plain Map still exercises the
+ * conditional writes the coalesce path now uses. The Map stays the assertion
+ * view; a side revision counter provides the optimistic-concurrency token.
+ */
+function revCollectionOverMap(queued: Map<string, QueuedMutation>): RxRecordMutationCollection {
+	const revs = new Map<string, string>();
+	let counter = 0;
+	const bump = (id: string) => {
+		counter += 1;
+		revs.set(id, `1-seed-${counter}`);
+	};
+	for (const id of queued.keys()) bump(id);
+	const conflict = () => Object.assign(new Error('CONFLICT'), { status: 409, code: 'CONFLICT' });
+	const docFor = (id: string) => {
+		if (!queued.has(id)) return undefined;
+		const captured = revs.get(id);
+		return {
+			toJSON: () => queued.get(id)!,
+			get revision() {
+				return revs.get(id) ?? '';
+			},
+			patch: async (changes: Partial<QueuedMutation>) => {
+				if (!queued.has(id) || revs.get(id) !== captured) throw conflict();
+				queued.set(id, { ...queued.get(id)!, ...changes });
+				bump(id);
+			},
+			remove: async () => {
+				if (!queued.has(id) || revs.get(id) !== captured) throw conflict();
+				queued.delete(id);
+				revs.delete(id);
+			},
+		};
+	};
+	return {
+		bulkUpsert: async (items: QueuedMutation[]) => {
+			for (const item of items) {
+				queued.set(item.mutationId, item);
+				bump(item.mutationId);
+			}
+			return { error: [] };
+		},
+		bulkInsert: async (items: QueuedMutation[]) => {
+			const error: { documentId: string; status: number }[] = [];
+			for (const item of items) {
+				if (queued.has(item.mutationId)) error.push({ documentId: item.mutationId, status: 409 });
+				else {
+					queued.set(item.mutationId, item);
+					bump(item.mutationId);
+				}
+			}
+			return { success: [], error };
+		},
+		find: () => ({ exec: async () => [...queued.keys()].map((id) => docFor(id)!) }),
+		bulkRemove: async (ids: string[]) => {
+			for (const id of ids) {
+				queued.delete(id);
+				revs.delete(id);
+			}
+			return { error: [] };
+		},
+	};
+}
 
 describe('enqueueWriteIntent', () => {
 	it.each([
@@ -12,17 +78,10 @@ describe('enqueueWriteIntent', () => {
 		['plain create then explicit update', false, true],
 		['plain create then plain update', false, false],
 	])('propagates explicit while coalescing %s', async (_label, priorExplicit, incomingExplicit) => {
-		const queued = new Map<string, QueuedMutation>();
-		const mutationCollection: RxRecordMutationCollection = {
-			bulkUpsert: async (items) => {
-				for (const item of items) queued.set(item.mutationId, item);
-				return { error: [] };
-			},
-			find: () => ({ exec: async () => [...queued.values()] }),
-			bulkRemove: async (ids) => {
-				for (const id of ids) queued.delete(id);
-				return { error: [] };
-			},
+		const mutationCollection = createFakeMutationCollection();
+		const queued = {
+			values: () => [...mutationCollection.store.values()].map((entry) => entry.mutation),
+			get: (id: string) => mutationCollection.store.get(id)?.mutation,
 		};
 		let residentData: Record<string, unknown> = {
 			payload: { status: 'pos-open' },
@@ -77,17 +136,10 @@ describe('enqueueWriteIntent', () => {
 	});
 
 	it('strips non-string order meta display fields after coalescing over resident payload', async () => {
-		const queued = new Map<string, QueuedMutation>();
-		const mutationCollection: RxRecordMutationCollection = {
-			bulkUpsert: async (items) => {
-				for (const item of items) queued.set(item.mutationId, item);
-				return { error: [] };
-			},
-			find: () => ({ exec: async () => [...queued.values()] }),
-			bulkRemove: async (ids) => {
-				for (const id of ids) queued.delete(id);
-				return { error: [] };
-			},
+		const mutationCollection = createFakeMutationCollection();
+		const queued = {
+			values: () => [...mutationCollection.store.values()].map((entry) => entry.mutation),
+			get: (id: string) => mutationCollection.store.get(id)?.mutation,
 		};
 		let residentData: Record<string, unknown> = {
 			payload: {
@@ -168,17 +220,10 @@ describe('enqueueWriteIntent', () => {
 	});
 
 	it('strips non-string order meta display fields from a born-twice follow-up', async () => {
-		const queued = new Map<string, QueuedMutation>();
-		const mutationCollection: RxRecordMutationCollection = {
-			bulkUpsert: async (items) => {
-				for (const item of items) queued.set(item.mutationId, item);
-				return { error: [] };
-			},
-			find: () => ({ exec: async () => [...queued.values()] }),
-			bulkRemove: async (ids) => {
-				for (const id of ids) queued.delete(id);
-				return { error: [] };
-			},
+		const mutationCollection = createFakeMutationCollection();
+		const queued = {
+			values: () => [...mutationCollection.store.values()].map((entry) => entry.mutation),
+			get: (id: string) => mutationCollection.store.get(id)?.mutation,
 		};
 		const db = {
 			collections: {
@@ -238,17 +283,7 @@ describe('enqueueWriteIntent', () => {
 				},
 			],
 		]);
-		const mutationCollection: RxRecordMutationCollection = {
-			bulkUpsert: async (items) => {
-				for (const item of items) queued.set(item.mutationId, item);
-				return { error: [] };
-			},
-			find: () => ({ exec: async () => [...queued.values()] }),
-			bulkRemove: async (ids) => {
-				for (const id of ids) queued.delete(id);
-				return { error: [] };
-			},
-		};
+		const mutationCollection = revCollectionOverMap(queued);
 		const db = {
 			collections: {
 				orders: { findOne: () => ({ exec: async () => null }) },
@@ -306,17 +341,7 @@ describe('enqueueWriteIntent', () => {
 				},
 			],
 		]);
-		const mutationCollection: RxRecordMutationCollection = {
-			bulkUpsert: async (items) => {
-				for (const item of items) queued.set(item.mutationId, item);
-				return { error: [] };
-			},
-			find: () => ({ exec: async () => [...queued.values()] }),
-			bulkRemove: async (ids) => {
-				for (const id of ids) queued.delete(id);
-				return { error: [] };
-			},
-		};
+		const mutationCollection = revCollectionOverMap(queued);
 		const db = {
 			collections: {
 				orders: { findOne: () => ({ exec: async () => null }) },
