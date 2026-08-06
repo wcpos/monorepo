@@ -87,6 +87,7 @@ export {
 	type PersistedCoverageRecord,
 	type PersistedCoverageRetentionDecision,
 	type PlanPersistedCoverageRetentionInput,
+	type RangedLaneResumeState,
 } from './persisted-coverage-schema';
 
 // Scheduler and query-total schemas

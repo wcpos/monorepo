@@ -20,6 +20,7 @@ import { assertReturnedRequestedIds, chunk, httpGet } from './rx-scheduler-colle
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
+import type { RangedLaneResumeState } from './persisted-coverage-schema';
 import type {
 	BuildCoverageDocumentsFromQueryResultInput,
 	BuildCumulativeCoverageDocumentsFromQueryResultInput,
@@ -30,7 +31,24 @@ type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Respons
 const SUPPORTED_ORDER_QUERY_KEY = 'orders:custom-pull';
 const MAX_STALLED_BATCHES = 3;
 const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
+/**
+ * The per-PASS record budget for a ranged fetch-to-completion walk — a work bound, not a wall
+ * (#954). #941 introduced this number as a runaway backstop; because paging was local to the
+ * call and the sort was always `id desc`, tripping it meant every later attempt re-downloaded
+ * the SAME newest 10,000 records, so a range with more orders than this could never converge.
+ * It now bounds how much ONE drain pass will do: the lane stays honestly incomplete, a
+ * continuation cursor is persisted on it, and the next pass picks up where this one stopped.
+ */
 const RANGED_COMPLETE_MAX_RECORDS = 10_000;
+/**
+ * How many boundary-second ids the resume cursor will carry in `exclude`. WP's date columns
+ * have one-second resolution, so a page can split a group of orders sharing one creation
+ * second; the cursor re-requests that second and excludes the ids already taken. The cap keeps
+ * the request URL well inside the ~8KB server default. A tie group larger than this cannot be
+ * resumed without either skipping records or looping, so the walk fails loudly instead — see
+ * the throw in fetchBrowserOrderQuery.
+ */
+const RANGED_RESUME_MAX_EXCLUDED_IDS = 500;
 
 export type OrdersSchedulerCoverageRepository = {
 	recordQueryResult(input: BuildCoverageDocumentsFromQueryResultInput): Promise<void>;
@@ -40,11 +58,24 @@ export type OrdersSchedulerCoverageRepository = {
 	recordCumulativeQueryResult?(
 		input: BuildCumulativeCoverageDocumentsFromQueryResultInput
 	): Promise<void>;
+	publishRangedResume?(input: {
+		collection: string;
+		queryKey: string;
+		resume: RangedLaneResumeState;
+		expected: RangedLaneResumeState | null;
+		nowMs: number;
+		freshForMs: number;
+	}): Promise<void>;
 	readLocalLaneCoverage?(
 		collection: string,
 		queryKey: string,
 		nowMs: number
-	): Promise<{ complete: boolean; fresh: boolean } | null>;
+	): Promise<{
+		complete: boolean;
+		fresh: boolean;
+		expectedRecordIds?: string[];
+		rangedResume?: RangedLaneResumeState;
+	} | null>;
 };
 
 export type OrdersSchedulerFetcherInput = {
@@ -282,6 +313,52 @@ async function hasFullBaselineMarker(
 	return Boolean(lane?.complete && lane.fresh);
 }
 
+/**
+ * The instant an order was created, in whole epoch seconds — the dimension the ranged walk
+ * both SORTS by and CURSORS on (see RangedLaneResumeState).
+ *
+ * Woo serializes `date_created_gmt` with no zone designator (`2026-07-14T10:00:00`), which
+ * `Date.parse` reads as LOCAL time. Pinning `Z` is the same trap the range bounds document in
+ * requirement-bridge.ts — get it wrong and the cursor drifts by the store's UTC offset, which
+ * on a resume silently skips (or re-downloads) hours of orders.
+ */
+function orderCreatedAtSeconds(payload: WooOrderPayload): number | null {
+	const raw = (payload as { date_created_gmt?: unknown }).date_created_gmt;
+	if (typeof raw !== 'string' || raw === '') return null;
+	const milliseconds = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+	if (!Number.isFinite(milliseconds) || milliseconds < 0) return null;
+	return Math.floor(milliseconds / 1_000);
+}
+
+function payloadWooId(payload: WooOrderPayload): number | null {
+	const id = Number((payload as { id?: unknown }).id);
+	return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * The oldest creation second on a page plus every id sharing it — the next cursor position.
+ *
+ * Records with no usable creation instant or id cannot move the cursor; they are still stored
+ * and still counted as covered, they simply do not participate in the boundary. `null` means
+ * the whole page was unusable, which leaves nowhere to resume from.
+ */
+function pageBoundary(payloads: WooOrderPayload[]): { seconds: number; wooIds: number[] } | null {
+	let seconds: number | null = null;
+	let wooIds: number[] = [];
+	for (const payload of payloads) {
+		const payloadSeconds = orderCreatedAtSeconds(payload);
+		const wooId = payloadWooId(payload);
+		if (payloadSeconds === null || wooId === null) continue;
+		if (seconds === null || payloadSeconds < seconds) {
+			seconds = payloadSeconds;
+			wooIds = [wooId];
+		} else if (payloadSeconds === seconds) {
+			wooIds.push(wooId);
+		}
+	}
+	return seconds === null ? null : { seconds, wooIds };
+}
+
 async function recordOrderFetchCoverage(
 	input: OrdersSchedulerFetcherInput,
 	task: FetchTask,
@@ -292,6 +369,122 @@ async function recordOrderFetchCoverage(
 	await input.coverageRepository.recordQueryResult(
 		orderCoverageInput(input, task, documentIds, complete)
 	);
+}
+
+type RangedResumeSnapshot = {
+	state: RangedLaneResumeState;
+	coveredRecordCount: number;
+};
+
+/**
+ * The lane's persisted continuation cursor, or null to start the range from its newest end.
+ *
+ * Resuming needs BOTH halves of the lane document — the cursor and the ids already covered —
+ * and needs them to have been written together, so a port that cannot accumulate coverage
+ * across passes (`recordCumulativeQueryResult`) never gets a cursor either: a walk that reset
+ * `expectedRecordIds` on every pass while advancing the cursor would end up marking the lane
+ * complete with only its LAST pass's records recorded.
+ */
+async function readRangedResumeState(
+	input: OrdersSchedulerFetcherInput,
+	task: FetchTask
+): Promise<RangedResumeSnapshot | null> {
+	const repository = input.coverageRepository;
+	if (!repository?.readLocalLaneCoverage || !repository.recordCumulativeQueryResult) return null;
+	const lane = await repository.readLocalLaneCoverage(
+		'orders',
+		task.queryKey,
+		coverageNowMs(input)
+	);
+	if (!lane?.rangedResume) return null;
+	return {
+		state: lane.rangedResume,
+		coveredRecordCount: lane.expectedRecordIds?.length ?? 0,
+	};
+}
+
+async function publishRangedProgress(
+	input: OrdersSchedulerFetcherInput,
+	task: FetchTask,
+	resume: RangedLaneResumeState,
+	expected: RangedLaneResumeState | null
+): Promise<void> {
+	if (!input.coverageRepository?.publishRangedResume) return;
+	await input.coverageRepository.publishRangedResume({
+		collection: 'orders',
+		queryKey: task.queryKey,
+		resume,
+		expected,
+		nowMs: coverageNowMs(input),
+		freshForMs: input.coverageFreshForMs ?? DEFAULT_COVERAGE_FRESH_FOR_MS,
+	});
+}
+
+type RangedCoverageWrite = {
+	documentIds: string[];
+	complete: boolean;
+	previousResume: RangedResumeSnapshot | null;
+	/** Where the walk's cursor stood when the pass ended. */
+	cursorBeforeSeconds: number | undefined;
+	cursorExcludeWooIds: number[];
+	/** `X-WP-Total` for this pass's narrowed window — the uncovered remainder. */
+	remainingTotal: number | null;
+	/** Whether the walk reached the end of the range (short page / advertised last page). */
+	exhausted: boolean;
+	/** Whether every record this pass saw actually carried the descriptor's POS dimensions. */
+	dimensionsHonored: boolean;
+	/** The cursor last PERSISTED by this pass — what the final write's ancestry must match. */
+	publishedResume: RangedLaneResumeState | null;
+};
+
+/**
+ * Record one PASS of a ranged fetch-to-completion walk: accumulate its records into the lane
+ * and persist — or, once the range is exhausted, clear — the cursor the next pass resumes from.
+ */
+async function recordRangedOrderFetchCoverage(
+	input: OrdersSchedulerFetcherInput,
+	task: FetchTask,
+	write: RangedCoverageWrite
+): Promise<void> {
+	const repository = input.coverageRepository;
+	if (!repository) return;
+	if (!repository.recordCumulativeQueryResult) {
+		// No cumulative channel — behave exactly as #941 did: one non-resumable pass.
+		await recordOrderFetchCoverage(input, task, write.documentIds, write.complete);
+		return;
+	}
+
+	const previous = write.previousResume;
+	const coveredBefore = previous?.coveredRecordCount ?? 0;
+	const resume: RangedLaneResumeState | null =
+		// A pass that saw a server ignoring the descriptor's POS dimensions must NOT leave a
+		// cursor behind. `dimensionsHonored` is per-pass evidence, so a superset accumulated by
+		// pass one would otherwise be completed by a later pass that happened to see only
+		// matching records — reporting every cashier's orders as this cashier's total, which is
+		// exactly what the check exists to prevent. Dropping the cursor restarts the whole walk,
+		// so an old plugin behaves as it did before #954: honest, incomplete, never accumulating.
+		write.exhausted || !write.dimensionsHonored || write.cursorBeforeSeconds === undefined
+			? null
+			: {
+					beforeSeconds: write.cursorBeforeSeconds,
+					excludeWooIds: write.cursorExcludeWooIds,
+					totalRecords:
+						write.remainingTotal === null
+							? (previous?.state.totalRecords ?? null)
+							: coveredBefore + write.remainingTotal,
+					downloadedRecords: coveredBefore + write.documentIds.length,
+				};
+
+	await repository.recordCumulativeQueryResult({
+		...orderCoverageInput(input, task, write.documentIds, write.complete),
+		// A pass with no cursor is the START of a walk, so it must not inherit the ids a
+		// previous (now superseded) walk of the same lane accumulated.
+		resetCumulativeExpectedIds: previous === null,
+		rangedResume: resume,
+		// Lets the write reject an advance whose starting cursor no longer exists — see the
+		// cursor-ancestry note in RxCoverageRepository.recordCumulativeQueryResult.
+		rangedResumeExpected: write.publishedResume,
+	});
 }
 
 async function recordCumulativeOrderFetchCoverage(
@@ -375,6 +568,26 @@ async function fetchBrowserOrderQuery(
 	let exhausted = false;
 	let dimensionsHonored = true;
 
+	// #954: a fetch-to-completion lane resumes where the last pass stopped. The cursor is read
+	// REGARDLESS of coverage freshness — freshness governs whether the lane may be BELIEVED
+	// complete, while the cursor records work already done, and a multi-pass walk of a large
+	// range routinely outlives the 5-minute freshness window. Throwing the cursor away because
+	// the lane went stale would restore exactly the never-converging re-download this fixes.
+	const previousResume = descriptor.complete ? await readRangedResumeState(input, task) : null;
+	let remainingTotal: number | null = null;
+	// The cursor narrows the descriptor's own upper bound; it never widens it.
+	let cursorBeforeSeconds =
+		previousResume === null
+			? descriptor.beforeSeconds
+			: descriptor.beforeSeconds === undefined
+				? previousResume.state.beforeSeconds
+				: Math.min(descriptor.beforeSeconds, previousResume.state.beforeSeconds);
+	let cursorExcludeWooIds = previousResume?.state.excludeWooIds ?? [];
+	// The cursor most recently PERSISTED for this lane — the ancestry expectation each
+	// subsequent write must match. It starts as the cursor the pass resumed from and advances
+	// with every per-page publish, so a wipe mid-pass is caught at the very next write.
+	let publishedResume: RangedLaneResumeState | null = previousResume?.state ?? null;
+
 	const recordLimit = descriptor.limit ?? RANGED_COMPLETE_MAX_RECORDS;
 	while (documentCount < recordLimit) {
 		const query = new URLSearchParams();
@@ -387,15 +600,32 @@ async function fetchBrowserOrderQuery(
 		}
 		if (descriptor.afterSeconds !== undefined)
 			query.set('after', new Date(descriptor.afterSeconds * 1_000).toISOString());
-		if (descriptor.beforeSeconds !== undefined)
-			query.set('before', new Date(descriptor.beforeSeconds * 1_000).toISOString());
-		if (descriptor.afterSeconds !== undefined || descriptor.beforeSeconds !== undefined) {
+		if (cursorBeforeSeconds !== undefined)
+			query.set('before', new Date(cursorBeforeSeconds * 1_000).toISOString());
+		if (descriptor.afterSeconds !== undefined || cursorBeforeSeconds !== undefined) {
 			query.set('dates_are_gmt', 'true');
 		}
+		// The boundary second is re-requested inclusively; the ids already taken from it are
+		// dropped server-side (`exclude` → `post__not_in`), so neither a tie group split across
+		// a page boundary is missed nor an already-stored record re-downloaded.
+		if (cursorExcludeWooIds.length > 0) query.set('exclude', cursorExcludeWooIds.join(','));
 		query.set('per_page', String(descriptor.perPage));
-		query.set('page', String(requestCount + 1));
-		query.set('orderby', descriptor.orderby ?? 'id');
-		query.set('order', descriptor.order ?? 'desc');
+		// A fetch-to-completion walk re-cursors EVERY request, so it always asks for page 1 of a
+		// window that has just shrunk. Positional paging (`page`/`offset`) would drift under
+		// concurrent writes: an order inserted into the range mid-walk pushes every later record
+		// down a slot (re-download), and a trashed one pulls them up (a silent skip). The date
+		// bound is content-addressed, so neither can move it. Windowed lanes keep page paging —
+		// they take a bounded slice, not the whole range, and are not resumable.
+		query.set('page', String(descriptor.complete ? 1 : requestCount + 1));
+		// A fetch-to-completion lane walks `date desc` NO MATTER what the grid asked to sort by:
+		// the cursor is a date bound, and a cursor that does not share the walk's ordering can
+		// skip records (an id-desc walk cannot express "everything older than X" to wc/v3, which
+		// has no id bound — see RangedLaneResumeState). Server ordering is invisible to the
+		// screen here: the lane downloads the WHOLE range and the grid sorts local residents,
+		// while the lane's `expectedRecordIds` is consumed only as a count (projectTotal).
+		// Windowed lanes keep the descriptor's sort, which is what decides WHICH records they get.
+		query.set('orderby', descriptor.complete ? 'date' : (descriptor.orderby ?? 'id'));
+		query.set('order', descriptor.complete ? 'desc' : (descriptor.order ?? 'desc'));
 
 		const url = `${input.baseUrl}/orders?${query.toString()}`;
 		const response = await httpGet(input, url, context);
@@ -405,12 +635,56 @@ async function fetchBrowserOrderQuery(
 
 		const totalPagesHeader = response.headers.get('X-WP-TotalPages');
 		const totalPages = Number(totalPagesHeader);
+		if (requestCount === 0) {
+			// `X-WP-Total` for THIS pass's (already narrowed) window is the uncovered remainder;
+			// added to what earlier passes covered it gives the range total the progress line needs.
+			// A MISSING header must stay `null`, not become 0 — `Number(null)` is 0, and a zero
+			// remainder would tell the cashier the download had already finished.
+			const totalHeader = response.headers.get('X-WP-Total');
+			const total = Number(totalHeader);
+			remainingTotal =
+				totalHeader !== null && Number.isSafeInteger(total) && total >= 0 ? total : null;
+		}
 		const payloads = JSON.parse(await response.text()) as WooOrderPayload[];
 		if (!payloads.every((payload) => honorsRequestedDimensions(payload, descriptor))) {
 			dimensionsHonored = false;
 		}
 		const remaining = recordLimit - documentCount;
-		const documents = payloads.slice(0, remaining).map(orderDocumentFromWooPayload);
+		const kept = payloads.slice(0, remaining);
+		if (descriptor.complete && kept.length > 0) {
+			const boundary = pageBoundary(kept);
+			if (boundary === null) {
+				throw new Error(
+					`Ranged order walk cannot advance ${task.queryKey}: no record on this page carries a usable date_created_gmt`
+				);
+			}
+			// The page's oldest second becomes the new bound. `before` is EXCLUSIVE in WP_Date_Query
+			// (`inclusive` defaults false, on both the CPT and HPOS paths), so a returned record is
+			// always strictly older than the current bound and the bound can only fall or hold.
+			// The clamp makes that a guarantee rather than a server promise: if some future
+			// WooCommerce made `before` inclusive, an unclamped bound would RISE and the walk would
+			// loop forever. Clamped, such a page still makes progress through the exclusion list.
+			const nextBeforeSeconds = Math.min(
+				boundary.seconds + 1,
+				cursorBeforeSeconds ?? Number.MAX_SAFE_INTEGER
+			);
+			// Holding at the same second means the page never left it, so the ids already taken from
+			// it must accumulate; moving past it retires them.
+			const advanced = cursorBeforeSeconds === undefined || nextBeforeSeconds < cursorBeforeSeconds;
+			cursorExcludeWooIds = advanced
+				? boundary.wooIds
+				: [...new Set([...cursorExcludeWooIds, ...boundary.wooIds])];
+			cursorBeforeSeconds = nextBeforeSeconds;
+			if (cursorExcludeWooIds.length > RANGED_RESUME_MAX_EXCLUDED_IDS) {
+				// Truncating the exclusion list would re-request the same second forever; dropping
+				// it would skip whatever the truncation hid. Neither is acceptable, so stop loudly:
+				// the task fails into retry backoff and the lane stays honestly incomplete.
+				throw new Error(
+					`Ranged order walk cannot advance ${task.queryKey}: more than ${RANGED_RESUME_MAX_EXCLUDED_IDS} orders share the boundary second ${boundary.seconds}`
+				);
+			}
+		}
+		const documents = kept.map(orderDocumentFromWooPayload);
 		// Offline-first: never overwrite an order that has queued local mutations.
 		// Re-read the pending set IMMEDIATELY before each page's upsert (not once up
 		// front) so a mutation queued mid-pull — during a slow request or a later
@@ -428,13 +702,34 @@ async function fetchBrowserOrderQuery(
 		documentCount += documents.length;
 		requestCount += 1;
 
+		if (descriptor.complete && cursorBeforeSeconds !== undefined) {
+			// Publish progress + cursor per PAGE: it lights the Reports progress line during the
+			// FIRST pass (the whole walk for any range under the bound), keeps the incomplete lane
+			// fresh so compaction cannot delete it mid-pass, and makes the walk resumable from the
+			// last page rather than the last pass if the app dies here.
+			const pageResume: RangedLaneResumeState = {
+				beforeSeconds: cursorBeforeSeconds,
+				excludeWooIds: cursorExcludeWooIds,
+				totalRecords:
+					remainingTotal === null
+						? (previousResume?.state.totalRecords ?? null)
+						: (previousResume?.coveredRecordCount ?? 0) + remainingTotal,
+				downloadedRecords: (previousResume?.coveredRecordCount ?? 0) + documentCount,
+			};
+			await publishRangedProgress(input, task, pageResume, publishedResume);
+			publishedResume = pageResume;
+		}
+
 		// A short page is the usual end-of-walk signal, but a range whose total is an exact
 		// multiple of the page size never produces one — every page is full. Woo advertises
 		// the last page in `X-WP-TotalPages` (the same signal the product fetcher and the
 		// customer trickle already stop on), so honour it rather than requesting a page past
-		// the end and failing the whole task after downloading every record.
+		// the end and failing the whole task after downloading every record. A cursored walk
+		// always asks for page 1, so its own advertised-last-page test is `totalPages <= 1`.
 		const atAdvertisedLastPage =
-			totalPagesHeader !== null && Number.isSafeInteger(totalPages) && requestCount >= totalPages;
+			totalPagesHeader !== null &&
+			Number.isSafeInteger(totalPages) &&
+			(descriptor.complete ? totalPages <= 1 : requestCount >= totalPages);
 		if (
 			(payloads.length < descriptor.perPage || atAdvertisedLastPage) &&
 			payloads.length <= remaining &&
@@ -445,10 +740,22 @@ async function fetchBrowserOrderQuery(
 		}
 	}
 
-	if (descriptor.search === '') {
-		// A superset from a server that ignored the POS dimensions is still worth keeping
-		// locally — it is real order data — but it must never be recorded as a COMPLETE lane
-		// for this descriptor, or the grid reports the superset's size as its total.
+	if (descriptor.complete && descriptor.search === '') {
+		await recordRangedOrderFetchCoverage(input, task, {
+			documentIds: fetchedDocumentIds,
+			// A superset from a server that ignored the POS dimensions is still worth keeping
+			// locally — it is real order data — but it must never be recorded as a COMPLETE lane
+			// for this descriptor, or the grid reports the superset's size as its total.
+			complete: exhausted && dimensionsHonored,
+			previousResume,
+			cursorBeforeSeconds,
+			cursorExcludeWooIds,
+			remainingTotal,
+			exhausted,
+			dimensionsHonored,
+			publishedResume,
+		});
+	} else if (descriptor.search === '') {
 		await recordOrderFetchCoverage(input, task, fetchedDocumentIds, exhausted && dimensionsHonored);
 	} else {
 		await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
@@ -458,7 +765,11 @@ async function fetchBrowserOrderQuery(
 		taskId: task.id,
 		documentCount,
 		requestCount,
-		completed: true,
+		// A fetch-to-completion lane reports HONESTLY whether the range is finished: it runs as a
+		// greedy task, and the runner keeps calling until this is true, so claiming completion
+		// after a bounded pass would strand the range at its first 10,000 records. A windowed
+		// browse is complete by construction — its window is the bound.
+		completed: descriptor.complete ? exhausted : true,
 	};
 }
 

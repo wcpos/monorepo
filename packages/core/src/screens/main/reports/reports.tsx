@@ -12,6 +12,7 @@ import { Chart } from './chart';
 import { FilterBar } from './filter-bar';
 import { Orders } from './orders';
 import { Report } from './report';
+import { ReportsSyncProgress } from './sync-progress';
 
 /**
  *
@@ -31,6 +32,9 @@ export function Reports() {
 		>
 			<ErrorBoundary>
 				<FilterBar />
+			</ErrorBoundary>
+			<ErrorBoundary>
+				<ReportsSyncProgress />
 			</ErrorBoundary>
 			<View className="flex-1">
 				<ErrorBoundary>

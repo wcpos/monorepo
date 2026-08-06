@@ -21,4 +21,4 @@ export type {
 	SortFieldOf,
 	VariationMatch,
 } from './query-state-types';
-export type { SearchSelectCollection } from './query-bindings';
+export type { QueryBinding, QueryLaneProgress, SearchSelectCollection } from './query-bindings';

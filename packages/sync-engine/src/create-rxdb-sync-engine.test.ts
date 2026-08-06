@@ -260,7 +260,7 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 				expectedRecordIds: ['1'],
 				freshUntilMs: 10_000,
 				updatedAtMs: 1,
-				schemaVersion: 2,
+				schemaVersion: 3,
 			});
 		}
 

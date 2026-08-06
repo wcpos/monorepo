@@ -52,12 +52,28 @@ import type { MangoQuerySortPart, RxCollection, RxDatabase, RxDocument } from 'r
 type LegacyCollectionName = EngineQueryDescriptor['collection'];
 type TotalSource = 'coverage' | 'local';
 
+/**
+ * How much of a fetch-to-completion lane has landed locally, while it is still landing (#954).
+ *
+ * Only a ranged `limit=all` lane — Reports — reports this: it is the one screen that declares
+ * "give me every result", so it is the one screen where a partially downloaded window is a
+ * silent lie rather than a deliberately small page. `null` once the lane is complete (or was
+ * never fetch-to-completion), which is what makes the progress surface self-dismissing.
+ */
+export type QueryLaneProgress = {
+	/** Records the walk has covered so far. */
+	downloaded: number;
+	/** The range's size per the server's `X-WP-Total`, or null if it never sent one. */
+	total: number | null;
+};
+
 export interface QueryBinding {
 	resource: ObservableResource<QueryResult<RxCollection>>;
 	result$: Observable<QueryResult<RxCollection>>;
 	active$: Observable<boolean>;
 	total$: Observable<number>;
 	totalSource$: Observable<TotalSource>;
+	laneProgress$: Observable<QueryLaneProgress | null>;
 	sync(): Promise<void>;
 }
 
@@ -73,6 +89,7 @@ const BOOT_LANE_QUERY_KEYS: Partial<Record<LegacyCollectionName, string>> = {
 const DEMAND_RETRY_BACKOFF_MS = 250;
 const LOCAL_TOTAL_SOURCE$ = of('local' as const);
 const INACTIVE$ = of(false);
+const NO_LANE_PROGRESS$ = of(null as QueryLaneProgress | null);
 
 function useStableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDescriptor {
 	const key = JSON.stringify(descriptor);
@@ -346,6 +363,28 @@ function projectTotal(input: {
 		: { total: input.localCount, source: 'local' };
 }
 
+/**
+ * The mid-flight half of the same coverage lane the total is projected from. `rangedResume` is
+ * present on exactly one kind of lane — a ranged fetch-to-completion walk that has not reached
+ * the end of its range — so its presence IS the "still downloading" signal, with no second
+ * source of truth to drift from. Freshness is deliberately not consulted: the walk's progress
+ * is work already done, and a large range routinely outlives the lane's freshness window.
+ */
+function projectLaneProgress(input: {
+	queryKey: string | null;
+	lanes: CoverageLaneDocument[];
+}): QueryLaneProgress | null {
+	if (input.queryKey === null) return null;
+	const lane = input.lanes.find((candidate) => candidate.queryKey === input.queryKey);
+	if (!lane?.rangedResume) return null;
+	return {
+		// The walk publishes its running count per page; the id set is only written when a pass
+		// ends, so it is the fallback for lanes written before the per-page publish.
+		downloaded: lane.rangedResume.downloadedRecords ?? lane.expectedRecordIds.length,
+		total: lane.rangedResume.totalRecords,
+	};
+}
+
 function coverageDocuments$<T>(
 	database$: Observable<RxDatabase | null>,
 	collectionName: string
@@ -369,7 +408,7 @@ function coverageProjection$(
 	descriptor: EngineQueryDescriptor,
 	result$: Observable<QueryResult<RxCollection>>,
 	queryKey$: Observable<string | null>
-): Observable<{ total: number; source: TotalSource }> {
+): Observable<{ total: number; source: TotalSource; laneProgress: QueryLaneProgress | null }> {
 	const database$ = observeEngineDatabases(engine).pipe(
 		shareReplay({ bufferSize: 1, refCount: true })
 	);
@@ -390,17 +429,22 @@ function coverageProjection$(
 		coverage$,
 		queryKey$,
 	]).pipe(
-		map(([localCount, { lanes, queryTotals, nowMs }, queryKey]) =>
-			projectTotal({
+		map(([localCount, { lanes, queryTotals, nowMs }, queryKey]) => ({
+			...projectTotal({
 				localCount,
 				queryKey,
 				lanes,
 				queryTotals,
 				nowMs,
-			})
-		),
+			}),
+			laneProgress: projectLaneProgress({ queryKey, lanes }),
+		})),
 		distinctUntilChanged(
-			(previous, current) => previous.total === current.total && previous.source === current.source
+			(previous, current) =>
+				previous.total === current.total &&
+				previous.source === current.source &&
+				previous.laneProgress?.downloaded === current.laneProgress?.downloaded &&
+				previous.laneProgress?.total === current.laneProgress?.total
 		),
 		shareReplay({ bufferSize: 1, refCount: true })
 	);
@@ -432,6 +476,7 @@ export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
 		result$: local.result$ as unknown as Observable<QueryResult<RxCollection>>,
 		total$: local.total$,
 		totalSource$: LOCAL_TOTAL_SOURCE$,
+		laneProgress$: NO_LANE_PROGRESS$,
 		active$: INACTIVE$,
 		sync: async () => undefined,
 	};
@@ -483,12 +528,17 @@ function useEngineBinding(
 		() => projection$.pipe(map(({ source }) => source)),
 		[projection$]
 	);
+	const laneProgress$ = React.useMemo(
+		() => projection$.pipe(map(({ laneProgress }) => laneProgress)),
+		[projection$]
+	);
 	return {
 		resource,
 		result$,
 		active$,
 		total$,
 		totalSource$,
+		laneProgress$,
 		sync: demand.sync,
 		whenReady: demand.whenReady,
 		declareOnce: demand.declareOnce,
@@ -663,6 +713,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 		active$,
 		total$: projection$.pipe(map(({ total }) => total)),
 		totalSource$: projection$.pipe(map(({ source }) => source)),
+		laneProgress$: projection$.pipe(map(({ laneProgress }) => laneProgress)),
 		sync,
 	};
 }
