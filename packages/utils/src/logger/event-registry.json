@@ -42,6 +42,30 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "cadence.backoff",
+		"domain": "SYNC",
+		"label": "Slowed down to protect your store",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "cadence.reconfigured",
+		"domain": "SYNC",
+		"label": "Sync speed setting changed",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "cadence.recovered",
+		"domain": "SYNC",
+		"label": "Resumed normal sync speed",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "cadence.start",
+		"domain": "SYNC",
+		"label": "Sync speed for this session",
+		"introducedIn": "1.11.0"
+	},
+	{
 		"type": "coverage.compacted",
 		"domain": "SYNC",
 		"label": "Tidied up local sync bookkeeping",

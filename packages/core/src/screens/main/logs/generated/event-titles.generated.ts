@@ -30,6 +30,14 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.apply_refetch');
 		case 'apply.refresh':
 			return t('health.logs.event.apply_refresh');
+		case 'cadence.backoff':
+			return t('health.logs.event.cadence_backoff');
+		case 'cadence.reconfigured':
+			return t('health.logs.event.cadence_reconfigured');
+		case 'cadence.recovered':
+			return t('health.logs.event.cadence_recovered');
+		case 'cadence.start':
+			return t('health.logs.event.cadence_start');
 		case 'coverage.compacted':
 			return t('health.logs.event.coverage_compacted');
 		case 'coverage.existence-prime':
