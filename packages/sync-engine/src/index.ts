@@ -4,6 +4,7 @@ export {
 	type CensusTotal,
 	type CensusTotals,
 	type ConflictResolutionChoice,
+	type CoverageOutcome,
 	type EngineConflict,
 	type EngineConnectivity,
 	type EngineEvent,

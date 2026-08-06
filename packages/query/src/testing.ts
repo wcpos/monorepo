@@ -80,6 +80,12 @@ export interface FakeEngine extends RxdbSyncEngine {
 	searchFailure?: Error;
 	/** Rejects kind:'refresh' handles while set — drives the demand retry path. */
 	refreshFailure?: Error;
+	/**
+	 * Resolves kind:'refresh' handles with `action: 'released'` while set — models ANOTHER
+	 * engine instance (another tab) owning the scheduler row, whose pull this tab's activity
+	 * counters cannot see.
+	 */
+	refreshReleased?: boolean;
 	resetCalls: string[];
 	syncCalls: (string | undefined)[];
 	setCollectionStatus(
@@ -325,11 +331,17 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 					? Promise.reject(engine.searchFailure)
 					: requirement.kind === 'refresh' && engine.refreshFailure
 						? Promise.reject(engine.refreshFailure)
-						: Promise.resolve({
-								action: 'serve-local' as const,
-								missingRecordIds: [],
-								reason: 'fake',
-							});
+						: requirement.kind === 'refresh' && engine.refreshReleased
+							? Promise.resolve({
+									action: 'released' as const,
+									missingRecordIds: [],
+									reason: 'fake: another owner holds the scheduler row',
+								})
+							: Promise.resolve({
+									action: 'serve-local' as const,
+									missingRecordIds: [],
+									reason: 'fake',
+								});
 			void ready.then(
 				() => changeActivity(requirement.collection, -1),
 				() => changeActivity(requirement.collection, -1)

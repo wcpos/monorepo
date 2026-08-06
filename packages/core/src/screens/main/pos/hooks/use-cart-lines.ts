@@ -15,9 +15,22 @@ import { useTaxRates } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type OrderDocument = import('@wcpos/database').OrderDocument;
+type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'lines']);
+
+/**
+ * The off-critical-path coupon replay armed when the foreground reference barrier expires (#963).
+ *
+ * Identity is (order revision, reference-demand generation): re-arming for the same pair is a
+ * no-op, and any other pair supersedes — the newer cart edit owns the replay from then on.
+ */
+type ReplayContinuation = {
+	order: OrderDocument;
+	generation: number;
+	abort: AbortController;
+};
 
 /**
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
@@ -52,9 +65,16 @@ export const useCartLines = () => {
 	 * carrying coupon lines has to declare that demand itself or the replay throws on a
 	 * device that never opened the coupon picker.
 	 */
-	const { whenSettled: whenCouponReferencesSettled } = useAppliedCouponReferenceDemand(
-		cartLines.coupon_lines.length > 0
-	);
+	const {
+		whenSettled: whenCouponReferencesSettled,
+		whenSettledInBackground: whenCouponReferencesSettledInBackground,
+		generation: couponReferenceGeneration,
+	} = useAppliedCouponReferenceDemand(cartLines.coupon_lines.length > 0);
+
+	// Continuation + single-flight state. Refs, not state: nothing renders off them, and a
+	// re-render must not disarm a wait that is still legitimate.
+	const continuationRef = React.useRef<ReplayContinuation | null>(null);
+	const replayingRef = React.useRef<OrderDocument | null>(null);
 
 	/**
 	 * If line items change, and we have a percentage fee line, we need to recalculate the fee line total.
@@ -83,6 +103,146 @@ export const useCartLines = () => {
 		[lineItems, priceNumDecimals]
 	);
 
+	/**
+	 * The coupon replay write, extracted so the background continuation reaches the order
+	 * through the SAME path a cart edit does — same recalculation, same identity guards, same
+	 * `localPatch`. The continuation only changes WHEN this runs, never how.
+	 *
+	 * Replays are single-flight per order revision: a settle signal that lands at the same
+	 * moment as a cart edit must not apply the same recalculation twice.
+	 */
+	const replayCoupons = React.useCallback(
+		async (freshOrder: OrderDocument) => {
+			if (replayingRef.current === freshOrder) return;
+			replayingRef.current = freshOrder;
+			try {
+				// Replay coupon discounts via recalculateCoupons() which handles:
+				// - POS price as coupon base (via _woocommerce_pos_data meta)
+				// - lineIndex-based allocation for duplicate product_id lines
+				// - Per-item capping to prevent over-allocation when stacking coupons
+				// - Sequential discount mode
+				// - Correct tax-inclusive/exclusive rounding
+				const result = await recalculate(
+					freshOrder.line_items || [],
+					freshOrder.coupon_lines || []
+				);
+				if (!result) return; // coupon missing locally — bail to avoid partial data
+				// Bail if order changed during async replay to avoid overwriting concurrent edits
+				if (currentOrder.getLatest() !== freshOrder) return;
+
+				// Compute order totals from the coupon-adjusted line items in the same
+				// tick. This prevents useOrderTotals from running with stale pre-coupon
+				// line items and flashing incorrect tax values.
+				const totals = calculateOrderTotals({
+					lineItems: result.lineItems.filter((item) => item.product_id !== null),
+					feeLines: (freshOrder.fee_lines || []).filter((item) => item.name !== null),
+					shippingLines: (freshOrder.shipping_lines || []).filter(
+						(item) => item.method_id !== null
+					),
+					couponLines: result.couponLines.filter((item) => item.code != null),
+					taxRates: allRates,
+					taxRoundAtSubtotal,
+					dp: priceNumDecimals,
+					pricesIncludeTax,
+				});
+
+				await localPatch({
+					document: freshOrder,
+					data: {
+						coupon_lines: result.couponLines,
+						line_items: result.lineItems,
+						discount_tax: totals.discount_tax,
+						discount_total: totals.discount_total,
+						shipping_tax: totals.shipping_tax,
+						shipping_total: totals.shipping_total,
+						cart_tax: totals.cart_tax,
+						total_tax: totals.total_tax,
+						total: totals.total,
+						tax_lines: totals.tax_lines as NonNullable<OrderDocument['tax_lines']>,
+					},
+				});
+			} finally {
+				if (replayingRef.current === freshOrder) replayingRef.current = null;
+			}
+		},
+		[
+			allRates,
+			currentOrder,
+			localPatch,
+			priceNumDecimals,
+			pricesIncludeTax,
+			recalculate,
+			taxRoundAtSubtotal,
+		]
+	);
+
+	const disarmReplayContinuation = React.useCallback(() => {
+		continuationRef.current?.abort.abort();
+		continuationRef.current = null;
+	}, []);
+
+	/**
+	 * Arm the off-critical-path continuation for a foreground barrier that expired (#963).
+	 *
+	 * Only the cart surface calls this, and `useCartLines` lives only there, so exactly one tab
+	 * — the one holding the cart — ever waits. Idempotent per (order revision, demand
+	 * generation): re-arming for the same pair keeps the existing wait, any other pair aborts it
+	 * because the newer edit's own replay now owns the order.
+	 */
+	const armReplayContinuation = React.useCallback(
+		(freshOrder: OrderDocument) => {
+			const armed = continuationRef.current;
+			if (
+				armed &&
+				armed.order === freshOrder &&
+				armed.generation === couponReferenceGeneration &&
+				!armed.abort.signal.aborted
+			) {
+				return;
+			}
+			disarmReplayContinuation();
+			const continuation: ReplayContinuation = {
+				order: freshOrder,
+				generation: couponReferenceGeneration,
+				abort: new AbortController(),
+			};
+			continuationRef.current = continuation;
+			void (async () => {
+				const settled = await whenCouponReferencesSettledInBackground(continuation.abort.signal);
+				// Superseded (or unmounted) while waiting: the continuation that replaced this
+				// one — or the cart edit that disarmed it — owns the order now.
+				if (continuationRef.current !== continuation || continuation.abort.signal.aborted) return;
+				continuationRef.current = null;
+				if (!settled) {
+					// Capped out. Give up silently; the next cart edit re-runs the replay.
+					cartLogger.debug('Coupon reference wait expired without settling; replay abandoned');
+					return;
+				}
+				// The cashier moved on — the newer revision's own replay owns the totals.
+				if (currentOrder.getLatest() !== continuation.order) return;
+				await replayCoupons(continuation.order);
+			})().catch((error) => cartLogger.error(String(error)));
+		},
+		[
+			couponReferenceGeneration,
+			currentOrder,
+			disarmReplayContinuation,
+			replayCoupons,
+			whenCouponReferencesSettledInBackground,
+		]
+	);
+
+	// Mount-only: a continuation must not outlive the cart surface. Unmounting (store switch,
+	// navigating away, checkout tearing the cart down) aborts the wait and drops the captured
+	// order document, so nothing can fire against an order this tab no longer owns.
+	React.useEffect(
+		() => () => {
+			continuationRef.current?.abort.abort();
+			continuationRef.current = null;
+		},
+		[]
+	);
+
 	const handleCartTotalChange = async () => {
 		// Recalculate percentage-based fee lines
 		const percentageFeeLines = (feeLines || []).filter((item: FeeLine) => {
@@ -98,59 +258,26 @@ export const useCartLines = () => {
 			}
 		}
 
-		// Replay coupon discounts via recalculateCoupons() which handles:
-		// - POS price as coupon base (via _woocommerce_pos_data meta)
-		// - lineIndex-based allocation for duplicate product_id lines
-		// - Per-item capping to prevent over-allocation when stacking coupons
-		// - Sequential discount mode
-		// - Correct tax-inclusive/exclusive rounding
 		const freshOrder = currentOrder.getLatest();
-		const allCouponLines = freshOrder.coupon_lines || [];
-		const hasActiveCoupons = allCouponLines.some((cl) => cl.code != null);
+		const hasActiveCoupons = (freshOrder.coupon_lines || []).some((cl) => cl.code != null);
 		if (hasActiveCoupons) {
 			// The demand declared above is asynchronous, and this edit can land while the pull
 			// is still in flight — scanning now would hit the still-empty collections and throw
 			// (or validate a category-restricted coupon against an empty tree). Wait for it, and
 			// if the wait times out, bail rather than replaying against residents we know are
-			// not ready: same "avoid partial data" rule as the missing-coupon bail below. The
-			// next cart edit re-runs the replay.
-			if (!(await whenCouponReferencesSettled())) return;
-			const result = await recalculate(freshOrder.line_items || [], allCouponLines);
-			if (!result) return; // coupon missing locally — bail to avoid partial data
-			// Bail if order changed during async replay to avoid overwriting concurrent edits
-			if (currentOrder.getLatest() !== freshOrder) return;
-
-			// Compute order totals from the coupon-adjusted line items in the same
-			// tick. This prevents useOrderTotals from running with stale pre-coupon
-			// line items and flashing incorrect tax values.
-			const totals = calculateOrderTotals({
-				lineItems: result.lineItems.filter((item) => item.product_id !== null),
-				feeLines: (freshOrder.fee_lines || []).filter((item) => item.name !== null),
-				shippingLines: (freshOrder.shipping_lines || []).filter((item) => item.method_id !== null),
-				couponLines: result.couponLines.filter((item) => item.code != null),
-				taxRates: allRates,
-				taxRoundAtSubtotal,
-				dp: priceNumDecimals,
-				pricesIncludeTax,
-			});
-
-			await localPatch({
-				document: freshOrder,
-				data: {
-					coupon_lines: result.couponLines,
-					line_items: result.lineItems,
-					discount_tax: totals.discount_tax,
-					discount_total: totals.discount_total,
-					shipping_tax: totals.shipping_tax,
-					shipping_total: totals.shipping_total,
-					cart_tax: totals.cart_tax,
-					total_tax: totals.total_tax,
-					total: totals.total,
-					tax_lines: totals.tax_lines as NonNullable<
-						import('@wcpos/database').OrderDocument['tax_lines']
-					>,
-				},
-			});
+			// not ready: same "avoid partial data" rule as the missing-coupon bail below.
+			if (!(await whenCouponReferencesSettled())) {
+				// Bailing used to strand the cashier on stale totals until the next edit (#963).
+				// Keep waiting off the critical path instead and replay when the references
+				// actually land, guarded on this exact order revision.
+				armReplayContinuation(freshOrder);
+				return;
+			}
+			// The references are here, so this edit's own replay supersedes anything an earlier
+			// edit left waiting — a stale continuation firing behind it would re-apply the
+			// pre-edit discounts.
+			disarmReplayContinuation();
+			await replayCoupons(freshOrder);
 		}
 	};
 

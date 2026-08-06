@@ -8,20 +8,53 @@ import { useCartLines } from './use-cart-lines';
 
 const appliedCouponReferenceDemand = jest.fn();
 let whenSettled = jest.fn(async () => true);
+let whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
+let referenceGeneration = 0;
 
 jest.mock('../../../../query', () => ({
 	useAppliedCouponReferenceDemand: (enabled: boolean) => {
 		appliedCouponReferenceDemand(enabled);
-		return { whenSettled: () => whenSettled() };
+		return {
+			whenSettled: () => whenSettled(),
+			whenSettledInBackground: (signal: AbortSignal) => whenSettledInBackground(signal),
+			generation: referenceGeneration,
+		};
 	},
 }));
 
 type CouponLine = { code: string | null };
+type LineItem = { total: string; total_tax: string; product_id: number };
 
-const lineItems$ = new BehaviorSubject<unknown[]>([]);
+const lineItems$ = new BehaviorSubject<LineItem[]>([]);
 const feeLines$ = new BehaviorSubject<unknown[]>([]);
 const shippingLines$ = new BehaviorSubject<unknown[]>([]);
 const couponLines$ = new BehaviorSubject<CouponLine[]>([]);
+
+/**
+ * RxDB hands out a NEW document object per revision, and the replay's identity guards compare
+ * by reference — so the fake has to behave the same way: `getLatest()` is stable until an edit
+ * lands, and every edit mints a new object.
+ */
+let latestOrder = buildOrder();
+
+function buildOrder() {
+	return {
+		line_items: lineItems$.getValue(),
+		fee_lines: [],
+		shipping_lines: [],
+		coupon_lines: couponLines$.getValue(),
+	};
+}
+
+function editCart(lineItems: LineItem[]) {
+	lineItems$.next(lineItems);
+	latestOrder = buildOrder();
+}
+
+function applyCoupon(couponLines: CouponLine[]) {
+	couponLines$.next(couponLines);
+	latestOrder = buildOrder();
+}
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
@@ -30,12 +63,7 @@ jest.mock('../contexts/current-order', () => ({
 			fee_lines$: feeLines$,
 			shipping_lines$: shippingLines$,
 			coupon_lines$: couponLines$,
-			getLatest: () => ({
-				line_items: lineItems$.getValue(),
-				fee_lines: [],
-				shipping_lines: [],
-				coupon_lines: couponLines$.getValue(),
-			}),
+			getLatest: () => latestOrder,
 		},
 	}),
 }));
@@ -44,7 +72,10 @@ jest.mock('./use-fee-line-data', () => ({
 	useFeeLineData: () => ({ getFeeLineData: () => ({ percent: false }) }),
 }));
 
-const recalculate = jest.fn(async () => undefined);
+const recalculate = jest.fn(async (lineItems: LineItem[], couponLines: CouponLine[]) => ({
+	lineItems,
+	couponLines,
+}));
 
 jest.mock('./use-recalculate-coupons', () => ({
 	useRecalculateCoupons: () => ({ recalculate }),
@@ -63,17 +94,51 @@ jest.mock('../../contexts/tax-rates', () => ({
 	}),
 }));
 
+type LocalPatchArgs = { document: unknown; data: Record<string, unknown> };
+const localPatch = jest.fn(async (_args: LocalPatchArgs) => undefined);
+
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
-	useLocalMutation: () => ({ localPatch: jest.fn() }),
+	useLocalMutation: () => ({ localPatch }),
 }));
+
+jest.mock('./calculate-order-totals', () => ({
+	calculateOrderTotals: () => ({
+		discount_tax: '0.00',
+		discount_total: '5.00',
+		shipping_tax: '0.00',
+		shipping_total: '0.00',
+		cart_tax: '0.00',
+		total_tax: '0.00',
+		total: '5.00',
+		tax_lines: [],
+	}),
+}));
+
+/** A deferred `whenSettledInBackground` the test resolves by hand. */
+function deferredBackgroundWait() {
+	let release: ((settled: boolean) => void) | undefined;
+	const signals: AbortSignal[] = [];
+	whenSettledInBackground = jest.fn(
+		(signal: AbortSignal) =>
+			new Promise<boolean>((resolve) => {
+				signals.push(signal);
+				release = resolve;
+			})
+	);
+	return { settle: () => release?.(true), giveUp: () => release?.(false), signals };
+}
 
 describe('useCartLines reference demand (#952)', () => {
 	beforeEach(() => {
 		appliedCouponReferenceDemand.mockClear();
 		recalculate.mockClear();
+		localPatch.mockClear();
 		whenSettled = jest.fn(async () => true);
+		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
+		referenceGeneration = 0;
 		couponLines$.next([]);
 		lineItems$.next([]);
+		latestOrder = buildOrder();
 	});
 
 	it('declares no coupon reference demand for a cart without coupon lines', () => {
@@ -84,7 +149,7 @@ describe('useCartLines reference demand (#952)', () => {
 	});
 
 	it('declares coupon reference demand once the cart carries an applied coupon line', () => {
-		couponLines$.next([{ code: 'bonus' }]);
+		applyCoupon([{ code: 'bonus' }]);
 		renderHook(() => useCartLines());
 
 		// Replay reads coupon + category residents directly, so the cart is the only
@@ -93,7 +158,7 @@ describe('useCartLines reference demand (#952)', () => {
 	});
 
 	it('ignores removed coupon lines (code === null) when declaring demand', () => {
-		couponLines$.next([{ code: null }]);
+		applyCoupon([{ code: null }]);
 		renderHook(() => useCartLines());
 
 		expect(appliedCouponReferenceDemand).toHaveBeenCalledWith(false);
@@ -105,7 +170,7 @@ describe('useCartLines reference demand (#952)', () => {
 		expect(appliedCouponReferenceDemand).not.toHaveBeenCalledWith(true);
 
 		await act(async () => {
-			couponLines$.next([{ code: 'bonus' }]);
+			applyCoupon([{ code: 'bonus' }]);
 		});
 
 		expect(appliedCouponReferenceDemand).toHaveBeenCalledWith(true);
@@ -119,13 +184,13 @@ describe('useCartLines reference demand (#952)', () => {
 					releaseReferences = () => resolve(true);
 				})
 		);
-		couponLines$.next([{ code: 'bonus' }]);
+		applyCoupon([{ code: 'bonus' }]);
 		renderHook(() => useCartLines());
 
 		// A cart edit while the on-demand pull is still in flight. Scanning now would hit the
 		// still-empty coupons/categories collections — the exact race the barrier closes.
 		await act(async () => {
-			lineItems$.next([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
 		});
 		expect(whenSettled).toHaveBeenCalled();
 		expect(recalculate).not.toHaveBeenCalled();
@@ -136,18 +201,171 @@ describe('useCartLines reference demand (#952)', () => {
 		expect(recalculate).toHaveBeenCalled();
 	});
 
-	it('skips the replay entirely when the reference wait times out', async () => {
+	it('skips the foreground replay when the reference wait times out', async () => {
 		// A deadline does not make unmaterialized residents trustworthy. Bailing leaves the
-		// cart on its previous totals; the next edit re-runs the replay.
+		// cart on its previous totals until the references actually land.
 		whenSettled = jest.fn(async () => false);
-		couponLines$.next([{ code: 'bonus' }]);
+		deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
 		renderHook(() => useCartLines());
 
 		await act(async () => {
-			lineItems$.next([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
+			editCart([{ total: '5.00', total_tax: '0.00', product_id: 1 }]);
 		});
 
 		expect(whenSettled).toHaveBeenCalled();
 		expect(recalculate).not.toHaveBeenCalled();
+	});
+});
+
+describe('useCartLines background coupon replay (#963)', () => {
+	beforeEach(() => {
+		appliedCouponReferenceDemand.mockClear();
+		recalculate.mockClear();
+		localPatch.mockClear();
+		// The scenario this issue is about: the reference pull outran the 10s barrier.
+		whenSettled = jest.fn(async () => false);
+		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
+		referenceGeneration = 0;
+		couponLines$.next([]);
+		lineItems$.next([]);
+		latestOrder = buildOrder();
+	});
+
+	it('replays the coupon once the references land after the foreground barrier expired', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		// Totals are stale at this point — that is the bug the continuation closes.
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(background.signals).toHaveLength(1);
+
+		await act(async () => {
+			background.settle();
+		});
+
+		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0]).toEqual(
+			expect.objectContaining({
+				document: latestOrder,
+				data: expect.objectContaining({ discount_total: '5.00', total: '5.00' }),
+			})
+		);
+	});
+
+	it('arms exactly one continuation for the same order revision and demand generation', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		await act(async () => {
+			// Same revision (price-decimals style re-run, not a new order): must not stack a
+			// second wait on top of the one already running.
+			lineItems$.next([{ total: '11.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		expect(whenSettledInBackground).toHaveBeenCalledTimes(1);
+		expect(background.signals).toHaveLength(1);
+		expect(background.signals[0].aborted).toBe(false);
+	});
+
+	it('drops the stale continuation when the cart is edited during the background wait', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		const staleOrder = latestOrder;
+
+		// A newer edit lands while the references are still in flight. Its own replay owns the
+		// order from here — the older continuation must not write the pre-edit discounts back.
+		whenSettled = jest.fn(async () => true);
+		await act(async () => {
+			editCart([{ total: '20.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch.mock.calls[0][0]).toEqual(expect.objectContaining({ document: latestOrder }));
+		expect(background.signals[0].aborted).toBe(true);
+
+		// The abandoned wait resolving late must be a no-op — no double-apply.
+		await act(async () => {
+			background.settle();
+		});
+		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+		expect(localPatch).not.toHaveBeenCalledWith(expect.objectContaining({ document: staleOrder }));
+	});
+
+	it('gives up silently when the background wait hits its cap, and the next edit still heals', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		await act(async () => {
+			background.giveUp();
+		});
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
+
+		// The next cart edit remains the ultimate self-heal.
+		whenSettled = jest.fn(async () => true);
+		await act(async () => {
+			editCart([{ total: '30.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
+	});
+
+	it('collapses a foreground replay that overlaps the continuation into a single write', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		// Hold the replay open so the two callers genuinely overlap rather than running in turn.
+		let releaseRecalculate: (() => void) | undefined;
+		recalculate.mockImplementationOnce(
+			(lineItems: LineItem[], couponLines: CouponLine[]) =>
+				new Promise((resolve) => {
+					releaseRecalculate = () => resolve({ lineItems, couponLines });
+				})
+		);
+
+		await act(async () => {
+			background.settle();
+		});
+		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(localPatch).not.toHaveBeenCalled();
+
+		// A same-revision re-run of the cart subscription (the #222 price-decimals path) reaches
+		// the replay while the continuation's recalculation is still in flight. Both hold the
+		// SAME order revision, so single-flight has to collapse them into one write.
+		whenSettled = jest.fn(async () => true);
+		await act(async () => {
+			lineItems$.next([{ total: '15.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		expect(recalculate).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			releaseRecalculate?.();
+		});
+		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 });
