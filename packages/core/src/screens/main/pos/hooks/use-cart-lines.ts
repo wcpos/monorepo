@@ -41,6 +41,8 @@ function replayStateKey(order: OrderDocument): string {
 		order.status ?? null,
 		order.date_modified_gmt ?? null,
 		order.line_items ?? [],
+		order.fee_lines ?? [],
+		order.shipping_lines ?? [],
 		order.coupon_lines ?? [],
 	]);
 }
@@ -59,6 +61,7 @@ type ReplayContinuation = {
 	stateKey: string;
 	generation: number;
 	abort: AbortController;
+	replay: (order: OrderDocument) => Promise<void>;
 };
 
 /**
@@ -217,8 +220,8 @@ export const useCartLines = () => {
 	 *
 	 * Only the cart surface calls this, and `useCartLines` lives only there, so exactly one tab
 	 * — the one holding the cart — ever waits. Idempotent per (order state, demand generation):
-	 * re-arming for the same pair keeps the existing wait, any other pair aborts it because the
-	 * newer edit's own replay now owns the order.
+	 * re-arming for the same pair keeps the existing wait and refreshes its calculation context;
+	 * any other pair aborts it because the newer edit's own replay now owns the order.
 	 */
 	const armReplayContinuation = React.useCallback(
 		(freshOrder: OrderDocument) => {
@@ -230,6 +233,7 @@ export const useCartLines = () => {
 				armed.generation === couponReferenceGeneration &&
 				!armed.abort.signal.aborted
 			) {
+				armed.replay = replayCoupons;
 				return;
 			}
 			disarmReplayContinuation();
@@ -238,6 +242,7 @@ export const useCartLines = () => {
 				stateKey,
 				generation: couponReferenceGeneration,
 				abort: new AbortController(),
+				replay: replayCoupons,
 			};
 			continuationRef.current = continuation;
 			void (async () => {
@@ -260,7 +265,7 @@ export const useCartLines = () => {
 				// write owns the order now; a replay computed against the old state must not
 				// land on top of it.
 				if (replayStateKey(latest) !== continuation.stateKey) return;
-				await replayCoupons(continuation.order);
+				await continuation.replay(continuation.order);
 			})().catch((error) => cartLogger.error(String(error)));
 		},
 		[
@@ -272,15 +277,15 @@ export const useCartLines = () => {
 		]
 	);
 
-	// Mount-only: a continuation must not outlive the cart surface. Unmounting (store switch,
-	// navigating away, checkout tearing the cart down) aborts the wait and drops the captured
-	// order document, so nothing can fire against an order this tab no longer owns.
+	// This external wait belongs to the current order identity. Switching tabs or unmounting
+	// aborts it and drops the captured document, so nothing can fire against an order this tab
+	// no longer owns.
 	React.useEffect(
 		() => () => {
 			continuationRef.current?.abort.abort();
 			continuationRef.current = null;
 		},
-		[]
+		[currentOrder]
 	);
 
 	const handleCartTotalChange = async () => {

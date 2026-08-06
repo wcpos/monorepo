@@ -1380,6 +1380,39 @@ describe('query bindings', () => {
 		await expect(background).resolves.toBe(false);
 	});
 
+	it('releases pending rearmed requirements when the background cap wins (#963)', async () => {
+		jest.useFakeTimers();
+		engine.refreshReleased = true;
+		const originalRequire = engine.require.bind(engine);
+		const releaseRearm = jest.fn();
+		engine.require = (requirement) => {
+			const handle = originalRequire(requirement);
+			if (!requirement.id.includes(':rearm:')) return handle;
+			return {
+				...handle,
+				ready: new Promise(() => undefined),
+				release: () => {
+					releaseRearm(requirement.collection);
+					handle.release();
+				},
+			};
+		};
+		const { result } = renderHook(() => useAppliedCouponReferenceDemand(true), {
+			wrapper: Provider,
+		});
+		await act(async () => Promise.resolve());
+
+		const controller = new AbortController();
+		const background = result.current.whenSettledInBackground(controller.signal);
+		await act(async () => jest.advanceTimersByTimeAsync(4 * 60_000));
+
+		await expect(background).resolves.toBe(false);
+		expect(releaseRearm.mock.calls.map(([collection]) => collection).sort()).toEqual([
+			'categories',
+			'coupons',
+		]);
+	});
+
 	it('background wait abandons itself when the caller aborts (#963)', async () => {
 		jest.useFakeTimers();
 		engine.refreshReleased = true;

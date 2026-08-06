@@ -55,6 +55,16 @@ function buildRevision(overrides: Record<string, unknown> = {}) {
 /** A brand-new object per call, exactly like the production proxy. */
 const getLatest = () => ({ ...revision });
 
+const buildCurrentOrder = () => ({
+	line_items$: lineItems$,
+	fee_lines$: feeLines$,
+	shipping_lines$: shippingLines$,
+	coupon_lines$: couponLines$,
+	getLatest,
+});
+
+let currentOrder = buildCurrentOrder();
+
 function editCart(lineItems: LineItem[]) {
 	lineItems$.next(lineItems);
 	revision = buildRevision({ date_modified_gmt: new Date().toISOString() });
@@ -67,13 +77,7 @@ function applyCoupon(couponLines: CouponLine[]) {
 
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
-		currentOrder: {
-			line_items$: lineItems$,
-			fee_lines$: feeLines$,
-			shipping_lines$: shippingLines$,
-			coupon_lines$: couponLines$,
-			getLatest,
-		},
+		currentOrder,
 	}),
 }));
 
@@ -94,11 +98,13 @@ jest.mock('./use-update-fee-line', () => ({
 	useUpdateFeeLine: () => ({ updateFeeLine: jest.fn() }),
 }));
 
+let priceNumDecimals = 2;
+
 jest.mock('../../contexts/tax-rates', () => ({
 	useTaxRates: () => ({
 		allRates: [],
 		taxRoundAtSubtotal: false,
-		priceNumDecimals: 2,
+		priceNumDecimals,
 		pricesIncludeTax: false,
 	}),
 }));
@@ -110,17 +116,19 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch }),
 }));
 
+const calculateOrderTotals = jest.fn((_args: Record<string, unknown>) => ({
+	discount_tax: '0.00',
+	discount_total: '5.00',
+	shipping_tax: '0.00',
+	shipping_total: '0.00',
+	cart_tax: '0.00',
+	total_tax: '0.00',
+	total: '5.00',
+	tax_lines: [],
+}));
+
 jest.mock('./calculate-order-totals', () => ({
-	calculateOrderTotals: () => ({
-		discount_tax: '0.00',
-		discount_total: '5.00',
-		shipping_tax: '0.00',
-		shipping_total: '0.00',
-		cart_tax: '0.00',
-		total_tax: '0.00',
-		total: '5.00',
-		tax_lines: [],
-	}),
+	calculateOrderTotals: (args: Record<string, unknown>) => calculateOrderTotals(args),
 }));
 
 /** A deferred `whenSettledInBackground` the test resolves by hand. */
@@ -141,13 +149,18 @@ describe('useCartLines reference demand (#952)', () => {
 	beforeEach(() => {
 		appliedCouponReferenceDemand.mockClear();
 		recalculate.mockClear();
+		calculateOrderTotals.mockClear();
 		localPatch.mockClear();
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		referenceGeneration = 0;
+		priceNumDecimals = 2;
 		couponLines$.next([]);
 		lineItems$.next([]);
+		feeLines$.next([]);
+		shippingLines$.next([]);
 		revision = buildRevision();
+		currentOrder = buildCurrentOrder();
 	});
 
 	it('declares no coupon reference demand for a cart without coupon lines', () => {
@@ -228,6 +241,42 @@ describe('useCartLines reference demand (#952)', () => {
 		);
 	});
 
+	it.each(['fee_lines', 'shipping_lines'] as const)(
+		'drops a foreground replay after a same-second %s mutation',
+		async (field) => {
+			let releaseRecalculate: (() => void) | undefined;
+			recalculate.mockImplementationOnce(
+				(lineItems: LineItem[], couponLines: CouponLine[]) =>
+					new Promise((resolve) => {
+						releaseRecalculate = () => resolve({ lineItems, couponLines });
+					})
+			);
+			applyCoupon([{ code: 'bonus' }]);
+			renderHook(() => useCartLines());
+
+			await act(async () => {
+				editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+			});
+			expect(recalculate).toHaveBeenCalledTimes(1);
+
+			// Local mutations stamp whole seconds. Replace only the totals input while preserving
+			// the captured timestamp and every other replay-identity field.
+			revision = {
+				...revision,
+				[field]:
+					field === 'fee_lines'
+						? [{ name: 'Handling', total: '3.00' }]
+						: [{ method_id: 'flat_rate', total: '4.00' }],
+			};
+			await act(async () => {
+				releaseRecalculate?.();
+			});
+
+			expect(calculateOrderTotals).not.toHaveBeenCalled();
+			expect(localPatch).not.toHaveBeenCalled();
+		}
+	);
+
 	it('skips the foreground replay when the reference wait times out', async () => {
 		// A deadline does not make unmaterialized residents trustworthy. Bailing leaves the
 		// cart on its previous totals until the references actually land.
@@ -249,6 +298,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 	beforeEach(() => {
 		appliedCouponReferenceDemand.mockClear();
 		recalculate.mockClear();
+		calculateOrderTotals.mockClear();
 		localPatch.mockClear();
 		// The scenario this issue is about: the reference pull outran the 10s barrier.
 		whenSettled = jest.fn(async () => false);
@@ -256,7 +306,11 @@ describe('useCartLines background coupon replay (#963)', () => {
 		referenceGeneration = 0;
 		couponLines$.next([]);
 		lineItems$.next([]);
+		feeLines$.next([]);
+		shippingLines$.next([]);
+		priceNumDecimals = 2;
 		revision = buildRevision();
+		currentOrder = buildCurrentOrder();
 	});
 
 	it('replays the coupon once the references land after the foreground barrier expired', async () => {
@@ -305,6 +359,51 @@ describe('useCartLines background coupon replay (#963)', () => {
 		expect(whenSettledInBackground).toHaveBeenCalledTimes(1);
 		expect(background.signals).toHaveLength(1);
 		expect(background.signals[0].aborted).toBe(false);
+	});
+
+	it('uses the latest calculation callback when the same continuation is armed again', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		const { rerender } = renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		await act(async () => {
+			priceNumDecimals = 3;
+			rerender();
+		});
+		expect(whenSettledInBackground).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			background.settle();
+		});
+
+		expect(calculateOrderTotals).toHaveBeenCalledWith(expect.objectContaining({ dp: 3 }));
+	});
+
+	it('aborts the continuation when the cart switches to another current order', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		const { rerender } = renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		expect(background.signals[0].aborted).toBe(false);
+
+		await act(async () => {
+			currentOrder = buildCurrentOrder();
+			rerender();
+		});
+		expect(background.signals[0].aborted).toBe(true);
+
+		await act(async () => {
+			background.settle();
+		});
+		expect(recalculate).not.toHaveBeenCalled();
+		expect(localPatch).not.toHaveBeenCalled();
 	});
 
 	it('drops the stale continuation when the cart is edited during the background wait', async () => {

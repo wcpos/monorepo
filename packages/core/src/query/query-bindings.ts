@@ -930,12 +930,20 @@ export function useAppliedCouponReferenceDemand(hasAppliedCoupons: boolean): {
 						signal
 					);
 					if (signal.aborted || Date.now() >= deadline) break;
-					readiness = await withDeadline(
-						Promise.all([coupons.declareOnce(signal), categories.declareOnce(signal)]),
-						signal,
-						deadline,
-						[NOT_ATTEMPTED, NOT_ATTEMPTED]
-					);
+					const rearm = new AbortController();
+					try {
+						readiness = await withDeadline(
+							Promise.all([
+								coupons.declareOnce(rearm.signal),
+								categories.declareOnce(rearm.signal),
+							]),
+							signal,
+							deadline,
+							[NOT_ATTEMPTED, NOT_ATTEMPTED]
+						);
+					} finally {
+						rearm.abort();
+					}
 				}
 				return false;
 			},
