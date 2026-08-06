@@ -10,6 +10,7 @@ import { EngineOutageBanner } from './engine-outage-banner';
 const mockPush = jest.fn();
 const mockUseEngineStatus = jest.fn();
 let mockOnlineStatus = 'online-website-available';
+let mockStorageDegraded = false;
 
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush }),
@@ -24,6 +25,10 @@ jest.mock('@wcpos/components/text', () => {
 
 jest.mock('../../hooks/use-engine-monitor', () => ({
 	useEngineStatus: () => mockUseEngineStatus(),
+}));
+
+jest.mock('../../hooks/use-storage-health', () => ({
+	useStorageDegraded: () => mockStorageDegraded,
 }));
 
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -41,6 +46,7 @@ describe('EngineOutageBanner', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockOnlineStatus = 'online-website-available';
+		mockStorageDegraded = false;
 	});
 
 	it('renders nothing while the engine is healthy', () => {
@@ -91,4 +97,31 @@ describe('EngineOutageBanner', () => {
 			);
 		}
 	);
+
+	// #163
+	it('renders the storage outage message while the local database is degraded', () => {
+		mockUseEngineStatus.mockReturnValue({ connectivity: 'online', gatedBy: null });
+		mockStorageDegraded = true;
+
+		render(<EngineOutageBanner />);
+
+		expect(screen.queryByTestId('engine-outage-banner')).toBeNull();
+		expect(screen.getByTestId('storage-outage-banner').textContent).toContain(
+			'Local database unavailable'
+		);
+		fireEvent.click(screen.getByTestId('scan-outage-view-status'));
+		expect(mockPush).toHaveBeenCalledWith('/health/database');
+	});
+
+	it('prefers the storage outage message over a concurrent engine outage', () => {
+		mockOnlineStatus = 'offline';
+		mockUseEngineStatus.mockReturnValue({ connectivity: 'offline', gatedBy: 'offline' });
+		mockStorageDegraded = true;
+
+		render(<EngineOutageBanner />);
+
+		expect(screen.getByTestId('storage-outage-banner').textContent).toContain(
+			'Local database unavailable'
+		);
+	});
 });
