@@ -97,6 +97,22 @@ export type QueuedMutation = RecordMutation & {
 	 */
 	readonly requeuedFrom?: string;
 	readonly requeueCount?: number;
+	/**
+	 * DURABLE RESOLUTION CLAIM (#832 follow-up — the cross-process residual left
+	 * open by #1016). An engine instance serializes its OWN resolutions in memory,
+	 * which is enough for one process; two Electron windows are two processes over
+	 * one storage, and in-memory serialization says nothing about the other one. So
+	 * the claim lives on the row — the only state both processes actually share.
+	 *
+	 * `resolutionClaimBy` is the claiming instance's id, `resolutionClaimUntil` the
+	 * ISO deadline after which the claim may be STOLEN. The deadline is what makes
+	 * a crashed window recoverable: a process that dies mid-resolution cannot
+	 * release, and without expiry its dead letter would be permanently unresolvable
+	 * — which for a rejected CREATE means a completed sale nobody can ever recover.
+	 * Both are absent on a row nobody is resolving.
+	 */
+	readonly resolutionClaimBy?: string;
+	readonly resolutionClaimUntil?: string;
 };
 
 /** Storage port — an append-only set keyed by `mutationId`. RxDB (durable) or memory (tests). */
@@ -325,6 +341,75 @@ export class RecordMutationQueue {
 		});
 	}
 
+	/**
+	 * DURABLE RESOLUTION CLAIM (CAS) — the cross-process half of resolution
+	 * safety (#832 follow-up; the residual #1016 left open).
+	 *
+	 * An engine instance serializes its own resolutions in memory. Two Electron
+	 * windows are two processes over one storage, each with its own chain, so that
+	 * says nothing about the other: a discard in window A can still interleave a
+	 * requeue in window B, and the outcome #1016 documents is a destroyed order
+	 * reappearing because the other window's replacement was already claimed by a
+	 * drain. The row is the ONLY state both processes share, so the lock lives
+	 * there — no new collection, no storage-specific primitive
+	 * (`navigator.locks` does not exist in the Electron main/worker storage path,
+	 * and would not cover the RN host at all).
+	 *
+	 * Returns:
+	 *  - `claimed` — the caller now holds it until `untilIso`;
+	 *  - `held` — someone else holds an UNEXPIRED claim; the caller must not proceed;
+	 *  - `gone` — the row is absent or no longer in `expectedStatus`, so there is
+	 *    nothing to resolve (a concurrent resolution already settled it).
+	 *
+	 * A claim is STEALABLE once its deadline passes. That is deliberate and it is
+	 * the only safe direction: a window that crashes mid-resolution can never
+	 * release, and a permanent lock on a dead letter is a completed sale nobody can
+	 * ever recover — strictly worse than the race the lock exists to prevent.
+	 * Stealing is safe because every step a resolution actually performs is
+	 * independently CAS-guarded (`removeIfStatus` retires the terminal row exactly
+	 * once; `removePending` unwinds only an unclaimed replacement), so a stolen
+	 * claim cannot double-apply — it can only lose those CASes.
+	 */
+	async claimForResolution(input: {
+		mutationId: string;
+		expectedStatus: QueuedMutation['status'];
+		holder: string;
+		untilIso: string;
+		nowMs: number;
+	}): Promise<'claimed' | 'held' | 'gone'> {
+		return this.transact(async () => {
+			const row = (await this.storage.list()).find((item) => item.mutationId === input.mutationId);
+			if (!row || row.status !== input.expectedStatus) return 'gone';
+			const heldBy = row.resolutionClaimBy;
+			const until = row.resolutionClaimUntil ? Date.parse(row.resolutionClaimUntil) : 0;
+			// Our own claim is always re-takeable (a retry inside one process), and an
+			// expired one is stealable. Anything else is a live foreign holder.
+			if (heldBy !== undefined && heldBy !== input.holder && until > input.nowMs) return 'held';
+			await this.storage.append({
+				...row,
+				resolutionClaimBy: input.holder,
+				resolutionClaimUntil: input.untilIso,
+			});
+			return 'claimed';
+		});
+	}
+
+	/**
+	 * Release a claim this holder still owns. A no-op when the row is GONE — the
+	 * common case, because a successful resolution removes it, and re-appending
+	 * here would RESURRECT a dead letter the caller just retired. Also a no-op when
+	 * someone else now holds it (ours expired and was stolen): clearing a live
+	 * foreign claim would hand the row to a third process mid-resolution.
+	 */
+	async releaseResolutionClaim(mutationId: string, holder: string): Promise<void> {
+		await this.transact(async () => {
+			const row = (await this.storage.list()).find((item) => item.mutationId === mutationId);
+			if (!row || row.resolutionClaimBy !== holder) return;
+			const { resolutionClaimBy: _by, resolutionClaimUntil: _until, ...released } = row;
+			await this.storage.append(released);
+		});
+	}
+
 	/** EVERY stored entry, terminal rows included — the engine's `conflicts()` reads this. */
 	async all(): Promise<QueuedMutation[]> {
 		return this.storage.list();
@@ -446,7 +531,7 @@ export class RxRecordMutationStorage implements RecordMutationStorage {
 /** RxDB collection schema for the durable queue — one row per mutation (`mutationId` PK). */
 export const recordMutationQueueSchema = {
 	title: 'record mutation queue schema',
-	version: 4,
+	version: 5,
 	primaryKey: 'mutationId',
 	type: 'object',
 	properties: {
@@ -480,6 +565,10 @@ export const recordMutationQueueSchema = {
 		rejectedAt: { type: 'string', maxLength: 32 },
 		requeuedFrom: { type: 'string', maxLength: 64 },
 		requeueCount: { type: 'number', minimum: 0, maximum: 1_000_000, multipleOf: 1 },
+		// The durable resolution claim (#832 follow-up) — optional, so a row nobody
+		// is resolving simply has neither.
+		resolutionClaimBy: { type: 'string', maxLength: 64 },
+		resolutionClaimUntil: { type: 'string', maxLength: 32 },
 	},
 	required: ['mutationId', 'recordId', 'collectionName', 'operation', 'payload', 'queuedAt'],
 } as const;
@@ -508,6 +597,11 @@ export const recordMutationQueueSchema = {
  * dead-lettered sales this very feature exists to recover (dev-next still
  * carries stranded orders from the #786 incident). A one-line passthrough at v4
  * costs nothing and keeps them. Flagged for ruling in the #832 PR.
+ * v4 → v5: the durable resolution claim (`resolutionClaimBy` /
+ * `resolutionClaimUntil`) — OPTIONAL additive properties, rows pass through. A
+ * new version for the same DB6 reason as v4: an in-place amend of a released v4
+ * keeps the `name-version` key with a different schema hash and the scope
+ * database fails to open at all.
  */
 export const recordMutationQueueMigrationStrategies = {
 	1: (doc: QueuedMutation): QueuedMutation => doc,
@@ -522,4 +616,5 @@ export const recordMutationQueueMigrationStrategies = {
 	}),
 	3: (doc: QueuedMutation): QueuedMutation => doc,
 	4: (doc: QueuedMutation): QueuedMutation => doc,
+	5: (doc: QueuedMutation): QueuedMutation => doc,
 };

@@ -450,6 +450,174 @@ describe('RxRecordMutationStorage', () => {
 		);
 	});
 
+	/**
+	 * TWO PROCESSES, ONE STORAGE (#832 follow-up). Each `RecordMutationQueue` has
+	 * its own in-memory transition chain, so two instances over one storage is
+	 * exactly the two-Electron-windows condition: neither chain can see the other,
+	 * and only the durable row is shared.
+	 */
+	describe('durable resolution claim across instances', () => {
+		const shared = () => {
+			const storage = new InMemoryRecordMutationStorage();
+			return { storage, a: new RecordMutationQueue(storage), b: new RecordMutationQueue(storage) };
+		};
+		const seedRejected = async (q: RecordMutationQueue) => {
+			const row = await q.enqueue(mut({ mutationId: 'dead-1' }));
+			await q.replace({ ...row, status: 'rejected' });
+		};
+
+		// EXPECTED TO FAIL — this is the spike's finding, kept executable so it
+		// starts passing the moment the storage port grows a real CAS.
+		//
+		// `transact` serializes transitions within ONE instance. Across instances
+		// there is nothing: `list()` drops `_rev` (plain `toJSON()`) and `append()` is
+		// an unconditional `bulkUpsert`, so read-then-write from two processes
+		// interleaves and the second write simply overwrites the first. Both windows
+		// therefore believe they hold the claim.
+		//
+		// This is not a flaw introduced by the claim — it is true of every existing
+		// "CAS" on this queue (`removeIfStatus`, `claim`, `coalesceInto`). They are
+		// in-process CAS only. A durable cross-process lock needs a revision-checked
+		// write in `RecordMutationStorage`; see the PR for the two candidate shapes.
+		it.fails(
+			'lets exactly ONE instance claim a dead letter; the other is told to wait',
+			async () => {
+				const { a, b } = shared();
+				await seedRejected(a);
+
+				const [first, second] = await Promise.all([
+					a.claimForResolution({
+						mutationId: 'dead-1',
+						expectedStatus: 'rejected',
+						holder: 'window-A',
+						untilIso: '2026-01-01T00:00:30.000Z',
+						nowMs: 0,
+					}),
+					b.claimForResolution({
+						mutationId: 'dead-1',
+						expectedStatus: 'rejected',
+						holder: 'window-B',
+						untilIso: '2026-01-01T00:00:30.000Z',
+						nowMs: 0,
+					}),
+				]);
+
+				expect([first, second].filter((outcome) => outcome === 'claimed')).toHaveLength(1);
+				expect([first, second].filter((outcome) => outcome === 'held')).toHaveLength(1);
+			}
+		);
+
+		it('lets a crashed window claim be STOLEN once its deadline passes', async () => {
+			const { a, b } = shared();
+			await seedRejected(a);
+			await a.claimForResolution({
+				mutationId: 'dead-1',
+				expectedStatus: 'rejected',
+				holder: 'window-A',
+				untilIso: '2026-01-01T00:00:30.000Z',
+				nowMs: 0,
+			});
+
+			// Window A died without releasing. Before the deadline the row is locked…
+			expect(
+				await b.claimForResolution({
+					mutationId: 'dead-1',
+					expectedStatus: 'rejected',
+					holder: 'window-B',
+					untilIso: '2026-01-01T00:01:00.000Z',
+					nowMs: Date.parse('2026-01-01T00:00:29.000Z'),
+				})
+			).toBe('held');
+			// …and after it, recovery is possible again. A permanent lock on a dead
+			// letter is a completed sale nobody can ever recover.
+			expect(
+				await b.claimForResolution({
+					mutationId: 'dead-1',
+					expectedStatus: 'rejected',
+					holder: 'window-B',
+					untilIso: '2026-01-01T00:01:00.000Z',
+					nowMs: Date.parse('2026-01-01T00:00:31.000Z'),
+				})
+			).toBe('claimed');
+		});
+
+		it('hands the row straight back on release, and reports a settled row as gone', async () => {
+			const { a, b } = shared();
+			await seedRejected(a);
+			await a.claimForResolution({
+				mutationId: 'dead-1',
+				expectedStatus: 'rejected',
+				holder: 'window-A',
+				untilIso: '2026-01-01T00:00:30.000Z',
+				nowMs: 0,
+			});
+			await a.releaseResolutionClaim('dead-1', 'window-A');
+
+			expect(
+				await b.claimForResolution({
+					mutationId: 'dead-1',
+					expectedStatus: 'rejected',
+					holder: 'window-B',
+					untilIso: '2026-01-01T00:00:30.000Z',
+					nowMs: 0,
+				})
+			).toBe('claimed');
+
+			// The other window resolved it in the meantime.
+			await b.remove(['dead-1']);
+			expect(
+				await a.claimForResolution({
+					mutationId: 'dead-1',
+					expectedStatus: 'rejected',
+					holder: 'window-A',
+					untilIso: '2026-01-01T00:00:30.000Z',
+					nowMs: 0,
+				})
+			).toBe('gone');
+		});
+
+		it('never RESURRECTS a row the winner already retired', async () => {
+			const { a, storage } = shared();
+			await seedRejected(a);
+			await a.claimForResolution({
+				mutationId: 'dead-1',
+				expectedStatus: 'rejected',
+				holder: 'window-A',
+				untilIso: '2026-01-01T00:00:30.000Z',
+				nowMs: 0,
+			});
+			// The resolution succeeded and removed the row; the release still runs.
+			await a.remove(['dead-1']);
+			await a.releaseResolutionClaim('dead-1', 'window-A');
+
+			expect(await storage.list()).toEqual([]);
+		});
+
+		it('does not clear a claim that has since been stolen by someone else', async () => {
+			const { a, b } = shared();
+			await seedRejected(a);
+			await a.claimForResolution({
+				mutationId: 'dead-1',
+				expectedStatus: 'rejected',
+				holder: 'window-A',
+				untilIso: '2026-01-01T00:00:30.000Z',
+				nowMs: 0,
+			});
+			await b.claimForResolution({
+				mutationId: 'dead-1',
+				expectedStatus: 'rejected',
+				holder: 'window-B',
+				untilIso: '2026-01-01T00:02:00.000Z',
+				nowMs: Date.parse('2026-01-01T00:00:31.000Z'),
+			});
+
+			// A wakes up late and releases. It must not unlock B's live resolution.
+			await a.releaseResolutionClaim('dead-1', 'window-A');
+
+			expect((await b.all())[0]).toMatchObject({ resolutionClaimBy: 'window-B' });
+		});
+	});
+
 	it('drives the queue end-to-end with FIFO pending ordering', async () => {
 		const q = new RecordMutationQueue(new RxRecordMutationStorage(fakeCollection()));
 		await q.enqueue(mut({ mutationId: 'm-b', queuedAt: '2026-06-26T00:00:02.000Z' }));
