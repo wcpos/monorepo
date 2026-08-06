@@ -62,12 +62,12 @@ export const OTHER_LANES = [
     reason:
       "Playwright specs — run against a deployed preview by the e2e job in deploy.yml",
   },
-  {
-    dir: "apps/main/.maestro",
-    workflow: "e2e-native.yml",
-    invocation: /\bmaestro\b[^\n]*\btest\s+apps\/main\/\.maestro\b/,
-    reason: "Maestro native flows — run on a simulator by e2e-native.yml",
-  },
+  // No Maestro entry. `apps/main/.maestro` still holds native flows, but #1027
+  // retired e2e-native.yml on next and no workflow invokes maestro any more, so
+  // an entry here would assert a lane that does not exist — which is precisely
+  // what the `invocation` check above refuses to let anyone write. The flows are
+  // not `*.test.*` files, so they were never counted by this check either way;
+  // they are simply unrun, and that is a product call, not a matrix bug.
 ];
 
 /**

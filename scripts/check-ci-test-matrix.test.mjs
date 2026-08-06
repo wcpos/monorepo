@@ -319,35 +319,24 @@ test("a commented-out command is not a lane", () => {
   assert.ok(stillCounts.has("packages/printer"));
 });
 
-for (const lane of ["playwright", "maestro"]) {
-  test(`the ${lane} lane check rejects a commented-out invocation`, (t) => {
-    const tree = makeTree();
-    t.after(() => rmSync(tree.root, { recursive: true, force: true }));
-    tree.write("pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n');
-    tree.write("package.json", JSON.stringify({ scripts: {} }));
-    tree.pkg("packages/core", "@wcpos/core", { test: "jest" });
-    tree.write("packages/core/src/core.test.ts", "");
-    tree.write(
-      ".github/workflows/test.yml",
-      "pnpm --filter @wcpos/core exec jest --ci\n",
-    );
-    const playwright = "run: cd apps/main && npx playwright test\n";
-    const maestro = "run: maestro test apps/main/.maestro\n";
-    tree.write(
-      ".github/workflows/deploy.yml",
-      lane === "playwright" ? `      # ${playwright}` : playwright,
-    );
-    tree.write(
-      ".github/workflows/e2e-native.yml",
-      lane === "maestro" ? `      # ${maestro}` : maestro,
-    );
+test("the playwright lane check rejects a commented-out invocation", (t) => {
+  const tree = makeTree();
+  t.after(() => rmSync(tree.root, { recursive: true, force: true }));
+  tree.write("pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n');
+  tree.write("package.json", JSON.stringify({ scripts: {} }));
+  tree.pkg("packages/core", "@wcpos/core", { test: "jest" });
+  tree.write("packages/core/src/core.test.ts", "");
+  tree.write(
+    ".github/workflows/test.yml",
+    "pnpm --filter @wcpos/core exec jest --ci\n",
+  );
+  tree.write(
+    ".github/workflows/deploy.yml",
+    "      # run: cd apps/main && npx playwright test\n",
+  );
 
-    assert.throws(
-      () => checkCiTestMatrix(tree.root),
-      new RegExp(`${lane}.*NO CI lane`, "i"),
-    );
-  });
-}
+  assert.throws(() => checkCiTestMatrix(tree.root), /playwright.*NO CI lane/is);
+});
 
 test("a package mentioned nowhere is dark", () => {
   const lanes = detectLanes(
@@ -436,10 +425,6 @@ test("the allowlist fails closed when an entry is gone or has no tests", (t) => 
       ".github/workflows/deploy.yml",
       "run: cd apps/main && npx playwright test\n",
     );
-    tree.write(
-      ".github/workflows/e2e-native.yml",
-      "run: maestro test apps/main/.maestro\n",
-    );
     if (packageState === "testless") {
       tree.pkg("apps/template-studio", "@wcpos/template-studio");
     }
@@ -488,34 +473,38 @@ test("package and script tests run before governance entrypoints", () => {
   }
 });
 
-for (const missing of ["playwright", "maestro"]) {
-  test(`the matrix fails when the ${missing} workflow stops invoking its suite`, (t) => {
-    const tree = makeTree();
-    t.after(() => rmSync(tree.root, { recursive: true, force: true }));
-    tree.write("pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n');
-    tree.write("package.json", JSON.stringify({ scripts: {} }));
-    tree.pkg("packages/core", "@wcpos/core", { test: "jest" });
-    tree.write("packages/core/src/core.test.ts", "");
-    tree.write(
-      ".github/workflows/test.yml",
-      "pnpm --filter @wcpos/core exec jest --ci\n",
-    );
-    tree.write(
-      ".github/workflows/deploy.yml",
-      missing === "playwright"
-        ? "name: deploy\n"
-        : "run: cd apps/main && npx playwright test\n",
-    );
-    tree.write(
-      ".github/workflows/e2e-native.yml",
-      missing === "maestro"
-        ? "name: native e2e\n"
-        : "run: maestro test apps/main/.maestro\n",
-    );
+test("the matrix fails when the playwright workflow stops invoking its suite", (t) => {
+  // This is not hypothetical: #1027 retired e2e-native.yml on next while
+  // apps/main/.maestro was still an OTHER_LANES entry, and this assertion is
+  // what turned that into a red build instead of a silent lie.
+  const tree = makeTree();
+  t.after(() => rmSync(tree.root, { recursive: true, force: true }));
+  tree.write("pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n');
+  tree.write("package.json", JSON.stringify({ scripts: {} }));
+  tree.pkg("packages/core", "@wcpos/core", { test: "jest" });
+  tree.write("packages/core/src/core.test.ts", "");
+  tree.write(
+    ".github/workflows/test.yml",
+    "pnpm --filter @wcpos/core exec jest --ci\n",
+  );
+  tree.write(".github/workflows/deploy.yml", "name: deploy\n");
 
-    assert.throws(
-      () => checkCiTestMatrix(tree.root),
-      new RegExp(`${missing}.*NO CI lane`, "i"),
-    );
-  });
-}
+  assert.throws(() => checkCiTestMatrix(tree.root), /playwright.*NO CI lane/is);
+});
+
+test("a lane whose workflow file is deleted outright fails closed", (t) => {
+  // The #1027 shape exactly: the workflow does not merely stop invoking the
+  // suite, it stops existing.
+  const tree = makeTree();
+  t.after(() => rmSync(tree.root, { recursive: true, force: true }));
+  tree.write("pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n');
+  tree.write("package.json", JSON.stringify({ scripts: {} }));
+  tree.pkg("packages/core", "@wcpos/core", { test: "jest" });
+  tree.write("packages/core/src/core.test.ts", "");
+  tree.write(
+    ".github/workflows/test.yml",
+    "pnpm --filter @wcpos/core exec jest --ci\n",
+  );
+
+  assert.throws(() => checkCiTestMatrix(tree.root), /playwright.*NO CI lane/is);
+});
