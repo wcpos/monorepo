@@ -283,15 +283,22 @@ export const useCartLines = () => {
 		]
 	);
 
-	// This external wait belongs to the current order identity. Switching tabs or unmounting
-	// aborts it and drops the captured document, so nothing can fire against an order this tab
-	// no longer owns.
+	// This external wait belongs to the current order IDENTITY. Switching order tabs
+	// (`setCurrentOrderID` swaps the context value without a remount) or unmounting aborts it and
+	// drops the captured document, so nothing can fire against an order this tab no longer owns.
+	//
+	// Keyed on the uuid, deliberately not on `currentOrder` itself: the open-orders resource
+	// re-runs `wrapEngineDocument` on every emission of its `pos-open` query, so the context
+	// object is replaced whenever ANY open order is written — routine background sync during
+	// exactly the slow reference pull this continuation exists to outlast. Keying on the object
+	// would abandon the replay for the very reason it was armed.
+	const currentOrderUUID = currentOrder.uuid;
 	React.useEffect(
 		() => () => {
 			continuationRef.current?.abort.abort();
 			continuationRef.current = null;
 		},
-		[currentOrder]
+		[currentOrderUUID]
 	);
 
 	const handleCartTotalChange = async () => {

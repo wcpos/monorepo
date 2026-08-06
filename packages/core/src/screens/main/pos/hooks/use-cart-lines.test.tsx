@@ -55,7 +55,14 @@ function buildRevision(overrides: Record<string, unknown> = {}) {
 /** A brand-new object per call, exactly like the production proxy. */
 const getLatest = () => ({ ...revision });
 
-const buildCurrentOrder = () => ({
+/**
+ * A fresh context value per call, like the open-orders resource: every emission of the
+ * `status: 'pos-open'` query re-runs `wrapEngineDocument`, so `currentOrder` is a NEW object
+ * whenever ANY open order is written — not only when the cashier switches order tabs. `uuid` is
+ * what actually identifies the order, and the proxy exposes it directly.
+ */
+const buildCurrentOrder = (uuid = 'order-uuid-1') => ({
+	uuid,
 	line_items$: lineItems$,
 	fee_lines$: feeLines$,
 	shipping_lines$: shippingLines$,
@@ -433,8 +440,11 @@ describe('useCartLines background coupon replay (#963)', () => {
 		});
 		expect(background.signals[0].aborted).toBe(false);
 
+		// A different order now owns the cart surface (setCurrentOrderID swaps the context
+		// value without a remount), so the wait for the previous one must be abandoned.
 		await act(async () => {
-			currentOrder = buildCurrentOrder();
+			currentOrder = buildCurrentOrder('order-uuid-2');
+			revision = buildRevision({ uuid: 'order-uuid-2' });
 			rerender();
 		});
 		expect(background.signals[0].aborted).toBe(true);
@@ -444,6 +454,33 @@ describe('useCartLines background coupon replay (#963)', () => {
 		});
 		expect(recalculate).not.toHaveBeenCalled();
 		expect(localPatch).not.toHaveBeenCalled();
+	});
+
+	it('survives a current-order re-emission that did not change which order is open', async () => {
+		// The open-orders query re-emits — and rebuilds every proxy — whenever ANY `pos-open`
+		// order is written, which during a slow reference pull is routine background sync. Tying
+		// the continuation's lifetime to the context OBJECT would abandon the replay for exactly
+		// the reason it was armed. Identity is the uuid, not the wrapper.
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		const { rerender } = renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+		expect(background.signals[0].aborted).toBe(false);
+
+		await act(async () => {
+			currentOrder = buildCurrentOrder();
+			rerender();
+		});
+		expect(background.signals[0].aborted).toBe(false);
+
+		await act(async () => {
+			background.settle();
+		});
+		expect(recalculate).toHaveBeenCalledTimes(1);
+		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 
 	it('drops the stale continuation when the cart is edited during the background wait', async () => {
