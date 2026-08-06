@@ -298,6 +298,92 @@ describe('query bindings', () => {
 		).toMatchObject({ wooIds: [11, 12] });
 	});
 
+	it('returns all, excludes conflicts, and clears stale variation rows as attributes change', async () => {
+		await engineDB.collections.variations.bulkInsert([
+			engineVariation({
+				uuid: 'red-large',
+				id: 11,
+				parent_id: 10,
+				name: 'Red Large',
+				attributes: [
+					{ id: 1, name: 'Color', option: 'Red' },
+					{ id: 2, name: 'Size', option: 'Large' },
+				],
+			}),
+			engineVariation({
+				uuid: 'blue-large',
+				id: 12,
+				parent_id: 10,
+				name: 'Blue Large',
+				attributes: [
+					{ id: 1, name: 'Color', option: 'Blue' },
+					{ id: 2, name: 'Size', option: 'Large' },
+				],
+			}),
+			engineVariation({
+				uuid: 'red-small',
+				id: 13,
+				parent_id: 10,
+				name: 'Red Small',
+				attributes: [
+					{ id: 1, name: 'Color', option: 'Red' },
+					{ id: 2, name: 'Size', option: 'Small' },
+				],
+			}),
+		]);
+		const base: QueryStateOf<'variations'> = {
+			search: '',
+			filters: { attributeMatches: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		};
+		const bindTargeted = useCollectionBinding as unknown as (
+			collection: 'variations',
+			queryState: QueryStateOf<'variations'>,
+			options: { wooIds: number[] }
+		) => ReturnType<typeof useCollectionBinding<'variations'>>;
+		const { result, rerender } = renderHook(
+			({ state }) => bindTargeted('variations', state, { wooIds: [11, 12, 13] }),
+			{ wrapper: Provider, initialProps: { state: base } }
+		);
+
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
+				'blue-large',
+				'red-large',
+				'red-small',
+			])
+		);
+
+		rerender({
+			state: {
+				...base,
+				filters: {
+					attributeMatches: [
+						{ id: 1, name: 'Color', option: 'Red' },
+						{ id: 2, name: 'Size', option: 'Large' },
+					],
+				},
+			},
+		});
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['red-large'])
+		);
+
+		rerender({
+			state: {
+				...base,
+				filters: {
+					attributeMatches: [
+						{ id: 1, name: 'Color', option: 'Green' },
+						{ id: 2, name: 'Size', option: 'Large' },
+					],
+				},
+			},
+		});
+		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+	});
+
 	it('declares the orders query descriptor for status/customer/date-filtered windows', async () => {
 		const state: QueryStateOf<'orders'> = {
 			search: 'smith',

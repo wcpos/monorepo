@@ -6,7 +6,10 @@ import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
 
+import { requirementsForQuery } from '@wcpos/query';
+
 import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
+import { translateQueryState } from './query-state-translator';
 
 import type { QueryStateActions, QueryStateOf } from './query-state-types';
 
@@ -145,6 +148,232 @@ describe('QueryStateProvider', () => {
 		act(() => actions?.extendLimit());
 		act(() => actions?.setSort('price', 'desc'));
 		expect(state).toMatchObject({ sort: { field: 'price', direction: 'desc' }, limit: 20 });
+	});
+
+	it('replaces a keyed filter with the latest value', () => {
+		let actions: QueryStateActions<'products'> | undefined;
+		let state: QueryStateOf<'products'> | undefined;
+
+		function Subscriber() {
+			state = useQueryState<'products'>();
+			actions = useQueryStateActions<'products'>();
+			return null;
+		}
+
+		render(wrapper(<Subscriber />));
+		act(() => actions?.setFilter('stock_status', 'instock'));
+		act(() => actions?.setFilter('stock_status', 'outofstock'));
+
+		expect(state?.filters).toEqual({
+			categories: [],
+			tags: [],
+			brands: [],
+			stock_status: 'outofstock',
+		});
+	});
+
+	it('treats clearing an absent filter as a harmless no-op', () => {
+		let actions: QueryStateActions<'products'> | undefined;
+		let state: QueryStateOf<'products'> | undefined;
+
+		function Subscriber() {
+			state = useQueryState<'products'>();
+			actions = useQueryStateActions<'products'>();
+			return null;
+		}
+
+		render(wrapper(<Subscriber />));
+		act(() => actions?.extendLimit());
+		const beforeClear = state;
+		act(() => actions?.clearFilter('stock_status'));
+
+		expect(state).toBe(beforeClear);
+		expect(state).toMatchObject({
+			filters: { categories: [], tags: [], brands: [] },
+			limit: 40,
+		});
+	});
+
+	it('replaces a cashier selection in both the selector and order demand', () => {
+		let actions: QueryStateActions<'orders'> | undefined;
+		let state: QueryStateOf<'orders'> | undefined;
+
+		function Subscriber() {
+			state = useQueryState<'orders'>();
+			actions = useQueryStateActions<'orders'>();
+			return null;
+		}
+
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={20}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<Subscriber />
+			</QueryStateProvider>
+		);
+		act(() => actions?.setFilter('cashier', 7));
+		act(() => actions?.setFilter('cashier', 8));
+
+		expect(state?.filters).toEqual({ cashier: 8 });
+		const translated = translateQueryState('orders', state!);
+		expect(translated.selector).toEqual({
+			$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: '8' } } }],
+		});
+		expect(
+			requirementsForQuery({
+				id: 'orders',
+				collectionName: translated.collectionName,
+				selector: translated.selector,
+				limit: translated.limit,
+			})
+		).toEqual({
+			requirements: [
+				{
+					id: 'orders:orders-browse',
+					collection: 'orders',
+					kind: 'orders-browse',
+					cashierId: 8,
+					limit: 20,
+					priority: 700,
+				},
+			],
+			represented: true,
+		});
+	});
+
+	it('clears cashier without removing an active store filter', () => {
+		let actions: QueryStateActions<'orders'> | undefined;
+		let state: QueryStateOf<'orders'> | undefined;
+
+		function Subscriber() {
+			state = useQueryState<'orders'>();
+			actions = useQueryStateActions<'orders'>();
+			return null;
+		}
+
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={20}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<Subscriber />
+			</QueryStateProvider>
+		);
+		act(() => actions?.setFilter('store', 12));
+		act(() => actions?.setFilter('cashier', 7));
+		act(() => actions?.clearFilter('cashier'));
+
+		expect(state?.filters).toEqual({ store: 12 });
+		const translated = translateQueryState('orders', state!);
+		expect(translated.selector).toEqual({
+			$and: [{ meta_data: { $elemMatch: { key: '_pos_store', value: '12' } } }],
+		});
+		expect(
+			requirementsForQuery({
+				id: 'orders',
+				collectionName: translated.collectionName,
+				selector: translated.selector,
+				limit: translated.limit,
+			}).requirements[0]
+		).toEqual({
+			id: 'orders:orders-browse',
+			collection: 'orders',
+			kind: 'orders-browse',
+			store: '12',
+			limit: 20,
+			priority: 700,
+		});
+	});
+
+	it('preserves store while cashier is selected, reselected, and cleared', () => {
+		let actions: QueryStateActions<'orders'> | undefined;
+		let state: QueryStateOf<'orders'> | undefined;
+
+		function Subscriber() {
+			state = useQueryState<'orders'>();
+			actions = useQueryStateActions<'orders'>();
+			return null;
+		}
+
+		render(
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={20}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<Subscriber />
+			</QueryStateProvider>
+		);
+		act(() => actions?.setFilter('store', 12));
+		act(() => actions?.setFilter('cashier', 7));
+		expect(state?.filters).toEqual({ store: 12, cashier: 7 });
+
+		act(() => actions?.setFilter('cashier', 8));
+		expect(state?.filters).toEqual({ store: 12, cashier: 8 });
+
+		act(() => actions?.clearFilter('cashier'));
+		expect(state?.filters).toEqual({ store: 12 });
+	});
+
+	it('replaces one selected category with another in selector and demand', () => {
+		let actions: QueryStateActions<'products'> | undefined;
+		let state: QueryStateOf<'products'> | undefined;
+
+		function Subscriber() {
+			state = useQueryState<'products'>();
+			actions = useQueryStateActions<'products'>();
+			return null;
+		}
+
+		render(wrapper(<Subscriber />));
+		act(() => actions?.setFilter('categories', [11]));
+		act(() => actions?.setFilter('categories', [22]));
+
+		expect(state?.filters.categories).toEqual([22]);
+		const translated = translateQueryState('products', state!);
+		expect(translated.selector).toEqual({
+			$and: [{ $or: [{ categories: { $elemMatch: { id: 22 } } }] }],
+		});
+		expect(
+			requirementsForQuery({
+				id: 'products',
+				collectionName: translated.collectionName,
+				selector: translated.selector,
+				limit: translated.limit,
+			}).requirements[0]
+		).toMatchObject({ kind: 'product-browse', category: [22] });
+	});
+
+	it('fully removes replaced multi-category ids from selector and demand', () => {
+		let actions: QueryStateActions<'products'> | undefined;
+		let state: QueryStateOf<'products'> | undefined;
+
+		function Subscriber() {
+			state = useQueryState<'products'>();
+			actions = useQueryStateActions<'products'>();
+			return null;
+		}
+
+		render(wrapper(<Subscriber />));
+		act(() => actions?.setFilter('categories', [11, 22]));
+		act(() => actions?.setFilter('categories', [33]));
+
+		expect(state?.filters.categories).toEqual([33]);
+		const translated = translateQueryState('products', state!);
+		expect(translated.selector).toEqual({
+			$and: [{ $or: [{ categories: { $elemMatch: { id: 33 } } }] }],
+		});
+		expect(
+			requirementsForQuery({
+				id: 'products',
+				collectionName: translated.collectionName,
+				selector: translated.selector,
+				limit: translated.limit,
+			}).requirements[0]
+		).toMatchObject({ kind: 'product-browse', category: [33] });
 	});
 
 	it('does not reset the window when an action commits the existing value', () => {

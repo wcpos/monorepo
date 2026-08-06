@@ -30,12 +30,16 @@ export function HairlineHeaderRow({
 export function HairlineHeaderCell({
 	children,
 	className,
+	testID,
 }: {
 	children: React.ReactNode;
 	className?: string;
+	testID?: string;
 }) {
 	return (
-		<Text className={cn('text-muted-foreground text-xs uppercase', className)}>{children}</Text>
+		<Text testID={testID} className={cn('text-muted-foreground text-xs uppercase', className)}>
+			{children}
+		</Text>
 	);
 }
 
