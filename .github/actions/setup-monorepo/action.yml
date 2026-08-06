@@ -55,6 +55,11 @@ runs:
     #     git submodule update packages/rn-primitives
     #   shell: bash
 
+    - name: 📦 Init web submodule
+      # Populate apps/web before pnpm scans the apps/* workspace glob.
+      run: git submodule update --init apps/web
+      shell: bash
+
     - name: 📦 Install dependencies
       run: |
         if [ "${{ inputs.skip-install-scripts }}" = "true" ]; then
