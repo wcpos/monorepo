@@ -428,17 +428,31 @@ describe('coverage ledger recovery', () => {
 		// …and it is a first-class lane again: listable, and evictable a second time.
 		await expect(coverage.listLanes('products')).resolves.toHaveLength(2);
 
-		// KNOWN LIMITATION, measured (review finding, 2026-08-06, P1 — accepted).
+		// WAS the known limitation of #1032; CLOSED by #1034. This block used to assert that
+		// an evicted window's key outlived its lane on the record forever.
 		//
-		// Eviction bounds the LANE collection. It does NOT touch the parallel membership the
-		// RECORD side accumulates: `recordQueryResult` appends the lane key to every covered
-		// record's `coveredQueryKeys`, and that union is never pruned, so an evicted window's
-		// key outlives its lane. Pinned so the bound this change actually delivers is not
-		// mistaken for a bigger one — see the follow-up referenced in the module docblock.
-		const snapshot = await coverage.readSnapshot();
-		expect(
-			snapshot.records.find((record) => record.id === 'woo-product:1')?.coveredQueryKeys
-		).toContain(window(100));
+		// A record keeps every key whose lane is LIVE — both windows still cover it here, and
+		// the limit=100 lane was revived by the write above.
+		const readKeys = async () =>
+			(await coverage.readSnapshot()).records.find((entry) => entry.id === 'woo-product:1')
+				?.coveredQueryKeys;
+		expect(await readKeys()).toEqual([window(100), window(200)]);
+
+		// Evict the deeper lane, then write the record again: the prune runs at write time,
+		// so the membership follows the lane out.
+		await coverage.removeLaneIfContained({
+			collection: 'products',
+			queryKey: window(200),
+			containedIn: Array.from({ length: 200 }, (_, index) => `woo-product:${index + 1}`),
+			supersededAtMs: 1_000,
+		});
+		await coverage.recordQueryResult({
+			collection: 'products',
+			queryKey: window(100),
+			records: [{ id: 'woo-product:1' }],
+			complete: true,
+		});
+		expect(await readKeys()).toEqual([window(100)]);
 
 		// The rebuild path sees the evicted lane exactly as it sees a never-written one.
 		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
@@ -447,5 +461,124 @@ describe('coverage ledger recovery', () => {
 		await expect(coverage.readSnapshot()).resolves.toEqual({ records: [], lanes: [] });
 		await expect(coverage.listLanes('products')).resolves.toEqual([]);
 		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
+
+	/**
+	 * THE BOUND, MEASURED END TO END (#1034).
+	 *
+	 * A scroll replayed through the real repository, with #1032's eviction applied at each
+	 * tick exactly as the fetchers apply it. Every tick re-stamps EVERY record in the window
+	 * (`recordCoverage` passes the whole window, not the delta), which is precisely why the
+	 * membership count used to be quadratic — and why a write-time prune is free.
+	 *
+	 * 500 rows in 100-row steps: memberships would be Σ(1..5)×100 = 1,500 without the prune.
+	 * They land at 900, and the shape of that number is the point — it is 2 per record, not
+	 * 1, and CONSTANT rather than growing with depth.
+	 *
+	 * Why 2 and not 1: #1032 evicts a superseded lane AFTER the write that filled the deeper
+	 * window (it has to — the ancestry guard re-reads the lane the walk resumed from). So at
+	 * the moment a tick stamps its records, the PREDECESSOR window's lane is still live and
+	 * legitimately retained; it is evicted a moment later, and the next tick that touches
+	 * those records drops it. A record therefore rests holding the current window and the one
+	 * before it.
+	 *
+	 * That is the real bound: O(1) per record instead of O(depth/step). Scaled to the
+	 * 10,000-row scroll, 505,000 memberships → 20,000, i.e. 17.34 MB → 0.71 MB of key
+	 * strings, a 96% reduction. Asserting 500 here would be asserting a number this design
+	 * does not produce.
+	 */
+	it('bounds record memberships to the live lanes across a full scroll', async () => {
+		const db = await openLedgerDatabase();
+		const coverage = createLocalCoverage({
+			database: db as never,
+			now: () => 1_000,
+			freshForMs: 60_000,
+		});
+		const window = (limit: number) => `products:browse-window:limit=${limit}`;
+		const ids = (limit: number) =>
+			Array.from({ length: limit }, (_, index) => ({ id: `woo-product:${index + 1}` }));
+
+		for (const limit of [100, 200, 300, 400, 500]) {
+			await coverage.recordQueryResult({
+				collection: 'products',
+				queryKey: window(limit),
+				records: ids(limit),
+				complete: true,
+			});
+			// #1032's sweep: the settled window evicts the smaller ones it contains.
+			for (const superseded of [100, 200, 300, 400].filter((value) => value < limit)) {
+				await coverage.removeLaneIfContained({
+					collection: 'products',
+					queryKey: window(superseded),
+					containedIn: ids(limit).map((record) => record.id),
+					supersededAtMs: 1_000,
+				});
+			}
+		}
+
+		const snapshot = await coverage.readSnapshot();
+		expect(snapshot.lanes).toHaveLength(1);
+		expect(snapshot.records).toHaveLength(500);
+		const memberships = snapshot.records.reduce(
+			(total, record) => total + record.coveredQueryKeys.length,
+			0
+		);
+		// Two live lanes per record for the 400 the deepest tick re-stamped, one for the tail
+		// it added — NOT the 1,500 the unpruned union would have accumulated.
+		expect(memberships).toBe(900);
+		// Every retained key is a window that was live when its record was last written; the
+		// long tail of superseded windows is gone.
+		expect(new Set(snapshot.records.flatMap((record) => record.coveredQueryKeys))).toEqual(
+			new Set([window(400), window(500)])
+		);
+		// The invariant that actually matters: bounded per record, not growing with depth.
+		expect(Math.max(...snapshot.records.map((record) => record.coveredQueryKeys.length))).toBe(2);
+	});
+
+	/**
+	 * THE SAFETY NET, stated honestly (#1034).
+	 *
+	 * The prune is lazy: it runs when a record is written. A record nothing covers any more is
+	 * never written, so it KEEPS its stale keys — and deliberately gets no sweep, because
+	 * record retention already deletes the whole document once `freshUntilMs` passes
+	 * (`planPersistedCoverageRetention` treats records exactly like lanes). Expiry collects
+	 * the document rather than tidying it, which is strictly cheaper.
+	 *
+	 * This pins BOTH halves so neither is mistaken for the other: stale-until-expiry, then
+	 * gone entirely.
+	 */
+	it('leaves an untouched record stale until retention removes the whole document', async () => {
+		const db = await openLedgerDatabase();
+		let now = 1_000;
+		const coverage = createLocalCoverage({
+			database: db as never,
+			now: () => now,
+			freshForMs: 500,
+			retainStaleForMs: 0,
+		});
+		const window = (limit: number) => `products:browse-window:limit=${limit}`;
+		await coverage.recordQueryResult({
+			collection: 'products',
+			queryKey: window(100),
+			records: [{ id: 'woo-product:1' }],
+			complete: true,
+		});
+		await coverage.removeLaneIfContained({
+			collection: 'products',
+			queryKey: window(100),
+			containedIn: ['woo-product:1'],
+			supersededAtMs: 1_000,
+		});
+
+		// Nothing has written the record since its lane went away, so the key is still there.
+		// This is the accepted cost of a write-time prune, not an oversight.
+		const staleKeys = (await coverage.readSnapshot()).records[0]?.coveredQueryKeys;
+		expect(staleKeys).toEqual([window(100)]);
+
+		// Retention is the net: once the record expires, the document goes and takes every
+		// key with it. No sweep, no per-key bookkeeping.
+		now = 10_000;
+		await expect(coverage.compact()).resolves.toBeGreaterThan(0);
+		await expect(coverage.readSnapshot()).resolves.toMatchObject({ records: [] });
 	});
 });
