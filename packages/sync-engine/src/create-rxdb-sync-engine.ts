@@ -247,6 +247,9 @@ export type RxdbSyncEnginePorts = {
 	 * propagation via BroadcastChannel). Default false; apps/main selects the
 	 * value for its current platform. */
 	multiInstance?: boolean;
+	/** Web multi-tab: true only while this engine owns the write plane. Followers
+	 * still read, but do not drain or mutate existing queue rows. Default true. */
+	writePlaneOwner?: () => boolean;
 	/** RxDB hashFunction for the engine's scope databases. Default: RxDB's
 	 * WebCrypto-based sha256. apps/main injects its platform hash implementation
 	 * where WebCrypto is unavailable. */
@@ -516,6 +519,7 @@ export function createRxdbSyncEngine(
 ): RxdbSyncEngine {
 	const mode = ports.mode ?? 'auto';
 	const connectivity = ports.connectivity ?? (() => 'online' as const);
+	const writePlaneOwner = ports.writePlaneOwner ?? (() => true);
 	const diagnostics: SyncObserver = (event) => {
 		try {
 			ports.diagnostics?.(event);
@@ -1341,6 +1345,9 @@ export function createRxdbSyncEngine(
 				reason: 'no queryTotal port provided',
 			});
 		}
+		if (name === 'write-drain' && !writePlaneOwner()) {
+			return Promise.resolve({ lane: 'write-drain', status: 'ran', pushed: 0 });
+		}
 		if (name === 'change-signal') {
 			return target.tick(signal).then((report) => {
 				// A rebaseline consumed the skipped sequence-log history; whatever
@@ -1965,6 +1972,7 @@ export function createRxdbSyncEngine(
 						mintUuid: uuid,
 						now: () => new Date(ports.now !== undefined ? ports.now() : Date.now()).toISOString(),
 						observe: diagnostics,
+						canCoalesce: writePlaneOwner(),
 					});
 					writeDrainLane.noteQueueDepth((await queueFor(database).pending()).length);
 					scheduleStatusChange();
@@ -2004,8 +2012,16 @@ export function createRxdbSyncEngine(
 			});
 		},
 		conflicts: () => conflictResolution.conflicts(),
-		resolveConflict: (mutationId, resolution) =>
-			conflictResolution.resolveConflict(mutationId, resolution),
+		resolveConflict: async (mutationId, resolution) => {
+			if (!writePlaneOwner()) {
+				const error = new Error(
+					'resolveConflict: another tab is the active window completing this — switch to it, or wait for it to finish'
+				);
+				error.name = 'WritePlaneFollowerError';
+				throw error;
+			}
+			return conflictResolution.resolveConflict(mutationId, resolution);
+		},
 		require: (requirement) => {
 			assertNotDisposed();
 			return requirePlane.require(requirement);

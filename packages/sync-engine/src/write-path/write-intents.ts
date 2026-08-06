@@ -141,6 +141,9 @@ export async function enqueueWriteIntent(input: {
 	now: () => string;
 	observe?: SyncObserver;
 	provenance?: { requeuedFrom: string; requeueCount: number };
+	/** False for a web follower whose cross-tab `_rev` cache cannot safely CAS an
+	 * existing queue row. It may only append a fresh mutation. Default true. */
+	canCoalesce?: boolean;
 }): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }> {
 	const intent =
 		input.intent.collection === 'orders' && input.intent.operation !== 'delete'
@@ -150,6 +153,7 @@ export async function enqueueWriteIntent(input: {
 				}
 			: input.intent;
 	const deps = { mintUuid: input.mintUuid, now: input.now };
+	const canCoalesce = input.canCoalesce ?? true;
 	const collection = collectionOf(input.db, intent.collection);
 	const queue = queueFor(input.db);
 
@@ -193,7 +197,9 @@ export async function enqueueWriteIntent(input: {
 		// Anything else — claimed, ever-pushed, terminal — makes the edit queue BEHIND.
 		const lastPending = pendingRows.at(-1);
 		const coalescable =
-			lastPending !== undefined && (lastPending.attempts ?? 0) === 0 ? lastPending : undefined;
+			canCoalesce && lastPending !== undefined && (lastPending.attempts ?? 0) === 0
+				? lastPending
+				: undefined;
 		// A recovered UPDATE never coalesces into a live successor (#832 follow-up,
 		// R7a). Coalescing REPLACES that row, so the successor's edit stops having a
 		// queue row of its own — and if the rebuilt payload is refused again, the
@@ -235,6 +241,7 @@ export async function enqueueWriteIntent(input: {
 		// the decision re-runs (the delete then queues behind the in-flight
 		// create); successors already removed are superseded by this delete either way.
 		if (
+			canCoalesce &&
 			intent.operation === 'delete' &&
 			pendingRows[0]?.operation === 'create' &&
 			pendingRows.length === recordRows.length &&

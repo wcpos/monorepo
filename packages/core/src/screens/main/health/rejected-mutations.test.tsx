@@ -249,4 +249,19 @@ describe('RejectedMutationsPanel', () => {
 			expect.objectContaining({ type: 'error', text2: 'record is no longer on this device' })
 		);
 	});
+
+	it('shows follower deferral as information instead of a failure', async () => {
+		const error = new Error('resolveConflict deferred');
+		error.name = 'WritePlaneFollowerError';
+		mockResolveConflict.mockRejectedValueOnce(error);
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-requeue-m-1'));
+
+		expect(mockToast).toHaveBeenCalledWith({
+			type: 'info',
+			text1: 'Another tab is completing this — switch to it or wait.',
+		});
+		expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+	});
 });

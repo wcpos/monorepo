@@ -926,6 +926,7 @@
 	"health.database.rejected.requeued": "Queued to send again.",
 	"health.database.rejected.discarded": "Change discarded.",
 	"health.database.rejected.destroyed": "Deleted from this device.",
+	"health.database.rejected.follower_deferred": "Another tab is completing this — switch to it or wait.",
 	"health.database.rejected.requeue_failed": "Couldn’t queue that again.",
 	"health.database.rejected.discard_failed": "Couldn’t discard that change.",
 	"health.database.rejected.tries_one": "sent again once",

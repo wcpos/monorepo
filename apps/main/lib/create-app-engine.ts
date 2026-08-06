@@ -20,12 +20,10 @@ import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-databa
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
-import type {
-	RxdbSyncEngine,
-	StoreScopeIdentity,
-} from '@wcpos/sync-engine';
+import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
 import { getEngineConnectivity } from './connectivity';
@@ -34,8 +32,10 @@ import { appMetricsObserver } from './metrics';
 import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
 import { markSyncStatusStale, syncStatusObserver } from './sync-status';
+import { electWriteLeader } from './web-write-leader';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
+const isWeb = Platform.isWeb;
 // Below the successor's 15s readiness-watchdog first report; orders of magnitude above a healthy close.
 const ENGINE_DISPOSAL_DEADLINE_MS = 10_000;
 
@@ -59,12 +59,12 @@ export interface CreateAppSyncEngineOptions {
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
 	/** The initial store/cashier scope. */
 	scope: StoreScopeIdentity;
-	/** Multi-tab hosts (web) pass true for cross-tab change propagation. */
+	/** Non-web RxDB override. Web selects this from Web Locks support. */
 	multiInstance?: boolean;
 }
 
 // One engine per scope, cached at module scope. The engine's factory opens an
-// RxDatabase keyed by scope (multiInstance:false), so constructing a second engine
+// RxDatabase keyed by scope, so constructing a second engine in the same runtime
 // for the SAME scope collides on the already-open database and its scope never
 // becomes ready — which is exactly what happens when a boot-time remount of the
 // engine-owning subtree (a compat-gate toggle, a Stack.Protected guard flip during
@@ -77,6 +77,7 @@ type MutableFetcherOptions = Pick<
 	CreateAppSyncEngineOptions,
 	'credentials' | 'refreshAuth' | 'useJwtAsParam'
 >;
+type WriteLeaderState = { current: ReturnType<typeof electWriteLeader> };
 
 type CachedEngine = {
 	key: string;
@@ -90,10 +91,18 @@ type CachedEngine = {
 	fetcherOptions: MutableFetcherOptions;
 	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
 	clockSkew: { generation: number; evaluated: boolean };
+	writeLeader?: WriteLeaderState;
 };
 
 let cachedEngine: CachedEngine | null = null;
 const pendingDisposals = new Map<string, Promise<void>>();
+
+function moveWriteLeader(entry: CachedEngine, databaseName: string): void {
+	if (!entry.writeLeader) return;
+	const previous = entry.writeLeader.current;
+	entry.writeLeader.current = electWriteLeader(`wcpos-write-leader:${databaseName}`);
+	previous.dispose();
+}
 
 function canonicalSite(site: string): string {
 	let canonical = site.trim().toLowerCase();
@@ -162,6 +171,7 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	});
 	pendingDisposals.set(entry.key, bounded);
 	void bounded.then(() => {
+		entry.writeLeader?.current.dispose();
 		if (pendingDisposals.get(entry.key) === bounded) {
 			pendingDisposals.delete(entry.key);
 		}
@@ -209,6 +219,7 @@ export async function switchAppEngineScope(session: {
 
 	entry.key = targetKey;
 	entry.databaseName = scopeDatabaseName(scope);
+	moveWriteLeader(entry, entry.databaseName);
 	entry.clockSkew.generation += 1;
 	entry.clockSkew.evaluated = false;
 }
@@ -243,24 +254,31 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
 		entry.clockSkew.generation += 1;
 		entry.clockSkew.evaluated = false;
-		void switching.catch((error) => {
-			engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
-				context: {
-					errorCode: ERROR_CODES.SCOPE_SWITCH_FAILED,
-					scopeKey: cacheKey,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
-			if (cachedEngine === entry && entry.key === cacheKey) {
-				entry.key = previousKey;
-				entry.databaseName = previousDatabaseName;
-				entry.fetcherOptions.credentials = previousFetcherOptions.credentials;
-				entry.fetcherOptions.refreshAuth = previousFetcherOptions.refreshAuth;
-				entry.fetcherOptions.useJwtAsParam = previousFetcherOptions.useJwtAsParam;
-				entry.clockSkew.generation += 1;
-				entry.clockSkew.evaluated = previousClockSkewEvaluated;
+		void switching.then(
+			() => {
+				if (cachedEngine === entry && entry.key === cacheKey) {
+					moveWriteLeader(entry, entry.databaseName);
+				}
+			},
+			(error) => {
+				engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
+					context: {
+						errorCode: ERROR_CODES.SCOPE_SWITCH_FAILED,
+						scopeKey: cacheKey,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+				if (cachedEngine === entry && entry.key === cacheKey) {
+					entry.key = previousKey;
+					entry.databaseName = previousDatabaseName;
+					entry.fetcherOptions.credentials = previousFetcherOptions.credentials;
+					entry.fetcherOptions.refreshAuth = previousFetcherOptions.refreshAuth;
+					entry.fetcherOptions.useJwtAsParam = previousFetcherOptions.useJwtAsParam;
+					entry.clockSkew.generation += 1;
+					entry.clockSkew.evaluated = previousClockSkewEvaluated;
+				}
 			}
-		});
+		);
 		return entry.engine;
 	}
 	const supersedesCachedEngine = cachedEngine !== null;
@@ -281,6 +299,11 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		useJwtAsParam: options.useJwtAsParam,
 	};
 	const clockSkew = { generation: 0, evaluated: false };
+	const webLocksAvailable =
+		isWeb && typeof navigator !== 'undefined' && navigator.locks !== undefined;
+	const writeLeader = isWeb
+		? { current: electWriteLeader(`wcpos-write-leader:${scopeDatabaseName(options.scope)}`) }
+		: undefined;
 
 	const emitTransport = (event: SyncEvent, durable = true): void => {
 		try {
@@ -346,7 +369,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			lastUserActivityMs,
 			onUserActivity,
 			diagnostics: composeObservers(appMetricsObserver, guardedDiagnostics),
-			multiInstance: options.multiInstance ?? false,
+			multiInstance: isWeb ? webLocksAvailable : (options.multiInstance ?? false),
+			...(writeLeader ? { writePlaneOwner: () => writeLeader.current.isLeader() } : {}),
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
 		options.scope
@@ -360,6 +384,17 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		engine,
 		fetcherOptions,
 		clockSkew,
+		...(writeLeader ? { writeLeader } : {}),
 	};
+	if (isWeb && !webLocksAvailable) {
+		composeObservers(
+			appMetricsObserver,
+			guardedDiagnostics
+		)({
+			type: 'engine.write-leader.degraded',
+			level: 'warn',
+			message: 'Web Locks unavailable; multi-tab sync is disabled for this browser',
+		});
+	}
 	return engine;
 }

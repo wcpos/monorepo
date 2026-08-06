@@ -82,6 +82,13 @@ export function RejectedMutationsPanel() {
 							: t('health.database.rejected.discarded'),
 			});
 		} catch (error) {
+			if (error instanceof Error && error.name === 'WritePlaneFollowerError') {
+				Toast.show({
+					type: 'info',
+					text1: t('health.database.rejected.follower_deferred'),
+				});
+				return;
+			}
 			const message = error instanceof Error ? error.message : String(error);
 			logger.error('dead letter resolution failed', {
 				context: {

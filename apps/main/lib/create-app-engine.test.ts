@@ -35,7 +35,8 @@ function createEngineDouble(
 }
 
 function loadCreateAppEngine(
-	createEngine: () => ReturnType<typeof createEngineDouble> = createEngineDouble
+	createEngine: () => ReturnType<typeof createEngineDouble> = createEngineDouble,
+	platformIsWeb = false
 ) {
 	jest.resetModules();
 	const appMetricsObserver = jest.fn();
@@ -44,9 +45,15 @@ function loadCreateAppEngine(
 	const networkInfo = jest.fn();
 	const networkWarn = jest.fn();
 	const networkError = jest.fn();
-	const markStorageTerminallyFailed = jest.fn(() => true);
-	const forceFreeDatabaseRegistration = jest.fn(() => true);
+	const markStorageTerminallyFailed = jest.fn((_databaseName: string, _reason: string) => true);
+	const forceFreeDatabaseRegistration = jest.fn((_databaseName: string) => true);
 	const getDatabaseEpoch = jest.fn(() => 0);
+	const writeLeaders: { isLeader: jest.Mock<boolean>; dispose: jest.Mock<void> }[] = [];
+	const electWriteLeader = jest.fn(() => {
+		const leader = { isLeader: jest.fn(() => true), dispose: jest.fn() };
+		writeLeaders.push(leader);
+		return leader;
+	});
 	const createRxdbSyncEngine = jest.fn(
 		(
 			_ports: {
@@ -64,12 +71,16 @@ function loadCreateAppEngine(
 				};
 				databaseOpenBarrier?: Promise<void>;
 				diagnostics?: typeof appMetricsObserver;
+				multiInstance?: boolean;
+				writePlaneOwner?: () => boolean;
 			},
 			_scope: unknown
 		) => createEngine()
 	);
 
 	jest.doMock('@wcpos/sync-engine', () => ({ createRxdbSyncEngine }));
+	jest.doMock('@wcpos/utils/platform', () => ({ Platform: { isWeb: platformIsWeb } }));
+	jest.doMock('./web-write-leader', () => ({ electWriteLeader }));
 	jest.doMock('@wcpos/database/plugins/wrapped-error-handler-storage', () => ({
 		markStorageTerminallyFailed,
 	}));
@@ -106,6 +117,8 @@ function loadCreateAppEngine(
 		markStorageTerminallyFailed,
 		forceFreeDatabaseRegistration,
 		getDatabaseEpoch,
+		electWriteLeader,
+		writeLeaders,
 	};
 }
 
@@ -744,5 +757,66 @@ describe('createAppSyncEngine scope cache', () => {
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	it('enables multi-instance and threads elected ownership on web', () => {
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: { locks: {} },
+		});
+		const { createAppSyncEngine, createRxdbSyncEngine, electWriteLeader } = loadCreateAppEngine(
+			undefined,
+			true
+		);
+
+		createAppSyncEngine(BASE_OPTIONS);
+
+		const ports = createRxdbSyncEngine.mock.calls[0]![0];
+		expect(ports.multiInstance).toBe(true);
+		expect(ports.writePlaneOwner?.()).toBe(true);
+		expect(electWriteLeader).toHaveBeenCalledWith(
+			`wcpos-write-leader:${scopeDatabaseName(BASE_OPTIONS.scope)}`
+		);
+	});
+
+	it('moves the web leadership lock when the cached engine switches scope', async () => {
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: { locks: {} },
+		});
+		const { createAppSyncEngine, electWriteLeader, writeLeaders } = loadCreateAppEngine(
+			undefined,
+			true
+		);
+		createAppSyncEngine(BASE_OPTIONS);
+		const targetScope = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+
+		createAppSyncEngine({ ...BASE_OPTIONS, scope: targetScope });
+		await Promise.resolve();
+
+		expect(writeLeaders[0]?.dispose).toHaveBeenCalledTimes(1);
+		expect(electWriteLeader).toHaveBeenLastCalledWith(
+			`wcpos-write-leader:${scopeDatabaseName(targetScope)}`
+		);
+	});
+
+	it('keeps single-instance behavior and emits diagnostics when Web Locks are unavailable', () => {
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: {},
+		});
+		const { createAppSyncEngine, createRxdbSyncEngine, appMetricsObserver } = loadCreateAppEngine(
+			undefined,
+			true
+		);
+
+		createAppSyncEngine({ ...BASE_OPTIONS, multiInstance: true });
+
+		const ports = createRxdbSyncEngine.mock.calls[0]![0];
+		expect(ports.multiInstance).toBe(false);
+		expect(ports.writePlaneOwner?.()).toBe(true);
+		expect(appMetricsObserver).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'engine.write-leader.degraded', level: 'warn' })
+		);
 	});
 });
