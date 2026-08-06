@@ -57,7 +57,6 @@ const POS_OPEN_STATUS = 'pos-open';
  * no-op, and any other pair supersedes — the newer cart edit owns the replay from then on.
  */
 type ReplayContinuation = {
-	order: OrderDocument;
 	stateKey: string;
 	generation: number;
 	abort: AbortController;
@@ -244,7 +243,6 @@ export const useCartLines = () => {
 			}
 			disarmReplayContinuation();
 			const continuation: ReplayContinuation = {
-				order: freshOrder,
 				stateKey,
 				generation: couponReferenceGeneration,
 				abort: new AbortController(),
@@ -271,7 +269,10 @@ export const useCartLines = () => {
 				// write owns the order now; a replay computed against the old state must not
 				// land on top of it.
 				if (replayStateKey(latest) !== continuation.stateKey) return;
-				await continuation.replay(continuation.order);
+				// Write through the handle just read, never the one captured minutes ago: the key
+				// proved the two are equal by VALUE, and this way the continuation holds no order
+				// document alive for the length of its wait.
+				await continuation.replay(latest);
 			})().catch((error) => cartLogger.error(String(error)));
 		},
 		[

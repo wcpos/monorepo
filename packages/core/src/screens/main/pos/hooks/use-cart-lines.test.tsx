@@ -42,6 +42,8 @@ let revision = buildRevision();
 function buildRevision(overrides: Record<string, unknown> = {}) {
 	return {
 		uuid: 'order-uuid-1',
+		// A POS cart has no Woo id until checkout pushes it and the create-ack grafts one on.
+		id: null as number | null,
 		status: 'pos-open',
 		date_modified_gmt: '2026-08-06T00:00:00',
 		line_items: lineItems$.getValue(),
@@ -52,8 +54,13 @@ function buildRevision(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-/** A brand-new object per call, exactly like the production proxy. */
-const getLatest = () => ({ ...revision });
+/**
+ * A brand-new object per call, exactly like the production proxy. `_readSeq` marks WHICH read a
+ * handle came from, so a test can tell a freshly-read document from one captured earlier —
+ * otherwise every handle looks alike and "wrote through the stale handle" is unobservable.
+ */
+let readSeq = 0;
+const getLatest = () => ({ ...revision, _readSeq: ++readSeq });
 
 /**
  * A fresh context value per call, like the open-orders resource: every emission of the
@@ -119,7 +126,10 @@ jest.mock('../../contexts/tax-rates', () => ({
 	}),
 }));
 
-type LocalPatchArgs = { document: unknown; data: Record<string, unknown> };
+type LocalPatchArgs = {
+	document: { uuid?: string; _readSeq?: number };
+	data: Record<string, unknown>;
+};
 const localPatch = jest.fn(async (_args: LocalPatchArgs) => undefined);
 
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
@@ -340,6 +350,7 @@ describe('useCartLines background coupon replay (#963)', () => {
 		// Totals are stale at this point — that is the bug the continuation closes.
 		expect(recalculate).not.toHaveBeenCalled();
 		expect(background.signals).toHaveLength(1);
+		const seqWhenArmed = readSeq;
 
 		await act(async () => {
 			background.settle();
@@ -356,6 +367,9 @@ describe('useCartLines background coupon replay (#963)', () => {
 				data: expect.objectContaining({ discount_total: '5.00', total: '5.00' }),
 			})
 		);
+		// The write goes through a handle read AFTER the wait settled, not the one captured when
+		// the continuation was armed — the continuation holds no document alive across its wait.
+		expect(localPatch.mock.calls[0][0].document._readSeq).toBeGreaterThan(seqWhenArmed);
 	});
 
 	it('arms exactly one continuation for the same order revision and demand generation', async () => {
@@ -553,9 +567,9 @@ describe('useCartLines background coupon replay (#963)', () => {
 		});
 
 		// Pay pushes the cart. The create-ack grafts the server's order id onto a resident that
-		// had none — status is still `pos-open` and the lines are untouched, so the remote id is
-		// the signal that this order now exists on the server.
-		revision = buildRevision({ id: 4711 });
+		// had none — status is still `pos-open`, the lines are untouched, and the timestamp is
+		// preserved, so the remote id is the ONLY thing that can reject this replay.
+		revision = { ...revision, id: 4711 };
 
 		await act(async () => {
 			background.settle();
