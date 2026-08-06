@@ -57,12 +57,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** A line already carries server identity when `id` is a positive number (or its numeric string). */
+/** A positive integer server identity, accepting Woo's numeric-string form. */
+function readServerId(id: unknown): number | null {
+	if (typeof id === 'string' && !/^\d+$/.test(id.trim())) return null;
+	if (typeof id !== 'number' && typeof id !== 'string') return null;
+	const parsed = typeof id === 'number' ? id : Number(id);
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function hasServerId(line: Record<string, unknown>): boolean {
-	const id = line.id;
-	if (typeof id === 'number') return Number.isFinite(id) && id > 0;
-	if (typeof id === 'string') return /^\d+$/.test(id.trim()) && Number(id) > 0;
-	return false;
+	return readServerId(line.id) !== null;
 }
 
 /**
@@ -70,18 +74,22 @@ function hasServerId(line: Record<string, unknown>): boolean {
  * carrying two DIFFERENT uuid meta entries is ambiguous about which line it is,
  * and picking the first would be a guess; fail closed instead.
  */
-function readLineUuid(line: unknown): string | null {
-	if (!isRecord(line) || !Array.isArray(line.meta_data)) return null;
-	let found: string | null = null;
+function readLineUuidClaims(line: unknown): Set<string> {
+	const found = new Set<string>();
+	if (!isRecord(line) || !Array.isArray(line.meta_data)) return found;
 	for (const entry of line.meta_data) {
 		if (!isRecord(entry) || entry.key !== LINE_UUID_META_KEY) continue;
 		if (typeof entry.value !== 'string') continue;
 		const uuid = entry.value.trim();
 		if (uuid === '') continue;
-		if (found !== null && found !== uuid) return null;
-		found = uuid;
+		found.add(uuid);
 	}
 	return found;
+}
+
+function readLineUuid(line: unknown): string | null {
+	const claims = readLineUuidClaims(line);
+	return claims.size === 1 ? ([...claims][0] ?? null) : null;
 }
 
 /**
@@ -94,14 +102,15 @@ function readLineUuid(line: unknown): string | null {
 function serverIdentityIndex(lines: unknown[]): Map<string, number | null> {
 	const index = new Map<string, number | null>();
 	for (const line of lines) {
-		const uuid = readLineUuid(line);
-		if (!uuid || !isRecord(line)) continue;
-		if (index.has(uuid)) {
-			index.set(uuid, null);
-			continue;
+		if (!isRecord(line)) continue;
+		const claims = readLineUuidClaims(line);
+		for (const uuid of claims) {
+			if (claims.size !== 1 || index.has(uuid)) {
+				index.set(uuid, null);
+				continue;
+			}
+			index.set(uuid, readServerId(line.id));
 		}
-		const id = typeof line.id === 'number' ? line.id : Number(line.id);
-		index.set(uuid, Number.isFinite(id) && id > 0 ? id : null);
 	}
 	return index;
 }
@@ -110,8 +119,9 @@ function serverIdentityIndex(lines: unknown[]): Map<string, number | null> {
 function unambiguousLocalUuids(lines: unknown[]): Set<string> {
 	const seen = new Map<string, number>();
 	for (const line of lines) {
-		const uuid = readLineUuid(line);
-		if (uuid) seen.set(uuid, (seen.get(uuid) ?? 0) + 1);
+		for (const uuid of readLineUuidClaims(line)) {
+			seen.set(uuid, (seen.get(uuid) ?? 0) + 1);
+		}
 	}
 	return new Set([...seen].filter(([, count]) => count === 1).map(([uuid]) => uuid));
 }

@@ -169,6 +169,33 @@ describe('graftServerLineIdentity', () => {
 		).toBe(payload);
 	});
 
+	it('counts every uuid claimed by a conflicting line when deciding ambiguity', () => {
+		const conflictedMeta = [...uuidMeta('a'), ...uuidMeta('b')];
+		const conflictedLocally = {
+			line_items: [
+				{ product_id: 1, meta_data: conflictedMeta },
+				{ product_id: 2, meta_data: uuidMeta('a') },
+			],
+		};
+		expect(
+			graftServerLineIdentity(conflictedLocally, {
+				line_items: [{ id: 10, meta_data: uuidMeta('a') }],
+			})
+		).toBe(conflictedLocally);
+
+		const conflictedOnServer = {
+			line_items: [{ product_id: 1, meta_data: uuidMeta('a') }],
+		};
+		expect(
+			graftServerLineIdentity(conflictedOnServer, {
+				line_items: [
+					{ id: 10, meta_data: conflictedMeta },
+					{ id: 11, meta_data: uuidMeta('a') },
+				],
+			})
+		).toBe(conflictedOnServer);
+	});
+
 	it('counts server OCCURRENCES, not usable ids, when deciding ambiguity', () => {
 		// Two server lines share uuid 'a' and only one carries an id. The client
 		// cannot tell which of the two it authored, so neither may be grafted.
@@ -176,6 +203,16 @@ describe('graftServerLineIdentity', () => {
 		expect(
 			graftServerLineIdentity(payload, {
 				line_items: [{ meta_data: uuidMeta('a') }, { id: 10, meta_data: uuidMeta('a') }],
+			})
+		).toBe(payload);
+	});
+
+	it.each([true, [7], 7.5])('rejects a non-integer server id (%j)', (id) => {
+		const payload = { line_items: [{ product_id: 1, meta_data: uuidMeta('a') }] };
+
+		expect(
+			graftServerLineIdentity(payload, {
+				line_items: [{ id, meta_data: uuidMeta('a') }],
 			})
 		).toBe(payload);
 	});
