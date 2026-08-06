@@ -106,6 +106,15 @@ describe('requirementsForQuery extraction', () => {
 		});
 	});
 
+	it('maps a bare numeric id selector to targeted-records demand', () => {
+		expect(onlyRequirement({ selector: { id: 123 } })).toEqual({
+			id: 'q:targeted',
+			collection: 'products',
+			kind: 'targeted-records',
+			wooIds: [123],
+		});
+	});
+
 	it('does not search variations globally when finite ids already scope the query', () => {
 		expect(
 			plan({
@@ -635,6 +644,26 @@ describe('requirementsForQuery extraction', () => {
 						featured: false,
 						stock_status: 'onbackorder',
 						priority: 700,
+					},
+				],
+				represented: false,
+			});
+		});
+
+		it('keeps a mixed-field taxonomy OR residual instead of narrowing remote demand', () => {
+			expect(
+				plan({
+					selector: {
+						$or: [{ categories: { $elemMatch: { id: 7 } } }, { tags: { $elemMatch: { id: 9 } } }],
+					},
+				})
+			).toEqual({
+				requirements: [
+					{
+						id: 'q:products-browse-window',
+						collection: 'products',
+						kind: 'product-browse',
+						limit: 10,
 					},
 				],
 				represented: false,

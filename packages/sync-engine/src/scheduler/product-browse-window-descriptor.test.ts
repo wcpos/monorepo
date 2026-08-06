@@ -67,6 +67,12 @@ describe('productBrowseWindowQueryKeyFromDimensions', () => {
 			'products:browse-window:limit=100'
 		);
 	});
+
+	it('filters an object element from an otherwise valid runtime taxonomy id array', () => {
+		expect(
+			productBrowseWindowQueryKeyFromDimensions({ category: [2, { id: 7 }, 9] as never })
+		).toBe('products:browse-window:limit=100:category=2,9');
+	});
 });
 
 describe('product browse-window descriptor', () => {

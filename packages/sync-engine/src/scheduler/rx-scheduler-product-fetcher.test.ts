@@ -136,6 +136,33 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
+	it('sends multiple tag ids as one comma-delimited Woo REST parameter', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const fetcher = vi.fn(async () => response([]));
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+		});
+
+		await schedulerFetcher(
+			productTask({
+				id: 'products:browse-window:limit=100:tag=3,9:windowed',
+				queryKey: 'products:browse-window:limit=100:tag=3,9',
+				limit: 100,
+			})
+		);
+
+		expect(fetcher).toHaveBeenCalledWith(
+			'http://wcpos.local/wp-json/wcpos/v2/products?per_page=100&orderby=menu_order&order=asc&status=publish&tag=3%2C9&page=1'
+		);
+	});
+
 	it('keeps a constant per_page across search pages when the limit is not dial-divisible', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),

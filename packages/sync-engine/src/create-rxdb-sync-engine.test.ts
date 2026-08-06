@@ -205,6 +205,60 @@ describe('createRxdbSyncEngine — slice 2 scope lifecycle', () => {
 		await engine.dispose();
 	});
 
+	it('resetCollection rejects after 30 seconds when collection re-add stalls', async () => {
+		const engine = engineWith();
+		const active = await engine.ready;
+		const database = active.database;
+		const originalAddCollections = database.addCollections.bind(database);
+		let releaseReAdd!: () => void;
+		let markReAddStarted!: () => void;
+		const reAddStarted = new Promise<void>((resolve) => {
+			markReAddStarted = resolve;
+		});
+		const stalled = new Promise<void>((resolve) => {
+			releaseReAdd = resolve;
+		});
+		const addCollections = vi.spyOn(database, 'addCollections').mockImplementation((async (
+			creators
+		) => {
+			if ('orders' in creators) {
+				markReAddStarted();
+				await stalled;
+			}
+			return originalAddCollections(creators);
+		}) as typeof database.addCollections);
+		const nativeSetTimeout = globalThis.setTimeout;
+		const timers = vi
+			.spyOn(globalThis, 'setTimeout')
+			.mockImplementation(((callback: TimerHandler, milliseconds?: number) =>
+				nativeSetTimeout(
+					callback,
+					milliseconds === 30_000 ? 0 : milliseconds
+				)) as typeof setTimeout);
+		const resetting = engine.scope.resetCollection('orders');
+		const settled = resetting.then(
+			() => 'resolved',
+			(error: unknown) => error
+		);
+		await reAddStarted;
+
+		const outcome = await Promise.race([
+			settled,
+			new Promise<'still-pending'>((resolve) =>
+				nativeSetTimeout(() => resolve('still-pending'), 20)
+			),
+		]);
+
+		timers.mockRestore();
+		releaseReAdd();
+		await resetting.catch(() => undefined);
+		await vi.waitFor(() => expect(database.collections.orders).toBeDefined());
+		addCollections.mockRestore();
+		expect(outcome).toBeInstanceOf(Error);
+		expect((outcome as Error).message).toMatch(/reset.*orders.*timed out.*30000ms/i);
+		await engine.dispose();
+	});
+
 	it('resetCollection clears exactly the matching checkpoint in a host-provided store', async () => {
 		const { a } = freshIdentities();
 		const checkpoints = memoryStringStore();
