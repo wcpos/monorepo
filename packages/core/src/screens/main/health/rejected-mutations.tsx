@@ -49,11 +49,29 @@ const logger = getLogger(['wcpos', 'health', 'deadLetters']);
 export function RejectedMutationsPanel() {
 	const t = useT();
 	const { engine } = useQueryRuntime();
-	const rows = useRejectedMutations();
+	const { rows, readError } = useRejectedMutations();
 	const nowMs = useNowMs(30_000);
 	const relative = useRelativeTime();
 	const [busyId, setBusyId] = React.useState<string | null>(null);
 	const [discarding, setDiscarding] = React.useState<RejectedMutation | null>(null);
+
+	// "Cannot read rejected sales" must never render as "no rejected sales" — the
+	// row this panel fails to show may be a completed sale that exists only on this
+	// device (cashier-full-information ruling, 2026-08-07).
+	if (readError) {
+		return (
+			<Callout tone="destructive" testID="db-rejected-read-error">
+				<VStack className="gap-0.5">
+					<Text className="text-destructive text-sm font-semibold">
+						{t('health.database.rejected.read_error_title')}
+					</Text>
+					<Text className="text-muted-foreground text-xs">
+						{t('health.database.rejected.read_error_body')}
+					</Text>
+				</VStack>
+			</Callout>
+		);
+	}
 
 	if (rows.length === 0) return null;
 

@@ -99,8 +99,12 @@ function makeEngine(
 }
 
 function Probe() {
-	const rows = useRejectedMutations();
-	return <div data-testid="rows">{rows.map((r) => r.mutationId).join(',') || 'EMPTY'}</div>;
+	const { rows, readError } = useRejectedMutations();
+	return (
+		<div data-testid="rows">
+			{readError ? 'READ-ERROR' : rows.map((r) => r.mutationId).join(',') || 'EMPTY'}
+		</div>
+	);
 }
 
 describe('RejectedMutationsPanel Suspense lifecycle (#40/#832)', () => {
@@ -142,11 +146,12 @@ describe('RejectedMutationsPanel Suspense lifecycle (#40/#832)', () => {
 		expect(screen.getByTestId('rows').textContent).toContain(deadLetterRow.mutationId);
 	}, 20000);
 
-	it('degrades to an empty panel when the query stream ERRORS — never poisons the cache', async () => {
+	it('degrades to a visible read-error when the query stream ERRORS — never poisons the cache', async () => {
 		// The resource is cached for the engine's life, so a stream error must not
 		// latch into `ObservableResource` and throw on every future render. The
-		// pipeline's catchError degrades to an empty list: the panel renders (empty)
-		// instead of wedging the whole Database health screen.
+		// pipeline's catchError degrades to a NON-throwing read-error emission: the
+		// screen stays usable, and the cashier is told the panel could not be read
+		// instead of seeing a silent empty state (cashier-full-information ruling).
 		const { engine } = makeEngine({ queryErrors: true });
 		engineStub = engine;
 
@@ -160,6 +165,6 @@ describe('RejectedMutationsPanel Suspense lifecycle (#40/#832)', () => {
 			await new Promise((resolve) => setTimeout(resolve, 150));
 		});
 		await waitFor(() => expect(screen.queryByTestId('rows')).not.toBeNull(), { timeout: 4000 });
-		expect(screen.getByTestId('rows').textContent).toBe('EMPTY');
+		expect(screen.getByTestId('rows').textContent).toBe('READ-ERROR');
 	}, 20000);
 });

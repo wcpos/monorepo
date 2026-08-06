@@ -78,7 +78,10 @@ jest.mock('./use-relative-time', () => ({
 	useNowMs: () => 1_767_225_600_000,
 	useRelativeTime: () => () => '2 months ago',
 }));
-jest.mock('./use-rejected-mutations', () => ({ useRejectedMutations: () => rows }));
+let readError = false;
+jest.mock('./use-rejected-mutations', () => ({
+	useRejectedMutations: () => ({ rows, readError }),
+}));
 
 function row(over: Partial<RejectedMutation> = {}): RejectedMutation {
 	return {
@@ -110,6 +113,7 @@ async function press(element: HTMLElement): Promise<void> {
 describe('RejectedMutationsPanel', () => {
 	beforeEach(() => {
 		rows = [row()];
+		readError = false;
 		mockResolveConflict.mockClear();
 		mockToast.mockClear();
 	});
@@ -118,6 +122,18 @@ describe('RejectedMutationsPanel', () => {
 		rows = [];
 
 		expect(render(<RejectedMutationsPanel />).queryByTestId('db-rejected')).toBeNull();
+	});
+
+	it('tells the cashier when recovery data could not be read — never a silent empty panel', () => {
+		rows = [];
+		readError = true;
+
+		const { getByTestId, queryByTestId } = render(<RejectedMutationsPanel />);
+		// A read failure may be hiding sales that exist only on this device; rendering
+		// it as "no rejected sales" is the one thing this panel must never do
+		// (cashier-full-information ruling, 2026-08-07).
+		expect(getByTestId('db-rejected-read-error')).toBeTruthy();
+		expect(queryByTestId('db-rejected')).toBeNull();
 	});
 
 	it("names the record and states the server's own verdict", () => {
