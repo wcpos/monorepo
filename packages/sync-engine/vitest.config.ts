@@ -20,5 +20,10 @@ export default defineConfig({
 		globals: true,
 		environment: 'node',
 		include: ['src/**/*.test.ts'],
+		// The performance contracts hold 10k-50k live documents at a time. Sharing a
+		// worker pool with the functional suites starved them on 2-core CI runners and
+		// tipped two engine-lifecycle tests past their 5s timeout (#949 CI run
+		// 31056121028), so the perf lane runs alone via `pnpm test:perf`.
+		exclude: ['**/node_modules/**', 'src/performance-contracts.test.ts'],
 	},
 });
