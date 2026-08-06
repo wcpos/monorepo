@@ -1474,6 +1474,102 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(new Set(recorded.records.map(({ id }) => id)).size).toBe(recorded.records.length);
 	});
 
+	/**
+	 * #948/#957 follow-up — Paul's eviction ruling, on the lane family that bloats fastest.
+	 *
+	 * Orders windows travel VERBATIM below one Woo page, so a cashier who scrolls the first
+	 * hundred rows mints a lane per ten: 10, 20, 30 … 100. Ten lanes and 550 stored ids to
+	 * describe a hundred orders. When the 100-row window completes, the nine windows it
+	 * strictly contains go with it.
+	 */
+	it('evicts the sub-quantum windows a completed orders window contains', async () => {
+		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const wooOrderIds = (count: number) =>
+			Array.from({ length: count }, (_, index) => `woo-order:${1_000 - index}`);
+		const lanes = new Map<
+			string,
+			{ complete: boolean; expectedRecordIds: string[]; updatedAtMs: number }
+		>();
+		for (const limit of [10, 20, 30, 40, 50, 60, 70, 80, 90]) {
+			lanes.set(`orders:browser:status=processing:search=:limit=${limit}`, {
+				complete: true,
+				expectedRecordIds: wooOrderIds(limit),
+				// Written by earlier scroll ticks, i.e. before the 100-row window settles.
+				updatedAtMs: 7_000 + limit,
+			});
+		}
+		const coverageRepository = {
+			recordQueryResult: vi.fn(
+				async (input: {
+					queryKey: string;
+					records: { id: string }[];
+					complete: boolean;
+					nowMs: number;
+				}) => {
+					lanes.set(input.queryKey, {
+						complete: input.complete,
+						expectedRecordIds: input.records.map((record) => record.id),
+						updatedAtMs: input.nowMs,
+					});
+				}
+			),
+			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
+				const lane = lanes.get(queryKey);
+				return lane
+					? { complete: lane.complete, fresh: true, expectedRecordIds: [...lane.expectedRecordIds] }
+					: null;
+			}),
+			listCoverageLanes: vi.fn(async () =>
+				[...lanes.entries()].map(([queryKey, lane]) => ({ queryKey, ...lane }))
+			),
+			removeCoverageLaneIfContained: vi.fn(
+				async (input: {
+					queryKey: string;
+					containedIn: readonly string[];
+					supersededAtMs: number;
+				}) => {
+					const lane = lanes.get(input.queryKey);
+					if (!lane || lane.updatedAtMs > input.supersededAtMs) return false;
+					const containedIn = new Set(input.containedIn);
+					if (!lane.expectedRecordIds.every((id) => containedIn.has(id))) return false;
+					lanes.delete(input.queryKey);
+					return true;
+				}
+			),
+		};
+		// A busy store: the server does NOT run out, so this lane is recorded `complete: false`
+		// like every deep orders window. It is settled because it FILLED — the property that
+		// makes eviction fire on the orders family at all (see isSettledBrowseWindowLane).
+		const fetcher = vi.fn(async () => response(orderPage(1_000, 100)));
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 120_000,
+			nowMs: () => 7_500,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+
+		await schedulerFetcher(
+			orderTask({
+				id: 'orders:browser:processing-100:windowed',
+				queryKey: 'orders:browser:status=processing:search=:limit=100',
+				limit: 100,
+				mode: 'windowed',
+			})
+		);
+
+		expect([...lanes.keys()]).toEqual(['orders:browser:status=processing:search=:limit=100']);
+		// The footer reads expectedRecordIds.length for exactly this key — still the window.
+		expect(
+			lanes.get('orders:browser:status=processing:search=:limit=100')!.expectedRecordIds
+		).toHaveLength(100);
+	});
+
 	it('records browser order query coverage across fetched Woo REST pages', async () => {
 		const repository = {
 			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),

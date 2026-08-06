@@ -22,6 +22,11 @@ import {
 	readBrowseWindowContinuation,
 } from './browse-window-continuation';
 import {
+	type BrowseWindowLaneEvictionRepository,
+	evictSupersededBrowseWindowLanes,
+	orderBrowseWindowLaneIdentity,
+} from './browse-window-lane-eviction';
+import {
 	ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS,
 	orderBrowserPredecessorWindow,
 	parseOrderBrowserSchedulerDescriptor,
@@ -64,7 +69,7 @@ const RANGED_COMPLETE_MAX_RECORDS = ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS;
  */
 const RANGED_RESUME_MAX_EXCLUDED_IDS = 500;
 
-export type OrdersSchedulerCoverageRepository = {
+export type OrdersSchedulerCoverageRepository = BrowseWindowLaneEvictionRepository & {
 	recordQueryResult(input: BuildCoverageDocumentsFromQueryResultInput): Promise<void>;
 	recordRecords?(
 		input: Omit<BuildCoverageDocumentsFromQueryResultInput, 'complete'>
@@ -893,6 +898,20 @@ async function fetchBrowserOrderQuery(
 			dimensionsHonored ? laneRecordIds : [],
 			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow
 		);
+		// STRICTLY AFTER the write. The smaller lanes this window supersedes include the one
+		// the continuation resumed from, and the ancestry guard above re-reads exactly that
+		// lane — evicting before the write would demote the pass to an incomplete delta.
+		// Only this branch: a searched window records RECORDS and no lane, so it has nothing
+		// to supersede with.
+		await evictSupersededBrowseWindowLanes({
+			collection: 'orders',
+			triggerQueryKey: task.queryKey,
+			identify: orderBrowseWindowLaneIdentity,
+			repository: input.coverageRepository,
+			readLane: input.coverageRepository?.readLocalLaneCoverage,
+			nowMs: coverageNowMs(input),
+			diagnostics: input.diagnostics,
+		});
 	} else {
 		await recordOrderFetchedRecords(input, task, laneRecordIds);
 	}

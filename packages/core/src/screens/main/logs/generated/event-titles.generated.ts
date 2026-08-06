@@ -32,6 +32,10 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.apply_refresh');
 		case 'browse-window.backstop-reached':
 			return t('health.logs.event.browse_window_backstop_reached');
+		case 'browse-window.eviction-skipped':
+			return t('health.logs.event.browse_window_eviction_skipped');
+		case 'browse-window.lanes-evicted':
+			return t('health.logs.event.browse_window_lanes_evicted');
 		case 'browse-window.page-budget-reached':
 			return t('health.logs.event.browse_window_page_budget_reached');
 		case 'browse-window.prefix-invalidated':

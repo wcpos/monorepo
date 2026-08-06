@@ -341,4 +341,111 @@ describe('coverage ledger recovery', () => {
 		expect(seeded.inserted).toBe(posBootstrapTasks().length);
 		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
 	});
+
+	/**
+	 * BROWSE-WINDOW LANE EVICTION AGAINST REAL RxDB (#948/#957 follow-up).
+	 *
+	 * The two new repository members run real queries — `listCoverageLanesForCollection`
+	 * selects on `collectionName` and sorts on the declared `['collectionName','queryKey']`
+	 * index, and `removeCoverageLaneIfContained` deletes through `incrementalModify`. The
+	 * fakes elsewhere cannot catch a selector or sort RxDB's dev-mode refuses to serve, so
+	 * this exercises both against the storage the app actually uses.
+	 *
+	 * It also pins the derivable-coverage contract: after a rebuild drops `coverageLanes`,
+	 * an evicted lane is indistinguishable from any other absent one — eviction introduces
+	 * no state the recovery path has to know about.
+	 */
+	it('evicts a superseded lane through real storage, and a rebuild treats it as ordinary absence', async () => {
+		const db = await openLedgerDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		const window = (limit: number) => `products:browse-window:limit=${limit}`;
+		for (const limit of [100, 200]) {
+			await coverage.recordQueryResult({
+				collection: 'products',
+				queryKey: window(limit),
+				records: Array.from({ length: limit }, (_, index) => ({
+					id: `woo-product:${index + 1}`,
+				})),
+				complete: true,
+			});
+		}
+		// A lane of a DIFFERENT collection must never appear in the sweep's candidate set.
+		await coverage.recordQueryResult({
+			collection: 'orders',
+			queryKey: 'orders:browser:status=all:search=:limit=100',
+			records: [{ id: 'woo-order:1' }],
+			complete: true,
+		});
+
+		await expect(coverage.listLanes('products')).resolves.toEqual([
+			expect.objectContaining({ queryKey: window(100) }),
+			expect.objectContaining({ queryKey: window(200) }),
+		]);
+
+		const survivorIds = (await coverage.readLane('products', window(200)))!.expectedRecordIds;
+		await expect(
+			coverage.removeLaneIfContained({
+				collection: 'products',
+				queryKey: window(100),
+				containedIn: survivorIds,
+				supersededAtMs: 1_000,
+			})
+		).resolves.toBe(true);
+
+		await expect(coverage.readLane('products', window(100))).resolves.toBeNull();
+		await expect(coverage.readLane('products', window(200))).resolves.toMatchObject({
+			complete: true,
+		});
+		await expect(coverage.listLanes('orders')).resolves.toHaveLength(1);
+
+		// AN EVICTED LANE CAN BE WRITTEN AGAIN (review finding, 2026-08-06, P1 — refuted).
+		//
+		// The concern was that `_deleted: true` leaves a TOMBSTONE: `insertOrMergeLane`'s
+		// `findOne().exec()` would miss it, the `insert()` would conflict, and the fallback
+		// `mergeExistingLane` never restores `_deleted: false` — so a shallow grid asking for
+		// the window again would re-fetch forever without regaining usable coverage.
+		//
+		// It does not happen: RxDB's `insert()` REVIVES a tombstoned primary key rather than
+		// conflicting, so the conflict branch is never entered (measured: one insert call, no
+		// throw) and the lane reads back with its full contents. Pinned here because the whole
+		// claim turns on real storage semantics that an in-memory fake cannot reproduce.
+		await coverage.recordQueryResult({
+			collection: 'products',
+			queryKey: window(100),
+			records: [{ id: 'woo-product:1' }, { id: 'woo-product:2' }],
+			complete: true,
+		});
+		await expect(coverage.readLane('products', window(100))).resolves.toMatchObject({
+			complete: true,
+			expectedRecordIds: ['woo-product:1', 'woo-product:2'],
+		});
+		// …and it is a first-class lane again: listable, and evictable a second time.
+		await expect(coverage.listLanes('products')).resolves.toHaveLength(2);
+
+		// KNOWN LIMITATION, measured (review finding, 2026-08-06, P1 — accepted).
+		//
+		// Eviction bounds the LANE collection. It does NOT touch the parallel membership the
+		// RECORD side accumulates: `recordQueryResult` appends the lane key to every covered
+		// record's `coveredQueryKeys`, and that union is never pruned, so an evicted window's
+		// key outlives its lane. Pinned so the bound this change actually delivers is not
+		// mistaken for a bigger one — see the follow-up referenced in the module docblock.
+		const snapshot = await coverage.readSnapshot();
+		expect(
+			snapshot.records.find((record) => record.id === 'woo-product:1')?.coveredQueryKeys
+		).toContain(window(100));
+
+		// The rebuild path sees the evicted lane exactly as it sees a never-written one.
+		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
+			refusalError('overlapping-ranges')
+		);
+		await expect(coverage.readSnapshot()).resolves.toEqual({ records: [], lanes: [] });
+		await expect(coverage.listLanes('products')).resolves.toEqual([]);
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
 });

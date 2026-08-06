@@ -28,6 +28,15 @@ export {
 	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
 } from './browse-window-continuation';
 export {
+	type BrowseWindowLaneEvictionRepository,
+	type BrowseWindowLaneIdentifier,
+	type BrowseWindowLaneSnapshot,
+	evictSupersededBrowseWindowLanes,
+	orderBrowseWindowLaneIdentity,
+	planBrowseWindowLaneEviction,
+	productBrowseWindowLaneIdentity,
+} from './browse-window-lane-eviction';
+export {
 	normalizeOrderBrowseWindowLimit,
 	ORDER_BROWSE_WINDOW_STEP,
 	orderBrowserQueryKey,

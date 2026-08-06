@@ -31,6 +31,7 @@ import {
 } from '../collections/engine-collections';
 
 import type {
+	BrowseWindowLaneSnapshot,
 	BuildCoverageDocumentsFromQueryResultInput,
 	BuildCumulativeCoverageDocumentsFromQueryResultInput,
 	LocalRecordCoverage,
@@ -122,6 +123,25 @@ export interface LocalCoverage {
 		collection: string,
 		queryKey: string
 	): Promise<LocalLaneCoverageWithExpectedRecords | null>;
+	/**
+	 * Every lane of one collection. Added for the browse-window eviction sweep (#948/#957
+	 * follow-up), which needs to see a view's whole lane family to know which windows a
+	 * completed one supersedes.
+	 */
+	listLanes(collection: string): Promise<BrowseWindowLaneSnapshot[]>;
+	/**
+	 * Delete a lane whose ids a larger lane has absorbed — compare-and-delete against the
+	 * stored revision, so a walk that rewrites the lane between plan and delete cannot lose
+	 * coverage. `supersededAtMs` is the superseding lane's `updatedAtMs`: a lane rewritten
+	 * after it is not stale and survives. The one targeted removal on this facade; everything
+	 * else reclaims by expiry through {@link LocalCoverage.compact}.
+	 */
+	removeLaneIfContained(input: {
+		collection: string;
+		queryKey: string;
+		containedIn: readonly string[];
+		supersededAtMs: number;
+	}): Promise<boolean>;
 	compact(): Promise<number>;
 	maintainCompaction(input: {
 		ownerId: string;
@@ -194,6 +214,14 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 		readRecords: (collection, ids) => repository.readLocalRecordCoverages(collection, ids, now()),
 		readLane: (collection, queryKey) =>
 			repository.readLocalLaneCoverage(collection, queryKey, now()),
+		listLanes: async (collection) =>
+			(await repository.listCoverageLanesForCollection(collection)).map((lane) => ({
+				queryKey: lane.queryKey,
+				complete: lane.complete,
+				expectedRecordIds: lane.expectedRecordIds,
+				updatedAtMs: lane.updatedAtMs,
+			})),
+		removeLaneIfContained: (input) => repository.removeCoverageLaneIfContained(input),
 		compact: async () => {
 			const result = await repository.compactRetention({
 				nowMs: now(),

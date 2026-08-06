@@ -467,6 +467,81 @@ export class RxCoverageRepository {
 		return document ? fromLaneDocument(toJson(document)) : null;
 	}
 
+	/**
+	 * Every lane of ONE collection. Deliberately not `readCoverageDocuments()`, which also
+	 * reads every coverage RECORD — thousands of rows — where the browse-window eviction
+	 * sweep needs only the handful of lanes for one collection. Served by the
+	 * `['collectionName','queryKey']` index.
+	 */
+	async listCoverageLanesForCollection(collection: string): Promise<PersistedCoverageLane[]> {
+		// The sort mirrors `readCoverageDocuments` exactly — `['collectionName','queryKey']` is
+		// the declared index, and RxDB's dev-mode rejects a sort it cannot serve from one.
+		const documents = await this.coverageLanes
+			.find({
+				selector: { collectionName: collection },
+				sort: [{ collectionName: 'asc' }, { queryKey: 'asc' }],
+			})
+			.exec();
+		return documents.map((document) => fromLaneDocument(toJson(document)));
+	}
+
+	/**
+	 * COMPARE-AND-DELETE a lane whose coverage a larger lane has absorbed (browse-window
+	 * eviction, #948/#957 follow-up).
+	 *
+	 * BOTH conditions run INSIDE `incrementalModify`, against the current revision — not
+	 * against the snapshot the caller planned from. That is what makes eviction safe against
+	 * a walk that writes this lane between the plan and the delete:
+	 *
+	 *  - a lane that grew into something `containedIn` no longer covers is left alone, so the
+	 *    sweep can never delete coverage the superseding lane does not hold; and
+	 *  - a lane REWRITTEN since `supersededAtMs` is left alone. Eviction is a claim about
+	 *    stale knowledge — "a deeper window already knows everything this one did" — and a
+	 *    rewrite is not stale. Without this the re-written lane is indistinguishable from the
+	 *    one that was planned for deletion (same window, same ids), so a walk that finished
+	 *    just after the sweep planned would have its lane deleted out from under it and the
+	 *    grid's footer would drop to the local count for no reason.
+	 *
+	 * The comparison is `<=`, and the equality case is the MAIN PATH, not an oversight: a
+	 * drain fixes its clock for the tick, so two windows of the same view completed in one
+	 * drain carry the same `updatedAtMs`. Requiring strictly-older would make eviction skip
+	 * the ordinary scroll and reclaim nothing.
+	 *
+	 * That leaves one residual, named rather than hidden (review finding, 2026-08-06, P2): a
+	 * victim rewritten LOGICALLY after the survivor but stamped with the same millisecond is
+	 * still deleted. Cost is one re-walk of that window — the failure direction this design
+	 * picks everywhere — and it does not repeat, because the rewritten lane is no longer the
+	 * deepest settled window of its view on the next pass. Closing it properly needs the
+	 * stored `_rev`, not a content compare: a same-window rewrite produces identical ids, so
+	 * comparing the planned snapshot (what `removeLaneIfUnchanged` does) accepts it exactly
+	 * as the timestamp does. Revision-based compare-and-delete would want to cover BOTH
+	 * removal call sites and is deliberately left as its own change.
+	 *
+	 * Returns whether it deleted.
+	 */
+	async removeCoverageLaneIfContained(input: {
+		collection: string;
+		queryKey: string;
+		containedIn: readonly string[];
+		supersededAtMs: number;
+	}): Promise<boolean> {
+		const document = await this.coverageLanes
+			.findOne(coverageLaneKey(input.collection, input.queryKey))
+			.exec();
+		if (!document) return false;
+
+		const containedIn = new Set(input.containedIn);
+		let removed = false;
+		await document.incrementalModify((currentDocument) => {
+			const currentLane = fromLaneDocument(currentDocument);
+			removed =
+				currentLane.updatedAtMs <= input.supersededAtMs &&
+				currentLane.expectedRecordIds.every((id) => containedIn.has(id));
+			return removed ? { ...currentDocument, _deleted: true } : currentDocument;
+		});
+		return removed;
+	}
+
 	async expectedRecordIdsForLane(
 		collection: string,
 		queryKey: string,
