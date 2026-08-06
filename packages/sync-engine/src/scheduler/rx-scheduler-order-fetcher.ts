@@ -406,6 +406,8 @@ type RangedCoverageWrite = {
 	remainingTotal: number | null;
 	/** Whether the walk reached the end of the range (short page / advertised last page). */
 	exhausted: boolean;
+	/** Whether every record this pass saw actually carried the descriptor's POS dimensions. */
+	dimensionsHonored: boolean;
 };
 
 /**
@@ -428,7 +430,13 @@ async function recordRangedOrderFetchCoverage(
 	const previous = write.previousResume;
 	const coveredBefore = previous?.coveredRecordCount ?? 0;
 	const resume: RangedLaneResumeState | null =
-		write.exhausted || write.cursorBeforeSeconds === undefined
+		// A pass that saw a server ignoring the descriptor's POS dimensions must NOT leave a
+		// cursor behind. `dimensionsHonored` is per-pass evidence, so a superset accumulated by
+		// pass one would otherwise be completed by a later pass that happened to see only
+		// matching records — reporting every cashier's orders as this cashier's total, which is
+		// exactly what the check exists to prevent. Dropping the cursor restarts the whole walk,
+		// so an old plugin behaves as it did before #954: honest, incomplete, never accumulating.
+		write.exhausted || !write.dimensionsHonored || write.cursorBeforeSeconds === undefined
 			? null
 			: {
 					beforeSeconds: write.cursorBeforeSeconds,
@@ -445,6 +453,9 @@ async function recordRangedOrderFetchCoverage(
 		// previous (now superseded) walk of the same lane accumulated.
 		resetCumulativeExpectedIds: previous === null,
 		rangedResume: resume,
+		// Lets the write reject an advance whose starting cursor no longer exists — see the
+		// cursor-ancestry note in RxCoverageRepository.recordCumulativeQueryResult.
+		rangedResumeExpected: previous?.state ?? null,
 	});
 }
 
@@ -691,6 +702,7 @@ async function fetchBrowserOrderQuery(
 			cursorExcludeWooIds,
 			remainingTotal,
 			exhausted,
+			dimensionsHonored,
 		});
 	} else if (descriptor.search === '') {
 		await recordOrderFetchCoverage(input, task, fetchedDocumentIds, exhausted && dimensionsHonored);

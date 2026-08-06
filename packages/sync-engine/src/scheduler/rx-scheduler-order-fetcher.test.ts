@@ -1786,6 +1786,30 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(new Set(upserted).size).toBe(30);
 	});
 
+	// A server that ignores the POS dimensions answers with the unfiltered superset.
+	// `dimensionsHonored` is PER-PASS evidence, so a cursor left behind by a superset pass could
+	// be completed by a later pass that happened to see only matching records — reporting every
+	// cashier's orders as this cashier's total. The cursor must not survive such a pass.
+	it('leaves no cursor behind when the server ignored the requested POS dimensions', async () => {
+		const coverageRepository = rangedLaneStore();
+		// 300 orders, none carrying the `_pos_user` meta the descriptor asked for.
+		let served = 0;
+		const fetcher = vi.fn(async () => {
+			const page = Array.from({ length: 100 }, (_, index) =>
+				rangedOrder(10_000 - served - index, RANGE_BASE_SECONDS - served - index)
+			);
+			served += 100;
+			return rangedResponse(page, { 'X-WP-Total': '30000', 'X-WP-TotalPages': '300' });
+		});
+		const schedulerFetcher = rangedFetcherFor({ fetcher, coverageRepository });
+		const queryKey = 'orders:browser:status=all:cashier=7:after=1782864000:search=:limit=all';
+
+		await schedulerFetcher(orderTask({ id: `${queryKey}:windowed`, queryKey, limit: 200 }));
+
+		expect(coverageRepository.lane()).toMatchObject({ complete: false });
+		expect(coverageRepository.lane()?.rangedResume).toBeUndefined();
+	});
+
 	// A tie group too large to express as an `exclude` list cannot be resumed without either
 	// skipping records or looping, so the pass fails loudly and the lane stays incomplete.
 	it('fails a ranged pass rather than resume past an unbounded boundary second', async () => {

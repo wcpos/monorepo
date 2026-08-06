@@ -138,6 +138,18 @@ function sameCoverageRecord(
 	);
 }
 
+function sameRangedResume(
+	left: RangedLaneResumeState | null,
+	right: RangedLaneResumeState | null
+): boolean {
+	if (left === null || right === null) return left === right;
+	return (
+		left.beforeSeconds === right.beforeSeconds &&
+		left.excludeWooIds.length === right.excludeWooIds.length &&
+		left.excludeWooIds.every((wooId, index) => wooId === right.excludeWooIds[index])
+	);
+}
+
 function sameCoverageLane(left: PersistedCoverageLane, right: PersistedCoverageLane): boolean {
 	return (
 		left.collection === right.collection &&
@@ -255,31 +267,52 @@ export class RxCoverageRepository {
 		input: BuildCumulativeCoverageDocumentsFromQueryResultInput
 	): Promise<void> {
 		const freshUntilMs = input.nowMs + input.freshForMs;
-		const existingLane = input.resetCumulativeExpectedIds
-			? null
-			: await this.readCoverageLane(input.collection, input.queryKey);
+		// A ranged walk always re-reads the lane, even on a reset pass: it has to check that the
+		// cursor it started from is still there before it is allowed to advance one (see below).
+		const storedLane =
+			input.resetCumulativeExpectedIds && input.rangedResume === undefined
+				? null
+				: await this.readCoverageLane(input.collection, input.queryKey);
+		/**
+		 * CURSOR ANCESTRY (#954). The fetcher reads the cursor at the start of a pass and writes
+		 * the advanced one at the end; between those two points the lane can vanish — Clear & Sync,
+		 * a ledger rebuild and coverage compaction all remove lane rows, and another tab can move
+		 * the cursor. Writing the advanced cursor anyway would recreate the lane claiming
+		 * "everything newer than here is covered" while holding only THIS pass's ids, over records
+		 * the wipe just deleted, and the walk would then complete having never re-fetched them.
+		 *
+		 * So a pass may only advance the cursor when the stored one is still exactly the cursor it
+		 * started from. Otherwise the walk restarts from the top of the range: wasteful, always
+		 * safe — the opposite trade is a silently incomplete report.
+		 */
+		const rangedWriteRejected =
+			input.rangedResume !== undefined &&
+			!sameRangedResume(storedLane?.rangedResume ?? null, input.rangedResumeExpected ?? null);
+		const existingLane = input.resetCumulativeExpectedIds ? null : storedLane;
 		const expectedRecordIds = [
 			...(existingLane?.expectedRecordIds ?? []),
 			...input.records.map((record) => record.id),
 		].filter((id, index, ids) => ids.indexOf(id) === index);
 
-		const recordIdsToRefresh = input.complete
+		const complete = rangedWriteRejected ? false : input.complete;
+		const recordIdsToRefresh = complete
 			? expectedRecordIds
 			: input.records.map((record) => record.id);
 
 		// `undefined` leaves the lane's existing cursor alone (the greedy custom-pull lane never
 		// sets one); an explicit `null` CLEARS it — the ranged walk reached the end of its range.
-		const rangedResume =
-			input.rangedResume === undefined
+		const rangedResume = rangedWriteRejected
+			? undefined
+			: input.rangedResume === undefined
 				? existingLane?.rangedResume
 				: (input.rangedResume ?? undefined);
 		const { rangedResume: _previousResume, ...baseLane }: PersistedCoverageLane =
-			!input.complete && existingLane?.complete
+			!complete && existingLane?.complete
 				? { ...existingLane, expectedRecordIds, updatedAtMs: input.nowMs }
 				: {
 						collection: input.collection,
 						queryKey: input.queryKey,
-						complete: input.complete,
+						complete,
 						expectedRecordIds,
 						freshUntilMs,
 						updatedAtMs: input.nowMs,

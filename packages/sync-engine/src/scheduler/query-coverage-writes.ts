@@ -36,6 +36,13 @@ export type BuildCumulativeCoverageDocumentsFromQueryResultInput =
 		 * CLEARS it — the walk finished, so there is nothing left to resume from.
 		 */
 		rangedResume?: RangedLaneResumeState | null;
+		/**
+		 * The cursor the pass STARTED from (`null` = it started a fresh walk). The write is only
+		 * allowed to advance the cursor if the stored one still matches this; anything else means
+		 * the lane was wiped or moved mid-pass, and advancing would strand the records the pass
+		 * believed were already covered. Only read when `rangedResume` is present.
+		 */
+		rangedResumeExpected?: RangedLaneResumeState | null;
 	};
 
 export function buildCoverageDocumentsFromQueryResult(
