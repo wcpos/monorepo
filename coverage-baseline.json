@@ -1,6 +1,6 @@
 {
   "_comment": "Coverage baseline \u2014 ratchet ensures these numbers never decrease. Values are floored to allow for minor CI variance.",
-  "_updated": "2026-05-22",
+  "_updated": "2026-08-05",
   "packages": {
     "utils": {
       "statements": 35,
@@ -37,6 +37,27 @@
       "branches": 20,
       "functions": 16,
       "lines": 16
+    },
+    "order-math": {
+      "_measured": "2026-08-05 on next @ d62440926 — 95.09/82.92/98.52/96.63 (24 suites, 550 tests)",
+      "statements": 92,
+      "branches": 80,
+      "functions": 96,
+      "lines": 94
+    },
+    "sync-core": {
+      "_measured": "2026-08-05 on next @ d62440926 — 95.82/87.41/93.42/96.58 (22 suites, 490 tests)",
+      "statements": 93,
+      "branches": 85,
+      "functions": 91,
+      "lines": 94
+    },
+    "sync-engine": {
+      "_measured": "2026-08-05 on next @ d62440926 — 89.65/82.12/89.74/91.42 (74 suites, 794 tests)",
+      "statements": 87,
+      "branches": 80,
+      "functions": 87,
+      "lines": 89
     }
   }
 }

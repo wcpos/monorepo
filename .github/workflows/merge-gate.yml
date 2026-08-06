@@ -34,5 +34,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          MERGE_GATE_REQUIRED_CHECKS: 🧹 Lint|🧪 Unit Tests
+          # "🎭 E2E Tests" is deploy.yml's `e2e-gate` aggregator job, not the
+          # per-shard "🎭 E2E Tests (n/6)" checks — the gate script matches
+          # check names exactly. deploy.yml always runs on pull_request now, so
+          # this check is always reported (SKIPPED when the paths filter or the
+          # draft guard legitimately skips the deploy).
+          MERGE_GATE_REQUIRED_CHECKS: 🧹 Lint|🧪 Unit Tests|🎭 E2E Tests
         run: .github/scripts/merge-gate.sh

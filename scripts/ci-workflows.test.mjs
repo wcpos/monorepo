@@ -1,0 +1,222 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+
+import { parse } from 'yaml';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+function readWorkflow(filename) {
+	return parse(readFileSync(path.join(ROOT, '.github', 'workflows', filename), 'utf8'));
+}
+
+function findStep(workflow, jobName, stepName) {
+	const step = workflow.jobs[jobName].steps.find(({ name }) => name === stepName);
+	assert.ok(step, `missing ${stepName} step`);
+	return step;
+}
+
+function runShell(script, { cwd = ROOT, env = {} } = {}) {
+	return spawnSync('bash', ['-c', script], {
+		cwd,
+		encoding: 'utf8',
+		env: { ...process.env, ...env },
+	});
+}
+
+test('the E2E aggregator runs on cancellation and fails the cancelled deploy', () => {
+	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
+
+	assert.equal(gate.if, 'always()');
+
+	const result = runShell(gate.steps[0].run, {
+		env: {
+			CHANGES_RESULT: 'success',
+			DEPLOY_RESULT: 'cancelled',
+			DEPLOY_URL: '',
+			E2E_RESULT: 'skipped',
+			EVENT_NAME: 'pull_request',
+			SKIP_E2E_INPUT: 'false',
+		},
+	});
+
+	assert.notEqual(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout + result.stderr, /cancelled/);
+});
+
+test('the E2E aggregator fails closed when change detection fails', () => {
+	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
+
+	assert.deepEqual([...gate.needs].sort(), ['changes', 'deploy', 'e2e']);
+	assert.equal(gate.steps[0].env.CHANGES_RESULT, '${{ needs.changes.result }}');
+
+	const failedDetection = runShell(gate.steps[0].run, {
+		env: {
+			CHANGES_RESULT: 'failure',
+			DEPLOY_RESULT: 'skipped',
+			DEPLOY_URL: '',
+			E2E_RESULT: 'skipped',
+			EVENT_NAME: 'pull_request',
+			SKIP_E2E_INPUT: 'false',
+		},
+	});
+	assert.notEqual(failedDetection.status, 0, failedDetection.stdout + failedDetection.stderr);
+	assert.match(failedDetection.stdout + failedDetection.stderr, /Change detection did not succeed/);
+
+	const legitimateSkip = runShell(gate.steps[0].run, {
+		env: {
+			CHANGES_RESULT: 'success',
+			DEPLOY_RESULT: 'skipped',
+			DEPLOY_URL: '',
+			E2E_RESULT: 'skipped',
+			EVENT_NAME: 'pull_request',
+			SKIP_E2E_INPUT: 'false',
+		},
+	});
+	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
+});
+
+test('deploy emits the required E2E check whenever the merge gate runs', () => {
+	const deployTypes = readWorkflow('deploy.yml').on.pull_request.types;
+	const mergeGateTypes = readWorkflow('merge-gate.yml').on.pull_request_target.types;
+
+	for (const activity of mergeGateTypes) {
+		assert.ok(deployTypes.includes(activity), `deploy.yml does not handle ${activity}`);
+	}
+});
+
+test('apps/main failures are preserved in result files and the PR summary', () => {
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-ci-workflows-'));
+	const binDir = path.join(workspace, 'bin');
+	const summaryPath = path.join(workspace, 'step-summary.md');
+	mkdirSync(path.join(workspace, 'apps', 'main'), { recursive: true });
+	mkdirSync(binDir);
+
+	const mockPnpm = path.join(binDir, 'pnpm');
+	writeFileSync(
+		mockPnpm,
+		`#!/usr/bin/env bash
+set -u
+args="$*"
+if [[ "$args" == *"exec jest"* ]]; then
+  output=""
+  for arg in "$@"; do
+    [[ "$arg" == --outputFile=* ]] && output="\${arg#--outputFile=}"
+  done
+  if [[ -n "$output" ]]; then
+    mkdir -p "$MOCK_WORKSPACE/apps/main"
+    printf '%s' '{"testResults":[{"status":"failed","assertionResults":[{"status":"failed","ancestorTitles":["Main"],"title":"reports a Jest failure","failureMessages":["jest boom"]}]}]}' > "$MOCK_WORKSPACE/apps/main/$output"
+  fi
+  exit 1
+fi
+if [[ "$args" == *"test:plugins"* ]]; then
+  printf '%s\n' 'TAP version 13' 'not ok 1 - reports a plugin failure' '  error: plugin boom' '1..1'
+  exit 1
+fi
+exit 64
+`,
+		{ mode: 0o755 }
+	);
+
+	try {
+		const workflow = readWorkflow('test.yml');
+		const appStep = findStep(workflow, 'unit-tests', '🧪 Run apps/main tests');
+		const env = {
+			GITHUB_STEP_SUMMARY: summaryPath,
+			MOCK_WORKSPACE: workspace,
+			PATH: `${binDir}:${process.env.PATH}`,
+		};
+
+		const appResult = runShell(appStep.run, { cwd: workspace, env });
+		assert.notEqual(appResult.status, 0, 'failing app tests must fail the step');
+		assert.ok(readFileSync(path.join(workspace, 'apps/main/test-results.json'), 'utf8'));
+		assert.match(
+			readFileSync(path.join(workspace, 'apps/main/plugin-test-results.tap'), 'utf8'),
+			/plugin boom/
+		);
+
+		const summaryStep = findStep(
+			workflow,
+			'unit-tests',
+			'📊 Generate test failure summary'
+		);
+		const isolatedSummaryScript = summaryStep.run.replaceAll(
+			'/tmp/test-summary',
+			path.join(workspace, 'test-summary')
+		);
+		const summaryResult = runShell(isolatedSummaryScript, { cwd: workspace, env });
+		assert.equal(summaryResult.status, 0, summaryResult.stdout + summaryResult.stderr);
+
+		const summary = readFileSync(summaryPath, 'utf8');
+		assert.match(summary, /@wcpos\/main.*reports a Jest failure/s);
+		assert.match(summary, /@wcpos\/main plugins.*plugin boom/s);
+
+		const commentSummary = readFileSync(
+			path.join(workspace, 'test-summary', 'failures.md'),
+			'utf8'
+		);
+		assert.match(commentSummary, /reports a Jest failure/);
+		assert.match(commentSummary, /plugin boom/);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
+test('coverage baseline metadata uses the measured commit date', () => {
+	const baseline = JSON.parse(readFileSync(path.join(ROOT, 'coverage-baseline.json'), 'utf8'));
+	const measuredCommit = 'd62440926';
+	const commitDate = spawnSync(
+		'git',
+		['show', '-s', '--format=%as', measuredCommit],
+		{ cwd: ROOT, encoding: 'utf8' }
+	).stdout.trim();
+
+	assert.equal(baseline._updated, commitDate);
+	for (const packageName of ['order-math', 'sync-core', 'sync-engine']) {
+		assert.match(
+			baseline.packages[packageName]._measured,
+			new RegExp(`^${commitDate} on next @ ${measuredCommit} —`)
+		);
+	}
+});
+
+test('order-math coverage includes an unimported source module', () => {
+	const packageDir = path.join(ROOT, 'packages', 'order-math');
+	const probe = path.join(packageDir, 'src', '__coverage-probe__.ts');
+	const coverageDir = mkdtempSync(path.join(tmpdir(), 'wcpos-order-math-coverage-'));
+	writeFileSync(probe, 'export const coverageProbe = () => 1;\n');
+
+	try {
+		const result = spawnSync(
+			'pnpm',
+			[
+				'exec',
+				'jest',
+				'--ci',
+				'--runInBand',
+				'--runTestsByPath',
+				'src/config.test.ts',
+				'--coverage',
+				'--coverageReporters=json-summary',
+				`--coverageDirectory=${coverageDir}`,
+			],
+			{ cwd: packageDir, encoding: 'utf8' }
+		);
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+
+		const summary = JSON.parse(
+			readFileSync(path.join(coverageDir, 'coverage-summary.json'), 'utf8')
+		);
+		const entry = Object.entries(summary).find(([filename]) => filename.endsWith(probe));
+		assert.ok(entry, 'the unimported source module is missing from coverage');
+		assert.ok(entry[1].statements.total > 0);
+		assert.equal(entry[1].statements.covered, 0);
+	} finally {
+		rmSync(probe, { force: true });
+		rmSync(coverageDir, { recursive: true, force: true });
+	}
+});

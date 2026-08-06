@@ -18,17 +18,13 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, ready_for_review]
-    paths:
-      # Deploy + E2E only run for changes that can affect apps/main. The
-      # template-studio is an internal designer tool that ships nothing to
-      # the deployed app, so its changes shouldn't trigger a full E2E run.
-      - apps/**
-      - '!apps/template-studio/**'
-      - packages/**
-      - .github/workflows/deploy.yml
-      - package.json
-      - pnpm-lock.yaml
+    types: [opened, synchronize, reopened, ready_for_review]
+    # NOTE: deliberately no workflow-level `paths:` filter. "🎭 E2E Tests"
+    # (the e2e-gate job) is a REQUIRED merge-gate check, and a check that is
+    # never reported blocks the gate until it times out. The path filtering
+    # moved into the `changes` job below, so the workflow always runs and the
+    # gate always gets an answer — the same pattern test.yml uses for Lint /
+    # Unit Tests.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -41,10 +37,36 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: 🔍 Detect Deploy Changes
+    runs-on: ubuntu-latest
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            src:
+              # Deploy + E2E only matter for changes that can affect apps/main.
+              # The template-studio is an internal designer tool that ships
+              # nothing to the deployed app, so its changes shouldn't trigger a
+              # full E2E run.
+              - 'apps/**'
+              - '!apps/template-studio/**'
+              - 'packages/**'
+              - '.github/workflows/deploy.yml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
-    if: github.actor != 'dependabot[bot]' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    needs: changes
+    if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || needs.changes.outputs.src == 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
       is_production: ${{ steps.get-url.outputs.is_production }}
@@ -203,20 +225,75 @@ jobs:
           path: apps/main/test-results/
           retention-days: 7
 
+  # Aggregator check consumed by merge-gate.yml as "🎭 E2E Tests".
+  #
+  # A skipped shard matrix used to count as a pass unconditionally, which meant
+  # a deploy that succeeded but published an EMPTY URL silently disabled the
+  # whole E2E suite and still reported green. Skipping is only legitimate when
+  # nothing was deployed in the first place (draft PR, dependabot, no
+  # app-affecting paths) or when a manual dispatch explicitly opted out.
   e2e-gate:
     name: 🎭 E2E Tests
-    needs: [e2e]
-    if: always() && !cancelled()
+    needs: [changes, deploy, e2e]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check shard results
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          DEPLOY_URL: ${{ needs.deploy.outputs.deployment_url }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          EVENT_NAME: ${{ github.event_name }}
+          SKIP_E2E_INPUT: ${{ github.event.inputs.skip_e2e }}
         run: |
-          if [ "${{ needs.e2e.result }}" = "success" ] || [ "${{ needs.e2e.result }}" = "skipped" ]; then
-            echo "All E2E shards passed"
-          else
-            echo "E2E shards result: ${{ needs.e2e.result }}"
+          set -uo pipefail
+
+          if [ -n "$DEPLOY_URL" ]; then url_state="present"; else url_state="EMPTY"; fi
+          echo "changes=$CHANGES_RESULT deploy=$DEPLOY_RESULT deployment_url=$url_state e2e=$E2E_RESULT event=$EVENT_NAME"
+
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::Change detection did not succeed (result: $CHANGES_RESULT). Refusing to treat downstream skips as legitimate."
             exit 1
           fi
+
+          if [ "$E2E_RESULT" = "success" ]; then
+            echo "✅ All E2E shards passed"
+            exit 0
+          fi
+
+          if [ "$E2E_RESULT" != "skipped" ]; then
+            echo "::error::E2E shards did not pass (result: $E2E_RESULT)"
+            exit 1
+          fi
+
+          # ---- E2E was skipped: was that legitimate? ----
+
+          # Nothing was deployed, so there was nothing to test. Covers draft
+          # PRs, dependabot, and PRs that touch no app-affecting paths.
+          if [ "$DEPLOY_RESULT" = "skipped" ]; then
+            echo "⏭️ Deploy was skipped (draft PR / dependabot / no app-affecting changes) — no E2E expected"
+            exit 0
+          fi
+
+          # Explicit opt-out on a manual run.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$SKIP_E2E_INPUT" = "true" ]; then
+            echo "⏭️ E2E skipped by the explicit skip_e2e workflow_dispatch input"
+            exit 0
+          fi
+
+          if [ "$DEPLOY_RESULT" != "success" ]; then
+            echo "::error::Deploy did not succeed (result: $DEPLOY_RESULT), so the E2E shards never ran. A broken deploy is not a passing E2E run."
+            exit 1
+          fi
+
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "::error::Deploy reported success but published an EMPTY deployment URL, so every E2E shard was skipped. Refusing to count a silent no-deploy as a passing E2E run — check the '🚀 Deploy preview' step's EAS output."
+            exit 1
+          fi
+
+          echo "::error::A deployment URL was published ($DEPLOY_URL) but the E2E shards were skipped. Failing the gate."
+          exit 1
 
   e2e-report:
     name: 📊 Merge E2E Reports
@@ -302,7 +379,10 @@ jobs:
   comment:
     name: 💬 PR Comment
     needs: [deploy, e2e, e2e-report]
-    if: always() && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    # `needs.deploy.result != 'skipped'` keeps the workflow quiet on PRs that
+    # touch no app-affecting paths — without it the workflow now runs on every
+    # PR and would post a misleading "❌ Failed to deploy" summary.
+    if: always() && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && needs.deploy.result != 'skipped'
     runs-on: ubuntu-latest
     permissions:
       contents: write

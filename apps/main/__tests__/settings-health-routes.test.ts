@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Reset at module scope to avoid jest-expo's winter-runtime "require outside test scope" error.
+jest.resetModules();
+
 const appRoot = join(__dirname, '..');
 const routeRoot = 'app/(app)/(drawer)';
 

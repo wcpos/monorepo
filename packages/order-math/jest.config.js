@@ -9,5 +9,11 @@ module.exports = {
 	},
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+	collectCoverageFrom: [
+		'src/**/*.{ts,tsx}',
+		'!src/**/*.test.{ts,tsx}',
+		'!src/**/*.d.ts',
+		'!src/**/index.{ts,tsx}',
+	],
 	verbose: true,
 };
