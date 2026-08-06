@@ -118,6 +118,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_write_enqueued');
 		case 'queue.write.needs-revision':
 			return t('health.logs.event.queue_write_needs_revision');
+		case 'queue.write.requeue-rebuilt':
+			return t('health.logs.event.queue_write_requeue_rebuilt');
 		case 'queue.write.reschedule-failed':
 			return t('health.logs.event.queue_write_reschedule_failed');
 		case 'queue.write.resolve':

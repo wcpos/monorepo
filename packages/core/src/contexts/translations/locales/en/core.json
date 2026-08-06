@@ -1107,6 +1107,7 @@
 	"health.logs.event.queue_write_drain": "Processed queued changes for your store",
 	"health.logs.event.queue_write_enqueued": "Queued a change to send to your store",
 	"health.logs.event.queue_write_needs_revision": "A change needs fixing before it can be sent",
+	"health.logs.event.queue_write_requeue_rebuilt": "Queued a refused change to send again",
 	"health.logs.event.queue_write_reschedule_failed": "Could not schedule another try for a change",
 	"health.logs.event.queue_write_resolve": "Settled a clashing change",
 	"health.logs.event.queue_write_tick_error": "Sending queued changes failed",

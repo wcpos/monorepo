@@ -57,6 +57,7 @@ export const SYNC_EVENT_TYPES = [
 	'queue.write.drain',
 	'queue.write.enqueued',
 	'queue.write.needs-revision',
+	'queue.write.requeue-rebuilt',
 	'queue.write.reschedule-failed',
 	'queue.write.resolve',
 	'queue.write.tick.error',
@@ -436,6 +437,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_needs_revision',
 		label: 'A change needs fixing before it can be sent',
+		introducedIn: '1.10.0',
+	},
+	'queue.write.requeue-rebuilt': {
+		type: 'queue.write.requeue-rebuilt',
+		domain: 'SYNC',
+		key: 'health.logs.event.queue_write_requeue_rebuilt',
+		label: 'Queued a refused change to send again',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.reschedule-failed': {
