@@ -906,9 +906,9 @@ describe('query bindings', () => {
 		).resolves.toBe('coverage');
 	});
 
-	// The columns the v2 read surface cannot sort keep the honest local footer rather than
-	// putting a `rest_invalid_param` on the wire once per scroll tick.
-	it('declares no browse demand for a customers sort the wire cannot express', async () => {
+	// #1028 follow-on: the plugin proxy (#1488/#1500) now handles last_name, so the grid's
+	// DEFAULT sort drives a server-sorted browse window rather than a local-only sort.
+	it('declares a browse window for the last_name sort now that the plugin proxies it', async () => {
 		await engineDB.addCollections({
 			coverageLanes: { schema: coverageLaneSchema },
 			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
@@ -933,10 +933,39 @@ describe('query bindings', () => {
 		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
 		expect(
 			engine.requireCalls.filter((requirement) => requirement.kind === 'customer-browse')
-		).toHaveLength(0);
-		await expect(
-			firstValueFrom(result.current.totalSource$.pipe(filter((source) => source === 'local')))
-		).resolves.toBe('local');
+		).toContainEqual(
+			expect.objectContaining({ kind: 'customer-browse', orderby: 'last_name', order: 'asc' })
+		);
+	});
+
+	// role now sorts server-side by staff hierarchy (#1500) — the client passes orderby=role and
+	// does NO local rank mapping.
+	it('drives a server browse window for the role sort with no client-side rank mapping', async () => {
+		await engineDB.addCollections({
+			coverageLanes: { schema: coverageLaneSchema },
+			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
+		} as never);
+		await engineDB.collections.customers.insert({
+			id: 'customer-ada',
+			wooCustomerId: 103,
+			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace', role: 'customer' },
+			sync: { revision: '1', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		const state: QueryStateOf<'customers'> = {
+			search: '',
+			filters: {},
+			sort: { field: 'role', direction: 'desc' },
+			limit: 10,
+		};
+		const { result } = renderHook(() => useCollectionBinding('customers', state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toHaveLength(1));
+		expect(engine.requireCalls).toContainEqual(
+			expect.objectContaining({ kind: 'customer-browse', orderby: 'role', order: 'desc' })
+		);
 	});
 
 	it('releases direct search demand when its binding unmounts', async () => {

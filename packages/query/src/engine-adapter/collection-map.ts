@@ -479,18 +479,18 @@ export const collectionMap = {
 		},
 	},
 	/**
-	 * Customers (#951). Only the columns with a `wooOrderby` drive a SERVER-sorted browse
-	 * window; the rest keep sorting local residents, and the footer keeps saying so.
+	 * Customers (#951, #1028 follow-on). Every column with a `wooOrderby` drives a SERVER-sorted
+	 * browse window; a column without one keeps sorting local residents.
 	 *
-	 * The gap is a wire fact, not a preference. `syncBaseUrl` is the `wcpos/v2` namespace,
-	 * whose `/customers` route proxies to `wc/v3/customers`, and wc/v3 accepts only
-	 * `id | include | name | registered_date`. The WCPOS plugin DOES implement first_name,
-	 * last_name, email, role and username — but on its own `wcpos/v1/customers` controller,
-	 * which the v2 proxy bypasses. 1.9 talked to v1 directly, which is why 1.9 could sort the
-	 * customer list by last name server-side; see
-	 * CUSTOMER_BROWSE_WINDOW_PLUGIN_ORDERBY_VALUES for the plugin change that closes it.
-	 * Requesting one anyway would be a `rest_invalid_param` 400 on every scroll tick, which is
-	 * strictly worse than a locally-sorted list that admits it is local.
+	 * `syncBaseUrl` is the `wcpos/v2` namespace, whose `/customers` route proxies to
+	 * `wc/v3/customers`. `id`, `name` and `registered_date` are wc/v3-native. `first_name`,
+	 * `last_name`, `email`, `username` and `role` are re-applied by the proxy through the V1
+	 * customer handler (plugin #1488), so they now reach the wire too — restoring the 1.9
+	 * server-side sort the v2 layer had temporarily withheld.
+	 *
+	 * `role` sorts by STAFF HIERARCHY server-side (plugin #1500), NOT alphabetically. The client
+	 * passes `orderby=role` and does no rank mapping — hence no `enginePath`-based rank here, the
+	 * wire orderby is the whole contract.
 	 */
 	customers: {
 		engineCollection: 'customers',
@@ -509,6 +509,41 @@ export const collectionMap = {
 				kind: 'payload',
 				enginePath: 'payload.date_created_gmt',
 				sort: { wooOrderby: 'registered_date' },
+			},
+			first_name: {
+				legacy: 'first_name',
+				kind: 'payload',
+				enginePath: 'payload.first_name',
+				sort: { wooOrderby: 'first_name' },
+			},
+			last_name: {
+				legacy: 'last_name',
+				kind: 'payload',
+				enginePath: 'payload.last_name',
+				sort: { wooOrderby: 'last_name' },
+			},
+			email: {
+				legacy: 'email',
+				kind: 'payload',
+				enginePath: 'payload.email',
+				sort: { wooOrderby: 'email' },
+			},
+			username: {
+				legacy: 'username',
+				kind: 'payload',
+				enginePath: 'payload.username',
+				sort: { wooOrderby: 'username' },
+			},
+			/**
+			 * Server-side staff-hierarchy sort (plugin #1500). The client only forwards
+			 * `orderby=role`; the local `payload.role` path is a plain value read, never a rank —
+			 * a local alphabetical sort here would disagree with the server's hierarchy order.
+			 */
+			role: {
+				legacy: 'role',
+				kind: 'payload',
+				enginePath: 'payload.role',
+				sort: { wooOrderby: 'role' },
 			},
 		},
 	},
