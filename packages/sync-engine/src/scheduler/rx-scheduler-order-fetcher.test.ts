@@ -1686,10 +1686,11 @@ describe('createOrdersSchedulerFetcher', () => {
 	 * warning above the read URL builders in rx-scheduler-order-fetcher.ts. What the client owes
 	 * the contract is that it carries whatever precision the server sends through to
 	 * storage verbatim: no reformatting, no rounding to display decimals. This is the
-	 * half of #946 that lives on this side of the wire, and it is pinned for EVERY
-	 * order read shape so a future read path that normalizes money fails loudly.
+	 * half of #946 that lives on this side of the wire. Every scheduler-owned read
+	 * shape is pinned here; the independent reconciliation read is pinned through
+	 * the public facade in create-rxdb-sync-engine.existence.test.ts.
 	 */
-	describe('preserves server monetary precision verbatim on every order read shape (#946)', () => {
+	describe('preserves server monetary precision verbatim on every scheduler read shape (#946)', () => {
 		// A 6dp payload as wc/v3 serves it under `dp=6`: sub-cent tax components that
 		// round away entirely at the store's display decimals (2dp).
 		const sixDecimalMoney = {
