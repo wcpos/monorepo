@@ -93,6 +93,7 @@ function row(over: Partial<RejectedMutation> = {}): RejectedMutation {
 		rejectedAt: '2026-01-05T00:00:01.000Z',
 		requeueCount: 0,
 		residentMissing: false,
+		destroysRecord: false,
 		...over,
 	};
 }
@@ -145,6 +146,41 @@ describe('RejectedMutationsPanel', () => {
 
 		await press(getByTestId('db-rejected-discard-confirm'));
 		expect(mockResolveConflict).toHaveBeenCalledWith('m-1', 'discard');
+	});
+
+	it('says outright that discarding a born-local record DELETES it (#832 R7b)', async () => {
+		rows = [row({ destroysRecord: true })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-discard-m-1'));
+
+		const confirm = getByTestId('db-rejected-discard-confirm');
+		// The confirm states destruction and names the record; it must never
+		// reassure the cashier that their server's version will be kept — there
+		// isn't one.
+		expect(document.body.textContent).toContain('permanently deletes it from this device');
+		expect(document.body.textContent).toContain('never saved to your store');
+		expect(document.body.textContent).toContain('#1042 · 25.00');
+		expect(document.body.textContent).not.toContain('your server’s version is kept');
+		expect(confirm.textContent).toContain('Delete');
+
+		await press(confirm);
+		expect(mockResolveConflict).toHaveBeenCalledWith('m-1', 'discard');
+		// …and the success toast says the record is gone, not that "a change" was dropped.
+		expect(mockToast).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'success', text1: 'Deleted from this device.' })
+		);
+	});
+
+	it('keeps the non-destructive copy when the record survives the discard', async () => {
+		rows = [row({ operation: 'update' })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-discard-m-1'));
+
+		expect(document.body.textContent).toContain('The record stays on this device');
+		expect(document.body.textContent).not.toContain('permanently deletes it from this device');
+		expect(getByTestId('db-rejected-discard-confirm').textContent).toContain('Discard');
 	});
 
 	it('disables requeue when the record is gone — there is nothing left to rebuild from', () => {

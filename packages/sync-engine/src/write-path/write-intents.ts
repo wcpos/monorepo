@@ -58,6 +58,7 @@ import {
 	buildCreateMutation,
 	buildDeleteMutation,
 	buildUpdateMutation,
+	RECORD_UUID_META_KEY,
 	RecordMutationQueue,
 	RxRecordMutationStorage,
 } from '@wcpos/sync-core';
@@ -452,6 +453,88 @@ export async function enqueueWriteIntent(input: {
 }
 
 /**
+ * True when `meta_data` is nothing but the canonical uuid mirror this record
+ * already carries. `buildUpdateMutation`/`buildCreateMutation` INJECT that entry
+ * into every payload (`identifyRecord` → `mirrorRecordUuid`), so its presence on
+ * a dead letter carries no cashier intent — and re-applying the stub over the
+ * resident's real `meta_data` would replace a full array (server ids, local-only
+ * `_pos_*` entries) with one plumbing row. A genuinely edited `meta_data` has
+ * other entries and is re-applied like any other field.
+ */
+function isBareUuidMirror(value: unknown, recordId: string): boolean {
+	if (!Array.isArray(value) || value.length !== 1) return false;
+	const entry = value[0] as { key?: unknown; value?: unknown } | null;
+	return (
+		typeof entry === 'object' &&
+		entry !== null &&
+		entry.key === RECORD_UUID_META_KEY &&
+		entry.value === recordId
+	);
+}
+
+/**
+ * The cashier's EDIT INTENT, recovered from a dead-lettered UPDATE (#832
+ * follow-up, ruling R7a).
+ *
+ * A rejected row stops guarding its record (`pendingRecordIds` skips it — #507
+ * regression 4, deliberate), so a later pull adopts server truth over the
+ * resident. That is CORRECT: the server's calculation is the source of truth and
+ * pulls are not re-blocked. But the resident is then no longer a witness to what
+ * the cashier asked for, and a rebuild taken purely from it sends the server its
+ * own values back — the edit vanishes with nothing anywhere saying so. The intent
+ * survives in exactly one place: the frozen payload on the rejected row.
+ *
+ * GRANULARITY — the queue row's TOP-LEVEL fields, and why not a diff:
+ *  - There is nothing to diff against. A row stores `baseRevision` (a revision
+ *    STRING, not a document); `conflictDocument` exists only for 409s, never for
+ *    a 4xx dead letter. No pre-edit snapshot is persisted anywhere, so "the
+ *    fields that changed" is not computable after the fact.
+ *  - Top-level IS the write path's own merge granularity: `enqueueWriteIntent`'s
+ *    coalescer merges `{...resident, ...prior, ...incoming}` shallowly, and the
+ *    born-twice reconcile does the same. Re-applying the rejected payload's
+ *    top-level fields over the resident is literally that same operation with
+ *    the dead letter as the last layer. A deeper per-leaf merge would invent a
+ *    semantics no other write in this engine uses, and for orders would emit
+ *    hybrids (half-server, half-local `billing`) that neither side ever asserted.
+ *
+ * Two subtractions, both about never letting an OLD intent win:
+ *  - `meta_data` when it is only the injected uuid mirror (see above);
+ *  - every field asserted by a same-record queue row NEWER than the dead letter
+ *    (`seq` above the dead letter's). Those are edits the cashier made AFTER the
+ *    one being recovered; the resident already carries them, and re-applying the
+ *    older value on top would silently roll them back. Same rule the queued-delete
+ *    guard states: a recovery replays an old intent, and an old intent never wins.
+ *
+ * Nothing here bypasses sanitization — the result is handed to
+ * `enqueueWriteIntent` as an ordinary intent payload, so every outbound sanitizer
+ * (`sanitizeOutboundOrderPayload`) still runs over the re-applied fields. That is
+ * what keeps this from being the replay #832 exists to avoid: the FIELDS come
+ * back, the refused SHAPE does not.
+ *
+ * Applies to UPDATEs only. A rejected CREATE has no server document, so no pull
+ * can overwrite its resident — the resident IS the intent, and layering the frozen
+ * create on top could only resurrect what the cashier has since removed locally
+ * (a deleted line item, a cleared fee).
+ */
+function recoveredEditFields(
+	entry: QueuedMutation,
+	sameRecordQueued: readonly QueuedMutation[]
+): Record<string, unknown> {
+	const supersededKeys = new Set(
+		sameRecordQueued
+			.filter((row) => row.operation !== 'delete' && (row.seq ?? 0) > (entry.seq ?? 0))
+			.flatMap((row) => Object.keys(row.payload ?? {}))
+	);
+	const recovered: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(entry.payload ?? {})) {
+		if (supersededKeys.has(key)) continue;
+		if (key === 'meta_data' && isBareUuidMirror(value, entry.recordId)) continue;
+		recovered[key] = value;
+	}
+	return recovered;
+}
+
+/**
  * DEAD-LETTER RECOVERY (#832): turn one permanently-rejected row back into
  * pushable work by REBUILDING its payload from the record as it stands NOW, and
  * enqueueing that through the pipeline above.
@@ -467,6 +550,18 @@ export async function enqueueWriteIntent(input: {
  * truth, and running it through the normal build → sanitize → coalesce → dirty-
  * mark path means every sanitizer that has landed since the rejection applies,
  * without this function knowing what any of them are.
+ *
+ * For an UPDATE the resident alone is not enough (#832 follow-up, R7a). A
+ * rejected row stops guarding its record, so a pull between the refusal and the
+ * recovery replaces the resident with server truth — correctly, per the standing
+ * "server calculation is the source of truth" ruling. Rebuilding from that
+ * resident would send the server its own values back and the cashier's edit would
+ * be gone with nothing anywhere recording it. So an update rebuild is
+ * `current resident ⊕ the dead letter's edit fields` (`recoveredEditFields`,
+ * which documents the granularity choice) — still through the same enqueue
+ * pipeline, so the recovered fields are sanitized exactly like a fresh write.
+ * When no pull intervened the two layers agree field-for-field and the rebuild is
+ * unchanged from the resident-only one.
  *
  * Consequences of that choice, deliberately:
  *  - a FRESH `mutationId`. The payload differs from the rejected one, and the
@@ -568,7 +663,13 @@ export async function requeueRejectedMutation(input: {
 					collection: entry.collectionName as SyncCollectionName,
 					operation: entry.operation,
 					recordId: entry.recordId,
-					payload: residentPayload,
+					// A create rebuilds from the resident alone; an update layers the
+					// cashier's refused edit back on top of it (R7a — see
+					// `recoveredEditFields` for the field granularity and why).
+					payload:
+						entry.operation === 'update'
+							? { ...residentPayload, ...recoveredEditFields(entry, queued) }
+							: residentPayload,
 					...(entry.explicit === true ? { explicit: true } : {}),
 				};
 	const receipt = await enqueueWriteIntent({

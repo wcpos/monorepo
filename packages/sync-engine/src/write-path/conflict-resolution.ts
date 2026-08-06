@@ -16,6 +16,9 @@ import type { RxDatabase } from 'rxdb';
  *    current resident through the normal enqueue pipeline and queue THAT. The
  *    rejected payload is never re-sent; see `requeueRejectedMutation`.
  *  - 'discard' — any terminal row: drop the local intent, restore server truth.
+ *    For a BORN-LOCAL create there is no server truth to restore and nothing will
+ *    ever sync the record, so discard DESTROYS the resident too (#832 follow-up,
+ *    R7b) rather than leaving a clean-flagged, permanently unsyncable ghost.
  */
 export type ConflictResolutionChoice = 'retry-with-server-base' | 'requeue-rebuilt' | 'discard';
 
@@ -58,6 +61,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 			// Scope-guarded like write(): the resolution writes into the captured
 			// scope's queue + record, and a switch/reset mid-resolution drops them.
 			let needsRepull: number | null = null;
+			let residentRemoved = false;
 			let resolved: { collectionName: string; recordId: string } | null = null;
 			await manager.runGuarded(async (bound) => {
 				const database = databaseByScopeId.get(bound.scopeId);
@@ -158,11 +162,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 							syncBaseUrl: ports.site.syncBaseUrl,
 							remoteId,
 						});
+						// The server no longer has it: no truth to restore, so discard
+						// tombstones the resident. A born-local create is decided separately,
+						// INSIDE guardWrite — see `bornLocalCreate` below.
 						discardRemovesResident = discardServerDocument === null;
-					} else if (entry.operation === 'create') {
-						// A rejected born-local create has no remote identity because it
-						// never existed server-side. Discard therefore means tombstone.
-						discardRemovesResident = true;
 					}
 				}
 				const applied = await bound.guardWrite(async () => {
@@ -222,16 +225,46 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 							): Promise<unknown>;
 							remove(): Promise<unknown>;
 						} | null;
-						const row = doc?.toJSON() as { wooOrderId?: number | null } | undefined;
+						const row = doc?.toJSON() as Record<string, unknown> | undefined;
+						const facet = writeFacetFor(entry.collectionName);
+						// BORN-LOCAL CREATE ⇒ discard DESTROYS the record (#832 follow-up,
+						// ruling R7b). A rejected create never reached the server: there is no
+						// server truth to restore and nothing will ever sync it again, so
+						// leaving the resident behind strands a GHOST — clean-flagged, listed
+						// in the app, permanently unsyncable. That is the exact failure class
+						// #832 exists to end, and #1011 only fixed it for non-orders (orders
+						// were excluded from the pre-flight block above), which is where the
+						// whole incident lives.
+						//
+						// Decided HERE, inside guardWrite, from the SAME read that performs the
+						// removal — not from the pre-flight read. A pull landing in between can
+						// adopt a server identity for this record (matched on
+						// `_woocommerce_pos_uuid`), and a record that HAS one is no longer
+						// born-local: it exists server-side and must survive the discard.
+						//
+						// A rejected UPDATE always keeps its resident: that row is server
+						// truth, and discard means "accept it".
+						const remoteId = facet ? row?.[facet.remoteIdField] : undefined;
+						const bornLocalCreate =
+							entry.operation === 'create' &&
+							doc !== null &&
+							typeof remoteId !== 'number' &&
+							// The pre-flight above resolves a remote id from the queued payload
+							// too, and a server document coming back proves the record exists
+							// there whatever the resident's column says. Never destroy that.
+							// (Orders skip the pre-flight fetch entirely, so this is always
+							// null for them and the resident's column decides alone.)
+							discardServerDocument === null;
+						const removesResident = discardRemovesResident || bornLocalCreate;
 						// #516 item 5: queue the server-truth re-pull DURABLY *before*
 						// clearing local state. A persisted targeted scheduler task
 						// survives crashes and failed fetches (a failed task re-runs once
 						// its retry gate elapses), so discard can never strand the record
 						// silently posing as synced with the re-pull lost in memory.
-						if (entry.collectionName === 'orders' && typeof row?.wooOrderId === 'number') {
-							needsRepull = row.wooOrderId;
+						if (entry.collectionName === 'orders' && typeof remoteId === 'number') {
+							needsRepull = remoteId;
 							await seedTargetedOrderSchedulerTask({
-								orderIds: [row.wooOrderId],
+								orderIds: [remoteId],
 								priority: 1_000,
 								completedDedupeForMs: 0,
 								...(ports.now !== undefined ? { nowMs: ports.now() } : {}),
@@ -239,7 +272,6 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 							});
 						}
 						if (entry.collectionName !== 'orders' && discardServerDocument) {
-							const facet = writeFacetFor(entry.collectionName);
 							if (!facet) {
 								throw new Error(
 									`resolveConflict: no refresh seam for "${entry.collectionName}" — cannot discard safely`
@@ -299,9 +331,34 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 							// the local row still poses as synced stale truth.
 							await facet.upsertServerDocument(database, documentToApply);
 						}
-						if (discardRemovesResident && doc) await doc.remove();
-						await queue.remove([mutationId]);
-						if (doc && !discardRemovesResident) {
+						// Destroy the resident BEFORE retiring the queue row, so a crash in
+						// between leaves the dead letter listed against an absent record
+						// (the panel then offers discard only, which completes the job) —
+						// never a removed row beside a surviving ghost, which is
+						// unrecoverable. Tolerated when the record is already gone: two
+						// discards of one dead letter (a double-tap that beat the button's
+						// disabled state, two windows) must not turn the loser into an error
+						// toast over work that is already done.
+						if (removesResident && doc) {
+							try {
+								await doc.remove();
+								residentRemoved = true;
+							} catch (error) {
+								const stillResident = await database.collections[entry.collectionName]
+									?.findOne(entry.recordId)
+									.exec();
+								if (stillResident) throw error;
+								residentRemoved = true;
+							}
+						}
+						// CAS, not an unconditional remove: two discards of one terminal row
+						// (a double-tap that beat the button's disabled state, two windows)
+						// would otherwise have the loser fail on a row the winner already
+						// took. `false` means someone else settled it — the record is already
+						// in the state this call asked for, so report success rather than
+						// alarm a cashier about work that is done.
+						await queue.removeIfStatus(mutationId, entry.status);
+						if (doc && !removesResident) {
 							await doc.incrementalModify((data) => {
 								const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
 								const pendingMutationIds = (local.pendingMutationIds ?? []).filter(
@@ -353,7 +410,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 					type: 'queue.write.resolve',
 					level: 'info',
 					collection: settled.collectionName,
-					fields: { recordId: settled.recordId, mutationId, resolution },
+					// `residentRemoved` makes a destructive discard legible in the log:
+					// it is the one resolution that deletes a record outright, and "the
+					// order is gone" must never be an unexplained disappearance (R7b).
+					fields: { recordId: settled.recordId, mutationId, resolution, residentRemoved },
 				});
 				// The resolution changed queue state outside the drain path — refresh
 				// the cached depth and tell status subscribers, or an idle engine

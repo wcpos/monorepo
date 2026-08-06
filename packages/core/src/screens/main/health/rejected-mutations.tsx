@@ -38,7 +38,10 @@ const logger = getLogger(['wcpos', 'health', 'deadLetters']);
  *    since been corrected; re-sending the frozen payload would earn the same
  *    refusal forever, which is why the engine rebuilds rather than replays.
  *  - Discard: destructive, behind a confirm — it drops the local change and
- *    accepts the server's version.
+ *    accepts the server's version. For a BORN-LOCAL record there is no server
+ *    version, so discarding DELETES the record from this device (#832 follow-up,
+ *    R7b) — a separate, explicit confirm says exactly that rather than implying
+ *    the record survives.
  *
  * A row whose record is no longer on this device has nothing to rebuild from, so
  * Requeue is disabled and says so rather than failing on press.
@@ -70,9 +73,13 @@ export function RejectedMutationsPanel() {
 			Toast.show({
 				type: 'success',
 				text1:
-					resolution === 'discard'
-						? t('health.database.rejected.discarded')
-						: t('health.database.rejected.requeued'),
+					resolution === 'requeue-rebuilt'
+						? t('health.database.rejected.requeued')
+						: row.destroysRecord
+							? // Say what actually happened: discarding a born-local record deletes
+								// it, and "Change discarded." would not tell a cashier the sale is gone.
+								t('health.database.rejected.destroyed')
+							: t('health.database.rejected.discarded'),
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -179,9 +186,21 @@ export function RejectedMutationsPanel() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{t('health.database.rejected.discard_title')}</AlertDialogTitle>
+						{/* A born-local record has no server version to fall back on, so
+						    discarding DESTROYS it (#832 follow-up, R7b). The confirm must
+						    say that outright — the old copy promised the record would stay,
+						    which was both wrong and the friendlier of the two readings. */}
+						<AlertDialogTitle>
+							{discarding?.destroysRecord
+								? t('health.database.rejected.discard_destroy_title')
+								: t('health.database.rejected.discard_title')}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{t('health.database.rejected.discard_body')}
+							{discarding?.destroysRecord
+								? t('health.database.rejected.discard_destroy_body', {
+										record: describeRecord(discarding, t),
+									})
+								: t('health.database.rejected.discard_body')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -197,7 +216,9 @@ export function RejectedMutationsPanel() {
 							}}
 						>
 							<Text className="text-destructive">
-								{t('health.database.rejected.discard_confirm')}
+								{discarding?.destroysRecord
+									? t('health.database.rejected.discard_destroy_confirm')
+									: t('health.database.rejected.discard_confirm')}
 							</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>

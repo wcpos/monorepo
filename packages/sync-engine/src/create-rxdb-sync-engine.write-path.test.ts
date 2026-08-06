@@ -1939,6 +1939,330 @@ describe('#507 offline write flows through the public handle', () => {
 		}
 	});
 
+	/**
+	 * #832 follow-up, ruling R7a. A rejected UPDATE stops guarding its record
+	 * (#507 regression 4, deliberate), so a pull adopts server truth over the
+	 * resident — which is CORRECT and stays correct here: pulls are not
+	 * re-blocked. But the resident is then no longer a witness to what the cashier
+	 * asked for, and #1011's resident-only rebuild sent the server its own values
+	 * back: the edit vanished with nothing anywhere saying so. The intent lives on
+	 * the dead letter's frozen payload, and requeue must carry it BACK ON TOP of
+	 * the server-adopted base.
+	 */
+	it("#832 R7a: a pull overwrote the rejected UPDATE's resident — requeue still carries the cashier's edit, on the server-adopted base", async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		server.script(() => ({ kind: 'identity_ambiguous' as const }));
+		const { state, fetch } = routedFetch(server, () => ({
+			number: '1042',
+			status: 'on-hold',
+			total: '10.00',
+			date_created_gmt: '2026-07-10T00:00:00',
+			date_modified_gmt: '2026-07-10T00:00:02',
+			customer_id: 0,
+			meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: UUID_A }],
+		}));
+		const engine = engineWith({ fetch });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'completed', customer_note: 'gift wrap' },
+			});
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', rejected: 1 });
+
+			// The pull the dead letter deliberately stopped guarding against: server
+			// truth lands on the resident, and the cashier's edit is no longer on it.
+			server.script(() => undefined);
+			await engine.require({
+				id: 'recover',
+				collection: 'orders',
+				kind: 'targeted-records',
+				wooIds: [42],
+				forceRefresh: true,
+			}).ready;
+			expect(state.orderPulls).toEqual([[42]]);
+			const overwritten = (await orderJson(engine, UUID_A))?.payload as Record<string, unknown>;
+			expect(overwritten.status).toBe('on-hold');
+			expect(overwritten.customer_note).toBeUndefined();
+
+			await engine.resolveConflict(receipt.mutationId, 'requeue-rebuilt');
+
+			// BOTH layers are in the rebuilt payload: the server-adopted base the pull
+			// wrote, and the refused edit's own fields put back on top of it.
+			const [requeued] = await queueRows(engine);
+			expect(requeued).toMatchObject({
+				status: 'pending',
+				operation: 'update',
+				requeuedFrom: receipt.mutationId,
+				requeueCount: 1,
+			});
+			expect(requeued.payload).toMatchObject({
+				status: 'completed',
+				customer_note: 'gift wrap',
+				number: '1042',
+				total: '10.00',
+			});
+			// `meta_data` is NOT taken from the dead letter: the builder injects the
+			// uuid mirror into every payload, so that entry carries no cashier intent
+			// and must not replace the resident's real (server-id-bearing) array.
+			expect(requeued.payload).toMatchObject({
+				meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+
+			// …and it is what actually reaches the server. Re-seed the fake server to
+			// the revision the pull anchored, or the push conflicts on a base mismatch
+			// that has nothing to do with the reconstruction under test.
+			const anchored = (await orderJson(engine, UUID_A))?.sync as { revision: string };
+			server.seed(UUID_A, { id: 42, revision: anchored.revision });
+			expect(await engine.sync('write-drain')).toMatchObject({ status: 'ran', pushed: 1 });
+			const sent = server.received.at(-1)?.payload as Record<string, unknown>;
+			expect(sent).toMatchObject({
+				status: 'completed',
+				customer_note: 'gift wrap',
+				total: '10.00',
+			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832 R7a: a NEWER queued edit still wins — the recovered fields never roll it back', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed', customer_note: 'refused note' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+			// An edit the cashier made AFTER the refusal. A recovery replays an OLD
+			// intent, and an old intent never wins over a newer one — the same rule the
+			// queued-delete guard states.
+			await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { customer_note: 'newer edit' },
+			});
+
+			await engine.resolveConflict('refused-update', 'requeue-rebuilt');
+
+			const rows = await queueRows(engine);
+			expect(rows).toHaveLength(1);
+			expect(rows[0].payload).toMatchObject({
+				customer_note: 'newer edit',
+				// A field the newer edit says nothing about still comes back.
+				status: 'completed',
+			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	/**
+	 * #832 follow-up, ruling R7b. Discarding a dead-lettered BORN-LOCAL create left
+	 * the order behind: clean-flagged, listed in the app, and permanently
+	 * unsyncable — the #832 failure class all over again, one press after the
+	 * recovery UI offered to end it. There is no server truth to fall back to, so
+	 * discard here means destruction, stated as such in the confirm copy.
+	 */
+	it('#832 R7b: discarding a rejected born-local CREATE removes the order — no unsyncable ghost left behind', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-paid', total: '25.00' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			await engine.resolveConflict('stranded-create', 'discard');
+
+			expect(await orderJson(engine, UUID_A)).toBeNull();
+			expect(await engine.conflicts()).toEqual([]);
+			expect(await queueRows(engine)).toEqual([]);
+			// Nothing was sent: a discard never talks to the server.
+			expect(server.received).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832 R7b: discarding a rejected UPDATE keeps the resident — that row is server truth', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const { fetch } = routedFetch(server, () => ({
+			number: '1042',
+			status: 'on-hold',
+			total: '10.00',
+			date_created_gmt: '2026-07-10T00:00:00',
+			date_modified_gmt: '2026-07-10T00:00:02',
+			customer_id: 0,
+			meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: UUID_A }],
+		}));
+		const engine = engineWith({ fetch });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			await engine.resolveConflict('refused-update', 'discard');
+
+			const order = await orderJson(engine, UUID_A);
+			expect(order).not.toBeNull();
+			expect(order?.wooOrderId).toBe(42);
+			expect(order?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
+			expect(await engine.conflicts()).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832 R7b: a create whose record has since gained a server identity is NOT born-local — discard keeps it', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const { fetch } = routedFetch(server, () => ({
+			number: '1042',
+			status: 'on-hold',
+			total: '10.00',
+			date_created_gmt: '2026-07-10T00:00:00',
+			date_modified_gmt: '2026-07-10T00:00:02',
+			customer_id: 0,
+			meta_data: [{ id: 1, key: '_woocommerce_pos_uuid', value: UUID_A }],
+		}));
+		const engine = engineWith({ fetch });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-paid' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+			// A pull matched the order by `_woocommerce_pos_uuid` and adopted the
+			// server's id: the record exists server-side now, so it is no longer
+			// born-local and destroying it would delete a real order.
+			await engine.require({
+				id: 'adopt',
+				collection: 'orders',
+				kind: 'targeted-records',
+				wooIds: [42],
+				forceRefresh: true,
+			}).ready;
+			expect((await orderJson(engine, UUID_A))?.wooOrderId).toBe(42);
+
+			await engine.resolveConflict('stranded-create', 'discard');
+
+			expect(await orderJson(engine, UUID_A)).not.toBeNull();
+			expect(await engine.conflicts()).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832 R7b: two discards of one born-local dead letter settle it once, without erroring over work already done', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A, {
+				status: 'pos-paid',
+				total: '25.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+			});
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'stranded-create',
+				collectionName: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				origin: 'minted',
+				payload: { status: 'pos-paid' },
+				baseRevision: null,
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+
+			const outcomes = await Promise.allSettled([
+				engine.resolveConflict('stranded-create', 'discard'),
+				engine.resolveConflict('stranded-create', 'discard'),
+			]);
+
+			expect(outcomes.some((outcome) => outcome.status === 'fulfilled')).toBe(true);
+			// A loser may report the row as already gone — never a storage conflict
+			// from removing a queue row or a record the winner already removed.
+			for (const outcome of outcomes) {
+				if (outcome.status === 'rejected') {
+					expect(String(outcome.reason)).toMatch(/not found/i);
+				}
+			}
+			expect(await orderJson(engine, UUID_A)).toBeNull();
+			expect(await engine.conflicts()).toEqual([]);
+			expect(await queueRows(engine)).toEqual([]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('regression 5: same-millisecond create+update under a fixed clock drains AS the create, carrying the latest snapshot', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_500 });
 		const engine = engineWith({

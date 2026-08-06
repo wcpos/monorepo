@@ -4,7 +4,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from, Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
-import { useQueryRuntime } from '@wcpos/query';
+import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
 
@@ -39,7 +39,26 @@ export type RejectedMutation = {
 	requeueCount: number;
 	/** The record is no longer on this device — there is nothing to rebuild from. */
 	residentMissing: boolean;
+	/**
+	 * Discarding this row DESTROYS the local record (#832 follow-up, R7b): a
+	 * born-local create never reached the server, so there is no server version to
+	 * fall back on and nothing will ever sync it — keeping it would leave an
+	 * unsyncable ghost. The confirm copy must say so; every other row keeps its
+	 * record, which is server truth.
+	 */
+	destroysRecord: boolean;
 };
+
+/**
+ * The record's server-identity column per collection ("wooOrderId", "wooId", …),
+ * derived exactly like `usePushDocument` derives it: the legacy `id` field's
+ * engine path. A resident with no value there has never existed server-side.
+ */
+const REMOTE_ID_FIELD = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY)
+		.filter(([, row]) => row.writeable)
+		.map(([name, row]) => [name, resolveLegacyField(row.legacyName, 'id').enginePath])
+) as Record<string, string | undefined>;
 
 type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
 type MutationRow = EngineConflict | { toJSON(): EngineConflict };
@@ -95,6 +114,8 @@ async function describe(
 			} catch {
 				readFailed = true;
 			}
+			const remoteIdField = REMOTE_ID_FIELD[entry.collectionName];
+			const remoteId = remoteIdField ? resident?.[remoteIdField] : undefined;
 			return {
 				mutationId: entry.mutationId,
 				collectionName: entry.collectionName,
@@ -107,6 +128,10 @@ async function describe(
 				rejectedAt: entry.rejectedAt ?? null,
 				requeueCount: entry.requeueCount ?? 0,
 				residentMissing: resident === null && !readFailed,
+				// Born-local CREATE ⇒ discard deletes the record. A read failure says
+				// nothing about the record, so it never claims destruction.
+				destroysRecord:
+					entry.operation === 'create' && resident !== null && typeof remoteId !== 'number',
 			};
 		})
 	);
