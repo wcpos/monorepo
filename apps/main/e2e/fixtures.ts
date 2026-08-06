@@ -10,6 +10,8 @@ import {
 	type TestInfo,
 } from '@playwright/test';
 
+import { log } from '@wcpos/utils/logger';
+
 import { restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
 
@@ -122,10 +124,12 @@ export async function tryAddProductBySku(page: Page, sku = E2E_PRODUCT_SKU): Pro
 	// immediately, so it would report "missing" on anything still rendering.
 	const search = page.getByTestId('search-products');
 	if (!(await becomesVisible(search, 30_000))) {
-		console.log('[product] search unavailable — falling back to first catalogue product');
+		log.info('[product] search unavailable — falling back to first catalogue product');
 		return false;
 	}
 
+	const resultCount = page.getByTestId('data-table-count');
+	const unfilteredCount = await resultCount.textContent().catch(() => null);
 	await search.fill(sku);
 	// Search is debounced and resolves against the local RxDB replica.
 	await page.waitForTimeout(2_000);
@@ -133,27 +137,32 @@ export async function tryAddProductBySku(page: Page, sku = E2E_PRODUCT_SKU): Pro
 	// `product-tile` is the simple-product tile; variable products render as
 	// `variable-product-tile` and would open a variation picker instead.
 	const tiles = page.getByTestId('product-tile');
+	const variableTiles = page.getByTestId('variable-product-tile');
 	const rowButtons = page.getByTestId('add-to-cart-button');
 
-	// A SKU matches exactly one product, so poll until the rendered list agrees
-	// rather than clicking the first thing that is visible: the grid keeps
-	// showing the unfiltered catalogue for a beat after the query changes, and
-	// clicking then would buy whichever product this change exists to stop
-	// buying. Settling on 0 (no such SKU here) simply times out into the
-	// fallback.
+	// A SKU matches exactly one product, so wait for the result count to change
+	// from the unfiltered query and for every rendered product type to agree.
+	// The grid keeps showing its deferred, unfiltered catalogue for a beat after
+	// the query changes; counting only simple tiles can mistake that stale view
+	// for a match when the remaining tiles are variable products.
 	const matched = await expect
-		.poll(async () => (await tiles.count()) + (await rowButtons.count()), {
-			timeout: 15_000,
-			intervals: [250, 500, 1_000],
-		})
+		.poll(
+			async () => {
+				const filteredCount = await resultCount.textContent().catch(() => null);
+				if (unfilteredCount === null || filteredCount === unfilteredCount) return 0;
+				return (await tiles.count()) + (await variableTiles.count()) + (await rowButtons.count());
+			},
+			{
+				timeout: 15_000,
+				intervals: [250, 500, 1_000],
+			}
+		)
 		.toBe(1)
 		.then(() => true)
 		.catch(() => false);
 
 	if (!matched) {
-		console.log(
-			`[product] SKU "${sku}" not in this store — falling back to first catalogue product`
-		);
+		log.info(`[product] SKU "${sku}" not in this store — falling back to first catalogue product`);
 		await search.clear();
 		await page.waitForTimeout(1_000);
 		return false;
@@ -176,11 +185,11 @@ export async function tryAddProductBySku(page: Page, sku = E2E_PRODUCT_SKU): Pro
 	await page.waitForTimeout(1_000);
 
 	if (!inCart) {
-		console.log(`[product] SKU "${sku}" matched but never reached the cart — falling back`);
+		log.info(`[product] SKU "${sku}" matched but never reached the cart — falling back`);
 		return false;
 	}
 
-	console.log(`[product] added dedicated SKU "${sku}" to the cart`);
+	log.info(`[product] added dedicated SKU "${sku}" to the cart`);
 	return true;
 }
 
