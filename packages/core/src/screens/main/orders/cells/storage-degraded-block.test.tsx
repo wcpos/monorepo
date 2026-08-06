@@ -158,6 +158,7 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 
 		expect(mockDisabled.get('order-reopen-menu-item')).toBe(false);
 		expect(mockDisabled.get('order-delete-confirm-button')).toBe(false);
+		expect(mockDisabled.get('order-refund-menu-item')).toBe(false);
 
 		await act(async () => {
 			await mockHandlers.get('order-delete-confirm-button')!();
@@ -167,17 +168,21 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 		);
 	});
 
-	it('blocks re-open (an order save) and delete (a void)', async () => {
+	it('blocks re-open (an order save), delete (a void) and refund', async () => {
 		render(<Actions {...cellProps} />);
 		await degradeStorage('degraded-orders-list');
 
 		expect(mockDisabled.get('order-reopen-menu-item')).toBe(true);
 		expect(mockDisabled.get('order-delete-menu-item')).toBe(true);
 		expect(mockDisabled.get('order-delete-confirm-button')).toBe(true);
+		// Refunds are a money path under the #163 follow-up ruling: don't let the
+		// cashier into a flow that cannot record what it hands back.
+		expect(mockDisabled.get('order-refund-menu-item')).toBe(true);
 
 		await act(async () => {
 			await mockHandlers.get('order-reopen-menu-item')!();
 			await mockHandlers.get('order-delete-confirm-button')!();
+			await mockHandlers.get('order-refund-menu-item')!();
 		});
 
 		expect(mockLocalPatch).not.toHaveBeenCalled();

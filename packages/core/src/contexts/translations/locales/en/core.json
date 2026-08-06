@@ -558,7 +558,7 @@
 	"pos_cart.shipping_method": "Shipping Method",
 	"pos_cart.shipping_method_title": "Shipping Method Title",
 	"pos_cart.split_qty": "Split",
-	"pos_cart.storage_unavailable_action_blocked": "Local database unavailable — reload the app before taking payment",
+	"pos_cart.storage_unavailable_action_blocked": "Local database unavailable — reload the app before taking or refunding payment",
 	"pos_cart.void": "Void",
 	"pos_cart.will_be_backordered": "{name} will be backordered",
 	"pos_checkout.amount_to_pay": "Amount to Pay",

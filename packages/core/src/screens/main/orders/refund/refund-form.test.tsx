@@ -4,7 +4,12 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+
+import {
+	clearStorageDegradation,
+	wrappedErrorHandlerStorage,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
 
 import { RefundOrderForm } from './form';
 
@@ -100,9 +105,23 @@ jest.mock('@wcpos/components/radio-group', () => ({
 	),
 }));
 
-jest.mock('observable-hooks', () => ({
-	useObservableEagerState: (observable: any) => observable?.getValue?.(),
-}));
+jest.mock('observable-hooks', () => {
+	const actual = jest.requireActual('observable-hooks');
+	return {
+		...actual,
+		// The store fields under test are BehaviorSubject-like (or absent); a real
+		// observable — the degraded-storage latch — goes through the real hook so it
+		// stays reactive. Each call site's branch is stable across renders, so hook
+		// order is too.
+		useObservableEagerState: (observable: any) => {
+			if (typeof observable?.getValue === 'function') return observable.getValue();
+			if (typeof observable?.subscribe === 'function') {
+				return actual.useObservableEagerState(observable);
+			}
+			return undefined;
+		},
+	};
+});
 
 const mockUseRefundMutation = jest.fn(() => jest.fn());
 const mockUseRouter = jest.fn(() => ({ back: jest.fn() }));
@@ -373,5 +392,91 @@ describe('RefundOrderForm', () => {
 
 		const processButton = await screen.findByTestId('process-refund-button');
 		expect(processButton.parentElement).toHaveClass('justify-end');
+	});
+});
+
+/**
+ * #163 follow-up ruling: refunds are a money path. Both the rendered disabled
+ * state and the submit handler must refuse, because the latch can fire between
+ * opening the confirm dialog and pressing it.
+ */
+describe('RefundOrderForm while storage is degraded', () => {
+	const mockRefundCall = jest.fn();
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockUseRefundMutation.mockReturnValue(mockRefundCall);
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') {
+				return Promise.resolve({
+					data: [
+						{
+							id: 'stripe_terminal_for_woocommerce',
+							capabilities: { supports_provider_refunds: true },
+						},
+					],
+				});
+			}
+			return Promise.resolve({
+				data: order.refunds,
+				headers: { 'x-wp-totalpages': '1' },
+			});
+		});
+	});
+
+	afterEach(() => {
+		act(() => clearStorageDegradation());
+	});
+
+	async function killStorageWorker() {
+		const instance = {
+			schema: { version: 0, type: 'object', properties: {}, primaryKey: 'id' },
+			findDocumentsById: jest.fn(),
+			bulkWrite: jest
+				.fn()
+				.mockRejectedValue(
+					new Error(
+						'could not requestRemote: {"methodName":"bulkWrite","error":{"message":"worker gone"}}'
+					)
+				),
+			query: jest.fn(),
+			count: jest.fn(),
+			getAttachmentData: jest.fn(),
+			getChangedDocumentsSince: jest.fn(),
+			changeStream: jest.fn(),
+			cleanup: jest.fn(),
+			close: jest.fn().mockResolvedValue(undefined),
+			remove: jest.fn(),
+			collectionName: 'orders',
+			databaseName: 'degraded-refund-form',
+			internals: {},
+			options: {},
+		};
+		const wrapped = await wrappedErrorHandlerStorage({
+			storage: {
+				name: 'mock-storage',
+				rxdbVersion: '17.4.0',
+				createStorageInstance: jest.fn().mockResolvedValue(instance),
+			} as never,
+		}).createStorageInstance({ databaseName: 'degraded-refund-form' } as never);
+
+		await expect(wrapped.bulkWrite([{ document: { id: '1' } }] as never, 'test')).rejects.toThrow();
+	}
+
+	it('disables both refund actions and refuses the submit', async () => {
+		render(<RefundOrderForm order={order} />);
+		await waitFor(() => expect(screen.getByTestId('process-refund-button')).toBeInTheDocument());
+
+		await killStorageWorker();
+
+		// The latch emission re-renders the form; waitFor lets that settle without
+		// an async act() that would also block on the form's in-flight refund fetch.
+		await waitFor(() => expect(screen.getByTestId('process-refund-button')).toBeDisabled());
+		expect(screen.getByTestId('confirm-process-refund-button')).toBeDisabled();
+
+		// The handler refuses too: `disabled` cannot cover a latch that fires while
+		// the confirm dialog is already open.
+		fireEvent.click(screen.getByTestId('confirm-process-refund-button'));
+		await waitFor(() => expect(mockRefundCall).not.toHaveBeenCalled());
 	});
 });

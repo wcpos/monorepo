@@ -147,7 +147,7 @@ async function degradeStorage(databaseName: string) {
 
 function expectBlockedLog() {
 	expect(mockLogger.error).toHaveBeenCalledWith(
-		'Local database unavailable — reload the app before taking payment',
+		'Local database unavailable — reload the app before taking or refunding payment',
 		expect.objectContaining({
 			showToast: true,
 			context: expect.objectContaining({ errorCode: ERROR_CODES.WORKER_CONNECTION_LOST }),

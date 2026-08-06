@@ -126,6 +126,16 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	/**
 	 * Handle delete button click
 	 */
+	/**
+	 * Refunds are a money path under the #163 follow-up ruling: cash handed back
+	 * with no persistable record is the checkout hazard in reverse. Refuse at the
+	 * door rather than letting the cashier into a flow that cannot complete.
+	 */
+	const handleRefund = React.useCallback(() => {
+		if (blockIfDegraded('refund', { orderId: order.uuid })) return;
+		router.push({ pathname: `/orders/refund/${order.uuid}` });
+	}, [blockIfDegraded, order.uuid, router]);
+
 	const handleDelete = React.useCallback(async () => {
 		// #163 ruling R5: same hazard as the cart's Void — a delete the device
 		// cannot record leaves the order's fate unknowable locally.
@@ -201,7 +211,9 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 							</DropdownMenuItem>
 							{canRefund && (
 								<DropdownMenuItem
-									onPress={() => router.push({ pathname: `/orders/refund/${order.uuid}` })}
+									testID="order-refund-menu-item"
+									onPress={handleRefund}
+									disabled={storageDegraded}
 								>
 									<Icon name="arrowRotateLeft" />
 									<Text>{t('orders.refund')}</Text>
