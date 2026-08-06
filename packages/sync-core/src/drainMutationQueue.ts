@@ -65,6 +65,12 @@ import type { PushResult } from './recordPushAdapter';
 export type DrainResult = {
 	/** Mutations pushed + acknowledged this drain. */
 	pushed: number;
+	/**
+	 * Never-pushed create→delete chains cancelled AT DRAIN TIME before any push
+	 * (#1059) — the leader-side equivalent of enqueue-time annihilation. Counts
+	 * whole chains annihilated (one per record), not individual rows removed.
+	 */
+	annihilated: number;
 	/** Mutations deliberately left pending by the host's hold policy. */
 	held: number;
 	/** Push results that came back as 409 conflicts (durable 'conflicted' rows) or unrecoverable
@@ -107,6 +113,111 @@ function isNonRetryable(error: unknown): boolean {
  */
 const DEFAULT_CLAIM_LEASE_MS = 60_000;
 
+/**
+ * LEADER-SIDE DRAIN ANNIHILATION (#1059): cancel a NEVER-PUSHED create→delete
+ * chain BEFORE any of it is claimed or pushed, so a follower's create-then-void
+ * of an order that never reached the server produces no phantom WooCommerce
+ * order (order number consumed, hooks/emails/stock fired, then cancelled).
+ *
+ * This is the drain-time twin of the enqueue-time annihilation in
+ * `enqueueWriteIntent` (#516 rules 2–3). On a single tab / Electron the acting
+ * tab is the write-plane leader, so its `write(delete)` coalesces (canCoalesce)
+ * and annihilates the pair AT ENQUEUE — by the time the drain runs the chain is
+ * already gone and THIS pass is a no-op, never a double-annihilation. On web a
+ * FOLLOWER's `write()` fresh-appends (its cross-tab `_rev` cache cannot CAS an
+ * existing row — #1057), so the create and the delete both survive to the queue;
+ * the single-writer LEADER, which alone drains, is the one place a cross-tab-safe
+ * annihilation can happen, and it happens here.
+ *
+ * Precondition — identical in spirit to enqueue-time (attempts === 0, whole
+ * chain pending, nothing ever pushed):
+ *  - the record's ENTIRE non-rejected row-set is `pending` (no claimed /
+ *    conflicted / needs-revision row — a create that may have reached the server
+ *    must never be annihilated);
+ *  - it is a create HEAD … delete TAIL chain (a re-create after the delete, i.e.
+ *    a delete that is not the terminal op, is left for the normal drain);
+ *  - every row has `attempts === 0` (a create that pushed then errored back to
+ *    pending carries attempts > 0 — its delete is a REAL void of a REAL order and
+ *    must push).
+ *
+ * Removals are CONDITIONAL and run successors-first, the create LAST, mirroring
+ * the enqueue-time ordering: a refused CAS (the row moved under us) restores the
+ * rows already removed and leaves the record to the normal drain, so a partial
+ * annihilation can never strand an orphaned delete or — worse — a create with no
+ * delete behind it. The resident is removed only after the whole chain is gone;
+ * if that removal throws, the chain is restored and the record is left to drain
+ * (net-neutral phantom, the pre-fix behaviour — never data loss).
+ */
+async function annihilateNeverPushedChains(input: {
+	queue: RecordMutationQueue;
+	removeResident?: (mutation: QueuedMutation, signal?: AbortSignal) => Promise<void>;
+	signal?: AbortSignal;
+	emit: (event: SyncEvent) => void;
+}): Promise<number> {
+	const pending = await input.queue.pending();
+	const byRecord = new Map<string, QueuedMutation[]>();
+	for (const row of pending) {
+		const key = `${row.collectionName} ${row.recordId}`;
+		const bucket = byRecord.get(key);
+		if (bucket) bucket.push(row);
+		else byRecord.set(key, [row]);
+	}
+	let annihilated = 0;
+	for (const rows of byRecord.values()) {
+		if (input.signal?.aborted) break;
+		// `pending()` already excludes 'rejected'; require every remaining row to be
+		// pending (undefined ⇒ pending) — any claimed/conflicted/needs-revision row
+		// means the create may be in flight or the record is blocked, so bail.
+		const pendingRows = rows.filter((row) => row.status === undefined || row.status === 'pending');
+		if (
+			pendingRows.length !== rows.length ||
+			pendingRows.length < 2 ||
+			pendingRows[0]?.operation !== 'create' ||
+			pendingRows[pendingRows.length - 1]?.operation !== 'delete' ||
+			pendingRows.some((row) => (row.attempts ?? 0) !== 0)
+		) {
+			continue;
+		}
+		const removed: QueuedMutation[] = [];
+		let refused = false;
+		for (const row of [...pendingRows].reverse()) {
+			if (await input.queue.removePending(row.mutationId)) removed.push(row);
+			else {
+				refused = true;
+				break;
+			}
+		}
+		// `removed` is delete-first … create-last; the restore wants seq order.
+		const orderedRemoved = [...removed].reverse();
+		if (refused) {
+			if (orderedRemoved.length > 0)
+				await input.queue.restoreAheadOfRecordNewcomers(orderedRemoved);
+			continue;
+		}
+		const head = pendingRows[0];
+		if (input.removeResident) {
+			try {
+				await input.removeResident(head, input.signal);
+			} catch {
+				// Could not remove the resident — put the chain back and let the normal
+				// drain handle it (a net-neutral phantom, the pre-#1059 behaviour). Never
+				// leave the record with removed queue rows AND a resident: that is the
+				// lost sale this whole write path is built to prevent.
+				await input.queue.restoreAheadOfRecordNewcomers(orderedRemoved);
+				continue;
+			}
+		}
+		annihilated += 1;
+		input.emit({
+			type: 'queue.write.annihilate',
+			level: 'info',
+			collection: head.collectionName,
+			fields: { recordId: head.recordId, removed: removed.length, drain: true },
+		});
+	}
+	return annihilated;
+}
+
 export async function drainMutationQueue(input: {
 	queue: RecordMutationQueue;
 	/** Pushes one mutation. The host wraps `pushRecordMutation` (endpoint, scope guard, telemetry). */
@@ -125,6 +236,16 @@ export async function drainMutationQueue(input: {
 	backoff?: RetryBackoffPolicy;
 	/** Reads the resident record's latest server revision immediately before push. */
 	currentRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
+	/**
+	 * Removes the local resident record when a never-pushed create→delete chain is
+	 * annihilated at drain (#1059). Called with the chain's create head after its
+	 * queue rows are gone, so the resident vanishes exactly as it would have under
+	 * enqueue-time annihilation (the caller asked for deletion). Absent ⇒ queue-only
+	 * annihilation (the model tests): the pushes are still cancelled, the resident is
+	 * left to the host. Wired by the write-drain lane, which only ticks on the leader,
+	 * so a follower never annihilates.
+	 */
+	removeResident?: (mutation: QueuedMutation, signal?: AbortSignal) => Promise<void>;
 	/** Leaves matching mutations pending without claiming, retrying, or backing off. */
 	shouldHold?: (mutation: QueuedMutation) => Promise<boolean>;
 	/**
@@ -152,6 +273,19 @@ export async function drainMutationQueue(input: {
 	const now = input.now ?? ((): number => Date.now());
 	const backoff = input.backoff ?? DEFAULT_RETRY_BACKOFF;
 	const limit = input.limit ?? Number.POSITIVE_INFINITY;
+
+	// LEADER-SIDE DRAIN ANNIHILATION (#1059): cancel never-pushed create→delete
+	// chains BEFORE the scan, so an annihilated create is never claimed or pushed
+	// (no phantom server order from a follower create+void). A no-op on
+	// single-tab/Electron, where the pair was already annihilated at enqueue.
+	const annihilated = input.signal?.aborted
+		? 0
+		: await annihilateNeverPushedChains({
+				queue: input.queue,
+				...(input.removeResident ? { removeResident: input.removeResident } : {}),
+				...(input.signal ? { signal: input.signal } : {}),
+				emit,
+			});
 	// Scan the WHOLE pending set, not a pre-sliced page: `limit` bounds the number of push ATTEMPTS
 	// (the network ops), not the scan — otherwise a deferred row at the head would consume a slot and
 	// starve a ready row behind it. 'claimed' rows are INCLUDED: a claim outlives a tick when a crash
@@ -571,6 +705,7 @@ export async function drainMutationQueue(input: {
 			scanned: batch.length,
 			attempted,
 			pushed,
+			annihilated,
 			held,
 			deferred,
 			conflicts: conflicts.length,
@@ -578,5 +713,5 @@ export async function drainMutationQueue(input: {
 			rejected: rejected.length,
 		},
 	});
-	return { pushed, held, conflicts, failed, deferred, rejected };
+	return { pushed, annihilated, held, conflicts, failed, deferred, rejected };
 }

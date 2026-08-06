@@ -114,6 +114,62 @@ describe('web write-plane leader gate', () => {
 		}
 	});
 
+	it('annihilates a follower create+void at the leader drain — no phantom server order (#1059)', async () => {
+		// The tab rings up an order then voids it as a FOLLOWER (fresh-appends, no
+		// coalesce), then becomes the write-plane LEADER and drains. Without
+		// leader-side drain annihilation the leader would push a real WooCommerce
+		// order and then delete it; with it, neither the create nor the delete is
+		// ever sent.
+		let isLeader = false;
+		const { engine, fetcher } = engineWith(() => isLeader);
+		const LOCAL_ID = '33333333-3333-4333-8333-333333333333';
+		try {
+			await engine.ready;
+			// Born-local order (no server identity) — rung up locally.
+			await engine.active()!.database.collections.orders.insert({
+				id: LOCAL_ID,
+				wooOrderId: null,
+				number: '',
+				dateCreatedGmt: '2026-08-07T00:00:00',
+				status: 'pos-open',
+				total: '5.00',
+				customerId: 0,
+				payload: { status: 'pos-open' },
+				sync: { revision: '', partial: true, source: 'local' },
+				local: { dirty: false, pendingMutationIds: [] },
+			});
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: LOCAL_ID,
+				payload: { status: 'pos-open' },
+			});
+			await engine.write({ collection: 'orders', operation: 'delete', recordId: LOCAL_ID });
+			expect(await queueRows(engine)).toHaveLength(2); // fresh-appended create + delete
+
+			isLeader = true; // the tab is now the write-plane leader
+			const report = await engine.sync('write-drain');
+
+			expect(report).toMatchObject({
+				lane: 'write-drain',
+				status: 'ran',
+				pushed: 0,
+				annihilated: 1,
+			});
+			// The core guarantee: nothing ever reached the write transport, so no
+			// order number was consumed and no create→delete round-trip happened.
+			expect(fetcher).not.toHaveBeenCalled();
+			expect(await queueRows(engine)).toHaveLength(0); // both rows gone
+			// The resident local order is removed, exactly as enqueue-time annihilation
+			// would have removed it on a single tab.
+			expect(
+				await engine.active()!.database.collections.orders.findOne(LOCAL_ID).exec()
+			).toBeNull();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('keeps the existing coalescing behavior for the default leader', async () => {
 		const { engine } = engineWith();
 		try {

@@ -78,6 +78,7 @@ describe('drainMutationQueue', () => {
 		const result = await drainMutationQueue({ queue: q, push: async (m) => ok(m), applyAck });
 		expect(result).toEqual({
 			pushed: 2,
+			annihilated: 0,
 			held: 0,
 			conflicts: [],
 			failed: 0,
