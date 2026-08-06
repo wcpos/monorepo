@@ -1338,6 +1338,76 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(recorded.records[299]).toEqual({ id: 'woo-order:701' });
 	});
 
+	it('restarts from page 1 after its prefix is wiped mid-walk', async () => {
+		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };
+		const ownKey = 'orders:browser:status=processing:search=:limit=300';
+		const predecessorKey = 'orders:browser:status=processing:search=:limit=200';
+		let predecessorAvailable = true;
+		let ownLane: {
+			complete: boolean;
+			fresh: boolean;
+			expectedRecordIds: string[];
+		} | null = null;
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
+				if (queryKey === ownKey) return ownLane;
+				if (queryKey !== predecessorKey || !predecessorAvailable) return null;
+				predecessorAvailable = false;
+				return {
+					complete: false,
+					fresh: true,
+					expectedRecordIds: Array.from(
+						{ length: 200 },
+						(_, index) => `woo-order:${1_000 - index}`
+					),
+				};
+			}),
+		};
+		const pagesSeen: number[] = [];
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			const page = Number(new URL(String(request)).searchParams.get('page'));
+			pagesSeen.push(page);
+			return response(orderPage(1_000 - (page - 1) * 100, 100));
+		});
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher,
+		});
+		const task = orderTask({
+			id: 'orders:browser:processing-300:windowed',
+			requirementId: 'orders.browser.processing.300',
+			queryKey: ownKey,
+			limit: 300,
+			mode: 'windowed',
+		});
+
+		await schedulerFetcher(task);
+
+		const [recorded] = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
+			{ records: { id: string }[]; complete: boolean },
+		];
+		expect(recorded.records).toEqual([]);
+		expect(recorded.complete).toBe(false);
+
+		ownLane = {
+			complete: recorded.complete,
+			fresh: true,
+			expectedRecordIds: recorded.records.map(({ id }) => id),
+		};
+		pagesSeen.length = 0;
+
+		await schedulerFetcher(task);
+
+		expect(pagesSeen[0]).toBe(1);
+	});
+
 	// #957 — the cap applied to every dimension equally, so the fix must too.
 	it('extends a customer-scoped window past 200 and continues from its own lane', async () => {
 		const repository = { upsertMany: vi.fn(async (_documents: unknown) => undefined) };

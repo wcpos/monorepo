@@ -880,7 +880,7 @@ describe('createProductsSchedulerFetcher', () => {
 	 * `expectedRecordIds.length` IS the grid's footer total, and a complete+fresh lane is a
 	 * serve-local answer, the grid would both report and believe coverage it does not hold.
 	 */
-	it('refuses to resurrect a prefix that was wiped mid-walk', async () => {
+	it('restarts from page 1 after its prefix is wiped mid-walk', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -891,17 +891,23 @@ describe('createProductsSchedulerFetcher', () => {
 		}));
 		const fetcher = catalogServer(products, []);
 		const diagnostics = vi.fn();
-		let reads = 0;
+		const ownKey = 'products:browse-window:limit=1100';
+		const predecessorKey = 'products:browse-window:limit=1000';
+		let predecessorAvailable = true;
+		let ownLane: {
+			complete: boolean;
+			fresh: boolean;
+			expectedRecordIds: string[];
+		} | null = null;
 		const coverageRepository = {
 			recordQueryResult: vi.fn(async () => undefined),
 			// First read (the continuation) sees the predecessor lane; the re-read at write
 			// time sees nothing, exactly as a Clear & Sync landing mid-walk would leave it.
 			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
-				if (queryKey !== 'products:browse-window:limit=1000') return null;
-				reads += 1;
-				return reads === 1
-					? { complete: true, fresh: true, expectedRecordIds: wooProductIds(1, 1_000) }
-					: null;
+				if (queryKey === ownKey) return ownLane;
+				if (queryKey !== predecessorKey || !predecessorAvailable) return null;
+				predecessorAvailable = false;
+				return { complete: true, fresh: true, expectedRecordIds: wooProductIds(1, 1_000) };
 			}),
 		};
 		const schedulerFetcher = createProductsSchedulerFetcher({
@@ -921,16 +927,33 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
-		// Only the delta is asserted, and the lane is honestly INCOMPLETE, so the next pass
-		// restarts the window from the top instead of trusting a prefix that is gone.
+		// The fetched delta was persisted, but it is not positional coverage after the prefix
+		// disappears. Recording it here would make its page-aligned length look like page 1.
 		const recorded = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
 			{ records: { id: string }[]; complete: boolean },
 		];
-		expect(recorded[0].records).toHaveLength(100);
+		expect(recorded[0].records).toEqual([]);
 		expect(recorded[0].complete).toBe(false);
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({ type: 'browse-window.prefix-invalidated' })
 		);
+
+		ownLane = {
+			complete: recorded[0].complete,
+			fresh: true,
+			expectedRecordIds: recorded[0].records.map(({ id }) => id),
+		};
+		fetcher.mockClear();
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=1100:windowed',
+				queryKey: ownKey,
+				limit: 1_100,
+			})
+		);
+
+		expect(new URL(String(fetcher.mock.calls[0]?.[0])).searchParams.get('page')).toBe('1');
 	});
 
 	/**

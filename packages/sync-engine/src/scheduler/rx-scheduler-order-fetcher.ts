@@ -839,7 +839,9 @@ async function fetchBrowserOrderQuery(
 			message: `Orders browse window ${windowLimit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 		});
 		if (descriptor.search === '') {
-			await recordOrderFetchCoverage(input, task, fetchedDocumentIds, false);
+			// The delta is stored, but without its prefix it is not positional coverage. Writing
+			// its ids would let a page-aligned delta masquerade as an offset on the next drain.
+			await recordOrderFetchCoverage(input, task, [], false);
 		} else {
 			await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
 		}

@@ -588,7 +588,9 @@ async function tryProductBrowseWindowWalk(
 			collection: 'products',
 			message: `Product browse window ${descriptor.limit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 		});
-		await recordCoverage('products', input, task, deltaRecordIds, false);
+		// The delta is stored, but without its prefix it is not positional coverage. Writing
+		// its ids would let a page-aligned delta masquerade as an offset on the next drain.
+		await recordCoverage('products', input, task, [], false);
 		return {
 			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
 			// The prefix is gone, so the next pass must re-walk from the top regardless; do not
