@@ -84,8 +84,12 @@ type Harness = {
 	engine: ReturnType<typeof createRxdbSyncEngine>;
 	timers: ReturnType<typeof captureTimers>;
 	diagnostics: SyncEvent[];
-	/** Push one scripted response (or thrown failure) through the engine's transport. */
-	respond: (response: Response | Error) => Promise<void>;
+	/**
+	 * Push one scripted response (or thrown failure) through the engine's
+	 * transport. `elapsedMs` advances the clock WHILE the request is in flight, so
+	 * the wrapper sees a genuinely long-running request.
+	 */
+	respond: (response: Response | Error, options?: { elapsedMs?: number }) => Promise<void>;
 	setNow: (ms: number) => void;
 	now: () => number;
 };
@@ -97,6 +101,7 @@ async function harness(
 	uniqueStore += 1;
 	let nowMs = options.startAtMs ?? 1_000;
 	let scripted: Response | Error | null = null;
+	let scriptedElapsedMs = 0;
 	const diagnostics: SyncEvent[] = [];
 	const timers = captureTimers();
 	const engine = createRxdbSyncEngine(
@@ -110,6 +115,9 @@ async function harness(
 			fetcher: async () => {
 				const next = scripted;
 				scripted = null;
+				// Time passes inside the request, exactly as it would on the wire.
+				nowMs += scriptedElapsedMs;
+				scriptedElapsedMs = 0;
 				if (next instanceof Error) throw next;
 				return next ?? emptyEnvelope();
 			},
@@ -121,8 +129,12 @@ async function harness(
 	await vi.waitFor(() => expect(timers.intervals.length).toBeGreaterThanOrEqual(9));
 	await vi.waitFor(() => expect(engine.status().lanes['change-signal'].nextDueAtMs).toBeDefined());
 
-	const respond = async (response: Response | Error): Promise<void> => {
+	const respond = async (
+		response: Response | Error,
+		responseOptions?: { elapsedMs?: number }
+	): Promise<void> => {
 		scripted = response;
+		scriptedElapsedMs = responseOptions?.elapsedMs ?? 0;
 		// hostTransport exposes the SAME wrapped fetcher the engine's lanes use, so
 		// driving it here exercises the real pressure seam rather than a stand-in.
 		await engine
@@ -329,6 +341,75 @@ describe('change-signal server-pressure adaptation', () => {
 			pressureMultiplier: 1,
 			retryAfterMs: 60_000,
 		});
+		await context.engine.dispose();
+	});
+
+	it('never re-arms a back-off to an earlier deadline than the one already set', async () => {
+		// A high jitter draw arms the first tick long; the redraw on a pause-only
+		// transition must not be allowed to pull it closer.
+		let draw = 1;
+		const context = await harness({ random: () => draw });
+
+		// Climb to a pressured cadence well beyond any short Retry-After.
+		for (let index = 0; index < 9; index += 1) {
+			context.setNow(context.now() + 1_000);
+			await context.respond(new Error('boom'));
+		}
+		const armedBefore = context.engine.status().lanes['change-signal']!.nextDueAtMs!;
+		expect(armedBefore - context.now()).toBe(96_000);
+
+		// Now a 503 naming a 5s pause, with the lowest possible jitter draw. The
+		// steady interval has not changed, so an unguarded redraw would land at
+		// 0.8 × 80s = 64s — earlier than the 96s already armed, while the server was
+		// asking for MORE distance, not less.
+		draw = 0;
+		await context.respond(new Response(null, { status: 503, headers: { 'retry-after': '5' } }));
+
+		expect(context.engine.status().lanes['change-signal']!.nextDueAtMs).toBe(armedBefore);
+		await context.engine.dispose();
+	});
+
+	it('stays silent about cadence in manual mode, where no timer is ever armed', async () => {
+		uniqueStore += 1;
+		const diagnostics: SyncEvent[] = [];
+		const engine = createRxdbSyncEngine(
+			{
+				site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
+				storage: memoryEngineStorage(),
+				mode: 'manual',
+				diagnostics: (event) => diagnostics.push(event),
+				fetcher: async () => new Response(null, { status: 429 }),
+			},
+			{ site: SITE, storeId: 1, cashierId: `pressure-manual-${uniqueStore}` }
+		);
+		await engine.ready;
+
+		for (let index = 0; index < 5; index += 1) {
+			await engine
+				.hostTransport()
+				.fetcher(`${SYNC_BASE}/changes/tick`)
+				.catch(() => undefined);
+		}
+
+		expect(cadenceEvents(diagnostics, 'cadence.backoff')).toHaveLength(0);
+		expect(cadenceEvents(diagnostics, 'cadence.start')).toHaveLength(0);
+		await engine.dispose();
+	});
+
+	it('reads a request abandoned past the lookup deadline as a real timeout', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		// Three requests each abandoned after 10s. Whoever pulled the plug, the
+		// server had not answered in that time — that is the timeout signal.
+		const deadlineAbort = (): Error =>
+			Object.assign(new Error('barcode online lookup timed out'), { name: 'AbortError' });
+		for (let index = 0; index < 3; index += 1) {
+			await context.respond(deadlineAbort(), { elapsedMs: 10_000 });
+		}
+
+		const [backoff] = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoff!.fields).toMatchObject({ signal: 'timeout', toIntervalMs: 20_000 });
 		await context.engine.dispose();
 	});
 

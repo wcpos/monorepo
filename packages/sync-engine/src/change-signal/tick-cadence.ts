@@ -4,11 +4,17 @@ export const CHANGE_SIGNAL_DECAY_STEPS_MS = [30_000, 60_000] as const;
 export type ChangeSignalDecayLevel = 0 | 1 | 2;
 
 /**
- * Top of the server-pressure ladder (#846). The ladder doubles, so this is five
+ * Top of the server-pressure ladder (#846). The ladder doubles, so this is six
  * steps from ×1; the tier's own ceiling below is what actually stops the climb
- * for slower presets.
+ * for every tier we ship.
+ *
+ * Sized for the FASTEST cadence `reconfigure` accepts, not the fastest preset:
+ * a Custom 5s setting needs ×64 to reach the 5-minute ceiling (5s × 32 tops out
+ * at 160s, which would leave a distressed server taking nearly twice the polls
+ * the ceiling promises). No slower tier gets near this cap — they hit their own
+ * ceiling first and stop.
  */
-export const CHANGE_SIGNAL_PRESSURE_MAX_MULTIPLIER = 32;
+export const CHANGE_SIGNAL_PRESSURE_MAX_MULTIPLIER = 64;
 
 /**
  * How slow the change-signal poll may get under server pressure.

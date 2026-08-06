@@ -77,7 +77,9 @@ describe('change-signal server-pressure composition', () => {
 		expect(changeSignalPressureCeilingMs(60_000)).toBe(300_000);
 		expect(changeSignalPressureCeilingMs(300_000)).toBe(600_000);
 
-		for (const tierMs of [10_000, 60_000, 300_000]) {
+		// 5s is the fastest cadence reconfigure() accepts (Custom, not a preset) and
+		// is the tier that needs the longest ladder to reach the 5-minute ceiling.
+		for (const tierMs of [5_000, 10_000, 60_000, 300_000]) {
 			const top = maxChangeSignalPressureMultiplier(tierMs);
 			expect(top).toBeGreaterThan(1);
 			expect(changeSignalSteadyIntervalMs({ tierMs, level: 0, pressureMultiplier: top })).toBe(

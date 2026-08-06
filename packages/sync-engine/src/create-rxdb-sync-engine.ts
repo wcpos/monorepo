@@ -265,6 +265,14 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
 	censusFreshForMs: number;
 };
 
+/**
+ * How long an in-flight request must have been running before a cancellation is
+ * read as the SERVER failing to answer rather than the app changing its mind.
+ * Matches the barcode lookup's own deadline (the fastest deadline any caller
+ * imposes on hostTransport) and is five times the sustained-slowness threshold.
+ */
+const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
+
 /** First stall report for a still-unsettled initial open, then repeats. */
 const READY_STALL_FIRST_MS = 15_000;
 const READY_STALL_REPEAT_MS = 60_000;
@@ -539,14 +547,25 @@ export function createRxdbSyncEngine(
 		try {
 			response = await rawFetcher(url, init);
 		} catch (error) {
-			// An abort is OUR doing, not the server's: a scope switch, a disposal or a
-			// superseded request cancels in-flight work, and a store switch can cancel
-			// several at once — exactly the three-strike burst that would invent a
-			// back-off out of nothing and hand it to the incoming scope. Everything
-			// else that throws here (timeout, DNS, TLS, connection reset) is a real
-			// transport failure and reports as status 0, the spelling the rest of the
-			// stack uses (see apps/main transport.request).
-			if ((error as { name?: unknown } | null)?.name !== 'AbortError') observe(0);
+			// Aborts are ambiguous, and BOTH readings are real:
+			//  - a scope switch, disposal or superseded search cancels in-flight work,
+			//    often several requests at once — counting those would invent a
+			//    three-strike burst out of nothing and hand the incoming scope a
+			//    phantom back-off;
+			//  - a deadline abort (the barcode lookup gives the server 10s before it
+			//    gives up, via hostTransport's fetcher) means the server genuinely
+			//    never answered, which is exactly the timeout signal we want.
+			// The honest discriminator is not WHO pulled the plug but HOW LONG the
+			// request had already been running: a cancellation that young says nothing
+			// about the server, while a request still unanswered after the barcode
+			// deadline was not going to be answered promptly whoever cancelled it.
+			// Everything else that throws here (network timeout, DNS, TLS, connection
+			// reset) is an unambiguous transport failure and reports as status 0, the
+			// spelling the rest of the stack uses (see apps/main transport.request).
+			const abortedYoung =
+				(error as { name?: unknown } | null)?.name === 'AbortError' &&
+				nowMs() - startedAtMs < ABORT_AS_TIMEOUT_AFTER_MS;
+			if (!abortedYoung) observe(0);
 			throw error;
 		}
 		let retryAfter: string | null = null;
@@ -1562,22 +1581,29 @@ export function createRxdbSyncEngine(
 		});
 	};
 	let cadenceStartAnnounced = false;
-	const armChangeSignalTimer = (): void => {
+	const armChangeSignalTimer = (options?: { neverEarlierThanArmed?: boolean }): void => {
 		if (disposed) return;
 		const now = nowMs();
+		const previouslyDueAtMs = laneNextDueAtMs.get('change-signal');
 		const lastActivityMs = ports.lastUserActivityMs?.() ?? engineStartedAtMs;
 		const idleForMs = Math.max(0, now - (lastActivityMs > 0 ? lastActivityMs : engineStartedAtMs));
 		changeSignalDecayLevel = nextChangeSignalDecayLevel({
 			idleForMs,
 			currentLevel: changeSignalDecayLevel,
 		});
-		const delay = changeSignalDelayMs({
+		const drawn = changeSignalDelayMs({
 			tierMs: intervals.changeSignalPollMs,
 			level: changeSignalDecayLevel,
 			pressureMultiplier: serverPressure.multiplier(),
 			retryAfterForMs: Math.max(0, serverPressure.retryAfterUntilMs() - now),
 			random,
 		});
+		// Backing off must never pull the next tick closer than the deadline already
+		// armed, whatever the fresh jitter draw happens to be.
+		const delay =
+			options?.neverEarlierThanArmed === true && previouslyDueAtMs !== undefined
+				? Math.max(drawn, previouslyDueAtMs - now)
+				: drawn;
 		laneNextDueAtMs.set('change-signal', now + delay);
 		scheduleStatusChange();
 		if (!cadenceStartAnnounced) {
@@ -1591,6 +1617,13 @@ export function createRxdbSyncEngine(
 		}, delay);
 	};
 	onServerPressureTransition = (transition) => {
+		// A manual-mode engine arms no change-signal timer at all: the host drives
+		// every tick. There is no cadence to slow, and no `cadence.start` row for a
+		// back-off to relate to — so a burst of failed manual syncs would otherwise
+		// persist "Slowed down to protect your store" about a cadence that does not
+		// exist. The pressure state still tracks (a host that later switches to
+		// automatic inherits it); only the narration is suppressed.
+		if (mode === 'manual') return;
 		const level = changeSignalDecayLevel;
 		diagnostics({
 			type: transition.direction === 'backoff' ? 'cadence.backoff' : 'cadence.recovered',
@@ -1618,16 +1651,20 @@ export function createRxdbSyncEngine(
 					: {}),
 			},
 		});
-		// A back-off only ever pushes the pending tick FURTHER out, so re-arming it
-		// now is safe and makes the new cadence effective immediately — the whole
-		// point when the server has just asked us to stop. Recovery deliberately
-		// does NOT re-arm: shortening a timer that is already most of the way to
-		// firing would restart the wait, and the faster cadence costs nothing by
-		// landing one tick later.
+		// Re-arm so the back-off takes effect immediately — the whole point when the
+		// server has just asked us to stop. `neverEarlierThanArmed` keeps that a
+		// one-way ratchet: a pause-only transition (multiplier unchanged, e.g. a 503
+		// whose Retry-After is shorter than the pressured cadence we are already
+		// running) redraws jitter for the SAME steady interval, and a low draw
+		// replacing a high one would pull the next tick EARLIER than the deadline
+		// already armed — the opposite of backing off. Recovery deliberately does
+		// NOT re-arm: shortening a timer that is already most of the way to firing
+		// would restart the wait, and the faster cadence costs nothing by landing
+		// one tick later.
 		if (transition.direction !== 'backoff') return;
-		if (mode === 'manual' || disposed || changeSignalTimer === null) return;
+		if (disposed || changeSignalTimer === null) return;
 		clearTimeout(changeSignalTimer);
-		armChangeSignalTimer();
+		armChangeSignalTimer({ neverEarlierThanArmed: true });
 	};
 	const armLaneInterval = (
 		lane: EngineLane,
@@ -1645,13 +1682,40 @@ export function createRxdbSyncEngine(
 	};
 	const reconfigure = (config: { changeSignalPollMs?: number; pullBatchSize?: number }): void => {
 		assertNotDisposed();
+		// Both dials price the merchant's server (#908: how OFTEN we ask, and how
+		// HEAVY each request is) and the Performance screen names the preset from the
+		// pair — so moving either one is a speed-setting change the durable log has
+		// to carry. Tracked before the cadence early-returns below, which would
+		// otherwise swallow a records-per-request change made on its own.
+		const fromBatchSize = pullBatchSize;
+		const fromIntervalMs = effectiveCadenceMs();
 		if (config.pullBatchSize !== undefined) {
 			if (!Number.isFinite(config.pullBatchSize)) {
 				throw new TypeError('pullBatchSize must be a finite number');
 			}
 			pullBatchSize = Math.min(100, Math.max(10, Math.trunc(config.pullBatchSize)));
 		}
+		const batchSizeChanged = pullBatchSize !== fromBatchSize;
+		const emitBatchOnlyChange = (): void => {
+			// The very first bridge push sets the batch size from `undefined`; that is
+			// boot reporting the till's stored setting, not the merchant changing it,
+			// and `cadence.start` already carries it.
+			if (!batchSizeChanged || fromBatchSize === undefined) return;
+			diagnostics({
+				type: 'cadence.reconfigured',
+				level: 'info',
+				message: `change-signal batch size set to ${pullBatchSize} records`,
+				fields: {
+					tierMs: intervals.changeSignalPollMs,
+					fromIntervalMs,
+					toIntervalMs: effectiveCadenceMs(),
+					pressureMultiplier: serverPressure.multiplier(),
+					...(pullBatchSize === undefined ? {} : { pullBatchSize }),
+				},
+			});
+		};
 		if (config.changeSignalPollMs === undefined) {
+			emitBatchOnlyChange();
 			scheduleStatusChange();
 			return;
 		}
@@ -1660,10 +1724,10 @@ export function createRxdbSyncEngine(
 		}
 		const nextPollMs = Math.min(300_000, Math.max(5_000, Math.trunc(config.changeSignalPollMs)));
 		if (nextPollMs === intervals.changeSignalPollMs) {
+			emitBatchOnlyChange();
 			scheduleStatusChange();
 			return;
 		}
-		const fromIntervalMs = effectiveCadenceMs();
 		intervals.changeSignalPollMs = nextPollMs;
 		// A slower tier reaches its ceiling in fewer doublings; retune the ladder so
 		// the multiplier can never sit above the new tier's top.
