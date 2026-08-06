@@ -114,7 +114,7 @@ test("shape 1: a for-loop list covers every package it names", () => {
     [
       [
         "test.yml",
-        "for pkg in core order-math printer; do\n  cd packages/$pkg\ndone",
+        "for pkg in core order-math printer; do\n  cd packages/$pkg\n  npx jest --ci\n  cd ../..\ndone",
       ],
     ],
     PACKAGES,
@@ -129,10 +129,38 @@ test("shape 1: a loop token may name the package instead of the directory", () =
   // packages/eslint publishes @wcpos/eslint-config — directory-only matching
   // would call it dark while CI runs it.
   const lanes = detectLanes(
-    [["test.yml", "for pkg in eslint-config; do\n  x\ndone"]],
+    [
+      [
+        "test.yml",
+        "for pkg in eslint-config; do\n  pnpm --filter @wcpos/$pkg test\ndone",
+      ],
+    ],
     PACKAGES,
   );
   assert.ok(lanes.has("packages/eslint"));
+});
+
+test("shape 1: reporting and coverage loops do not count as test lanes", () => {
+  const lanes = detectLanes(
+    [
+      [
+        "test.yml",
+        [
+          "for pkg in core order-math; do",
+          '  file="packages/$pkg/test-results.json"',
+          "  node -e \"console.log(require('./$file'))\"",
+          "done",
+          "for pkg in core order-math; do",
+          '  file="packages/$pkg/coverage/coverage-summary.json"',
+          '  echo "$file"',
+          "done",
+        ].join("\n"),
+      ],
+    ],
+    PACKAGES,
+  );
+  assert.ok(!lanes.has("packages/core"));
+  assert.ok(!lanes.has("packages/order-math"));
 });
 
 test("shape 2: --filter counts only alongside a test verb", () => {
@@ -271,3 +299,35 @@ test("every other-lane entry points at a workflow that exists", () => {
     );
   }
 });
+
+for (const missing of ["playwright", "maestro"]) {
+  test(`the matrix fails when the ${missing} workflow stops invoking its suite`, (t) => {
+    const tree = makeTree();
+    t.after(() => rmSync(tree.root, { recursive: true, force: true }));
+    tree.write("pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n');
+    tree.write("package.json", JSON.stringify({ scripts: {} }));
+    tree.pkg("packages/core", "@wcpos/core", { test: "jest" });
+    tree.write("packages/core/src/core.test.ts", "");
+    tree.write(
+      ".github/workflows/test.yml",
+      "pnpm --filter @wcpos/core exec jest --ci\n",
+    );
+    tree.write(
+      ".github/workflows/deploy.yml",
+      missing === "playwright"
+        ? "name: deploy\n"
+        : "run: cd apps/main && npx playwright test\n",
+    );
+    tree.write(
+      ".github/workflows/e2e-native.yml",
+      missing === "maestro"
+        ? "name: native e2e\n"
+        : "run: maestro test apps/main/.maestro\n",
+    );
+
+    assert.throws(
+      () => checkCiTestMatrix(tree.root),
+      new RegExp(`${missing}.*NO CI lane`, "i"),
+    );
+  });
+}

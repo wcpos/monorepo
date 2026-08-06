@@ -58,12 +58,14 @@ export const OTHER_LANES = [
   {
     dir: "apps/main/e2e",
     workflow: "deploy.yml",
+    invocation: /\bcd\s+apps\/main\s*&&\s*npx\s+playwright\s+test\b/,
     reason:
       "Playwright specs — run against a deployed preview by the e2e job in deploy.yml",
   },
   {
     dir: "apps/main/.maestro",
     workflow: "e2e-native.yml",
+    invocation: /\bmaestro\b[^\n]*\btest\s+apps\/main\/\.maestro\b/,
     reason: "Maestro native flows — run on a simulator by e2e-native.yml",
   },
 ];
@@ -105,6 +107,10 @@ export function readSubmodulePaths(root = repoRoot) {
 
 /** Words that make a workflow line an actual test invocation rather than a mention. */
 const TEST_VERB = /\b(test|tests|jest|vitest|playwright|maestro)\b/;
+
+/** Commands that prove a package loop executes tests rather than reporting on them. */
+const LOOP_TEST_INVOCATION =
+  /\b(?:jest|vitest|playwright|maestro)\b|\bpnpm\b[^\n;&|]*\btests?\b/;
 
 /** Workspace globs from pnpm-workspace.yaml — `apps/*`, `packages/*`, or a literal dir. */
 export function parseWorkspaceGlobs(yamlText) {
@@ -219,10 +225,13 @@ export function detectLanes(sources, packages) {
 
   for (const [source, text] of sources) {
     // Shape 1 — `for pkg in core components database; do`
-    for (const match of text.matchAll(/for\s+\w+\s+in\s+([^;\n]+);/g)) {
+    for (const match of text.matchAll(
+      /for\s+\w+\s+in\s+([^;\n]+);\s*do\b([\s\S]*?)\bdone\b/g,
+    )) {
+      if (!LOOP_TEST_INVOCATION.test(match[2])) continue;
       for (const token of match[1].trim().split(/\s+/)) {
         if (token.startsWith("$")) continue;
-        record(resolveToken(token), source, match[0]);
+        record(resolveToken(token), source, `for … in ${match[1]}; do`);
       }
     }
     // Shape 2 — `pnpm --filter @wcpos/main exec jest`, `pnpm --filter @wcpos/printer test`.
@@ -277,7 +286,25 @@ export function readLaneSources(root = repoRoot) {
 
 export function checkCiTestMatrix(root = repoRoot) {
   const packages = surveyPackages(root);
-  const lanes = detectLanes(readLaneSources(root), packages);
+  const sources = readLaneSources(root);
+  const sourceText = new Map(sources);
+  const missingOtherLanes = OTHER_LANES.filter(
+    (entry) =>
+      !entry.invocation.test(
+        sourceText.get(`.github/workflows/${entry.workflow}`) ?? "",
+      ),
+  );
+  if (missingOtherLanes.length > 0) {
+    throw new Error(
+      missingOtherLanes
+        .map(
+          (entry) =>
+            `${entry.reason} — NO CI lane invocation found in ${entry.workflow}`,
+        )
+        .join("\n"),
+    );
+  }
+  const lanes = detectLanes(sources, packages);
   const allowed = new Map(ALLOWLIST.map((entry) => [entry.dir, entry]));
   const submodules = readSubmodulePaths(root);
 
