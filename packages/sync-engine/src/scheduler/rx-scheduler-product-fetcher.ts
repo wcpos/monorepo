@@ -653,6 +653,7 @@ async function tryProductBrowseWindowWalk(
 		triggerQueryKey: task.queryKey,
 		identify: productBrowseWindowLaneIdentity,
 		repository: input.coverageRepository,
+		readLane: input.coverageRepository?.readLocalLaneCoverage,
 		nowMs: input.nowMs?.() ?? Date.now(),
 		diagnostics: input.diagnostics,
 	});

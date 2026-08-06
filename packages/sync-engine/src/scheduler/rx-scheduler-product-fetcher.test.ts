@@ -1203,6 +1203,68 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	/**
+	 * COMPOSITION — eviction vs the progress-not-shape fallback above.
+	 *
+	 * The fallback introduces a pass that walks, writes NO lane, and returns. Eviction fires
+	 * on "the deepest settled lane just written", so a sweep running off that fruitless pass
+	 * would be reasoning about a lane that does not exist — and the lanes it would delete are
+	 * the very ones the re-walk is about to resume nothing from.
+	 *
+	 * It cannot happen: the fruitless walk returns BEFORE `recordCoverage`, so the sweep is
+	 * never reached. The full re-walk that follows in the same pass writes the window and
+	 * evicts. Net effect: exactly one lane write and exactly one sweep, both from the
+	 * productive walk.
+	 */
+	it('evicts once from the re-walk, not from the fruitless resume that preceded it', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 2_000 }, (_, index) => ({
+			id: 2_000 - index,
+			menu_order: 0,
+		}));
+		const coverageRepository = statefulCoverage();
+		// What earlier scroll ticks left behind; the 200 lane is what the resume comes from.
+		coverageRepository.lanes.set('products:browse-window:limit=100', {
+			complete: true,
+			expectedRecordIds: wooProductIds(1, 100),
+			updatedAtMs: 1_000,
+		});
+		coverageRepository.lanes.set('products:browse-window:limit=200', {
+			complete: true,
+			expectedRecordIds: wooProductIds(1, 200),
+			updatedAtMs: 2_000,
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			coverageFreshForMs: 60_000,
+			nowMs: () => 5_000,
+			fetcher: catalogServer(products, []),
+			pullBatchSize: () => 100,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		// One lane write (the re-walk's) and one sweep — the fruitless resume did neither.
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledTimes(1);
+		expect(coverageRepository.listCoverageLanes).toHaveBeenCalledTimes(1);
+		// The superseded windows are gone and the deepest one carries the whole window.
+		expect([...coverageRepository.lanes.keys()]).toEqual(['products:browse-window:limit=300']);
+		expect(
+			coverageRepository.lanes.get('products:browse-window:limit=300')!.expectedRecordIds
+		).toHaveLength(300);
+	});
+
+	/**
 	 * REGRESSION — a resume page that no longer exists (#957 review finding, P2).
 	 *
 	 * Records deleted since the prefix was written can pull the listing's last page below

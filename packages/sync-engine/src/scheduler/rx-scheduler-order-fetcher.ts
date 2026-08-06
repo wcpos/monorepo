@@ -908,6 +908,7 @@ async function fetchBrowserOrderQuery(
 			triggerQueryKey: task.queryKey,
 			identify: orderBrowseWindowLaneIdentity,
 			repository: input.coverageRepository,
+			readLane: input.coverageRepository?.readLocalLaneCoverage,
 			nowMs: coverageNowMs(input),
 			diagnostics: input.diagnostics,
 		});

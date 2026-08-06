@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+	type BrowseWindowLaneEvictionRepository,
 	type BrowseWindowLaneSnapshot,
 	evictSupersededBrowseWindowLanes,
 	orderBrowseWindowLaneIdentity,
@@ -25,6 +26,20 @@ const filled = (limit: number, complete = true): BrowseWindowLaneSnapshot => ({
 	expectedRecordIds: ids(limit),
 	updatedAtMs: limit,
 });
+
+/**
+ * REGRESSION GUARD, enforced by `tsc` rather than at runtime.
+ *
+ * The eviction port must NOT declare `readLocalLaneCoverage`. Both fetcher repositories
+ * already declare their own, and the ORDERS one returns more than a browse window cares
+ * about (#954's `rangedResume`). Intersecting this port into those types would put two
+ * signatures on one property, and TypeScript resolves calls against the first — silently
+ * erasing `rangedResume` from every other consumer's view of the reader. That is exactly
+ * what happened when this change was rebased onto the merged #1030, and it only surfaced as
+ * a type error two files away.
+ */
+// @ts-expect-error the eviction port deliberately has no lane reader; the sweep takes one.
+type _EvictionPortHasNoLaneReader = BrowseWindowLaneEvictionRepository['readLocalLaneCoverage'];
 
 const evictedKeys = (result: { queryKey: string }[]) =>
 	result.map((entry) => entry.queryKey).sort();
@@ -331,6 +346,7 @@ describe('evictSupersededBrowseWindowLanes', () => {
 			triggerQueryKey,
 			identify: productBrowseWindowLaneIdentity,
 			repository,
+			readLane: repository?.readLocalLaneCoverage,
 			nowMs: 1_000,
 		});
 
@@ -375,6 +391,7 @@ describe('evictSupersededBrowseWindowLanes', () => {
 				triggerQueryKey: productWindow(400),
 				identify: productBrowseWindowLaneIdentity,
 				repository,
+				readLane: repository.readLocalLaneCoverage,
 				nowMs: 1_000,
 				diagnostics,
 			})

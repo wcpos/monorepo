@@ -259,8 +259,15 @@ export type BrowseWindowLaneEvictionRepository = {
 		containedIn: readonly string[];
 		supersededAtMs: number;
 	}) => Promise<boolean>;
-	readLocalLaneCoverage?: BrowseWindowLaneReader;
 };
+// The lane READER is deliberately NOT a member of this port, even though the sweep needs
+// one. Both fetchers already declare their own `readLocalLaneCoverage`, and the orders one
+// returns MORE than a browse window cares about (#954's `rangedResume`). Intersecting this
+// port into those repository types would put two signatures on the same property, and TypeScript
+// resolves the call against the first — silently narrowing the orders reader back to the
+// browse-window shape and erasing `rangedResume` from every OTHER caller's view of it. The
+// sweep takes the reader as an argument instead, so this port only declares what is unique
+// to eviction.
 
 /**
  * Delete the lanes the window `triggerQueryKey` just completed has superseded.
@@ -299,6 +306,8 @@ export async function evictSupersededBrowseWindowLanes(input: {
 	triggerQueryKey: string;
 	identify: BrowseWindowLaneIdentifier;
 	repository?: BrowseWindowLaneEvictionRepository | undefined;
+	/** The survivor re-read at delete time; see the ancestry note above. */
+	readLane?: BrowseWindowLaneReader | undefined;
 	nowMs: number;
 	diagnostics?: SyncObserver | undefined;
 }): Promise<string[]> {
@@ -317,7 +326,7 @@ export async function evictSupersededBrowseWindowLanes(input: {
 
 	const survivor = lanes.find((lane) => lane.queryKey === input.triggerQueryKey)!;
 	const survivorLimit = input.identify(input.triggerQueryKey)!.limit;
-	if (!(await survivorStillHolds(input, repository, survivor, survivorLimit))) {
+	if (!(await survivorStillHolds(input, input.readLane, survivor, survivorLimit))) {
 		input.diagnostics?.({
 			type: 'browse-window.eviction-skipped',
 			level: 'warn',
@@ -355,16 +364,12 @@ export async function evictSupersededBrowseWindowLanes(input: {
  */
 async function survivorStillHolds(
 	input: { collection: string; nowMs: number },
-	repository: BrowseWindowLaneEvictionRepository,
+	readLane: BrowseWindowLaneReader | undefined,
 	planned: BrowseWindowLaneSnapshot,
 	limit: number
 ): Promise<boolean> {
-	if (!repository.readLocalLaneCoverage) return true;
-	const current = await repository.readLocalLaneCoverage(
-		input.collection,
-		planned.queryKey,
-		input.nowMs
-	);
+	if (!readLane) return true;
+	const current = await readLane(input.collection, planned.queryKey, input.nowMs);
 	if (!current) return false;
 	const currentIds = current.expectedRecordIds ?? [];
 	if (
