@@ -26,6 +26,7 @@ export type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seed
 export {
 	BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT,
 	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
+	laneHoldsBrowseWindowPrefix,
 } from './browse-window-continuation';
 export {
 	type BrowseWindowLaneEvictionRepository,

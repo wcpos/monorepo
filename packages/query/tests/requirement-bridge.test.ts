@@ -1,7 +1,7 @@
 import type { EngineRequirement } from '@wcpos/sync-engine';
 
 import { declareRequirements, requirementsForQuery } from '../src/requirement-bridge';
-import { createEngineDatabase, createFakeEngine } from '../src/testing';
+import { createEngineDatabase, createFakeEngine, orderBrowserQueryKey } from '../src/testing';
 
 import type { RequirementInput, RequirementPlan } from '../src/requirement-bridge';
 import type { RxDatabase } from 'rxdb';
@@ -486,6 +486,41 @@ describe('requirementsForQuery extraction', () => {
 					limit: 25,
 				}).represented
 			).toBe(false);
+		});
+
+		// A ranged report downloads the WHOLE range and walks `date desc` on the wire whatever
+		// the grid is sorted by, so re-sorting must NOT fork the lane — it used to, and every
+		// re-sort re-downloaded the entire range.
+		it('resolves every sort of one reports range to a single lane key', () => {
+			const rangedSelector = {
+				status: { $eq: 'completed' },
+				date_created_gmt: { $gte: '2026-07-01T00:00:00', $lte: '2026-07-14T23:59:59' },
+			};
+			const keyFor = (sort: Record<string, 'asc' | 'desc'>[]) =>
+				orderBrowserQueryKey(
+					orderRequirement({
+						selector: rangedSelector,
+						sort,
+						limit: Number.MAX_SAFE_INTEGER,
+					}) as never
+				);
+
+			const byDate = keyFor([{ date_created_gmt: 'desc' }]);
+			expect(byDate).toBe(
+				'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all'
+			);
+			expect(keyFor([{ total: 'asc' }])).toBe(byDate);
+			expect(keyFor([{ number: 'desc' }])).toBe(byDate);
+		});
+
+		// #909 sort-aware windows: a windowed browse's sort decides WHICH records it holds, so
+		// it must keep forking per sort. Only the ranged family is sort-agnostic.
+		it('still forks a windowed browse lane per sort', () => {
+			const keyFor = (sort: Record<string, 'asc' | 'desc'>[]) =>
+				orderBrowserQueryKey(orderRequirement({ sort, limit: 25 }) as never);
+
+			expect(keyFor([{ total: 'asc' }])).not.toBe(keyFor([{ total: 'desc' }]));
+			expect(keyFor([{ total: 'asc' }])).toContain(':orderby=total:order=asc');
 		});
 
 		it('keeps small and scrolled ranged limits raw', () => {

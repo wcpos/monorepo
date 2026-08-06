@@ -643,7 +643,17 @@ async function tryProductBrowseWindowWalk(
 		input,
 		task,
 		brandsHonored ? laneRecordIds : [],
-		brandsHonored && !truncatedByPageBudget && filledTheWindow
+		brandsHonored && !truncatedByPageBudget && filledTheWindow,
+		// Re-check the carried prefix INSIDE the write. The guard above runs before the walk,
+		// but `withLedgerRecovery` replays this write verbatim after a rebuild drops
+		// `coverageLanes` — the one window that guard cannot close (#1030 residual).
+		continuation.covered > 0 && continuation.sourceQueryKey
+			? {
+					sourceQueryKey: continuation.sourceQueryKey,
+					recordIds: continuation.recordIds,
+					fallbackRecordIds: deltaRecordIds,
+				}
+			: undefined
 	);
 	// STRICTLY AFTER the write. The smaller lanes this window supersedes include the one the
 	// continuation resumed from, and the ancestry guard above re-reads exactly that lane —

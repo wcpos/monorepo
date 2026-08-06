@@ -245,16 +245,16 @@ function continuationFrom(
  * write to the delta alone with `complete: false`, restarting the window from the top next
  * pass. Wasteful, always safe; the opposite trade is a grid lying about what it holds.
  *
- * NOT ATOMIC, and deliberately so for now. This is a read, and the lane write that follows
- * it is a second operation, so one window remains open: `createLocalCoverage` wraps its
- * repository in `withLedgerRecovery`, which catches a corruption refusal, rebuilds the
- * ledger (dropping `coverageLanes`) and then RE-INVOKES the same write with the same
- * arguments — replaying a prefix this check had already approved. Closing that needs the
- * condition evaluated inside the write itself, i.e. the compare-and-set #954 built for its
- * ranged cursor (`incrementalModify` with an `expected` value), extended from
- * `rangedResume` to `expectedRecordIds`. That is a persistence-layer change and is tracked
- * as a follow-up; this guard still closes the ordinary case, which is a wipe landing before
- * the write rather than inside its retry.
+ * This check is the FAST PATH, not the last word. It is a read, and the lane write that
+ * follows it is a second operation, so on its own it left one window open: `createLocalCoverage`
+ * wraps its repository in `withLedgerRecovery`, which catches a corruption refusal, rebuilds
+ * the ledger (dropping `coverageLanes`) and then RE-INVOKES the same write with the same
+ * arguments — replaying a prefix this check had already approved. That window is now closed
+ * on the write side: the fetchers hand `prefixAncestry` to `recordQueryResult`, which
+ * re-evaluates the same predicate (`laneHoldsBrowseWindowPrefix`) INSIDE the replayed call
+ * and demotes to the delta when the lineage is gone. This check stays because it also drives
+ * the `browse-window.prefix-invalidated` diagnostic and lets a pass skip the union work
+ * entirely, but correctness no longer rests on it alone.
  */
 export async function browseWindowPrefixSurvived(input: {
 	collection: string;
@@ -266,9 +266,22 @@ export async function browseWindowPrefixSurvived(input: {
 	// Nothing was carried forward, so there is no ancestry to lose.
 	if (continuation.covered === 0 || !continuation.sourceQueryKey || !input.readLane) return true;
 	const lane = await input.readLane(input.collection, continuation.sourceQueryKey, input.nowMs);
-	const stored = lane?.expectedRecordIds;
-	if (!stored || stored.length < continuation.recordIds.length) return false;
-	return continuation.recordIds.every((id, index) => stored[index] === id);
+	return laneHoldsBrowseWindowPrefix(lane?.expectedRecordIds, continuation.recordIds);
+}
+
+/**
+ * Whether `stored` still begins with `prefix` — the ancestry rule itself, split out so the
+ * persistence layer can re-evaluate it INSIDE the write it is guarding rather than only
+ * ahead of it (see the residual note on browseWindowPrefixSurvived). A source lane that has
+ * GROWN past the prefix is fine; one that was wiped, shortened or reordered is not.
+ */
+export function laneHoldsBrowseWindowPrefix(
+	stored: readonly string[] | undefined,
+	prefix: readonly string[]
+): boolean {
+	if (prefix.length === 0) return true;
+	if (!stored || stored.length < prefix.length) return false;
+	return prefix.every((id, index) => stored[index] === id);
 }
 
 /** Union the covered prefix with a freshly fetched delta, first occurrence wins. */

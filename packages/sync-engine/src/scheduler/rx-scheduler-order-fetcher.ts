@@ -395,12 +395,14 @@ async function recordOrderFetchCoverage(
 	input: OrdersSchedulerFetcherInput,
 	task: FetchTask,
 	documentIds: string[],
-	complete: boolean
+	complete: boolean,
+	prefixAncestry?: BuildCoverageDocumentsFromQueryResultInput['prefixAncestry']
 ): Promise<void> {
 	if (!input.coverageRepository) return;
-	await input.coverageRepository.recordQueryResult(
-		orderCoverageInput(input, task, documentIds, complete)
-	);
+	await input.coverageRepository.recordQueryResult({
+		...orderCoverageInput(input, task, documentIds, complete),
+		...(prefixAncestry ? { prefixAncestry } : {}),
+	});
 }
 
 type RangedResumeSnapshot = {
@@ -896,7 +898,17 @@ async function fetchBrowserOrderQuery(
 			input,
 			task,
 			dimensionsHonored ? laneRecordIds : [],
-			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow
+			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow,
+			// Re-check the carried prefix INSIDE the write. The guard above runs before the
+			// walk, but `withLedgerRecovery` replays this write verbatim after a rebuild drops
+			// `coverageLanes` — the one window that guard cannot close (#1030 residual).
+			continuation.covered > 0 && continuation.sourceQueryKey
+				? {
+						sourceQueryKey: continuation.sourceQueryKey,
+						recordIds: continuation.recordIds,
+						fallbackRecordIds: fetchedDocumentIds,
+					}
+				: undefined
 		);
 		// STRICTLY AFTER the write. The smaller lanes this window supersedes include the one
 		// the continuation resumed from, and the ancestry guard above re-reads exactly that

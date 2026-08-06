@@ -25,6 +25,22 @@ export type BuildCoverageDocumentsFromQueryResultInput = {
 	complete: boolean;
 	nowMs: number;
 	freshForMs: number;
+	/**
+	 * The prefix a growing browse window carried forward from a SMALLER lane, re-checked by
+	 * the write itself (#1030 residual). The fetcher already checks it before walking, but
+	 * that read and this write are two operations and `withLedgerRecovery` re-invokes the
+	 * write with the SAME arguments after a corruption refusal drops `coverageLanes` —
+	 * replaying a prefix the pre-read approved onto a store that no longer holds it. Because
+	 * this check lives inside the replayed call, the replay re-runs it and demotes instead.
+	 */
+	prefixAncestry?: {
+		/** The smaller lane the prefix was taken from. */
+		sourceQueryKey: string;
+		/** The ids that must still be a prefix of that lane. */
+		recordIds: readonly string[];
+		/** What to record instead when the lineage is gone: this pass's delta alone. */
+		fallbackRecordIds: readonly string[];
+	};
 };
 
 export type BuildCumulativeCoverageDocumentsFromQueryResultInput =

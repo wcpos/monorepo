@@ -48,6 +48,9 @@ type DataCollection =
  * engine opens (via `engineSyncCollectionCreators`), validation off for raw test
  * speed. This is what `executeAdapterQuery` reads (`collection.database`).
  */
+/** Re-exported so lane-identity tests can assert on the canonical key the engine builds. */
+export { orderBrowserQueryKey };
+
 export async function createEngineDatabase(
 	collections: readonly DataCollection[] = ['products', 'variations', 'orders']
 ): Promise<RxDatabase> {

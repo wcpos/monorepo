@@ -126,9 +126,13 @@ function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
 	const rangePart = `${
 		input.afterSeconds === undefined ? '' : `:after=${input.afterSeconds}`
 	}${input.beforeSeconds === undefined ? '' : `:before=${input.beforeSeconds}`}`;
-	const sortPart = `${input.orderby === undefined ? '' : `:orderby=${input.orderby}`}${
-		input.order === undefined ? '' : `:order=${input.order}`
-	}`;
+	// Ranged (`limit=all`) lanes are sort-agnostic — see the sortPart note in
+	// orderBrowserQueryKey, whose grammar this must stay byte-identical to.
+	const sortPart = input.complete
+		? ''
+		: `${input.orderby === undefined ? '' : `:orderby=${input.orderby}`}${
+				input.order === undefined ? '' : `:order=${input.order}`
+			}`;
 	const limitPart = input.complete ? 'all' : input.limit;
 	const queryKey = `orders:browser:status=${status}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:search=${search}:limit=${limitPart}`;
 	const descriptorDecision = parseOrderBrowserSchedulerDescriptor(queryKey);
