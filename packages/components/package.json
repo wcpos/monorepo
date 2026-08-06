@@ -145,6 +145,6 @@
     "sonner": "^2.0.7",
     "sonner-native": "^0.26.4",
     "tailwind-merge": "^3.6.0",
-    "uniwind": "npm:uniwind-pro@1.3.0"
+    "uniwind": "1.10.0"
   }
 }
