@@ -1,6 +1,6 @@
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from, Observable, of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { catchError, switchMap } from 'rxjs/operators';
 
 import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
 import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
@@ -192,7 +192,15 @@ function rejected$(engine: RxdbSyncEngine): Observable<RejectedMutation[]> {
 			return mutations
 				.find({ selector: { status: { $eq: 'rejected' } } })
 				.$.pipe(switchMap((rows) => from(describe(database, rows))));
-		})
+		}),
+		// The resource is cached for the engine's whole life (that is the fix), so a
+		// stream error must never be able to POISON it: `ObservableResource` latches
+		// the error and `read()` would then throw forever, on every remount and every
+		// scope switch, with no path to recovery. `describe()` already swallows a
+		// failing resident read, but the RxDB query itself can still error on a
+		// storage fault — degrade that to an empty list (the panel simply shows
+		// nothing) rather than wedge the whole Database health screen permanently.
+		catchError(() => of<RejectedMutation[]>([]))
 	);
 }
 

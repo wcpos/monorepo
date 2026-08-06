@@ -20,7 +20,7 @@
 import * as React from 'react';
 
 import { act, render, waitFor } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, throwError } from 'rxjs';
 
 import { useRejectedMutations } from './use-rejected-mutations';
 
@@ -51,7 +51,9 @@ const deadLetterRow = {
 };
 
 /** A mock engine whose async shape matches the live one the diagnostic measured. */
-function makeEngine(options: { residentRead?: () => Promise<unknown> } = {}) {
+function makeEngine(
+	options: { residentRead?: () => Promise<unknown>; queryErrors?: boolean } = {}
+) {
 	let subscribeCount = 0;
 	const residentDoc = {
 		toJSON: () => ({
@@ -70,7 +72,9 @@ function makeEngine(options: { residentRead?: () => Promise<unknown> } = {}) {
 					return {
 						get $() {
 							subscribeCount += 1;
-							return subject.asObservable();
+							return options.queryErrors
+								? throwError(() => new Error('storage query failed'))
+								: subject.asObservable();
 						},
 					};
 				},
@@ -136,5 +140,26 @@ describe('RejectedMutationsPanel Suspense lifecycle (#40/#832)', () => {
 		});
 		await waitFor(() => expect(screen.queryByTestId('rows')).not.toBeNull(), { timeout: 4000 });
 		expect(screen.getByTestId('rows').textContent).toContain(deadLetterRow.mutationId);
+	}, 20000);
+
+	it('degrades to an empty panel when the query stream ERRORS — never poisons the cache', async () => {
+		// The resource is cached for the engine's life, so a stream error must not
+		// latch into `ObservableResource` and throw on every future render. The
+		// pipeline's catchError degrades to an empty list: the panel renders (empty)
+		// instead of wedging the whole Database health screen.
+		const { engine } = makeEngine({ queryErrors: true });
+		engineStub = engine;
+
+		const screen = render(
+			<React.Suspense fallback={<div data-testid="spinner">loading</div>}>
+				<Probe />
+			</React.Suspense>
+		);
+
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 150));
+		});
+		await waitFor(() => expect(screen.queryByTestId('rows')).not.toBeNull(), { timeout: 4000 });
+		expect(screen.getByTestId('rows').textContent).toBe('EMPTY');
 	}, 20000);
 });
