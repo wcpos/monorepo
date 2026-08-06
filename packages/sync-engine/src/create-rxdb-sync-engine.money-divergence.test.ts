@@ -426,8 +426,8 @@ describe('divergence detection at the ack boundary', () => {
 					mutationId: expect.any(String),
 					mode: 'exact-6dp',
 					fields: [
-						{ field: 'total', expected: '36.68', got: '50.07', decimals: 2 },
-						{ field: 'total_tax', expected: '6.71', got: '11.10', decimals: 2 },
+						{ field: 'total', expected: '36.680000', got: '50.070000', decimals: 6 },
+						{ field: 'total_tax', expected: '6.710000', got: '11.100000', decimals: 6 },
 					],
 				},
 			]);

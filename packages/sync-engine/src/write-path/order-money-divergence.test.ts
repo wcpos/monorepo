@@ -138,20 +138,18 @@ describe('compareOrderMoney — server-precision mode (the legacy rule)', () => 
 		expect(compareOrderMoney({ pushed: pos, acked, mode: 'server-precision' })).toBeNull();
 	});
 
-	it('is why the legacy rule could not survive the server going 6dp', () => {
-		// Trusting the ack's width alone breaks the moment the server widens a
-		// field the POS stores at display decimals: `total_tax` is `6.71` on both
-		// sides, but padded to `6.710000` it gets compared against the POS's
-		// 2dp value at six decimals. This is the false alert the mode flip
-		// exists to avoid — pinned here so the tradeoff is on the record.
+	it('trusts a narrow ack blindly, however far it is from the POS value', () => {
+		// The legacy rule's blind spot, pinned as the reason it is not the shipped
+		// one: rounding to whatever width the ack printed lets unrelated numbers
+		// agree. A whole-number ack of `"7"` against the POS's `6.71328` compares
+		// at ZERO decimals and reads as identical — a 0.28 correction, silent.
 		const acked = clone(server2dp);
-		acked.total_tax = '6.713280';
-		const legacy = compareOrderMoney({ pushed: pos, acked, mode: 'server-precision' });
-		expect(legacy?.fields).toEqual([
-			{ field: 'total_tax', expected: '6.710000', got: '6.713280', decimals: 6 },
+		acked.cart_tax = '7';
+		expect(compareOrderMoney({ pushed: pos, acked, mode: 'server-precision' })).toBeNull();
+		// The shipped rule floors the tolerance at cents and reports it.
+		expect(compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' })?.fields).toEqual([
+			{ field: 'cart_tax', expected: '6.71', got: '7.00', decimals: 2 },
 		]);
-		// The shipped rule takes the narrower width and stays correctly silent.
-		expect(compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' })).toBeNull();
 	});
 
 	it('tolerates a sparse ack: fields the server omitted are not compared', () => {
@@ -255,7 +253,7 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 			mode: 'exact-6dp',
 		});
 		expect(divergence?.fields).toEqual([
-			{ field: 'total', expected: '45.00', got: '50.07', decimals: 2 },
+			{ field: 'total', expected: '45.000000', got: '50.070000', decimals: 6 },
 		]);
 	});
 
@@ -267,7 +265,7 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 		acked.cart_tax = '6.714000';
 		const divergence = compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' });
 		expect(divergence?.fields).toEqual([
-			{ field: 'cart_tax', expected: '6.71328', got: '6.71400', decimals: 5 },
+			{ field: 'cart_tax', expected: '6.713280', got: '6.714000', decimals: 6 },
 		]);
 	});
 
@@ -278,9 +276,9 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 		expect(divergence?.fields).toEqual([
 			{
 				field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total_tax`,
-				expected: '6.71328',
-				got: '6.72328',
-				decimals: 5,
+				expected: '6.713280',
+				got: '6.723280',
+				decimals: 6,
 			},
 		]);
 	});
@@ -361,5 +359,33 @@ describe('preserveEquivalentLocalPrecision (the adoption half of the mirror cont
 	it('returns the ack payload unchanged when there is nothing to preserve', () => {
 		const acked = clone(server6dp);
 		expect(preserveEquivalentLocalPrecision({}, acked)).toBe(acked);
+	});
+
+	// The tolerance must never swallow a correction. Rounding to the ack's own
+	// width unconditionally does exactly that: unrelated numbers agree once the
+	// width is narrow enough.
+	it.each([
+		['a whole-number ack', 'cart_tax', '7', '7'],
+		['a one-decimal ack', 'cart_tax', '6.8', '6.8'],
+		['a wider ack that really differs', 'cart_tax', '6.714000', '6.714000'],
+	])('adopts %s rather than keeping the stale POS value', (_case, field, acked, expected) => {
+		const ack = clone(server6dp);
+		(ack as Record<string, unknown>)[field] = acked;
+		const merged = preserveEquivalentLocalPrecision(pos, ack);
+		expect(merged[field]).toBe(expected);
+	});
+
+	it('keeps detection and adoption on the SAME equality — no silent adoption', () => {
+		// If adoption changes a value the comparator did not report, the cart
+		// recomputes its own, use-order-totals patches the difference back, and
+		// nobody was ever told. Sweep both halves over the same acks.
+		for (const ackedCartTax of ['6.71328', '6.713280', '6.71', '7', '6.714000', '6.8']) {
+			const ack = clone(server6dp);
+			ack.cart_tax = ackedCartTax;
+			const reported = compareOrderMoney({ pushed: pos, acked: ack, mode: 'exact-6dp' })?.fields;
+			const adopted = preserveEquivalentLocalPrecision(pos, ack).cart_tax !== pos.cart_tax;
+			const flagged = (reported ?? []).some((f) => f.field === 'cart_tax');
+			expect({ ack: ackedCartTax, adopted }).toEqual({ ack: ackedCartTax, adopted: flagged });
+		}
 	});
 });
