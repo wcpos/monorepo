@@ -502,6 +502,21 @@ export class RxCoverageRepository {
 	 *    just after the sweep planned would have its lane deleted out from under it and the
 	 *    grid's footer would drop to the local count for no reason.
 	 *
+	 * The comparison is `<=`, and the equality case is the MAIN PATH, not an oversight: a
+	 * drain fixes its clock for the tick, so two windows of the same view completed in one
+	 * drain carry the same `updatedAtMs`. Requiring strictly-older would make eviction skip
+	 * the ordinary scroll and reclaim nothing.
+	 *
+	 * That leaves one residual, named rather than hidden (review finding, 2026-08-06, P2): a
+	 * victim rewritten LOGICALLY after the survivor but stamped with the same millisecond is
+	 * still deleted. Cost is one re-walk of that window — the failure direction this design
+	 * picks everywhere — and it does not repeat, because the rewritten lane is no longer the
+	 * deepest settled window of its view on the next pass. Closing it properly needs the
+	 * stored `_rev`, not a content compare: a same-window rewrite produces identical ids, so
+	 * comparing the planned snapshot (what `removeLaneIfUnchanged` does) accepts it exactly
+	 * as the timestamp does. Revision-based compare-and-delete would want to cover BOTH
+	 * removal call sites and is deliberately left as its own change.
+	 *
 	 * Returns whether it deleted.
 	 */
 	async removeCoverageLaneIfContained(input: {

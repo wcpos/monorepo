@@ -19,8 +19,26 @@
  * actually feels — was the quadratic number.
  *
  * Eviction swaps expiry-based reclaim for supersession-based reclaim: the moment a larger
- * window is known to CONTAIN a smaller one, the smaller one goes. Steady state becomes ~1×
- * the deepest window instead of ~(depth/step)/2 ×.
+ * window is known to CONTAIN a smaller one, the smaller one goes. The `coverageLanes`
+ * collection then holds ~1× the deepest window instead of ~(depth/step)/2 ×.
+ *
+ * ## What this does NOT bound (measured, not assumed)
+ *
+ * The RECORD side keeps a parallel membership that eviction does not touch:
+ * `recordQueryResult` appends the lane's key to every covered record's `coveredQueryKeys`,
+ * and that union is never pruned, so an evicted window's key outlives its lane. Scrolling to
+ * 4,000 rows therefore still leaves ~82,000 key memberships spread across the 4,000 coverage
+ * RECORDS — the same quadratic sum, in queryKey strings rather than id arrays. (A membership
+ * string is in fact the longer of the two, so this is the larger half of the problem.)
+ *
+ * That is a real limit on what this change delivers, and it is stated here rather than
+ * quietly implied away. Pruning it from the sweep is not viable at this seam: evicting the
+ * 3,900-row lane at the 4,000 tick would mean rewriting 3,900 record documents, which makes
+ * the WORK quadratic to stop the STORAGE being quadratic. The fix belongs on the record
+ * side — browse windows arguably should not stamp per-window membership on records at all,
+ * since a browse lane's membership is already implied by its own `expectedRecordIds` — and
+ * is tracked separately. `ledger-storage-recovery.test.ts` pins the current behaviour so the
+ * gap cannot be mistaken for a bound this module provides.
  *
  * ## Why deleting a lane is the safe direction
  *

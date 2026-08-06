@@ -404,6 +404,42 @@ describe('coverage ledger recovery', () => {
 		});
 		await expect(coverage.listLanes('orders')).resolves.toHaveLength(1);
 
+		// AN EVICTED LANE CAN BE WRITTEN AGAIN (review finding, 2026-08-06, P1 — refuted).
+		//
+		// The concern was that `_deleted: true` leaves a TOMBSTONE: `insertOrMergeLane`'s
+		// `findOne().exec()` would miss it, the `insert()` would conflict, and the fallback
+		// `mergeExistingLane` never restores `_deleted: false` — so a shallow grid asking for
+		// the window again would re-fetch forever without regaining usable coverage.
+		//
+		// It does not happen: RxDB's `insert()` REVIVES a tombstoned primary key rather than
+		// conflicting, so the conflict branch is never entered (measured: one insert call, no
+		// throw) and the lane reads back with its full contents. Pinned here because the whole
+		// claim turns on real storage semantics that an in-memory fake cannot reproduce.
+		await coverage.recordQueryResult({
+			collection: 'products',
+			queryKey: window(100),
+			records: [{ id: 'woo-product:1' }, { id: 'woo-product:2' }],
+			complete: true,
+		});
+		await expect(coverage.readLane('products', window(100))).resolves.toMatchObject({
+			complete: true,
+			expectedRecordIds: ['woo-product:1', 'woo-product:2'],
+		});
+		// …and it is a first-class lane again: listable, and evictable a second time.
+		await expect(coverage.listLanes('products')).resolves.toHaveLength(2);
+
+		// KNOWN LIMITATION, measured (review finding, 2026-08-06, P1 — accepted).
+		//
+		// Eviction bounds the LANE collection. It does NOT touch the parallel membership the
+		// RECORD side accumulates: `recordQueryResult` appends the lane key to every covered
+		// record's `coveredQueryKeys`, and that union is never pruned, so an evicted window's
+		// key outlives its lane. Pinned so the bound this change actually delivers is not
+		// mistaken for a bigger one — see the follow-up referenced in the module docblock.
+		const snapshot = await coverage.readSnapshot();
+		expect(
+			snapshot.records.find((record) => record.id === 'woo-product:1')?.coveredQueryKeys
+		).toContain(window(100));
+
 		// The rebuild path sees the evicted lane exactly as it sees a never-written one.
 		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
 			refusalError('overlapping-ranges')
