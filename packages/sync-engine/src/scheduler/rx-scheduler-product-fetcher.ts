@@ -21,6 +21,7 @@ import {
 	type BrowseWindowLaneReader,
 	browseWindowPrefixSurvived,
 	mergeBrowseWindowRecordIds,
+	NO_BROWSE_WINDOW_CONTINUATION,
 	readBrowseWindowContinuation,
 } from './browse-window-continuation';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
@@ -78,11 +79,11 @@ export type ProductsSchedulerFetcherInput = {
 	 */
 	manifestSink?: (rows: ExistenceManifestDocument[]) => Promise<void>;
 	/**
-	 * An explicitly user-driven sync (the grid's `sync()` / pull-to-refresh). Browse
-	 * windows then re-walk from page 1 instead of resuming from their covered prefix — a
-	 * refresh that continued from its own prefix would never see anything new.
+	 * The ONE browse-window lane key an explicitly user-driven sync (the grid's `sync()`)
+	 * is refreshing. Only THAT window re-walks from page 1 instead of resuming from its
+	 * covered prefix; every other queued window keeps its continuation.
 	 */
-	refreshBrowseWindows?: boolean;
+	refreshBrowseWindowKey?: string;
 };
 
 /**
@@ -360,6 +361,69 @@ async function fetchProductBrowseWindow(
 	continuation: BrowseWindowContinuation,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
+	// A RESUMED walk has two ways to be useless, and both are only detectable once it has
+	// run, so both fall back to a full walk in this same pass rather than stranding the
+	// window until coverage expires:
+	//
+	//  - **It made no progress.** The exact-fill + page-alignment gate cannot tell a
+	//    positional prefix from one the phase-2 tiebreak walk SUBSTITUTED out of later wire
+	//    pages. On an all-tied catalogue a 300-row lane can hold exactly 200 page-aligned
+	//    ids, which passes the gate, resumes at the same offset, re-fetches the same ids and
+	//    re-merges to 200 — identically, forever. Progress, not shape, is the honest test.
+	//  - **Its resume page no longer exists.** Records deleted since the prefix was written
+	//    can pull the listing's last page below the resume offset, and WP answers an
+	//    out-of-range `page` with a 400 rather than an empty page.
+	if (continuation.covered > 0) {
+		const resumed = await tryProductBrowseWindowWalk(
+			input,
+			task,
+			descriptor,
+			pageSize,
+			continuation,
+			context
+		);
+		if (resumed !== null && resumed.progressed) return resumed.result;
+		const full = await fetchProductBrowseWindow(
+			input,
+			task,
+			descriptor,
+			pageSize,
+			NO_BROWSE_WINDOW_CONTINUATION,
+			context
+		);
+		return {
+			...full,
+			// Report the wasted resume attempt honestly — it did cost requests.
+			requestCount: full.requestCount + (resumed?.result.requestCount ?? 0),
+		};
+	}
+	const walked = await tryProductBrowseWindowWalk(
+		input,
+		task,
+		descriptor,
+		pageSize,
+		continuation,
+		context
+	);
+	if (walked === null) {
+		throw new Error(`Woo REST product browse-window request failed for ${task.queryKey}`);
+	}
+	return walked.result;
+}
+
+/**
+ * One browse-window walk. Returns `null` when the walk could not run because its resume page
+ * is out of range (the caller retries from the top); otherwise the result plus whether the
+ * window actually grew past what the continuation already covered.
+ */
+async function tryProductBrowseWindowWalk(
+	input: ProductsSchedulerFetcherInput,
+	task: FetchTask,
+	descriptor: ProductBrowseWindowDescriptor,
+	pageSize: number,
+	continuation: BrowseWindowContinuation,
+	context?: SchedulerFetcherContext
+): Promise<{ result: FetchTaskResult; progressed: boolean } | null> {
 	const covered = continuation.covered;
 	// Rows still owed for this window. The walk below is expressed entirely in DELTA terms
 	// — `limit` here is what is left to fetch, not the window's size.
@@ -399,7 +463,18 @@ async function fetchProductBrowseWindow(
 	// Phase 1 — fill the window's uncovered tail at the dial's page size.
 	while (requestCount < windowPages) {
 		query.set('page', String(nextPageNumber));
-		const page = await fetchProductQuery(input, query, context);
+		// The FIRST request of a resumed walk is the one that can be out of range: records
+		// deleted since the prefix was written can pull the last page below the resume
+		// offset, and WP answers that with a 400. Report it as an unusable resume so the
+		// caller re-walks from the top, instead of failing the whole browse into retry
+		// backoff where every attempt would re-request the same dead page.
+		let page: Awaited<ReturnType<typeof fetchProductQuery>>;
+		try {
+			page = await fetchProductQuery(input, query, context);
+		} catch (error) {
+			if (requestCount === 0 && covered > 0) return null;
+			throw error;
+		}
 		requestCount += 1;
 		nextPageNumber += 1;
 		pagePayloads = page.payloads;
@@ -479,7 +554,20 @@ async function fetchProductBrowseWindow(
 				'Store returned products outside the requested brands — brand filtering needs a WooCommerce version with core brands in the REST API; keeping the superset locally without claiming coverage',
 		});
 	}
-	const documents = windowPayloads.map(productDocumentFromWooPayload);
+	// bulkUpsert REJECTS an input carrying duplicate primary keys (COL22), which would fail
+	// the whole browse after several otherwise-successful requests. The walk concatenates
+	// pages verbatim, so a product inserted mid-walk — shifting every later row down a wire
+	// slot and repeating one across the page boundary — is enough to trigger it, and an
+	// uncapped window walks more boundaries than the old 1,000-row one ever did. Dedupe on
+	// the materialized storage id, keeping the first sighting so server ordering is
+	// preserved. (Same defect and remedy as the customers lane, bddd21d17.)
+	const documentsById = new Map<string, Materialized<Record<string, unknown>>>();
+	for (const payload of windowPayloads) {
+		const document = productDocumentFromWooPayload(payload);
+		const storageId = (document.storedDocument as { id: string }).id;
+		if (!documentsById.has(storageId)) documentsById.set(storageId, document);
+	}
+	const documents = [...documentsById.values()];
 	await persistProductDocuments(input, documents);
 	const deltaRecordIds = documents.map(({ storedDocument }) =>
 		coverageRecordId(storedDocument as ProductDocument)
@@ -501,7 +589,12 @@ async function fetchProductBrowseWindow(
 			message: `Product browse window ${descriptor.limit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 		});
 		await recordCoverage('products', input, task, deltaRecordIds, false);
-		return { taskId: task.id, documentCount: documents.length, requestCount, completed: true };
+		return {
+			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
+			// The prefix is gone, so the next pass must re-walk from the top regardless; do not
+			// send the caller round again in this one.
+			progressed: true,
+		};
 	}
 	if (truncatedByPageBudget) {
 		input.diagnostics?.({
@@ -521,19 +614,36 @@ async function fetchProductBrowseWindow(
 	// already holds; the merge dedupes them and this lane comes back SHORT of its window.
 	// Recording that as complete would make the footer report (say) 215 for a 300-row
 	// window AND let the serve-local gate answer from it — the window would appear to stop
-	// growing. Reporting it incomplete instead makes the next pass re-walk in full, which
-	// is correct and self-correcting (the short count is also not page-aligned, so the
-	// continuation gate refuses to offset from it).
+	// growing.
 	const filledTheWindow = serverExhausted || laneRecordIds.length >= descriptor.limit;
+	// Did this walk move the window past what it already had? A resumed walk that re-fetched
+	// only ids the prefix already held has not — and must NOT write its lane, or it would
+	// leave a spurious short lane behind for the full re-walk to overwrite a moment later.
+	const progressed = laneRecordIds.length > covered || serverExhausted;
+	if (!progressed) {
+		return {
+			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
+			progressed: false,
+		};
+	}
+	// A store that ignored `brand` returned an UNFILTERED SUPERSET. Those records are worth
+	// keeping locally, but this lane must claim NO coverage for them: recording `limit`
+	// superset ids under a filtered descriptor would let the serve-local gate answer a
+	// brand-filtered window from rows that were never brand-filtered, for a whole freshness
+	// window. `complete:false` alone does not prevent that, because a filled-but-incomplete
+	// lane is exactly what an ordinary un-exhausted window looks like.
 	await recordCoverage(
 		'products',
 		input,
 		task,
-		laneRecordIds,
+		brandsHonored ? laneRecordIds : [],
 		brandsHonored && !truncatedByPageBudget && filledTheWindow
 	);
 
-	return { taskId: task.id, documentCount: documents.length, requestCount, completed: true };
+	return {
+		result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
+		progressed: true,
+	};
 }
 
 async function fetchProductSearch(
@@ -625,7 +735,7 @@ export function createProductsSchedulerFetcher(
 				pageSize,
 				nowMs: input.nowMs?.() ?? Date.now(),
 				readLane: input.coverageRepository?.readLocalLaneCoverage,
-				forceRefresh: input.refreshBrowseWindows,
+				forceRefresh: input.refreshBrowseWindowKey === task.queryKey,
 			});
 			if (continuation.satisfied) {
 				// Fresh, complete coverage for this exact window: serve local. Deliberately

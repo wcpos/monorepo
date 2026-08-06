@@ -229,11 +229,16 @@ export type RunEngineSchedulerDrainInput = {
 	 * keep the bounded default when this is omitted. */
 	maxRequestsPerTask?: number;
 	/**
-	 * This drain serves an explicitly user-driven sync (#948/#957). Browse windows then
-	 * re-walk from page 1 instead of resuming from their covered prefix — the continuation
+	 * The ONE browse-window lane key this drain is force-refreshing (#948/#957). That window
+	 * re-walks from page 1 instead of resuming from its covered prefix — the continuation
 	 * that makes ordinary scrolling cheap would otherwise make a refresh a no-op.
+	 *
+	 * A KEY, not a boolean: a drain executes every runnable persisted task, not only the one
+	 * just seeded, so a drain-wide flag would also strip the continuation from unrelated
+	 * browse windows already queued in the ledger — up to 50 extra requests each, for a
+	 * refresh the cashier asked of one grid.
 	 */
-	refreshBrowseWindows?: boolean;
+	refreshBrowseWindowKey?: string;
 	onProgress?: (progress: { collection: string; documents: number; requests: number }) => void;
 	withCollectionActivity?: <T>(
 		collection: FetchTask['collection'],
@@ -258,7 +263,7 @@ function createEngineSchedulerFetcherRegistry(
 		| 'pullBatchSize'
 		| 'diagnostics'
 		| 'nowMs'
-		| 'refreshBrowseWindows'
+		| 'refreshBrowseWindowKey'
 	>
 ) {
 	const db = input.db;
@@ -284,8 +289,8 @@ function createEngineSchedulerFetcherRegistry(
 		...(input.diagnostics !== undefined ? { diagnostics: input.diagnostics } : {}),
 		...(input.fetcher !== undefined ? { fetcher: input.fetcher } : {}),
 		...(input.pullBatchSize !== undefined ? { pullBatchSize: input.pullBatchSize } : {}),
-		...(input.refreshBrowseWindows !== undefined
-			? { refreshBrowseWindows: input.refreshBrowseWindows }
+		...(input.refreshBrowseWindowKey !== undefined
+			? { refreshBrowseWindowKey: input.refreshBrowseWindowKey }
 			: {}),
 	};
 

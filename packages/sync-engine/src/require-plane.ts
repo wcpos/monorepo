@@ -307,6 +307,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			};
 
 			if (item.requirement.collection === 'orders' && item.requirement.kind === 'query') {
+				// Captured here: the guardWrite closure below loses this narrowing.
+				const browseQueryKey = item.requirement.queryKey;
 				const decision = parseOrderBrowserSchedulerDescriptor(item.requirement.queryKey ?? '');
 				if (!decision || 'skipReason' in decision) {
 					throw new Error(
@@ -335,7 +337,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						// An explicit user sync must re-walk the window from page 1; without this the
 						// scroll continuation (#948/#957) would serve it straight back from coverage.
-						...(item.requirement.forceRefresh ? { refreshBrowseWindows: true } : {}),
+						// An explicit user sync must re-walk THIS window from page 1; without it the
+						// scroll continuation (#948/#957) would serve it straight back from coverage.
+						// Scoped to the one lane key so a drain's other queued windows keep theirs.
+						...(item.requirement.forceRefresh ? { refreshBrowseWindowKey: browseQueryKey } : {}),
 						signal: item.abortController.signal,
 						onProgress: progressObserver(item.requirement),
 					});
@@ -384,6 +389,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				// grid's own limit and sort reach the wire — before it existed, an empty-selector
 				// products browse declared no demand at all, so infinite scroll past the cold
 				// 100-row seed fetched nothing and a sort change re-sorted the wrong local slice.
+				// Captured here: the guardWrite closure below loses this narrowing.
+				const browseQueryKey = item.requirement.queryKey;
 				const browseWindow = parseProductBrowseWindowDescriptor(item.requirement.queryKey ?? '');
 				if (!browseWindow) {
 					throw new Error(
@@ -417,7 +424,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						// An explicit user sync must re-walk the window from page 1; without this the
 						// scroll continuation (#948/#957) would serve it straight back from coverage.
-						...(item.requirement.forceRefresh ? { refreshBrowseWindows: true } : {}),
+						// An explicit user sync must re-walk THIS window from page 1; without it the
+						// scroll continuation (#948/#957) would serve it straight back from coverage.
+						// Scoped to the one lane key so a drain's other queued windows keep theirs.
+						...(item.requirement.forceRefresh ? { refreshBrowseWindowKey: browseQueryKey } : {}),
 						signal: item.abortController.signal,
 						onProgress: progressObserver(item.requirement),
 					});

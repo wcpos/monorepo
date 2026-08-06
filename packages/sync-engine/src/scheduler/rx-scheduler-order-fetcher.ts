@@ -16,7 +16,6 @@ import { materializeLocalOnly } from '../materialization/record-materialization'
 import {
 	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
 	type BrowseWindowContinuation,
-	type BrowseWindowLaneReader,
 	browseWindowPrefixSurvived,
 	mergeBrowseWindowRecordIds,
 	NO_BROWSE_WINDOW_CONTINUATION,
@@ -85,7 +84,7 @@ export type OrdersSchedulerCoverageRepository = {
 	 * Serves two readers: #954's ranged resume cursor, and #957's browse-window
 	 * CONTINUATION, which asks how much of a growing window is already covered so extending
 	 * 200 → 300 fetches one page rather than three. Structurally a
-	 * {@link BrowseWindowLaneReader}; `rangedResume` is simply ignored by that consumer.
+	 * BrowseWindowLaneReader; `rangedResume` is simply ignored by that consumer.
 	 */
 	readLocalLaneCoverage?(
 		collection: string,
@@ -116,11 +115,11 @@ export type OrdersSchedulerFetcherInput = {
 	 */
 	pendingMutationOrderIds?: () => Promise<ReadonlySet<string | number>>;
 	/**
-	 * An explicitly user-driven sync. Browse windows then re-walk from page 1 instead of
-	 * resuming from their covered prefix — a refresh that continued from its own prefix
-	 * would never see anything new.
+	 * The ONE browse-window lane key an explicitly user-driven sync is refreshing. Only
+	 * THAT window re-walks from page 1 instead of resuming from its covered prefix; every
+	 * other queued window keeps its continuation.
 	 */
-	refreshBrowseWindows?: boolean;
+	refreshBrowseWindowKey?: string;
 };
 
 function assertSupportedOrderTask(task: FetchTask): void {
@@ -627,11 +626,18 @@ async function fetchBrowserOrderQuery(
 	const recordLimit = windowLimit - covered;
 	const skipInResumePage = covered % descriptor.perPage;
 	let nextPageNumber = Math.floor(covered / descriptor.perPage) + 1;
+	// See the page-budget note in the loop: only a walk that can resume may be truncated.
+	const resumable = !descriptor.complete && descriptor.search === '';
 	while (documentCount < recordLimit) {
-		// The per-drain page budget governs SCROLL windows only. A ranged
-		// fetch-to-completion (Reports) is a caller who asked for the whole date range in
-		// one go and is bounded by RANGED_COMPLETE_MAX_RECORDS instead.
-		if (!descriptor.complete && requestCount >= BROWSE_WINDOW_MAX_PAGES_PER_DRAIN) break;
+		// The per-drain page budget only applies to a walk that can RESUME. Truncating one
+		// that cannot is not a pause, it is a ceiling: the walk would stop at the same page
+		// every attempt and the records beyond it could never load. Two walks are exempt:
+		//  - a ranged fetch-to-completion (Reports), which carries #954's own cursor and is
+		//    bounded by RANGED_COMPLETE_MAX_RECORDS; and
+		//  - a SEARCH-scoped window, whose coverage goes through `recordRecords` — that
+		//    writes no lane document, so `readBrowseWindowContinuation` has nothing to
+		//    resume from. Its work is still bounded by the window the cashier asked for.
+		if (resumable && requestCount >= BROWSE_WINDOW_MAX_PAGES_PER_DRAIN) break;
 		const query = new URLSearchParams();
 		if (descriptor.status) query.set('status', descriptor.status);
 		if (descriptor.search) query.set('search', descriptor.search);
@@ -805,7 +811,7 @@ async function fetchBrowserOrderQuery(
 	//
 	// The per-drain page budget bit before the window filled: the lane must not claim
 	// completeness, and the next drain resumes from the prefix this one leaves.
-	const truncatedByPageBudget = !descriptor.complete && !exhausted && documentCount < recordLimit;
+	const truncatedByPageBudget = resumable && !exhausted && documentCount < recordLimit;
 	if (truncatedByPageBudget) {
 		input.diagnostics?.({
 			type: 'browse-window.page-budget-reached',
@@ -876,10 +882,15 @@ async function fetchBrowserOrderQuery(
 		});
 	} else if (descriptor.search === '') {
 		// A superset from a server that ignored the POS dimensions is still worth keeping
+		// locally — it is real order data — but this lane must claim NO coverage for it.
+		// `complete:false` alone does not prevent it being SERVED: a filled-but-incomplete
+		// lane is exactly what an ordinary un-exhausted window looks like, so the
+		// serve-local gate would answer a cashier/store-filtered window from rows that were
+		// never filtered, for a whole freshness window.
 		await recordOrderFetchCoverage(
 			input,
 			task,
-			laneRecordIds,
+			dimensionsHonored ? laneRecordIds : [],
 			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow
 		);
 	} else {
@@ -1013,7 +1024,7 @@ export function createOrdersSchedulerFetcher(input: OrdersSchedulerFetcherInput)
 						pageSize: browserDescriptor.perPage,
 						nowMs: input.nowMs?.() ?? Date.now(),
 						readLane: input.coverageRepository?.readLocalLaneCoverage,
-						forceRefresh: input.refreshBrowseWindows,
+						forceRefresh: input.refreshBrowseWindowKey === task.queryKey,
 					});
 			if (continuation.satisfied) {
 				// Fresh coverage already holds this whole window: serve local. No coverage

@@ -856,7 +856,7 @@ describe('createProductsSchedulerFetcher', () => {
 			coverageRepository,
 			fetcher,
 			pullBatchSize: () => 100,
-			refreshBrowseWindows: true,
+			refreshBrowseWindowKey: 'products:browse-window:limit=300',
 		});
 
 		await schedulerFetcher(
@@ -934,32 +934,37 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	/**
-	 * REGRESSION — the tie-heavy catalogue (#948 review finding, HIGH).
+	 * REGRESSION — the tie-heavy catalogue (#948 review findings, HIGH ×2).
 	 *
 	 * Every `menu_order` is 0, which the fetcher's own comment calls "the common case". The
 	 * phase-2 tiebreak walk then scans far past the window and keeps the LOWEST ids it
 	 * finds, so a filled lane is "the N lowest ids in wire[0, N+1900)" — NOT wire[0, N).
-	 * Resuming positionally from its length re-reads rows the prefix already holds, the
-	 * merge dedupes them, and the lane comes back SHORT.
+	 * Resuming positionally from its length re-reads rows the prefix already holds and the
+	 * merge dedupes them away, so the walk yields NOTHING new.
 	 *
-	 * The bug this pins: recording that short lane as COMPLETE made the footer report (e.g.)
-	 * 215 for a 300-row window and let the serve-local gate answer from it, so the window
-	 * stopped growing — #948's silent dead-end, reintroduced. It must report INCOMPLETE so
-	 * the next pass re-walks in full.
+	 * The exact-fill + page-alignment gate cannot catch this: the all-tied trace leaves
+	 * exactly 200 unique ids for a 300-row lane, and 200 is page-aligned, so the gate
+	 * accepts it and every retry repeats identically — a silent freeze. Progress, not shape,
+	 * is the honest test: a resumed walk that did not move the window falls back to a full
+	 * walk in the SAME pass, so the window converges instead of stalling.
 	 */
-	it('never claims a window it did not fill when the tiebreak walk substitutes rows', async () => {
+	it('falls back to a full walk when a resumed window cannot make progress', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
 		// Every product ties on menu_order, and the server hands them back id-DESC, so the
-		// correct window is only reachable by substitution from later pages.
+		// window is only reachable by substitution from later pages.
 		const products = Array.from({ length: 2_000 }, (_, index) => ({
 			id: 2_000 - index,
 			menu_order: 0,
 		}));
-		const fetcher = catalogServer(products, []);
-		// A predecessor lane holding ids the resumed pages will re-deliver.
+		const pagesSeen: number[] = [];
+		const catalog = catalogServer(products, []);
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			pagesSeen.push(Number(new URL(String(request)).searchParams.get('page')));
+			return catalog(request);
+		});
 		const coverageRepository = coverageWithLanes({
 			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
 		});
@@ -979,16 +984,75 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
+		// The resume was attempted (page 3) and then abandoned for a walk from the top.
+		expect(pagesSeen[0]).toBe(3);
+		expect(pagesSeen).toContain(1);
+		// Exactly ONE lane is written — the fruitless resume must not leave a short lane
+		// behind for the re-walk to overwrite a moment later.
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledTimes(1);
 		const [recorded] = coverageRepository.recordQueryResult.mock.calls[0] as unknown as [
 			{ records: { id: string }[]; complete: boolean },
 		];
-		// The substitution genuinely bites here: the tiebreak walk re-finds the very ids the
-		// prefix already held, so the merge yields 200 unique for a 300-row window. Asserted
-		// explicitly so this test cannot quietly go vacuous if the walk changes shape.
-		expect(recorded.records.length).toBeLessThan(300);
-		// THE FIX: a short lane must be INCOMPLETE. Marking it complete is what froze the
-		// window and made the footer report the shortfall as the total.
-		expect(recorded.complete).toBe(false);
+		// …and it is the FULL window, so the grid keeps growing rather than freezing at 200.
+		expect(recorded.records).toHaveLength(300);
+		expect(recorded.complete).toBe(true);
+	});
+
+	/**
+	 * REGRESSION — a resume page that no longer exists (#957 review finding, P2).
+	 *
+	 * Records deleted since the prefix was written can pull the listing's last page below
+	 * the resume offset, and WP answers an out-of-range `page` with a 400. Failing the task
+	 * would strand the window: every retry re-requests the same dead page until coverage
+	 * expires. The walk restarts from page 1 instead.
+	 */
+	it('restarts from page 1 when the resume page no longer exists', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 120 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const pagesSeen: number[] = [];
+		const catalog = catalogServer(products, []);
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			const page = Number(new URL(String(request)).searchParams.get('page'));
+			pagesSeen.push(page);
+			// The catalogue shrank: page 3 is past the end and WP 400s rather than
+			// returning an empty page.
+			if (page > 2) {
+				return new Response(JSON.stringify({ code: 'rest_post_invalid_page_number' }), {
+					status: 400,
+					headers: { 'content-type': 'application/json' },
+				});
+			}
+			return catalog(request);
+		});
+		const coverageRepository = coverageWithLanes({
+			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+
+		const result = await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		// It asked for the dead resume page, then restarted from the top instead of throwing.
+		expect(pagesSeen[0]).toBe(3);
+		expect(pagesSeen).toContain(1);
+		expect(result.documentCount).toBe(120);
 	});
 
 	/**
@@ -1032,6 +1096,166 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(pagesSeen[0]).toBe(1);
+	});
+
+	/**
+	 * REGRESSION — COL22 on a page-boundary duplicate.
+	 *
+	 * `bulkUpsert()` REJECTS an input carrying duplicate primary keys ("cannot be run with
+	 * multiple documents that have the same primary key", rx-collection COL22). The browse
+	 * walk concatenates pages verbatim, so a product inserted mid-walk — which shifts every
+	 * later row down a wire slot and repeats one across the boundary — made the whole browse
+	 * throw AFTER several successful requests. Uncapped windows walk more pages, so they meet
+	 * this more often. Same defect the customers lane fixed in bddd21d17; same remedy.
+	 */
+	it('dedupes a page-boundary repeat before upserting, so a mid-walk insert cannot fail the browse', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		// Page 2 repeats id 20 from page 1 — exactly what an insert between the two requests
+		// produces.
+		const page1 = Array.from({ length: 20 }, (_, index) => ({ id: index + 1, menu_order: index }));
+		const page2 = [
+			{ id: 20, menu_order: 19 },
+			...Array.from({ length: 19 }, (_, index) => ({ id: 21 + index, menu_order: 20 + index })),
+		];
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			const page = Number(new URL(String(request)).searchParams.get('page'));
+			const slice = (page === 1 ? page1 : page2).map((product) => ({
+				...product,
+				date_modified_gmt: '2026-05-20T10:10:00',
+				meta_data: posMeta(product.id),
+			}));
+			return response(slice, 2);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 20,
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=40:windowed',
+				queryKey: 'products:browse-window:limit=40',
+				limit: 40,
+			})
+		);
+
+		for (const [documents] of repository.upsertMany.mock.calls as unknown as [{ id: string }[]][]) {
+			const ids = documents.map(({ id }) => id);
+			expect(new Set(ids).size).toBe(ids.length);
+		}
+	});
+
+	/**
+	 * REGRESSION — a forced refresh must not strip the continuation from OTHER windows
+	 * (#948 review finding, P2). A drain executes every runnable persisted task, not only
+	 * the one just seeded, so a drain-wide boolean would make every queued browse window
+	 * re-walk from page 1 — up to 50 extra requests each — for a refresh the cashier asked
+	 * of one grid. The key is carried instead, and only the matching lane re-walks.
+	 */
+	it('scopes a forced refresh to the requested lane, leaving other windows resumable', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const products = Array.from({ length: 2_000 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const pagesSeen: number[] = [];
+		const catalog = catalogServer(products, []);
+		const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+			pagesSeen.push(Number(new URL(String(request)).searchParams.get('page')));
+			return catalog(request);
+		});
+		const coverageRepository = coverageWithLanes({
+			'products:browse-window:limit=200': { complete: true, ids: wooProductIds(1, 200) },
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+			pullBatchSize: () => 100,
+			// A DIFFERENT grid is being refreshed.
+			refreshBrowseWindowKey: 'products:browse-window:limit=500:category=9',
+		});
+
+		await schedulerFetcher(
+			browseTask({
+				id: 'products:browse-window:limit=300:windowed',
+				queryKey: 'products:browse-window:limit=300',
+				limit: 300,
+			})
+		);
+
+		// This window keeps its continuation: it resumes at page 3 rather than page 1.
+		expect(pagesSeen[0]).toBe(3);
+	});
+
+	/**
+	 * A page-budget truncation ALWAYS advances (#948 review thread — refutation, pinned).
+	 *
+	 * The review's concern was that a truncated walk could "repeatedly fetch the same first
+	 * 50 pages without advancing". It cannot: a budget truncation stops on a whole page, so
+	 * the short lane it leaves is page-aligned by construction and the own-lane branch
+	 * resumes from it. Successive drains therefore walk 1-50, 51-100, … and the window
+	 * converges. This test drives three drains over a lane store that behaves like the real
+	 * repository (the fetcher's own writes are what the next drain reads).
+	 */
+	it('advances the window on every drain after a page-budget truncation', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		// 15,000 products, dial at 100 ⇒ 150 pages for a 15,000-row window; the budget is 50.
+		const products = Array.from({ length: 15_000 }, (_, index) => ({
+			id: index + 1,
+			menu_order: index,
+		}));
+		const fetcher = catalogServer(products, []);
+		// A stateful lane store: whatever the fetcher records, the next drain reads back.
+		const lanes = new Map<string, { complete: boolean; ids: string[] }>();
+		const coverageRepository = {
+			recordQueryResult: vi.fn(
+				async (value: { queryKey: string; records: { id: string }[]; complete: boolean }) => {
+					lanes.set(value.queryKey, {
+						complete: value.complete,
+						ids: value.records.map(({ id }) => id),
+					});
+				}
+			),
+			readLocalLaneCoverage: vi.fn(async (_collection: string, queryKey: string) => {
+				const lane = lanes.get(queryKey);
+				return lane ? { complete: lane.complete, fresh: true, expectedRecordIds: lane.ids } : null;
+			}),
+		};
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+			pullBatchSize: () => 100,
+		});
+		const task = browseTask({
+			id: 'products:browse-window:limit=15000:windowed',
+			queryKey: 'products:browse-window:limit=15000',
+			limit: 15_000,
+		});
+
+		const covered: number[] = [];
+		for (let drain = 0; drain < 3; drain += 1) {
+			await schedulerFetcher(task);
+			covered.push(lanes.get('products:browse-window:limit=15000')!.ids.length);
+		}
+
+		// Strictly increasing, 50 pages at a time — never the same 50 pages twice.
+		expect(covered).toEqual([5_000, 10_000, 15_000]);
+		expect(lanes.get('products:browse-window:limit=15000')!.complete).toBe(true);
 	});
 
 	it('resolves the id tiebreak across a page seam when the dial splits the window', async () => {

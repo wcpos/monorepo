@@ -153,6 +153,22 @@ describe('readBrowseWindowContinuation', () => {
 		).toEqual(NO_BROWSE_WINDOW_CONTINUATION);
 	});
 
+	/**
+	 * REGRESSION — a dimension-mismatch lane must not serve local (#948 review finding, P1).
+	 *
+	 * When an older server ignores a brand / cashier / store dimension the fetchers keep the
+	 * unfiltered superset locally but now record NO lane ids for it, precisely so this gate
+	 * cannot treat it as a satisfied window. Pinned here as the gate's own contract: a lane
+	 * that claims no coverage is not coverage.
+	 */
+	it('does not treat a lane claiming no coverage as satisfied', async () => {
+		expect(
+			await continuationFor({
+				'products:browse-window:limit=300': { complete: false, ids: [] },
+			})
+		).toEqual(NO_BROWSE_WINDOW_CONTINUATION);
+	});
+
 	it('refuses every continuation for an explicitly requested refresh', async () => {
 		expect(
 			await continuationFor(
