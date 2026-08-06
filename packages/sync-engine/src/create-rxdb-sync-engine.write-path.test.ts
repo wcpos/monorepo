@@ -2322,6 +2322,104 @@ describe('#507 offline write flows through the public handle', () => {
 		}
 	});
 
+	it('#832 R7a: a later ordinary edit never coalesces INTO a pending recovery row', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+			await engine.resolveConflict('refused-update', 'requeue-rebuilt');
+			const [recovery] = await queueRows(engine);
+			expect(recovery).toMatchObject({ requeuedFrom: 'refused-update' });
+
+			// The recovery can sit pending for a long time — offline, held, backing
+			// off. An edit landing meanwhile must NOT replace it: merging the refused
+			// fields into a new valid edit (and dropping the provenance with them)
+			// recreates the entombment the outbound half of this rule prevents.
+			const later = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { customer_note: 'later edit' },
+			});
+
+			const rows = await queueRows(engine);
+			expect(rows).toHaveLength(2);
+			const recoveryRow = rows.find((item) => item.mutationId === recovery.mutationId);
+			const laterRow = rows.find((item) => item.mutationId === later.mutationId);
+			expect(recoveryRow).toMatchObject({ requeuedFrom: 'refused-update' });
+			expect(recoveryRow?.payload).not.toHaveProperty('customer_note');
+			expect(laterRow?.payload).toMatchObject({ customer_note: 'later edit' });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('#832 R7a: a dead-lettered DELETE supersedes an older update — requeue refuses', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:server-r1' });
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const queue = queueFor(scope.database);
+			const stale = await queue.enqueue({
+				mutationId: 'refused-update',
+				collectionName: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { status: 'completed' },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:00.000Z',
+			});
+			await queue.replace({ ...stale, status: 'rejected', rejectedStatus: 400 });
+			// The cashier's newer intent is DELETION, and it dead-lettered too.
+			// `pending()` filters rejected rows out, so this delete used to be
+			// invisible to the recovery's guard — reviving the older update would push
+			// a change to a record they have asked to remove.
+			const deletion = await queue.enqueue({
+				mutationId: 'refused-delete',
+				collectionName: 'orders',
+				operation: 'delete',
+				recordId: UUID_A,
+				origin: 'existing',
+				payload: { id: UUID_A },
+				baseRevision: 'sha256:server-r1',
+				queuedAt: '2026-01-05T00:00:02.000Z',
+			});
+			await queue.replace({ ...deletion, status: 'rejected', rejectedStatus: 400 });
+
+			await expect(engine.resolveConflict('refused-update', 'requeue-rebuilt')).rejects.toThrow(
+				/queued for deletion/i
+			);
+			// Both dead letters stay listed and independently resolvable.
+			expect((await engine.conflicts()).map((item) => item.mutationId).sort()).toEqual([
+				'refused-delete',
+				'refused-update',
+			]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	/**
 	 * `identity-ambiguous` is the push adapter's PERMANENT 409: the record's uuid
 	 * resolves to more than one server record, so the server fails closed and the

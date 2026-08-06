@@ -94,6 +94,8 @@ function row(over: Partial<RejectedMutation> = {}): RejectedMutation {
 		requeueCount: 0,
 		residentMissing: false,
 		destroysRecord: false,
+		mayDestroyRecord: false,
+		residentUnknown: false,
 		...over,
 	};
 }
@@ -183,6 +185,32 @@ describe('RejectedMutationsPanel', () => {
 
 		expect(document.body.textContent).not.toContain('permanently deletes it from this device');
 		expect(getByTestId('db-rejected-discard-confirm').textContent).toContain('Discard');
+	});
+
+	it('states the CONDITION when deletion depends on what the server still has', async () => {
+		// The engine re-fetches the server document for a non-order row and removes
+		// the resident when the server 404s. The client cannot know that answer
+		// without the request, so the copy must state the condition rather than
+		// promise "your server's version is kept" and then delete the record.
+		rows = [row({ operation: 'update', collectionName: 'products', mayDestroyRecord: true })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		await press(getByTestId('db-rejected-discard-m-1'));
+
+		expect(document.body.textContent).toContain('If your server no longer has');
+		expect(document.body.textContent).toContain('also deletes it from this device');
+		expect(document.body.textContent).not.toContain('permanently deletes it from this device');
+	});
+
+	it('disables discard while the resident read failed — the outcome is unknown', async () => {
+		// Not `residentMissing` (a successful read finding nothing) but a FAILED
+		// read: whether discard destroys the record is unknowable, so every confirm
+		// we could show might describe the wrong outcome.
+		rows = [row({ residentUnknown: true })];
+		const { getByTestId } = render(<RejectedMutationsPanel />);
+
+		expect((getByTestId('db-rejected-discard-m-1') as HTMLButtonElement).disabled).toBe(true);
+		expect(getByTestId('db-rejected-row-m-1').textContent).toContain('couldn’t read the record');
 	});
 
 	it('keeps the non-destructive copy when the record survives the discard', async () => {

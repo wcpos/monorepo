@@ -203,7 +203,20 @@ export async function enqueueWriteIntent(input: {
 		// its own, and a second refusal dead-letters only the recovery. A recovered
 		// CREATE must still coalesce — the server has never seen the record, so an
 		// update may not reach it ahead of its create (#516 rules 1–2).
-		const prior = input.provenance && intent.operation === 'update' ? undefined : coalescable;
+		//
+		// The BLOCK IS SYMMETRIC (PR #1016 review): a pending recovery row is not a
+		// coalesce target for a later ordinary write either. A recovery can sit
+		// pending for a long time — offline, held, backing off — and an edit landing
+		// meanwhile would REPLACE it, merging the refused fields into the cashier's
+		// new valid edit and dropping the requeue provenance with them. One more
+		// refusal then dead-letters the merged row and discarding it loses the new
+		// edit: exactly the entombment the outbound half of this rule prevents.
+		// Keeping recovery rows unmergeable in both directions is what makes
+		// "recovered work stays independently resolvable" actually hold.
+		const recoveryUpdate = input.provenance !== undefined && intent.operation === 'update';
+		const coalescingIntoRecovery =
+			input.provenance === undefined && coalescable?.requeuedFrom !== undefined;
+		const prior = recoveryUpdate || coalescingIntoRecovery ? undefined : coalescable;
 		// A create still ahead in the queue (pending or in flight): a delete queued
 		// behind it defers its baseRevision to the drain-time re-stamp.
 		const createAhead = recordRows.find(
@@ -667,6 +680,23 @@ export async function requeueRejectedMutation(input: {
 	//    asking for a retry costs a second; guessing costs a spurious 404 dead
 	//    letter on top of the one being recovered.
 	const queued = sameRecord(await queue.pending());
+	// The DELETE check reads EVERY same-record row, not just the pending ones
+	// (PR #1016 review). `pending()` filters rejected rows out by design, so a
+	// delete that itself dead-lettered was invisible here — and a dead-lettered
+	// delete is still the cashier's most recent stated intent for the record.
+	// Reviving an older update against it would push a change to a record they
+	// have asked to remove. Recovering the DELETE is the honest way forward, so
+	// this refuses and says so. (Field ownership below stays pending-only: a
+	// rejected row is a refused intent with no live row to deliver it, and
+	// subtracting its fields would silently gut this recovery instead.)
+	const supersedingDelete = sameRecord(await queue.all()).some(
+		(item) => item.operation === 'delete' && item.mutationId !== entry.mutationId
+	);
+	if (supersedingDelete) {
+		throw new Error(
+			`requeue: ${entry.collectionName}/${entry.recordId} is queued for deletion — sending the refused change again would undo that; discard instead`
+		);
+	}
 	if (queued.some((item) => item.operation === 'delete')) {
 		throw new Error(
 			`requeue: ${entry.collectionName}/${entry.recordId} is queued for deletion — sending the refused change again would undo that; discard instead`

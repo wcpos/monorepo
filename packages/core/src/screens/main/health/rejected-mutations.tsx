@@ -151,6 +151,11 @@ export function RejectedMutationsPanel() {
 									{t('health.database.rejected.no_record')}
 								</Text>
 							) : null}
+							{row.residentUnknown ? (
+								<Text className="text-muted-foreground/80 text-xs">
+									{t('health.database.rejected.unknown_record')}
+								</Text>
+							) : null}
 						</View>
 						<HStack className="items-center gap-2">
 							<Button
@@ -166,7 +171,12 @@ export function RejectedMutationsPanel() {
 								variant="ghost"
 								size="sm"
 								testID={`db-rejected-discard-${row.mutationId}`}
-								disabled={busyId !== null}
+								// A failed resident read leaves the destructive outcome UNKNOWN
+								// (PR #1016 review): the record may or may not be deleted, so
+								// every confirm we could show might be describing the wrong one.
+								// Wait for a read that succeeds rather than guess — the feed
+								// re-renders on the next queue emission.
+								disabled={busyId !== null || row.residentUnknown}
 								onPress={() => setDiscarding(row)}
 							>
 								<ButtonText className="text-destructive">
@@ -186,21 +196,32 @@ export function RejectedMutationsPanel() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						{/* A born-local record has no server version to fall back on, so
-						    discarding DESTROYS it (#832 follow-up, R7b). The confirm must
-						    say that outright — the old copy promised the record would stay,
-						    which was both wrong and the friendlier of the two readings. */}
+						{/* THREE outcomes, because the engine has three (PR #1016 review).
+						    A born-local record has no server version to fall back on, so
+						    discarding DESTROYS it (#832 follow-up, R7b) and the confirm says
+						    so outright. A non-order row WITH a server identity is deleted
+						    only if the server no longer has it — unknowable without the
+						    request the engine itself makes, so that copy states the
+						    condition instead of promising an outcome. Everything else keeps
+						    its record. The original copy promised "your server's version is
+						    kept" for all three, which was a lie on two of them. */}
 						<AlertDialogTitle>
 							{discarding?.destroysRecord
 								? t('health.database.rejected.discard_destroy_title')
-								: t('health.database.rejected.discard_title')}
+								: discarding?.mayDestroyRecord
+									? t('health.database.rejected.discard_maybe_title')
+									: t('health.database.rejected.discard_title')}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
 							{discarding?.destroysRecord
 								? t('health.database.rejected.discard_destroy_body', {
 										record: describeRecord(discarding, t),
 									})
-								: t('health.database.rejected.discard_body')}
+								: discarding?.mayDestroyRecord
+									? t('health.database.rejected.discard_maybe_body', {
+											record: describeRecord(discarding, t),
+										})
+									: t('health.database.rejected.discard_body')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

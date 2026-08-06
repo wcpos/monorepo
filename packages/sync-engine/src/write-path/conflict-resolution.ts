@@ -109,8 +109,17 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 					entry.status === 'rejected'
 			);
 		},
-		resolveConflict: async (mutationId: string, resolution: ConflictResolutionChoice) =>
-			serialize(async () => {
+		resolveConflict: async (mutationId: string, resolution: ConflictResolutionChoice) => {
+			// Captured BEFORE the resolution chain is joined. `runGuarded` takes its
+			// scope ticket synchronously when it is CALLED, and serializing delays that
+			// call until every queued resolution ahead of this one has finished — long
+			// enough for the cashier to switch stores. The resolution would then bind to
+			// the store that is active when its turn arrives, not the one whose Store
+			// health screen the cashier pressed the button on. Serialization must not
+			// change which store a resolution applies to, so the issuing scope is pinned
+			// here and verified once the turn is granted.
+			const issuedAgainst = activeDatabase();
+			return serialize(async () => {
 				assertNotDisposed();
 				await readySettledForSync;
 				// Scope-guarded like write(): the resolution writes into the captured
@@ -121,6 +130,11 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 				await manager.runGuarded(async (bound) => {
 					const database = databaseByScopeId.get(bound.scopeId);
 					if (!database) throw new Error('resolveConflict: scope database not open');
+					if (issuedAgainst !== null && database !== issuedAgainst) {
+						throw new Error(
+							'resolveConflict: the active store changed while this resolution was queued — reopen Store health and retry against the settled store'
+						);
+					}
 					const queue = queueFor(database);
 					const entry = (await queue.all()).find((item) => item.mutationId === mutationId);
 					if (
@@ -314,6 +328,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 								// exactly why `serverMayHoldRecord` below has to carry the weight.)
 								discardServerDocument === null &&
 								!serverMayHoldRecord(entry);
+							const removesResident = discardRemovesResident || bornLocalCreate;
 							// Destroying is only safe when NOTHING is queued to send for this
 							// record. A live row means a push is pending or in flight, and for a
 							// rejected CREATE the most likely live row is a recovery's own
@@ -323,10 +338,27 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 							// cannot interleave mid-discard, but a replacement enqueued by an
 							// EARLIER, already-returned requeue is still sitting there — this is
 							// what catches it. Refuse and let the queue drain first.
-							if (bornLocalCreate) {
+							//
+							// Bound to `removesResident`, NOT to `bornLocalCreate` (CodeRabbit,
+							// PR #1016): the other destructive branch — a non-order record whose
+							// `fetchServerDocument` came back null — deletes the resident just as
+							// finally, and a successor queued against it lands in exactly the same
+							// rematerialization the born-local guard exists to prevent. Every
+							// destructive path takes the same check.
+							// Only rows the DRAIN can actually send count. `pending()` also
+							// returns terminal conflicted / needs-revision rows — including the
+							// one being resolved right now — and those go nowhere without their
+							// own explicit resolution; counting them would refuse every
+							// server-gone discard of a conflicted row.
+							if (removesResident) {
 								const live = (await queue.pending()).filter(
 									(item) =>
-										item.collectionName === entry.collectionName && item.recordId === entry.recordId
+										item.collectionName === entry.collectionName &&
+										item.recordId === entry.recordId &&
+										item.mutationId !== mutationId &&
+										(item.status === undefined ||
+											item.status === 'pending' ||
+											item.status === 'claimed')
 								);
 								if (live.length > 0) {
 									throw new Error(
@@ -334,7 +366,6 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 									);
 								}
 							}
-							const removesResident = discardRemovesResident || bornLocalCreate;
 							// #516 item 5: queue the server-truth re-pull DURABLY *before*
 							// clearing local state. A persisted targeted scheduler task
 							// survives crashes and failed fetches (a failed task re-runs once
@@ -503,6 +534,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 					}
 					scheduleStatusChange();
 				}
-			}),
+			});
+		},
 	};
 }

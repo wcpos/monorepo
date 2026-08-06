@@ -47,6 +47,22 @@ export type RejectedMutation = {
 	 * record, which is server truth.
 	 */
 	destroysRecord: boolean;
+	/**
+	 * Discarding MIGHT delete the record: the engine re-fetches the server document
+	 * for a non-order row first, and removes the resident when the server no longer
+	 * has it (`discardRemovesResident`). The client cannot know the answer without
+	 * making that request, so the confirm says "if your server no longer has it"
+	 * rather than promising either outcome (PR #1016 review — the old copy promised
+	 * the record would be kept and then deleted it).
+	 */
+	mayDestroyRecord: boolean;
+	/**
+	 * The resident read FAILED — the record's state is unknown, so whether discard
+	 * destroys it is unknowable too. Discard is disabled rather than shown behind a
+	 * confirm that might be describing the wrong outcome (PR #1016 review). Distinct
+	 * from `residentMissing`, which is a successful read finding nothing.
+	 */
+	residentUnknown: boolean;
 };
 
 /**
@@ -115,7 +131,25 @@ async function describe(
 				readFailed = true;
 			}
 			const remoteIdField = REMOTE_ID_FIELD[entry.collectionName];
-			const remoteId = remoteIdField ? resident?.[remoteIdField] : undefined;
+			// The engine's OWN resolution order, mirrored exactly
+			// (`conflict-resolution.ts`): the resident's column, then — for a
+			// non-order, which is the only kind it pre-fetches for — the queued
+			// payload's `id` and the conflict document's. A create whose payload names
+			// a server record is NOT born-local, and the engine will fetch and keep it;
+			// reading only the column made the dialog promise a deletion that never
+			// happened (PR #1016 review).
+			const columnRemoteId = remoteIdField ? resident?.[remoteIdField] : undefined;
+			const queuedRemoteId =
+				entry.collectionName === 'orders'
+					? undefined
+					: ((entry.payload as Record<string, unknown> | undefined)?.id ??
+						(entry.conflictDocument as Record<string, unknown> | undefined)?.id);
+			const remoteId = typeof columnRemoteId === 'number' ? columnRemoteId : queuedRemoteId;
+			// A non-order row WITH a server identity is the engine's other destructive
+			// branch: it fetches the server document and removes the resident when the
+			// server 404s. Orders skip that fetch entirely, so they never take it.
+			const mayDestroyRecord =
+				entry.collectionName !== 'orders' && resident !== null && typeof remoteId === 'number';
 			return {
 				mutationId: entry.mutationId,
 				collectionName: entry.collectionName,
@@ -128,6 +162,7 @@ async function describe(
 				rejectedAt: entry.rejectedAt ?? null,
 				requeueCount: entry.requeueCount ?? 0,
 				residentMissing: resident === null && !readFailed,
+				residentUnknown: readFailed,
 				// Born-local CREATE ⇒ discard deletes the record. A read failure says
 				// nothing about the record, so it never claims destruction — and neither
 				// does a verdict that says the SERVER matched this record's uuid
@@ -136,8 +171,10 @@ async function describe(
 				destroysRecord:
 					entry.operation === 'create' &&
 					resident !== null &&
+					!readFailed &&
 					typeof remoteId !== 'number' &&
 					!rejectionSuggestsServerRecord(entry.rejectedReason),
+				mayDestroyRecord: mayDestroyRecord && !readFailed,
 			};
 		})
 	);

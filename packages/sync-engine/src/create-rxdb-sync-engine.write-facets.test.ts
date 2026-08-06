@@ -896,6 +896,60 @@ describe('write facets beyond orders', () => {
 		await subject.dispose();
 	});
 
+	it('refuses the server-gone tombstone while a successor is still queued (PR #1016 review)', async () => {
+		// The OTHER destructive branch: `discardRemovesResident`, taken when the
+		// server no longer returns the record. It deletes the resident just as
+		// finally as the born-local path, so a successor queued against it lands in
+		// the same rematerialization — the guard is bound to `removesResident`, not
+		// to `bornLocalCreate`.
+		const spec = FACETS[0];
+		let truth: Record<string, unknown> | null = {
+			...payload(spec, UUID_A, 'server-truth', spec.remoteId),
+			_rxdb_revision: 'sha256:server-base',
+		};
+		const route = routedServer(spec, () => truth);
+		route.server.seed(UUID_A, {
+			id: spec.remoteId,
+			revision: 'sha256:server-base',
+			collection: spec.collection,
+			payload: truth,
+		});
+		const subject = engine(route.fetch);
+		await subject.ready;
+		await insert(
+			subject,
+			spec,
+			storedDocument({
+				spec,
+				id: UUID_A,
+				label: 'local',
+				remoteId: spec.remoteId,
+				revision: 'sha256:stale',
+			})
+		);
+		const receipt = await subject.write({
+			collection: spec.collection,
+			operation: 'update',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'local', spec.remoteId),
+		});
+		await subject.sync('write-drain');
+		truth = null;
+		// A later edit the cashier made; it is still queued to send.
+		await subject.write({
+			collection: spec.collection,
+			operation: 'update',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'later-edit', spec.remoteId),
+		});
+
+		await expect(subject.resolveConflict(receipt.mutationId, 'discard')).rejects.toThrow(
+			/queued to send/i
+		);
+		expect(await record(subject, spec, UUID_A)).not.toBeNull();
+		await subject.dispose();
+	});
+
 	it('discard removes a rejected born-local create that never existed remotely', async () => {
 		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
 		const route = routedServer(spec, () => null);
