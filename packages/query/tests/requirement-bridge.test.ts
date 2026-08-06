@@ -1,4 +1,4 @@
-import type { EngineRequirement } from '@wcpos/sync-engine';
+import type { EngineRequirement, RequirementHandle } from '@wcpos/sync-engine';
 
 import { declareRequirements, requirementsForQuery } from '../src/requirement-bridge';
 import { createEngineDatabase, createFakeEngine, orderBrowserQueryKey } from '../src/testing';
@@ -742,12 +742,16 @@ describe('declareRequirements', () => {
 	});
 
 	it('contains a rejected category refresh without an unhandled rejection', async () => {
-		const engine = createFakeEngine(database);
-		engine.refreshFailure = new Error('offline');
+		const handle: RequirementHandle = {
+			ready: Promise.reject(new Error('offline')),
+			release: jest.fn(),
+			queryKey: null,
+		};
+		const engine = { require: jest.fn(() => handle) };
 		const unhandled = jest.fn();
 		process.once('unhandledRejection', unhandled);
 
-		declareRequirements(engine, [
+		declareRequirements(engine as never, [
 			{ id: 'category-filter', collection: 'categories', kind: 'refresh' },
 		]);
 		await new Promise((resolve) => setTimeout(resolve, 0));

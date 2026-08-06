@@ -26,15 +26,12 @@ jest.mock('@wcpos/components/tree-combobox', () => ({
 	TreeComboboxContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 	TreeComboboxTrigger: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('../../../../../contexts/translations', () => ({
-	useT: () => (key: string) =>
-		(
-			({
-				'common.category': 'Category',
-				'common.loading': 'Loading…',
-			}) as Record<string, string>
-		)[key] ?? key,
-}));
+jest.mock('../../../../../contexts/translations', () => {
+	const { createTestT } = jest.requireActual<typeof import('../../../../../../jest/translate')>(
+		'../../../../../../jest/translate'
+	);
+	return { useT: () => createTestT() };
+});
 jest.mock('../category-select', () => ({ CategoryTreeLoader: () => null }));
 
 describe('selected category labels', () => {
