@@ -98,14 +98,17 @@ jest.mock('./use-update-fee-line', () => ({
 	useUpdateFeeLine: () => ({ updateFeeLine: jest.fn() }),
 }));
 
+let allRates: unknown[] = [];
+let taxRoundAtSubtotal = false;
 let priceNumDecimals = 2;
+let pricesIncludeTax = false;
 
 jest.mock('../../contexts/tax-rates', () => ({
 	useTaxRates: () => ({
-		allRates: [],
-		taxRoundAtSubtotal: false,
+		allRates,
+		taxRoundAtSubtotal,
 		priceNumDecimals,
-		pricesIncludeTax: false,
+		pricesIncludeTax,
 	}),
 }));
 
@@ -154,7 +157,10 @@ describe('useCartLines reference demand (#952)', () => {
 		whenSettled = jest.fn(async () => true);
 		whenSettledInBackground = jest.fn(async (_signal: AbortSignal) => true);
 		referenceGeneration = 0;
+		allRates = [];
+		taxRoundAtSubtotal = false;
 		priceNumDecimals = 2;
+		pricesIncludeTax = false;
 		couponLines$.next([]);
 		lineItems$.next([]);
 		feeLines$.next([]);
@@ -308,7 +314,10 @@ describe('useCartLines background coupon replay (#963)', () => {
 		lineItems$.next([]);
 		feeLines$.next([]);
 		shippingLines$.next([]);
+		allRates = [];
+		taxRoundAtSubtotal = false;
 		priceNumDecimals = 2;
+		pricesIncludeTax = false;
 		revision = buildRevision();
 		currentOrder = buildCurrentOrder();
 	});
@@ -381,6 +390,37 @@ describe('useCartLines background coupon replay (#963)', () => {
 		});
 
 		expect(calculateOrderTotals).toHaveBeenCalledWith(expect.objectContaining({ dp: 3 }));
+	});
+
+	it('uses current tax settings when they change without re-arming the continuation', async () => {
+		const background = deferredBackgroundWait();
+		applyCoupon([{ code: 'bonus' }]);
+		const { rerender } = renderHook(() => useCartLines());
+
+		await act(async () => {
+			editCart([{ total: '10.00', total_tax: '0.00', product_id: 1 }]);
+		});
+
+		const currentRates = [{ id: 7 }];
+		await act(async () => {
+			allRates = currentRates;
+			taxRoundAtSubtotal = true;
+			pricesIncludeTax = true;
+			rerender();
+		});
+		expect(whenSettledInBackground).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			background.settle();
+		});
+
+		expect(calculateOrderTotals).toHaveBeenCalledWith(
+			expect.objectContaining({
+				taxRates: currentRates,
+				taxRoundAtSubtotal: true,
+				pricesIncludeTax: true,
+			})
+		);
 	});
 
 	it('aborts the continuation when the cart switches to another current order', async () => {

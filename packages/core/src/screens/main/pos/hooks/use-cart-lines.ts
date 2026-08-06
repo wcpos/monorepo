@@ -210,6 +210,12 @@ export const useCartLines = () => {
 		]
 	);
 
+	// The background wait is external to React, so a tax-setting change does not re-arm it.
+	// Keep an already-armed continuation on the calculation context from the latest render.
+	React.useEffect(() => {
+		if (continuationRef.current) continuationRef.current.replay = replayCoupons;
+	}, [replayCoupons]);
+
 	const disarmReplayContinuation = React.useCallback(() => {
 		continuationRef.current?.abort.abort();
 		continuationRef.current = null;
