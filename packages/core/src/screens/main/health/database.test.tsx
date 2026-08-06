@@ -7,6 +7,8 @@ import { render } from '@testing-library/react';
 
 import { DatabaseScreen } from './database';
 
+import type { StuckRecord } from '../logs/logs-logic';
+
 type TooltipProps = { children: React.ReactNode; showOnNative?: boolean };
 
 const mockTooltip = jest.fn(({ children }: TooltipProps) => <>{children}</>);
@@ -17,6 +19,7 @@ const mockMutationCounts = {
 	rejected: 0,
 	unresolvedConflicts: 0,
 };
+const mockDeadLetterStuck: StuckRecord[] = [];
 
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: (props: TooltipProps) => mockTooltip(props),
@@ -97,6 +100,10 @@ jest.mock('../../../contexts/translations', () => {
 jest.mock('../logs/use-log-stats', () => ({
 	useLogStats: () => ({ stuck: [] }),
 }));
+jest.mock('./use-dead-letter-attention', () => ({
+	...jest.requireActual('./use-dead-letter-attention'),
+	useDeadLetterStuckRecords: () => mockDeadLetterStuck,
+}));
 jest.mock('../hooks/use-census-totals', () => ({
 	useCensusTotals: () => ({
 		products: { total: 2, updatedAtMs: 100, freshUntilMs: 1_000, fresh: true },
@@ -139,6 +146,7 @@ describe('DatabaseScreen coverage', () => {
 		mockMutationCounts.conflicts = 0;
 		mockMutationCounts.rejected = 0;
 		mockMutationCounts.unresolvedConflicts = 0;
+		mockDeadLetterStuck.length = 0;
 	});
 
 	it('enables press-to-show coverage tooltips on native', () => {
@@ -164,5 +172,23 @@ describe('DatabaseScreen coverage', () => {
 		expect(
 			getByText('1 sale(s) need attention — changed on the server while a till was editing.')
 		).toBeTruthy();
+	});
+
+	it('counts durable dead letters in their collection row', () => {
+		mockDeadLetterStuck.push({
+			key: 'orders:42',
+			collection: 'orders',
+			recordId: '42',
+			reason: 'invalid order',
+			lastSeen: 1,
+			attempts: 0,
+			eventType: 'push.rejected',
+			direction: 'push',
+			retryable: false,
+		});
+
+		const { getAllByText } = render(<DatabaseScreen />);
+
+		expect(getAllByText('1 stuck')).toHaveLength(2);
 	});
 });

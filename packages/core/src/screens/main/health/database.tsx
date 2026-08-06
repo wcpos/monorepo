@@ -537,7 +537,8 @@ export function DatabaseScreen() {
 	const rows = deriveRows(ROW_ORDER, counts, census);
 	const totalRecords = totalLocalRecords(counts);
 	const storageText = formatBytes(storageBytes);
-	const stuckByRow = stuckCountsByRow(stats.stuck);
+	const stuck = mergeStuckRecords(deadLetterStuck, stats.stuck);
+	const stuckByRow = stuckCountsByRow(stuck);
 	const everythingElseText = formatBytes(
 		deriveEverythingElseBytes(
 			storageBytes,
@@ -597,7 +598,7 @@ export function DatabaseScreen() {
 				    records (#832 follow-up). The log feed resets on restart, so a banner
 				    built from it alone hid a refused sale the moment the app was quit —
 				    while the queue row was still there. */}
-				<AttentionPanel stuck={mergeStuckRecords(deadLetterStuck, stats.stuck)} />
+				<AttentionPanel stuck={stuck} />
 
 				{stats.clockSkew ? (
 					<Callout tone="warning" testID="db-clock-skew">
