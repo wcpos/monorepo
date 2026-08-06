@@ -135,6 +135,8 @@ import {
 	SEED_RETICK_LANES,
 } from './maintenance/lane-registry';
 
+import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
+
 export type {
 	CoverageOutcome,
 	CustomerBrowseDimensions,
@@ -352,6 +354,21 @@ export type EngineEvent =
 			mutationId: string;
 			status?: number;
 			reason?: string;
+	  }
+	// R1 — the save-time mirror check. The server ACKED an order the POS built, but
+	// its money is not the money that was pushed: WooCommerce's calculation is the
+	// source of truth, the POS mirrors it, and this is the mirror breaking. NOT a
+	// terminal outcome — the write succeeded and `write-acknowledged` still follows;
+	// the server's totals stand and the cashier is told to review before handing over
+	// goods. Payment-time adjustments (gateway surcharges, fee plugins) happen after
+	// this ack and arrive by PULL, so they can never raise it.
+	| {
+			type: 'order-money-divergence';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			mode: MoneyPrecisionMode;
+			fields: MoneyDivergenceField[];
 	  };
 
 export type EngineStatus = {

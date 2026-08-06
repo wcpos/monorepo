@@ -126,6 +126,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.push_error');
 		case 'push.in_progress':
 			return t('health.logs.event.push_in_progress');
+		case 'push.money-divergence':
+			return t('health.logs.event.push_money_divergence');
 		case 'push.outcome':
 			return t('health.logs.event.push_outcome');
 		case 'push.rejected':

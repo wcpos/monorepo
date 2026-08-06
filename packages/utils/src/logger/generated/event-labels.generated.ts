@@ -61,6 +61,7 @@ export const SYNC_EVENT_TYPES = [
 	'push.conflict',
 	'push.error',
 	'push.in_progress',
+	'push.money-divergence',
 	'push.outcome',
 	'push.rejected',
 	'queue.drain.progress',
@@ -481,6 +482,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.push_in_progress',
 		label: 'This change was already being sent',
+		introducedIn: '1.10.0',
+	},
+	'push.money-divergence': {
+		type: 'push.money-divergence',
+		domain: 'CHECKOUT',
+		key: 'health.logs.event.push_money_divergence',
+		label: 'Totals from your store differ from the till',
 		introducedIn: '1.10.0',
 	},
 	'push.outcome': {

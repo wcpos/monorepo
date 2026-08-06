@@ -30,6 +30,7 @@ import { CheckoutTitle } from './components/title';
 import { useCheckoutSession } from './hooks/use-checkout-session';
 import { useT } from '../../../../contexts/translations';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
+import { TotalsChangedBanner } from '../cart/totals-changed-banner';
 import { stockRejection$ } from '../hooks/stock-rejection';
 
 interface Props {
@@ -163,6 +164,17 @@ function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDoc
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
+						{/* R1. The cart's copy of this banner is behind this full-height
+						    modal, and the write that produces a divergence is usually the
+						    Pay button's own save — so without a mount HERE the cashier can
+						    take payment having never seen that the store changed the money.
+						    This is the exact moment the ruling names: before goods change
+						    hands. It does not gate Process Payment; the server's totals
+						    stand, and the cashier decides. */}
+						<TotalsChangedBanner
+							orderId={order.uuid as string | undefined}
+							testID="checkout-totals-changed-banner"
+						/>
 						{storageDegraded && !showStockRejection ? (
 							<VStack
 								space="xs"

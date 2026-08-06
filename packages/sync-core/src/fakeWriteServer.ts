@@ -91,6 +91,17 @@ export type FakeWriteServer = {
 export type FakeWriteServerOptions = {
 	/** First numeric id assigned to a create; increments per distinct `recordId`. Default 500. */
 	firstId?: number;
+	/**
+	 * How the server RENDERS the stored record into a push ack, applied to the success
+	 * body only. Default: verbatim.
+	 *
+	 * The real controller does not echo the pushed payload — it re-serializes the saved
+	 * order, which today means display decimals (`6.713280` → `"6.71"`, issue #946) and a
+	 * TRIMMED projection that may omit whole arrays. Both are indistinguishable from an
+	 * echo without this seam, so a client contract about ack precision or sparse acks
+	 * could not be written honestly.
+	 */
+	serialize?: (payload: Record<string, unknown>, envelope: PushEnvelope) => Record<string, unknown>;
 };
 
 const NAMESPACE = '/wcpos/v2/';
@@ -158,6 +169,10 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 	// mutationId → the response already produced for a SUCCESS, so a replay is byte-identical (idempotent).
 	const memoByMutation = new Map<string, { status: number; body: unknown }>();
 	let scriptFn: (env: PushEnvelope) => FakeWriteServerFault | undefined = () => undefined;
+
+	/** Stored record → the shape the ack body carries (see the `serialize` option). */
+	const render = (payload: Record<string, unknown>, env: PushEnvelope): Record<string, unknown> =>
+		options.serialize ? options.serialize(payload, env) : payload;
 
 	const asResponse = (status: number, body: unknown): Response =>
 		({ status, ok: status >= 200 && status < 300, json: async () => body }) as unknown as Response;
@@ -361,7 +376,10 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 				records.set(env.recordId, { id: existing.id, revision });
 				const payload = { ...existingPayload, ...(env.payload ?? {}) };
 				recordPayloads.set(env.recordId, payload);
-				return remember(200, successBody(existing.id, env.recordId, revision, payload));
+				return remember(
+					200,
+					successBody(existing.id, env.recordId, revision, render(payload, env))
+				);
 			}
 
 			// create
@@ -370,7 +388,7 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 				// uuid / mutationId) — return the existing id/revision rather than allocating a second.
 				return remember(
 					200,
-					successBody(existing.id, env.recordId, existing.revision, existingPayload)
+					successBody(existing.id, env.recordId, existing.revision, render(existingPayload, env))
 				);
 			}
 			const id = nextId++;
@@ -378,7 +396,7 @@ export function createFakeWriteServer(options: FakeWriteServerOptions = {}): Fak
 			records.set(env.recordId, { id, revision });
 			const payload = { ...(env.payload ?? {}) };
 			recordPayloads.set(env.recordId, payload);
-			return remember(201, successBody(id, env.recordId, revision, payload));
+			return remember(201, successBody(id, env.recordId, revision, render(payload, env)));
 		},
 	};
 }

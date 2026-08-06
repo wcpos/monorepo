@@ -17,6 +17,7 @@ import { CartHeader } from './cart-header';
 import { CartTable } from './table';
 import { OpenOrderTabs } from './tabs';
 import { Totals } from './totals';
+import { CartTotalsChangedBanner } from './totals-changed-banner';
 import { useCurrentOrder } from '../contexts/current-order';
 
 /**
@@ -58,6 +59,9 @@ export function OpenOrders({ isColumn = false }) {
 									<CartTable />
 								</ErrorBoundary>
 							</View>
+							<ErrorBoundary>
+								<CartTotalsChangedBanner />
+							</ErrorBoundary>
 							<ErrorBoundary>
 								<Totals />
 							</ErrorBoundary>
