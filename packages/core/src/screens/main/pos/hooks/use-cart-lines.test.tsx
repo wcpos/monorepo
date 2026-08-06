@@ -22,7 +22,9 @@ jest.mock('@wcpos/utils/logger', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/translations', () => {
-	const { createTestT } = require('../../../../../jest/translate');
+	const { createTestT } = jest.requireActual<typeof import('../../../../../jest/translate')>(
+		'../../../../../jest/translate'
+	);
 	return { useT: () => createTestT() };
 });
 
