@@ -183,6 +183,15 @@ jobs:
             exit 1
           fi
 
+      - name: "\U0001F3C1 Run sync-engine performance contracts"
+        run: |
+          # The perf lane (#949) runs ALONE via its own vitest config: those tests
+          # hold 10k-50k live documents, and sharing the worker pool with the ~76
+          # functional files starved them on 2-core runners. `--if-present` keeps
+          # this step a no-op until the suite lands, so the two PRs can merge in
+          # either order.
+          pnpm --filter @wcpos/sync-engine run --if-present test:perf
+
       - name: "\U0001F4CA Generate test failure summary"
         if: always()
         run: |
