@@ -79,8 +79,14 @@ import {
 import {
 	type ChangeSignalDecayLevel,
 	changeSignalDelayMs,
+	changeSignalSteadyIntervalMs,
+	maxChangeSignalPressureMultiplier,
 	nextChangeSignalDecayLevel,
 } from './change-signal/tick-cadence';
+import {
+	createServerPressureMonitor,
+	type ServerPressureTransition,
+} from './change-signal/server-pressure';
 import { hydrateActiveBarcodeSelectors } from './change-signal/config-fingerprint-source';
 import { createWriteDrainLane, type WriteOutcomeEvent } from './write-path/write-drain-lane';
 import {
@@ -189,6 +195,11 @@ export type EngineFetcher = (url: string, init?: RequestInit) => Promise<Respons
  * Read-only reflection of the transport the host configured on the engine.
  * This does not add a transport or change engine behavior; it lets host-adjacent
  * consumers reuse the exact authenticated fetcher and sync namespace already in use.
+ *
+ * `fetcher` is the engine's own thin wrapper around the configured one — same
+ * arguments, same response, same errors — so that a host-adjacent request to the
+ * SAME server also feeds the server-pressure monitor (#846). Nothing about the
+ * caller's request is delayed or retried by it.
  */
 export type EngineHostTransport = Readonly<{
 	syncBaseUrl: string;
@@ -486,7 +497,63 @@ export function createRxdbSyncEngine(
 			// The observer seam must never throw into the engine (ADR 0018).
 		}
 	};
-	const fetcher: EngineFetcher = ports.fetcher ?? ((url, init) => globalThis.fetch(url, init));
+	const nowMs = ports.now ?? (() => Date.now());
+	const random = ports.random ?? Math.random;
+	const readConnectivity = (): EngineConnectivity => {
+		try {
+			return connectivity();
+		} catch {
+			return 'offline';
+		}
+	};
+	// #846: EVERY engine request feeds the pressure monitor — the change-signal
+	// poll, the maintenance lanes AND the demand-driven pulls a cashier triggers.
+	// A 429 raised by a product search is the same server saying the same thing,
+	// so it counts as evidence. What it does NOT do is slow that search down:
+	// only the change-signal cadence adapts (see armChangeSignalTimer). Demand
+	// fetches are human-bounded — a cashier can only ask so fast — and delaying
+	// one would trade the merchant's server load for the merchant's queue.
+	const serverPressure = createServerPressureMonitor({
+		maxMultiplier: maxChangeSignalPressureMultiplier(
+			ports.intervals?.changeSignalPollMs ?? DEFAULT_INTERVALS.changeSignalPollMs
+		),
+	});
+	// Assigned below, once the change-signal timer exists — a transition observed
+	// before then (there is no transport before `ready`) is simply dropped.
+	let onServerPressureTransition: (transition: ServerPressureTransition) => void = () => undefined;
+	const rawFetcher: EngineFetcher = ports.fetcher ?? ((url, init) => globalThis.fetch(url, init));
+	const fetcher: EngineFetcher = async (url, init) => {
+		const startedAtMs = nowMs();
+		const observe = (status: number, retryAfter?: string | null): void => {
+			const atMs = nowMs();
+			const transition = serverPressure.observe({
+				atMs,
+				status,
+				durationMs: atMs - startedAtMs,
+				offline: readConnectivity() === 'offline',
+				...(retryAfter === undefined ? {} : { retryAfter }),
+			});
+			if (transition !== null) onServerPressureTransition(transition);
+		};
+		let response: Response;
+		try {
+			response = await rawFetcher(url, init);
+		} catch (error) {
+			// status 0 is the transport-failure spelling the rest of the stack uses
+			// (see apps/main transport.request): timeout, DNS, TLS, abort.
+			observe(0);
+			throw error;
+		}
+		let retryAfter: string | null = null;
+		try {
+			retryAfter = response.headers.get('retry-after');
+		} catch {
+			// A host fetch stub may hand back a header-less object; never let
+			// telemetry break a real response.
+		}
+		observe(response.status, retryAfter);
+		return response;
+	};
 	const hostTransport: EngineHostTransport = Object.freeze({
 		syncBaseUrl: ports.site.syncBaseUrl,
 		fetcher,
@@ -564,9 +631,7 @@ export function createRxdbSyncEngine(
 	const bootstrapFailures = new Map<string, string>();
 	const laneLastTick = new Map<EngineLane, { atMs: number; status: SyncReport['status'] }>();
 	const laneNextDueAtMs = new Map<EngineLane, number>();
-	const nowMs = ports.now ?? (() => Date.now());
 	const engineStartedAtMs = nowMs();
-	const random = ports.random ?? Math.random;
 	let pullBatchSize: number | undefined;
 
 	// The initial open is the one lifecycle op with no caller obliged to observe
@@ -1396,13 +1461,6 @@ export function createRxdbSyncEngine(
 	const maintenanceTimers: ReturnType<typeof setInterval>[] = [];
 	let lastAutomaticConnectivity: EngineConnectivity | undefined;
 	let reconnectRetick: Promise<void> | null = null;
-	const readConnectivity = (): EngineConnectivity => {
-		try {
-			return connectivity();
-		} catch {
-			return 'offline';
-		}
-	};
 	const runAutomaticTick = async (tick: () => Promise<SyncReport>): Promise<void> => {
 		if (pendingLifecycleOps > 0) return;
 		const connectivityNow = readConnectivity();
@@ -1460,6 +1518,45 @@ export function createRxdbSyncEngine(
 			},
 		});
 	};
+	/**
+	 * The cadence the change-signal lane is CURRENTLY running at, before jitter —
+	 * the merchant's tier, lengthened by idle decay and again by server pressure.
+	 * This is the number the cadence log events report, because it is the one a
+	 * support engineer needs to answer "how often was this till asking?".
+	 */
+	const effectiveCadenceMs = (input?: {
+		level?: ChangeSignalDecayLevel;
+		pressureMultiplier?: number;
+	}): number =>
+		changeSignalSteadyIntervalMs({
+			tierMs: intervals.changeSignalPollMs,
+			level: input?.level ?? changeSignalDecayLevel,
+			pressureMultiplier: input?.pressureMultiplier ?? serverPressure.multiplier(),
+		});
+	/**
+	 * Cadence telemetry (#846, part d). Durable by design — support has to be able
+	 * to reconstruct what a register was doing yesterday from an export alone.
+	 * TRANSITIONS ONLY: steady-state ticking writes nothing, so a healthy till in a
+	 * quiet week contributes four rows (start, and any preset change), not one per
+	 * poll. Levels are deliberately flat `info`: a back-off is the app working as
+	 * designed and self-healing, and dressing it as a warn is exactly the scary-
+	 * log failure #899 was about. A server that stays sick still shows up loudly —
+	 * through transport.request rows, which carry the actual faults.
+	 */
+	const emitCadenceStart = (): void => {
+		diagnostics({
+			type: 'cadence.start',
+			level: 'info',
+			message: `change-signal polling every ${Math.round(effectiveCadenceMs() / 1000)}s`,
+			fields: {
+				intervalMs: effectiveCadenceMs(),
+				tierMs: intervals.changeSignalPollMs,
+				pressureMultiplier: serverPressure.multiplier(),
+				...(pullBatchSize === undefined ? {} : { pullBatchSize }),
+			},
+		});
+	};
+	let cadenceStartAnnounced = false;
 	const armChangeSignalTimer = (): void => {
 		if (disposed) return;
 		const now = nowMs();
@@ -1472,15 +1569,60 @@ export function createRxdbSyncEngine(
 		const delay = changeSignalDelayMs({
 			tierMs: intervals.changeSignalPollMs,
 			level: changeSignalDecayLevel,
+			pressureMultiplier: serverPressure.multiplier(),
+			retryAfterForMs: Math.max(0, serverPressure.retryAfterUntilMs() - now),
 			random,
 		});
 		laneNextDueAtMs.set('change-signal', now + delay);
 		scheduleStatusChange();
+		if (!cadenceStartAnnounced) {
+			cadenceStartAnnounced = true;
+			emitCadenceStart();
+		}
 		changeSignalTimer = setTimeout(() => {
 			// Re-arm before work so a slow tick cannot lengthen the polling cadence.
 			armChangeSignalTimer();
 			void runAutomaticTick(() => tickLaneWithEvents('change-signal'));
 		}, delay);
+	};
+	onServerPressureTransition = (transition) => {
+		const level = changeSignalDecayLevel;
+		diagnostics({
+			type: transition.direction === 'backoff' ? 'cadence.backoff' : 'cadence.recovered',
+			level: 'info',
+			message:
+				transition.direction === 'backoff'
+					? `slowed change-signal polling (${transition.signal})`
+					: 'restored change-signal polling',
+			fields: {
+				signal: transition.signal,
+				tierMs: intervals.changeSignalPollMs,
+				fromIntervalMs: effectiveCadenceMs({
+					level,
+					pressureMultiplier: transition.fromMultiplier,
+				}),
+				toIntervalMs: effectiveCadenceMs({ level, pressureMultiplier: transition.toMultiplier }),
+				pressureMultiplier: transition.toMultiplier,
+				...(transition.retryAfterUntilMs === undefined
+					? {}
+					: { retryAfterMs: Math.max(0, transition.retryAfterUntilMs - nowMs()) }),
+				// A till that made it back to its chosen cadence RECOVERED — the export
+				// should read as an incident that closed, not as an open one.
+				...(transition.direction === 'recovery' && transition.toMultiplier === 1
+					? { outcome: 'recovered' as const }
+					: {}),
+			},
+		});
+		// A back-off only ever pushes the pending tick FURTHER out, so re-arming it
+		// now is safe and makes the new cadence effective immediately — the whole
+		// point when the server has just asked us to stop. Recovery deliberately
+		// does NOT re-arm: shortening a timer that is already most of the way to
+		// firing would restart the wait, and the faster cadence costs nothing by
+		// landing one tick later.
+		if (transition.direction !== 'backoff') return;
+		if (mode === 'manual' || disposed || changeSignalTimer === null) return;
+		clearTimeout(changeSignalTimer);
+		armChangeSignalTimer();
 	};
 	const armLaneInterval = (
 		lane: EngineLane,
@@ -1516,7 +1658,27 @@ export function createRxdbSyncEngine(
 			scheduleStatusChange();
 			return;
 		}
+		const fromIntervalMs = effectiveCadenceMs();
 		intervals.changeSignalPollMs = nextPollMs;
+		// A slower tier reaches its ceiling in fewer doublings; retune the ladder so
+		// the multiplier can never sit above the new tier's top.
+		serverPressure.setMaxMultiplier(maxChangeSignalPressureMultiplier(nextPollMs));
+		// The preset change itself is durable: "the merchant moved this till to Eco
+		// at 14:02" is half of any later answer about why sync felt slow. Note that
+		// the pressure multiplier is deliberately CARRIED THROUGH a preset change —
+		// picking Realtime does not clear a struggling server's back-off.
+		diagnostics({
+			type: 'cadence.reconfigured',
+			level: 'info',
+			message: `change-signal cadence set to ${Math.round(nextPollMs / 1000)}s`,
+			fields: {
+				tierMs: nextPollMs,
+				fromIntervalMs,
+				toIntervalMs: effectiveCadenceMs({ level: 0 }),
+				pressureMultiplier: serverPressure.multiplier(),
+				...(pullBatchSize === undefined ? {} : { pullBatchSize }),
+			},
+		});
 		if (mode === 'manual' || changeSignalTimer === null) {
 			scheduleStatusChange();
 			return;
@@ -1544,6 +1706,16 @@ export function createRxdbSyncEngine(
 						changeSignalDecayLevel = 0;
 						clearTimeout(changeSignalTimer);
 						armChangeSignalTimer();
+						// Idle decay snaps back for the cashier who just walked up — that
+						// decay only ever existed because nobody was watching. Server
+						// pressure does NOT: it exists because the merchant's server is
+						// struggling, and an impatient till is precisely who must not be
+						// allowed to override it. So under pressure (or inside a pause the
+						// server named itself) the catch-up tick is skipped; the re-armed
+						// timer above already carries the pressured cadence.
+						if (serverPressure.multiplier() > 1 || serverPressure.retryAfterUntilMs() > nowMs()) {
+							return;
+						}
 						void runAutomaticTick(() => tickLaneWithEvents('change-signal'));
 					});
 				}

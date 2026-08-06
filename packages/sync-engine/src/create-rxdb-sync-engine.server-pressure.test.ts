@@ -1,0 +1,360 @@
+/**
+ * Server-pressure adaptation, through the PUBLIC handle (#846 part c/d).
+ *
+ * The contract under test is Paul's rule: the POS must never crush the
+ * merchant's WooCommerce server. Whatever cadence the merchant chose, a server
+ * in distress slows the change-signal poll down, an impatient cashier cannot
+ * override that, and every transition lands in the durable log so support can
+ * reconstruct it later.
+ */
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
+
+import type { SyncEvent } from '@wcpos/sync-core';
+
+import { createRxdbSyncEngine, type RxdbSyncEnginePorts } from './create-rxdb-sync-engine';
+import { memoryEngineStorage, scriptedConnectivity } from './testing';
+
+setPremiumFlag();
+
+const SITE = 'https://pressure.example.test';
+const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
+let uniqueStore = 0;
+
+type CapturedTimeout = {
+	callback: () => void;
+	delay: number;
+	handle: ReturnType<typeof setTimeout>;
+};
+
+/**
+ * Timer capture is process-wide, so a test that builds TWO engines must not
+ * re-spy — the second spy would capture the first as its "real" implementation
+ * and recurse forever. One installation per test, reset in afterEach.
+ */
+let installedTimers: { intervals: { delay: number }[]; timeouts: CapturedTimeout[] } | null = null;
+
+function captureTimers(): {
+	intervals: { delay: number }[];
+	timeouts: CapturedTimeout[];
+} {
+	if (installedTimers !== null) return installedTimers;
+	const intervals: { delay: number }[] = [];
+	const timeouts: CapturedTimeout[] = [];
+	let nextHandle = 1;
+	vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+		_callback: () => void,
+		delay: number
+	) => {
+		const handle = nextHandle++ as unknown as ReturnType<typeof setInterval>;
+		intervals.push({ delay });
+		return handle;
+	}) as typeof setInterval);
+	vi.spyOn(globalThis, 'clearInterval').mockImplementation(() => undefined);
+	const realSetTimeout = globalThis.setTimeout;
+	const realClearTimeout = globalThis.clearTimeout;
+	vi.spyOn(globalThis, 'setTimeout').mockImplementation(((callback: () => void, delay: number) => {
+		const handle = realSetTimeout(callback, delay);
+		timeouts.push({ callback, delay, handle });
+		return handle;
+	}) as typeof setTimeout);
+	vi.spyOn(globalThis, 'clearTimeout').mockImplementation((handle) => realClearTimeout(handle));
+	installedTimers = { intervals, timeouts };
+	return installedTimers;
+}
+
+/** The delay of the change-signal timer currently armed, read off public status. */
+function armedDelay(
+	engine: { status: () => { lanes: Record<string, { nextDueAtMs?: number }> } },
+	nowMs: number
+): number {
+	return engine.status().lanes['change-signal']!.nextDueAtMs! - nowMs;
+}
+
+/** An empty-but-valid JSON envelope; enough for every lane the engine arms. */
+function emptyEnvelope(): Response {
+	return new Response(JSON.stringify({ changes: [], complete: true, documents: [] }), {
+		status: 200,
+		headers: { 'content-type': 'application/json' },
+	});
+}
+
+type Harness = {
+	engine: ReturnType<typeof createRxdbSyncEngine>;
+	timers: ReturnType<typeof captureTimers>;
+	diagnostics: SyncEvent[];
+	/** Push one scripted response (or thrown failure) through the engine's transport. */
+	respond: (response: Response | Error) => Promise<void>;
+	setNow: (ms: number) => void;
+	now: () => number;
+};
+
+async function harness(
+	overrides: Partial<RxdbSyncEnginePorts> = {},
+	options: { startAtMs?: number } = {}
+): Promise<Harness> {
+	uniqueStore += 1;
+	let nowMs = options.startAtMs ?? 1_000;
+	let scripted: Response | Error | null = null;
+	const diagnostics: SyncEvent[] = [];
+	const timers = captureTimers();
+	const engine = createRxdbSyncEngine(
+		{
+			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
+			storage: memoryEngineStorage(),
+			mode: 'auto',
+			now: () => nowMs,
+			random: () => 0.5,
+			diagnostics: (event) => diagnostics.push(event),
+			fetcher: async () => {
+				const next = scripted;
+				scripted = null;
+				if (next instanceof Error) throw next;
+				return next ?? emptyEnvelope();
+			},
+			...overrides,
+		},
+		{ site: SITE, storeId: 1, cashierId: `pressure-${uniqueStore}` }
+	);
+	await engine.ready;
+	await vi.waitFor(() => expect(timers.intervals.length).toBeGreaterThanOrEqual(9));
+	await vi.waitFor(() => expect(engine.status().lanes['change-signal'].nextDueAtMs).toBeDefined());
+
+	const respond = async (response: Response | Error): Promise<void> => {
+		scripted = response;
+		// hostTransport exposes the SAME wrapped fetcher the engine's lanes use, so
+		// driving it here exercises the real pressure seam rather than a stand-in.
+		await engine
+			.hostTransport()
+			.fetcher(`${SYNC_BASE}/changes/tick`)
+			.catch(() => undefined);
+	};
+
+	return {
+		engine,
+		timers,
+		diagnostics,
+		respond,
+		setNow: (ms) => {
+			nowMs = ms;
+		},
+		now: () => nowMs,
+	};
+}
+
+const cadenceEvents = (events: SyncEvent[], type: string): SyncEvent[] =>
+	events.filter((event) => event.type === type);
+
+afterEach(() => {
+	installedTimers = null;
+	vi.restoreAllMocks();
+});
+
+describe('change-signal server-pressure adaptation', () => {
+	it('honours Retry-After exactly and records the back-off', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		await context.respond(
+			new Response(JSON.stringify({ code: 'too_many_requests' }), {
+				status: 429,
+				headers: { 'content-type': 'application/json', 'retry-after': '120' },
+			})
+		);
+
+		// The pending tick was re-armed the moment the server pushed back — the next
+		// one cannot land before the 120s the server named.
+		expect(armedDelay(context.engine, context.now())).toBeGreaterThanOrEqual(120_000);
+
+		const [backoff] = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoff).toBeDefined();
+		expect(backoff!.level).toBe('info');
+		expect(backoff!.fields).toMatchObject({
+			signal: 'rate-limited',
+			fromIntervalMs: 10_000,
+			toIntervalMs: 20_000,
+			pressureMultiplier: 2,
+			retryAfterMs: 120_000,
+		});
+		await context.engine.dispose();
+	});
+
+	it('multiplies the interval on a timeout burst and stops at the ceiling', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		const timeout = (): Error => Object.assign(new Error('timeout'), { name: 'TimeoutError' });
+		// Three failures inside the rolling window = one step; fifteen walks a 10s
+		// tier all the way up: 10 → 20 → 40 → 80 → 160 → 300 (the ceiling).
+		for (let index = 0; index < 15; index += 1) {
+			context.setNow(context.now() + 1_000);
+			await context.respond(timeout());
+		}
+
+		const backoffs = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoffs.map((event) => event.fields?.toIntervalMs)).toEqual([
+			20_000, 40_000, 80_000, 160_000, 300_000,
+		]);
+		expect(backoffs[0]!.fields).toMatchObject({ signal: 'timeout' });
+		expect(armedDelay(context.engine, context.now())).toBe(300_000);
+
+		// The ceiling holds: fifteen more failures buy the server no further silence.
+		for (let index = 0; index < 15; index += 1) {
+			context.setNow(context.now() + 1_000);
+			await context.respond(timeout());
+		}
+		expect(cadenceEvents(context.diagnostics, 'cadence.backoff')).toHaveLength(5);
+		await context.engine.dispose();
+	});
+
+	it('does not read the device being offline as the server being in trouble', async () => {
+		const connectivity = scriptedConnectivity('offline');
+		const context = await harness({ connectivity: connectivity.signal });
+		context.diagnostics.length = 0;
+
+		for (let index = 0; index < 10; index += 1) {
+			context.setNow(context.now() + 1_000);
+			await context.respond(new Error('network down'));
+		}
+
+		expect(cadenceEvents(context.diagnostics, 'cadence.backoff')).toHaveLength(0);
+		await context.engine.dispose();
+	});
+
+	it('decays the multiplier gradually on recovery, one step at a time', async () => {
+		const context = await harness();
+		await context.respond(new Response(null, { status: 429 }));
+		await context.respond(new Response(null, { status: 429 }));
+		expect(cadenceEvents(context.diagnostics, 'cadence.backoff')).toHaveLength(2);
+		context.diagnostics.length = 0;
+
+		// Nine clean responses are not yet a recovery — the streak has to be earned.
+		for (let index = 0; index < 9; index += 1) await context.respond(emptyEnvelope());
+		expect(cadenceEvents(context.diagnostics, 'cadence.recovered')).toHaveLength(0);
+
+		await context.respond(emptyEnvelope());
+		const [first] = cadenceEvents(context.diagnostics, 'cadence.recovered');
+		expect(first!.level).toBe('info');
+		expect(first!.fields).toMatchObject({
+			signal: 'healthy',
+			fromIntervalMs: 40_000,
+			toIntervalMs: 20_000,
+			pressureMultiplier: 2,
+		});
+		// Still not back to the merchant's cadence — no single jump to normal.
+		expect(first!.fields).not.toHaveProperty('outcome');
+
+		for (let index = 0; index < 10; index += 1) await context.respond(emptyEnvelope());
+		const recoveries = cadenceEvents(context.diagnostics, 'cadence.recovered');
+		expect(recoveries).toHaveLength(2);
+		expect(recoveries[1]!.fields).toMatchObject({
+			toIntervalMs: 10_000,
+			pressureMultiplier: 1,
+			outcome: 'recovered',
+		});
+		await context.engine.dispose();
+	});
+
+	it('lets foreground activity cancel idle decay but never server pressure', async () => {
+		let activityListener: (() => void) | null = null;
+		let lastActivityMs = 1;
+		const idleStartMs = 10 * 60_000 + 1;
+		const context = await harness(
+			{
+				lastUserActivityMs: () => lastActivityMs,
+				onUserActivity: (listener) => {
+					activityListener = listener;
+					return () => undefined;
+				},
+			},
+			{ startAtMs: idleStartMs }
+		);
+
+		// Baseline: pure idle decay DOES snap back for a cashier who walks up.
+		expect(armedDelay(context.engine, context.now())).toBe(30_000);
+		lastActivityMs = context.now();
+		activityListener!();
+		expect(armedDelay(context.engine, context.now())).toBe(10_000);
+
+		// Now the server pushes back, and the till goes idle again.
+		await context.respond(new Response(null, { status: 429 }));
+		lastActivityMs = 1;
+		context.setNow(context.now() + 20 * 60_000);
+		// Force the decay level forward the way a fired tick would.
+		const pending = context.timers.timeouts.at(-1)!;
+		clearTimeout(pending.handle);
+		pending.callback();
+		const decayedUnderPressure = armedDelay(context.engine, context.now());
+		expect(decayedUnderPressure).toBe(60_000);
+
+		// The impatient cashier: activity clears idle decay, but the pressured
+		// cadence stands and there is NO opportunistic catch-up tick.
+		const ticksBefore = context.diagnostics.filter(
+			(event) => event.type === 'engine.lane.tick' && event.fields?.lane === 'change-signal'
+		).length;
+		lastActivityMs = context.now();
+		activityListener!();
+		expect(armedDelay(context.engine, context.now())).toBe(20_000);
+		expect(armedDelay(context.engine, context.now())).toBeGreaterThan(10_000);
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(
+			context.diagnostics.filter(
+				(event) => event.type === 'engine.lane.tick' && event.fields?.lane === 'change-signal'
+			)
+		).toHaveLength(ticksBefore);
+		await context.engine.dispose();
+	});
+
+	it('records the cadence at startup and on every preset change', async () => {
+		const context = await harness();
+
+		const [start] = cadenceEvents(context.diagnostics, 'cadence.start');
+		expect(start!.level).toBe('info');
+		expect(start!.fields).toMatchObject({ intervalMs: 10_000, tierMs: 10_000 });
+
+		context.engine.reconfigure({ changeSignalPollMs: 60_000, pullBatchSize: 50 });
+		const [reconfigured] = cadenceEvents(context.diagnostics, 'cadence.reconfigured');
+		expect(reconfigured!.level).toBe('info');
+		expect(reconfigured!.fields).toMatchObject({
+			tierMs: 60_000,
+			fromIntervalMs: 10_000,
+			toIntervalMs: 60_000,
+			pullBatchSize: 50,
+		});
+
+		// Steady-state ticking adds nothing: one start row, one change row, no spam.
+		const pending = context.timers.timeouts.at(-1)!;
+		clearTimeout(pending.handle);
+		pending.callback();
+		expect(cadenceEvents(context.diagnostics, 'cadence.start')).toHaveLength(1);
+		expect(cadenceEvents(context.diagnostics, 'cadence.reconfigured')).toHaveLength(1);
+		await context.engine.dispose();
+	});
+
+	it('carries an active back-off through a preset change and retunes its ceiling', async () => {
+		const context = await harness();
+		await context.respond(new Response(null, { status: 429 }));
+		expect(armedDelay(context.engine, context.now())).toBe(20_000);
+
+		// Choosing Realtime does not buy a cashier their way out of a sick server.
+		context.engine.reconfigure({ changeSignalPollMs: 5_000 });
+		expect(armedDelay(context.engine, context.now())).toBe(10_000);
+		const [reconfigured] = cadenceEvents(context.diagnostics, 'cadence.reconfigured');
+		expect(reconfigured!.fields).toMatchObject({ pressureMultiplier: 2 });
+		await context.engine.dispose();
+	});
+
+	it('starts every engine trusting the server again', async () => {
+		const first = await harness();
+		await first.respond(new Response(null, { status: 429 }));
+		expect(armedDelay(first.engine, first.now())).toBe(20_000);
+		await first.engine.dispose();
+
+		const second = await harness();
+		expect(armedDelay(second.engine, second.now())).toBe(10_000);
+		expect(cadenceEvents(second.diagnostics, 'cadence.backoff')).toHaveLength(0);
+		await second.engine.dispose();
+	});
+});

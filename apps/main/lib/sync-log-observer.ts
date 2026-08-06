@@ -1,6 +1,7 @@
 import type { SyncEvent, SyncObserver } from '@wcpos/sync-core';
 import type { LogTerminalFields } from '@wcpos/utils/logger';
 
+import { presetFor } from '../components/health/performance-logic';
 import { normalizeSyncCollection } from './sync-status';
 
 export type PersistLogRow = (
@@ -133,6 +134,17 @@ const CONFORMANCE = new Map<string, Conformance>([
 				num(f.pushed) + num(f.conflicts) + num(f.deferred) + num(f.failed) + num(f.rejected) > 0,
 		},
 	],
+	// Cadence rows (#846). All four are transitions, never steady state, so they
+	// are cheap enough to persist unconditionally — and they are the only record
+	// of how often a till was asking, which is the first question support has when
+	// a merchant reports "sync felt slow yesterday". Outcomes are 'ok' rather than
+	// 'failed' on purpose: adapting to a struggling server is the app working,
+	// and the observer's derivation below still promotes an explicit
+	// `outcome: 'recovered'` when a back-off closes out (#899).
+	['cadence.start', { operationType: 'sync.cadence', outcome: 'ok' }],
+	['cadence.reconfigured', { operationType: 'sync.cadence', outcome: 'ok' }],
+	['cadence.backoff', { operationType: 'sync.cadence', outcome: 'ok' }],
+	['cadence.recovered', { operationType: 'sync.cadence', outcome: 'ok' }],
 	['engine.ready', { operationType: 'sync.startup', outcome: 'ok' }],
 	['engine.ready-failed', { operationType: 'sync.startup', outcome: 'failed' }],
 	['engine.ready-stalled', { operationType: 'sync.startup', outcome: 'unknown' }],
@@ -445,6 +457,17 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		if (fields.reason !== undefined) {
 			if (reason === undefined) delete context.reason;
 			else context.reason = reason;
+		}
+		// The engine reports its cadence in milliseconds because it has no idea the
+		// Performance screen exists. Naming the preset here — where the presets are
+		// defined — turns "tierMs: 60000" into a row a merchant and a support
+		// engineer read the same way, without teaching the engine about app UI.
+		if (conformance.operationType === 'sync.cadence') {
+			const tierMs = fields.tierMs;
+			const batchSize = fields.pullBatchSize;
+			if (typeof tierMs === 'number' && typeof batchSize === 'number') {
+				context.preset = presetFor(tierMs, batchSize);
+			}
 		}
 		if (conformance.operationType === 'sync.record') {
 			context.direction = event.type === 'apply.escalation' ? 'pull' : 'push';

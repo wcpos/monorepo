@@ -452,6 +452,48 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
+	it('persists every cadence transition and names the preset behind the numbers', () => {
+		observer.observe(
+			event({
+				type: 'cadence.start',
+				fields: { intervalMs: 60_000, tierMs: 60_000, pullBatchSize: 50 },
+			})
+		);
+		observer.observe(
+			event({
+				type: 'cadence.backoff',
+				fields: { signal: 'rate-limited', fromIntervalMs: 60_000, toIntervalMs: 120_000 },
+			})
+		);
+		observer.observe(
+			event({
+				type: 'cadence.recovered',
+				fields: { signal: 'healthy', toIntervalMs: 60_000, outcome: 'recovered' },
+			})
+		);
+
+		expect(rows.map((row) => row.terminal?.operationType)).toEqual([
+			'sync.cadence',
+			'sync.cadence',
+			'sync.cadence',
+		]);
+		expect(rows[0].context.preset).toBe('balanced');
+		// A back-off is the app protecting the merchant's server, not a fault.
+		expect(rows[1].level).toBe('info');
+		expect(rows[1].terminal?.outcome).toBe('ok');
+		expect(rows[2].terminal?.outcome).toBe('recovered');
+	});
+
+	it('leaves the preset unnamed when the cadence row cannot identify one', () => {
+		observer.observe(event({ type: 'cadence.start', fields: { intervalMs: 60_000 } }));
+		observer.observe(
+			event({ type: 'cadence.start', fields: { tierMs: 45_000, pullBatchSize: 33 } })
+		);
+
+		expect(rows[0].context.preset).toBeUndefined();
+		expect(rows[1].context.preset).toBe('custom');
+	});
+
 	it('normalizes engine camelCase collections to snake_case in persisted rows', () => {
 		observer.observe(
 			event({

@@ -27,8 +27,18 @@ describe('RxdbSyncEngine host transport reflection', () => {
 
 		const transport: EngineHostTransport = engine.hostTransport();
 
-		expect(transport).toEqual({ syncBaseUrl, fetcher });
+		expect(transport.syncBaseUrl).toBe(syncBaseUrl);
 		expect(Object.isFrozen(transport)).toBe(true);
+
+		// NOT the configured function by identity: the engine hands back its own
+		// wrapper so a host-adjacent consumer's traffic — same site, same server —
+		// also feeds the server-pressure monitor (#846). The configured fetcher is
+		// still the one that runs, with the same arguments and the same response.
+		expect(transport.fetcher).not.toBe(fetcher);
+		const init = { method: 'GET' } as const;
+		const response = await transport.fetcher('https://example.test/probe', init);
+		expect(fetcher).toHaveBeenCalledWith('https://example.test/probe', init);
+		expect(await response.text()).toBe('{}');
 
 		await engine.ready;
 		await engine.dispose();
