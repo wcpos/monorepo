@@ -74,7 +74,7 @@ The engine's diagnostics call sites emit these event types (including events emi
 | `coverage.gate.hit`, `coverage.gate.miss` | requirement and coverage decision fields |
 | `coverage.compacted` | `removed` |
 | `coverage.existence-prime` | `products`, `customers`, `orders`, `durationMs` |
-| `coverage.existence-reconcile` | `buckets`, `pruned`, `pulled`, `repulled`, `skippedDirty`, `durationMs` |
+| `coverage.existence-reconcile` | `buckets`, `pruned`, `emptyBuckets`, `missing`, `changed`, `skippedDirty`, `durationMs` |
 | `<maintenance-lane>.tick`, `<maintenance-lane>.tick-error` | lane summary or error text in `message` |
 | `apply.refresh` | `collection` |
 | `apply.refetch` | `collection`, `refetched`, `reason` |

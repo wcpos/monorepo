@@ -110,7 +110,7 @@
 	{
 		"type": "coverage.existence-reconcile",
 		"domain": "SYNC",
-		"label": "Reconciled this device with your store",
+		"label": "Checked this device for records deleted on your store",
 		"introducedIn": "1.10.0"
 	},
 	{

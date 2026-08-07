@@ -231,7 +231,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		type: 'coverage.existence-reconcile',
 		domain: 'SYNC',
 		key: 'health.logs.event.coverage_existence_reconcile',
-		label: 'Reconciled this device with your store',
+		label: 'Checked this device for records deleted on your store',
 		introducedIn: '1.10.0',
 	},
 	'coverage.gate.hit': {

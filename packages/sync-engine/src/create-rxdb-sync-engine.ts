@@ -903,10 +903,9 @@ export function createRxdbSyncEngine(
 		});
 	registerManifestInvalidator('products', 'existenceManifest', 'product');
 	// A variations reset clears the PRODUCT manifest rows too: they share the
-	// existenceManifest, and surviving product rows keep maxWooId() nonzero —
-	// the next reconcile pass would walk those buckets and bulk-pull the wiped
-	// variation catalog back (the #874 bulk-heal). Product rows re-prime
-	// cheaply from resident docs on the next existence-prime tick.
+	// existenceManifest, and surviving product rows would otherwise keep those
+	// buckets in the next audit. Product rows re-prime cheaply from resident docs
+	// on the next existence-prime tick.
 	registerManifestInvalidator('variations', 'existenceManifest', 'product');
 	registerManifestInvalidator('variations', 'existenceManifest', 'variation');
 	registerManifestInvalidator('customers', 'existenceManifestCustomers', 'customer');
