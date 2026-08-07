@@ -41,7 +41,10 @@ import { createConfigFingerprintLiveSource } from './config-fingerprint-source';
 import { deserializeChangeSignalState, serializeChangeSignalState } from './change-signal-state';
 
 import type { RxDatabase } from 'rxdb';
-import type { ScopeBarcodeSelectors } from '../materialization/barcode-selectors';
+import type {
+	BarcodeSelectorsReader,
+	ScopeBarcodeSelectors,
+} from '../materialization/barcode-selectors';
 import type { SyncCollectionName } from '../collections/engine-collections';
 
 /** The engine-owned kv key holding one scope's serialized engine state. */
@@ -240,9 +243,13 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						head: outcome.head,
 						rebaselined: outcome.rebaseline,
 					};
-					// Read AFTER the poll: a config-fingerprint read publishes this scope's
-					// carriers, and the pulls this tick applies must materialize by them.
-					const barcodeSelectors = deps.barcodeSelectorsFor?.(scopeId)?.current();
+					// A LIVE reader, resolved at each projection: the config poll above
+					// publishes this scope's carriers, and a long chunked apply must not
+					// keep materializing by the carrier it started with.
+					const barcodeSelectors: BarcodeSelectorsReader | undefined =
+						deps.barcodeSelectorsFor === undefined
+							? undefined
+							: () => deps.barcodeSelectorsFor!(scopeId)?.current();
 					await applyReplicationActions(
 						actions,
 						buildReplicationHandlers({

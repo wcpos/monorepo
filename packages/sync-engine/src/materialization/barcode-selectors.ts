@@ -14,6 +14,14 @@
  * hydrated yet or the server reported none. It is the deliberate safe reading:
  * no `barcode` field is materialized, so a scan misses locally and falls back
  * to the online resolve rather than matching on a guessed field.
+ *
+ * A `BarcodeSelectors` value is an IMMUTABLE SNAPSHOT: `publish()` swaps the
+ * object rather than mutating it, so a snapshot captured before an `await` goes
+ * stale the moment a concurrent config poll resolves a new carrier. Anything
+ * that spans awaits (a lane tick, a multi-page drain, a queue drain) therefore
+ * holds a `BarcodeSelectorsReader` and calls it at the point of use; only
+ * synchronous leaf consumers (`materializeTargeted`, `mapBarcodeEditToPayload`)
+ * take the value itself.
  */
 import type {
 	BarcodeConfigCollection,
@@ -37,6 +45,13 @@ export const NO_BARCODE_SELECTORS: BarcodeSelectors = Object.freeze({
 });
 
 /**
+ * A LIVE read of one scope's carriers. Hold this — never the value it returns —
+ * across an await: the carriers a lane started with are not necessarily the ones
+ * in force when its later rows are written. `undefined` = no scope to read.
+ */
+export type BarcodeSelectorsReader = () => BarcodeSelectors | undefined;
+
+/**
  * Reads one collection's carriers out of a scope's selectors, answering `[]` for
  * every collection that has no barcode facet (customers, orders, references) —
  * so a generic call site can hand its collection name straight through.
@@ -55,6 +70,16 @@ export type ScopeBarcodeSelectors = {
 	current(): BarcodeSelectors;
 	/** Publish the carriers a config-fingerprint read resolved for one collection. */
 	publish(collection: BarcodeMaterializedCollection, selectors: readonly string[]): void;
+	/**
+	 * A scope-open hydration attempt is STARTING: drop whatever a previous attempt
+	 * resolved. Open-time hydration retries whenever the scope has not bootstrapped
+	 * (a failed bootstrap seed leaves it un-bootstrapped), so without this a first
+	 * attempt's carriers would outlive a later attempt that FAILED — and if the
+	 * site's barcode setting changed in between, every record materialized after
+	 * that would use the wrong carrier with nothing to correct it. Clearing first
+	 * keeps the failure mode the documented one: no carriers, online fallback.
+	 */
+	beginHydrationAttempt(): void;
 	/**
 	 * The scope's OPEN-TIME hydration failed, so the documents bootstrap seeded
 	 * (and anything pulled before the first successful config poll) were
@@ -93,6 +118,12 @@ export function createScopeBarcodeSelectors(): ScopeBarcodeSelectors {
 		current: () => selectors,
 		publish(collection, next) {
 			selectors = { ...selectors, [collection]: [...next] };
+		},
+		beginHydrationAttempt() {
+			selectors = NO_BARCODE_SELECTORS;
+			// `hydrationFailed` deliberately survives: an EARLIER attempt may already
+			// have seeded barcode-less documents, and only the recovery re-pull —
+			// not a later successful hydration — repairs those.
 		},
 		noteHydrationFailed() {
 			hydrationFailed = true;

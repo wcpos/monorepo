@@ -14,7 +14,11 @@ import {
 	type WooProductPayload,
 } from '@wcpos/sync-core';
 
-import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
+import {
+	type BarcodeSelectors,
+	barcodeSelectorsFor,
+	type BarcodeSelectorsReader,
+} from '../materialization/barcode-selectors';
 import { type Materialized, materializeTargeted } from '../materialization/record-materialization';
 import {
 	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
@@ -90,8 +94,10 @@ export type ProductsSchedulerFetcherInput = {
 	 * covered prefix; every other queued window keeps its continuation.
 	 */
 	refreshBrowseWindowKey?: string;
-	/** The ACTIVE SCOPE's barcode carriers — products materialize `payload.barcode` from them. */
-	barcodeSelectors?: BarcodeSelectors;
+	/** LIVE read of the active scope's barcode carriers — products materialize
+	 * `payload.barcode` from them. A reader, not a value: a browse walk spans
+	 * many pages and a config poll can change the carrier mid-walk. */
+	barcodeSelectors?: BarcodeSelectorsReader;
 };
 
 /**
@@ -200,7 +206,7 @@ async function fetchTargetedProducts(
 			payloads
 		);
 		const documents = payloads.map((payload) =>
-			productDocumentFromWooPayload(payload, input.barcodeSelectors)
+			productDocumentFromWooPayload(payload, input.barcodeSelectors?.())
 		);
 		const published = documents.filter((_, index) => payloads[index]?.status === 'publish');
 		const unpublished = documents.filter((_, index) => payloads[index]?.status !== 'publish');
@@ -578,7 +584,7 @@ async function tryProductBrowseWindowWalk(
 	// preserved. (Same defect and remedy as the customers lane, bddd21d17.)
 	const documentsById = new Map<string, Materialized<Record<string, unknown>>>();
 	for (const payload of windowPayloads) {
-		const document = productDocumentFromWooPayload(payload, input.barcodeSelectors);
+		const document = productDocumentFromWooPayload(payload, input.barcodeSelectors?.());
 		const storageId = (document.storedDocument as { id: string }).id;
 		if (!documentsById.has(storageId)) documentsById.set(storageId, document);
 	}
@@ -663,7 +669,7 @@ async function fetchProductSearch(
 	const payloads = uniqueProductPayloads([...skuLeg.payloads, ...(searchLeg?.payloads ?? [])]);
 	const documents = payloads
 		.slice(0, limit)
-		.map((payload) => productDocumentFromWooPayload(payload, input.barcodeSelectors));
+		.map((payload) => productDocumentFromWooPayload(payload, input.barcodeSelectors?.()));
 	await persistProductDocuments(input, documents);
 	// A skipped short-term search leg counts as exhausted; otherwise both legs must exhaust.
 	// The slice above can drop deduped cross-leg hits past the window, and the products

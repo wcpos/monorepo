@@ -73,7 +73,7 @@ import type { SyncCollectionName } from './collections/engine-collections';
 import type { EngineSourceFetcher } from './change-signal/change-signal-source';
 import type { RxCollection, RxDatabase } from 'rxdb';
 import type { LocalCoverage } from './local-coverage/local-coverage';
-import type { BarcodeSelectors } from './materialization/barcode-selectors';
+import type { BarcodeSelectors, BarcodeSelectorsReader } from './materialization/barcode-selectors';
 
 const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
 
@@ -440,7 +440,14 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				>;
 				return rawBoundFetch(url, rest as never);
 			};
-			const barcodeSelectors = deps.barcodeSelectorsFor?.(bound.scopeId) ?? undefined;
+			// A reader, not a snapshot: a demand drain walks many pages and the
+			// change-signal lane can publish a new carrier mid-walk (see
+			// barcode-selectors). `ctx` takes the VALUE — its projections run
+			// synchronously per chunk — so it re-reads at each use below.
+			const barcodeSelectors: BarcodeSelectorsReader | undefined =
+				deps.barcodeSelectorsFor === undefined
+					? undefined
+					: () => deps.barcodeSelectorsFor!(bound.scopeId) ?? undefined;
 			const ctx = {
 				database,
 				fetch: boundFetch,

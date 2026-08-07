@@ -322,7 +322,7 @@ describe('write facets beyond orders', () => {
 			syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 			persistState: async () => undefined,
 			log: () => undefined,
-			barcodeSelectors: { products: ['sku'], variations: ['sku'] },
+			barcodeSelectors: () => ({ products: ['sku'], variations: ['sku'] }),
 		});
 
 		expect(await handlers.reFetchCollection(spec.collection)).toBe(1);
@@ -367,7 +367,7 @@ describe('write facets beyond orders', () => {
 				syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 				persistState: async () => undefined,
 				log: () => undefined,
-				barcodeSelectors: { products: ['sku'], variations: ['sku'] },
+				barcodeSelectors: () => ({ products: ['sku'], variations: ['sku'] }),
 			});
 
 			expect(await handlers.reFetchCollection(spec.collection)).toBe(1);

@@ -1196,6 +1196,11 @@ export function createRxdbSyncEngine(
 				// scope empty (online-fallback scans) without touching any other
 				// scope's — no reset, and nothing another engine could inherit.
 				const barcodeSelectors = barcodeSelectorsOf(scopeId);
+				// Each ATTEMPT starts from empty. This block re-runs whenever the scope
+				// has not bootstrapped yet (a failed seed leaves it so), and carriers a
+				// previous attempt resolved must not outlive an attempt that fails —
+				// the site's barcode setting may have changed in between.
+				barcodeSelectors.beginHydrationAttempt();
 				const hydrationAbort = new AbortController();
 				const hydrationTimeout = setTimeout(() => hydrationAbort.abort(), 5_000);
 				try {

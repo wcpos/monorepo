@@ -41,6 +41,64 @@ const uuidFor = (n: number): string => `00000000-0000-4000-8000-${String(n).padS
 const posMeta = (n: number) => [{ key: '_woocommerce_pos_uuid', value: uuidFor(n) }];
 
 describe('createProductsSchedulerFetcher', () => {
+	it("re-reads the barcode carriers per request, never freezing the drain's first read", async () => {
+		// A drain spans many requests and the change-signal lane publishes carriers
+		// concurrently. Holding the first read would let the tail of a slow drain
+		// write rows by a carrier the site has already stopped using — and the
+		// config fingerprint has already moved, so nothing would repair them.
+		const upserted: { payload: { barcode?: string } }[][] = [];
+		const repository = {
+			upsertMany: vi.fn(async (documents: unknown[]) => {
+				upserted.push(documents as { payload: { barcode?: string } }[]);
+			}),
+			removeMany: vi.fn(async () => undefined),
+		};
+		let carrier = 'sku';
+		let requests = 0;
+		const fetcher = vi.fn(async (url: string) => {
+			// The site flips its barcode carrier once this drain is already underway,
+			// i.e. after the first batch was materialized and persisted.
+			if (requests > 0) carrier = 'global_unique_id';
+			requests += 1;
+			const wooId = Number(new URL(url).searchParams.get('include'));
+			const payload = {
+				id: wooId,
+				name: `Product ${wooId}`,
+				status: 'publish',
+				date_modified_gmt: '2026-05-20T10:10:00',
+				sku: `SKU-${wooId}`,
+				global_unique_id: `GTIN-${wooId}`,
+				meta_data: posMeta(wooId),
+			};
+			return response([payload]);
+		});
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			fetcher,
+			pullBatchSize: () => 1,
+			barcodeSelectors: () => ({ products: [carrier], variations: [carrier] }),
+		});
+
+		await schedulerFetcher(
+			productTask({
+				id: 'products:ids:321,654:on-demand',
+				requirementId: 'products.cart-items',
+				queryKey: 'products:ids:321,654',
+				ids: ['woo-product:321', 'woo-product:654'],
+				wooIds: [321, 654],
+				limit: 2,
+				mode: 'on-demand',
+			})
+		);
+
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		const barcodeOf = (batch: number) => upserted[batch][0].payload.barcode;
+		// First batch: read before the flip. Second: read after it.
+		expect(barcodeOf(0)).toBe('SKU-321');
+		expect(barcodeOf(1)).toBe('GTIN-654');
+	});
+
 	it('runs only the exact SKU leg for a two-character search', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),

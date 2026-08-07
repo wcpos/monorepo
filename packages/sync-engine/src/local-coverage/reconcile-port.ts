@@ -14,7 +14,7 @@ import {
 	upsertManifestRows,
 } from './rx-existence-manifest-repository';
 
-import type { BarcodeSelectors } from '../materialization/barcode-selectors';
+import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { LocalCoverageReconcilePort, ReconcileRequest } from './local-coverage';
 import type { RxDatabase } from 'rxdb';
 
@@ -31,8 +31,9 @@ type ReconcilePortDeps = {
 	database: RxDatabase;
 	fetcher: (url: string, init?: RequestInit) => Promise<Response>;
 	ports: { site: { syncBaseUrl: string } };
-	/** THIS scope's barcode carriers — a reconcile re-pull materializes by them. */
-	barcodeSelectors?: () => BarcodeSelectors;
+	/** LIVE read of THIS scope's barcode carriers — a reconcile re-pull
+	 * materializes by them, and it walks in chunks. */
+	barcodeSelectors?: BarcodeSelectorsReader;
 };
 
 export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReconcilePort[] {
@@ -117,7 +118,7 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 				{
 					...handlerContext,
 					fetch: request?.fetcher ?? fetcher,
-					...(deps.barcodeSelectors ? { barcodeSelectors: deps.barcodeSelectors() } : {}),
+					...(deps.barcodeSelectors ? { barcodeSelectors: deps.barcodeSelectors } : {}),
 				},
 				descriptor,
 				wooIds,

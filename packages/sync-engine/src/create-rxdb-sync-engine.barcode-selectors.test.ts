@@ -200,6 +200,52 @@ describe('scope-open barcode selector hydration', () => {
 		await engine.dispose();
 	});
 
+	it("drops the previous attempt's carriers when a retried hydration fails", async () => {
+		// A failed bootstrap seed leaves the scope un-bootstrapped, so the NEXT
+		// switch re-runs hydration. If that retry fails, the first attempt's
+		// carriers must not stay active — the site's barcode setting may have
+		// changed in between, and materializing by a stale carrier is worse than
+		// materializing by none (which falls back to the online resolve).
+		let configRequests = 0;
+		seedPosBootstrapLanes.mockRejectedValue(new Error('seed unavailable'));
+		const engine = createRxdbSyncEngine(
+			{
+				site: {
+					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+					wpJsonRoot: 'https://example.test/wp-json',
+				},
+				storage: memoryEngineStorage(),
+				mode: 'manual',
+				fetcher: async () => {
+					configRequests += 1;
+					if (configRequests === 1) return configResponse();
+					throw new Error('config unavailable');
+				},
+			},
+			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
+		);
+
+		// Attempt 1: hydration succeeds, the bootstrap seed fails.
+		await engine.ready;
+		expect(engine.active()!.barcodeSelectors).toEqual({
+			products: ['global_unique_id'],
+			variations: ['meta_data:_barcode'],
+		});
+		expect(engine.status().bootstrapFailed).not.toEqual({});
+
+		// Attempt 2: the scope is still un-bootstrapped, so the switch re-hydrates
+		// — and this time the config read fails.
+		await engine.scope.switch({
+			site: 'https://example.test',
+			storeId: 1,
+			cashierId: `hydrate-${identity}`,
+		});
+		expect(configRequests).toBeGreaterThan(1);
+		expect(engine.active()!.barcodeSelectors).toEqual({ products: [], variations: [] });
+
+		await engine.dispose();
+	});
+
 	it('gives each engine its own carriers — a later engine inherits nothing', async () => {
 		const engineFor = (input: { cashierId: string; fetcher: typeof fetch }) =>
 			createRxdbSyncEngine(

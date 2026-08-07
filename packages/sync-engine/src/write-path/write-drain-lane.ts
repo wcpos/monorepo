@@ -269,7 +269,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		try {
 			return await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
-				const scopeBarcodeSelectors = deps.barcodeSelectorsFor?.(bound.scopeId) ?? undefined;
+				// A LIVE read, never a tick-scoped snapshot: a drain works one row at a
+				// time and the change-signal lane can publish a new carrier between
+				// rows, so a captured value would map a later barcode edit onto the
+				// field the site stopped using.
+				const scopeBarcodeSelectors = (): BarcodeSelectors | undefined =>
+					deps.barcodeSelectorsFor?.(bound.scopeId) ?? undefined;
 				if (!database) {
 					return {
 						lane: 'write-drain' as const,
@@ -419,7 +424,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									mutation: await withGraftedLineIdentity(database, mutation),
 									resolveEndpoint,
 									barcodeSelectors: barcodeSelectorsFor(
-										scopeBarcodeSelectors,
+										scopeBarcodeSelectors(),
 										mutation.collectionName
 									),
 									fetcher: (url, init) => {
@@ -462,7 +467,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										}
 										await facet.upsertServerDocument(
 											database,
-											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors)
+											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors())
 										);
 										ackCandidates.push({
 											type: 'write-ack-rematerialized',
