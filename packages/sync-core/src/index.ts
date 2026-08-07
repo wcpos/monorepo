@@ -4,8 +4,8 @@ export { assertBulkSuccess } from './assertBulkSuccess';
 // prettier-ignore
 export {
 	barcodeMatchCandidates, buildLocalBarcodeIndex, deriveBarcodeFromPayload,
-	getActiveBarcodeSelectors, mapBarcodeEditToPayload, resetActiveBarcodeSelectors,
-	resolveScan, setActiveBarcodeSelectors, type BarcodeResolveFetcher,
+	mapBarcodeEditToPayload, resolveScan,
+	type BarcodeMaterializedCollection, type BarcodeResolveFetcher,
 } from './barcodeResolve';
 export { planReplicationActions, type ReplicationActions } from './changeSignalReplication';
 export { type ConfigFingerprintSnapshot, type ConfigFingerprintSource } from './configChangeSignal';

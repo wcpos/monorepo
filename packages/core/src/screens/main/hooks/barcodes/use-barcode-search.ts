@@ -6,11 +6,15 @@ import {
 	useQueryRuntime,
 	wrapEngineDocument,
 } from '@wcpos/query';
-import {
-	barcodeMatchCandidates,
-	buildLocalBarcodeIndex,
-	getActiveBarcodeSelectors,
-} from '@wcpos/sync-core';
+import { barcodeMatchCandidates, buildLocalBarcodeIndex } from '@wcpos/sync-core';
+
+/**
+ * The barcode carriers of the engine's ACTIVE scope, per materialized
+ * collection — the scan reads them off the scope it is scanning, so a store
+ * switch cannot leave a previous site's carriers in play.
+ */
+type ActiveBarcodeSelectors = { products: readonly string[]; variations: readonly string[] };
+const NO_BARCODE_SELECTORS: ActiveBarcodeSelectors = { products: [], variations: [] };
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
@@ -31,12 +35,16 @@ function matchesExactSymbology(document: EngineRxDocument, barcode: string): boo
  * never gains an equivalent form, and excludes the exact code (a higher tier) so
  * this is strictly the equivalence match.
  */
-function matchesEquivalentSymbology(document: EngineRxDocument, barcode: string): boolean {
+function matchesEquivalentSymbology(
+	document: EngineRxDocument,
+	barcode: string,
+	selectors: ActiveBarcodeSelectors
+): boolean {
 	const materialized = document.payload?.barcode;
 	const collection = document.collection.name;
 	const skuActive =
 		(collection === 'products' || collection === 'variations') &&
-		getActiveBarcodeSelectors(collection)[0] === 'sku';
+		selectors[collection][0] === 'sku';
 	if (typeof materialized !== 'string' || skuActive) {
 		return false;
 	}
@@ -75,8 +83,11 @@ export const useBarcodeSearch = () => {
 				return [];
 			}
 
-			// Resolve on every scan: a store-scope move replaces the active engine database.
-			const collections = runtime.engine.active()?.database.collections;
+			// Resolve on every scan: a store-scope move replaces the active engine
+			// database AND its barcode carriers — read both off the same scope.
+			const scope = runtime.engine.active();
+			const selectors: ActiveBarcodeSelectors = scope?.barcodeSelectors ?? NO_BARCODE_SELECTORS;
+			const collections = scope?.database.collections;
 			const productCollection = collections?.products;
 			const variationsCollection = collections?.variations;
 			if (!productCollection || !variationsCollection) {
@@ -90,13 +101,10 @@ export const useBarcodeSearch = () => {
 				variationsCollection.find().exec(),
 			]);
 			const products = engineDocuments(productResult).filter(
-				(document) =>
-					getActiveBarcodeSelectors('products').length > 0 && document.payload?.status === 'publish'
+				(document) => selectors.products.length > 0 && document.payload?.status === 'publish'
 			);
 			const variations = engineDocuments(variationResult).filter(
-				(document) =>
-					getActiveBarcodeSelectors('variations').length > 0 &&
-					document.payload?.status === 'publish'
+				(document) => selectors.variations.length > 0 && document.payload?.status === 'publish'
 			);
 
 			const select = (predicate: (document: EngineRxDocument) => boolean) => [
@@ -126,7 +134,7 @@ export const useBarcodeSearch = () => {
 				return symbologyExact;
 			}
 			const symbologyEquivalent = select((document) =>
-				matchesEquivalentSymbology(document, normalizedBarcode)
+				matchesEquivalentSymbology(document, normalizedBarcode, selectors)
 			);
 			if (symbologyEquivalent.length > 0) {
 				return symbologyEquivalent;

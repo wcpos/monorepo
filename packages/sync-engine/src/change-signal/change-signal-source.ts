@@ -13,6 +13,7 @@ import type {
 
 import {
 	applyBarcodeSelectorsFromSnapshot,
+	type BarcodeSelectorSink,
 	type ConfigFingerprintEnvelope,
 	mapConfigFingerprintEnvelope,
 } from './config-fingerprint-source';
@@ -28,6 +29,13 @@ export type CreateLiveChangeSignalSourceInput = {
 	syncBaseUrl: string;
 	/** Already-authenticated fetcher (auth header injected upstream). */
 	fetcher: EngineSourceFetcher;
+	/**
+	 * Scope-bound sink for the barcode carriers a sequence-log envelope may
+	 * piggyback (the config fingerprint rides TIER 1 when the server sends it).
+	 * Omitted — nothing is published; the carriers stay whatever the scope's own
+	 * config poll last resolved.
+	 */
+	publishBarcodeSelectors?: BarcodeSelectorSink;
 };
 
 // --- Envelope plumbing (self-contained; the matrix helper is AdapterContext-
@@ -381,7 +389,8 @@ export function createLiveChangeSignalSource(
 				sequenceLogConfigFingerprint === undefined
 					? undefined
 					: mapConfigFingerprintEnvelope(sequenceLogConfigFingerprint);
-			if (configFingerprint) applyBarcodeSelectorsFromSnapshot(configFingerprint);
+			if (configFingerprint)
+				applyBarcodeSelectorsFromSnapshot(configFingerprint, input.publishBarcodeSelectors);
 			const page = {
 				rows,
 				cursor: { sequence: Math.max(echoed, maxSeen) },

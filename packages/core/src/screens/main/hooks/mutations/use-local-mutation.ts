@@ -18,11 +18,7 @@ import {
 	useQueryRuntime,
 	type WriteableCollection,
 } from '@wcpos/query';
-import {
-	deriveBarcodeFromPayload,
-	getActiveBarcodeSelectors,
-	mapBarcodeEditToPayload,
-} from '@wcpos/sync-core';
+import { deriveBarcodeFromPayload, mapBarcodeEditToPayload } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -102,6 +98,19 @@ function ensureRecordMetadata(
 	return { ...payload, meta_data: metadata };
 }
 
+/**
+ * The barcode carriers of the engine's ACTIVE scope. Read per edit off the scope
+ * being written to, so a store switch cannot map an edit onto the previous
+ * site's carrier field; `[]` when the scope has none yet.
+ */
+function activeBarcodeSelectors(
+	manager: QueryManager,
+	collection: WriteableCollection
+): readonly string[] {
+	if (collection !== 'products' && collection !== 'variations') return [];
+	return manager.engine.active()?.barcodeSelectors[collection] ?? [];
+}
+
 async function activeCollection(manager: QueryManager, collection: WriteableCollection) {
 	const scope = manager.engine.active() ?? (await manager.engine.ready);
 	const residentCollection = scope.database.collections[collection];
@@ -130,13 +139,19 @@ export async function patchEngineResident(input: {
 	if (!resident) {
 		throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 	}
-	return applyEngineResidentChanges(resident, input.collection, input.changes);
+	return applyEngineResidentChanges(
+		resident,
+		input.collection,
+		input.changes,
+		activeBarcodeSelectors(input.manager, input.collection)
+	);
 }
 
 async function applyEngineResidentChanges(
 	resident: EngineResident,
 	collection: WriteableCollection,
-	changes: Record<string, unknown>
+	changes: Record<string, unknown>,
+	selectors: readonly string[]
 ): Promise<EngineResident> {
 	return (await resident.incrementalModify((old) => {
 		const priorPayload = (old.payload ?? {}) as Record<string, unknown>;
@@ -145,7 +160,6 @@ async function applyEngineResidentChanges(
 			set(payload, field, value);
 		}
 		if (collection === 'products' || collection === 'variations') {
-			const selectors = getActiveBarcodeSelectors(collection);
 			const prior = typeof priorPayload.barcode === 'string' ? priorPayload.barcode.trim() : '';
 			const edited = typeof changes.barcode === 'string' ? changes.barcode.trim() : undefined;
 			if (edited !== undefined && edited !== prior) {
@@ -200,7 +214,12 @@ export async function patchAndEnqueueEngineResident(input: {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 		}
 		const previousResident = cloneDeep(resident.toJSON());
-		await applyEngineResidentChanges(resident, input.collection, input.changes);
+		await applyEngineResidentChanges(
+			resident,
+			input.collection,
+			input.changes,
+			activeBarcodeSelectors(input.manager, input.collection)
+		);
 
 		let writeError: unknown;
 		try {

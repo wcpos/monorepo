@@ -1,6 +1,6 @@
 import { type MetaDataEntry, readRecordUuid } from './recordIdentity';
 import { type SyncEvent, type SyncObserver } from './telemetry';
-import { getActiveBarcodeSelectors, mapBarcodeEditToPayload } from './barcodeResolve';
+import { mapBarcodeEditToPayload } from './barcodeResolve';
 
 import type { RecordMutation } from './recordMutation';
 
@@ -138,6 +138,14 @@ export async function pushRecordMutation(input: {
 	 * (e.g. the legacy `/orders/push` returns `{ document: … }`).
 	 */
 	extractDocument?: (body: Record<string, unknown>) => ServerDocument | null;
+	/**
+	 * The barcode carriers active for THIS mutation's collection, read from the
+	 * scope the mutation belongs to (products/variations only — see
+	 * `deriveBarcodeFromPayload`). Omitted (or empty) means the scope has no
+	 * carriers yet, and the materialized `barcode` field is dropped rather than
+	 * written to a guessed field.
+	 */
+	barcodeSelectors?: readonly string[];
 }): Promise<PushResult> {
 	const { mutation } = input;
 	const emit = (event: SyncEvent): void => {
@@ -167,10 +175,7 @@ export async function pushRecordMutation(input: {
 	if (mutation.operation !== 'delete') {
 		envelope.payload =
 			mutation.collectionName === 'products' || mutation.collectionName === 'variations'
-				? mapBarcodeEditToPayload(
-						mutation.payload,
-						getActiveBarcodeSelectors(mutation.collectionName)
-					)
+				? mapBarcodeEditToPayload(mutation.payload, input.barcodeSelectors ?? [])
 				: mutation.payload;
 	}
 	// Standard-header MIRROR of the canonical body (ADR 0011): Idempotency-Key = mutationId, and when there's a

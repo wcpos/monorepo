@@ -116,7 +116,9 @@ export function createVariationsSchedulerFetcher(
 		const payloads = uniqueVariationPayloads([...skuLeg.payloads, ...(searchLeg?.payloads ?? [])]);
 		const documents = payloads
 			.slice(0, limit)
-			.map((payload) => variationDocument(payload) as StoredVariationDocument);
+			.map(
+				(payload) => variationDocument(payload, input.barcodeSelectors) as StoredVariationDocument
+			);
 		await input.repository.upsertMany(documents);
 		const manifestRows = documents.flatMap((document) =>
 			manifestRowOf(document) ? [manifestRowOf(document)!] : []

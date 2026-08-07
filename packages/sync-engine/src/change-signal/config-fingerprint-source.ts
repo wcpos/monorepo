@@ -7,10 +7,12 @@
  */
 import type {
 	BarcodeConfigCollection,
+	BarcodeMaterializedCollection,
 	ConfigFingerprintSnapshot,
 	ConfigFingerprintSource,
 } from '@wcpos/sync-core';
-import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
+
+import { BARCODE_MATERIALIZED_COLLECTIONS } from '../materialization/barcode-selectors';
 
 /** Fetcher contract — same shape the rest of the bench uses. */
 export type ConfigSourceFetcher = (
@@ -18,11 +20,24 @@ export type ConfigSourceFetcher = (
 	init?: { headers?: HeadersInit; signal?: AbortSignal }
 ) => Promise<Response>;
 
+/**
+ * Where the resolved barcode carriers land. The carriers belong to ONE store
+ * scope (ADR 0006 — two sites may map barcodes to different fields), so the
+ * source never owns them: the caller supplies the sink bound to the scope it is
+ * polling for.
+ */
+export type BarcodeSelectorSink = (
+	collection: BarcodeMaterializedCollection,
+	selectors: readonly string[]
+) => void;
+
 export type CreateConfigFingerprintLiveSourceInput = {
 	/** e.g. http://wcpos.local/wp-json/wcpos/v2 (no trailing slash). */
 	syncBaseUrl: string;
 	/** Already-authenticated fetcher (Basic-auth header injected upstream). */
 	fetcher: ConfigSourceFetcher;
+	/** Scope-bound sink for the carriers each poll resolves. */
+	publishBarcodeSelectors?: BarcodeSelectorSink;
 };
 
 /** The raw envelope the PHP endpoint emits. */
@@ -77,12 +92,16 @@ export function mapConfigFingerprintEnvelope(
 	return snapshot;
 }
 
-export function applyBarcodeSelectorsFromSnapshot(snapshot: ConfigFingerprintSnapshot): void {
-	for (const collection of ['products', 'variations'] as const) {
+export function applyBarcodeSelectorsFromSnapshot(
+	snapshot: ConfigFingerprintSnapshot,
+	publish: BarcodeSelectorSink | undefined
+): void {
+	if (!publish) return;
+	for (const collection of BARCODE_MATERIALIZED_COLLECTIONS) {
 		const selectors = snapshot.barcodeFields?.[collection];
 		// Empty lists are deliberately not applied so old-plugin envelopes preserve stale-but-plausible selectors.
 		if (selectors && selectors.length > 0) {
-			setActiveBarcodeSelectors(collection, selectors);
+			publish(collection, selectors);
 		}
 	}
 }
@@ -106,7 +125,7 @@ export function createConfigFingerprintLiveSource(
 				validator === null ? undefined : { headers: { 'If-None-Match': validator } }
 			);
 			if (response.status === 304 && validator !== null && cachedSnapshot !== null) {
-				applyBarcodeSelectorsFromSnapshot(cachedSnapshot);
+				applyBarcodeSelectorsFromSnapshot(cachedSnapshot, input.publishBarcodeSelectors);
 				return cachedSnapshot;
 			}
 			if (!response.ok) {
@@ -115,19 +134,28 @@ export function createConfigFingerprintLiveSource(
 			const body = await response.text();
 			cachedSnapshot = mapConfigFingerprintEnvelope(JSON.parse(body) as ConfigFingerprintEnvelope);
 			etag = response.headers.get('etag');
-			applyBarcodeSelectorsFromSnapshot(cachedSnapshot);
+			applyBarcodeSelectorsFromSnapshot(cachedSnapshot, input.publishBarcodeSelectors);
 			return cachedSnapshot;
 		},
 	};
 }
 
-export async function hydrateActiveBarcodeSelectors(
-	input: CreateConfigFingerprintLiveSourceInput & { signal: AbortSignal }
+/**
+ * The scope-open read (facade `switchScope`): resolve this scope's barcode
+ * carriers BEFORE anything materializes documents into it, and publish them
+ * onto that scope. Rejects on transport failure — the caller records the miss
+ * on the scope so the recovery re-pull can run once carriers do arrive.
+ */
+export async function hydrateBarcodeSelectors(
+	input: CreateConfigFingerprintLiveSourceInput & {
+		publishBarcodeSelectors: BarcodeSelectorSink;
+		signal: AbortSignal;
+	}
 ): Promise<void> {
 	const source = createConfigFingerprintLiveSource({
 		syncBaseUrl: input.syncBaseUrl,
 		fetcher: (url, init) => input.fetcher(url, { ...init, signal: input.signal }),
+		publishBarcodeSelectors: input.publishBarcodeSelectors,
 	});
-	const snapshot = await source.pollConfigFingerprints();
-	applyBarcodeSelectorsFromSnapshot(snapshot);
+	await source.pollConfigFingerprints();
 }

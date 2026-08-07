@@ -5,6 +5,7 @@ import { seedTargetedOrderSchedulerTask } from '../scheduler';
 import { fetchOrderServerRevision } from './write-drain-lane';
 import { queueFor, requeueRejectedMutation } from './write-intents';
 
+import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { EngineRequirement, RequirementHandle } from '../require-plane';
 import type { RxDatabase } from 'rxdb';
 
@@ -70,11 +71,18 @@ type ConflictResolutionDeps = {
 	diagnostics: SyncObserver;
 	writeDrainLane: { noteQueueDepth: (depth: number) => void };
 	scheduleStatusChange: () => void;
+	/** The active scope's barcode carriers — a discard rebuilds the optimistic
+	 * document through the same projection an ordinary pull uses. */
+	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 };
 
 export function createConflictResolution(deps: ConflictResolutionDeps) {
 	// prettier-ignore
 	const { assertNotDisposed, readySettledForSync, manager, databaseByScopeId, activeDatabase, fetcher, ports, mintUuid, requirePlane, diagnostics, writeDrainLane, scheduleStatusChange } = deps;
+	const activeBarcodeSelectors = (): BarcodeSelectors | undefined => {
+		const scopeId = manager.activeScope;
+		return (scopeId === null ? null : deps.barcodeSelectorsFor?.(scopeId)) ?? undefined;
+	};
 
 	// Resolutions run ONE AT A TIME (#832 follow-up, R7b). Two different choices
 	// racing on the same dead letter is not a hypothetical: requeue durably
@@ -466,7 +474,8 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 															? payload
 															: { ...payload, ...mutation.payload },
 													serverPayload
-												)
+												),
+												activeBarcodeSelectors()
 											);
 										const local = (optimistic.local ?? {}) as {
 											dirty?: boolean;

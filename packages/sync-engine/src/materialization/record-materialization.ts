@@ -1,7 +1,6 @@
 /** Engine-private payload -> stored-document boundary, partitioned by descriptor shape. */
 import {
 	deriveBarcodeFromPayload,
-	getActiveBarcodeSelectors,
 	identifyRecord,
 	normalizeCheckpoint,
 	type OrderDocument,
@@ -76,7 +75,15 @@ function stripDigest<T extends Payload>(payload: T): T {
 
 export function materializeTargeted(
 	collection: 'products' | 'variations' | 'customers',
-	raw: Payload
+	raw: Payload,
+	/**
+	 * The barcode carriers active for the SCOPE this record is being materialized
+	 * into (see materialization/barcode-selectors). Omitted or empty — the scope
+	 * has none yet, or the collection has no barcode facet — materializes no
+	 * `barcode` field, so a scan falls back to the online resolve instead of
+	 * matching on a guessed one.
+	 */
+	barcodeSelectors: readonly string[] = []
 ): Materialized<Record<string, unknown>> {
 	const label =
 		collection === 'products' ? 'product' : collection === 'variations' ? 'variation' : 'customer';
@@ -94,7 +101,7 @@ export function materializeTargeted(
 	const manifestRow = digest(adopted.payload, wooId, label);
 	const barcode =
 		collection === 'products' || collection === 'variations'
-			? deriveBarcodeFromPayload(raw, getActiveBarcodeSelectors(collection))
+			? deriveBarcodeFromPayload(raw, barcodeSelectors)
 			: undefined;
 	const identified = identity(
 		stripDigest(barcode === undefined ? adopted.payload : { ...adopted.payload, barcode })

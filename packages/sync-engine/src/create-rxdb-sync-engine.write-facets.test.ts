@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
@@ -315,7 +314,6 @@ describe('write facets beyond orders', () => {
 				remoteId: spec.remoteId,
 			})
 		);
-		setActiveBarcodeSelectors(spec.collection, ['sku']);
 		const scope = subject.active();
 		if (!scope) throw new Error('no active scope');
 		const handlers = buildReplicationHandlers({
@@ -324,6 +322,7 @@ describe('write facets beyond orders', () => {
 			syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 			persistState: async () => undefined,
 			log: () => undefined,
+			barcodeSelectors: { products: ['sku'], variations: ['sku'] },
 		});
 
 		expect(await handlers.reFetchCollection(spec.collection)).toBe(1);
@@ -360,7 +359,6 @@ describe('write facets beyond orders', () => {
 				...storedDocument({ spec, id: UUID_B, label: 'dirty', remoteId: spec.remoteId + 1 }),
 				local: { dirty: true, pendingMutationIds: ['m1'] },
 			});
-			setActiveBarcodeSelectors(spec.collection, ['sku']);
 			const scope = subject.active();
 			if (!scope) throw new Error('no active scope');
 			const handlers = buildReplicationHandlers({
@@ -369,6 +367,7 @@ describe('write facets beyond orders', () => {
 				syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 				persistState: async () => undefined,
 				log: () => undefined,
+				barcodeSelectors: { products: ['sku'], variations: ['sku'] },
 			});
 
 			expect(await handlers.reFetchCollection(spec.collection)).toBe(1);

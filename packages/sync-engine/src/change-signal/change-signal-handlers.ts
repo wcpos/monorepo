@@ -39,6 +39,7 @@ import { manifestRowOf } from '../materialization/record-materialization';
 import { upsertManifestRows } from '../local-coverage/rx-existence-manifest-repository';
 import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
 
+import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { RxCollection, RxDatabase } from 'rxdb';
 import type { SyncCollectionName } from '../collections/engine-collections';
 
@@ -71,6 +72,12 @@ export type HandlerContext = {
 		collection: SyncCollectionName,
 		work: () => Promise<T>
 	) => Promise<T>;
+	/**
+	 * The barcode carriers of the SCOPE this tick is bound to — the projections
+	 * derive `payload.barcode` from them (ADR 0006). Absent = none known for this
+	 * scope, so no barcode is materialized.
+	 */
+	barcodeSelectors?: BarcodeSelectors;
 };
 
 const INCLUDE_CHUNK = 50;
@@ -169,7 +176,7 @@ async function pullByIds(
 				});
 			}
 		}
-		const documents = payloads.map((payload) => d.project(payload));
+		const documents = payloads.map((payload) => d.project(payload, ctx.barcodeSelectors));
 		const applicable = await withoutLocallyProtected(
 			collection as never,
 			documents as { id: string }[]
@@ -234,7 +241,9 @@ async function fetchAll(ctx: HandlerContext, path: string): Promise<Record<strin
 /** upsert-refresh: full re-pull upserts, NEVER prunes (deletes have their own arm). */
 async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): Promise<void> {
 	const collection = collectionOf(ctx, d.collection);
-	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) => d.project(payload));
+	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) =>
+		d.project(payload, ctx.barcodeSelectors)
+	);
 	const applicable = await withoutLocallyProtected(
 		collection as never,
 		documents as { id: string }[]
@@ -250,7 +259,9 @@ async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): P
 /** greedy-prunable: full re-pull upserts AND set-difference-prunes by KEPT storage ids. */
 async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor): Promise<void> {
 	const collection = collectionOf(ctx, d.collection);
-	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) => d.project(payload));
+	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) =>
+		d.project(payload, ctx.barcodeSelectors)
+	);
 	const applicable = await withoutLocallyProtected(
 		collection as never,
 		documents as { id: string }[]

@@ -56,6 +56,7 @@ import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
 
 import type { MaintenanceLaneName, MaintenanceLaneRegistryEntry } from './lane-registry';
+import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { RxDatabase } from 'rxdb';
 import type { SyncCollectionName } from '../collections/engine-collections';
@@ -105,6 +106,8 @@ type MaintenanceLaneDeps = {
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
 	coverageFor: (scopeId: string) => LocalCoverage | null;
+	/** The per-scope barcode carriers a scheduler pull materializes products/variations by. */
+	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	/** Namespaced read base (site.syncBaseUrl) — the drain fetchers pull through it. */
 	syncBaseUrl: string;
 	/** The engine's transport port, threaded into every drain fetcher pull. */
@@ -299,9 +302,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	const schedulerDrain = lane('scheduler-drain', async (db, _scopeId, signal, fetcher) => {
 		const coverage = deps.coverageFor(_scopeId);
 		if (!coverage) return { summary: null };
+		const barcodeSelectors = deps.barcodeSelectorsFor?.(_scopeId) ?? undefined;
 		const result = await runEngineSchedulerDrain({
 			db: db as unknown as SchedulerDrainDatabase,
 			coverage,
+			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 			baseUrl: deps.syncBaseUrl,
 			ownerId: deps.ownerId(),
 			diagnostics: deps.diagnostics,

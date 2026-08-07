@@ -3,8 +3,6 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
-import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
-
 import { useLocalMutation } from './use-local-mutation';
 
 const mockUseT = jest.fn();
@@ -12,6 +10,15 @@ const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:
 const mockWrite = jest.fn();
 const mockFindOneExec = jest.fn();
 const mockStatus = jest.fn();
+/** The ACTIVE SCOPE's barcode carriers — the mutation reads them off the scope. */
+let scopeSelectors: { products: readonly string[]; variations: readonly string[] } = {
+	products: [],
+	variations: [],
+};
+
+function setSelectors(collection: 'products' | 'variations', list: readonly string[]): void {
+	scopeSelectors = { ...scopeSelectors, [collection]: list };
+}
 
 jest.mock('@wcpos/query', () => ({
 	// The write-direction projections are the code under test here (parity with the
@@ -24,6 +31,7 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({
 		engine: {
 			active: () => ({
+				barcodeSelectors: scopeSelectors,
 				database: {
 					collections: {
 						orders: { findOne: () => ({ exec: mockFindOneExec }) },
@@ -48,6 +56,7 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 describe('useLocalMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		scopeSelectors = { products: [], variations: [] };
 		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
 		mockStatus.mockReturnValue({ activeScopeId: 'scope-1' });
 		mockUseT.mockReturnValue((_key: string, options?: Record<string, unknown>) =>
@@ -62,7 +71,7 @@ describe('useLocalMutation', () => {
 	] as const)(
 		'keeps a barcode edit and its %s carrier consistent locally',
 		async (selector, carrier) => {
-			setActiveBarcodeSelectors('products', [selector]);
+			setSelectors('products', [selector]);
 			const stored: Record<string, unknown> = {
 				id: 'product-uuid',
 				wooProductId: 42,
@@ -117,7 +126,7 @@ describe('useLocalMutation', () => {
 	] as const)(
 		'a direct %s carrier edit wins over the echoed unchanged barcode',
 		async (selector, priorCarrier, carrierEdit, expected) => {
-			setActiveBarcodeSelectors('products', [selector]);
+			setSelectors('products', [selector]);
 			const stored: Record<string, unknown> = {
 				id: 'product-uuid',
 				wooProductId: 42,

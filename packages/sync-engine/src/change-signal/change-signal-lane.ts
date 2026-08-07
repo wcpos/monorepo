@@ -24,7 +24,6 @@ import {
 	planReplicationActions,
 } from '@wcpos/sync-core';
 import type {
-	BarcodeConfigCollection,
 	ConfigFingerprintSnapshot,
 	Fetcher,
 	HybridChangeSignalEngine,
@@ -42,6 +41,7 @@ import { createConfigFingerprintLiveSource } from './config-fingerprint-source';
 import { deserializeChangeSignalState, serializeChangeSignalState } from './change-signal-state';
 
 import type { RxDatabase } from 'rxdb';
+import type { ScopeBarcodeSelectors } from '../materialization/barcode-selectors';
 import type { SyncCollectionName } from '../collections/engine-collections';
 
 /** The engine-owned kv key holding one scope's serialized engine state. */
@@ -77,10 +77,13 @@ export type ChangeSignalLaneDeps = {
 	) => Promise<T>;
 	pullBatchSize?: () => number | undefined;
 	now?: () => number;
-	forceConfigStaleCollections?: (
-		scopeId: string,
-		snapshot: ConfigFingerprintSnapshot
-	) => readonly BarcodeConfigCollection[];
+	/**
+	 * The per-scope barcode carriers (materialization/barcode-selectors). The lane
+	 * both WRITES them — every config-fingerprint poll republishes the resolved
+	 * carriers onto the polled scope — and READS them, to materialize this tick's
+	 * pulls and to ask whether the scope owes a hydration-miss recovery.
+	 */
+	barcodeSelectorsFor?: (scopeId: string) => ScopeBarcodeSelectors | null;
 };
 
 export type ChangeSignalLane = {
@@ -134,12 +137,16 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			source: createLiveChangeSignalSource({
 				syncBaseUrl: deps.syncBaseUrl,
 				fetcher: sourceFetcher,
+				publishBarcodeSelectors: (collection, selectors) =>
+					deps.barcodeSelectorsFor?.(scopeId)?.publish(collection, selectors),
 			}),
 			// ADR 0006 config tier: a settings change with no row change (e.g. a
 			// barcode-field flip) must still surface staleCollections and re-derive.
 			configSource: createConfigFingerprintLiveSource({
 				syncBaseUrl: deps.syncBaseUrl,
 				fetcher: sourceFetcher,
+				publishBarcodeSelectors: (collection, selectors) =>
+					deps.barcodeSelectorsFor?.(scopeId)?.publish(collection, selectors),
 			}),
 			initialCursor: initial.initialCursor,
 			...(initial.baselineDigests !== undefined
@@ -148,10 +155,10 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			...(restored?.configBaseline !== undefined
 				? { configBaseline: restored.configBaseline }
 				: {}),
-			...(deps.forceConfigStaleCollections
+			...(deps.barcodeSelectorsFor
 				? {
 						forceConfigStaleCollections: (snapshot: ConfigFingerprintSnapshot) =>
-							deps.forceConfigStaleCollections!(scopeId, snapshot),
+							deps.barcodeSelectorsFor!(scopeId)?.staleCollectionsForRecovery(snapshot) ?? [],
 					}
 				: {}),
 			...(deps.now !== undefined ? { now: deps.now } : {}),
@@ -233,6 +240,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						head: outcome.head,
 						rebaselined: outcome.rebaseline,
 					};
+					// Read AFTER the poll: a config-fingerprint read publishes this scope's
+					// carriers, and the pulls this tick applies must materialize by them.
+					const barcodeSelectors = deps.barcodeSelectorsFor?.(scopeId)?.current();
 					await applyReplicationActions(
 						actions,
 						buildReplicationHandlers({
@@ -253,6 +263,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 								? { withCollectionActivity: deps.withCollectionActivity }
 								: {}),
 							...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+							...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 						})
 					);
 				});

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
-
 import {
 	materializeGreedyPrunable,
 	materializeLocalOnly,
@@ -24,20 +22,22 @@ describe('record materialization seam', () => {
 	] as const)(
 		'materializes the active %s carrier as payload.barcode',
 		(selector, carrier, barcode) => {
-			setActiveBarcodeSelectors('products', [selector]);
-			const stored = materializeTargeted('products', {
-				id: 7,
-				date_modified_gmt: 'legacy',
-				...carrier,
-				...(selector.startsWith('meta_data:') ? {} : { meta_data }),
-			}).storedDocument;
+			const stored = materializeTargeted(
+				'products',
+				{
+					id: 7,
+					date_modified_gmt: 'legacy',
+					...carrier,
+					...(selector.startsWith('meta_data:') ? {} : { meta_data }),
+				},
+				[selector]
+			).storedDocument;
 
 			expect(stored.payload).toMatchObject({ barcode });
 		}
 	);
 
 	it('does not clobber a previously materialized barcode when no selectors are reported', () => {
-		setActiveBarcodeSelectors('products', []);
 		const stored = materializeTargeted('products', {
 			id: 7,
 			barcode: 'KEEP-ME',

@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import {
-	getActiveBarcodeSelectors,
-	setActiveBarcodeSelectors,
-	type SyncEvent,
-} from '@wcpos/sync-core';
+import { type SyncEvent } from '@wcpos/sync-core';
 
 import { createRxdbSyncEngine } from './create-rxdb-sync-engine';
 import { materializeTargeted } from './materialization/record-materialization';
@@ -36,21 +32,19 @@ function configResponse(): Response {
 describe('scope-open barcode selector hydration', () => {
 	beforeEach(() => {
 		identity += 1;
-		setActiveBarcodeSelectors('products', []);
-		setActiveBarcodeSelectors('variations', []);
 		seedPosBootstrapLanes.mockReset();
 		seedPosBootstrapLanes.mockResolvedValue(undefined);
 	});
 
 	it('hydrates selectors before bootstrap seeding', async () => {
 		const order: string[] = [];
-		const selectorsAtSeed: { products: string[]; variations: string[] }[] = [];
+		const selectorsAtSeed: unknown[] = [];
+		let engineUnderTest: ReturnType<typeof createRxdbSyncEngine> | undefined;
 		seedPosBootstrapLanes.mockImplementation(async () => {
 			order.push('seed');
-			selectorsAtSeed.push({
-				products: [...getActiveBarcodeSelectors('products')],
-				variations: [...getActiveBarcodeSelectors('variations')],
-			});
+			// The seed runs INSIDE the scope open, so the carriers it will
+			// materialize by must already be on the scope by now.
+			selectorsAtSeed.push(engineUnderTest?.active()?.barcodeSelectors);
 		});
 		const engine = createRxdbSyncEngine(
 			{
@@ -68,6 +62,7 @@ describe('scope-open barcode selector hydration', () => {
 			},
 			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
 		);
+		engineUnderTest = engine;
 
 		await engine.ready;
 
@@ -75,13 +70,15 @@ describe('scope-open barcode selector hydration', () => {
 		expect(selectorsAtSeed).toEqual([
 			{ products: ['global_unique_id'], variations: ['meta_data:_barcode'] },
 		]);
+		expect(engine.active()!.barcodeSelectors).toEqual({
+			products: ['global_unique_id'],
+			variations: ['meta_data:_barcode'],
+		});
 		await engine.dispose();
 	});
 
-	it('continues bootstrap and preserves selectors when hydration fails', async () => {
+	it('continues bootstrap and leaves the scope carrier-less when hydration fails', async () => {
 		const diagnostics: SyncEvent[] = [];
-		setActiveBarcodeSelectors('products', ['existing-product']);
-		setActiveBarcodeSelectors('variations', ['existing-variation']);
 		const engine = createRxdbSyncEngine(
 			{
 				site: {
@@ -100,12 +97,10 @@ describe('scope-open barcode selector hydration', () => {
 
 		await expect(engine.ready).resolves.toBeDefined();
 		expect(seedPosBootstrapLanes).toHaveBeenCalledOnce();
-		// A previous engine's carriers (set above) must NOT survive into this
-		// engine's failed hydration — the scope-open reset leaves the registry
-		// empty so scans fall back online instead of using the wrong site's
-		// carriers (#869 review).
-		expect(getActiveBarcodeSelectors('products')).toEqual([]);
-		expect(getActiveBarcodeSelectors('variations')).toEqual([]);
+		// A failed hydration leaves THIS scope with no carriers, so scans fall back
+		// online instead of matching on a guessed field (#869 review). Nothing has
+		// to be reset for that to hold: the carriers were never process state.
+		expect(engine.active()!.barcodeSelectors).toEqual({ products: [], variations: [] });
 		expect(diagnostics).toContainEqual(
 			expect.objectContaining({
 				type: 'engine.barcode-selector-hydrate-failed',
@@ -132,7 +127,9 @@ describe('scope-open barcode selector hydration', () => {
 			stock_quantity: null,
 		};
 		seedPosBootstrapLanes.mockImplementationOnce(async (input: SeedPosBootstrapLanesInput) => {
-			const product = materializeTargeted('products', remoteProduct).storedDocument;
+			// Seeded with NO carriers — the failed hydration's consequence, and what
+			// the recovery below has to undo.
+			const product = materializeTargeted('products', remoteProduct, []).storedDocument;
 			const database = input.database as RxDatabase;
 			await database.collections.products.bulkUpsert([product]);
 			return { inserted: 1, deduped: 0 };
@@ -203,26 +200,49 @@ describe('scope-open barcode selector hydration', () => {
 		await engine.dispose();
 	});
 
-	it('clears the registry on dispose so a later engine cannot inherit carriers', async () => {
-		const engine = createRxdbSyncEngine(
-			{
-				site: {
-					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-					wpJsonRoot: 'https://example.test/wp-json',
+	it('gives each engine its own carriers — a later engine inherits nothing', async () => {
+		const engineFor = (input: { cashierId: string; fetcher: typeof fetch }) =>
+			createRxdbSyncEngine(
+				{
+					site: {
+						syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+						wpJsonRoot: 'https://example.test/wp-json',
+					},
+					storage: memoryEngineStorage(),
+					mode: 'manual',
+					fetcher: input.fetcher as never,
 				},
-				storage: memoryEngineStorage(),
-				mode: 'manual',
-				fetcher: async () => configResponse(),
-			},
-			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
-		);
-		await engine.ready;
-		expect(getActiveBarcodeSelectors('products')).toEqual(['global_unique_id']);
-		expect(getActiveBarcodeSelectors('variations')).toEqual(['meta_data:_barcode']);
+				{ site: 'https://example.test', storeId: 1, cashierId: input.cashierId }
+			);
 
-		await engine.dispose();
+		const first = engineFor({
+			cashierId: `hydrate-${identity}-a`,
+			fetcher: (async () => configResponse()) as never,
+		});
+		await first.ready;
+		expect(first.active()!.barcodeSelectors).toEqual({
+			products: ['global_unique_id'],
+			variations: ['meta_data:_barcode'],
+		});
 
-		expect(getActiveBarcodeSelectors('products')).toEqual([]);
-		expect(getActiveBarcodeSelectors('variations')).toEqual([]);
+		// The second engine's own hydration fails. Its scope stays carrier-less —
+		// the first engine's carriers are unreachable from here by construction,
+		// disposed or not, because they live on the first engine's scope.
+		const second = engineFor({
+			cashierId: `hydrate-${identity}-b`,
+			fetcher: (async () => {
+				throw new Error('config unavailable');
+			}) as never,
+		});
+		await second.ready;
+		expect(second.active()!.barcodeSelectors).toEqual({ products: [], variations: [] });
+		expect(first.active()!.barcodeSelectors).toEqual({
+			products: ['global_unique_id'],
+			variations: ['meta_data:_barcode'],
+		});
+
+		await first.dispose();
+		expect(second.active()!.barcodeSelectors).toEqual({ products: [], variations: [] });
+		await second.dispose();
 	});
 });

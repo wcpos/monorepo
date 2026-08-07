@@ -19,6 +19,7 @@ import { chunk } from './chunk';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
+import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { BuildCoverageDocumentsFromQueryResultInput } from './query-coverage-writes';
 
 export const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
@@ -60,6 +61,8 @@ export type CollectionSchedulerInput<Doc> = {
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
 	pullBatchSize?: () => number | undefined;
+	/** The ACTIVE SCOPE's barcode carriers, for the collections that materialize one. */
+	barcodeSelectors?: BarcodeSelectors;
 };
 
 /** The per-collection delta for a GREEDY (paginate-the-whole-set) collection — reference + tax. */

@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getActiveBarcodeSelectors, setActiveBarcodeSelectors } from '@wcpos/sync-core';
-
+import {
+	createScopeBarcodeSelectors,
+	type ScopeBarcodeSelectors,
+} from '../materialization/barcode-selectors';
 import {
 	createConfigFingerprintLiveSource,
 	mapConfigFingerprintEnvelope,
@@ -13,10 +15,20 @@ const envelope = (barcodeFields: Record<string, string[]>) => ({
 });
 
 describe('config fingerprint barcode selector boundaries', () => {
+	let scope: ScopeBarcodeSelectors;
+
 	beforeEach(() => {
-		setActiveBarcodeSelectors('products', ['existing-product']);
-		setActiveBarcodeSelectors('variations', ['existing-variation']);
+		scope = createScopeBarcodeSelectors();
+		scope.publish('products', ['existing-product']);
+		scope.publish('variations', ['existing-variation']);
 	});
+
+	const sourceFor = (fields: Record<string, string[]>) =>
+		createConfigFingerprintLiveSource({
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			fetcher: async () => Response.json(envelope(fields)),
+			publishBarcodeSelectors: (collection, selectors) => scope.publish(collection, selectors),
+		});
 
 	it('keeps mapConfigFingerprintEnvelope pure', () => {
 		mapConfigFingerprintEnvelope(
@@ -27,45 +39,51 @@ describe('config fingerprint barcode selector boundaries', () => {
 			})
 		);
 
-		expect(getActiveBarcodeSelectors('products')).toEqual(['existing-product']);
-		expect(getActiveBarcodeSelectors('variations')).toEqual(['existing-variation']);
+		expect(scope.current()).toEqual({
+			products: ['existing-product'],
+			variations: ['existing-variation'],
+		});
 	});
 
-	it('applies non-empty selectors when polling the live source', async () => {
-		const source = createConfigFingerprintLiveSource({
-			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-			fetcher: async () =>
-				Response.json(
-					envelope({
-						products: ['global_unique_id'],
-						variations: ['meta_data:_barcode'],
-						tax_rates: [],
-					})
-				),
+	it('publishes non-empty selectors onto the polled scope', async () => {
+		await sourceFor({
+			products: ['global_unique_id'],
+			variations: ['meta_data:_barcode'],
+			tax_rates: [],
+		}).pollConfigFingerprints();
+
+		expect(scope.current()).toEqual({
+			products: ['global_unique_id'],
+			variations: ['meta_data:_barcode'],
 		});
-
-		await source.pollConfigFingerprints();
-
-		expect(getActiveBarcodeSelectors('products')).toEqual(['global_unique_id']);
-		expect(getActiveBarcodeSelectors('variations')).toEqual(['meta_data:_barcode']);
 	});
 
 	it('does not replace existing selectors with empty lists', async () => {
-		const source = createConfigFingerprintLiveSource({
-			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-			fetcher: async () => Response.json(envelope({ products: [], variations: [], tax_rates: [] })),
+		await sourceFor({ products: [], variations: [], tax_rates: [] }).pollConfigFingerprints();
+
+		expect(scope.current()).toEqual({
+			products: ['existing-product'],
+			variations: ['existing-variation'],
 		});
+	});
 
-		await source.pollConfigFingerprints();
+	it('leaves OTHER scopes untouched — carriers are per scope, not per process', async () => {
+		const other = createScopeBarcodeSelectors();
 
-		expect(getActiveBarcodeSelectors('products')).toEqual(['existing-product']);
-		expect(getActiveBarcodeSelectors('variations')).toEqual(['existing-variation']);
+		await sourceFor({
+			products: ['global_unique_id'],
+			variations: ['meta_data:_barcode'],
+			tax_rates: [],
+		}).pollConfigFingerprints();
+
+		expect(other.current()).toEqual({ products: [], variations: [] });
 	});
 });
 
 describe('config fingerprint conditional requests', () => {
 	it('parses the first response without a validator, then reuses its ETag on 304', async () => {
 		const requests: ({ headers?: HeadersInit } | undefined)[] = [];
+		const scope = createScopeBarcodeSelectors();
 		let call = 0;
 		const source = createConfigFingerprintLiveSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
@@ -78,10 +96,11 @@ describe('config fingerprint conditional requests', () => {
 						})
 					: new Response(null, { status: 304 });
 			},
+			publishBarcodeSelectors: (collection, selectors) => scope.publish(collection, selectors),
 		});
 
 		const first = await source.pollConfigFingerprints();
-		setActiveBarcodeSelectors('products', ['changed-after-first-poll']);
+		scope.publish('products', ['changed-after-first-poll']);
 		const cached = await source.pollConfigFingerprints();
 
 		expect(first).toEqual({
@@ -89,7 +108,8 @@ describe('config fingerprint conditional requests', () => {
 			barcodeFields: { products: ['sku'], variations: [], tax_rates: [] },
 		});
 		expect(cached).toEqual(first);
-		expect(getActiveBarcodeSelectors('products')).toEqual(['sku']);
+		// The 304 re-publishes the cached snapshot's carriers onto the scope.
+		expect(scope.current().products).toEqual(['sku']);
 		expect(new Headers(requests[0]?.headers).get('if-none-match')).toBeNull();
 		expect(new Headers(requests[1]?.headers).get('if-none-match')).toBe('"config-1"');
 	});
