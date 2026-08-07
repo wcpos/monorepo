@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -7,6 +8,14 @@ import { useT } from '../../../contexts/translations';
 
 type CapabilityHint =
 	'editProducts' | 'createCoupons' | 'editCoupons' | 'createCustomers' | 'editCustomers';
+
+export function CapabilityTooltipTrigger({ children }: { children: React.ReactElement }) {
+	return (
+		<TooltipTrigger asChild>
+			<View role="none">{children}</View>
+		</TooltipTrigger>
+	);
+}
 
 export function CapabilityTooltip({
 	children,
@@ -30,7 +39,7 @@ export function CapabilityTooltip({
 
 	return (
 		<Tooltip showOnNative>
-			<TooltipTrigger asChild>{children}</TooltipTrigger>
+			<CapabilityTooltipTrigger>{children}</CapabilityTooltipTrigger>
 			<TooltipContent>
 				<Text>{messages[hint]}</Text>
 			</TooltipContent>

@@ -10,7 +10,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 
 import { Actions } from './cells/actions';
@@ -26,6 +26,7 @@ import { FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { useProAccess } from '../contexts/pro-access';
+import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { TextCell } from '../components/text-cell';
@@ -154,14 +155,14 @@ function CouponsScreenContent() {
 								testID="search-coupons"
 							/>
 							<Tooltip showOnNative={!readOnly && !caps.canCreateCoupons}>
-								<TooltipTrigger asChild>
+								<CapabilityTooltipTrigger>
 									<IconButton
 										testID="coupons-add-button"
 										name="plus"
 										onPress={() => router.push({ pathname: '/coupons/add' })}
 										disabled={readOnly || !caps.canCreateCoupons}
 									/>
-								</TooltipTrigger>
+								</CapabilityTooltipTrigger>
 								<TooltipContent>
 									<Text>
 										{readOnly

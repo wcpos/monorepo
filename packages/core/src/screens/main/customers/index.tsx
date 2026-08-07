@@ -10,7 +10,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
@@ -19,6 +19,7 @@ import { CustomerEmail } from './cells/email';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { useProAccess } from '../contexts/pro-access';
+import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { TextCell } from '../components/text-cell';
@@ -126,14 +127,14 @@ function CustomersScreenContent() {
 							testID="search-customers"
 						/>
 						<Tooltip showOnNative={!readOnly && !caps.canCreateCustomers}>
-							<TooltipTrigger asChild>
+							<CapabilityTooltipTrigger>
 								<IconButton
 									testID="customers-add-button"
 									name="userPlus"
 									onPress={() => router.push({ pathname: '/customers/add' })}
 									disabled={readOnly || !caps.canCreateCustomers}
 								/>
-							</TooltipTrigger>
+							</CapabilityTooltipTrigger>
 							<TooltipContent>
 								<Text>
 									{readOnly

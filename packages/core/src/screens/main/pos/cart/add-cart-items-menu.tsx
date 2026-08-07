@@ -26,6 +26,7 @@ import { AddFee } from './add-fee';
 import { AddMiscProduct } from './add-misc-product';
 import { AddShipping } from './add-shipping';
 import { useT } from '../../../../contexts/translations';
+import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
 import { useLicense } from '../../hooks/use-license';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
@@ -51,12 +52,12 @@ export function AddCartItemsMenu() {
 						</DropdownMenuItem>
 					) : (
 						<Tooltip showOnNative={isPro && !caps.canCreateCustomers}>
-							<TooltipTrigger asChild>
+							<CapabilityTooltipTrigger>
 								<DropdownMenuItem testID="menu-add-customer" disabled>
 									<Icon name="userPlus" />
 									<Text>{t('common.add_new_customer')}</Text>
 								</DropdownMenuItem>
-							</TooltipTrigger>
+							</CapabilityTooltipTrigger>
 							<TooltipContent>
 								<Text>
 									{isPro ? t('capability_hints.create_customers') : t('common.upgrade_to_pro')}

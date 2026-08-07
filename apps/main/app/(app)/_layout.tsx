@@ -12,6 +12,7 @@ import { registerEngineScopeSwitcher } from '@wcpos/core/contexts/app-state/engi
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
+import { useUserValidation } from '@wcpos/core/hooks/use-user-validation';
 import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status-logger';
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
@@ -264,9 +265,10 @@ function MetricsPersistenceBridge() {
 }
 
 export default function AppLayout() {
-	const { site } = useAppState();
+	const { site, wpCredentials } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
 	const { collection: logCollection } = useCollection('logs');
+	useUserValidation({ site, wpUser: wpCredentials });
 
 	// The logger holds its collection outside React, so release the outgoing store on unmount.
 	React.useEffect(() => {

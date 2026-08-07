@@ -272,7 +272,9 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						updateData.roles = [data.role];
 					}
 
-					if (Array.isArray(data.capabilities)) {
+					if (data.capabilities === undefined) {
+						updateData.capabilities = undefined;
+					} else if (Array.isArray(data.capabilities)) {
 						updateData.capabilities = [
 							...new Set(
 								data.capabilities.filter(

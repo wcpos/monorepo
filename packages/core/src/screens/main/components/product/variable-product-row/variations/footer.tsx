@@ -49,11 +49,7 @@ export function VariationTableFooter({ binding, parent, count }: VariationTableF
 	return (
 		<HStack space="xs" className="border-border bg-footer justify-end border-b p-2">
 			<Text className="text-xs">{t('common.showing_of', { shown: count, total })}</Text>
-			<SyncButton
-				sync={binding.sync}
-				clearAndSync={handleClearVariations}
-				active={loading}
-			/>
+			<SyncButton sync={binding.sync} clearAndSync={handleClearVariations} active={loading} />
 		</HStack>
 	);
 }
