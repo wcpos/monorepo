@@ -27,7 +27,8 @@ let uniqueStore = 0;
 const customerUuid = (n: number): string =>
 	`00000000-0000-4000-9000-${String(n).padStart(12, '0')}`;
 
-afterEach(() => {
+afterEach(async () => {
+	await createEngineHarness.disposeTrackedEngines();
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 });

@@ -38,12 +38,17 @@ function engineWith(
 	overrides?: Partial<RxdbSyncEnginePorts>,
 	identity = freshIdentity()
 ): RxdbSyncEngine {
+	const { now = Date.now, diagnostics, connectivity, fetcher, ...ports } = overrides ?? {};
 	return createEngineHarness({
 		site: SITE,
 		identity,
 		mode: 'manual',
 		captureTimers: overrides?.mode === 'auto',
-		ports: { now: Date.now, ...overrides },
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
+		...(fetcher === undefined ? {} : { fetch: fetcher }),
+		ports,
 		awaitReady: false,
 	}).engine;
 }
@@ -559,7 +564,6 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			);
 			expect(fetchedUrls).toContainEqual(expect.stringContaining('/orders?'));
 		} finally {
-			vi.useRealTimers();
 			await engine.dispose();
 		}
 	});

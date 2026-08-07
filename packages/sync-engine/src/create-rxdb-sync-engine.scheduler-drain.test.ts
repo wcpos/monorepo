@@ -92,12 +92,16 @@ function engineWith(
 	fetch: (url: string) => Promise<Response>,
 	overrides?: Partial<RxdbSyncEnginePorts>
 ): RxdbSyncEngine {
+	const { now, diagnostics, connectivity, fetcher, ...ports } = overrides ?? {};
 	return createEngineHarness({
 		site: SITE,
 		identity: freshIdentity(),
 		mode: 'manual',
-		fetch,
-		ports: overrides,
+		fetch: fetcher ?? fetch,
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
+		ports,
 		awaitReady: false,
 	}).engine;
 }

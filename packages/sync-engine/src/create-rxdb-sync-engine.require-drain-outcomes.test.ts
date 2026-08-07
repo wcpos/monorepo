@@ -23,7 +23,8 @@ import { createEngineHarness } from './testing';
 const SITE = 'https://lab.example.test';
 let uniqueStore = 0;
 
-afterEach(() => {
+afterEach(async () => {
+	await createEngineHarness.disposeTrackedEngines();
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 });

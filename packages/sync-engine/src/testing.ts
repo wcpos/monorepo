@@ -17,7 +17,12 @@ import type { EngineConnectivity, EngineStringStore } from './create-rxdb-sync-e
 // Host schema-canary fixtures. This is deliberately the exact sync-collection
 // recipe the engine opens, without exposing package-private descriptors.
 export { engineSyncCollectionCreators } from './collections/engine-collections';
-export { createEngineHarness } from './engine-harness';
+export {
+	createEngineHarness,
+	type CapturedEngineTimers,
+	type EngineHarness,
+	type EngineHarnessOptions,
+} from './engine-harness';
 
 /**
  * Memory storage for the engine's `storage` port. z-schema-validated by

@@ -106,6 +106,21 @@ describe('createCensusPublisher', () => {
 		expect((await publisher.freshEntry('customers'))?.totalMatchingRecords).toBe(7);
 	});
 
+	it('takes the freshness timestamp after the cache read settles', async () => {
+		const read = deferred<QueryTotalCacheEntry[]>();
+		let nowMs = 100;
+		const publisher = createCensusPublisher({
+			cache: { readForQueryKeys: () => read.promise },
+			now: () => nowMs,
+			diagnostics: vi.fn(),
+		});
+		const pending = publisher.freshEntry('customers');
+		nowMs = 200;
+		read.resolve([entry(7, 150)]);
+
+		await expect(pending).resolves.toBeNull();
+	});
+
 	it('reads a fresh entry from the captured database after the active database changes', async () => {
 		const firstDatabase = { name: 'first' };
 		const secondDatabase = { name: 'second' };

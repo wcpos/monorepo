@@ -54,12 +54,16 @@ describe('createCadenceController', () => {
 		expect(timeouts[1]!.delayMs).toBe(12_000);
 	});
 
-	it('announces cadence start once per controller instance', () => {
+	it('starts once per controller instance and treats later calls as no-ops', () => {
 		const first = harness();
 		const second = harness();
 		first.controller.start();
+		const timeoutCalls = vi.mocked(first.timers.setTimeout).mock.calls.length;
+		const intervalCalls = vi.mocked(first.timers.setInterval).mock.calls.length;
 		first.controller.start();
 		second.controller.start();
+		expect(first.timers.setTimeout).toHaveBeenCalledTimes(timeoutCalls);
+		expect(first.timers.setInterval).toHaveBeenCalledTimes(intervalCalls);
 		expect(
 			first.diagnostics.mock.calls.filter(([event]) => event.type === 'cadence.start')
 		).toHaveLength(1);

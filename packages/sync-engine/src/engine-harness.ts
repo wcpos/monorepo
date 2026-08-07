@@ -59,6 +59,9 @@ export type EngineHarnessOptions = {
 	routes?: Record<string, EngineHarnessRoute>;
 	fetch?: EngineFetcher;
 	startAtMs?: number;
+	now?: RxdbSyncEnginePorts['now'];
+	diagnostics?: RxdbSyncEnginePorts['diagnostics'];
+	connectivitySignal?: RxdbSyncEnginePorts['connectivity'];
 	random?: () => number;
 	captureTimers?: boolean;
 	awaitReady?: boolean;
@@ -85,6 +88,7 @@ export type EngineHarness = {
 
 let nextHarnessIdentity = 0;
 const trackedEngines = new Set<RxdbSyncEngine>();
+const ALWAYS_OWNED_PORTS = ['now', 'diagnostics', 'connectivity', 'fetcher'] as const;
 
 function json(value: unknown): Response {
 	return Response.json(value);
@@ -168,16 +172,13 @@ function createEngineHarnessImpl(
 	const ports = Object.fromEntries(
 		Object.entries(options.ports ?? {}).filter(([, value]) => value !== undefined)
 	) as Partial<RxdbSyncEnginePorts>;
-	const ownedPorts = [
-		'now',
-		'diagnostics',
-		'connectivity',
-		'fetcher',
-		...(options.storage !== undefined || options.validateSchemas !== undefined
-			? (['storage'] as const)
-			: []),
-	] as const;
-	const collisions = ownedPorts.filter((name) => ports[name] !== undefined);
+	const collisions: string[] = ALWAYS_OWNED_PORTS.filter((name) => ports[name] !== undefined);
+	if (
+		(options.storage !== undefined || options.validateSchemas !== undefined) &&
+		ports.storage !== undefined
+	) {
+		collisions.push('storage');
+	}
 	if (collisions.length > 0) {
 		throw new Error(
 			`options.ports cannot override harness-owned ports (now, diagnostics, connectivity, fetcher; storage when storage or validateSchemas is set): ${collisions.join(', ')}`
@@ -185,7 +186,9 @@ function createEngineHarnessImpl(
 	}
 	nextHarnessIdentity += 1;
 	let nowMs = options.startAtMs ?? 1_000;
+	let nowSource = options.now;
 	let connectivityState = options.connectivity ?? 'online';
+	let connectivitySource = options.connectivitySignal;
 	let scripted: { response: Response | Error; elapsedMs: number } | null = null;
 	const diagnostics: SyncEvent[] = [];
 	const events: EngineEvent[] = [];
@@ -249,10 +252,10 @@ function createEngineHarnessImpl(
 			storage,
 			mode: options.mode ?? 'manual',
 			fetcher,
-			now: () => nowMs,
+			now: () => nowSource?.() ?? nowMs,
 			random: options.random ?? (() => 0.5),
-			connectivity: () => connectivityState,
-			diagnostics: (event) => diagnostics.push(event),
+			connectivity: () => connectivitySource?.() ?? connectivityState,
+			diagnostics: (event) => void (diagnostics.push(event), options.diagnostics?.(event)),
 			...(options.checkpoints === undefined ? {} : { checkpoints: options.checkpoints }),
 			...(options.intervals === undefined ? {} : { intervals: options.intervals }),
 			...(options.queryTotal === undefined ? {} : { queryTotal: options.queryTotal }),
@@ -299,16 +302,19 @@ function createEngineHarnessImpl(
 				.catch(() => undefined);
 		},
 		clock: {
-			now: () => nowMs,
+			now: () => nowSource?.() ?? nowMs,
 			set: (ms) => {
+				nowSource = undefined;
 				nowMs = ms;
 			},
 			advance: (ms) => {
-				nowMs += ms;
+				nowMs = (nowSource?.() ?? nowMs) + ms;
+				nowSource = undefined;
 			},
 		},
 		connectivity: {
 			set: (state) => {
+				connectivitySource = undefined;
 				connectivityState = state;
 			},
 		},

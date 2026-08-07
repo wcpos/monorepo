@@ -238,10 +238,8 @@ function engineWith(input: {
 			},
 		},
 		...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
-		ports: {
-			...(input.connectivity ? { connectivity: input.connectivity } : {}),
-			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
-		},
+		connectivitySignal: input.connectivity,
+		diagnostics: input.diagnostics,
 		awaitReady: false,
 	}).engine;
 }

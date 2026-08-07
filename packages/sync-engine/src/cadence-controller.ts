@@ -59,6 +59,7 @@ export function createCadenceController(options: {
 	const laneNextDueAtMs = new Map<EngineLane, number>();
 	let pullBatchSize: number | undefined;
 	let cadenceStartAnnounced = false;
+	let started = false;
 	let stopped = false;
 	options.pressure.setMaxMultiplier(
 		maxChangeSignalPressureMultiplier(options.intervals.changeSignalPollMs)
@@ -229,7 +230,8 @@ export function createCadenceController(options: {
 		options.onStatusChange();
 	};
 	const start = (): void => {
-		if (options.mode !== 'auto' || stopped || options.isDisposed()) return;
+		if (options.mode !== 'auto' || started || stopped || options.isDisposed()) return;
+		started = true;
 		armChangeSignalTimer();
 		if (options.onUserActivity !== undefined) {
 			unsubscribeUserActivity = options.onUserActivity(() => {

@@ -47,11 +47,16 @@ function freshIdentities(): { a: StoreScopeIdentity; b: StoreScopeIdentity } {
 }
 
 function engineWith(overrides?: Partial<RxdbSyncEnginePorts>, initial?: StoreScopeIdentity) {
+	const { now, diagnostics, connectivity, fetcher, ...ports } = overrides ?? {};
 	return createEngineHarness({
 		site: SITE,
 		identity: initial ?? freshIdentities().a,
 		mode: 'auto',
-		ports: overrides,
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
+		...(fetcher === undefined ? {} : { fetch: fetcher }),
+		ports,
 		awaitReady: false,
 	}).engine;
 }

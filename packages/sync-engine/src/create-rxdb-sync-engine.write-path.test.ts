@@ -54,12 +54,12 @@ function engineWith(input: {
 		...(input.storage ? { storage: input.storage } : {}),
 		mode: input.mode ?? 'manual',
 		fetch: input.fetch,
+		now: input.now,
+		diagnostics: input.diagnostics,
+		connectivitySignal: input.connectivity,
 		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
 		ports: {
-			...(input.connectivity ? { connectivity: input.connectivity } : {}),
 			...(input.uuid ? { uuid: input.uuid } : {}),
-			...(input.now ? { now: input.now } : {}),
-			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
 		},
 		...(input.writeDrainPollMs !== undefined
 			? { intervals: { writeDrainPollMs: input.writeDrainPollMs } }

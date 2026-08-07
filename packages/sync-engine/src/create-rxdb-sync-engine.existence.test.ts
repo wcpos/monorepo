@@ -24,13 +24,17 @@ function engine(
 	fetcher: RxdbSyncEnginePorts['fetcher'],
 	overrides: Partial<RxdbSyncEnginePorts> = {}
 ) {
+	const { now, diagnostics, connectivity, ...ports } = overrides;
 	return createEngineHarness({
 		site: SITE,
 		identity: identity(),
 		mode: 'manual',
 		fetch: (url, init) => fetcher?.(url, init) ?? Promise.reject(new Error(`unexpected ${url}`)),
 		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
-		ports: overrides,
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
+		ports,
 		awaitReady: false,
 	}).engine;
 }

@@ -90,7 +90,7 @@ function engineWith(input: { serialize?: Serialize; diagnostics?: SyncObserver }
 		mode: 'manual',
 		fetch: (url, init) => server.fetch(url, init as never),
 		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
-		ports: input.diagnostics ? { diagnostics: input.diagnostics } : {},
+		diagnostics: input.diagnostics,
 		awaitReady: false,
 	}).engine;
 	return { engine, server };

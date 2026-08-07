@@ -53,12 +53,15 @@ function isTrickleUrl(url: string): boolean {
 }
 
 function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}, storeIdentity = identity()) {
-	const { fetcher, ...ports } = overrides;
+	const { fetcher, now, diagnostics, connectivity, ...ports } = overrides;
 	return createEngineHarness({
 		site: SITE,
 		identity: storeIdentity,
 		mode: 'manual',
 		fetch: fetcher ?? (async () => json([])),
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
 		routes: { '/changes/config-fingerprint': {} },
 		ports,
 		awaitReady: false,
