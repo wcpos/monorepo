@@ -120,7 +120,7 @@ export function createScopeBarcodeSelectors(): ScopeBarcodeSelectors {
 	return {
 		current: () => selectors,
 		publish(collection, next) {
-			selectors = { ...selectors, [collection]: [...next] };
+			selectors = Object.freeze({ ...selectors, [collection]: Object.freeze([...next]) });
 		},
 		beginHydrationAttempt() {
 			selectors = NO_BARCODE_SELECTORS;
