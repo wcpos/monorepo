@@ -34,7 +34,7 @@ on:
 # Non-PR events keep the original per-ref groups and supersede semantics, so
 # a production deploy never waits on (or cancels) PR E2E.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && 'e2e-shared-store' || format('{0}-{1}-{2}', github.workflow, github.event_name, github.ref) }}
+  group: ${{ github.event_name == 'pull_request' && 'e2e-shared-store' || format('deploy-{0}', github.ref) }}
   cancel-in-progress: ${{ github.event_name != 'pull_request' && github.ref != 'refs/heads/main' }}
 
 env:
