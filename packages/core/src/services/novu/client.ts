@@ -2,6 +2,8 @@ import { type Notification, Novu } from '@novu/js';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { NOVU_CONFIG } from './config';
+
 import type { NovuSubscriberMetadata } from './subscriber';
 
 const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
@@ -36,18 +38,9 @@ const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
  */
 
 /**
- * Novu Application IDs for each environment
- * These are from our self-hosted Novu instance
- */
-const NOVU_APP_IDS = {
-	production: 'Wu5i9hEUNMO2',
-	development: '64qzhASJJNnb',
-} as const;
-
-/**
  * Novu environment type - matches server-side definition
  */
-export type NovuEnvironment = 'development' | 'production';
+export type { NovuEnvironment } from './config';
 
 /**
  * Get the current Novu environment
@@ -58,21 +51,7 @@ export type NovuEnvironment = 'development' | 'production';
  *
  * Can be overridden with NOVU_ENV environment variable if needed.
  */
-export function getNovuEnvironment(): NovuEnvironment {
-	// Allow explicit override via env var (for edge cases)
-	const override = process.env.EXPO_PUBLIC_NOVU_ENV || process.env.NOVU_ENV;
-	if (override === 'development' || override === 'production') {
-		return override;
-	}
-
-	// Auto-detect: __DEV__ is available in Expo/React Native
-	if (typeof __DEV__ !== 'undefined') {
-		return __DEV__ ? 'development' : 'production';
-	}
-
-	// Fallback for Electron/Node: check NODE_ENV
-	return process.env.NODE_ENV === 'development' ? 'development' : 'production';
-}
+export { getNovuEnvironment } from './config';
 
 /**
  * Novu configuration for our self-hosted instance
@@ -80,19 +59,7 @@ export function getNovuEnvironment(): NovuEnvironment {
  * Environment is auto-detected based on __DEV__ (Expo) or NODE_ENV (Electron).
  * No environment variables needed for normal workflow.
  */
-const NOVU_CONFIG = {
-	get applicationIdentifier() {
-		return NOVU_APP_IDS[getNovuEnvironment()];
-	},
-	apiUrl:
-		process.env.EXPO_PUBLIC_NOVU_API_URL ||
-		process.env.NOVU_API_URL ||
-		'https://api.notifications.wcpos.com',
-	socketUrl:
-		process.env.EXPO_PUBLIC_NOVU_SOCKET_URL ||
-		process.env.NOVU_SOCKET_URL ||
-		'wss://ws.notifications.wcpos.com',
-};
+export { NOVU_CONFIG };
 
 /**
  * Singleton Novu client instance
