@@ -12,6 +12,7 @@ import {
 
 import { log } from '@wcpos/utils/logger';
 
+import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
 import { restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
 
@@ -835,13 +836,37 @@ export const authenticatedTest = base.extend<{
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 		await use(captureStoreAuthorization(page));
 	},
-	posPage: async ({ page, storeAuthorization }, use, testInfo) => {
+	posPage: async ({ page, storeAuthorization, request }, use, testInfo) => {
 		// `storeAuthorization` is a declared dependency so its request listener is
 		// attached before the app boots and sends its first authenticated request.
 		storeAuthorization();
+		// Record the server id of every order this spec pushes, so teardown can
+		// finalize the ones left as lingering pos-open carts.
+		const orderCapture = captureCreatedOrderIds(page);
 		await hydrateAuthenticatedPage(page, testInfo);
 
-		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
-		await use(page);
+		try {
+			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
+			await use(page);
+		} finally {
+			// Best-effort: transition any still-open carts this spec created to a
+			// terminal status (cancelled) so they don't pile up on the shared dev
+			// store. Reuses the app's own captured credentials/transport. This must
+			// never fail the test — finalizeCreatedOrders swallows all errors, but
+			// we guard the settle()+call as well (route-handler-never-rethrow, #997).
+			try {
+				await orderCapture.settle();
+				await finalizeCreatedOrders(
+					request,
+					getStoreUrl(testInfo),
+					orderCapture.createdOrderIds,
+					storeRequestOptions(storeAuthorization())
+				);
+			} catch (error) {
+				log.warn(
+					`[order-cleanup] teardown failed: ${error instanceof Error ? error.message : String(error)}`
+				);
+			}
+		}
 	},
 });
