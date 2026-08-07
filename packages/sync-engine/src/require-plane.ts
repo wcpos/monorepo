@@ -212,6 +212,52 @@ type RequirementSubscriber = {
 	released: boolean;
 };
 
+/**
+ * The drain arguments that genuinely differ between requirement kinds. Everything else a
+ * drain tick needs — scope database, coverage, transport, owner id, abort signal, progress
+ * observer, batch-size dial — is invariant across every seeded requirement and is supplied
+ * once, by the runner.
+ */
+type RequirementDrainOverrides = Pick<
+	Parameters<typeof runEngineSchedulerDrain>[0],
+	'taskId' | 'maxRequestsPerTask' | 'refreshBrowseWindowKey' | 'nowMs'
+>;
+
+/**
+ * One kind's seed: the result, plus any drain argument the seed itself decided (the shared
+ * `nowMs` a reference refresh pins across BOTH halves of its tick, notably).
+ */
+type SeedTick = {
+	seed: SeedPersistedSchedulerTasksResult;
+	drain?: RequirementDrainOverrides;
+};
+
+/**
+ * A seed→drain→verdict requirement as data — the whole per-kind variation surface of
+ * `runSeedDrain`. The protocol itself (seed inside one guarded write, an active lane
+ * releases instead of draining, a dropped write throws, a mid-drain ledger rebuild
+ * releases, the verdict comes from `requirementDrainOutcome` over OUR task ids) is
+ * invariant and lives in the runner, once.
+ */
+type SeedDrainRequirement = {
+	/** Seed this kind's task(s) inside the guarded write. */
+	seed: () => Promise<SeedTick>;
+	/** Per-kind drain arguments, merged under whatever the seed returns. */
+	drain?: RequirementDrainOverrides;
+	/** Thrown when the scope moved mid-tick and the writes were dropped. */
+	droppedMessage: string;
+	/** Released when another owner already holds this lane (`skippedActive`). */
+	activeReason: string;
+	/**
+	 * Only the reference lanes (#952) treat a COMPLETED lane inside the dedupe window as a
+	 * short-circuit: they serve local without draining at all. Every other kind drains and
+	 * lets `requirementDrainOutcome` fold `skippedCompleted` into its `freshReason`.
+	 */
+	dedupedReason?: string;
+	fetchedReason: string;
+	freshReason: string;
+};
+
 export type RequirePlane = {
 	require(requirement: EngineRequirement): RequirementHandle;
 	hasPendingWork(): boolean;
@@ -402,55 +448,80 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 			};
 
-			if (item.requirement.collection === 'orders' && item.requirement.kind === 'query') {
-				// Captured here: the guardWrite closure below loses this narrowing.
-				const browseQueryKey = item.requirement.queryKey;
-				const decision = parseOrderBrowserSchedulerDescriptor(item.requirement.queryKey ?? '');
-				if (!decision || 'skipReason' in decision) {
-					throw new Error(
-						`require: unsupported order query (${decision?.skipReason ?? 'missing queryKey'})`
-					);
-				}
+			// The ONE site that asserts the scope database into the scheduler's structural shape.
+			// Both describe the same object; reconciling their types is the cycle this file
+			// deliberately does not enter, so the assertion is made once and named.
+			const schedulerDb = database as unknown as SchedulerDrainDatabase;
+			const schedulerFetcher = boundFetch as never;
+
+			/** One drain tick carrying the require-plane's invariant arguments. */
+			const drainScheduler = (overrides: RequirementDrainOverrides = {}) =>
+				runEngineSchedulerDrain({
+					db: schedulerDb,
+					coverage,
+					baseUrl: deps.syncBaseUrl,
+					ownerId: 'require-plane',
+					fetcher: schedulerFetcher,
+					diagnostics: deps.diagnostics,
+					...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+					signal: item.abortController.signal,
+					onProgress: progressObserver(item.requirement),
+					...overrides,
+				});
+
+			/**
+			 * Seed → drain → verdict, once, for every requirement kind that runs on the durable
+			 * scheduler (the two browse windows, the orders query, the full order refresh, the
+			 * on-demand reference lanes). Each of those used to re-implement this protocol inline,
+			 * which is how the #956 invariant below came to be written five times — and how a branch
+			 * could quietly be written a sixth time without it.
+			 *
+			 * The order of the verdicts is itself the contract:
+			 *  1. a dropped guarded write means the scope moved mid-tick — nothing is trustworthy;
+			 *  2. an ACTIVE lane means another owner is mid-pull — release, do not report met;
+			 *  3. a COMPLETED lane inside the dedupe window (reference lanes only) is genuinely
+			 *     fresh — serve local without draining;
+			 *  4. a ledger rebuild (#956) aborted the tick — nothing was claimed and nothing was
+			 *     fetched, so release rather than report the requirement met;
+			 *  5. only then is the drain readable, and only through OUR seeded task ids.
+			 */
+			const runSeedDrain = async (spec: SeedDrainRequirement): Promise<CoverageOutcome> => {
 				let drainResult = emptyDrainResult();
 				let seedOutcome = emptySeedResult();
 				let skippedActive = false;
+				let deduped = false;
 				const applied = await bound.guardWrite(async () => {
-					const seedResult = await seedOrderFilterSchedulerTask({
-						...decision.descriptor,
-						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
-						database: database,
-					});
-					seedOutcome = seedResult;
-					if (seedResult.skippedActive > 0) {
+					const tick = await spec.seed();
+					seedOutcome = tick.seed;
+					// `skippedActive` and `skippedCompleted` are NOT the same answer. An active lane
+					// means another owner is mid-pull, which releases this caller. Only a completed
+					// lane inside a dedupe window is a genuine "your data is already fresh".
+					if (tick.seed.skippedActive > 0) {
 						skippedActive = true;
 						return;
 					}
-					drainResult = await runEngineSchedulerDrain({
-						db: database as unknown as SchedulerDrainDatabase,
-						coverage,
-						baseUrl: deps.syncBaseUrl,
-						ownerId: 'require-plane',
-						fetcher: boundFetch as never,
-						diagnostics: deps.diagnostics,
-						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
-						// An explicit user sync must re-walk the window from page 1; without this the
-						// scroll continuation (#948/#957) would serve it straight back from coverage.
-						// An explicit user sync must re-walk THIS window from page 1; without it the
-						// scroll continuation (#948/#957) would serve it straight back from coverage.
-						// Scoped to the one lane key so a drain's other queued windows keep theirs.
-						...(item.requirement.forceRefresh ? { refreshBrowseWindowKey: browseQueryKey } : {}),
-						signal: item.abortController.signal,
-						onProgress: progressObserver(item.requirement),
-					});
+					if (spec.dedupedReason !== undefined && tick.seed.skippedCompleted > 0) {
+						deduped = true;
+						return;
+					}
+					drainResult = await drainScheduler({ ...spec.drain, ...tick.drain });
 				});
-				if (applied === 'dropped')
-					throw new Error('require: scope moved mid-query (writes dropped)');
+				if (applied === 'dropped') throw new Error(spec.droppedMessage);
 				if (skippedActive)
 					return {
 						action: 'released',
 						missingRecordIds: [],
-						reason: 'order query refresh already in progress',
+						reason: spec.activeReason,
 					};
+				if (deduped && spec.dedupedReason !== undefined) {
+					return {
+						action: 'serve-local',
+						missingRecordIds: [],
+						reason: spec.dedupedReason,
+						documents: 0,
+						requests: 0,
+					};
+				}
 				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
 				// nothing was fetched, so release instead of reporting the requirement met.
 				if (drainResult.ledgerRebuilt)
@@ -462,6 +533,36 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				return requirementDrainOutcome({
 					drain: drainResult,
 					seed: seedOutcome,
+					fetchedReason: spec.fetchedReason,
+					freshReason: spec.freshReason,
+				});
+			};
+
+			if (item.requirement.collection === 'orders' && item.requirement.kind === 'query') {
+				// Captured here: the guardWrite closure below loses this narrowing.
+				const browseQueryKey = item.requirement.queryKey;
+				const decision = parseOrderBrowserSchedulerDescriptor(item.requirement.queryKey ?? '');
+				if (!decision || 'skipReason' in decision) {
+					throw new Error(
+						`require: unsupported order query (${decision?.skipReason ?? 'missing queryKey'})`
+					);
+				}
+				return runSeedDrain({
+					seed: async () => ({
+						seed: await seedOrderFilterSchedulerTask({
+							...decision.descriptor,
+							completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
+							database: database,
+						}),
+					}),
+					// An explicit user sync must re-walk THIS window from page 1; without it the
+					// scroll continuation (#948/#957) would serve it straight back from coverage.
+					// Scoped to the one lane key so a drain's other queued windows keep theirs.
+					...(item.requirement.forceRefresh
+						? { drain: { refreshBrowseWindowKey: browseQueryKey } }
+						: {}),
+					droppedMessage: 'require: scope moved mid-query (writes dropped)',
+					activeReason: 'order query refresh already in progress',
 					fetchedReason: `drained order query ${decision.descriptor.queryKey}`,
 					freshReason: 'order query refreshed within the dedupe window',
 				});
@@ -481,62 +582,27 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						`require: unsupported product query (${item.requirement.queryKey ?? 'missing queryKey'})`
 					);
 				}
-				let drainResult = emptyDrainResult();
-				let seedOutcome = emptySeedResult();
-				let skippedActive = false;
-				const applied = await bound.guardWrite(async () => {
-					const seedResult = await seedProductBrowseWindowSchedulerTask({
-						// Spread the WHOLE descriptor, as the orders branch above does. Cherry-picking
-						// limit/orderby/order silently dropped every filter dimension: the seeder then
-						// rebuilt an UNFILTERED key, so filtered demand could never reach the wire and
-						// its coverage lane collided with the unfiltered window's.
-						...browseWindow,
-						priority: item.priority,
-						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
-						database: database,
-					});
-					seedOutcome = seedResult;
-					if (seedResult.skippedActive > 0) {
-						skippedActive = true;
-						return;
-					}
-					drainResult = await runEngineSchedulerDrain({
-						db: database as unknown as SchedulerDrainDatabase,
-						coverage,
-						baseUrl: deps.syncBaseUrl,
-						ownerId: 'require-plane',
-						fetcher: boundFetch as never,
-						diagnostics: deps.diagnostics,
-						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
-						// An explicit user sync must re-walk the window from page 1; without this the
-						// scroll continuation (#948/#957) would serve it straight back from coverage.
-						// An explicit user sync must re-walk THIS window from page 1; without it the
-						// scroll continuation (#948/#957) would serve it straight back from coverage.
-						// Scoped to the one lane key so a drain's other queued windows keep theirs.
-						...(item.requirement.forceRefresh ? { refreshBrowseWindowKey: browseQueryKey } : {}),
-						signal: item.abortController.signal,
-						onProgress: progressObserver(item.requirement),
-					});
-				});
-				if (applied === 'dropped')
-					throw new Error('require: scope moved mid-query (writes dropped)');
-				if (skippedActive)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'product browse window already in progress',
-					};
-				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
-				// nothing was fetched, so release instead of reporting the requirement met.
-				if (drainResult.ledgerRebuilt)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'local sync bookkeeping was rebuilt mid-drain',
-					};
-				return requirementDrainOutcome({
-					drain: drainResult,
-					seed: seedOutcome,
+				return runSeedDrain({
+					seed: async () => ({
+						seed: await seedProductBrowseWindowSchedulerTask({
+							// Spread the WHOLE descriptor, as the orders branch above does. Cherry-picking
+							// limit/orderby/order silently dropped every filter dimension: the seeder then
+							// rebuilt an UNFILTERED key, so filtered demand could never reach the wire and
+							// its coverage lane collided with the unfiltered window's.
+							...browseWindow,
+							priority: item.priority,
+							...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
+							database: database,
+						}),
+					}),
+					// An explicit user sync must re-walk THIS window from page 1; without it the
+					// scroll continuation (#948/#957) would serve it straight back from coverage.
+					// Scoped to the one lane key so a drain's other queued windows keep theirs.
+					...(item.requirement.forceRefresh
+						? { drain: { refreshBrowseWindowKey: browseQueryKey } }
+						: {}),
+					droppedMessage: 'require: scope moved mid-query (writes dropped)',
+					activeReason: 'product browse window already in progress',
 					fetchedReason: `drained product browse window ${item.requirement.queryKey}`,
 					freshReason: 'product browse window refreshed within the dedupe window',
 				});
@@ -554,59 +620,24 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						`require: unsupported customer query (${item.requirement.queryKey ?? 'missing queryKey'})`
 					);
 				}
-				let drainResult = emptyDrainResult();
-				let seedOutcome = emptySeedResult();
-				let skippedActive = false;
-				const applied = await bound.guardWrite(async () => {
-					const seedResult = await seedCustomerBrowseWindowSchedulerTask({
-						...browseWindow,
-						priority: item.priority,
-						...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
-						database: database,
-					});
-					seedOutcome = seedResult;
-					if (seedResult.skippedActive > 0) {
-						skippedActive = true;
-						return;
-					}
-					drainResult = await runEngineSchedulerDrain({
-						db: database as unknown as SchedulerDrainDatabase,
-						coverage,
-						baseUrl: deps.syncBaseUrl,
-						ownerId: 'require-plane',
-						fetcher: boundFetch as never,
-						diagnostics: deps.diagnostics,
-						// Work ISOLATION, orthogonal to outcome purity: the customers browse drains
-						// only its own row, so a foreground grid never drags an unrelated lane onto
-						// the wire. Per-task outcomes below make the VERDICT correct for every lane;
-						// this keeps the customers path from doing other lanes' work at all. The
-						// other five sites still drain opportunistically — generalizing this is a
-						// separate throughput decision, not a correctness one.
-						taskId: `${browseQueryKey}:windowed`,
-						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
-						signal: item.abortController.signal,
-						onProgress: progressObserver(item.requirement),
-					});
-				});
-				if (applied === 'dropped')
-					throw new Error('require: scope moved mid-query (writes dropped)');
-				if (skippedActive)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'customer browse window already in progress',
-					};
-				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
-				// nothing was fetched, so release instead of reporting the requirement met.
-				if (drainResult.ledgerRebuilt)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'local sync bookkeeping was rebuilt mid-drain',
-					};
-				return requirementDrainOutcome({
-					drain: drainResult,
-					seed: seedOutcome,
+				return runSeedDrain({
+					seed: async () => ({
+						seed: await seedCustomerBrowseWindowSchedulerTask({
+							...browseWindow,
+							priority: item.priority,
+							...(item.requirement.forceRefresh ? { completedDedupeForMs: 0 } : {}),
+							database: database,
+						}),
+					}),
+					// Work ISOLATION, orthogonal to outcome purity: the customers browse drains
+					// only its own row, so a foreground grid never drags an unrelated lane onto
+					// the wire. Per-task outcomes make the VERDICT correct for every lane; this
+					// keeps the customers path from doing other lanes' work at all. The other
+					// sites still drain opportunistically — generalizing this is a separate
+					// throughput decision, not a correctness one.
+					drain: { taskId: `${browseQueryKey}:windowed` },
+					droppedMessage: 'require: scope moved mid-query (writes dropped)',
+					activeReason: 'customer browse window already in progress',
 					fetchedReason: `drained customer browse window ${item.requirement.queryKey}`,
 					freshReason: 'customer browse window refreshed within the dedupe window',
 				});
@@ -614,53 +645,20 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 
 			if (item.requirement.collection === 'orders' && item.requirement.kind === 'refresh') {
 				const refreshRequirement = item.requirement;
-				let drainResult = emptyDrainResult();
-				let seedOutcome = emptySeedResult();
-				let skippedActive = false;
-				const applied = await bound.guardWrite(async () => {
-					const seedResult = await seedOrderSchedulerTasks({
-						perPage: refreshRequirement.limit ?? 250,
-						priority: item.priority,
-						completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
-						database: database,
-					});
-					seedOutcome = seedResult;
-					if (seedResult.skippedActive > 0) {
-						skippedActive = true;
-						return;
-					}
-					drainResult = await runEngineSchedulerDrain({
-						db: database as unknown as SchedulerDrainDatabase,
-						coverage,
-						baseUrl: deps.syncBaseUrl,
-						ownerId: 'require-plane',
-						fetcher: boundFetch as never,
-						diagnostics: deps.diagnostics,
-						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
-						signal: item.abortController.signal,
-						maxRequestsPerTask: Number.POSITIVE_INFINITY,
-						onProgress: progressObserver(item.requirement),
-					});
-				});
-				if (applied === 'dropped')
-					throw new Error('require: scope moved mid-refresh (writes dropped)');
-				if (skippedActive)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'full order refresh already in progress',
-					};
-				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
-				// nothing was fetched, so release instead of reporting the requirement met.
-				if (drainResult.ledgerRebuilt)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'local sync bookkeeping was rebuilt mid-drain',
-					};
-				return requirementDrainOutcome({
-					drain: drainResult,
-					seed: seedOutcome,
+				return runSeedDrain({
+					seed: async () => ({
+						seed: await seedOrderSchedulerTasks({
+							perPage: refreshRequirement.limit ?? 250,
+							priority: item.priority,
+							completedDedupeForMs: item.requirement.forceRefresh ? 0 : undefined,
+							database: database,
+						}),
+					}),
+					// The explicit full refresh runs its tasks to completion instead of taking the
+					// bounded per-task request budget a background drain keeps.
+					drain: { maxRequestsPerTask: Number.POSITIVE_INFINITY },
+					droppedMessage: 'require: scope moved mid-refresh (writes dropped)',
+					activeReason: 'full order refresh already in progress',
 					fetchedReason: 'drained full order refresh',
 					freshReason: 'order refresh completed within the dedupe window',
 				});
@@ -672,72 +670,26 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// collapses a remount (or a second surface over the same collection) into the one
 			// pull, so repeated opens cost nothing until the window lapses.
 			if (item.requirement.kind === 'refresh' && descriptor.shape === 'greedy-prunable') {
-				let drainResult = emptyDrainResult();
-				let seedOutcome = emptySeedResult();
-				let skippedActive = false;
-				let deduped = false;
-				const applied = await bound.guardWrite(async () => {
-					const nowMs = deps.now?.();
-					const seedResult = await seedReferenceLanes({
-						collections: [descriptor.collection],
-						completedDedupeForMs: item.requirement.forceRefresh ? 0 : REFERENCE_REFRESH_DEDUPE_MS,
-						database: database,
-						...(nowMs !== undefined ? { nowMs } : {}),
-					});
-					seedOutcome = seedResult;
-					// `skippedActive` and `skippedCompleted` are NOT the same answer. An active
-					// lane means another owner is mid-pull, which releases this caller the way the
-					// order/product branches above do. Only a completed lane inside the dedupe
-					// window is a genuine "your data is already fresh" — that one serves local.
-					if (seedResult.skippedActive > 0) {
-						skippedActive = true;
-						return;
-					}
-					if (seedResult.skippedCompleted > 0) {
-						deduped = true;
-						return;
-					}
-					drainResult = await runEngineSchedulerDrain({
-						db: database as unknown as SchedulerDrainDatabase,
-						coverage,
-						baseUrl: deps.syncBaseUrl,
-						ownerId: 'require-plane',
-						fetcher: boundFetch as never,
-						diagnostics: deps.diagnostics,
-						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
-						signal: item.abortController.signal,
-						...(nowMs !== undefined ? { nowMs } : {}),
-						onProgress: progressObserver(item.requirement),
-					});
-				});
-				if (applied === 'dropped')
-					throw new Error('require: scope moved mid-refresh (writes dropped)');
-				if (skippedActive)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: `${descriptor.collection} refresh already in progress`,
-					};
-				if (deduped) {
-					return {
-						action: 'serve-local',
-						missingRecordIds: [],
-						reason: `${descriptor.collection} refreshed within the dedupe window`,
-						documents: 0,
-						requests: 0,
-					};
-				}
-				// #956: a derivable-ledger rebuild aborted the tick — nothing was claimed and
-				// nothing was fetched, so release instead of reporting the requirement met.
-				if (drainResult.ledgerRebuilt)
-					return {
-						action: 'released',
-						missingRecordIds: [],
-						reason: 'local sync bookkeeping was rebuilt mid-drain',
-					};
-				return requirementDrainOutcome({
-					drain: drainResult,
-					seed: seedOutcome,
+				return runSeedDrain({
+					seed: async () => {
+						// One clock reading for BOTH halves of the tick: the dedupe window the seed
+						// measures and the runnability the drain measures must agree.
+						const nowMs = deps.now?.();
+						return {
+							seed: await seedReferenceLanes({
+								collections: [descriptor.collection],
+								completedDedupeForMs: item.requirement.forceRefresh
+									? 0
+									: REFERENCE_REFRESH_DEDUPE_MS,
+								database: database,
+								...(nowMs !== undefined ? { nowMs } : {}),
+							}),
+							...(nowMs !== undefined ? { drain: { nowMs } } : {}),
+						};
+					},
+					droppedMessage: 'require: scope moved mid-refresh (writes dropped)',
+					activeReason: `${descriptor.collection} refresh already in progress`,
+					dedupedReason: `${descriptor.collection} refreshed within the dedupe window`,
 					fetchedReason: `drained ${descriptor.collection} refresh`,
 					freshReason: `${descriptor.collection} refreshed within the dedupe window`,
 				});
@@ -816,10 +768,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				let result: Awaited<ReturnType<typeof runEngineSchedulerTask>> | undefined;
 				const applied = await bound.guardWrite(async () => {
 					result = await runEngineSchedulerTask({
-						db: database as unknown as SchedulerDrainDatabase,
+						db: schedulerDb,
 						coverage,
 						baseUrl: deps.syncBaseUrl,
-						fetcher: boundFetch as never,
+						fetcher: schedulerFetcher,
 						...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 						signal: item.abortController.signal,
 						task,
@@ -846,6 +798,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				// Orders (slice 5f): the DURABLE path — a persisted targeted task the
 				// scheduler drain completes, so a crash mid-fetch never loses the
 				// requirement (the drain lane finishes it later). Presence gate first.
+				//
+				// This one does NOT go through `runSeedDrain`, deliberately: its verdict is
+				// RESIDENCY, not the drain tick. It re-checks the records after every tick,
+				// waits out another owner's active claim with a bounded backoff instead of
+				// releasing on it, and reports the ids it pulled — so it shares the drain
+				// arguments (`drainScheduler`) and nothing else.
 				const wooIds = item.requirement.wooIds ?? [];
 				if (wooIds.length === 0) {
 					throw new Error("require: 'targeted-records' needs wooIds");
@@ -891,18 +849,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						});
 						skippedActive = seedResult.skippedActive;
 						const ownedTaskIds = new Set(seedResult.taskIds);
-						const drainResult = await runEngineSchedulerDrain({
-							db: database as unknown as SchedulerDrainDatabase,
-							coverage,
-							baseUrl: deps.syncBaseUrl,
-							ownerId: 'require-plane',
-							fetcher: boundFetch as never,
-							diagnostics: deps.diagnostics,
-							...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
-							signal: item.abortController.signal,
-							nowMs,
-							onProgress: progressObserver(item.requirement),
-						});
+						const drainResult = await drainScheduler({ nowMs });
 						// Only OUR targeted tasks count: an unrelated collection failing in the same
 						// tick must not abort a pull whose own tasks are fine.
 						failed = drainResult.tasks.filter(
