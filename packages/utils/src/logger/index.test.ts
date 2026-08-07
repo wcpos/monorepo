@@ -63,6 +63,31 @@ async function flushWrites() {
 }
 
 describe('logger/index', () => {
+	describe('without a bundler-defined __DEV__ (plain Node, e.g. the Playwright runner)', () => {
+		it('imports without throwing, falls back to info level, and still writes warnings to the console', async () => {
+			const consoleWarn = jest.spyOn(console, 'warn').mockImplementation();
+			const devDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+			let isolatedLevel: string | undefined;
+
+			Reflect.deleteProperty(globalThis, '__DEV__');
+
+			try {
+				await expect(
+					jest.isolateModulesAsync(async () => {
+						const { log: isolatedLog } = await import('./index');
+						isolatedLevel = isolatedLog.getLevel();
+						isolatedLog.warn('warning without Metro');
+					})
+				).resolves.toBeUndefined();
+				expect(isolatedLevel).toBe('info');
+				expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('warning without Metro'));
+			} finally {
+				if (devDescriptor) Object.defineProperty(globalThis, '__DEV__', devDescriptor);
+				consoleWarn.mockRestore();
+			}
+		});
+	});
+
 	describe('getLogger', () => {
 		it('should create a CategoryLogger with the given category', () => {
 			const logger = getLogger(['wcpos', 'test']);
