@@ -62,10 +62,12 @@ describe('createCensusPublisher', () => {
 		const second = deferred<QueryTotalCacheEntry[]>();
 		const reads = [first, second];
 		const listener = vi.fn();
+		const { timers } = timerHarness();
 		const publisher = createCensusPublisher({
 			cache: { readForQueryKeys: () => reads.shift()!.promise },
 			now: () => 100,
 			diagnostics: vi.fn(),
+			timers,
 		});
 		publisher.subscribe(listener);
 		publisher.publish();
@@ -77,6 +79,44 @@ describe('createCensusPublisher', () => {
 		await Promise.resolve();
 		expect(listener).toHaveBeenCalledTimes(1);
 		expect(listener.mock.calls[0]![0].customers?.total).toBe(2);
+	});
+
+	it('retries a failed expiry read and resumes freshness publishing', async () => {
+		const { callbacks, timers } = timerHarness();
+		const diagnostics = vi.fn();
+		const listener = vi.fn();
+		const cache = {
+			readForQueryKeys: vi
+				.fn()
+				.mockResolvedValueOnce([entry(4, 110)])
+				.mockRejectedValueOnce(new Error('transient read failure'))
+				.mockResolvedValueOnce([entry(5, 200)]),
+		};
+		const publisher = createCensusPublisher({
+			cache,
+			now: () => 100,
+			diagnostics,
+			timers,
+		});
+		publisher.subscribe(listener);
+		await Promise.resolve();
+		await Promise.resolve();
+
+		callbacks[0]!();
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({ message: expect.stringContaining('transient read failure') })
+		);
+		expect(timers.setTimeout).toHaveBeenCalledTimes(2);
+
+		callbacks[1]!();
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(cache.readForQueryKeys).toHaveBeenCalledTimes(3);
+		expect(listener).toHaveBeenLastCalledWith(
+			expect.objectContaining({ customers: expect.objectContaining({ total: 5 }) })
+		);
 	});
 
 	it('re-publishes just after the next freshness deadline', async () => {

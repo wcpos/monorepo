@@ -1351,6 +1351,8 @@ export function createRxdbSyncEngine(
 			get: (key) => readBlob(scopeId, key),
 			set: (key, value) => writeBlob(scopeId, key, value),
 		}),
+		// The lane body runs inside guardWrite; a scope switch drains it before changing
+		// manager.activeScope, so this active census read remains bound to the lane's database.
 		customerCensusTotal: async () => (await censusPublisher.totals()).customers,
 		hasPendingInteractiveWork: requirePlane.hasPendingWork,
 		...(ports.lastUserActivityMs !== undefined

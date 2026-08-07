@@ -181,7 +181,7 @@ function createEngineHarnessImpl(
 	}
 	if (collisions.length > 0) {
 		throw new Error(
-			`options.ports cannot override harness-owned ports (now, diagnostics, connectivity, fetcher; storage when storage or validateSchemas is set): ${collisions.join(', ')}`
+			`options.ports cannot override harness-owned ports (${ALWAYS_OWNED_PORTS.join(', ')}; storage when storage or validateSchemas is set): ${collisions.join(', ')}`
 		);
 	}
 	nextHarnessIdentity += 1;

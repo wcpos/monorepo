@@ -40,6 +40,29 @@ describe('createAutomaticTickGate', () => {
 		expect(recordTick).toHaveBeenCalledWith(tickReport, 25);
 	});
 
+	it('reports a rejected lane tick without rejecting the automatic path', async () => {
+		const diagnostics = vi.fn();
+		const now = vi.fn().mockReturnValueOnce(25).mockReturnValue(40);
+		const gate = createAutomaticTickGate({
+			isGated: () => false,
+			connectivity: () => 'online',
+			now,
+			diagnostics,
+			onStatusChange: vi.fn(),
+			tickLane: vi.fn().mockRejectedValue(new Error('lane exploded')),
+			recordTick: vi.fn(),
+			seedRetickLanes: [],
+		});
+
+		await expect(gate.runLane('change-signal')).resolves.toBeUndefined();
+		expect(diagnostics).toHaveBeenCalledWith({
+			type: 'engine.lane.tick',
+			level: 'error',
+			message: 'automatic tick failed: lane exploded',
+			fields: { lane: 'change-signal', status: 'error', durationMs: 15 },
+		});
+	});
+
 	it('reticks seeds before drains on an offline-to-online edge', async () => {
 		let connectivity: EngineConnectivity = 'offline';
 		const lanes: EngineLane[] = [];

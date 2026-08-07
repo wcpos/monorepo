@@ -12,6 +12,8 @@ import {
 
 import type { SyncCollectionName } from './collections/engine-collections';
 
+const CENSUS_READ_RETRY_MS = 1_000;
+
 export type CensusCacheReader<Database = never> = {
 	readForQueryKeys(keys: string[], database?: Database): Promise<QueryTotalCacheEntry[] | null>;
 };
@@ -81,6 +83,12 @@ export function createCensusPublisher<Database = never>(options: {
 					level: 'error',
 					message: `censusChanges() cache read failed: ${error instanceof Error ? error.message : String(error)}`,
 				});
+				if (expiryTimer === null) {
+					expiryTimer = timers.setTimeout(() => {
+						expiryTimer = null;
+						publish();
+					}, CENSUS_READ_RETRY_MS);
+				}
 			}
 		);
 	};

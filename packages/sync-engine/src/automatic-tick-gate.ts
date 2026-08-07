@@ -19,7 +19,7 @@ export function createAutomaticTickGate(options: {
 }): AutomaticTickGate {
 	let lastAutomaticConnectivity: EngineConnectivity | undefined;
 	let reconnectRetick: Promise<void> | null = null;
-	const run = async (tick: () => Promise<SyncReport>): Promise<void> => {
+	const run = async (tick: () => Promise<SyncReport>, lane?: EngineLane): Promise<void> => {
 		if (options.isGated()) return;
 		const connectivityNow = options.connectivity();
 		const reconnected = lastAutomaticConnectivity === 'offline' && connectivityNow === 'online';
@@ -43,8 +43,22 @@ export function createAutomaticTickGate(options: {
 			);
 		}
 		const startedAtMs = options.now();
-		options.recordTick(await tick(), startedAtMs);
+		try {
+			options.recordTick(await tick(), startedAtMs);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			options.diagnostics({
+				type: 'engine.lane.tick',
+				level: 'error',
+				message: `automatic tick failed: ${message}`,
+				fields: {
+					...(lane === undefined ? {} : { lane }),
+					status: 'error',
+					durationMs: options.now() - startedAtMs,
+				},
+			});
+		}
 	};
-	const runLane = (lane: EngineLane): Promise<void> => run(() => options.tickLane(lane));
+	const runLane = (lane: EngineLane): Promise<void> => run(() => options.tickLane(lane), lane);
 	return { run, runLane };
 }
