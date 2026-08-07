@@ -12,6 +12,7 @@ import {
 
 import { log } from '@wcpos/utils/logger';
 
+import { cashierAuthStateName, getE2ECashierAuth } from './cashier-slot';
 import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
 import { restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
@@ -406,7 +407,7 @@ async function waitForOPFSPersistence(page: Page): Promise<void> {
 export async function authenticateWithStore(
 	page: Page,
 	testInfo: TestInfo,
-	options: { waitForCatalogue?: boolean } = {}
+	options: { waitForCatalogue?: boolean; credentials?: { username: string; password: string } } = {}
 ) {
 	const { waitForCatalogue = true } = options;
 	const storeUrl = getStoreUrl(testInfo);
@@ -488,10 +489,10 @@ export async function authenticateWithStore(
 	// `becomesVisible` waits for the field to render — `isVisible({ timeout })`
 	// ignores its timeout and would skip filling a slow-rendering login form.
 	if (await becomesVisible(usernameInput.first(), 5_000)) {
-		await usernameInput.first().fill(E2E_USERNAME);
+		await usernameInput.first().fill(options.credentials?.username ?? E2E_USERNAME);
 	}
 	if (await becomesVisible(passwordInput.first(), 5_000)) {
-		await passwordInput.first().fill(E2E_PASSWORD);
+		await passwordInput.first().fill(options.credentials?.password ?? E2E_PASSWORD);
 	}
 
 	// Submit login form
@@ -731,9 +732,11 @@ export async function hydrateAuthenticatedPage(
 ): Promise<void> {
 	const { waitForCatalogue = true, beforeBoot } = options;
 	const variant = getStoreVariant(testInfo);
+	const cashierAuth = getE2ECashierAuth(variant, testInfo.config.shard?.current ?? 0);
 	await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
 	if (beforeBoot) await beforeBoot(page);
-	const statePath = path.join(__dirname, '.auth-state', `${options.stateName ?? variant}.json`);
+	const stateName = cashierAuthStateName(options.stateName ?? variant, cashierAuth);
+	const statePath = path.join(__dirname, '.auth-state', `${stateName}.json`);
 
 	let state: SavedAuthState | null = null;
 	if (fs.existsSync(statePath)) {
@@ -820,11 +823,17 @@ export async function hydrateAuthenticatedPage(
 
 			// Unblock JS before re-authenticating
 			await page.unroute('**/*', blockScriptRequests).catch(() => {});
-			await authenticateWithStore(page, testInfo, { waitForCatalogue });
+			await authenticateWithStore(page, testInfo, {
+				waitForCatalogue,
+				credentials: cashierAuth ?? undefined,
+			});
 		}
 	} else {
 		// No saved state — fall back to full OAuth (local dev without globalSetup)
-		await authenticateWithStore(page, testInfo, { waitForCatalogue });
+		await authenticateWithStore(page, testInfo, {
+			waitForCatalogue,
+			credentials: cashierAuth ?? undefined,
+		});
 	}
 }
 

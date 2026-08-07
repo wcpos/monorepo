@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+process.env.E2E_RUN_ID ??= process.env.GITHUB_RUN_ID ?? `local-${process.pid}`;
+
 /**
  * Custom test options passed to each project.
  */

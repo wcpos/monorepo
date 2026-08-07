@@ -1,8 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { chromium } from '@playwright/test';
+import { chromium, type FullConfig } from '@playwright/test';
 
+import { cashierAuthStateName, getE2ECashierAuth } from './cashier-slot';
 import {
 	COLD_START_ENABLED,
 	COLD_START_STATE_NAME,
@@ -114,9 +115,10 @@ async function setupVariant(
 	variant: StoreVariant,
 	storeUrl: string,
 	baseURL: string,
-	options: { stateName?: string; coldStart?: boolean } = {}
+	options: { stateName?: string; coldStart?: boolean; shardIndex?: number } = {}
 ): Promise<void> {
-	const stateName = options.stateName ?? variant;
+	const cashierAuth = getE2ECashierAuth(variant, options.shardIndex ?? 0);
+	const stateName = cashierAuthStateName(options.stateName ?? variant, cashierAuth);
 	console.log(
 		`[global-setup] Authenticating with ${variant} store: ${storeUrl}` +
 			(options.coldStart ? ' (cold start — bulk catalogue sync blocked)' : '')
@@ -185,6 +187,7 @@ async function setupVariant(
 	try {
 		await authenticateWithStore(authPage, testInfo as any, {
 			waitForCatalogue: !options.coldStart,
+			credentials: cashierAuth ?? undefined,
 		});
 
 		console.log(`[global-setup] Auth complete for ${stateName}, exporting state...`);
@@ -236,17 +239,18 @@ async function setupVariant(
 /**
  * Playwright globalSetup: authenticate once per store variant and save state.
  */
-async function globalSetup() {
+async function globalSetup(config: FullConfig) {
 	const baseURL = process.env.BASE_URL || 'http://localhost:8081';
+	const shardIndex = config.shard?.current ?? 0;
 
 	// Create the state directory
 	fs.mkdirSync(AUTH_STATE_DIR, { recursive: true });
 
 	// Auth both variants in sequence (parallel would contend on the same stores)
 	if (FREE_STORE_URL) {
-		await setupVariant('free', FREE_STORE_URL, baseURL);
+		await setupVariant('free', FREE_STORE_URL, baseURL, { shardIndex });
 	}
-	await setupVariant('pro', PRO_STORE_URL, baseURL);
+	await setupVariant('pro', PRO_STORE_URL, baseURL, { shardIndex });
 
 	// The cold-start profile (#991) needs its own bootstrap: the same login, but
 	// captured BEFORE steady-state sync fills the catalogue. Opt-in — it costs a
@@ -255,6 +259,7 @@ async function globalSetup() {
 		await setupVariant('pro', PRO_STORE_URL, baseURL, {
 			stateName: COLD_START_STATE_NAME,
 			coldStart: true,
+			shardIndex,
 		});
 	}
 
