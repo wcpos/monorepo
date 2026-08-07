@@ -40,8 +40,8 @@ function metaValue(document: EngineRxDocument, key: string): unknown {
 }
 
 export function useOpenOrdersResource(
-	cashierID: number,
-	storeID: number
+	cashierID: number | undefined,
+	storeID: number | undefined
 ): ObservableResource<OpenOrderHit[]> {
 	const runtime = useQueryRuntime();
 	const resource = React.useMemo(() => {
@@ -63,7 +63,8 @@ export function useOpenOrdersResource(
 					.filter((document) => {
 						const posUser = metaValue(document, '_pos_user');
 						const posStore = metaValue(document, '_pos_store');
-						if (storeID === 0) return posUser === String(cashierID);
+						if (cashierID === undefined) return false;
+						if (storeID === undefined || storeID === 0) return posUser === String(cashierID);
 						return posUser === String(cashierID) && posStore === String(storeID);
 					})
 					.map((document) => wrapEngineDocument<OrderDocument>('orders', document))
