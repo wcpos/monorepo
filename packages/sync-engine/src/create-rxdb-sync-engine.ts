@@ -456,7 +456,11 @@ export type RxdbSyncEngine = {
 	 * `rejectedMessage` / `rejectedAt`) and, once recovered at least once, their
 	 * requeue provenance (`requeuedFrom` / `requeueCount`) — they resolve by
 	 * 'requeue-rebuilt' or 'discard'. Rows persist here until `resolveConflict`
-	 * settles them.
+	 * settles them — with ONE exception (#1082): a 'rejected' row for a catalog
+	 * collection (products/variations/customers/coupons, never orders) is
+	 * auto-discarded moments after the `write-rejected` event, so consumers may
+	 * observe it vanish asynchronously; a row whose auto-discard failed stays
+	 * parked here as before.
 	 */
 	conflicts(): Promise<EngineConflict[]>;
 	/**
@@ -1315,6 +1319,15 @@ export function createRxdbSyncEngine(
 			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
 				return;
 			}
+			// Reactive revert (#1082): a rejected catalog change is settled for the
+			// cashier by restoring server truth, through the SAME discard machinery
+			// Store Health uses — claim serialization, in-guard successor overlay
+			// (a newer queued edit's resident value survives the restore; see the
+			// `successors` merge in conflict-resolution.ts), barcode selectors,
+			// tombstone when the server no longer has the record. A write() landing
+			// exactly between that overlay's read and its upsert can still flash
+			// server truth for a beat — accepted: the newer mutation's queue row
+			// survives and the next drain re-decides the record either way.
 			void (async () => {
 				try {
 					await writePlane.resolveConflict(event.mutationId, 'discard');
