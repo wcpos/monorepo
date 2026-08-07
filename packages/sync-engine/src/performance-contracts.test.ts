@@ -653,7 +653,7 @@ describe('sync-engine performance contracts (#949)', () => {
 	// -------------------------------------------------------------------------
 
 	it(
-		'reconciles 5,000 local residents against a mixed 10,000-record server manifest within budget',
+		'audits and prunes 5,000 local residents against a mixed 10,000-record server manifest within budget',
 		async () => {
 			const serverCount = 10_000;
 			const overlapCount = 2_500;
@@ -674,17 +674,17 @@ describe('sync-engine performance contracts (#949)', () => {
 				'mixed reconcile local=5000 server=10000',
 				elapsed,
 				budgetMs,
-				' overlap=2500 additions=7500 deletions=2500'
+				' overlap=2500 missing=7500 pruned=2500'
 			);
 			const bucketFetches = fetcher.mock.calls.filter(([url]) =>
 				new URL(url).pathname.endsWith('/integrity/bucket')
 			).length;
 			expect(result.status).toBe('ran');
-			expect(bucketFetches).toBe(13);
-			expect(await active.database.collections['products']!.count().exec()).toBe(serverCount);
+			expect(bucketFetches).toBe(6);
+			expect(await active.database.collections['products']!.count().exec()).toBe(overlapCount);
 			expect(
 				await active.database.collections['products']!.findOne(uuidFor(5_000, 0)).exec()
-			).not.toBeNull();
+			).toBeNull();
 			expect(
 				await active.database.collections['products']!.findOne(uuidFor(deletedStart, 0)).exec()
 			).toBeNull();
