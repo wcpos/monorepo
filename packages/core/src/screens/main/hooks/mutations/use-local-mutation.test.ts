@@ -107,6 +107,52 @@ describe('useLocalMutation', () => {
 		}
 	);
 
+	it('keeps the resident and barcode carrier on one scope through an A→B→A switch', async () => {
+		setSelectors('products', ['sku']);
+		const stored: Record<string, unknown> = {
+			id: 'product-uuid',
+			wooProductId: 42,
+			payload: { id: 42 },
+			sync: { revision: 'rev-1' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		mockFindOneExec.mockImplementationOnce(async () => {
+			// The resident came from scope A, then scope B became active while the
+			// lookup yielded. The status returns to A during the write below.
+			setSelectors('products', ['global_unique_id']);
+			return {
+				incrementalModify: async (
+					modifier: (old: Record<string, unknown>) => Record<string, unknown>
+				) => {
+					Object.assign(stored, modifier(stored));
+					return stored;
+				},
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+			};
+		});
+		mockWrite.mockImplementationOnce(async () => {
+			setSelectors('products', ['sku']);
+			return { mutationId: 'mutation-1', recordId: 'product-uuid' };
+		});
+		const document = {
+			uuid: 'product-uuid',
+			id: 42,
+			collection: { name: 'products' },
+			getLatest: () => document,
+		};
+
+		const { result } = renderHook(() => useLocalMutation());
+		await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { barcode: 'EDITED' } as never,
+			})
+		);
+
+		expect(stored.payload).toMatchObject({ barcode: 'EDITED', sku: 'EDITED' });
+		expect(stored.payload).not.toHaveProperty('global_unique_id');
+	});
+
 	it.each([
 		['sku', { sku: 'OLD' }, { sku: 'NEW' }, { sku: 'NEW' }],
 		[
