@@ -36,6 +36,23 @@ export type AdapterQueryResult = {
 	count: number;
 };
 
+export type CompiledSortPart = {
+	direction: 'asc' | 'desc';
+	enginePath?: string;
+	value: (document: EngineDocument) => unknown;
+};
+
+export type CompiledQueryRead = {
+	prefilter: MangoQuerySelector<EngineDocument>;
+	residual: (document: EngineDocument) => boolean;
+	complete: boolean;
+	sort: CompiledSortPart[];
+	sortPushable: boolean;
+	limit?: number;
+	search: string;
+	searchFields?: string[];
+};
+
 export type ExecuteAdapterQueryOptions = {
 	database: AdapterDatabase;
 	collection: LegacyCollectionName;
@@ -43,6 +60,7 @@ export type ExecuteAdapterQueryOptions = {
 	sort?: MangoQuerySortPart<EngineDocument>[];
 	skip?: number;
 	limit?: number;
+	read?: CompiledQueryRead;
 };
 
 function comparableValue(
@@ -106,6 +124,19 @@ function sortDocuments(
 	});
 }
 
+function sortCompiledDocuments(
+	documents: EngineRxDocument[],
+	sort: CompiledSortPart[]
+): EngineRxDocument[] {
+	return [...documents].sort((left, right) => {
+		for (const part of sort) {
+			const comparison = compareValues(part.value(left), part.value(right));
+			if (comparison !== 0) return part.direction === 'desc' ? -comparison : comparison;
+		}
+		return String(left.id).localeCompare(String(right.id));
+	});
+}
+
 function translateSort(
 	collection: LegacyCollectionName,
 	sort: MangoQuerySortPart<EngineDocument>[]
@@ -139,9 +170,31 @@ export function executeAdapterQuery({
 	sort = [],
 	skip = 0,
 	limit,
+	read,
 }: ExecuteAdapterQueryOptions): Observable<AdapterQueryResult> {
-	const { prefilter, residual, complete } = translateSelector(collection, selector);
-	const engineSort = translateSort(collection, sort);
+	const compiledWithSearch = read && Object.keys(selector).length > 0;
+	const selectorRead =
+		!read || compiledWithSearch ? translateSelector(collection, selector) : undefined;
+	const prefilter = read
+		? ((compiledWithSearch
+				? { $and: [read.prefilter, selectorRead!.prefilter] }
+				: read.prefilter) as MangoQuerySelector<EngineDocument>)
+		: selectorRead!.prefilter;
+	const residual = read
+		? (document: EngineDocument) =>
+				read.residual(document) && (!compiledWithSearch || selectorRead!.residual(document))
+		: selectorRead!.residual;
+	const complete = read
+		? read.complete && (!compiledWithSearch || selectorRead!.complete)
+		: selectorRead!.complete;
+	const engineSort = read
+		? {
+				pushable: read.sortPushable,
+				sort: read.sort.map((part) => ({ [part.enginePath!]: part.direction })),
+			}
+		: translateSort(collection, sort);
+	const effectiveSkip = skip;
+	const effectiveLimit = read?.limit ?? limit;
 	const engineCollectionName = collectionMap[collection].engineCollection;
 	const engineCollection = database.collections[engineCollectionName];
 	if (!engineCollection) {
@@ -157,8 +210,8 @@ export function executeAdapterQuery({
 		const query = engineCollection.find({
 			selector: prefilter,
 			sort: engineSort.sort.length > 0 ? engineSort.sort : [{ id: 'asc' }],
-			skip: Math.max(0, skip),
-			...(limit !== undefined ? { limit: Math.max(0, limit) } : {}),
+			skip: Math.max(0, effectiveSkip),
+			...(effectiveLimit !== undefined ? { limit: Math.max(0, effectiveLimit) } : {}),
 		});
 		const count = engineCollection.count({ selector: prefilter });
 
@@ -184,12 +237,14 @@ export function executeAdapterQuery({
 				const matching = complete
 					? documents
 					: documents.filter((document) => residual(document as EngineDocument));
-				const ordered = sortDocuments(collection, matching, sort);
-				const offset = Math.max(0, skip);
+				const ordered = read
+					? sortCompiledDocuments(matching, read.sort)
+					: sortDocuments(collection, matching, sort);
+				const offset = Math.max(0, effectiveSkip);
 				const hits =
-					limit === undefined
+					effectiveLimit === undefined
 						? ordered.slice(offset)
-						: ordered.slice(offset, offset + Math.max(0, limit));
+						: ordered.slice(offset, offset + Math.max(0, effectiveLimit));
 				subscriber.next({
 					hits,
 					count: matching.length,

@@ -120,6 +120,8 @@ export type FieldMapEntry = {
 	legacy: string;
 	kind: FieldKind;
 	enginePath: string;
+	/** How a query-state filter reaches the remote lane; absent for non-filter fields. */
+	wireFace?: 'dimension' | 'implied' | 'local-only';
 	readEnginePath?: string;
 	write?: (value: unknown) => unknown;
 	adapterDerived?: boolean;
@@ -157,6 +159,18 @@ function metadataValue(document: EngineDocument, key: string): unknown {
 			item !== null && typeof item === 'object' && (item as Record<string, unknown>).key === key
 	);
 	return entry && typeof entry === 'object' ? (entry as Record<string, unknown>).value : undefined;
+}
+
+function queryPayloadField<W extends NonNullable<FieldMapEntry['wireFace']>>(
+	legacy: string,
+	wireFace: W
+) {
+	return {
+		legacy,
+		kind: 'payload' as const,
+		enginePath: `payload.${legacy}`,
+		wireFace,
+	};
 }
 
 function couponIsActive(document: EngineDocument): boolean {
@@ -236,6 +250,7 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'stockStatus',
 				write: (value) => String(value ?? ''),
+				wireFace: 'dimension',
 				sort: { wooOrderby: 'stock_status' },
 			},
 			featured: {
@@ -243,12 +258,14 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'featured',
 				write: Boolean,
+				wireFace: 'dimension',
 			},
 			on_sale: {
 				legacy: 'on_sale',
 				kind: 'promoted',
 				enginePath: 'onSale',
 				write: Boolean,
+				wireFace: 'dimension',
 			},
 			categories: {
 				legacy: 'categories',
@@ -262,7 +279,9 @@ export const collectionMap = {
 								.filter((id) => Number.isFinite(id) && id > 0)
 						: [],
 				notes: 'Selectors use numeric membership; reads preserve Woo category objects.',
+				wireFace: 'dimension',
 			},
+			tags: queryPayloadField('tags', 'dimension'),
 			brands: {
 				legacy: 'brands',
 				kind: 'promoted',
@@ -275,12 +294,14 @@ export const collectionMap = {
 								.filter((id) => Number.isFinite(id) && id > 0)
 						: [],
 				notes: 'Selectors use numeric membership; reads preserve Woo brand objects.',
+				wireFace: 'dimension',
 			},
 			status: {
 				legacy: 'status',
 				kind: 'payload',
 				enginePath: 'payload.status',
 				notes: 'Synthetic Manager-test selector; no production product selector was observed.',
+				wireFace: 'implied',
 			},
 			category: {
 				legacy: 'category',
@@ -359,7 +380,9 @@ export const collectionMap = {
 								.filter(({ name, option }) => name !== '' && option !== '')
 						: [],
 				notes: 'Selectors use normalized attributes; reads retain the source payload.',
+				wireFace: 'local-only',
 			},
+			status: queryPayloadField('status', 'local-only'),
 			price: {
 				legacy: 'price',
 				kind: 'promoted',
@@ -413,6 +436,7 @@ export const collectionMap = {
 				enginePath: 'status',
 				write: (value) => String(value ?? ''),
 				sort: { wooOrderby: 'status' },
+				wireFace: 'dimension',
 			},
 			customer_id: {
 				legacy: 'customer_id',
@@ -420,6 +444,7 @@ export const collectionMap = {
 				enginePath: 'customerId',
 				write: (value) => Number(value ?? 0),
 				sort: { wooOrderby: 'customer_id' },
+				wireFace: 'dimension',
 			},
 			date_created_gmt: {
 				legacy: 'date_created_gmt',
@@ -427,6 +452,7 @@ export const collectionMap = {
 				enginePath: 'dateCreatedGmt',
 				write: (value) => String(value ?? ''),
 				sort: { wooOrderby: 'date' },
+				wireFace: 'dimension',
 			},
 			date_modified_gmt: {
 				legacy: 'date_modified_gmt',
@@ -468,6 +494,14 @@ export const collectionMap = {
 				enginePath: 'payload.meta_data',
 				notes: 'Value of the _pos_user metadata entry.',
 				compute: (document) => metadataValue(document, '_pos_user'),
+				wireFace: 'dimension',
+			},
+			store: {
+				legacy: 'store',
+				kind: 'computed',
+				enginePath: 'payload.meta_data',
+				adapterDerived: false,
+				wireFace: 'dimension',
 			},
 			select: {
 				legacy: 'select',
@@ -605,6 +639,9 @@ export const collectionMap = {
 				enginePath: 'wooId',
 				adapterDerived: false,
 			},
+			discount_type: queryPayloadField('discount_type', 'local-only'),
+			status: queryPayloadField('status', 'local-only'),
+			date_expires_gmt: queryPayloadField('date_expires_gmt', 'local-only'),
 			active: {
 				legacy: 'active',
 				kind: 'computed',

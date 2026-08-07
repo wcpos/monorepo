@@ -6,10 +6,8 @@ import * as React from 'react';
 
 import { act, render } from '@testing-library/react';
 
-import { requirementsForQuery } from '@wcpos/query';
-
 import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
-import { translateQueryState } from './query-state-translator';
+import { compileQuery } from './query-state-translator';
 
 import type { QueryStateActions, QueryStateOf } from './query-state-types';
 
@@ -147,7 +145,10 @@ describe('QueryStateProvider', () => {
 
 		act(() => actions?.extendLimit());
 		act(() => actions?.setSort('price', 'desc'));
-		expect(state).toMatchObject({ sort: { field: 'price', direction: 'desc' }, limit: 20 });
+		expect(state).toMatchObject({
+			sort: { field: 'price', direction: 'desc' },
+			limit: 20,
+		});
 	});
 
 	it('replaces a keyed filter with the latest value', () => {
@@ -217,18 +218,11 @@ describe('QueryStateProvider', () => {
 		act(() => actions?.setFilter('cashier', 8));
 
 		expect(state?.filters).toEqual({ cashier: 8 });
-		const translated = translateQueryState('orders', state!);
-		expect(translated.selector).toEqual({
-			$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: '8' } } }],
-		});
-		expect(
-			requirementsForQuery({
-				id: 'orders',
-				collectionName: translated.collectionName,
-				selector: translated.selector,
-				limit: translated.limit,
-			})
-		).toEqual({
+		const compiled = compileQuery('orders', state!, { id: 'orders' });
+		expect({
+			requirements: compiled.demand,
+			represented: compiled.represented,
+		}).toEqual({
 			requirements: [
 				{
 					id: 'orders:orders-browse',
@@ -236,6 +230,8 @@ describe('QueryStateProvider', () => {
 					kind: 'orders-browse',
 					cashierId: 8,
 					limit: 20,
+					orderby: 'date',
+					order: 'desc',
 					priority: 700,
 				},
 			],
@@ -267,23 +263,15 @@ describe('QueryStateProvider', () => {
 		act(() => actions?.clearFilter('cashier'));
 
 		expect(state?.filters).toEqual({ store: 12 });
-		const translated = translateQueryState('orders', state!);
-		expect(translated.selector).toEqual({
-			$and: [{ meta_data: { $elemMatch: { key: '_pos_store', value: '12' } } }],
-		});
-		expect(
-			requirementsForQuery({
-				id: 'orders',
-				collectionName: translated.collectionName,
-				selector: translated.selector,
-				limit: translated.limit,
-			}).requirements[0]
-		).toEqual({
+		const compiled = compileQuery('orders', state!, { id: 'orders' });
+		expect(compiled.demand[0]).toEqual({
 			id: 'orders:orders-browse',
 			collection: 'orders',
 			kind: 'orders-browse',
 			store: '12',
 			limit: 20,
+			orderby: 'date',
+			order: 'desc',
 			priority: 700,
 		});
 	});
@@ -333,18 +321,12 @@ describe('QueryStateProvider', () => {
 		act(() => actions?.setFilter('categories', [22]));
 
 		expect(state?.filters.categories).toEqual([22]);
-		const translated = translateQueryState('products', state!);
-		expect(translated.selector).toEqual({
-			$and: [{ $or: [{ categories: { $elemMatch: { id: 22 } } }] }],
+		const compiled = compileQuery('products', state!, { id: 'products' });
+		expect(compiled.read.prefilter).toEqual({ categoryIds: { $in: [22] } });
+		expect(compiled.demand[0]).toMatchObject({
+			kind: 'product-browse',
+			category: [22],
 		});
-		expect(
-			requirementsForQuery({
-				id: 'products',
-				collectionName: translated.collectionName,
-				selector: translated.selector,
-				limit: translated.limit,
-			}).requirements[0]
-		).toMatchObject({ kind: 'product-browse', category: [22] });
 	});
 
 	it('fully removes replaced multi-category ids from selector and demand', () => {
@@ -362,18 +344,12 @@ describe('QueryStateProvider', () => {
 		act(() => actions?.setFilter('categories', [33]));
 
 		expect(state?.filters.categories).toEqual([33]);
-		const translated = translateQueryState('products', state!);
-		expect(translated.selector).toEqual({
-			$and: [{ $or: [{ categories: { $elemMatch: { id: 33 } } }] }],
+		const compiled = compileQuery('products', state!, { id: 'products' });
+		expect(compiled.read.prefilter).toEqual({ categoryIds: { $in: [33] } });
+		expect(compiled.demand[0]).toMatchObject({
+			kind: 'product-browse',
+			category: [33],
 		});
-		expect(
-			requirementsForQuery({
-				id: 'products',
-				collectionName: translated.collectionName,
-				selector: translated.selector,
-				limit: translated.limit,
-			}).requirements[0]
-		).toMatchObject({ kind: 'product-browse', category: [33] });
 	});
 
 	it('does not reset the window when an action commits the existing value', () => {
@@ -421,6 +397,8 @@ describe('QueryStateProvider', () => {
 		expect(state?.limit).toBe(10);
 
 		act(() => actions?.resetFilters());
-		expect(state?.filters).toEqual({ level: ['error', 'warn', 'info', 'success'] });
+		expect(state?.filters).toEqual({
+			level: ['error', 'warn', 'info', 'success'],
+		});
 	});
 });

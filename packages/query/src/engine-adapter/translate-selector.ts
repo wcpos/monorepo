@@ -219,7 +219,7 @@ function genericAllMatch(actual: unknown, requested: unknown): boolean {
 	);
 }
 
-function variationAllMatch(actual: unknown, requested: unknown): boolean {
+export function variationAllMatch(actual: unknown, requested: unknown): boolean {
 	if (!Array.isArray(actual) || !Array.isArray(requested)) {
 		return false;
 	}

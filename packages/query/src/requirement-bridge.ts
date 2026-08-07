@@ -142,7 +142,7 @@ function orderBrowseDimensions(
 	if (selector && Array.isArray(selector.$and)) consumed[0]?.add('$and');
 	const statusValue = (() => {
 		const status = selector?.status as unknown;
-		if (typeof status === 'string' && status.length > 0) {
+		if (typeof status === 'string') {
 			consumed[0]?.add('status');
 			return status;
 		}

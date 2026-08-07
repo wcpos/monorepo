@@ -1,20 +1,166 @@
 import { requirementsForQuery } from '@wcpos/query';
+import {
+	type LegacyCollectionName,
+	sortAliasFor,
+	sortTiebreakFor,
+} from '@wcpos/query/collection-map';
+import { orderBrowserQueryKey } from '@wcpos/query/testing';
 
 import {
+	compileQuery,
 	FILTER_TRANSLATORS,
 	normalizeQuerySortField,
-	translateQueryState,
+	requirementsForCompiledQuery,
+	translateLogsQueryState,
 } from './query-state-translator';
+import { parseRemoteId } from '../utils/parse-remote-id';
 
 import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
 
 type ExhaustiveFilterMap = {
-	[C in CollectionKey]: { [F in keyof FiltersOf<C>]-?: unknown };
+	[C in Exclude<CollectionKey, 'logs'>]: { [F in keyof FiltersOf<C>]-?: unknown };
 };
 
 // This assignment is intentionally part of the compile gate: adding a FiltersOf field
 // without a translator entry makes this suite fail before it can run.
 const exhaustiveFilterMap: ExhaustiveFilterMap = FILTER_TRANSLATORS;
+
+type LegacyOperator =
+	| 'taxonomy-many'
+	| 'value'
+	| 'metadata'
+	| 'store'
+	| 'date-range'
+	| 'all-match'
+	| 'in'
+	| 'prefix-range'
+	| 'exists';
+type LegacyFilterTranslator = { legacyPath: string; operator: LegacyOperator };
+
+const legacyEntry = (
+	legacyPath: string,
+	operator: LegacyOperator = 'value'
+): LegacyFilterTranslator => ({ legacyPath, operator });
+const LEGACY_FILTER_TRANSLATORS = {
+	products: {
+		categories: legacyEntry('categories', 'taxonomy-many'),
+		tags: legacyEntry('tags', 'taxonomy-many'),
+		brands: legacyEntry('brands', 'taxonomy-many'),
+		featured: legacyEntry('featured'),
+		on_sale: legacyEntry('on_sale'),
+		stock_status: legacyEntry('stock_status'),
+		status: legacyEntry('status'),
+	},
+	orders: {
+		status: legacyEntry('status'),
+		customer_id: legacyEntry('customer_id'),
+		cashier: legacyEntry('meta_data', 'metadata'),
+		store: legacyEntry('created_via', 'store'),
+		dateRange: legacyEntry('date_created_gmt', 'date-range'),
+	},
+	coupons: {
+		discount_type: legacyEntry('discount_type'),
+		status: legacyEntry('status'),
+		dateRange: legacyEntry('date_expires_gmt', 'date-range'),
+	},
+	variations: {
+		attributeMatches: legacyEntry('attributes', 'all-match'),
+		status: legacyEntry('status'),
+	},
+	customers: {},
+	'tax-rates': {},
+} as const;
+const LEGACY_REQUIREMENT_TOP_LEVEL_FIELDS = new Set(['status', 'customer_id', 'dateRange']);
+
+function legacyCompile(
+	entryValue: LegacyFilterTranslator,
+	value: unknown
+): Record<string, unknown> | undefined {
+	if (value === undefined || (Array.isArray(value) && value.length === 0)) return undefined;
+	switch (entryValue.operator) {
+		case 'value':
+			return { [entryValue.legacyPath]: value };
+		case 'in':
+			return { [entryValue.legacyPath]: { $in: value } };
+		case 'taxonomy-many':
+			return {
+				$or: (value as number[]).map((id) => ({
+					[entryValue.legacyPath]: { $elemMatch: { id } },
+				})),
+			};
+		case 'metadata': {
+			const cashierID = parseRemoteId(value);
+			return cashierID === undefined
+				? undefined
+				: { meta_data: { $elemMatch: { key: '_pos_user', value: String(cashierID) } } };
+		}
+		case 'store': {
+			const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
+			return numeric
+				? { meta_data: { $elemMatch: { key: '_pos_store', value: String(value) } } }
+				: { created_via: value };
+		}
+		case 'date-range': {
+			const range = value as { from: string; to: string };
+			return { [entryValue.legacyPath]: { $gte: range.from, $lte: range.to } };
+		}
+		case 'all-match':
+			return { attributes: { $allMatch: value } };
+		case 'prefix-range': {
+			const prefix = String(value);
+			return { [entryValue.legacyPath]: { $gte: prefix, $lt: `${prefix}/` } };
+		}
+		case 'exists':
+			return value === true ? { [entryValue.legacyPath]: { $exists: true } } : undefined;
+	}
+}
+
+type CompiledCollection = Exclude<CollectionKey, 'logs'>;
+
+function legacySortCollection(collection: CompiledCollection): LegacyCollectionName {
+	return collection === 'tax-rates' ? 'taxes' : collection;
+}
+
+/**
+ * Test fixture copied from f8c2e9f85:packages/core/src/query/query-state-translator.ts.
+ * Keep this independent encoder so the compile-once path cannot silently drift from its bridge.
+ */
+function oldEncode<C extends CompiledCollection>(collection: C, state: QueryStateOf<C>) {
+	const translators = LEGACY_FILTER_TRANSLATORS[collection] as Record<
+		string,
+		LegacyFilterTranslator
+	>;
+	const topLevelConditions: Record<string, unknown> = {};
+	const nestedConditions: Record<string, unknown>[] = [];
+	Object.entries(state.filters).forEach(([field, value]) => {
+		const condition = legacyCompile(translators[field], value);
+		if (!condition) return;
+		if (collection === 'orders' && LEGACY_REQUIREMENT_TOP_LEVEL_FIELDS.has(field)) {
+			Object.assign(topLevelConditions, condition);
+		} else {
+			nestedConditions.push(condition);
+		}
+	});
+	const selector = {
+		...topLevelConditions,
+		...(nestedConditions.length > 0 ? { $and: nestedConditions } : {}),
+	};
+	const sortField = normalizeQuerySortField(collection, state.sort.field)!;
+	const legacyCollection = legacySortCollection(collection);
+	const adapterSortField = sortAliasFor(legacyCollection, sortField) ?? sortField;
+	const sort: Record<string, 'asc' | 'desc'>[] = [{ [adapterSortField]: state.sort.direction }];
+	const tiebreak = sortTiebreakFor(legacyCollection, sortField);
+	for (const field of tiebreak ?? []) {
+		sort.push({ [field]: 'asc' });
+	}
+	return {
+		collectionName: collection === 'tax-rates' ? 'taxes' : collection,
+		selector,
+		sort,
+		limit: state.limit,
+		search: state.search.trim(),
+	};
+}
 
 describe('query-state translator', () => {
 	it.each([
@@ -35,9 +181,12 @@ describe('query-state translator', () => {
 			limit: 10,
 		} as unknown as QueryStateOf<'products'>;
 
-		expect(translateQueryState('products', state)).toMatchObject({
-			sort: [{ total_sales: 'desc' }],
+		const compiled = compileQuery('products', state, { id: 'products' });
+		expect(compiled.demand[0]).toMatchObject({
+			orderby: 'popularity',
+			order: 'desc',
 		});
+		expect(compiled.read.sort).toHaveLength(1);
 	});
 
 	it.each(['asc', 'desc'] as const)(
@@ -50,9 +199,12 @@ describe('query-state translator', () => {
 				limit: 10,
 			} as unknown as QueryStateOf<'products'>;
 
-			expect(translateQueryState('products', state)).toMatchObject({
-				sort: [{ menu_order: direction }, { id: 'asc' }],
+			const compiled = compileQuery('products', state, { id: 'products' });
+			expect(compiled.demand[0]).toMatchObject({
+				orderby: 'menu_order',
+				order: direction,
 			});
+			expect(compiled.read.sort.map((part) => part.direction)).toEqual([direction, 'asc']);
 		}
 	);
 
@@ -64,9 +216,7 @@ describe('query-state translator', () => {
 			limit: 10,
 		} as unknown as QueryStateOf<'variations'>;
 
-		expect(translateQueryState('variations', state)).toMatchObject({
-			sort: [{ menu_order: 'asc' }, { id: 'asc' }],
-		});
+		expect(compileQuery('variations', state, { id: 'variations' }).read.sort).toHaveLength(2);
 	});
 
 	it('has an exhaustive entry for every declared collection filter', () => {
@@ -82,91 +232,193 @@ describe('query-state translator', () => {
 		]);
 	});
 
-	it('preserves every legacy products filter selector shape', () => {
-		const products = translateQueryState('products', {
-			search: '',
-			filters: {
-				categories: [2, 7],
-				tags: [5],
-				brands: [9],
-				featured: true,
-				on_sale: false,
-				stock_status: 'outofstock',
-				status: 'publish',
-			},
-			sort: { field: 'price', direction: 'desc' },
-			limit: 25,
-		} satisfies QueryStateOf<'products'>);
-		expect(products.selector).toEqual({
-			$and: [
-				{
-					$or: [
-						{ categories: { $elemMatch: { id: 2 } } },
-						{ categories: { $elemMatch: { id: 7 } } },
-					],
+	it('compiles every products filter into equivalent wire and read faces', () => {
+		const products = compileQuery(
+			'products',
+			{
+				search: '',
+				filters: {
+					categories: [2, 7],
+					tags: [5],
+					brands: [9],
+					featured: true,
+					on_sale: false,
+					stock_status: 'outofstock',
+					status: 'publish',
 				},
-				{ $or: [{ tags: { $elemMatch: { id: 5 } } }] },
-				{ $or: [{ brands: { $elemMatch: { id: 9 } } }] },
+				sort: { field: 'price', direction: 'desc' },
+				limit: 25,
+			} satisfies QueryStateOf<'products'>,
+			{ id: 'products' }
+		);
+		expect(products.read.prefilter).toEqual({
+			$and: [
+				{ categoryIds: { $in: [2, 7] } },
+				{ $or: [{ 'payload.tags': { $elemMatch: { id: 5 } } }] },
+				{ brandIds: { $in: [9] } },
 				{ featured: true },
-				{ on_sale: false },
-				{ stock_status: 'outofstock' },
-				{ status: 'publish' },
+				{ onSale: false },
+				{ stockStatus: 'outofstock' },
+				{ 'payload.status': 'publish' },
 			],
 		});
-		expect(products).toMatchObject({
-			sort: [{ sortable_price: 'desc' }],
+		expect(products.demand[0]).toMatchObject({
+			category: [2, 7],
+			tag: [5],
+			brand: [9],
+			featured: true,
+			on_sale: false,
+			stock_status: 'outofstock',
+			orderby: 'price',
+			order: 'desc',
 			limit: 25,
 		});
+		expect(products.represented).toBe(true);
+		expect(products.read.complete).toBe(true);
 	});
 
 	it('composes order payload metadata with promoted filters and dates', () => {
-		const translated = translateQueryState('orders', {
-			search: 'smith',
-			filters: {
-				status: 'processing',
-				customer_id: 42,
-				cashier: 7,
-				store: 3,
-				dateRange: { from: '2026-07-01', to: '2026-07-14' },
-			},
-			sort: { field: 'date_created_gmt', direction: 'desc' },
-			limit: 50,
-		} satisfies QueryStateOf<'orders'>);
+		const compiled = compileQuery(
+			'orders',
+			{
+				search: 'smith',
+				filters: {
+					status: 'processing',
+					customer_id: 42,
+					cashier: 7,
+					store: 3,
+					dateRange: { from: '2026-07-01', to: '2026-07-14' },
+				},
+				sort: { field: 'date_created_gmt', direction: 'desc' },
+				limit: 50,
+			} satisfies QueryStateOf<'orders'>,
+			{ id: 'orders' }
+		);
 
-		expect(translated.selector).toEqual({
-			status: 'processing',
-			customer_id: 42,
-			date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' },
+		expect(compiled.read.prefilter).toEqual({
 			$and: [
-				{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
-				{ meta_data: { $elemMatch: { key: '_pos_store', value: '3' } } },
+				{ status: 'processing' },
+				{ customerId: 42 },
+				{
+					'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '7' } },
+				},
+				{
+					'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '3' } },
+				},
+				{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 			],
 		});
-		expect(translated.search).toBe('smith');
+		expect(compiled.demand[0]).toMatchObject({
+			status: 'processing',
+			customerId: 42,
+			cashierId: 7,
+			store: '3',
+			search: 'smith',
+		});
+	});
+
+	it('keeps cashier, store, and date grid reads complete and pushable', () => {
+		const compiled = compileQuery(
+			'orders',
+			{
+				search: '',
+				filters: {
+					cashier: 7,
+					store: 3,
+					dateRange: { from: '2026-07-01', to: '2026-07-14' },
+				},
+				sort: { field: 'date_created_gmt', direction: 'desc' },
+				limit: 50,
+			},
+			{ id: 'orders' }
+		);
+
+		expect(compiled.read).toMatchObject({
+			prefilter: {
+				$and: [
+					{
+						'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '7' } },
+					},
+					{
+						'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '3' } },
+					},
+					{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
+				],
+			},
+			complete: true,
+			sortPushable: true,
+		});
+	});
+
+	it('keeps prior scoping and omits undefined range fields for a malformed later range', () => {
+		const requirement = compileQuery(
+			'orders',
+			{
+				search: '',
+				filters: {
+					cashier: 7,
+					store: 'checkout',
+					dateRange: { from: 'not-a-date', to: 'also-not-a-date' },
+				},
+				sort: { field: 'date_created_gmt', direction: 'desc' },
+				limit: 50,
+			},
+			{ id: 'orders' }
+		).demand[0]!;
+
+		expect(requirement).toMatchObject({ cashierId: 7, store: 'checkout', priority: 700 });
+		expect(requirement).not.toHaveProperty('afterSeconds');
+		expect(requirement).not.toHaveProperty('beforeSeconds');
+	});
+
+	it('accepts an empty order status as a represented bare value', () => {
+		const compiled = compileQuery(
+			'orders',
+			{
+				search: '',
+				filters: { status: '' },
+				sort: { field: 'date_created_gmt', direction: 'desc' },
+				limit: 50,
+			},
+			{ id: 'orders' }
+		);
+
+		expect(compiled.demand[0]).toMatchObject({ status: '' });
+		expect(compiled.represented).toBe(true);
 	});
 
 	it('normalizes cashier ids before matching order metadata', () => {
-		const translated = translateQueryState('orders', {
-			search: '',
-			filters: { cashier: ' 0007 ' },
-			sort: { field: 'date_created_gmt', direction: 'desc' },
-			limit: 50,
-		} satisfies QueryStateOf<'orders'>);
+		const compiled = compileQuery(
+			'orders',
+			{
+				search: '',
+				filters: { cashier: ' 0007 ' },
+				sort: { field: 'date_created_gmt', direction: 'desc' },
+				limit: 50,
+			} satisfies QueryStateOf<'orders'>,
+			{ id: 'orders' }
+		);
 
-		expect(translated.selector).toEqual({
-			$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } }],
-		});
+		expect(compiled.demand[0]).toMatchObject({ cashierId: 7 });
 	});
 
 	it('sorts order totals through the numeric adapter field', () => {
-		const translated = translateQueryState('orders', {
-			search: '',
-			filters: {},
-			sort: { field: 'total', direction: 'asc' },
-			limit: 50,
-		} satisfies QueryStateOf<'orders'>);
+		const compiled = compileQuery(
+			'orders',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'total', direction: 'asc' },
+				limit: 50,
+			} satisfies QueryStateOf<'orders'>,
+			{ id: 'orders' }
+		);
 
-		expect(translated.sort).toEqual([{ sortable_total: 'asc' }]);
+		expect(compiled.demand[0]).toMatchObject({
+			orderby: 'total',
+			order: 'asc',
+		});
+		expect(compiled.read.sortPushable).toBe(false);
 	});
 
 	it('preserves the legacy mutually-exclusive created_via and _pos_store selector branches', () => {
@@ -176,75 +428,62 @@ describe('query-state translator', () => {
 			limit: 10,
 		} as const;
 
-		expect(translateQueryState('orders', { ...base, filters: { store: '12' } }).selector).toEqual({
-			$and: [{ meta_data: { $elemMatch: { key: '_pos_store', value: '12' } } }],
-		});
 		expect(
-			translateQueryState('orders', { ...base, filters: { store: 'checkout' } }).selector
-		).toEqual({
-			$and: [{ created_via: 'checkout' }],
-		});
+			compileQuery('orders', { ...base, filters: { store: '12' } }, { id: 'orders' }).demand[0]
+		).toMatchObject({ store: '12' });
+		expect(
+			compileQuery('orders', { ...base, filters: { store: 'checkout' } }, { id: 'orders' })
+				.demand[0]
+		).toMatchObject({ store: 'checkout' });
 	});
 
-	it('keeps order demand fields visible to the requirement bridge', () => {
-		const translated = translateQueryState('orders', {
-			search: '',
-			filters: {
-				status: 'processing',
-				customer_id: 42,
-				dateRange: { from: '2026-07-01', to: '2026-07-14' },
-			},
-			sort: { field: 'date_created_gmt', direction: 'desc' },
-			limit: 50,
-		} satisfies QueryStateOf<'orders'>);
-		const requirementInput = {
-			id: 'orders-binding',
-			collectionName: translated.collectionName,
-			limit: translated.limit,
-		};
-
-		expect(
-			requirementsForQuery({
-				...requirementInput,
-				selector: translated.selector,
-			})
-		).toEqual(
-			requirementsForQuery({
-				...requirementInput,
-				selector: {
+	it('compiles order demand fields without a selector bridge', () => {
+		const compiled = compileQuery(
+			'orders',
+			{
+				search: '',
+				filters: {
 					status: 'processing',
 					customer_id: 42,
-					date_created_gmt: { $gte: '2026-07-01', $lte: '2026-07-14' },
+					dateRange: { from: '2026-07-01', to: '2026-07-14' },
 				},
-			})
+				sort: { field: 'date_created_gmt', direction: 'desc' },
+				limit: 50,
+			} satisfies QueryStateOf<'orders'>,
+			{ id: 'orders-binding' }
 		);
+		expect(compiled.demand[0]).toMatchObject({
+			status: 'processing',
+			customerId: 42,
+			afterSeconds: 1782864000,
+			beforeSeconds: 1783987200,
+		});
 	});
 
 	it('keeps the completed reports date window representable as orders demand', () => {
-		const translated = translateQueryState('orders', {
-			search: '',
-			filters: {
-				status: 'completed',
-				cashier: '7',
-				store: '12',
-				dateRange: {
-					from: '2026-07-15T00:00:00.000Z',
-					to: '2026-07-15T23:59:59.999Z',
+		const compiled = compileQuery(
+			'orders',
+			{
+				search: '',
+				filters: {
+					status: 'completed',
+					cashier: '7',
+					store: '12',
+					dateRange: {
+						from: '2026-07-15T00:00:00.000Z',
+						to: '2026-07-15T23:59:59.999Z',
+					},
 				},
-			},
-			sort: { field: 'date_created_gmt', direction: 'desc' },
-			limit: Number.MAX_SAFE_INTEGER,
-		} satisfies QueryStateOf<'orders'>);
+				sort: { field: 'date_created_gmt', direction: 'desc' },
+				limit: Number.MAX_SAFE_INTEGER,
+			} satisfies QueryStateOf<'orders'>,
+			{ id: 'reports-orders-binding' }
+		);
 
-		expect(
-			requirementsForQuery({
-				id: 'reports-orders-binding',
-				collectionName: translated.collectionName,
-				selector: translated.selector,
-				limit: translated.limit,
-				sort: translated.sort,
-			})
-		).toEqual({
+		expect({
+			requirements: compiled.demand,
+			represented: compiled.represented,
+		}).toEqual({
 			requirements: [
 				{
 					id: 'reports-orders-binding:orders-browse',
@@ -264,6 +503,440 @@ describe('query-state translator', () => {
 			represented: true,
 		});
 	});
+
+	it('resolves every sort of one reports range to a single lane key', () => {
+		const keyFor = (field: QueryStateOf<'orders'>['sort']['field']) => {
+			const compiled = compileQuery(
+				'orders',
+				{
+					search: '',
+					filters: {
+						status: 'completed',
+						dateRange: {
+							from: '2026-07-01T00:00:00',
+							to: '2026-07-14T23:59:59',
+						},
+					},
+					sort: { field, direction: field === 'total' ? 'asc' : 'desc' },
+					limit: Number.MAX_SAFE_INTEGER,
+				},
+				{ id: 'reports' }
+			);
+			return orderBrowserQueryKey(compiled.demand[0] as never);
+		};
+
+		const byDate = keyFor('date_created_gmt');
+		expect(byDate).toBe(
+			'orders:browser:status=completed:after=1782864000:before=1784073599:search=:limit=all'
+		);
+		expect(keyFor('total')).toBe(byDate);
+		expect(keyFor('number')).toBe(byDate);
+	});
+
+	it('still forks a windowed browse lane per sort', () => {
+		const keyFor = (direction: 'asc' | 'desc') => {
+			const compiled = compileQuery(
+				'orders',
+				{
+					search: '',
+					filters: {},
+					sort: { field: 'total', direction },
+					limit: 25,
+				},
+				{ id: 'orders' }
+			);
+			return orderBrowserQueryKey(compiled.demand[0] as never);
+		};
+
+		expect(keyFor('asc')).not.toBe(keyFor('desc'));
+		expect(keyFor('asc')).toContain(':orderby=total:order=asc');
+	});
+
+	it('compiles product wire, read, and sort faces together', () => {
+		const compiled = compileQuery(
+			'products',
+			{
+				search: '  shirt  ',
+				filters: {
+					categories: [7, 2, 7],
+					tags: [],
+					brands: [],
+					stock_status: 'instock',
+					status: 'publish',
+				},
+				sort: { field: 'price', direction: 'desc' },
+				limit: 25,
+			},
+			{ id: 'products-binding' }
+		);
+
+		expect(compiled.demand).toEqual([
+			{
+				id: 'products-binding:search',
+				collection: 'products',
+				kind: 'search',
+				term: 'shirt',
+				limit: 25,
+			},
+		]);
+		expect(compiled.represented).toBe(false);
+		expect(compiled.read).toMatchObject({
+			prefilter: {
+				$and: [
+					{ categoryIds: { $in: [2, 7] } },
+					{ stockStatus: 'instock' },
+					{ 'payload.status': 'publish' },
+				],
+			},
+			complete: true,
+			sortPushable: false,
+			limit: 25,
+			search: 'shirt',
+		});
+	});
+
+	it('pushes payload taxonomies without forcing the residual slow path', () => {
+		const compiled = compileQuery(
+			'products',
+			{
+				search: '',
+				filters: { categories: [], tags: [5, 9], brands: [] },
+				sort: { field: 'id', direction: 'asc' },
+				limit: 25,
+			},
+			{ id: 'products' }
+		);
+
+		expect(compiled.read.prefilter).toEqual({
+			$or: [
+				{ 'payload.tags': { $elemMatch: { id: 5 } } },
+				{ 'payload.tags': { $elemMatch: { id: 9 } } },
+			],
+		});
+		expect(compiled.read.complete).toBe(true);
+	});
+
+	it.each([
+		['unsupported stock status', { stock_status: 'weird' }],
+		['invalid category id', { categories: [0] }],
+	] as [string, Partial<FiltersOf<'products'>>][])(
+		'does not prioritize or dimension %s',
+		(_name, filters) => {
+			const compiled = compileQuery(
+				'products',
+				{
+					search: '',
+					filters: { categories: [], tags: [], brands: [], ...filters },
+					sort: { field: 'id', direction: 'asc' },
+					limit: 25,
+				},
+				{ id: 'products' }
+			);
+
+			expect(compiled.demand[0]).not.toHaveProperty('priority');
+			expect(compiled.demand[0]).not.toHaveProperty('category');
+			expect(compiled.represented).toBe(false);
+		}
+	);
+
+	it('keeps variation attribute matching entirely residual for wildcard variations', () => {
+		const compiled = compileQuery(
+			'variations',
+			{
+				search: '',
+				filters: { attributeMatches: [{ id: 1, name: 'Color', option: 'Red' }] },
+				sort: { field: 'id', direction: 'asc' },
+				limit: 25,
+			},
+			{ id: 'variations' }
+		);
+
+		expect(compiled.read.prefilter).toEqual({});
+		expect(compiled.read.complete).toBe(false);
+	});
+
+	it.each([
+		['orders', true, 'orders-browse'],
+		['products', false, 'search'],
+		['customers', false, 'customer-browse'],
+		['variations', false, 'search'],
+	] as const)(
+		'preserves the %s 1-2 character search semantics',
+		(collection, represented, kind) => {
+			const states = {
+				orders: {
+					search: 'ab',
+					filters: {},
+					sort: { field: 'date_created_gmt', direction: 'desc' },
+					limit: 25,
+				} satisfies QueryStateOf<'orders'>,
+				products: {
+					search: 'ab',
+					filters: { categories: [], tags: [], brands: [] },
+					sort: { field: 'id', direction: 'asc' },
+					limit: 25,
+				} satisfies QueryStateOf<'products'>,
+				customers: {
+					search: 'ab',
+					filters: {},
+					sort: { field: 'id', direction: 'asc' },
+					limit: 25,
+				} satisfies QueryStateOf<'customers'>,
+				variations: {
+					search: 'ab',
+					filters: { attributeMatches: [] },
+					sort: { field: 'id', direction: 'asc' },
+					limit: 25,
+				} satisfies QueryStateOf<'variations'>,
+			};
+			const compiled = compileQuery(collection, states[collection], { id: collection });
+
+			expect(compiled.represented).toBe(represented);
+			expect(compiled.demand[0]).toMatchObject({ kind });
+		}
+	);
+
+	it('keeps empty targeting distinct from an untargeted customer browse', () => {
+		const compiled = compileQuery(
+			'customers',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'id', direction: 'asc' },
+				limit: 10,
+			},
+			{ id: 'guest', targeted: [] }
+		);
+
+		expect(compiled.demand).toEqual([]);
+		expect(compiled.represented).toBe(false);
+		expect(compiled.read.prefilter).toEqual({ wooCustomerId: { $in: [] } });
+	});
+
+	it('keeps forceRefresh kind-sensitive when compiled demand is re-declared', () => {
+		const refresh = compileQuery(
+			'coupons',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'code', direction: 'asc' },
+				limit: 20,
+			},
+			{ id: 'coupons' }
+		);
+		const product = compileQuery(
+			'products',
+			{
+				search: '',
+				filters: { categories: [], tags: [], brands: [] },
+				sort: { field: 'id', direction: 'asc' },
+				limit: 20,
+			},
+			{ id: 'products' }
+		);
+
+		expect(
+			requirementsForCompiledQuery(refresh.demand, { id: 'coupons:sync', forceRefresh: true })
+		).toEqual([
+			{
+				id: 'coupons:sync:reference-refresh',
+				collection: 'coupons',
+				kind: 'refresh',
+				priority: 700,
+			},
+		]);
+		expect(
+			requirementsForCompiledQuery(product.demand, { id: 'products:sync', forceRefresh: true })
+		).toEqual([
+			expect.objectContaining({
+				id: 'products:sync:products-browse-window',
+				forceRefresh: true,
+			}),
+		]);
+	});
+});
+
+describe('compile-once demand equivalence with the legacy encoder and bridge', () => {
+	type EquivalenceFixture = {
+		name: string;
+		collection: CompiledCollection;
+		state: QueryStateOf<CompiledCollection>;
+		targeted?: readonly number[];
+	};
+	const fixture = <C extends CompiledCollection>(
+		name: string,
+		collection: C,
+		state: QueryStateOf<C>,
+		targeted?: readonly number[]
+	): EquivalenceFixture => ({
+		name,
+		collection,
+		state: state as QueryStateOf<CompiledCollection>,
+		targeted,
+	});
+	const cases = [
+		fixture('orders status/customer/date sort', 'orders', {
+			search: '',
+			filters: {
+				status: 'processing',
+				customer_id: 42,
+				dateRange: { from: '2026-07-01', to: '2026-07-14' },
+			},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 50,
+		}),
+		fixture('orders cashier/store/range total sort', 'orders', {
+			search: '',
+			filters: {
+				cashier: 7,
+				store: 3,
+				dateRange: { from: '2026-07-01', to: '2026-07-14' },
+			},
+			sort: { field: 'total', direction: 'asc' },
+			limit: 50,
+		}),
+		fixture('orders slug store and short search', 'orders', {
+			search: 'ab',
+			filters: { store: 'checkout' },
+			sort: { field: 'number', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('orders scope before malformed range', 'orders', {
+			search: '',
+			filters: {
+				cashier: 7,
+				store: 'checkout',
+				dateRange: { from: 'not-a-date', to: 'also-not-a-date' },
+			},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 50,
+		}),
+		fixture('orders empty status', 'orders', {
+			search: '',
+			filters: { status: '' },
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: 50,
+		}),
+		fixture('products empty search', 'products', {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'id', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('products short search', 'products', {
+			search: 'ab',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('products long search', 'products', {
+			search: 'shirt',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('products taxonomies flags and publish', 'products', {
+			search: '',
+			filters: {
+				categories: [2, 7],
+				tags: [5],
+				brands: [9],
+				featured: true,
+				on_sale: false,
+				stock_status: 'instock',
+				status: 'publish',
+			},
+			sort: { field: 'price', direction: 'desc' },
+			limit: 25,
+		}),
+		fixture('products draft status', 'products', {
+			search: '',
+			filters: { categories: [], tags: [], brands: [], status: 'draft' },
+			sort: { field: 'id', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('products malformed stock status', 'products', {
+			search: '',
+			filters: { categories: [], tags: [], brands: [], stock_status: 'weird' },
+			sort: { field: 'id', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('products invalid category', 'products', {
+			search: '',
+			filters: { categories: [0], tags: [], brands: [] },
+			sort: { field: 'id', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('customers empty search id sort', 'customers', {
+			search: '',
+			filters: {},
+			sort: { field: 'id', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('customers short search email sort', 'customers', {
+			search: 'ab',
+			filters: {},
+			sort: { field: 'email', direction: 'desc' },
+			limit: 25,
+		}),
+		fixture('customers long search', 'customers', {
+			search: 'alice',
+			filters: {},
+			sort: { field: 'last_name', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture(
+			'guest empty customer ids',
+			'customers',
+			{
+				search: '',
+				filters: {},
+				sort: { field: 'id', direction: 'asc' },
+				limit: 1,
+			},
+			[]
+		),
+		fixture('variation attributes', 'variations', {
+			search: '',
+			filters: { attributeMatches: [{ id: 1, name: 'Color', option: 'Red' }] },
+			sort: { field: 'menu_order', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('coupon reference collection', 'coupons', {
+			search: '',
+			filters: { status: 'publish' },
+			sort: { field: 'code', direction: 'asc' },
+			limit: 25,
+		}),
+		fixture('tax rates local reference', 'tax-rates', {
+			search: '',
+			filters: {},
+			sort: { field: 'priority', direction: 'asc' },
+			limit: 25,
+		}),
+	];
+
+	it.each(cases)('$name', ({ collection, state, targeted }) => {
+		const encoded = oldEncode(collection, state);
+		const selector = {
+			...encoded.selector,
+			...(targeted !== undefined ? { id: { $in: [...targeted] } } : {}),
+			...(encoded.search ? { search: encoded.search } : {}),
+		};
+		const legacy = requirementsForQuery({
+			id: 'equivalence',
+			collectionName: encoded.collectionName,
+			selector,
+			limit: encoded.limit,
+			sort: encoded.sort,
+		});
+		const compiled = compileQuery(collection, state, { id: 'equivalence', targeted });
+
+		expect({ demand: compiled.demand, represented: compiled.represented }).toEqual({
+			demand: legacy.requirements,
+			represented: legacy.represented,
+		});
+	});
 });
 
 describe('logs preset filters', () => {
@@ -274,7 +947,7 @@ describe('logs preset filters', () => {
 	} as const;
 
 	it('translates the sync preset to an index-friendly category prefix range', () => {
-		const translated = translateQueryState('logs', {
+		const translated = translateLogsQueryState({
 			...base,
 			filters: {
 				level: ['info', 'warn', 'error'],
@@ -291,7 +964,7 @@ describe('logs preset filters', () => {
 	});
 
 	it('translates the actions preset to an actor-existence predicate', () => {
-		const translated = translateQueryState('logs', {
+		const translated = translateLogsQueryState({
 			...base,
 			filters: { level: ['info', 'warn', 'error'], has_actor: true },
 		} satisfies QueryStateOf<'logs'>);
@@ -302,7 +975,7 @@ describe('logs preset filters', () => {
 	});
 
 	it('drops a false has_actor filter entirely', () => {
-		const translated = translateQueryState('logs', {
+		const translated = translateLogsQueryState({
 			...base,
 			filters: { level: ['error'], has_actor: false },
 		} satisfies QueryStateOf<'logs'>);

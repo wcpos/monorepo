@@ -187,6 +187,24 @@ describe('query bindings', () => {
 		);
 	});
 
+	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'resident', id: 1, name: 'Resident product' })
+		);
+		const state: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'id', direction: 'asc' },
+			limit: 1,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', state, { wooIds: [] }), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+		expect(engine.requireCalls).toEqual([]);
+	});
+
 	it('re-declares the footer binding current descriptor after a reset generation bump', async () => {
 		const base: QueryStateOf<'products'> = {
 			search: '',
@@ -292,6 +310,39 @@ describe('query bindings', () => {
 					requirement.collection === 'variations' && requirement.kind === 'targeted-records'
 			)
 		).toMatchObject({ wooIds: [11, 12] });
+	});
+
+	it('keeps an any variation when the attribute residual admits its missing attribute', async () => {
+		await engineDB.collections.variations.bulkInsert([
+			engineVariation({
+				uuid: 'red-small',
+				id: 11,
+				parent_id: 10,
+				attributes: [{ id: 1, name: 'Color', option: 'Red' }],
+			}),
+			engineVariation({
+				uuid: 'any-color',
+				id: 12,
+				parent_id: 10,
+				attributes: [{ id: 2, name: 'Size', option: 'Large' }],
+			}),
+		]);
+		const state: QueryStateOf<'variations'> = {
+			search: '',
+			filters: { attributeMatches: [{ id: 1, name: 'Color', option: 'Red' }] },
+			sort: { field: 'id', direction: 'asc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		};
+		const { result } = renderHook(() => useCollectionBinding('variations', state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
+				'red-small',
+				'any-color',
+			])
+		);
 	});
 
 	it('returns all, excludes conflicts, and clears stale variation rows as attributes change', async () => {
@@ -1238,14 +1289,21 @@ describe('query bindings', () => {
 			sort: { field: 'name', direction: 'asc' },
 			limit: 20,
 		};
-		const { result } = renderHook(() => useRelationalCollectionBinding(state), {
-			wrapper: Provider,
-		});
+		const { result, rerender } = renderHook(
+			({ queryState }) => useRelationalCollectionBinding(queryState),
+			{ wrapper: Provider, initialProps: { queryState: state } }
+		);
 		await waitFor(() =>
 			expect(current(result.current.resource)?.hits[0]).toMatchObject({
 				id: 'shirt',
 				childrenSearchCount: 1,
 			})
+		);
+		expect(current(result.current.resource)?.searchActive).toBe(true);
+
+		rerender({ queryState: { ...state, search: '' } });
+		await waitFor(() =>
+			expect(Boolean(current(result.current.resource)?.searchActive)).toBe(false)
 		);
 	});
 
