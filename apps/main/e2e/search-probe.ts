@@ -83,6 +83,38 @@ function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: numbe
 	return id === undefined ? base : `${base}/${id}`;
 }
 
+/** The plain-permalink spelling of the same route: /?rest_route=/wc/v3/… */
+function plainPermalinkUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {
+	const route = id === undefined ? `/wc/v3/${collection}` : `/wc/v3/${collection}/${id}`;
+	return `${storeUrl.replace(/\/+$/, '')}/?rest_route=${route}`;
+}
+
+type ProbeRequestOptions = {
+	headers: Record<string, string>;
+	params: Record<string, string>;
+	data?: unknown;
+};
+
+/**
+ * Issue a wc/v3 request tolerating both permalink styles: try the pretty
+ * /wp-json/ path first, and on WordPress's rest_no_route 404 retry the
+ * plain-permalink ?rest_route= spelling. Without this, a plain-permalink store
+ * would mis-report probe creation as a missing write capability and the search
+ * specs would skip on a store they fully support.
+ */
+async function probeRequest(
+	request: APIRequestContext,
+	method: 'post' | 'delete',
+	storeUrl: string,
+	collection: ProbeCollection,
+	id: number | undefined,
+	options: ProbeRequestOptions
+) {
+	const pretty = await request[method](collectionUrl(storeUrl, collection, id), options);
+	if (pretty.status() !== 404) return pretty;
+	return request[method](plainPermalinkUrl(storeUrl, collection, id), options);
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
 		? (value as Record<string, unknown>)
@@ -131,7 +163,7 @@ export async function createSearchProbe(
 				};
 
 	try {
-		const response = await request.post(collectionUrl(storeUrl, collection), {
+		const response = await probeRequest(request, 'post', storeUrl, collection, undefined, {
 			...storeRequestOptions(authorization),
 			data,
 		});
@@ -183,7 +215,7 @@ export async function deleteSearchProbe(
 ): Promise<void> {
 	const { request, storeUrl, authorization, collection, id } = options;
 	try {
-		const response = await request.delete(collectionUrl(storeUrl, collection, id), {
+		const response = await probeRequest(request, 'delete', storeUrl, collection, id, {
 			...storeRequestOptions(authorization),
 			params: { ...storeRequestOptions(authorization).params, force: 'true' },
 		});
