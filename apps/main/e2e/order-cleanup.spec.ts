@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
 	chunk,
 	extractOrderIdFromPushBody,
+	extractOrderNumberFromPushBody,
 	FINALIZE_FROM_STATUSES,
 	RETAINED_FIXTURE_ORDER_IDS,
 	selectOrdersToFinalize,
@@ -21,6 +22,16 @@ test.describe('order-cleanup pure logic', () => {
 		expect(extractOrderIdFromPushBody({ document: { id: 789 } })).toBe(789);
 		expect(extractOrderIdFromPushBody({ record: { id: 42 } })).toBe(42);
 		expect(extractOrderIdFromPushBody({ data: { id: 7 } })).toBe(7);
+	});
+
+	test('extractOrderNumberFromPushBody reads bare and enveloped shapes, falls back to null', () => {
+		expect(extractOrderNumberFromPushBody({ number: 'SEQ-1001' })).toBe('SEQ-1001');
+		expect(extractOrderNumberFromPushBody({ number: 1001 })).toBe('1001');
+		expect(extractOrderNumberFromPushBody({ document: { number: '70954' } })).toBe('70954');
+		expect(extractOrderNumberFromPushBody({ record: { number: ' 7 ' } })).toBe('7');
+		expect(extractOrderNumberFromPushBody({ data: {} })).toBeNull();
+		expect(extractOrderNumberFromPushBody({ number: '' })).toBeNull();
+		expect(extractOrderNumberFromPushBody(null)).toBeNull();
 	});
 
 	test('extractOrderIdFromPushBody rejects non-positive-integer ids and junk', () => {
