@@ -51,9 +51,10 @@ jest.mock('./metrics', () => ({
 }));
 
 type StateDocument = {
-	get: jest.Mock<() => SyncStatusState | undefined>;
+	get: jest.Mock<SyncStatusState | undefined, []>;
 	set: jest.Mock<
-		(path: string, update: (current: SyncStatusState) => SyncStatusState) => Promise<void>
+		Promise<void>,
+		[path: string, update: (current: SyncStatusState) => SyncStatusState]
 	>;
 };
 

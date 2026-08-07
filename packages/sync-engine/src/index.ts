@@ -8,6 +8,7 @@ export {
 	type EngineConflict,
 	type EngineConnectivity,
 	type EngineEvent,
+	type EngineFetcher,
 	type EngineRequirement,
 	type EngineStatus,
 	type CustomerBrowseDimensions,
