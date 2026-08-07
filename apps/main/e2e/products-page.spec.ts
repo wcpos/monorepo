@@ -6,7 +6,12 @@ import {
 	navigateToPage,
 	authenticatedTest as test,
 } from './fixtures';
-import { createSearchProbe, deleteSearchProbe, searchAndWaitForServer } from './search-probe';
+import {
+	createSearchProbe,
+	deleteSearchProbe,
+	productWriterAuthorization,
+	searchAndWaitForServer,
+} from './search-probe';
 
 /**
  * Products page (pro-only drawer page with inline editing).
