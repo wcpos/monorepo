@@ -1126,7 +1126,7 @@
 	"health.logs.event.cadence_start": "Sync speed for this session",
 	"health.logs.event.coverage_compacted": "Tidied up local sync bookkeeping",
 	"health.logs.event.coverage_existence_prime": "Checked which records exist in your store",
-	"health.logs.event.coverage_existence_reconcile": "Reconciled this device with your store",
+	"health.logs.event.coverage_existence_reconcile": "Checked this device for records deleted on your store",
 	"health.logs.event.coverage_gate_hit": "Answered a search from data already on this device",
 	"health.logs.event.coverage_gate_miss": "Fetched a search from your store",
 	"health.logs.event.coverage_ledger_rebuilt": "Rebuilt local sync bookkeeping",

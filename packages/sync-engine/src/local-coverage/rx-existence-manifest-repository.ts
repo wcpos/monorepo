@@ -44,7 +44,7 @@ export async function readManifestRange(
 }
 
 /**
- * Rows per page of the max-wooId scan (#949 tranche 2).
+ * Rows per page of the occupied-bucket scan (#949 tranche 2).
  *
  * Measured 2026-08-06, memory storage, 50k manifest rows: 2,000 rows/page costs ~3.3 ms per page
  * (25 pages, 83 ms total) against 63 ms for the single unbroken `find().exec()` it replaces —
@@ -68,8 +68,8 @@ export const MANIFEST_SCAN_PAGE_SIZE = 2_000;
 const MAX_SCAN_PAGES = 5_000;
 
 /**
- * The highest `wooId` in the manifest, or 0 when it is empty — the reconcile derives its bucket
- * span from this.
+ * The occupied `wooId` bucket indexes in ascending order. The reconcile walks only these ranges,
+ * so a sparse high-ID manifest does not issue one local query for every empty preceding bucket.
  *
  * Walks the wooId index in ascending KEYSET pages, yielding to the event loop between them. Two
  * reasons it is a keyset walk and not `skip`/`limit`:
@@ -84,16 +84,20 @@ const MAX_SCAN_PAGES = 5_000;
  * stale-LOW by one audit. That is the same staleness the single-query version had (it, too, was a
  * snapshot taken before the walk began) and it is benign — the next pass sees them.
  */
-export async function maxManifestWooId(
+export async function occupiedManifestBucketIndexes(
 	collection: ManifestCollection,
+	bucketSize: number,
 	pageSize: number = MANIFEST_SCAN_PAGE_SIZE,
 	maxPages: number = MAX_SCAN_PAGES
-): Promise<number> {
+): Promise<number[]> {
+	if (!Number.isSafeInteger(bucketSize) || bucketSize <= 0) {
+		throw new RangeError('bucketSize must be a positive integer');
+	}
 	if (!Number.isSafeInteger(pageSize) || pageSize <= 0) {
 		throw new RangeError('pageSize must be a positive integer');
 	}
 	let cursor = -1;
-	let max = 0;
+	const buckets = new Set<number>();
 	for (let page = 0; page < maxPages; page += 1) {
 		if (page > 0) {
 			await yieldToEventLoop();
@@ -103,20 +107,18 @@ export async function maxManifestWooId(
 			.exec();
 		for (const doc of rows) {
 			const wooId = Number(doc.toJSON().wooId) || 0;
-			if (wooId > max) {
-				max = wooId;
-			}
+			if (wooId > 0) buckets.add(Math.floor(wooId / bucketSize));
 			if (wooId > cursor) {
 				cursor = wooId;
 			}
 		}
 		// A short (or empty) page means the index is exhausted — this is the only clean exit.
 		if (rows.length < pageSize) {
-			return max;
+			return [...buckets];
 		}
 	}
 	throw new Error(
-		`existence manifest scan exceeded ${maxPages} pages of ${pageSize} rows; refusing to report a truncated max wooId`
+		`existence manifest scan exceeded ${maxPages} pages of ${pageSize} rows; refusing to report truncated occupied buckets`
 	);
 }
 

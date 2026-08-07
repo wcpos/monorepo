@@ -3,27 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ExistenceManifestDocument } from '@wcpos/sync-engine/testing';
 
-import {
-	bucketIndexesForMaxWooId,
-	partitionActionsByLane,
-	reconcileExistence,
-	resolveDirtyWooIds,
-} from './reconciliation';
+import { partitionActionsByLane, reconcileExistence, resolveDirtyWooIds } from './reconciliation';
 
 import type { ServerDigestEntry } from '../reconcile-bucket-plan';
-
-describe('bucketIndexesForMaxWooId', () => {
-	it('covers every id up to the max in fixed-width buckets', () => {
-		expect(bucketIndexesForMaxWooId(2500, 1000)).toEqual([0, 1, 2]); // id 2500 lives in bucket 2
-		expect(bucketIndexesForMaxWooId(1000, 1000)).toEqual([0, 1]); // id 1000 spills into bucket 1
-		expect(bucketIndexesForMaxWooId(1, 1000)).toEqual([0]);
-	});
-
-	it('is empty when there are no local ids', () => {
-		expect(bucketIndexesForMaxWooId(0, 1000)).toEqual([]);
-		expect(bucketIndexesForMaxWooId(-5, 1000)).toEqual([]);
-	});
-});
 
 describe('partitionActionsByLane', () => {
 	it('splits actions into product and variation wooId lists', () => {
@@ -80,54 +62,73 @@ describe('reconcileExistence', () => {
 		objectType,
 	});
 
-	it('audits every bucket, pruning stale records and pulling missing/changed, via the lane handlers', async () => {
+	it('audits every nonempty bucket, routes prune through delete handlers, and reports missing/changed', async () => {
 		const deleteProducts = vi.fn(async () => undefined);
 		const deleteVariations = vi.fn(async () => undefined);
-		const pullProducts = vi.fn(async () => undefined);
-		const pullVariations = vi.fn(async () => undefined);
 
 		const local: Record<number, ExistenceManifestDocument[]> = {
 			0: [manifest(3, 'gone'), manifest(4, 'v-gone', 'variation')], // both server-absent → prune
-			1: [manifest(1200, 'old')], // digest differs → repull
+			1: [manifest(1200, 'old')], // digest differs → changed
 		};
 		const serverByBucket: Record<number, ServerDigestEntry[]> = {
 			0: [],
-			1: [server(1200, 'new'), server(1300, 'fresh')], // 1300 missing locally → pull
+			1: [server(1200, 'new'), server(1300, 'fresh')], // 1300 missing locally
 		};
 
 		const summary = await reconcileExistence({
 			bucketSize: 1000,
-			maxWooId: async () => 1300,
+			occupiedBucketIndexes: async () => [0, 1],
 			readManifestRange: async (lo) => local[lo / 1000] ?? [],
 			dirtyWooIds: async () => new Set<number>(),
 			fetchServerBucket: async (bucket) => serverByBucket[bucket] ?? [],
 			deleteProducts,
 			deleteVariations,
-			pullProducts,
-			pullVariations,
 		});
 
 		// bucket 0: prune product 3 + variation 4 (routed to the right lane handlers, which also drop manifest rows)
 		expect(deleteProducts).toHaveBeenCalledWith([3]);
 		expect(deleteVariations).toHaveBeenCalledWith([4]);
-		// bucket 1: pull 1300 then repull 1200 (both products; pull precedes repull in the plan dispatch)
-		expect(pullProducts).toHaveBeenCalledWith([1300, 1200]);
-		expect(pullVariations).not.toHaveBeenCalled();
-		expect(summary).toEqual({ buckets: 2, pruned: 2, pulled: 1, repulled: 1, skippedDirty: 0 });
+		expect(summary).toEqual({
+			buckets: 2,
+			emptyBuckets: 0,
+			pruned: 2,
+			missing: 1,
+			changed: 1,
+			skippedDirty: 0,
+		});
+	});
+
+	it('reads only occupied buckets for a sparse high-ID manifest', async () => {
+		const readManifestRange = vi.fn(async (lo: number) =>
+			lo === 0 ? [manifest(3, 'low')] : lo === 10_000 ? [manifest(10_003, 'high')] : []
+		);
+
+		await reconcileExistence({
+			bucketSize: 1000,
+			occupiedBucketIndexes: async () => [0, 10],
+			readManifestRange,
+			dirtyWooIds: async () => new Set<number>(),
+			fetchServerBucket: async () => [],
+			deleteProducts: vi.fn(async () => undefined),
+			deleteVariations: vi.fn(async () => undefined),
+		});
+
+		expect(readManifestRange.mock.calls).toEqual([
+			[0, 1000],
+			[10_000, 11_000],
+		]);
 	});
 
 	it('never prunes a record with a pending local write (dirty from the mutation queue)', async () => {
 		const deleteProducts = vi.fn(async () => undefined);
 		const summary = await reconcileExistence({
 			bucketSize: 1000,
-			maxWooId: async () => 5,
+			occupiedBucketIndexes: async () => [0],
 			readManifestRange: async () => [manifest(3, 'gone')], // server-absent, but dirty
 			dirtyWooIds: async () => new Set<number>([3]),
 			fetchServerBucket: async () => [],
 			deleteProducts,
 			deleteVariations: vi.fn(async () => undefined),
-			pullProducts: vi.fn(async () => undefined),
-			pullVariations: vi.fn(async () => undefined),
 		});
 		expect(deleteProducts).not.toHaveBeenCalled();
 		expect(summary).toMatchObject({ pruned: 0, skippedDirty: 1 });
@@ -137,16 +138,21 @@ describe('reconcileExistence', () => {
 		const fetchServerBucket = vi.fn(async () => [] as ServerDigestEntry[]);
 		const summary = await reconcileExistence({
 			bucketSize: 1000,
-			maxWooId: async () => 0,
+			occupiedBucketIndexes: async () => [],
 			readManifestRange: async () => [],
 			dirtyWooIds: async () => new Set<number>(),
 			fetchServerBucket,
 			deleteProducts: vi.fn(async () => undefined),
 			deleteVariations: vi.fn(async () => undefined),
-			pullProducts: vi.fn(async () => undefined),
-			pullVariations: vi.fn(async () => undefined),
 		});
 		expect(fetchServerBucket).not.toHaveBeenCalled();
-		expect(summary).toEqual({ buckets: 0, pruned: 0, pulled: 0, repulled: 0, skippedDirty: 0 });
+		expect(summary).toEqual({
+			buckets: 0,
+			emptyBuckets: 0,
+			pruned: 0,
+			missing: 0,
+			changed: 0,
+			skippedDirty: 0,
+		});
 	});
 });

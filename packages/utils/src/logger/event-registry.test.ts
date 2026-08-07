@@ -61,6 +61,12 @@ describe('event registry', () => {
 		}
 	});
 
+	it('describes existence reconciliation as a deletion audit', () => {
+		expect(registry.find(({ type }) => type === 'coverage.existence-reconcile')?.label).toBe(
+			'Checked this device for records deleted on your store'
+		);
+	});
+
 	it('exposes every registered type through the generated catalogue', () => {
 		expect([...SYNC_EVENT_TYPES].sort()).toEqual(registry.map(({ type }) => type).sort());
 		for (const entry of registry) {

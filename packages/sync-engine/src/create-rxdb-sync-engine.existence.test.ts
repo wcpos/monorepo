@@ -49,7 +49,7 @@ async function seed(
 afterEach(() => vi.restoreAllMocks());
 
 describe('existence maintenance lanes through the public facade', () => {
-	it('reconciles all three id spaces, pulls missing rows, protects dirty rows, and applies order tombstones without resurrection', async () => {
+	it('audits all three id spaces without downloads, protects dirty rows, and applies prune tombstones', async () => {
 		const diagnostics = vi.fn();
 		const fetches: string[] = [];
 		const server = {
@@ -75,51 +75,6 @@ describe('existence maintenance lanes through the public facade', () => {
 				return json({ digests: server[lane].filter((row) => ids.includes(row.id)) });
 			}
 			if (u.pathname.endsWith('/integrity/bucket')) return json({ ids: server[lane] });
-			if (u.pathname.endsWith('/products'))
-				return json([
-					{
-						id: 40,
-						status: 'publish',
-						_rxdb_digest: 'p40',
-						price: '4',
-						stock_status: 'instock',
-						type: 'simple',
-						categories: [],
-						brands: [],
-						on_sale: false,
-						featured: false,
-						stock_quantity: null,
-						meta_data: [
-							{ key: '_woocommerce_pos_uuid', value: '44444444-4444-4444-8444-444444444444' },
-						],
-					},
-				]);
-			if (u.pathname.endsWith('/customers'))
-				return json([
-					{
-						id: 41,
-						_rxdb_digest: 'c41',
-						meta_data: [
-							{ key: '_woocommerce_pos_uuid', value: '41414141-4141-4141-8141-414141414141' },
-						],
-					},
-				]);
-			if (u.pathname.endsWith('/orders'))
-				return json([
-					{
-						id: 42,
-						_rxdb_digest: 'o42',
-						number: '42',
-						date_created_gmt: '2026-01-01T00:00:00',
-						date_modified_gmt: '2026-01-01T00:00:00',
-						status: 'processing',
-						total: '1',
-						customer_id: 0,
-						meta_data: [
-							{ key: '_woocommerce_pos_uuid', value: '42424242-4242-4242-8242-424242424242' },
-						],
-					},
-				]);
 			throw new Error(`unexpected fetch ${url}`);
 		});
 		const e = engine(fetcher, { diagnostics, now: () => 500 });
@@ -197,18 +152,19 @@ describe('existence maintenance lanes through the public facade', () => {
 		await seed(db.existenceManifestOrders as never, manifest(32, 'o32', 'order'));
 
 		expect((await e.sync('existence-prime')).status).toBe('ran');
+		const reconcileFetchStart = fetches.length;
 		const report = await e.sync('existence-reconcile');
 		expect(report).toMatchObject({ status: 'ran', lane: 'existence-reconcile' });
 		expect(await db.variations.findOne('v11').exec()).toBeNull();
 		expect(await db.customers.findOne('c21').exec()).not.toBeNull();
 		expect(await db.orders.findOne('o31').exec()).toBeNull();
 		expect(await db.orders.findOne('o32').exec()).not.toBeNull();
-		expect(await db.products.findOne('44444444-4444-4444-8444-444444444444').exec()).not.toBeNull();
-		expect(
-			await db.customers.findOne('41414141-4141-4141-8141-414141414141').exec()
-		).not.toBeNull();
-		expect(await db.orders.findOne('42424242-4242-4242-8242-424242424242').exec()).not.toBeNull();
-		expect(fetches.filter((url) => url.includes('/orders?'))).toHaveLength(1);
+		expect(await db.products.findOne('44444444-4444-4444-8444-444444444444').exec()).toBeNull();
+		expect(await db.customers.findOne('41414141-4141-4141-8141-414141414141').exec()).toBeNull();
+		expect(await db.orders.findOne('42424242-4242-4242-8242-424242424242').exec()).toBeNull();
+		expect(fetches.slice(reconcileFetchStart).filter((url) => url.includes('include='))).toEqual(
+			[]
+		);
 		expect(
 			fetches
 				.filter((url) => {
@@ -222,17 +178,21 @@ describe('existence maintenance lanes through the public facade', () => {
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'coverage.existence-reconcile',
-				fields: expect.objectContaining({ pruned: 2, pulled: 3, skippedDirty: 2, durationMs: 0 }),
+				fields: expect.objectContaining({
+					emptyBuckets: 0,
+					pruned: 2,
+					missing: 3,
+					changed: 0,
+					skippedDirty: 2,
+					durationMs: 0,
+				}),
 			})
 		);
 
-		const payloadFetchCount = fetches.filter((url) =>
-			/\/(products|customers|orders)\?/.test(url)
-		).length;
 		const secondReport = await e.sync('existence-reconcile');
 		expect(secondReport).toMatchObject({ status: 'ran', lane: 'existence-reconcile' });
-		expect(fetches.filter((url) => /\/(products|customers|orders)\?/.test(url))).toHaveLength(
-			payloadFetchCount
+		expect(fetches.slice(reconcileFetchStart).filter((url) => url.includes('include='))).toEqual(
+			[]
 		);
 		expect(
 			diagnostics.mock.calls
@@ -242,110 +202,21 @@ describe('existence maintenance lanes through the public facade', () => {
 		).toEqual(
 			expect.objectContaining({
 				type: 'coverage.existence-reconcile',
-				fields: expect.objectContaining({ pruned: 0, pulled: 0, repulled: 0 }),
+				fields: expect.objectContaining({ pruned: 0, missing: 3, changed: 0 }),
 			})
 		);
-		expect((await db.existenceManifest.findOne('40').exec())?.toJSON()).toMatchObject({
-			wooId: 40,
-			digest: 'p40',
-		});
-		expect((await db.existenceManifestCustomers.findOne('41').exec())?.toJSON()).toMatchObject({
-			wooId: 41,
-			digest: 'c41',
-		});
-		expect(
-			'_rxdb_digest' in
-				((await db.products.findOne('44444444-4444-4444-8444-444444444444').exec())!.toJSON()
-					.payload as object)
-		).toBe(false);
-		expect(
-			'_rxdb_digest' in
-				((await db.customers.findOne('41414141-4141-4141-8141-414141414141').exec())!.toJSON()
-					.payload as object)
-		).toBe(false);
 		await e.dispose();
 	});
 
-	it('preserves server monetary precision verbatim through the order reconciliation read (#946)', async () => {
-		const sixDecimalMoney = {
-			total: '10.123456',
-			total_tax: '1.234567',
-			line_items: [
-				{
-					id: 1,
-					total: '8.888889',
-					total_tax: '0.740741',
-					taxes: [{ id: 1, total: '0.740741', subtotal: '0.740741' }],
-				},
-			],
-			tax_lines: [{ id: 2, tax_total: '1.234567', shipping_tax_total: '0.000001' }],
-		};
-		const reconciliationRequestUrls: string[] = [];
-		const fetcher = vi.fn(async (url: string) => {
-			const parsed = new URL(url);
-			if (parsed.pathname.endsWith('/integrity/bucket')) {
-				return json({
-					ids:
-						parsed.searchParams.get('collection') === 'orders'
-							? [{ id: 42, digest: 'new-42', object_type: 'order' }]
-							: [],
-				});
-			}
-			if (parsed.pathname.endsWith('/orders')) {
-				reconciliationRequestUrls.push(url);
-				return json([
-					{
-						id: 42,
-						_rxdb_digest: 'new-42',
-						number: '42',
-						date_created_gmt: '2026-01-01T00:00:00',
-						date_modified_gmt: '2026-01-01T00:00:00',
-						status: 'processing',
-						customer_id: 0,
-						meta_data: [
-							{ key: '_woocommerce_pos_uuid', value: '42424242-4242-4242-8242-424242424242' },
-						],
-						...sixDecimalMoney,
-					},
-				]);
-			}
-			return json({ ids: [] });
-		});
-		const e = engine(fetcher);
-		await e.ready;
-		const db = e.active()!.database.collections;
-		await seed(db.existenceManifestOrders as never, {
-			id: '42',
-			wooId: 42,
-			digest: 'old-42',
-			objectType: 'order',
-		});
-
-		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
-		expect(reconciliationRequestUrls).toHaveLength(1);
-		expect(reconciliationRequestUrls.every((url) => !new URL(url).searchParams.has('dp'))).toBe(
-			true
-		);
-		const stored = await db.orders.findOne('42424242-4242-4242-8242-424242424242').exec();
-		expect(stored?.toJSON()).toMatchObject({ payload: sixDecimalMoney });
-		await e.dispose();
-	});
-
-	it('removes a resident product omitted by a publish-filtered reconciliation pull', async () => {
+	it('prunes a local product absent from the publish-filtered server bucket', async () => {
 		const productId = '77777777-7777-4777-8777-777777777777';
 		const fetcher = vi.fn(async (url: string) => {
 			const parsed = new URL(url);
 			if (parsed.pathname.endsWith('/integrity/bucket')) {
-				return json({
-					ids: parsed.searchParams.has('collection')
-						? []
-						: [{ id: 77, digest: 'draft-77', object_type: 'product' }],
-				});
-			}
-			if (parsed.pathname.endsWith('/products')) {
-				expect(parsed.searchParams.get('include')).toBe('77');
-				expect(parsed.searchParams.get('status')).toBe('publish');
-				return json([]);
+				if (!parsed.searchParams.has('collection')) {
+					expect(parsed.searchParams.get('status')).toBe('publish');
+				}
+				return json({ ids: [] });
 			}
 			throw new Error(`unexpected fetch ${url}`);
 		});
@@ -377,50 +248,7 @@ describe('existence maintenance lanes through the public facade', () => {
 		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
 		expect(await db.products.findOne(productId).exec()).toBeNull();
 		expect(await db.existenceManifest.findOne('77').exec()).toBeNull();
-		await e.dispose();
-	});
-
-	it('removes a variation manifest row when the reconciliation pull omits it', async () => {
-		const fetcher = vi.fn(async (url: string) => {
-			const parsed = new URL(url);
-			if (parsed.pathname.endsWith('/integrity/bucket')) {
-				return json({
-					ids: parsed.searchParams.has('collection')
-						? []
-						: [{ id: 88, digest: 'remote-88', object_type: 'variation' }],
-				});
-			}
-			if (parsed.pathname.endsWith('/variations')) {
-				expect(parsed.searchParams.get('include')).toBe('88');
-				return json({ documents: [] });
-			}
-			throw new Error(`unexpected fetch ${url}`);
-		});
-		const e = engine(fetcher);
-		await e.ready;
-		const db = e.active()!.database.collections;
-		await seed(db.variations as never, {
-			id: 'v88',
-			wooId: 88,
-			parentId: 8,
-			price: 8,
-			stockStatus: 'instock',
-			attributes: [],
-			stockQuantity: null,
-			payload: { id: 88 },
-			sync: { revision: 'old', partial: false, source: 'woo-rest' },
-			local: { dirty: false, pendingMutationIds: [] },
-		});
-		await seed(db.existenceManifest as never, {
-			id: '88',
-			wooId: 88,
-			digest: 'local-88',
-			objectType: 'variation',
-		});
-
-		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
-		expect(await db.variations.findOne('v88').exec()).toBeNull();
-		expect(await db.existenceManifest.findOne('88').exec()).toBeNull();
+		expect(fetcher.mock.calls.some(([url]) => String(url).includes('include='))).toBe(false);
 		await e.dispose();
 	});
 
@@ -472,32 +300,35 @@ describe('existence maintenance lanes through the public facade', () => {
 			if (new URL(url).pathname.endsWith('/integrity/bucket')) {
 				heldSignal = init?.signal ?? undefined;
 				await bucketHeld;
-				return json({ ids: [{ id: 40, digest: 'new', object_type: 'product' }] });
-			}
-			if (new URL(url).pathname.endsWith('/products')) {
-				return json([
-					{
-						id: 40,
-						status: 'publish',
-						_rxdb_digest: 'new',
-						meta_data: [
-							{ key: '_woocommerce_pos_uuid', value: '44444444-4444-4444-8444-444444444444' },
-						],
-					},
-				]);
+				return json({ ids: [] });
 			}
 			return json({ ids: [] });
 		});
 		const e = engine(fetcher);
 		await e.ready;
 		const oldDb = e.active()!.database.collections;
+		await seed(oldDb.products as never, {
+			id: 'p40',
+			wooProductId: 40,
+			price: 1,
+			stockStatus: 'instock',
+			type: 'simple',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { id: 40, status: 'publish' },
+			sync: { revision: 'old', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
 		await seed(oldDb.existenceManifest as never, {
 			id: '40',
 			wooId: 40,
 			digest: 'old',
 			objectType: 'product',
 		});
-		const oldProductWrites = vi.spyOn(oldDb.products, 'bulkUpsert');
+		const oldProductDeletes = vi.spyOn(oldDb.products, 'bulkRemove');
 
 		const pass = e.sync('existence-reconcile');
 		await vi.waitFor(() =>
@@ -511,7 +342,7 @@ describe('existence maintenance lanes through the public facade', () => {
 
 		await expect(pass).resolves.toMatchObject({ status: 'skipped' });
 		await switching;
-		expect(oldProductWrites).not.toHaveBeenCalled();
+		expect(oldProductDeletes).not.toHaveBeenCalled();
 		await e.dispose();
 	});
 
@@ -560,104 +391,6 @@ describe('existence maintenance lanes through the public facade', () => {
 		await expect(pass).resolves.toMatchObject({ status: 'skipped' });
 		await switching;
 		expect(oldManifestWrites).not.toHaveBeenCalled();
-		await e.dispose();
-	});
-
-	it('chunks order existence pulls at the Woo REST 100-record cap', async () => {
-		const ids = Array.from({ length: 150 }, (_unused, index) => index + 1);
-		const orderPulls: number[][] = [];
-		const fetcher = vi.fn(async (url: string) => {
-			const parsed = new URL(url);
-			if (parsed.pathname.endsWith('/integrity/bucket')) {
-				const lane = parsed.searchParams.get('collection');
-				return json({
-					ids:
-						lane === 'orders'
-							? ids.map((id) => ({ id, digest: `new-${id}`, object_type: 'order' }))
-							: [],
-				});
-			}
-			if (parsed.pathname.endsWith('/orders')) {
-				const requested = (parsed.searchParams.get('include') ?? '').split(',').map(Number);
-				orderPulls.push(requested);
-				return json(
-					requested.slice(0, 100).map((id) => ({
-						id,
-						_rxdb_digest: `new-${id}`,
-						date_modified_gmt: '2026-01-01T00:00:00',
-						meta_data: [
-							{
-								key: '_woocommerce_pos_uuid',
-								value: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,
-							},
-						],
-					}))
-				);
-			}
-			return json({ ids: [] });
-		});
-		const e = engine(fetcher);
-		await e.ready;
-		const db = e.active()!.database.collections;
-		for (const id of ids) {
-			await seed(db.existenceManifestOrders as never, {
-				id: String(id),
-				wooId: id,
-				digest: `old-${id}`,
-				objectType: 'order',
-			});
-		}
-
-		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
-		expect(orderPulls.map((batch) => batch.length)).toEqual([100, 50]);
-		expect(orderPulls.flat()).toEqual(ids);
-		expect(await db.orders.count().exec()).toBe(150);
-		await e.dispose();
-	});
-
-	it('continues reconciling when an order disappears between the bucket scan and pull', async () => {
-		const fetcher = vi.fn(async (url: string) => {
-			const parsed = new URL(url);
-			if (parsed.pathname.endsWith('/integrity/bucket')) {
-				return json({
-					ids:
-						parsed.searchParams.get('collection') === 'orders'
-							? [
-									{ id: 1, digest: 'new-1', object_type: 'order' },
-									{ id: 2, digest: 'new-2', object_type: 'order' },
-								]
-							: [],
-				});
-			}
-			if (parsed.pathname.endsWith('/orders')) {
-				return json([
-					{
-						id: 1,
-						_rxdb_digest: 'new-1',
-						date_modified_gmt: '2026-01-01T00:00:00',
-						meta_data: [
-							{ key: '_woocommerce_pos_uuid', value: '00000000-0000-4000-8000-000000000001' },
-						],
-					},
-				]);
-			}
-			return json({ ids: [] });
-		});
-		const e = engine(fetcher);
-		await e.ready;
-		const db = e.active()!.database.collections;
-		for (const id of [1, 2]) {
-			await seed(db.existenceManifestOrders as never, {
-				id: String(id),
-				wooId: id,
-				digest: `old-${id}`,
-				objectType: 'order',
-			});
-		}
-
-		await expect(e.sync('existence-reconcile')).resolves.toMatchObject({ status: 'ran' });
-		expect(await db.orders.findOne('00000000-0000-4000-8000-000000000001').exec()).not.toBeNull();
-		expect(await db.orders.count().exec()).toBe(1);
 		await e.dispose();
 	});
 
@@ -841,7 +574,15 @@ describe('existence maintenance lanes through the public facade', () => {
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'coverage.existence-reconcile',
-				fields: { buckets: 0, pruned: 0, pulled: 0, repulled: 0, skippedDirty: 0, durationMs: 0 },
+				fields: {
+					buckets: 0,
+					emptyBuckets: 0,
+					pruned: 0,
+					missing: 0,
+					changed: 0,
+					skippedDirty: 0,
+					durationMs: 0,
+				},
 			})
 		);
 		await e.dispose();
