@@ -639,7 +639,7 @@ describe('query-state translator', () => {
 		}
 	);
 
-	it('keeps variation attribute matching residual over a coarse engine prefilter', () => {
+	it('keeps variation attribute matching entirely residual for wildcard variations', () => {
 		const compiled = compileQuery(
 			'variations',
 			{
@@ -651,9 +651,7 @@ describe('query-state translator', () => {
 			{ id: 'variations' }
 		);
 
-		expect(compiled.read.prefilter).toEqual({
-			attributes: { $elemMatch: { id: 1, name: 'Color', option: 'Red' } },
-		});
+		expect(compiled.read.prefilter).toEqual({});
 		expect(compiled.read.complete).toBe(false);
 	});
 

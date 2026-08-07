@@ -173,9 +173,7 @@ function compileReadFilter(
 		};
 	}
 	if (operator === 'all-match') {
-		const [first] = value as Record<string, unknown>[];
 		return {
-			...(first ? { prefilter: { [mapping.enginePath]: { $elemMatch: first } } } : {}),
 			complete: false,
 			// Reproduce translate-selector.ts:248's variations enginePath bypass, not its payload path.
 			matches: (document) => variationAllMatch(readEnginePath(document, mapping.enginePath), value),

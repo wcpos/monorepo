@@ -675,7 +675,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 				}).pipe(
 					map((result) => ({
 						...result,
-						searchActive: Boolean(descriptor.search?.trim()),
+						searchActive: Boolean(compiled.read.search),
 						hits: result.hits.map((hit) => {
 							const wooId = Number((hit.document as unknown as Record<string, unknown>).id);
 							return {
