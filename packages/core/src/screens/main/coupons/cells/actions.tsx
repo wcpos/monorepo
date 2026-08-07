@@ -30,6 +30,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useProAccess } from '../../contexts/pro-access';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -69,9 +70,8 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 	}, [runtime]);
 
 	const handleDelete = React.useCallback(async () => {
-		await runtime.engine.write({
+		await requestServerDelete(runtime.engine, {
 			collection: 'coupons',
-			operation: 'delete',
 			recordId: coupon.uuid!,
 		});
 	}, [coupon.uuid, runtime]);

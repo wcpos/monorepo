@@ -29,6 +29,7 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useProAccess } from '../../contexts/pro-access';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
@@ -142,9 +143,8 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		// cannot record leaves the order's fate unknowable locally.
 		if (blockIfDegraded('void', { orderId: order.uuid })) return;
 
-		const receipt = await runtime.engine.write({
+		const receipt = await requestServerDelete(runtime.engine, {
 			collection: 'orders',
-			operation: 'delete',
 			recordId: order.uuid!,
 		});
 		if (!receipt.annihilated) {

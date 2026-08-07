@@ -30,6 +30,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useProAccess } from '../../contexts/pro-access';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
@@ -79,9 +80,8 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		await runtime.engine.write({
+		await requestServerDelete(runtime.engine, {
 			collection: 'customers',
-			operation: 'delete',
 			recordId: customer.uuid!,
 		});
 	}, [customer.uuid, runtime]);
