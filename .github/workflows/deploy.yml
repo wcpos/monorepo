@@ -26,9 +26,16 @@ on:
     # gate always gets an answer — the same pattern test.yml uses for Lint /
     # Unit Tests.
 
+# PR-event runs all hit the ONE shared dev store; concurrent E2E runs contend
+# on the same pinned SKU / checkout flows and fail specs that pass solo
+# (verified 2026-08-07: 5 simultaneous runs → checkout/variations failures;
+# solo reruns green). PR runs therefore share a single serial queue and are
+# never cancelled (cancelling in a shared group would kill OTHER PRs' runs).
+# Non-PR events keep the original per-ref groups and supersede semantics, so
+# a production deploy never waits on (or cancels) PR E2E.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ github.event_name == 'pull_request' && 'e2e-shared-store' || format('deploy-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'pull_request' && github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
