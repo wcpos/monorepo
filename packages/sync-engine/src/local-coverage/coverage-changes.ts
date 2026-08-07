@@ -26,6 +26,7 @@ import {
 	type CoverageVerdict,
 	coverageVerdictFrom,
 	nextCoverageExpiryMs,
+	queryKeyBelongsToCollection,
 } from './coverage-verdicts';
 // Through the facade, not `./persistence` directly: the lane's primary-key format is a
 // LocalCoverage fact, and the facade is its only sanctioned door (local-coverage.test.ts).
@@ -39,9 +40,18 @@ type Unsubscribe = () => void;
 
 /** The slice of RxDB this module uses, named structurally so the tables stay package-private. */
 type LiveDocument<T> = { toJSON(): T };
+/**
+ * `error` is not optional here on purpose. A storage query that fails TERMINATES its stream, so
+ * a handler-less subscription would leave this hub silently frozen on its last verdict while
+ * nothing is watching the row any more — the one failure mode a coverage verdict must not have.
+ */
+type LiveObserver<T> = {
+	next(document: LiveDocument<T> | null): void;
+	error(error: unknown): void;
+};
 type LiveCollection<T> = {
 	findOne(documentId: string): {
-		$: { subscribe(next: (document: LiveDocument<T> | null) => void): { unsubscribe(): void } };
+		$: { subscribe(observer: LiveObserver<T>): { unsubscribe(): void } };
 	};
 };
 
@@ -99,6 +109,14 @@ export function createCoverageChangeHub(ports: CoverageChangeHubPorts): Coverage
 		entry.expiryTimer = null;
 	};
 
+	const reportFailure = (what: string, error: unknown): void => {
+		ports.diagnostics({
+			type: 'engine.listener-error',
+			level: 'error',
+			message: `coverageChanges() ${what} failed: ${error instanceof Error ? error.message : String(error)}`,
+		});
+	};
+
 	const publish = (entry: Entry): void => {
 		if (disposed) return;
 		const now = ports.now();
@@ -143,21 +161,41 @@ export function createCoverageChangeHub(ports: CoverageChangeHubPorts): Coverage
 		const totals = collectionOf<QueryTotalCacheDocument>(database, 'queryTotalCacheEntries');
 		if (lanes !== null) {
 			entry.storage.push(
-				lanes.findOne(coverageLaneKey(entry.collection, queryKey)).$.subscribe((document) => {
-					if (entry.generation !== generation) return;
-					entry.lane = document === null ? null : document.toJSON();
-					publish(entry);
+				lanes.findOne(coverageLaneKey(entry.collection, queryKey)).$.subscribe({
+					next: (document) => {
+						if (entry.generation !== generation) return;
+						entry.lane = document === null ? null : document.toJSON();
+						publish(entry);
+					},
+					// The stream is dead after this, so the lane is no longer being watched — drop
+					// what it told us and republish rather than freeze on a claim nothing maintains.
+					error: (error) => {
+						if (entry.generation !== generation) return;
+						reportFailure('coverage lane subscription', error);
+						entry.lane = null;
+						publish(entry);
+					},
 				})
 			);
 		}
-		if (totals !== null) {
-			// The query-total table is keyed by queryKey alone (namespaced by convention, no
-			// collection column) — the lane's primary key is what carries the collection guard.
+		// The query-total table is keyed by queryKey ALONE — no collection column — so its
+		// namespace is the only thing separating one collection's cached server total from
+		// another's. A key outside this target's namespace is not this target's total, and the
+		// cheapest way to honour that is never to open the subscription.
+		if (totals !== null && queryKeyBelongsToCollection(entry.collection, queryKey)) {
 			entry.storage.push(
-				totals.findOne(queryKey).$.subscribe((document) => {
-					if (entry.generation !== generation) return;
-					entry.queryTotal = document === null ? null : document.toJSON();
-					publish(entry);
+				totals.findOne(queryKey).$.subscribe({
+					next: (document) => {
+						if (entry.generation !== generation) return;
+						entry.queryTotal = document === null ? null : document.toJSON();
+						publish(entry);
+					},
+					error: (error) => {
+						if (entry.generation !== generation) return;
+						reportFailure('query-total subscription', error);
+						entry.queryTotal = null;
+						publish(entry);
+					},
 				})
 			);
 		}

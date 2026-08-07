@@ -17,8 +17,14 @@ import {
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
+import { queryKeyBelongsToCollection } from './local-coverage/coverage-verdicts';
 import { coverageLaneKey } from './local-coverage/local-coverage';
-import { laneKeyFor } from './scheduler';
+import {
+	customerBrowseWindowQueryKeyFromDimensions,
+	laneKeyFor,
+	orderBrowserQueryKey,
+	productBrowseWindowQueryKeyFromDimensions,
+} from './scheduler';
 import { memoryEngineStorage } from './testing';
 
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
@@ -270,6 +276,50 @@ describe('coverageChanges through the public handle', () => {
 
 		orders.stop();
 		await engine.dispose();
+	});
+
+	// The query-total table has NO collection column — it is keyed by queryKey alone — so a
+	// target of another collection reading it by key would adopt a server count for a query it
+	// is not showing. The key's namespace is the guard.
+	it('does not adopt a query-total cached under another collection key namespace', async () => {
+		const engine = engineWith({ now: () => 1_000_000 });
+		await engine.ready;
+		await writeQueryTotal(engine, ORDERS_KEY, 4_200, 1_060_000);
+		const products = record(engine, { collection: 'products', queryKey: ORDERS_KEY });
+		const orders = record(engine, { collection: 'orders', queryKey: ORDERS_KEY });
+
+		// Same row, same key, two collections: only the one that owns the namespace may read it.
+		await vi.waitFor(() => expect(orders.latest()?.source).toBe('query-total'));
+		expect(orders.latest()?.total).toBe(4_200);
+		expect(products.latest()).toMatchObject({ total: null, source: 'unknown' });
+
+		products.stop();
+		orders.stop();
+		await engine.dispose();
+	});
+
+	/**
+	 * The tripwire under that guard. `queryKeyBelongsToCollection` is a prefix test, and it is
+	 * only sound while every key the engine mints is `${collection}:…`. A future key that breaks
+	 * the convention would otherwise silently drop a footer back to its resident count, so the
+	 * REAL builders are asserted here rather than the convention being left as a comment.
+	 */
+	it('mints every query key inside its own collection namespace', () => {
+		const keys: [string, string][] = [
+			['orders', orderBrowserQueryKey({ status: 'processing', limit: 25 })],
+			['products', productBrowseWindowQueryKeyFromDimensions({ limit: 100 })],
+			['customers', customerBrowseWindowQueryKeyFromDimensions({ limit: 100 })],
+		];
+		for (const collection of ['taxRates', 'categories', 'brands', 'tags', 'coupons'] as const) {
+			const queryKey = laneKeyFor(collection);
+			if (queryKey === null) throw new Error(`no reference lane for ${collection}`);
+			keys.push([collection, queryKey]);
+		}
+		for (const [collection, queryKey] of keys) {
+			expect(queryKeyBelongsToCollection(collection, queryKey)).toBe(true);
+			// And nothing else claims it.
+			expect(queryKeyBelongsToCollection('orders', 'products:browse-window:limit=100')).toBe(false);
+		}
 	});
 
 	// A reset bulk-removes the collection's lanes and re-emits the SAME database object with

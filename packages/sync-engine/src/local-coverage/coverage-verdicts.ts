@@ -101,6 +101,25 @@ export function coverageVerdictFrom(
 }
 
 /**
+ * Does `queryKey` belong to `collection`'s key namespace?
+ *
+ * The COVERAGE LANE table needs no such test — its primary key is `${collection}::${queryKey}`,
+ * so the collection is part of the address. The QUERY-TOTAL table has no collection column at
+ * all: it is keyed by `queryKey` alone and separated only by the convention that every key the
+ * engine mints is `${collection}:…` (`laneKeyFor`, plus the orders/product/customer browse key
+ * builders). Reading it by key alone would therefore let a target of one collection adopt
+ * another collection's cached server total — a wrong number presented as authoritative, which
+ * is worse than declining to answer.
+ *
+ * So the namespace IS the guard, and it is checked rather than assumed. The convention is
+ * pinned by a test over the real key builders, so a future key that breaks it fails loudly
+ * instead of silently dropping a footer back to the resident count.
+ */
+export function queryKeyBelongsToCollection(collection: string, queryKey: string): boolean {
+	return queryKey.startsWith(`${collection}:`);
+}
+
+/**
  * The earliest future deadline at which this verdict could change on its own, or null.
  *
  * Nothing writes a row at `freshUntilMs`, so a verdict that says `fresh: true` would otherwise
