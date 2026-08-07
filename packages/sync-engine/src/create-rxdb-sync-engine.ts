@@ -990,10 +990,10 @@ export function createRxdbSyncEngine(
 		const scopeId = manager.activeScope;
 		return scopeId === null ? null : (databaseByScopeId.get(scopeId) ?? null);
 	};
-	const censusPublisher = createCensusPublisher({
+	const censusPublisher = createCensusPublisher<RxDatabase>({
 		cache: {
-			readForQueryKeys: async (keys) => {
-				const database = activeDatabase();
+			readForQueryKeys: async (keys, capturedDatabase) => {
+				const database = capturedDatabase ?? activeDatabase();
 				return database === null
 					? null
 					: new RxQueryTotalCacheRepository(database as never).readForQueryKeys(keys);
@@ -1261,7 +1261,7 @@ export function createRxdbSyncEngine(
 			if (!scopeId || !database) return false;
 			const state = decodeCustomerTrickleState(await readBlob(scopeId, CUSTOMER_TRICKLE_STATE_KEY));
 			if (!state.walkComplete) return false;
-			const entry = await censusPublisher.freshEntry('customers');
+			const entry = await censusPublisher.freshEntry('customers', database);
 			if (entry === null) return false;
 			// The born-local customer:default sentinel is not part of the server census — counting
 			// it would let a walk that is one real customer short read as complete and suppress

@@ -105,4 +105,29 @@ describe('createCensusPublisher', () => {
 		});
 		expect((await publisher.freshEntry('customers'))?.totalMatchingRecords).toBe(7);
 	});
+
+	it('reads a fresh entry from the captured database after the active database changes', async () => {
+		const firstDatabase = { name: 'first' };
+		const secondDatabase = { name: 'second' };
+		const entries = new Map([
+			[firstDatabase, entry(7)],
+			[secondDatabase, entry(9)],
+		]);
+		let activeDatabase = firstDatabase;
+		const publisher = createCensusPublisher<typeof firstDatabase>({
+			cache: {
+				readForQueryKeys: async (_keys: string[], database = activeDatabase) => [
+					entries.get(database)!,
+				],
+			},
+			now: () => 100,
+			diagnostics: vi.fn(),
+		});
+		const capturedDatabase = activeDatabase;
+		activeDatabase = secondDatabase;
+
+		const capturedEntry = await publisher.freshEntry('customers', capturedDatabase);
+		expect(capturedEntry?.totalMatchingRecords).toBe(7);
+		expect((await publisher.freshEntry('customers'))?.totalMatchingRecords).toBe(9);
+	});
 });

@@ -12,24 +12,27 @@ import {
 
 import type { SyncCollectionName } from './collections/engine-collections';
 
-export type CensusCacheReader = {
-	readForQueryKeys(keys: string[]): Promise<QueryTotalCacheEntry[] | null>;
+export type CensusCacheReader<Database = never> = {
+	readForQueryKeys(keys: string[], database?: Database): Promise<QueryTotalCacheEntry[] | null>;
 };
 
-export type CensusPublisher = {
+export type CensusPublisher<Database = never> = {
 	subscribe(cb: (totals: CensusTotals) => void): () => void;
 	publish(): void;
 	totals(): Promise<CensusTotals>;
-	freshEntry(collection: SyncCollectionName): Promise<QueryTotalCacheEntry | null>;
+	freshEntry(
+		collection: SyncCollectionName,
+		database?: Database
+	): Promise<QueryTotalCacheEntry | null>;
 	dispose(): void;
 };
 
-export function createCensusPublisher(options: {
-	cache: CensusCacheReader;
+export function createCensusPublisher<Database = never>(options: {
+	cache: CensusCacheReader<Database>;
 	now: () => number;
 	diagnostics: SyncObserver;
 	timers?: EngineTimers;
-}): CensusPublisher {
+}): CensusPublisher<Database> {
 	const timers = options.timers ?? systemTimers;
 	const subscribers = new Set<(totals: CensusTotals) => void>();
 	let notificationVersion = 0;
@@ -90,8 +93,9 @@ export function createCensusPublisher(options: {
 		},
 		publish,
 		totals,
-		freshEntry: async (collection) => {
-			const [entry] = (await options.cache.readForQueryKeys([censusQueryKey(collection)])) ?? [];
+		freshEntry: async (collection, database) => {
+			const [entry] =
+				(await options.cache.readForQueryKeys([censusQueryKey(collection)], database)) ?? [];
 			return entry !== undefined && entry.freshUntilMs > options.now() ? entry : null;
 		},
 		dispose: () => {
