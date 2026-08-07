@@ -1,6 +1,7 @@
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
+import { assertBulkSuccess } from '@wcpos/sync-core';
 import type { StoreScopeIdentity, SyncEvent } from '@wcpos/sync-core';
 
 import { createRxdbSyncEngine } from './create-rxdb-sync-engine';
@@ -164,6 +165,24 @@ async function disposeTrackedEngines(): Promise<void> {
 function createEngineHarnessImpl(
 	options: EngineHarnessOptions = {}
 ): EngineHarness | Promise<EngineHarness> {
+	const ports = Object.fromEntries(
+		Object.entries(options.ports ?? {}).filter(([, value]) => value !== undefined)
+	) as Partial<RxdbSyncEnginePorts>;
+	const ownedPorts = [
+		'now',
+		'diagnostics',
+		'connectivity',
+		'fetcher',
+		...(options.storage !== undefined || options.validateSchemas !== undefined
+			? (['storage'] as const)
+			: []),
+	] as const;
+	const collisions = ownedPorts.filter((name) => ports[name] !== undefined);
+	if (collisions.length > 0) {
+		throw new Error(
+			`options.ports cannot override harness-owned ports (now, diagnostics, connectivity, fetcher; storage when storage or validateSchemas is set): ${collisions.join(', ')}`
+		);
+	}
 	nextHarnessIdentity += 1;
 	let nowMs = options.startAtMs ?? 1_000;
 	let connectivityState = options.connectivity ?? 'online';
@@ -238,11 +257,14 @@ function createEngineHarnessImpl(
 			...(options.intervals === undefined ? {} : { intervals: options.intervals }),
 			...(options.queryTotal === undefined ? {} : { queryTotal: options.queryTotal }),
 			...(timers === null ? {} : { timers }),
-			...options.ports,
+			...ports,
 		},
 		identity
 	);
 	trackedEngines.add(engine);
+	engine.statusChanges((status) => {
+		if (status.disposed) trackedEngines.delete(engine);
+	});
 	engine.events((event) => events.push(event));
 	const dispose = async (): Promise<void> => {
 		trackedEngines.delete(engine);
@@ -293,7 +315,7 @@ function createEngineHarnessImpl(
 		timers,
 		collection,
 		seed: async (name, documents) => {
-			await collection(name).bulkInsert(documents);
+			assertBulkSuccess(await collection(name).bulkInsert(documents), `harness seed ${name}`);
 		},
 		dispose,
 		[Symbol.asyncDispose]: dispose,
