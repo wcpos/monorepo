@@ -189,7 +189,9 @@ export const isolatedVariableProductTest = productProbeTest.extend<
 export async function tryAddRunPrivateSimpleProduct(page: Page, index = 0): Promise<boolean> {
 	const probes = simpleProbesByPage.get(page);
 	if (probes === undefined) {
-		throw new Error('Run-private product helper requires isolatedProductTest');
+		throw new Error(
+			'tryAddRunPrivateSimpleProduct requires isolatedProductTest fixture registration'
+		);
 	}
 	const probe = probes?.[index] ?? null;
 	if (probe) {
@@ -203,7 +205,7 @@ export async function tryAddRunPrivateSimpleProduct(page: Page, index = 0): Prom
 			probe.token
 		);
 		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
-		const tile = posScreen.getByTestId('product-tile').filter({ hasText: probe.token });
+		const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
 		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
 		await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
 		if (await tile.isVisible()) await tile.click();
@@ -238,7 +240,9 @@ export async function addCheckoutProbeProduct(page: Page): Promise<void> {
 export async function findVariableProduct(page: Page, search: Locator): Promise<void> {
 	const probe = variableProbeByPage.get(page);
 	if (probe === undefined) {
-		throw new Error('Run-private product helper requires isolatedVariableProductTest');
+		throw new Error(
+			'findVariableProduct requires isolatedVariableProductTest fixture registration'
+		);
 	}
 	if (probe) {
 		await searchAndWaitForServer(page, search, 'products', probe.token);

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { findVariableProduct } from './checkout-probe';
+import { findVariableProduct, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import {
 	createRunPrivateProduct,
 	findCreatedProductRecord,
@@ -59,9 +59,14 @@ test.describe('search-probe pure logic', () => {
 		);
 	});
 
-	test('names the variable fixture when its page registration is absent', async () => {
-		await expect(findVariableProduct({} as never, {} as never)).rejects.toThrow(
-			'isolatedVariableProductTest'
+	test('product helpers name the fixture required for their page registration', async () => {
+		const unregisteredPage = {} as never;
+
+		await expect(tryAddRunPrivateSimpleProduct(unregisteredPage)).rejects.toThrow(
+			'tryAddRunPrivateSimpleProduct requires isolatedProductTest fixture registration'
+		);
+		await expect(findVariableProduct(unregisteredPage, {} as never)).rejects.toThrow(
+			'findVariableProduct requires isolatedVariableProductTest fixture registration'
 		);
 	});
 
