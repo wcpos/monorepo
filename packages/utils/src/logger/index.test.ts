@@ -63,6 +63,32 @@ async function flushWrites() {
 }
 
 describe('logger/index', () => {
+	describe('module initialization', () => {
+		it('uses production behavior when the Metro __DEV__ global is unavailable', async () => {
+			const devDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+			const consoleWarn = jest.spyOn(console, 'warn').mockImplementation();
+			let isolatedLevel: string | undefined;
+
+			Reflect.deleteProperty(globalThis, '__DEV__');
+
+			try {
+				await expect(
+					jest.isolateModulesAsync(async () => {
+						const { log: isolatedLog } = await import('./index');
+						isolatedLevel = isolatedLog.getLevel();
+						isolatedLog.warn('warning without Metro');
+					})
+				).resolves.toBeUndefined();
+				expect(isolatedLevel).toBe('info');
+			} finally {
+				if (devDescriptor) {
+					Object.defineProperty(globalThis, '__DEV__', devDescriptor);
+				}
+				consoleWarn.mockRestore();
+			}
+		});
+	});
+
 	describe('getLogger', () => {
 		it('should create a CategoryLogger with the given category', () => {
 			const logger = getLogger(['wcpos', 'test']);

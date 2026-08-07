@@ -53,6 +53,7 @@ export const SYNC_EVENT_TYPES = [
 	'engine.reconnect.retick',
 	'engine.reset-needs-confirmation',
 	'engine.scope-switched',
+	'engine.write-leader.degraded',
 	'maintenance.lane.error',
 	'maintenance.lane.tick',
 	'product.browse-window.approximate',
@@ -427,6 +428,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_scope_switched',
 		label: 'Switched to another store',
+		introducedIn: '1.10.0',
+	},
+	'engine.write-leader.degraded': {
+		type: 'engine.write-leader.degraded',
+		domain: 'SYNC',
+		key: 'health.logs.event.engine_write_leader_degraded',
+		label: 'This browser can only sync one tab at a time',
 		introducedIn: '1.10.0',
 	},
 	'maintenance.lane.error': {
