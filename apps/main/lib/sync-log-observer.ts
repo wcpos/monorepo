@@ -15,7 +15,7 @@ export type PersistLogRow = (
 	message: string,
 	context: Record<string, unknown>,
 	terminal?: LogTerminalFields,
-	toast?: boolean
+	toast?: { title: string; description?: string }
 ) => void;
 
 /**
@@ -37,8 +37,13 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
 	visible?: boolean;
 	/** Cashier-facing severity when it intentionally differs from the engine severity. */
 	level?: 'info' | 'warn' | 'error';
-	/** Request a cashier-facing toast for this row. */
-	toast?: boolean;
+	/**
+	 * Request a cashier-facing toast for this row. Returns the toast content
+	 * separately from `message`: the persisted row message is forensic (record
+	 * ids, HTTP codes, repeat-collapse discrimination) while a snackbar has to
+	 * read as a sentence the cashier acts on.
+	 */
+	toast?(event: SyncEvent, fields: SyncEventFieldsBase): { title: string; description?: string };
 	/** Return false to route this occurrence to the check ring instead of a row
 	 *  (idle work). Omit to always persist. */
 	didWork?(fields: SyncEventFields<T>): boolean;
@@ -321,7 +326,15 @@ const CONFORMANCE_TABLE = {
 		operationType: 'sync.record',
 		outcome: 'recovered',
 		level: 'error',
-		toast: true,
+		toast(event, fields) {
+			const reason = sanitizeReason(fields.reason);
+			return {
+				title: 'Change rejected by your store — reverted',
+				description: reason
+					? `${reason} See Store health for details.`
+					: 'See Store health for details.',
+			};
+		},
 		message: recordMessage('change reverted to server value; see Store health'),
 	},
 	'queue.write.conflict-transition': {
@@ -627,7 +640,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 					? { durationMs, startedAt: (event.at ?? nowMs()) - durationMs }
 					: {}),
 			},
-			conformance.toast
+			conformance.toast?.(event, { ...fields, ...(reason ? { reason } : {}) })
 		);
 		// Presentation stays warn, but a lane crash still promotes the preceding
 		// recorder evidence just as its original error-level row did.

@@ -29,7 +29,7 @@ describe('createSyncLogObserver', () => {
 		message: string;
 		context: Record<string, unknown>;
 		terminal?: LogTerminalFields;
-		toast?: boolean;
+		toast?: { title: string; description?: string };
 	}[];
 	let observer: ReturnType<typeof createSyncLogObserver>;
 
@@ -38,7 +38,7 @@ describe('createSyncLogObserver', () => {
 		isVerboseDiagnosticsMock.mockReturnValue(false);
 		rows = [];
 		observer = createSyncLogObserver({
-			persist: (level, message, context, terminal, toast?: boolean) =>
+			persist: (level, message, context, terminal, toast) =>
 				rows.push({ level, message, context, terminal, toast }),
 			nowMs: () => 2_000,
 		});
@@ -207,7 +207,10 @@ describe('createSyncLogObserver', () => {
 				reason: 'woocommerce_rest_cannot_edit [redacted]',
 			},
 			terminal: { operationType: 'sync.record', outcome: 'recovered' },
-			toast: true,
+			toast: {
+				title: 'Change rejected by your store — reverted',
+				description: 'woocommerce_rest_cannot_edit [redacted] See Store health for details.',
+			},
 		});
 	});
 

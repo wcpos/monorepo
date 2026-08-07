@@ -339,7 +339,17 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			engineLogger[level](message, {
 				context,
 				terminal,
-				...(toast ? { showToast: true } : {}),
+				...(toast
+					? {
+							showToast: true,
+							toast: {
+								// The persisted message is forensic (record id, HTTP code); the
+								// snackbar gets the cashier-readable sentence instead.
+								title: toast.title,
+								...(toast.description !== undefined ? { text2: toast.description } : {}),
+							},
+						}
+					: {}),
 			});
 		},
 	});
