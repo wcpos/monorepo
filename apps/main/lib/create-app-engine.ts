@@ -28,6 +28,7 @@ import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
 import { getEngineConnectivity } from './connectivity';
 import { createEngineFetcher, fetchWooQueryTotal } from './engine-fetcher';
+import { platformEngineFetch } from './engine-platform-fetch';
 import { appMetricsObserver } from './metrics';
 import { createSyncLogObserver } from './sync-log-observer';
 import { deriveSyncSite } from './sync-site';
@@ -325,6 +326,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		auth: fetcherOptions,
 		clockSkew,
 		emitTransport,
+		...(platformEngineFetch ? { fetch: platformEngineFetch } : {}),
 	});
 
 	// Per-engine so late events from a superseded engine can be dropped: a scope

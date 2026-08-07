@@ -1,8 +1,8 @@
 /**
  * Electron implementation of useOnlineStatus
  *
- * Electron runs in Chromium, so we can use the same approach as web.
- * Re-exports from the web implementation.
+ * Re-exports the web implementation, whose reachability import resolves to
+ * check-website-reachability.electron.ts and rides the main-process axios bridge.
  */
 export {
 	OnlineStatusContext,
