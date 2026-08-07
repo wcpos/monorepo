@@ -101,6 +101,23 @@ describe('Novu Electron client', () => {
 		});
 	});
 
+	it('retries the same subscriber after initialization fails', async () => {
+		const { ipcRenderer } = createIpcRenderer();
+		setIpcRenderer(ipcRenderer);
+		ipcRenderer.invoke
+			.mockResolvedValueOnce({ success: false, message: 'main process failed' })
+			.mockResolvedValueOnce({ success: true, result: true });
+		const { getNovuClient } = await loadClient();
+
+		const failedHandle = getNovuClient('subscriber-one');
+		await ipcRenderer.invoke.mock.results[0].value;
+		await Promise.resolve();
+		const retryHandle = getNovuClient('subscriber-one');
+
+		expect(retryHandle).not.toBe(failedHandle);
+		expect(ipcRenderer.invoke).toHaveBeenCalledTimes(2);
+	});
+
 	it('dispatches each event kind, dedupes notifications, and unsubscribes', async () => {
 		const { ipcRenderer, unsubscribe, emit } = createIpcRenderer();
 		setIpcRenderer(ipcRenderer);
@@ -132,6 +149,36 @@ describe('Novu Electron client', () => {
 
 		stop();
 		expect(unsubscribe).toHaveBeenCalledTimes(1);
+	});
+
+	it('subscribes to events only after initialization succeeds', async () => {
+		const { ipcRenderer, emit } = createIpcRenderer();
+		setIpcRenderer(ipcRenderer);
+		let resolveInit: (response: { success: true; result: true }) => void = () => undefined;
+		ipcRenderer.invoke.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveInit = resolve;
+				})
+		);
+		const { getNovuClient, subscribeToNovuEvents } = await loadClient();
+		const onNotificationReceived = jest.fn();
+		const notification = { id: 'notification-after-init' } as NovuNotification;
+
+		getNovuClient('subscriber-one');
+		subscribeToNovuEvents({ onNotificationReceived });
+		emit({ kind: 'notification_received', notification });
+
+		expect(ipcRenderer.on).not.toHaveBeenCalled();
+		expect(onNotificationReceived).not.toHaveBeenCalled();
+
+		resolveInit({ success: true, result: true });
+		await Promise.resolve();
+		await Promise.resolve();
+		emit({ kind: 'notification_received', notification });
+
+		expect(ipcRenderer.on).toHaveBeenCalledWith('novu:event', expect.any(Function));
+		expect(onNotificationReceived).toHaveBeenCalledWith(notification);
 	});
 
 	it('maps wait, fetch, and unread count requests and unwraps their results', async () => {

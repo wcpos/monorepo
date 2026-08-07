@@ -29,7 +29,9 @@ const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
 const processedNotificationIds = new Set<string>();
 const MAX_PROCESSED_IDS = 100;
 let currentSubscriberId: string | null = null;
+let initializingSubscriberId: string | null = null;
 let novuClient: Novu | null = null;
+let initializationPromise: Promise<boolean> | null = null;
 let warnedMissingBridge = false;
 
 function getIpcRenderer(): NovuIpcRenderer | null {
@@ -64,13 +66,18 @@ async function invokeNovu<T>(request: Record<string, unknown>, fallback: T): Pro
 }
 
 export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMetadata): Novu {
-	if (novuClient && currentSubscriberId === subscriberId) return novuClient;
+	if (
+		novuClient &&
+		(currentSubscriberId === subscriberId || initializingSubscriberId === subscriberId)
+	)
+		return novuClient;
 	if (!getIpcRenderer()) return {} as Novu;
 
 	// Consumers only use this nominal handle as an initialization signal; Electron owns the real client.
 	novuClient = {} as Novu;
-	currentSubscriberId = subscriberId;
-	void invokeNovu(
+	currentSubscriberId = null;
+	initializingSubscriberId = subscriberId;
+	const pendingInitialization = invokeNovu(
 		{
 			type: 'init',
 			subscriberId,
@@ -79,8 +86,19 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
 			apiUrl: NOVU_CONFIG.apiUrl,
 			socketUrl: NOVU_CONFIG.socketUrl,
 		},
-		undefined
+		false
 	);
+	initializationPromise = pendingInitialization;
+	void pendingInitialization.then((initialized) => {
+		if (initializationPromise !== pendingInitialization) return;
+		initializingSubscriberId = null;
+		if (initialized) {
+			currentSubscriberId = subscriberId;
+		} else {
+			novuClient = null;
+			initializationPromise = null;
+		}
+	});
 	return novuClient;
 }
 
@@ -107,20 +125,37 @@ function isNewNotification(notificationId: string | undefined): boolean {
 export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 	const ipc = getIpcRenderer();
 	if (!ipc) return () => {};
-	return ipc.on('novu:event', (event) => {
-		if (event.kind === 'notification_received') {
-			if (isNewNotification(event.notification.id))
-				handlers.onNotificationReceived?.(event.notification);
-		} else if (event.kind === 'unread_count_changed') {
-			handlers.onUnreadCountChanged?.(event.count);
-		} else if (event.kind === 'unseen_count_changed') {
-			handlers.onUnseenCountChanged?.(event.count);
+	const subscribe = () =>
+		ipc.on('novu:event', (event) => {
+			if (event.kind === 'notification_received') {
+				if (isNewNotification(event.notification.id))
+					handlers.onNotificationReceived?.(event.notification);
+			} else if (event.kind === 'unread_count_changed') {
+				handlers.onUnreadCountChanged?.(event.count);
+			} else if (event.kind === 'unseen_count_changed') {
+				handlers.onUnseenCountChanged?.(event.count);
+			}
+		});
+	const pendingInitialization = initializationPromise;
+	if (!pendingInitialization) return subscribe();
+
+	let active = true;
+	let unsubscribe: (() => void) | null = null;
+	void pendingInitialization.then((initialized) => {
+		if (active && initialized && initializationPromise === pendingInitialization) {
+			unsubscribe = subscribe();
 		}
 	});
+	return () => {
+		active = false;
+		unsubscribe?.();
+	};
 }
 
 export function disconnectNovuClient(): void {
 	void invokeNovu({ type: 'disconnect' }, undefined);
 	novuClient = null;
 	currentSubscriberId = null;
+	initializingSubscriberId = null;
+	initializationPromise = null;
 }
