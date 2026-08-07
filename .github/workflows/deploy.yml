@@ -1,5 +1,14 @@
 name: Deploy
 
+# PR runs all hit the ONE shared dev store; concurrent E2E runs contend on the
+# same pinned SKU / checkout flows and fail specs that pass solo (verified
+# 2026-08-07: 5 simultaneous runs → checkout/variations failures; solo rerun
+# green). Serialize PR runs in a single queue; main pushes and manual deploys
+# keep their own per-ref groups so a production deploy never waits on PR E2E.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && 'e2e-shared-store' || format('deploy-{0}', github.ref) }}
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
