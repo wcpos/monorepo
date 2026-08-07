@@ -7,17 +7,26 @@ import {
 	type SchedulerTaskStateDatabase,
 } from './rx-scheduler-task-state-repository';
 import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
-import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
-import { parseOrderBrowserSchedulerDescriptor } from './order-browser-scheduler-descriptor';
+import {
+	ORDER_BROWSE_WINDOW_GRAMMAR,
+	type OrderBrowseWindowFields,
+	parseOrderBrowserSchedulerDescriptor,
+} from './order-browser-scheduler-descriptor';
+import {
+	type BrowseWindowLaneDescriptor,
+	seedBrowseWindowLane,
+} from './rx-browse-window-lane-seeder';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 
 const BACKGROUND_ORDER_SCHEDULER_PRIORITY = 100;
 const BACKGROUND_ORDER_SCHEDULER_COMPLETED_DEDUPE_FOR_MS = 5 * 60_000;
-const ORDER_FILTER_SCHEDULER_PRIORITY = 700;
-const ORDER_FILTER_SCHEDULER_COMPLETED_DEDUPE_FOR_MS = 30_000;
-const SCHEDULER_TASK_KEY_MAX_LENGTH = schedulerTaskStateSchema.properties.queryKey.maxLength;
-const SCHEDULER_REQUIREMENT_ID_MAX_LENGTH =
-	schedulerTaskStateSchema.properties.requirementId.maxLength;
+
+/** The orders BROWSE lane over the shared seeder template (rxBrowseWindowLaneSeeder.ts). */
+const ORDER_BROWSE_LANE: BrowseWindowLaneDescriptor<OrderBrowseWindowFields> = {
+	grammar: ORDER_BROWSE_WINDOW_GRAMMAR,
+	defaultPriority: 700,
+	defaultCompletedDedupeForMs: 30_000,
+};
 
 /**
  * Targeted ORDER lane — the on-demand `orders:ids:<ids>` mirror of the product lane,
@@ -103,112 +112,70 @@ export async function seedOrderSchedulerTasks(
 	});
 }
 
-function orderFilterDescriptor(input: SeedOrderFilterSchedulerTaskInput): {
-	status: string;
+/**
+ * Validate the caller's dimensions and hand them to the shared browse-window seeder.
+ *
+ * This seeder does NOT quantize: `limit` travels verbatim (the demand plane already put it
+ * on the growth curve, and a Reports range asks for the rows it asks for). The parse below
+ * is an INPUT check, not a check on the encoder — there is only one encoder now, and it
+ * lives in the grammar beside this parser. What is still worth refusing here is a
+ * dimension the caller supplied that this grammar cannot express: a
+ * status carrying a `:`, a non-integer customer id, a store id outside the id charset, half
+ * a sort pair, or a `limit=all` with no date bound. Left through, each would seed a task the
+ * drain permanently refuses.
+ */
+function orderFilterWindow(input: SeedOrderFilterSchedulerTaskInput): {
+	window: OrderBrowseWindowFields;
 	limit: number;
-	queryKey: string;
-	requirementId: string;
-	/** Whether this is a fetch-to-completion (`limit=all`) range — it runs greedy. */
 	complete: boolean;
 } {
 	if (!Number.isSafeInteger(input.limit) || input.limit <= 0) {
 		throw new Error('Browser order scheduler descriptor limit must be a positive integer');
 	}
 
-	const status = input.status.trim() || 'all';
-	const search = input.search.trim();
-	// Structured dimensions (customer, cashier, store, the range bounds, then the sort pair)
-	// precede `:search=` so arbitrary search text can never be read back as a filter or sort —
-	// see the grammar note in order-browser-scheduler-descriptor.ts.
-	const customerPart = input.customerId === undefined ? '' : `:customer=${input.customerId}`;
-	const cashierPart = input.cashierId === undefined ? '' : `:cashier=${input.cashierId}`;
-	const storePart = input.store === undefined ? '' : `:store=${input.store}`;
-	const rangePart = `${
-		input.afterSeconds === undefined ? '' : `:after=${input.afterSeconds}`
-	}${input.beforeSeconds === undefined ? '' : `:before=${input.beforeSeconds}`}`;
-	// Byte-identical to orderBrowserQueryKey's sortPart, and it has to be: the demand plane
-	// builds the key there and this seeder rebuilds it here, so any divergence gives one browse
-	// two lane identities depending on which door it came through. Ranged (`limit=all`) lanes
-	// are sort-agnostic, and the DEFAULT `id desc` sort is omitted rather than encoded.
-	const defaultSort = input.orderby === 'id' && input.order === 'desc';
-	const sortPart =
-		input.complete || defaultSort
-			? ''
-			: `${input.orderby === undefined ? '' : `:orderby=${input.orderby}`}${
-					input.order === undefined ? '' : `:order=${input.order}`
-				}`;
-	const limitPart = input.complete ? 'all' : input.limit;
-	const queryKey = `orders:browser:status=${status}${customerPart}${cashierPart}${storePart}${rangePart}${sortPart}:search=${search}:limit=${limitPart}`;
-	const descriptorDecision = parseOrderBrowserSchedulerDescriptor(queryKey);
-	if (!descriptorDecision || 'skipReason' in descriptorDecision) {
-		throw new Error(
-			descriptorDecision?.skipReason ?? 'Browser order scheduler descriptor is not supported'
-		);
-	}
-	const { limit } = descriptorDecision.descriptor;
-	const searchPart = search === '' ? '' : `.search.${search}`;
-	const requirementId =
-		customerPart || cashierPart || storePart || rangePart || sortPart
-			? queryKey.replaceAll(':', '.')
-			: `orders.browser.status.${status}${searchPart}.limit.${limitPart}`;
-	if (queryKey.length > SCHEDULER_TASK_KEY_MAX_LENGTH) {
-		throw new Error(
-			`Browser order scheduler descriptor queryKey exceeds schema limit: ${queryKey.length} > ${SCHEDULER_TASK_KEY_MAX_LENGTH}`
-		);
-	}
-	if (requirementId.length > SCHEDULER_REQUIREMENT_ID_MAX_LENGTH) {
-		throw new Error(
-			`Browser order scheduler descriptor requirementId exceeds schema limit: ${requirementId.length} > ${SCHEDULER_REQUIREMENT_ID_MAX_LENGTH}`
-		);
+	const window: OrderBrowseWindowFields = {
+		status: input.status.trim() || 'all',
+		search: input.search.trim(),
+		limit: input.complete ? 'all' : input.limit,
+		customerId: input.customerId,
+		cashierId: input.cashierId,
+		store: input.store,
+		afterSeconds: input.afterSeconds,
+		beforeSeconds: input.beforeSeconds,
+		orderby: input.orderby,
+		order: input.order,
+	};
+	const decision = parseOrderBrowserSchedulerDescriptor(ORDER_BROWSE_WINDOW_GRAMMAR.encode(window));
+	if (!decision?.descriptor) {
+		throw new Error(decision?.skipReason ?? 'Browser order scheduler descriptor is not supported');
 	}
 
-	return {
-		status,
-		limit,
-		queryKey,
-		requirementId,
-		complete: Boolean(input.complete),
-	};
+	// A ranged lane's task limit is its PER-PASS record ceiling, which the parser supplies;
+	// a windowed lane's is the window itself.
+	return { window, limit: decision.descriptor.limit, complete: Boolean(input.complete) };
 }
 
 export async function seedOrderFilterSchedulerTask(
 	input: SeedOrderFilterSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-	const descriptor = orderFilterDescriptor(input);
-	const nowMs = input.nowMs ?? Date.now();
+	const { window, limit, complete } = orderFilterWindow(input);
 
-	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
-	// and the seed runs again against the fresh store (#956) — callers treat a
-	// resolved seed as a durable enqueue, so it must not resolve empty.
-	return withSchedulerSeedLedgerRecovery({
+	return seedBrowseWindowLane(ORDER_BROWSE_LANE, {
+		window,
+		limit,
+		// A fetch-to-completion (`limit=all`) range is GREEDY: the runner keeps calling the
+		// fetcher until it reports `completed`, renewing the claim between passes. A windowed
+		// task gets exactly ONE fetch invocation (`taskCompleted = task.mode !== 'greedy' ||
+		// fetchResult.completed` in rx-scheduler-task-runner.ts) and `useDemand` declares a
+		// requirement once, so a ranged walk left windowed would stop after its first pass and
+		// the report would stay permanently capped — the cursor would be persisted and never
+		// read (#954). The per-pass record bound still applies; greedy just means the next pass
+		// follows immediately instead of waiting for an unrelated re-declaration.
+		mode: complete ? 'greedy' : 'windowed',
+		priority: input.priority,
+		completedDedupeForMs: input.completedDedupeForMs,
+		nowMs: input.nowMs,
 		database: input.database,
-		run: () =>
-			seedPersistedSchedulerTasks({
-				repository: new RxSchedulerTaskStateRepository(input.database),
-				tasks: [
-					{
-						id: `${descriptor.queryKey}:windowed`,
-						requirementId: descriptor.requirementId,
-						collection: 'orders',
-						queryKey: descriptor.queryKey,
-						limit: descriptor.limit,
-						priority: input.priority ?? ORDER_FILTER_SCHEDULER_PRIORITY,
-						// A fetch-to-completion (`limit=all`) range is GREEDY: the runner keeps
-						// calling the fetcher until it reports `completed`, renewing the claim between
-						// passes. A windowed task gets exactly ONE fetch invocation
-						// (`taskCompleted = task.mode !== 'greedy' || fetchResult.completed` in
-						// rx-scheduler-task-runner.ts) and `useDemand` declares a requirement once, so
-						// a ranged walk left windowed would stop after its first pass and the report
-						// would stay permanently capped — the cursor would be persisted and never read
-						// (#954). The per-pass record bound still applies; greedy just means the next
-						// pass follows immediately instead of waiting for an unrelated re-declaration.
-						mode: descriptor.complete ? 'greedy' : 'windowed',
-					},
-				],
-				nowMs,
-				completedDedupeForMs:
-					input.completedDedupeForMs ?? ORDER_FILTER_SCHEDULER_COMPLETED_DEDUPE_FOR_MS,
-			}),
 	});
 }
 

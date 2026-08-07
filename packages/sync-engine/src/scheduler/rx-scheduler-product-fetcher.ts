@@ -19,14 +19,12 @@ import {
 	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
 	type BrowseWindowContinuation,
 	type BrowseWindowLaneReader,
-	browseWindowPrefixSurvived,
-	mergeBrowseWindowRecordIds,
 	NO_BROWSE_WINDOW_CONTINUATION,
 	readBrowseWindowContinuation,
 } from './browse-window-continuation';
+import { finalizeBrowseWindowLane } from './browse-window-fetcher-tail';
 import {
 	type BrowseWindowLaneEvictionRepository,
-	evictSupersededBrowseWindowLanes,
 	productBrowseWindowLaneIdentity,
 } from './browse-window-lane-eviction';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
@@ -579,106 +577,46 @@ async function tryProductBrowseWindowWalk(
 	const deltaRecordIds = documents.map(({ storedDocument }) =>
 		coverageRecordId(storedDocument as ProductDocument)
 	);
-	// Ancestry guard (#1023's pattern): only assert the carried prefix if the lane it came
-	// from still holds exactly it. A Clear & Sync or ledger rebuild landing mid-walk would
-	// otherwise resurrect coverage for records it just deleted.
-	const prefixSurvived = await browseWindowPrefixSurvived({
-		collection: 'products',
-		continuation,
-		nowMs: input.nowMs?.() ?? Date.now(),
-		readLane: input.coverageRepository?.readLocalLaneCoverage,
-	});
-	if (!prefixSurvived) {
-		input.diagnostics?.({
-			type: 'browse-window.prefix-invalidated',
-			level: 'warn',
-			collection: 'products',
-			message: `Product browse window ${descriptor.limit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
-		});
-		// The lane claims NOTHING, not this pass's rows — they are a TAIL of the listing and
-		// readBrowseWindowContinuation would read them as its LEADING prefix. See the orders
-		// fetcher's matching branch. The rows' RECORD coverage still stands: they are real and
-		// already resident, it is only the window claim that is withdrawn.
-		await recordCoverageRecordsOnly('products', input, task, deltaRecordIds);
-		await recordCoverage('products', input, task, [], false);
-		return {
-			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
-			// The prefix is gone, so the next pass must re-walk from the top regardless; do not
-			// send the caller round again in this one.
-			progressed: true,
-		};
-	}
-	if (truncatedByPageBudget) {
-		input.diagnostics?.({
-			type: 'browse-window.page-budget-reached',
-			level: 'warn',
-			collection: 'products',
-			message: `Product browse window paused after ${requestCount} pages with ${covered + documents.length} of ${descriptor.limit} rows covered; the next drain resumes from there`,
-		});
-	}
-	// The lane records the WHOLE window — the covered prefix unioned with this drain's
-	// delta — not just what travelled the wire. The grid's footer total reads
-	// `expectedRecordIds.length` for exactly this key (projectTotal), so a delta-only lane
-	// would make a grown window report the size of its last growth step.
-	const laneRecordIds = mergeBrowseWindowRecordIds(continuation.recordIds, deltaRecordIds);
-	// NEVER claim a window you did not actually fill. The phase-2 tiebreak walk substitutes
-	// rows from later wire pages, so a resumed delta can re-deliver records the prefix
-	// already holds; the merge dedupes them and this lane comes back SHORT of its window.
-	// Recording that as complete would make the footer report (say) 215 for a 300-row
-	// window AND let the serve-local gate answer from it — the window would appear to stop
-	// growing.
-	const filledTheWindow = serverExhausted || laneRecordIds.length >= descriptor.limit;
-	// Did this walk move the window past what it already had? A resumed walk that re-fetched
-	// only ids the prefix already held has not — and must NOT write its lane, or it would
-	// leave a spurious short lane behind for the full re-walk to overwrite a moment later.
-	const progressed = laneRecordIds.length > covered || serverExhausted;
-	if (!progressed) {
-		return {
-			result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
-			progressed: false,
-		};
-	}
 	// A store that ignored `brand` returned an UNFILTERED SUPERSET. Those records are worth
-	// keeping locally, but this lane must claim NO coverage for them: recording `limit`
-	// superset ids under a filtered descriptor would let the serve-local gate answer a
-	// brand-filtered window from rows that were never brand-filtered, for a whole freshness
-	// window. `complete:false` alone does not prevent that, because a filled-but-incomplete
-	// lane is exactly what an ordinary un-exhausted window looks like.
-	await recordCoverage(
-		'products',
-		input,
-		task,
-		brandsHonored ? laneRecordIds : [],
-		brandsHonored && !truncatedByPageBudget && filledTheWindow,
-		// Re-check the carried prefix INSIDE the write. The guard above runs before the walk,
-		// but `withLedgerRecovery` replays this write verbatim after a rebuild drops
-		// `coverageLanes` — the one window that guard cannot close (#1030 residual).
-		continuation.covered > 0 && continuation.sourceQueryKey
-			? {
-					sourceQueryKey: continuation.sourceQueryKey,
-					recordIds: continuation.recordIds,
-					// Same brand gate as the primary write above: a superset from a server that
-					// ignored `brand` must not be recorded as coverage through the demotion path.
-					fallbackRecordIds: brandsHonored ? deltaRecordIds : [],
-				}
-			: undefined
-	);
-	// STRICTLY AFTER the write. The smaller lanes this window supersedes include the one the
-	// continuation resumed from, and the ancestry guard above re-reads exactly that lane —
-	// evicting before the write would make the pass demote itself to an incomplete delta.
-	await evictSupersededBrowseWindowLanes({
+	// keeping locally, but the lane must claim NO coverage for them — see `dimensionsHonored`
+	// on the shared tail, which applies the same gate to the primary and demotion writes.
+	const outcome = await finalizeBrowseWindowLane({
 		collection: 'products',
-		triggerQueryKey: task.queryKey,
+		queryKey: task.queryKey,
+		windowLimit: descriptor.limit,
+		continuation,
+		deltaRecordIds,
+		serverExhausted,
+		truncatedByPageBudget,
+		dimensionsHonored: brandsHonored,
+		// A products window that filled to its own size is complete even with more catalogue
+		// behind it; only orders insists the server ran out.
+		requireServerExhaustedForComplete: false,
+		// A resumed walk that re-fetched only ids the prefix already held must NOT write its
+		// lane, or it would leave a spurious short lane behind for the full re-walk to
+		// overwrite a moment later.
+		skipLaneWriteWithoutProgress: true,
+		pageBudget: {
+			message: `Product browse window paused after ${requestCount} pages with ${covered + documents.length} of ${descriptor.limit} rows covered; the next drain resumes from there`,
+			emitBeforeAncestryCheck: false,
+		},
+		prefixInvalidatedMessage: `Product browse window ${descriptor.limit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 		identify: productBrowseWindowLaneIdentity,
-		repository: input.coverageRepository,
+		evictionRepository: input.coverageRepository,
 		readLane: input.coverageRepository?.readLocalLaneCoverage,
 		nowMs: input.nowMs?.() ?? Date.now(),
 		diagnostics: input.diagnostics,
+		writer: {
+			recordRecordsOnly: (recordIds) =>
+				recordCoverageRecordsOnly('products', input, task, recordIds),
+			recordLane: ({ recordIds, complete, prefixAncestry }) =>
+				recordCoverage('products', input, task, recordIds, complete, prefixAncestry),
+		},
 	});
 
 	return {
 		result: { taskId: task.id, documentCount: documents.length, requestCount, completed: true },
-		progressed: true,
+		progressed: outcome.progressed,
 	};
 }
 

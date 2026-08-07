@@ -1,3 +1,4 @@
+import { type BrowseWindowGrammar, browseWindowKeyPart } from './browse-window-grammar';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 
 import type { CustomerBrowseDimensions } from '../require-plane';
@@ -175,8 +176,29 @@ export function customerBrowseWindowQueryKey(
 	if (order !== 'asc' && order !== 'desc') {
 		throw new TypeError(`unsupported customer browse order "${order}"`);
 	}
-	const sortPart = isDefaultSort(orderby, order) ? '' : `:orderby=${orderby}:order=${order}`;
-	return `${CUSTOMER_BROWSE_WINDOW_QUERY_KEY_PREFIX}limit=${limit}${sortPart}`;
+	return encodeCustomerBrowseWindowKey(String(limit), orderby, order);
+}
+
+/**
+ * Assemble the key from parts already decided. The ONE place this grammar's bytes are
+ * written, so the view identity below (which spells the limit as the empty string) cannot
+ * drift from the lane keys it has to group.
+ */
+function encodeCustomerBrowseWindowKey(limitText: string, orderby: string, order: string): string {
+	const sortPart = isDefaultSort(orderby, order)
+		? ''
+		: `${browseWindowKeyPart('orderby', orderby)}${browseWindowKeyPart('order', order)}`;
+	return `${CUSTOMER_BROWSE_WINDOW_QUERY_KEY_PREFIX}limit=${limitText}${sortPart}`;
+}
+
+/** The persisted requirement identity for a customers browse window. */
+export function customerBrowseWindowRequirementId(
+	descriptor: CustomerBrowseWindowDescriptor
+): string {
+	const sortSuffix = isDefaultSort(descriptor.orderby, descriptor.order)
+		? ''
+		: `.${descriptor.orderby}.${descriptor.order}`;
+	return `customers.browse-window.limit.${descriptor.limit}${sortSuffix}`;
 }
 
 /** Adapt public typed browse dimensions to the canonical customer window key. */
@@ -225,3 +247,27 @@ export function parseCustomerBrowseWindowDescriptor(
 export function isCustomerBrowseWindowQueryKey(queryKey: string): boolean {
 	return parseCustomerBrowseWindowDescriptor(queryKey) !== null;
 }
+
+/**
+ * The customers lane, as a value the shared browse-window engine consumes
+ * (browse-window-grammar.ts).
+ *
+ * This lane grows GEOMETRICALLY, so the window one step back is half the size and its
+ * coverage is not a page-aligned prefix of this one. The customers fetcher therefore carries
+ * no continuation and no eviction — see rx-scheduler-customer-fetcher.ts, which walks each
+ * window from page 1.
+ */
+export const CUSTOMER_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<CustomerBrowseWindowDescriptor> = {
+	collection: 'customers',
+	encode: (descriptor) =>
+		customerBrowseWindowQueryKey(descriptor.limit, {
+			orderby: descriptor.orderby,
+			order: descriptor.order,
+		}),
+	parse: parseCustomerBrowseWindowDescriptor,
+	limitOf: (descriptor) => descriptor.limit,
+	requirementId: customerBrowseWindowRequirementId,
+	viewKey: (descriptor) => encodeCustomerBrowseWindowKey('', descriptor.orderby, descriptor.order),
+	schemaCeilingLabel: 'Customer browse-window scheduler',
+	measureTaskIdAgainstCeiling: true,
+};

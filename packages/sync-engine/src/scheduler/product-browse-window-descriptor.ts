@@ -3,6 +3,7 @@ import {
 	clampToBrowseWindowBackstop,
 	isBrowseWindowLimit,
 } from './browse-window-continuation';
+import { type BrowseWindowGrammar, browseWindowKeyPart } from './browse-window-grammar';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 
 import type { ProductBrowseDimensions } from '../require-plane';
@@ -146,9 +147,35 @@ export function productBrowseWindowQueryKey(
 ): string {
 	const orderby = sort?.orderby ?? PRODUCT_BROWSE_WINDOW_ORDERBY;
 	const order = sort?.order ?? PRODUCT_BROWSE_WINDOW_ORDER;
-	const base = `${PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX}limit=${limit}`;
-	const sortPart = isDefaultSort(orderby, order) ? '' : `:orderby=${orderby}:order=${order}`;
-	return `${base}${sortPart}${productBrowseWindowFilterPart(filters)}`;
+	return encodeProductBrowseWindowKey(String(limit), orderby, order, filters);
+}
+
+/**
+ * Assemble the key from parts already decided. The ONE place this grammar's bytes are
+ * written, so the view identity below (which spells the limit as the empty string) cannot
+ * drift from the lane keys it has to group.
+ */
+function encodeProductBrowseWindowKey(
+	limitText: string,
+	orderby: string,
+	order: string,
+	filters?: ProductBrowseWindowFilters
+): string {
+	const sortPart = isDefaultSort(orderby, order)
+		? ''
+		: `${browseWindowKeyPart('orderby', orderby)}${browseWindowKeyPart('order', order)}`;
+	return `${PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX}limit=${limitText}${sortPart}${productBrowseWindowFilterPart(filters)}`;
+}
+
+/** The persisted requirement identity for a products browse window. */
+export function productBrowseWindowRequirementId(
+	descriptor: ProductBrowseWindowDescriptor
+): string {
+	const sortSuffix = isDefaultSort(descriptor.orderby, descriptor.order)
+		? ''
+		: `.${descriptor.orderby}.${descriptor.order}`;
+	const filterPart = productBrowseWindowFilterPart(descriptor).replaceAll(':', '.');
+	return `products.browse-window.limit.${descriptor.limit}${sortSuffix}${filterPart}`;
 }
 
 /** Adapt public typed browse dimensions to the canonical product window key. */
@@ -277,5 +304,27 @@ export function productBrowseWindowPredecessorQueryKey(
 		descriptor
 	);
 }
+
+/**
+ * The products lane, as a value the shared browse-window engine consumes
+ * (browse-window-grammar.ts). The limit is the FIRST field of this grammar, so the view
+ * identity re-encodes with an empty limit rather than stripping a suffix.
+ */
+export const PRODUCT_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<ProductBrowseWindowDescriptor> = {
+	collection: 'products',
+	encode: (descriptor) =>
+		productBrowseWindowQueryKey(
+			descriptor.limit,
+			{ orderby: descriptor.orderby, order: descriptor.order },
+			descriptor
+		),
+	parse: parseProductBrowseWindowDescriptor,
+	limitOf: (descriptor) => descriptor.limit,
+	requirementId: productBrowseWindowRequirementId,
+	viewKey: (descriptor) =>
+		encodeProductBrowseWindowKey('', descriptor.orderby, descriptor.order, descriptor),
+	schemaCeilingLabel: 'Product browse-window scheduler',
+	measureTaskIdAgainstCeiling: true,
+};
 
 export { WOO_REST_MAX_PER_PAGE };
