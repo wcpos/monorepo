@@ -83,10 +83,14 @@ function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: numbe
 	return id === undefined ? base : `${base}/${id}`;
 }
 
-/** The plain-permalink spelling of the same route: /?rest_route=/wc/v3/… */
-function plainPermalinkUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {
+/** The plain-permalink spelling of the same route: /index.php?rest_route=/wc/v3/… */
+export function plainPermalinkUrl(
+	storeUrl: string,
+	collection: ProbeCollection,
+	id?: number
+): string {
 	const route = id === undefined ? `/wc/v3/${collection}` : `/wc/v3/${collection}/${id}`;
-	return `${storeUrl.replace(/\/+$/, '')}/?rest_route=${route}`;
+	return `${storeUrl.replace(/\/+$/, '')}/index.php?rest_route=${route}`;
 }
 
 type ProbeRequestOptions = {
