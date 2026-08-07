@@ -1,0 +1,225 @@
+import { randomUUID } from 'crypto';
+
+import { log } from '@wcpos/utils/logger';
+
+import { type StoreAuthorization, storeRequestOptions } from './fixtures';
+
+import type { APIRequestContext, Locator, Page } from '@playwright/test';
+
+type ProbeCollection = 'products' | 'customers';
+type SearchCollection = ProbeCollection | 'orders';
+
+export interface SearchProbe {
+	collection: ProbeCollection;
+	id: number;
+	rowTestId?: string;
+	token: string;
+}
+
+export type SearchProbeResult = { ok: true; probe: SearchProbe } | { ok: false; reason: string };
+
+interface CreateSearchProbeOptions {
+	request: APIRequestContext;
+	storeUrl: string;
+	authorization: StoreAuthorization | null;
+	collection: ProbeCollection;
+	workerIndex: number;
+}
+
+/** A single alphanumeric FlexSearch token, unique across workers, retries and parallel runs. */
+export function mintSearchProbeToken(workerIndex: number): string {
+	return `zx${workerIndex.toString(36)}${Date.now().toString(36)}${randomUUID().replaceAll('-', '').slice(0, 8)}`;
+}
+
+/**
+ * Optional elevated credentials for the PRODUCTS probe. The plugin's `next`
+ * deliberately keeps POS cashiers read-only on the catalog (Write_Controller's
+ * pinned decision), so the demo user's create attempt 403s. When the CI store
+ * provides an admin-capable WCPOS login via E2E_PRODUCT_WRITER_USER/_PASS, we
+ * mint a JWT through the same wcpos-auth flow the app uses and create the probe
+ * with it. Absent credentials → null → the caller falls back to the captured
+ * auth, and a 403 surfaces as the spec's skip-with-reason.
+ *
+ * The token is never logged; a failed login degrades to null, never a throw.
+ */
+export async function productWriterAuthorization(
+	request: APIRequestContext,
+	storeUrl: string
+): Promise<StoreAuthorization | null> {
+	const user = process.env.E2E_PRODUCT_WRITER_USER;
+	const pass = process.env.E2E_PRODUCT_WRITER_PASS;
+	if (!user || !pass) return null;
+
+	try {
+		const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe`;
+		const pageResponse = await request.get(authUrl);
+		const html = await pageResponse.text();
+		const nonce = /name="_wpnonce" value="([^"]+)"/.exec(html)?.[1];
+		const session = /name="auth_session" value="([^"]+)"/.exec(html)?.[1];
+		if (!nonce || !session) return null;
+
+		const submit = await request.post(authUrl, {
+			form: {
+				'wcpos-log': user,
+				'wcpos-pwd': pass,
+				_wpnonce: nonce,
+				auth_session: session,
+				'wcpos-submit': '1',
+			},
+			maxRedirects: 0,
+		});
+		const location = submit.headers()['location'] ?? '';
+		const token = /access_token=([^&]+)/.exec(location)?.[1];
+		return token ? { transport: 'header', value: `Bearer ${token}` } : null;
+	} catch {
+		log.warn('[search-probe] product-writer login failed; falling back to captured auth');
+		return null;
+	}
+}
+
+function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {
+	// wc/v3 accepts the captured Bearer JWT; query-param JWT auth may remain wcpos/v2-only.
+	const base = `${storeUrl.replace(/\/+$/, '')}/wp-json/wc/v3/${collection}`;
+	return id === undefined ? base : `${base}/${id}`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	return value && typeof value === 'object' && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: null;
+}
+
+/** Accept the bare wc/v3 record and the document/record/data envelopes used by store versions. */
+function unwrapRecord(body: unknown): Record<string, unknown> | null {
+	const root = asRecord(body);
+	if (!root) return null;
+	for (const key of ['document', 'record', 'data']) {
+		const nested = asRecord(root[key]);
+		if (nested) return nested;
+	}
+	return root;
+}
+
+function positiveId(record: Record<string, unknown> | null): number | null {
+	const id = Number(record?.id ?? 0);
+	return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * Create one server-side product/customer that cannot already be resident in the restored POS
+ * snapshot. A rejected or unreachable write is returned as an explicit skip reason; malformed
+ * success responses remain failures because they violate the probe contract.
+ */
+export async function createSearchProbe(
+	options: CreateSearchProbeOptions
+): Promise<SearchProbeResult> {
+	const { request, storeUrl, authorization, collection, workerIndex } = options;
+	const token = mintSearchProbeToken(workerIndex);
+	const data =
+		collection === 'products'
+			? {
+					name: `E2E Probe ${token}`,
+					type: 'simple',
+					status: 'publish',
+					regular_price: '1.00',
+					manage_stock: false,
+				}
+			: {
+					email: `${token}@example.invalid`,
+					first_name: `E2E ${token}`,
+					last_name: 'Probe',
+				};
+
+	try {
+		const response = await request.post(collectionUrl(storeUrl, collection), {
+			...storeRequestOptions(authorization),
+			data,
+		});
+		if (!response.ok()) {
+			if (collection === 'products' && response.status() === 403) {
+				return {
+					ok: false,
+					reason: `Store lacks product write capability (HTTP ${response.status()}); skipping product search probe`,
+				};
+			}
+			return {
+				ok: false,
+				reason: `Store rejected ${collection} search-probe creation (HTTP ${response.status()}); server write access is required`,
+			};
+		}
+
+		const record = unwrapRecord(await response.json().catch(() => null));
+		const id = positiveId(record);
+		if (!record || id === null) {
+			throw new Error(`${collection} search-probe create succeeded without a record id`);
+		}
+		const slug = typeof record.slug === 'string' && record.slug ? record.slug : null;
+		if (collection === 'products' && !slug) {
+			await deleteSearchProbe({ request, storeUrl, authorization, collection, id });
+			throw new Error('products search-probe create succeeded without its WC response slug');
+		}
+
+		return {
+			ok: true,
+			probe: {
+				collection,
+				id,
+				...(slug ? { rowTestId: `data-table-row-${slug}` } : {}),
+				token,
+			},
+		};
+	} catch (error) {
+		if (error instanceof Error && error.message.includes('create succeeded')) throw error;
+		return {
+			ok: false,
+			reason: `Store could not create the ${collection} search probe; server write access is required`,
+		};
+	}
+}
+
+/** Force-delete a probe without ever turning teardown trouble into a test failure. */
+export async function deleteSearchProbe(
+	options: Omit<CreateSearchProbeOptions, 'workerIndex'> & { id: number }
+): Promise<void> {
+	const { request, storeUrl, authorization, collection, id } = options;
+	try {
+		const response = await request.delete(collectionUrl(storeUrl, collection, id), {
+			...storeRequestOptions(authorization),
+			params: { ...storeRequestOptions(authorization).params, force: 'true' },
+		});
+		if (!response.ok()) {
+			log.warn(`[search-probe] failed to delete ${collection} ${id}: HTTP ${response.status()}`);
+		}
+	} catch {
+		// Do not print the request error: query-auth stores can include the JWT in its URL.
+		log.warn(`[search-probe] delete ${collection} ${id} threw`);
+	}
+}
+
+/** Fill a testID-located search input only after arming the matching server-demand waiter. */
+export async function searchAndWaitForServer(
+	page: Page,
+	searchInput: Locator,
+	collection: SearchCollection,
+	term: string
+): Promise<void> {
+	const responsePending = page.waitForResponse(
+		(response) => {
+			if (response.request().method() !== 'GET') return false;
+			const url = new URL(response.url());
+			const route = url.searchParams.get('rest_route');
+			const matchesCollection =
+				url.pathname.endsWith(`/wp-json/wcpos/v2/${collection}`) ||
+				route === `/wcpos/v2/${collection}`;
+			return matchesCollection && url.searchParams.get('search') === term;
+		},
+		{ timeout: 60_000 }
+	);
+	responsePending.catch(() => {});
+
+	await searchInput.fill(term);
+	const response = await responsePending;
+	if (!response.ok()) {
+		throw new Error(`${collection} search demand failed: HTTP ${response.status()}`);
+	}
+}

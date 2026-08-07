@@ -1,6 +1,14 @@
 import { expect, type Page } from '@playwright/test';
 
-import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
+import {
+	getStoreVariant,
+	navigateToPage,
+	authenticatedTest as test,
+	tryAddProductBySku,
+} from './fixtures';
+import { extractOrderIdFromPushBody } from './order-cleanup';
+import { stampRunLabel } from './order-lifecycle';
+import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
 
 /** Helper to navigate to Orders page and wait for load */
 async function navigateToOrders(page: Page) {
@@ -8,6 +16,25 @@ async function navigateToOrders(page: Page) {
 	const screen = page.getByTestId('screen-orders');
 	await expect(screen.getByTestId('search-orders')).toBeVisible({ timeout: 30_000 });
 	return screen;
+}
+
+/** Add a resident simple product so Save creates an order with the active POS scope meta. */
+async function addOrderProbeProduct(page: Page) {
+	const skuResult = await tryAddProductBySku(page);
+	if (skuResult === 'added') return;
+	if (skuResult === 'add_failed') {
+		throw new Error('Dedicated E2E SKU matched but did not reach the order-probe cart');
+	}
+
+	const tile = page.getByTestId('product-tile').first();
+	const tableButton = page.getByTestId('add-to-cart-button').first();
+	await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
+	if (await tile.isVisible()) {
+		await tile.click();
+	} else {
+		await tableButton.click();
+	}
+	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -61,22 +88,46 @@ test.describe('Orders Page (Pro)', () => {
 			.toBeTruthy();
 	});
 
-	test('should search orders', async ({ posPage: page }) => {
+	test('should search orders', async ({ posPage: page }, testInfo) => {
+		await addOrderProbeProduct(page);
+		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
+
+		const savePending = page.waitForResponse(
+			(response) =>
+				response.request().method() === 'POST' &&
+				response.url().includes('/wp-json/wcpos/v2/push/orders'),
+			{ timeout: 90_000 }
+		);
+		savePending.catch(() => {});
+		await page.getByTestId('save-to-server-button').click();
+		const saveResponse = await savePending;
+		if (!saveResponse.ok()) {
+			test.skip(
+				true,
+				`Store rejected order search-probe creation (HTTP ${saveResponse.status()}); server write access is required`
+			);
+			return;
+		}
+
+		const orderId = extractOrderIdFromPushBody(await saveResponse.json().catch(() => null));
+		const envelope = (saveResponse.request().postDataJSON() ?? {}) as { recordId?: unknown };
+		const orderUuid = typeof envelope.recordId === 'string' ? envelope.recordId : '';
+		if (orderId === null || !orderUuid) {
+			throw new Error('Order search-probe create succeeded without its server id or stable uuid');
+		}
+		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+
 		const screen = await navigateToOrders(page);
-		const countEl = screen.getByTestId('data-table-count');
-		await expect(countEl).toBeVisible({ timeout: 30_000 });
-		const initialCount = await countEl.textContent();
-		await expect(screen.getByTestId(/^data-table-row-/).first()).toBeVisible({ timeout: 30_000 });
-
 		const searchInput = screen.getByTestId('search-orders');
-		// Order 70954 is a retained dev-next E2E fixture documented in the sync regression suite.
-		await searchInput.fill('70954');
+		const orderNumber = String(orderId);
+		await searchAndWaitForServer(page, searchInput, 'orders', orderNumber);
 
-		const matchingRows = screen.getByTestId(/^data-table-row-/);
-		await expect(matchingRows).toHaveCount(1, { timeout: 30_000 });
-		await expect(matchingRows.first()).toBeVisible();
-		await expect(matchingRows.first()).toContainText('70954');
-		await expect.poll(() => countEl.textContent(), { timeout: 30_000 }).not.toBe(initialCount);
+		const createdRow = screen.getByTestId(`data-table-row-${orderUuid}`);
+		await expect(createdRow).toBeVisible({ timeout: 30_000 });
+		await expect(createdRow).toContainText(orderNumber);
+		await expect
+			.poll(() => screen.getByTestId(/^data-table-row-/).count(), { timeout: 30_000 })
+			.toBeGreaterThanOrEqual(1);
 	});
 
 	test('should show filter pills', async ({ posPage: page }) => {

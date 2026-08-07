@@ -1,6 +1,12 @@
 import { expect } from '@playwright/test';
 
-import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
+import {
+	getStoreUrl,
+	getStoreVariant,
+	navigateToPage,
+	authenticatedTest as test,
+} from './fixtures';
+import { createSearchProbe, deleteSearchProbe, searchAndWaitForServer } from './search-probe';
 
 /**
  * Products page (pro-only drawer page with inline editing).
@@ -88,28 +94,58 @@ test.describe('Products Page (Pro)', () => {
 		}
 	});
 
-	test('should search products on Products page', async ({ posPage: page }) => {
-		await navigateToPage(page, 'products');
-		const screen = page.getByTestId('screen-products').filter({ visible: true });
-		const countEl = screen.getByTestId('data-table-count');
-		await expect(countEl).toBeVisible({
-			timeout: 60_000,
+	test('should search products on Products page', async ({
+		posPage: page,
+		request,
+		storeAuthorization,
+	}, testInfo) => {
+		const storeUrl = getStoreUrl(testInfo);
+		// Catalog writes are deliberately closed to POS cashiers, so the probe
+		// prefers the optional CI product-writer credentials and falls back to
+		// the captured auth (whose 403 becomes the skip below).
+		const writerAuthorization = await productWriterAuthorization(request, storeUrl);
+		const authorization = writerAuthorization ?? storeAuthorization();
+		const created = await createSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'products',
+			workerIndex: testInfo.workerIndex,
 		});
-		const initialCount = await countEl.textContent();
-		const knownNonMatch = screen.getByTestId('data-table-row-belt');
-		await expect(knownNonMatch).toBeVisible({ timeout: 30_000 });
+		if (!created.ok) {
+			const hint = writerAuthorization
+				? created.reason
+				: `${created.reason} (set the E2E_PRODUCT_WRITER_USER/_PASS secrets to enable this spec)`;
+			test.skip(true, hint);
+			return;
+		}
+		if (!created.probe.rowTestId) {
+			throw new Error('Product search probe is missing its WC response slug-derived row testID');
+		}
 
-		const searchInput = screen.getByTestId('search-products');
-		await searchInput.fill('hoodie with');
+		try {
+			await navigateToPage(page, 'products');
+			const screen = page.getByTestId('screen-products').filter({ visible: true });
+			const searchInput = screen.getByTestId('search-products');
+			await expect(searchInput).toBeVisible({ timeout: 30_000 });
 
-		await expect(screen.getByTestId('data-table-row-hoodie-with-pocket')).toBeVisible({
-			timeout: 30_000,
-		});
-		await expect(screen.getByTestId('data-table-row-hoodie-with-zipper')).toBeVisible({
-			timeout: 30_000,
-		});
-		await expect(knownNonMatch).not.toBeVisible();
-		await expect.poll(() => countEl.textContent(), { timeout: 30_000 }).not.toBe(initialCount);
+			await searchAndWaitForServer(page, searchInput, 'products', created.probe.token);
+
+			await expect(screen.getByTestId(created.probe.rowTestId)).toBeVisible({
+				timeout: 30_000,
+			});
+			await expect
+				.poll(() => screen.getByTestId(/^data-table-row-/).count(), { timeout: 30_000 })
+				.toBeGreaterThanOrEqual(1);
+		} finally {
+			await deleteSearchProbe({
+				request,
+				storeUrl,
+				authorization,
+				collection: created.probe.collection,
+				id: created.probe.id,
+			});
+		}
 	});
 
 	test('should show product actions menu', async ({ posPage: page }) => {

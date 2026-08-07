@@ -208,6 +208,8 @@ jobs:
         env:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
+          E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
+          E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
 
       - name: 📊 Upload blob report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

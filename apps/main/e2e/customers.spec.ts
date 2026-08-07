@@ -1,6 +1,12 @@
 import { expect, type Page } from '@playwright/test';
 
-import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
+import {
+	getStoreUrl,
+	getStoreVariant,
+	navigateToPage,
+	authenticatedTest as test,
+} from './fixtures';
+import { createSearchProbe, deleteSearchProbe, searchAndWaitForServer } from './search-probe';
 
 async function openAddCartItemsMenu(page: Page) {
 	const menuButton = page.getByTestId('add-cart-item-menu');
@@ -122,22 +128,46 @@ test.describe('Customers Page (Pro)', () => {
 			.toBeTruthy();
 	});
 
-	test('should search customers', async ({ posPage: page }) => {
-		await navigateToPage(page, 'customers');
-		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
-		const countEl = screen.getByTestId('data-table-count');
-		await expect(countEl).toBeVisible({ timeout: 30_000 });
-		const initialCount = await countEl.textContent();
-		await expect(screen.getByTestId(/^data-table-row-/).first()).toBeVisible({ timeout: 30_000 });
+	test('should search customers', async ({
+		posPage: page,
+		request,
+		storeAuthorization,
+	}, testInfo) => {
+		const storeUrl = getStoreUrl(testInfo);
+		const authorization = storeAuthorization();
+		const created = await createSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'customers',
+			workerIndex: testInfo.workerIndex,
+		});
+		if (!created.ok) {
+			test.skip(true, created.reason);
+			return;
+		}
 
-		const searchInput = screen.getByTestId('search-customers');
-		await searchInput.fill('admin');
+		try {
+			await navigateToPage(page, 'customers');
+			const screen = page.getByTestId('screen-customers');
+			const searchInput = screen.getByTestId('search-customers');
+			await expect(searchInput).toBeVisible({ timeout: 30_000 });
 
-		const matchingRows = screen.getByTestId(/^data-table-row-/);
-		await expect(matchingRows.first()).toBeVisible({ timeout: 15_000 });
-		await expect(matchingRows.first()).toContainText(/admin/i);
-		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialCount);
+			await searchAndWaitForServer(page, searchInput, 'customers', created.probe.token);
+
+			const matchingRows = screen.getByTestId(/^data-table-row-/);
+			await expect(matchingRows).toHaveCount(1, { timeout: 30_000 });
+			await expect(matchingRows.first()).toBeVisible();
+			await expect(screen.getByTestId('data-table-count')).toContainText(/\b1\b/);
+		} finally {
+			await deleteSearchProbe({
+				request,
+				storeUrl,
+				authorization,
+				collection: created.probe.collection,
+				id: created.probe.id,
+			});
+		}
 	});
 
 	test('should have add customer button on Customers page', async ({ posPage: page }) => {
