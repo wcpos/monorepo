@@ -133,6 +133,13 @@ import type { EngineTimers } from './engine-timers';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
+const AUTO_REVERT_COLLECTIONS: ReadonlySet<string> = new Set([
+	'products',
+	'variations',
+	'customers',
+	'coupons',
+] satisfies SyncCollectionName[]);
+
 export type {
 	CoverageOutcome,
 	CustomerBrowseDimensions,
@@ -359,6 +366,8 @@ export type EngineEvent =
 			mutationId: string;
 			status?: number;
 			reason?: string;
+			/** The server's human-readable message; `reason` is the machine code. */
+			serverMessage?: string;
 	  }
 	// R1 — the save-time mirror check. The server ACKED an order the POS built, but
 	// its money is not the money that was pushed: WooCommerce's calculation is the
@@ -447,7 +456,11 @@ export type RxdbSyncEngine = {
 	 * `rejectedMessage` / `rejectedAt`) and, once recovered at least once, their
 	 * requeue provenance (`requeuedFrom` / `requeueCount`) — they resolve by
 	 * 'requeue-rebuilt' or 'discard'. Rows persist here until `resolveConflict`
-	 * settles them.
+	 * settles them — with ONE exception (#1082): a 'rejected' row for a catalog
+	 * collection (products/variations/customers/coupons, never orders) is
+	 * auto-discarded moments after the `write-rejected` event, so consumers may
+	 * observe it vanish asynchronously; a row whose auto-discard failed stays
+	 * parked here as before.
 	 */
 	conflicts(): Promise<EngineConflict[]>;
 	/**
@@ -1301,7 +1314,43 @@ export function createRxdbSyncEngine(
 			}
 		},
 		isWritePlaneOwner: writePlaneOwner,
-		emitWriteEvent: (event) => emitEngineEvent(event),
+		emitWriteEvent: (event) => {
+			emitEngineEvent(event);
+			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
+				return;
+			}
+			// Reactive revert (#1082): a rejected catalog change is settled for the
+			// cashier by restoring server truth, through the SAME discard machinery
+			// Store Health uses — claim serialization, in-guard successor overlay
+			// (a newer queued edit's resident value survives the restore; see the
+			// `successors` merge in conflict-resolution.ts), barcode selectors,
+			// tombstone when the server no longer has the record. A write() landing
+			// exactly between that overlay's read and its upsert can still flash
+			// server truth for a beat — accepted: the newer mutation's queue row
+			// survives and the next drain re-decides the record either way.
+			void (async () => {
+				try {
+					await writePlane.resolveConflict(event.mutationId, 'discard');
+					diagnostics({
+						type: 'queue.write.auto-reverted',
+						level: 'error',
+						collection: event.collection,
+						message:
+							event.serverMessage ?? event.reason ?? 'Rejected change reverted to server truth',
+						fields: {
+							collection: event.collection,
+							recordId: event.recordId,
+							mutationId: event.mutationId,
+							...(event.status !== undefined ? { status: event.status } : {}),
+							...(event.reason !== undefined ? { reason: event.reason } : {}),
+							...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
+						},
+					});
+				} catch {
+					// The rejected row stays parked for Store Health when discard cannot settle it.
+				}
+			})();
+		},
 		onActivityChange: changeCollectionActivity,
 		barcodeSelectorsFor,
 		persistOrderRepull: async ({ database, wooIds, nowMs: repullNowMs }) => {

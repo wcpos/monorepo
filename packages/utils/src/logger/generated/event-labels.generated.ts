@@ -69,6 +69,7 @@ export const SYNC_EVENT_TYPES = [
 	'queue.drain.progress',
 	'queue.scheduler.drain',
 	'queue.write.annihilate',
+	'queue.write.auto-reverted',
 	'queue.write.born-twice-requeue',
 	'queue.write.coalesce',
 	'queue.write.conflict-transition',
@@ -540,6 +541,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_annihilate',
 		label: 'A change cancelled itself out before it was sent',
+		introducedIn: '1.10.0',
+	},
+	'queue.write.auto-reverted': {
+		type: 'queue.write.auto-reverted',
+		domain: 'SYNC',
+		key: 'health.logs.event.queue_write_auto_reverted',
+		label: 'Reverted a change your store rejected',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.born-twice-requeue': {

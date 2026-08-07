@@ -14,7 +14,8 @@ export type PersistLogRow = (
 	level: 'debug' | 'info' | 'warn' | 'error',
 	message: string,
 	context: Record<string, unknown>,
-	terminal?: LogTerminalFields
+	terminal?: LogTerminalFields,
+	toast?: { title: string; description?: string }
 ) => void;
 
 /**
@@ -36,6 +37,13 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
 	visible?: boolean;
 	/** Cashier-facing severity when it intentionally differs from the engine severity. */
 	level?: 'info' | 'warn' | 'error';
+	/**
+	 * Request a cashier-facing toast for this row. Returns the toast content
+	 * separately from `message`: the persisted row message is forensic (record
+	 * ids, HTTP codes, repeat-collapse discrimination) while a snackbar has to
+	 * read as a sentence the cashier acts on.
+	 */
+	toast?(event: SyncEvent, fields: SyncEventFieldsBase): { title: string; description?: string };
 	/** Return false to route this occurrence to the check ring instead of a row
 	 *  (idle work). Omit to always persist. */
 	didWork?(fields: SyncEventFields<T>): boolean;
@@ -314,6 +322,24 @@ const CONFORMANCE_TABLE = {
 		outcome: 'rejected',
 		message: recordMessage('needs revision'),
 	},
+	'queue.write.auto-reverted': {
+		operationType: 'sync.record',
+		outcome: 'recovered',
+		level: 'error',
+		toast(event, fields) {
+			// The server's human-readable message ("Sorry, you are not allowed to
+			// edit this resource.", localized by WP) over the machine code.
+			const reason = sanitizeReason(fields.serverMessage) ?? sanitizeReason(fields.reason);
+			const detail = reason === undefined || reason.endsWith('.') ? reason : `${reason}.`;
+			return {
+				title: 'Change rejected by your store — reverted',
+				description: detail
+					? `${detail} See Store health for details.`
+					: 'See Store health for details.',
+			};
+		},
+		message: recordMessage('change reverted to server value; see Store health'),
+	},
 	'queue.write.conflict-transition': {
 		operationType: 'sync.record',
 		outcome: 'failed',
@@ -568,6 +594,12 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			if (reason === undefined) delete context.reason;
 			else context.reason = reason;
 		}
+		// serverMessage is server-provided prose — same redaction contract as reason.
+		if (fields.serverMessage !== undefined) {
+			const serverMessage = sanitizeReason(fields.serverMessage);
+			if (serverMessage === undefined) delete context.serverMessage;
+			else context.serverMessage = serverMessage;
+		}
 		// The engine reports its cadence in milliseconds because it has no idea the
 		// Performance screen exists. Naming the preset here — where the presets are
 		// defined — turns "tierMs: 60000" into a row a merchant and a support
@@ -616,7 +648,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 				...(durationMs !== undefined
 					? { durationMs, startedAt: (event.at ?? nowMs()) - durationMs }
 					: {}),
-			}
+			},
+			conformance.toast?.(event, { ...fields, ...(reason ? { reason } : {}) })
 		);
 		// Presentation stays warn, but a lane crash still promotes the preceding
 		// recorder evidence just as its original error-level row did.

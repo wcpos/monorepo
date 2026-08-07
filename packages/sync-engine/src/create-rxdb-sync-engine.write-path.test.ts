@@ -178,6 +178,69 @@ function routedFetch(
 	return { state, fetch };
 }
 
+const PRODUCT_ID = 501;
+
+function productPayload(stockQuantity: number): Record<string, unknown> {
+	return {
+		id: PRODUCT_ID,
+		name: 'Auto-revert product',
+		type: 'simple',
+		price: '12.50',
+		stock_status: 'instock',
+		stock_quantity: stockQuantity,
+		categories: [],
+		brands: [],
+		on_sale: false,
+		featured: false,
+		meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+		_rxdb_revision: 'sha256:server-truth',
+	};
+}
+
+async function insertServerBornProduct(
+	engine: RxdbSyncEngine,
+	stockQuantity: number
+): Promise<void> {
+	const scope = engine.active();
+	if (!scope) throw new Error('no active scope');
+	const facet = writeFacetFor('products');
+	if (!facet) throw new Error('no products write facet');
+	await facet.upsertServerDocument(
+		scope.database,
+		facet.documentFromServerPayload(productPayload(stockQuantity))
+	);
+}
+
+async function productJson(engine: RxdbSyncEngine): Promise<Record<string, unknown> | null> {
+	const scope = engine.active();
+	if (!scope) throw new Error('no active scope');
+	const doc = await scope.database.collections.products.findOne(UUID_A).exec();
+	return doc?.toJSON() ?? null;
+}
+
+function rejectedProductFetch(options: { failPull?: boolean } = {}) {
+	const pulls: number[][] = [];
+	const fetch = async (url: string): Promise<Response> => {
+		const parsed = new URL(url);
+		if (parsed.pathname.includes('/push/')) {
+			return Response.json(
+				{
+					code: 'woocommerce_rest_cannot_edit',
+					message: 'Sorry, you are not allowed to edit this resource.',
+				},
+				{ status: 403 }
+			);
+		}
+		if (!parsed.pathname.endsWith('/products')) throw new Error(`unexpected ${parsed.pathname}`);
+		pulls.push(
+			(parsed.searchParams.get('include') ?? '').split(',').map(Number).filter(Number.isSafeInteger)
+		);
+		if (options.failPull) return new Response('unavailable', { status: 503 });
+		return Response.json([productPayload(9)]);
+	};
+	return { pulls, fetch };
+}
+
 function withAckDocument(
 	server: ReturnType<typeof createFakeWriteServer>,
 	mapDocument: (document: Record<string, unknown> | null) => Record<string, unknown> | null
@@ -1108,6 +1171,109 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		expect(events.some((event) => event.type === 'write-rejected')).toBe(true);
 		expect(engine.status().queueDepth).toBe(0);
 		await engine.dispose();
+	});
+
+	it('auto-reverts a rejected catalog mutation to server truth without a pull lane', async () => {
+		const route = rejectedProductFetch();
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			const receipt = await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+			await vi.waitFor(async () => {
+				expect((await productJson(engine))?.stockQuantity).toBe(9);
+				expect(await engine.conflicts()).toEqual([]);
+			});
+			expect(route.pulls).toEqual([[PRODUCT_ID]]);
+			expect(diagnostics).toContainEqual(
+				expect.objectContaining({
+					type: 'queue.write.auto-reverted',
+					level: 'error',
+					collection: 'products',
+					fields: expect.objectContaining({
+						recordId: UUID_A,
+						mutationId: receipt.mutationId,
+						status: 403,
+						reason: 'woocommerce_rest_cannot_edit',
+						// The WP-localized sentence the cashier sees — not the machine code.
+						serverMessage: 'Sorry, you are not allowed to edit this resource.',
+					}),
+				})
+			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('never auto-reverts a rejected order mutation', async () => {
+		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
+		server.script(() => ({ kind: 'cannot_delete' }));
+		const { state, fetch } = routedFetch(server, () => ({ status: 'on-hold' }));
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({ fetch, diagnostics: (event) => diagnostics.push(event) });
+		try {
+			await engine.ready;
+			await insertServerBornOrder(engine, UUID_A, {
+				wooOrderId: 42,
+				revision: 'sha256:server-r1',
+			});
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { status: 'completed' },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+			expect(await engine.conflicts()).toEqual([
+				expect.objectContaining({ mutationId: receipt.mutationId, status: 'rejected' }),
+			]);
+			expect(state.orderPulls).toEqual([]);
+			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('leaves a rejected catalog mutation parked when the auto-revert fetch fails', async () => {
+		const route = rejectedProductFetch({ failPull: true });
+		const diagnostics: SyncEvent[] = [];
+		const engine = engineWith({
+			fetch: route.fetch,
+			diagnostics: (event) => diagnostics.push(event),
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 2);
+			const receipt = await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: productPayload(2),
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ rejected: 1 });
+			await vi.waitFor(() => expect(route.pulls).toEqual([[PRODUCT_ID]]));
+			expect(await engine.conflicts()).toEqual([
+				expect.objectContaining({ mutationId: receipt.mutationId, status: 'rejected' }),
+			]);
+			expect((await productJson(engine))?.stockQuantity).toBe(2);
+			expect(diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(false);
+		} finally {
+			await engine.dispose();
+		}
 	});
 
 	it('the queue survives A→B→A: an offline write drains after the return', async () => {

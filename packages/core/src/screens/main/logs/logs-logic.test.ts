@@ -328,6 +328,59 @@ describe('deriveStuckRecords', () => {
 		expect(deriveStuckRecords(rows)).toHaveLength(0);
 	});
 
+	it('clears a rejected record whose latest row says it recovered', () => {
+		const rows = [
+			recordRow('auto-reverted', 300, 'recovered', {
+				recordId: 812,
+				collection: 'products',
+				type: 'queue.write.auto-reverted',
+			}),
+			recordRow('rejected-before', 200, 'rejected', {
+				recordId: 812,
+				collection: 'products',
+				type: 'push.rejected',
+			}),
+		];
+		expect(deriveStuckRecords(rows)).toHaveLength(0);
+	});
+
+	it('clears a rejected record once a requeue-rebuilt row says it is back in flight', () => {
+		const rows = [
+			recordRow('requeued', 300, 'recovered', {
+				recordId: 813,
+				collection: 'products',
+				type: 'queue.write.requeue-rebuilt',
+			}),
+			recordRow('rejected-before', 200, 'rejected', {
+				recordId: 813,
+				collection: 'products',
+				type: 'push.rejected',
+			}),
+		];
+		expect(deriveStuckRecords(rows)).toHaveLength(0);
+	});
+
+	it('re-marks a record stuck when a fresh failure lands after a recovered row', () => {
+		const rows = [
+			recordRow('rejected-again', 400, 'rejected', {
+				recordId: 814,
+				collection: 'products',
+				type: 'push.rejected',
+			}),
+			recordRow('requeued', 300, 'recovered', {
+				recordId: 814,
+				collection: 'products',
+				type: 'queue.write.requeue-rebuilt',
+			}),
+			recordRow('rejected-before', 200, 'rejected', {
+				recordId: 814,
+				collection: 'products',
+				type: 'push.rejected',
+			}),
+		];
+		expect(deriveStuckRecords(rows)).toHaveLength(1);
+	});
+
 	it('skips cancelled/unknown rows so an older decisive row can rule', () => {
 		const rows = [
 			recordRow('aborted', 300, 'cancelled', { recordId: 9, collection: 'products' }),

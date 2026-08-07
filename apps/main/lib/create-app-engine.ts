@@ -335,8 +335,22 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// the effect that rebinds the logger database runs, so an epoch captured
 	// here could be permanently stale.
 	const syncLogObserver = createSyncLogObserver({
-		persist: (level, message, context, terminal) => {
-			engineLogger[level](message, { context, terminal });
+		persist: (level, message, context, terminal, toast) => {
+			engineLogger[level](message, {
+				context,
+				terminal,
+				...(toast
+					? {
+							showToast: true,
+							toast: {
+								// The persisted message is forensic (record id, HTTP code); the
+								// snackbar gets the cashier-readable sentence instead.
+								title: toast.title,
+								...(toast.description !== undefined ? { text2: toast.description } : {}),
+							},
+						}
+					: {}),
+			});
 		},
 	});
 

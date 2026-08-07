@@ -171,6 +171,8 @@ export type WriteOutcomeEvent =
 			mutationId: string;
 			status?: number;
 			reason?: string;
+			/** The server's human-readable message; `reason` is the machine code. */
+			serverMessage?: string;
 	  }
 	/**
 	 * R1: the server ACKED an order the POS built, but the money it returned is not
@@ -555,7 +557,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								currentRevision: conflict.currentRevision,
 							});
 						}
-						for (const { mutation: dead, status, reason } of result.rejected) {
+						for (const { mutation: dead, status, reason, serverMessage } of result.rejected) {
 							// Dead-letter cleanup (#507 D): the rejected mutation will never
 							// push, so drop it from the record's pendingMutationIds (+ dirty
 							// when empty) — the pull-apply guard frees the record and the next
@@ -586,6 +588,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								mutationId: dead.mutationId,
 								status,
 								reason,
+								serverMessage,
 							});
 						}
 						deps.setQueueDepth(stillPending.size);

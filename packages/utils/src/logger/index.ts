@@ -45,6 +45,7 @@ export interface LoggerOptions {
 	context?: any;
 	terminal?: LogTerminalFields;
 	toast?: {
+		title?: string; // Override the toast title when the log message is forensic (ids, codes) rather than cashier-readable
 		text2?: string; // Secondary message
 		dismissable?: boolean; // Show close button
 		showErrorCode?: boolean; // Show error code "Help" link (default: true if errorCode exists)
@@ -634,7 +635,7 @@ const mainTransport = (props: any) => {
 		// Build toast config using NEW format (not legacy text1/text2)
 		const toastConfig: any = {
 			type: toastType,
-			title: message, // New format uses 'title' not 'text1'
+			title: options.toast?.title ?? message, // New format uses 'title' not 'text1'
 		};
 
 		// Add secondary message (description in new format)
