@@ -1151,6 +1151,7 @@
 	"health.logs.event.engine_reconnect_retick": "Resumed syncing after reconnecting",
 	"health.logs.event.engine_reset_needs_confirmation": "A data reset is waiting for your confirmation",
 	"health.logs.event.engine_scope_switched": "Switched to another store",
+	"health.logs.event.engine_write_leader_degraded": "This browser can only sync one tab at a time",
 	"health.logs.event.maintenance_lane_error": "A background maintenance task failed",
 	"health.logs.event.maintenance_lane_tick": "Background maintenance ran",
 	"health.logs.event.product_browse_window_approximate": "Product totals are approximate in a catalogue this large",

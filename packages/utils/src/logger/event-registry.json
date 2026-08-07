@@ -282,6 +282,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "engine.write-leader.degraded",
+		"domain": "SYNC",
+		"label": "This browser can only sync one tab at a time",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "maintenance.lane.error",
 		"domain": "SYNC",
 		"label": "A background maintenance task failed",

@@ -110,6 +110,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.engine_reset_needs_confirmation');
 		case 'engine.scope-switched':
 			return t('health.logs.event.engine_scope_switched');
+		case 'engine.write-leader.degraded':
+			return t('health.logs.event.engine_write_leader_degraded');
 		case 'maintenance.lane.error':
 			return t('health.logs.event.maintenance_lane_error');
 		case 'maintenance.lane.tick':
