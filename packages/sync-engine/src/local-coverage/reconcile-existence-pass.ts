@@ -9,21 +9,19 @@ import {
 /**
  * Leg-3 existence reconcile — the pure bucket-walk orchestration (ADR 0014 increment 5c-core).
  *
- * Walks the wooId space bucket by bucket; for each bucket it diffs the client's local manifest slice
- * against the server's authoritative set (reconcileBucketPlan) and dispatches the outcome: prune the
- * stale records, (re)pull the missing/changed ones. This is the periodic convergence backstop — Legs 1-2
- * carry the fast incremental path; this is the audit that guarantees the client's set eventually equals
- * the server's, catching the out-of-band removals no hook ever reported.
+ * Walks the locally occupied wooId buckets; for each nonempty local manifest slice it diffs against the
+ * server's authoritative set (reconcileBucketPlan), prunes stale records, and reports missing/changed
+ * records without downloading them. Coverage gaps belong to the census and polite demand lanes.
  *
- * Pure w.r.t. I/O: every side effect (manifest read, server fetch, prune, pull) is injected, so the
+ * Pure w.r.t. I/O: every side effect (manifest read, server fetch, prune) is injected, so the
  * bucket-walk logic is testable in isolation and the caller owns storage/transport/cadence. The dirty
  * guard lives in reconcileBucketPlan — the caller marks `dirty` on the local entries it returns.
  *
  * CONCURRENCY STANCE (#949 tranche 2, ruling R10b). The walk yields to the event loop between
- * buckets, so a pull or a cashier's write CAN land mid-walk. That is not a new exposure — every
+ * buckets, so another lane or a cashier's write CAN land mid-walk. That is not a new exposure — every
  * `await` in this loop already exposed the same window — and it is safe by construction:
  *
- *  - The unit of atomicity is a BUCKET, not the walk. A bucket's read -> plan -> prune -> pull
+ *  - The unit of atomicity is a BUCKET, not the walk. A bucket's read -> plan -> prune
  *    sequence contains no yield, so no bucket is ever left half-applied and the coverage ledger's
  *    invariants (#942/#959) never observe a partial bucket.
  *  - Buckets are disjoint wooId ranges, so a bucket's plan can never be invalidated by work done
@@ -41,9 +39,10 @@ import {
 
 export type ReconcileSummary = {
 	buckets: number;
+	emptyBuckets: number;
 	pruned: number;
-	pulled: number;
-	repulled: number;
+	missing: number;
+	changed: number;
 	skippedDirty: number;
 };
 
@@ -54,23 +53,22 @@ export async function runExistenceReconcile(input: {
 	readLocalBucket: (lo: number, hi: number) => Promise<LocalManifestEntry[]>;
 	fetchServerBucket: (bucket: number, bucketSize: number) => Promise<ServerDigestEntry[]>;
 	executePrune: (actions: ReconcileAction[]) => Promise<void>;
-	/** Handles both pull (missing) and repull (changed) — both are a targeted server fetch. */
-	enqueuePull: (actions: ReconcileAction[]) => Promise<void>;
 	/** Stops the walk between buckets on teardown/scope-switch (no partial bucket left half-applied). */
 	isAborted?: () => boolean;
 }): Promise<ReconcileSummary> {
 	const summary: ReconcileSummary = {
 		buckets: 0,
+		emptyBuckets: 0,
 		pruned: 0,
-		pulled: 0,
-		repulled: 0,
+		missing: 0,
+		changed: 0,
 		skippedDirty: 0,
 	};
 
 	let iteration = 0;
 	for (const bucket of input.buckets) {
 		// Hand the event loop a turn BETWEEN buckets — never inside one (#949 tranche 2, R10b).
-		// A bucket's read -> plan -> prune -> pull sequence stays one atomic unit, so the walk
+		// A bucket's read -> plan -> prune sequence stays one atomic unit, so the walk
 		// still never leaves a bucket half-applied; this only widens the gap the walk already
 		// had between them, which every await here already exposed to concurrent writes.
 		// The abort check below deliberately follows the yield, so a teardown that lands WHILE
@@ -85,12 +83,14 @@ export async function runExistenceReconcile(input: {
 		const lo = bucket * input.bucketSize;
 		const hi = lo + input.bucketSize;
 
-		const [local, server] = await Promise.all([
-			input.readLocalBucket(lo, hi),
-			input.fetchServerBucket(bucket, input.bucketSize),
-		]);
+		const local = await input.readLocalBucket(lo, hi);
+		if (local.length === 0) {
+			summary.emptyBuckets += 1;
+			continue;
+		}
+		const server = await input.fetchServerBucket(bucket, input.bucketSize);
 		// Re-check AFTER the in-flight reads: a scope-switch/teardown that flipped `isAborted` while they
-		// were pending must NOT let this bucket's prune/pull mutate the DB post-teardown (codex P2).
+		// were pending must NOT let this bucket's prune mutate the DB post-teardown (codex P2).
 		if (input.isAborted?.()) {
 			break;
 		}
@@ -99,15 +99,10 @@ export async function runExistenceReconcile(input: {
 		if (plan.prune.length > 0) {
 			await input.executePrune(plan.prune);
 		}
-		const toPull = [...plan.pull, ...plan.repull];
-		if (toPull.length > 0) {
-			await input.enqueuePull(toPull);
-		}
-
 		summary.buckets += 1;
 		summary.pruned += plan.prune.length;
-		summary.pulled += plan.pull.length;
-		summary.repulled += plan.repull.length;
+		summary.missing += plan.missing.length;
+		summary.changed += plan.changed.length;
 		summary.skippedDirty += plan.skippedDirty.length;
 	}
 

@@ -231,7 +231,10 @@ const CONFORMANCE_TABLE = {
 	'coverage.existence-reconcile': {
 		operationType: 'sync.coverage',
 		outcome: 'ok',
-		didWork: (f) => num(f.pruned) + num(f.pulled) + num(f.repulled) > 0,
+		// Prune is the audit's only executed action. `missing`/`changed` are
+		// observations, and windowed stores keep `missing` > 0 by design — counting
+		// them as work would persist a steady-state row every audit cycle.
+		didWork: (f) => num(f.pruned) > 0,
 	},
 	'coverage.compacted': {
 		// Emitted on every retention pass, including the common no-op one; without

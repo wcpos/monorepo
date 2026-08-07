@@ -255,9 +255,8 @@ describe('LocalCoverage interface', () => {
 		]);
 	});
 
-	it('plans and dispatches a reconcile pass while keeping dirty stale records', async () => {
+	it('plans and dispatches a prune-only reconcile pass while reporting coverage gaps', async () => {
 		const deleteProducts = vi.fn(async () => undefined);
-		const pullProducts = vi.fn(async () => undefined);
 		const coverage = createLocalCoverage({
 			database: coverageDatabase() as never,
 			freshForMs: 1,
@@ -272,20 +271,18 @@ describe('LocalCoverage interface', () => {
 				fetchServerBucket: async () => [{ id: 30, objectType: 'product', digest: 'new' }],
 				deleteProducts,
 				deleteVariations: vi.fn(async () => undefined),
-				pullProducts,
-				pullVariations: vi.fn(async () => undefined),
 			},
 		});
 
 		await expect(coverage.reconcilePass()).resolves.toEqual({
 			buckets: 1,
+			emptyBuckets: 0,
 			pruned: 1,
-			pulled: 1,
-			repulled: 0,
+			missing: 1,
+			changed: 0,
 			skippedDirty: 1,
 		});
 		expect(deleteProducts).toHaveBeenCalledWith([10]);
-		expect(pullProducts).toHaveBeenCalledWith([30]);
 	});
 
 	it('waits for every id-space reconcile before reporting aggregated failures', async () => {
@@ -302,8 +299,6 @@ describe('LocalCoverage interface', () => {
 			fetchServerBucket: async () => [],
 			deleteProducts: async () => undefined,
 			deleteVariations: async () => undefined,
-			pullProducts: async () => undefined,
-			pullVariations: async () => undefined,
 		});
 		const coverage = createLocalCoverage({
 			database: coverageDatabase() as never,

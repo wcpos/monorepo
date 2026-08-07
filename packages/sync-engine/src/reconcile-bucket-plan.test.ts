@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { reconcileBucketPlan } from './reconcile-bucket-plan';
 
-const empty = { prune: [], pull: [], repull: [], skippedDirty: [] };
+const empty = { prune: [], missing: [], changed: [], skippedDirty: [] };
 
 // Terse builders — local entries default to the 'product' lane; overridden where the lane matters.
 const L = (
@@ -31,12 +31,15 @@ describe('reconcileBucketPlan', () => {
 		expect(reconcileBucketPlan([L(5, 'a')], [])).toEqual({ ...empty, prune: [P(5)] });
 	});
 
-	it('pulls a server record the client is missing', () => {
-		expect(reconcileBucketPlan([], [S(5, 'a')])).toEqual({ ...empty, pull: [P(5)] });
+	it('classifies a server record the client is missing', () => {
+		expect(reconcileBucketPlan([], [S(5, 'a')])).toEqual({ ...empty, missing: [P(5)] });
 	});
 
-	it('repulls a record present both sides whose digest differs (incl. hook-bypass edits)', () => {
-		expect(reconcileBucketPlan([L(5, 'old')], [S(5, 'new')])).toEqual({ ...empty, repull: [P(5)] });
+	it('classifies a record present both sides whose digest differs (incl. hook-bypass edits)', () => {
+		expect(reconcileBucketPlan([L(5, 'old')], [S(5, 'new')])).toEqual({
+			...empty,
+			changed: [P(5)],
+		});
 	});
 
 	it('does nothing when the digests match (in sync)', () => {
@@ -44,19 +47,19 @@ describe('reconcileBucketPlan', () => {
 	});
 
 	it('carries the lane per action so the executor routes products vs variations', () => {
-		// A bucket holds both lanes (shared wp_posts id space). Prune a local variation; pull a server variation.
+		// A bucket holds both lanes (shared wp_posts id space). Prune a local variation; report a missing server variation.
 		const plan = reconcileBucketPlan(
 			[L(5, 'a', { objectType: 'variation' })],
 			[S(9, 'b', 'variation')]
 		);
 		expect(plan.prune).toEqual([P(5, 'variation')]);
-		expect(plan.pull).toEqual([P(9, 'variation')]); // lane recovered from the SERVER entry (no local row)
+		expect(plan.missing).toEqual([P(9, 'variation')]); // lane recovered from the SERVER entry (no local row)
 	});
 
 	it('compares digests as strings — a >2^53 value that would collide as a Number stays distinct', () => {
 		expect(reconcileBucketPlan([L(5, '9007199254740993')], [S(5, '9007199254740995')])).toEqual({
 			...empty,
-			repull: [P(5)],
+			changed: [P(5)],
 		});
 	});
 
@@ -68,7 +71,7 @@ describe('reconcileBucketPlan', () => {
 			});
 		});
 
-		it('never repulls a dirty record whose digest differs — surfaces it in skippedDirty', () => {
+		it('never classifies a dirty record whose digest differs as changed — surfaces it in skippedDirty', () => {
 			expect(reconcileBucketPlan([L(5, 'old', { dirty: true })], [S(5, 'new')])).toEqual({
 				...empty,
 				skippedDirty: [P(5)],
@@ -79,8 +82,8 @@ describe('reconcileBucketPlan', () => {
 			expect(reconcileBucketPlan([L(5, 'a', { dirty: true })], [S(5, 'a')])).toEqual(empty);
 		});
 
-		it('keeps a dirty record out of pull (it IS local, just not pruned/repulled)', () => {
-			expect(reconcileBucketPlan([L(5, 'a', { dirty: true })], [S(5, 'a')]).pull).toEqual([]);
+		it('keeps a dirty resident record out of missing', () => {
+			expect(reconcileBucketPlan([L(5, 'a', { dirty: true })], [S(5, 'a')]).missing).toEqual([]);
 		});
 	});
 
@@ -91,15 +94,15 @@ describe('reconcileBucketPlan', () => {
 	it('composes all four outcomes in one bucket', () => {
 		const local = [
 			L(1, 'same'), // match → no-op
-			L(2, 'old'), // differs → repull
+			L(2, 'old'), // differs → changed
 			L(3, 'gone'), // server-absent → prune
 			L(4, 'x', { dirty: true }), // dirty + server-absent → skippedDirty
 		];
-		const server = [S(1, 'same'), S(2, 'new'), S(6, 'fresh', 'variation')]; // 6: local-absent → pull (variation)
+		const server = [S(1, 'same'), S(2, 'new'), S(6, 'fresh', 'variation')]; // 6: local-absent → missing (variation)
 		expect(reconcileBucketPlan(local, server)).toEqual({
 			prune: [P(3)],
-			pull: [P(6, 'variation')],
-			repull: [P(2)],
+			missing: [P(6, 'variation')],
+			changed: [P(2)],
 			skippedDirty: [P(4)],
 		});
 	});

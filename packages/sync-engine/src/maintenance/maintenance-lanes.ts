@@ -568,7 +568,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			fields: { ...result, durationMs: now() - startedAt },
 		});
 		return {
-			summary: `Existence reconcile: ${result.buckets} buckets, ${result.pruned} pruned, ${result.pulled} pulled, ${result.repulled} repulled, ${result.skippedDirty} dirty skipped`,
+			summary: `Existence audit: ${result.buckets} buckets (${result.emptyBuckets} empty skipped), ${result.pruned} pruned, ${result.missing} missing (not fetched), ${result.changed} changed (not fetched), ${result.skippedDirty} dirty skipped`,
 		};
 	});
 

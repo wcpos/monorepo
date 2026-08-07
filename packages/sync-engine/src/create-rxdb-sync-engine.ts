@@ -797,7 +797,6 @@ export function createRxdbSyncEngine(
 					database: db,
 					fetcher,
 					ports,
-					barcodeSelectors: () => barcodeSelectorsFor(scopeId),
 				}),
 				freshForMs: ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 				retainStaleForMs: COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS,

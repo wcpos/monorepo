@@ -62,7 +62,7 @@ export async function resolveDirtyWooIds(
 /**
  * Run one existence-reconcile audit. Derives the bucket span from the max local wooId, marks dirty
  * records from the pending-mutation queue, and drives the pure walk — pruning stale records (reusing the
- * lane delete handlers, which already remove the doc AND its manifest row) and (re)pulling missing/changed.
+ * lane delete handlers, which already remove the doc AND its manifest row) and reporting missing/changed.
  */
 export async function reconcileExistence(deps: {
 	bucketSize: number;
@@ -73,15 +73,14 @@ export async function reconcileExistence(deps: {
 	/** Removes the product docs AND their manifest rows (the tick's deleteProducts handler). */
 	deleteProducts: (wooIds: number[]) => Promise<void>;
 	deleteVariations: (wooIds: number[]) => Promise<void>;
-	pullProducts: (wooIds: number[]) => Promise<void>;
-	pullVariations: (wooIds: number[]) => Promise<void>;
 	isAborted?: () => boolean;
 }): Promise<ReconcileSummary> {
 	const emptySummary: ReconcileSummary = {
 		buckets: 0,
+		emptyBuckets: 0,
 		pruned: 0,
-		pulled: 0,
-		repulled: 0,
+		missing: 0,
+		changed: 0,
 		skippedDirty: 0,
 	};
 	const maxWooId = await deps.maxWooId();
@@ -109,15 +108,6 @@ export async function reconcileExistence(deps: {
 			}
 			if (variationWooIds.length > 0) {
 				await deps.deleteVariations(variationWooIds);
-			}
-		},
-		enqueuePull: async (actions) => {
-			const { productWooIds, variationWooIds } = partitionActionsByLane(actions);
-			if (productWooIds.length > 0) {
-				await deps.pullProducts(productWooIds);
-			}
-			if (variationWooIds.length > 0) {
-				await deps.pullVariations(variationWooIds);
 			}
 		},
 		isAborted: deps.isAborted,

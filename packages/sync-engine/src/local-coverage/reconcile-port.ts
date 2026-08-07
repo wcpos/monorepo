@@ -1,20 +1,14 @@
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
-import { pullTargetedByIds } from '../change-signal/change-signal-handlers';
-import { COLLECTION_DESCRIPTORS } from '../collections/collection-descriptors';
 import { forEachYielding } from '../event-loop-yield';
-import { manifestRowOf } from '../materialization/record-materialization';
-import { chunk, orderDocumentFromWooPayload, WOO_REST_MAX_PER_PAGE } from '../scheduler';
 import { EngineOrderRepository } from '../write-path/engine-order-repository';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import {
 	maxManifestWooId,
 	readManifestRange,
 	removeManifestByWooIds,
-	upsertManifestRows,
 } from './rx-existence-manifest-repository';
 
-import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { LocalCoverageReconcilePort, ReconcileRequest } from './local-coverage';
 import type { RxDatabase } from 'rxdb';
 
@@ -31,28 +25,10 @@ type ReconcilePortDeps = {
 	database: RxDatabase;
 	fetcher: (url: string, init?: RequestInit) => Promise<Response>;
 	ports: { site: { syncBaseUrl: string } };
-	/** LIVE read of THIS scope's barcode carriers — a reconcile re-pull
-	 * materializes by them, and it walks in chunks. */
-	barcodeSelectors?: BarcodeSelectorsReader;
 };
 
 export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReconcilePort[] {
 	const { database: db, fetcher, ports } = deps;
-	const targeted = Object.fromEntries(
-		COLLECTION_DESCRIPTORS.filter((descriptor) => descriptor.shape === 'targeted').map(
-			(descriptor) => [descriptor.collection, descriptor]
-		)
-	) as Record<
-		'products' | 'variations' | 'customers',
-		Extract<(typeof COLLECTION_DESCRIPTORS)[number], { shape: 'targeted' }>
-	>;
-	const handlerContext = {
-		database: db,
-		fetch: fetcher,
-		syncBaseUrl: ports.site.syncBaseUrl,
-		persistState: async () => undefined,
-		log: () => undefined,
-	};
 	const reconcilePort = (
 		manifestName: 'existenceManifest' | 'existenceManifestCustomers' | 'existenceManifestOrders',
 		collection: 'products' | 'customers' | 'orders'
@@ -109,49 +85,6 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 				wooIds.filter((wooId) => !protectedWooIds.has(wooId))
 			);
 		};
-		const pullTargetedAndPopulateManifest = async (
-			descriptor: (typeof targeted)[keyof typeof targeted],
-			wooIds: number[],
-			request?: ReconcileRequest
-		) => {
-			await pullTargetedByIds(
-				{
-					...handlerContext,
-					fetch: request?.fetcher ?? fetcher,
-					...(deps.barcodeSelectors ? { barcodeSelectors: deps.barcodeSelectors } : {}),
-				},
-				descriptor,
-				wooIds,
-				async (documents) => {
-					let publishable = documents;
-					if (descriptor.collection === 'products') {
-						const unpublishedWooIds: number[] = [];
-						publishable = documents.filter((document) => {
-							if ((document as { payload?: { status?: unknown } }).payload?.status === 'publish')
-								return true;
-							const wooId = (document as { wooProductId?: unknown }).wooProductId;
-							if (typeof wooId === 'number') unpublishedWooIds.push(wooId);
-							return false;
-						});
-						if (unpublishedWooIds.length > 0)
-							await removeTargeted('products', 'wooProductId', unpublishedWooIds);
-					}
-					const manifestRows = publishable.flatMap((document) =>
-						manifestRowOf(document) ? [manifestRowOf(document)!] : []
-					);
-					if (publishable.length > 0)
-						assertBulkSuccess(
-							await db.collections[descriptor.collection].bulkUpsert(publishable as never[]),
-							'create-rxdb-sync-engine upsert'
-						);
-					if (manifestRows.length > 0) await upsertManifestRows(manifest, manifestRows);
-				},
-				async (missingWooIds) => {
-					await removeTargeted(descriptor.collection, descriptor.wooIdField, missingWooIds);
-					return missingWooIds.length;
-				}
-			);
-		};
 		return {
 			bucketSize: 1000,
 			maxWooId: () => maxManifestWooId(manifest),
@@ -187,34 +120,6 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 				);
 			},
 			deleteVariations: (wooIds: number[]) => removeTargeted('variations', 'wooId', wooIds),
-			pullProducts: async (wooIds: number[], request?: ReconcileRequest) => {
-				if (collection === 'orders') {
-					for (const batch of chunk(wooIds, WOO_REST_MAX_PER_PAGE)) {
-						// No `dp` — see the monetary-precision note in rx-scheduler-order-fetcher (#946).
-						const response = await (request?.fetcher ?? fetcher)(
-							`${ports.site.syncBaseUrl}/orders?include=${batch.join(',')}&per_page=${batch.length}&orderby=include`,
-							request?.signal ? { signal: request.signal } : undefined
-						);
-						if (!response.ok) throw new Error(`order existence pull failed: ${response.status}`);
-						const payloads = (await response.json()) as Record<string, unknown>[];
-						const payloadByWooId = new Map(
-							payloads.map((payload) => [Number(payload.id), payload])
-						);
-						const existingPayloads = batch.flatMap((wooId) => {
-							const payload = payloadByWooId.get(wooId);
-							return payload ? [payload] : [];
-						});
-						await new EngineOrderRepository(db.collections as never).upsertMany(
-							existingPayloads.map((payload) => orderDocumentFromWooPayload(payload))
-						);
-					}
-					return;
-				}
-				await pullTargetedAndPopulateManifest(targeted[collection], wooIds, request);
-			},
-			pullVariations: async (wooIds: number[], request?: ReconcileRequest) => {
-				await pullTargetedAndPopulateManifest(targeted.variations, wooIds, request);
-			},
 		};
 	};
 	return [

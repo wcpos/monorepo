@@ -76,8 +76,6 @@ export type LocalCoverageReconcilePort = {
 	) => Promise<ServerDigestEntry[]>;
 	deleteProducts: (wooIds: number[]) => Promise<void>;
 	deleteVariations: (wooIds: number[]) => Promise<void>;
-	pullProducts: (wooIds: number[], request?: ReconcileRequest) => Promise<void>;
-	pullVariations: (wooIds: number[], request?: ReconcileRequest) => Promise<void>;
 	isAborted?: () => boolean;
 };
 
@@ -160,9 +158,10 @@ export interface LocalCoverage {
 
 const emptyReconcileSummary = (): ReconcileSummary => ({
 	buckets: 0,
+	emptyBuckets: 0,
 	pruned: 0,
-	pulled: 0,
-	repulled: 0,
+	missing: 0,
+	changed: 0,
 	skippedDirty: 0,
 });
 
@@ -278,10 +277,6 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 						...port,
 						fetchServerBucket: (bucket, bucketSize) =>
 							port.fetchServerBucket(bucket, bucketSize, request),
-						pullProducts: (wooIds) =>
-							request ? port.pullProducts(wooIds, request) : port.pullProducts(wooIds),
-						pullVariations: (wooIds) =>
-							request ? port.pullVariations(wooIds, request) : port.pullVariations(wooIds),
 						isAborted: () => signal?.aborted === true || port.isAborted?.() === true,
 					})
 				)
@@ -291,9 +286,10 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 					result.status === 'fulfilled'
 						? {
 								buckets: total.buckets + result.value.buckets,
+								emptyBuckets: total.emptyBuckets + result.value.emptyBuckets,
 								pruned: total.pruned + result.value.pruned,
-								pulled: total.pulled + result.value.pulled,
-								repulled: total.repulled + result.value.repulled,
+								missing: total.missing + result.value.missing,
+								changed: total.changed + result.value.changed,
 								skippedDirty: total.skippedDirty + result.value.skippedDirty,
 							}
 						: total,

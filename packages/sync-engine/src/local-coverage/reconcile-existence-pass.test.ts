@@ -3,11 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { runExistenceReconcile } from './reconcile-existence-pass';
 
-import type {
-	LocalManifestEntry,
-	ReconcileAction,
-	ServerDigestEntry,
-} from '../reconcile-bucket-plan';
+import type { LocalManifestEntry, ServerDigestEntry } from '../reconcile-bucket-plan';
 
 const L = (wooId: number, digest: string, dirty = false): LocalManifestEntry => ({
 	wooId,
@@ -22,16 +18,15 @@ const S = (id: number, digest: string): ServerDigestEntry => ({
 });
 
 describe('runExistenceReconcile', () => {
-	it('walks each bucket by its id-range and dispatches prune + (re)pull, accumulating a summary', async () => {
+	it('audits nonempty local buckets, dispatches prune only, and counts missing/changed records', async () => {
 		const executePrune = vi.fn(async () => undefined);
-		const enqueuePull = vi.fn(async () => undefined);
 		const local: Record<number, LocalManifestEntry[]> = {
-			0: [L(3, 'gone'), L(4, 'old')], // 3 → prune, 4 → repull
-			1: [], // 15 → pull
+			0: [L(3, 'gone'), L(4, 'old')], // 3 → prune, 4 → changed
+			1: [L(12, 'same')], // 15 → missing
 		};
 		const server: Record<number, ServerDigestEntry[]> = {
 			0: [S(4, 'new')],
-			1: [S(15, 'x')],
+			1: [S(12, 'same'), S(15, 'x')],
 		};
 
 		const summary = await runExistenceReconcile({
@@ -40,29 +35,30 @@ describe('runExistenceReconcile', () => {
 			readLocalBucket: async (lo) => local[lo / 10] ?? [],
 			fetchServerBucket: async (bucket) => server[bucket] ?? [],
 			executePrune,
-			enqueuePull,
 		});
 
-		// bucket 0: prune [3], repull [4]; bucket 1: pull [15]
+		// bucket 0: prune [3], changed [4]; bucket 1: missing [15]
 		expect(executePrune).toHaveBeenCalledTimes(1);
 		expect(executePrune).toHaveBeenCalledWith([{ wooId: 3, objectType: 'product' }]);
-		expect((enqueuePull.mock.calls as unknown as [unknown][]).map((c) => c[0])).toEqual([
-			[{ wooId: 4, objectType: 'product' }], // bucket 0 repull
-			[{ wooId: 15, objectType: 'product' }], // bucket 1 pull
-		]);
-		expect(summary).toEqual({ buckets: 2, pruned: 1, pulled: 1, repulled: 1, skippedDirty: 0 });
+		expect(summary).toEqual({
+			buckets: 2,
+			emptyBuckets: 0,
+			pruned: 1,
+			missing: 1,
+			changed: 1,
+			skippedDirty: 0,
+		});
 	});
 
-	it('reads local and server for the correct half-open id-range per bucket', async () => {
-		const readLocalBucket = vi.fn(async () => [] as LocalManifestEntry[]);
+	it('reads local ranges first and skips server fetches for empty local buckets', async () => {
+		const readLocalBucket = vi.fn(async (lo: number) => (lo === 1000 ? [] : [L(lo + 1, 'local')]));
 		const fetchServerBucket = vi.fn(async () => [] as ServerDigestEntry[]);
-		await runExistenceReconcile({
+		const summary = await runExistenceReconcile({
 			buckets: [0, 1, 2],
 			bucketSize: 1000,
 			readLocalBucket,
 			fetchServerBucket,
 			executePrune: vi.fn(async () => undefined),
-			enqueuePull: vi.fn(async () => undefined),
 		});
 		expect(readLocalBucket.mock.calls).toEqual([
 			[0, 1000],
@@ -71,25 +67,29 @@ describe('runExistenceReconcile', () => {
 		]);
 		expect(fetchServerBucket.mock.calls).toEqual([
 			[0, 1000],
-			[1, 1000],
 			[2, 1000],
 		]);
+		expect(summary).toMatchObject({ buckets: 2, emptyBuckets: 1 });
 	});
 
-	it('does not call prune/pull for an in-sync bucket', async () => {
+	it('does not call prune for an in-sync bucket', async () => {
 		const executePrune = vi.fn(async () => undefined);
-		const enqueuePull = vi.fn(async () => undefined);
 		const summary = await runExistenceReconcile({
 			buckets: [0],
 			bucketSize: 10,
 			readLocalBucket: async () => [L(1, 'a')],
 			fetchServerBucket: async () => [S(1, 'a')],
 			executePrune,
-			enqueuePull,
 		});
 		expect(executePrune).not.toHaveBeenCalled();
-		expect(enqueuePull).not.toHaveBeenCalled();
-		expect(summary).toEqual({ buckets: 1, pruned: 0, pulled: 0, repulled: 0, skippedDirty: 0 });
+		expect(summary).toEqual({
+			buckets: 1,
+			emptyBuckets: 0,
+			pruned: 0,
+			missing: 0,
+			changed: 0,
+			skippedDirty: 0,
+		});
 	});
 
 	it('carries the dirty-guard count through and never prunes a dirty record', async () => {
@@ -100,16 +100,14 @@ describe('runExistenceReconcile', () => {
 			readLocalBucket: async () => [L(1, 'a', true)], // dirty + server-absent → skippedDirty, NOT pruned
 			fetchServerBucket: async () => [],
 			executePrune,
-			enqueuePull: vi.fn(async () => undefined),
 		});
 		expect(executePrune).not.toHaveBeenCalled();
 		expect(summary.skippedDirty).toBe(1);
 		expect(summary.pruned).toBe(0);
 	});
 
-	it('does not prune/pull a bucket whose abort flipped DURING its in-flight reads', async () => {
+	it('does not prune a bucket whose abort flipped DURING its sequential reads', async () => {
 		const executePrune = vi.fn(async () => undefined);
-		const enqueuePull = vi.fn(async () => undefined);
 		let aborted = false;
 		const summary = await runExistenceReconcile({
 			buckets: [0],
@@ -120,13 +118,18 @@ describe('runExistenceReconcile', () => {
 			},
 			fetchServerBucket: async () => [],
 			executePrune,
-			enqueuePull,
 			isAborted: () => aborted,
 		});
 		// The post-read re-check bails before mutating.
 		expect(executePrune).not.toHaveBeenCalled();
-		expect(enqueuePull).not.toHaveBeenCalled();
-		expect(summary).toEqual({ buckets: 0, pruned: 0, pulled: 0, repulled: 0, skippedDirty: 0 });
+		expect(summary).toEqual({
+			buckets: 0,
+			emptyBuckets: 0,
+			pruned: 0,
+			missing: 0,
+			changed: 0,
+			skippedDirty: 0,
+		});
 	});
 
 	it('applies the current bucket then stops at the next boundary when aborted mid-apply', async () => {
@@ -139,11 +142,17 @@ describe('runExistenceReconcile', () => {
 			executePrune: async () => {
 				aborted = true; // teardown races in as bucket 0 applies its prune
 			},
-			enqueuePull: vi.fn(async () => undefined),
 			isAborted: () => aborted,
 		});
 		// Bucket 0 fully applied (pruned 1); buckets 1 & 2 skipped at the top-of-loop check.
-		expect(summary).toEqual({ buckets: 1, pruned: 1, pulled: 0, repulled: 0, skippedDirty: 0 });
+		expect(summary).toEqual({
+			buckets: 1,
+			emptyBuckets: 0,
+			pruned: 1,
+			missing: 0,
+			changed: 0,
+			skippedDirty: 0,
+		});
 	});
 
 	// --- event-loop fairness (#949 tranche 2, ruling R10b) ---------------------------------------
@@ -163,10 +172,9 @@ describe('runExistenceReconcile', () => {
 		await runExistenceReconcile({
 			buckets: [0, 1, 2, 3],
 			bucketSize: 10,
-			readLocalBucket: () => Promise.resolve([]),
+			readLocalBucket: (lo) => Promise.resolve([L(lo + 1, 'same')]),
 			fetchServerBucket: () => Promise.resolve([]),
 			executePrune: async () => undefined,
-			enqueuePull: async () => undefined,
 		});
 		running = false;
 
@@ -183,40 +191,42 @@ describe('runExistenceReconcile', () => {
 		const summary = await runExistenceReconcile({
 			buckets: [0, 1],
 			bucketSize: 10,
-			readLocalBucket: async (lo) => (lo === 10 ? [L(3, 'gone')] : []),
+			readLocalBucket: async (lo) => (lo === 0 ? [] : [L(13, 'gone')]),
 			fetchServerBucket: async () => [],
 			executePrune,
-			enqueuePull: async () => undefined,
 			isAborted: () => aborted,
 		});
 
 		expect(executePrune).not.toHaveBeenCalled();
-		expect(summary.buckets).toBe(1);
+		expect(summary).toMatchObject({ buckets: 0, emptyBuckets: 1 });
 	});
 
 	it('re-diffs each bucket against state as of THAT bucket, tolerating a mid-walk write', async () => {
 		// The cashier edits a record in bucket 1 while bucket 0 is being applied. Buckets are
 		// disjoint id ranges, so bucket 0's plan is unaffected and bucket 1 simply sees the new
 		// state when its own read runs — no stale plan is executed against changed data.
-		const enqueuePull = vi.fn(async (_actions: ReconcileAction[]) => undefined);
 		let editedMidWalk = false;
 
 		const summary = await runExistenceReconcile({
 			buckets: [0, 1],
 			bucketSize: 10,
 			readLocalBucket: async (lo) =>
-				lo === 0 ? [L(4, 'old')] : [L(14, editedMidWalk ? 'dirty-now' : 'old', editedMidWalk)],
-			fetchServerBucket: async (bucket) => (bucket === 0 ? [S(4, 'new')] : [S(14, 'new')]),
-			executePrune: async () => undefined,
-			enqueuePull: async (actions) => {
-				editedMidWalk = true; // a write lands as bucket 0 applies
-				await enqueuePull(actions);
+				lo === 0 ? [L(4, 'gone')] : [L(14, editedMidWalk ? 'dirty-now' : 'old', editedMidWalk)],
+			fetchServerBucket: async (bucket) => (bucket === 0 ? [] : [S(14, 'new')]),
+			executePrune: async () => {
+				editedMidWalk = true; // a write lands as bucket 0 applies its prune
 			},
 		});
 
-		// Bucket 0 repulled 4; bucket 1 saw wooId 14 as dirty by the time it was read and left it
-		// to the write path rather than clobbering the un-pushed edit.
-		expect(summary).toEqual({ buckets: 2, pruned: 0, pulled: 0, repulled: 1, skippedDirty: 1 });
-		expect(enqueuePull).toHaveBeenCalledTimes(1);
+		// Bucket 0 pruned 4; bucket 1 saw wooId 14 as dirty by the time it was read and left it
+		// to the write path rather than pruning the un-pushed edit.
+		expect(summary).toEqual({
+			buckets: 2,
+			emptyBuckets: 0,
+			pruned: 1,
+			missing: 0,
+			changed: 0,
+			skippedDirty: 1,
+		});
 	});
 });

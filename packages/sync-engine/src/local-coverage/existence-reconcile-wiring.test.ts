@@ -80,19 +80,17 @@ describe('reconcileExistence', () => {
 		objectType,
 	});
 
-	it('audits every bucket, pruning stale records and pulling missing/changed, via the lane handlers', async () => {
+	it('audits every nonempty bucket, routes prune through delete handlers, and reports missing/changed', async () => {
 		const deleteProducts = vi.fn(async () => undefined);
 		const deleteVariations = vi.fn(async () => undefined);
-		const pullProducts = vi.fn(async () => undefined);
-		const pullVariations = vi.fn(async () => undefined);
 
 		const local: Record<number, ExistenceManifestDocument[]> = {
 			0: [manifest(3, 'gone'), manifest(4, 'v-gone', 'variation')], // both server-absent → prune
-			1: [manifest(1200, 'old')], // digest differs → repull
+			1: [manifest(1200, 'old')], // digest differs → changed
 		};
 		const serverByBucket: Record<number, ServerDigestEntry[]> = {
 			0: [],
-			1: [server(1200, 'new'), server(1300, 'fresh')], // 1300 missing locally → pull
+			1: [server(1200, 'new'), server(1300, 'fresh')], // 1300 missing locally
 		};
 
 		const summary = await reconcileExistence({
@@ -103,17 +101,19 @@ describe('reconcileExistence', () => {
 			fetchServerBucket: async (bucket) => serverByBucket[bucket] ?? [],
 			deleteProducts,
 			deleteVariations,
-			pullProducts,
-			pullVariations,
 		});
 
 		// bucket 0: prune product 3 + variation 4 (routed to the right lane handlers, which also drop manifest rows)
 		expect(deleteProducts).toHaveBeenCalledWith([3]);
 		expect(deleteVariations).toHaveBeenCalledWith([4]);
-		// bucket 1: pull 1300 then repull 1200 (both products; pull precedes repull in the plan dispatch)
-		expect(pullProducts).toHaveBeenCalledWith([1300, 1200]);
-		expect(pullVariations).not.toHaveBeenCalled();
-		expect(summary).toEqual({ buckets: 2, pruned: 2, pulled: 1, repulled: 1, skippedDirty: 0 });
+		expect(summary).toEqual({
+			buckets: 2,
+			emptyBuckets: 0,
+			pruned: 2,
+			missing: 1,
+			changed: 1,
+			skippedDirty: 0,
+		});
 	});
 
 	it('never prunes a record with a pending local write (dirty from the mutation queue)', async () => {
@@ -126,8 +126,6 @@ describe('reconcileExistence', () => {
 			fetchServerBucket: async () => [],
 			deleteProducts,
 			deleteVariations: vi.fn(async () => undefined),
-			pullProducts: vi.fn(async () => undefined),
-			pullVariations: vi.fn(async () => undefined),
 		});
 		expect(deleteProducts).not.toHaveBeenCalled();
 		expect(summary).toMatchObject({ pruned: 0, skippedDirty: 1 });
@@ -143,10 +141,15 @@ describe('reconcileExistence', () => {
 			fetchServerBucket,
 			deleteProducts: vi.fn(async () => undefined),
 			deleteVariations: vi.fn(async () => undefined),
-			pullProducts: vi.fn(async () => undefined),
-			pullVariations: vi.fn(async () => undefined),
 		});
 		expect(fetchServerBucket).not.toHaveBeenCalled();
-		expect(summary).toEqual({ buckets: 0, pruned: 0, pulled: 0, repulled: 0, skippedDirty: 0 });
+		expect(summary).toEqual({
+			buckets: 0,
+			emptyBuckets: 0,
+			pruned: 0,
+			missing: 0,
+			changed: 0,
+			skippedDirty: 0,
+		});
 	});
 });

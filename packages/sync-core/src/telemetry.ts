@@ -186,9 +186,10 @@ export type SyncEventFieldsByType = {
 	};
 	'coverage.existence-reconcile': {
 		readonly buckets?: number;
+		readonly emptyBuckets?: number;
 		readonly pruned: number;
-		readonly pulled: number;
-		readonly repulled: number;
+		readonly missing: number;
+		readonly changed: number;
 		readonly skippedDirty?: number;
 		readonly durationMs?: number;
 	};
