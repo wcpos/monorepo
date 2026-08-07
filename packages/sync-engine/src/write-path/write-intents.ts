@@ -175,12 +175,19 @@ export async function enqueueWriteIntent(input: {
 		const recordRows = rows.filter(
 			(item) => item.collectionName === intent.collection && item.recordId === intent.recordId
 		);
+		// Read the resident before placement so delete deferral sees the same
+		// explicit-or-stored revision fallback used when the mutation is built.
+		const doc = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
+		const stored = doc
+			? (doc.toJSON() as { sync?: { revision?: string }; payload?: Record<string, unknown> })
+			: undefined;
+		const storedRevision = stored?.sync?.revision ?? '';
 		const placement = decideWritePlacement({
 			rows: recordRows,
 			operation: intent.operation,
 			isRecovery: input.provenance !== undefined,
 			canCoalesce,
-			hasBaseRevision: intent.operation !== 'delete' || intent.baseRevision !== undefined,
+			hasBaseRevision: intent.operation !== 'delete' || !!(intent.baseRevision ?? storedRevision),
 		});
 		// DEAD-LETTER RECOVERY GUARD (#832), checked HERE — inside the loop, against
 		// the same `rows` read that decides coalescing — because checking it before
@@ -216,7 +223,9 @@ export async function enqueueWriteIntent(input: {
 		// "recovered work stays independently resolvable" actually hold.
 		const prior = placement.kind === 'coalesce' ? placement.prior : undefined;
 		// A create still ahead in the queue (pending or in flight): a delete queued
-		// behind it defers its baseRevision to the drain-time re-stamp.
+		// behind it defers its baseRevision to the drain-time re-stamp. Append can
+		// consume the base-aware decision; other modes need the raw create-ahead fact
+		// while building a coalesced or conditional mutation.
 		const createAhead =
 			placement.kind === 'append'
 				? placement.deferBaseRevision
@@ -273,13 +282,6 @@ export async function enqueueWriteIntent(input: {
 			return { mutationId: input.mintUuid(), recordId: intent.recordId, annihilated: true };
 		}
 
-		// The resident row, fetched fresh per iteration: revision sourcing, the
-		// coalesced-payload re-materialization, and the dirty-mark all read it.
-		const doc = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
-		const stored = doc
-			? (doc.toJSON() as { sync?: { revision?: string }; payload?: Record<string, unknown> })
-			: undefined;
-
 		let mutation: QueuedMutation;
 		if (intent.operation === 'create') {
 			// A create must target a RESIDENT born-local row (the web contract): the
@@ -305,7 +307,6 @@ export async function enqueueWriteIntent(input: {
 					`write(${intent.operation}): record "${intent.recordId}" is not resident in "${intent.collection}"`
 				);
 			}
-			const storedRevision = stored?.sync?.revision ?? '';
 			if (intent.operation === 'update') {
 				const built = buildUpdateMutation(
 					{

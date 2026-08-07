@@ -80,7 +80,7 @@ export type ConflictResolutionDeps = {
 	queueFor: (database: RxDatabase) => RecordMutationQueue;
 	resolutionInstanceIdFor: () => string;
 	serializeResolution: <T>(op: () => Promise<T>) => Promise<T>;
-	onQueueChanged: (database: RxDatabase) => Promise<void>;
+	onQueueChanged: (database: RxDatabase | null) => Promise<void>;
 	/** The active scope's barcode carriers — a discard rebuilds the optimistic
 	 * document through the same projection an ordinary pull uses. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -102,13 +102,13 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 	const boundBarcodeSelectors = (scopeId: string): BarcodeSelectors | undefined =>
 		deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
 
-	// The in-process `serialize` above orders THIS window's resolutions. Two
+	// The write plane's in-process `serializeResolution` orders THIS window's resolutions. Two
 	// Electron windows are two processes over one storage, and neither chain sees
 	// the other — so the same discard-vs-requeue interleave reappears across
 	// windows. The durable resolution CLAIM closes it (task 43): before a
 	// resolution reads anything it takes a revision-checked claim on the row, which
 	// exactly one window can hold; the other is refused and asks the cashier to
-	// retry. `instanceId` distinguishes the two windows and is minted lazily — a
+	// retry. `resolutionInstanceIdFor` distinguishes the two windows and is minted lazily — a
 	// read-only engine may open on a host without Web Crypto, where `mintUuid`
 	// throws, and an engine that never resolves must not pay for an id it never uses.
 	const nowMs = now;
@@ -622,8 +622,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 					// The resolution changed queue state outside the drain path — refresh
 					// the cached depth and tell status subscribers, or an idle engine
 					// keeps showing the pre-resolution depth.
-					const database = activeDatabase();
-					if (database) await onQueueChanged(database);
+					await onQueueChanged(activeDatabase());
 				}
 			});
 		},

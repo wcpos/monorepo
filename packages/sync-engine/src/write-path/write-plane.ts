@@ -61,7 +61,21 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 	let queueDepth: number | null = null;
 	let lastError: string | null = null;
 	let drainChain: Promise<unknown> = Promise.resolve();
+	// Resolutions run ONE AT A TIME (#832 follow-up, R7b). Two different choices
+	// racing on the same dead letter is not a hypothetical: requeue durably
+	// enqueues its replacement BEFORE it retires the dead letter, so a discard
+	// interleaving in that window destroys the resident while the replacement is
+	// already queued — the drain then pushes the create and the ack's
+	// missing-resident path REMATERIALIZES the order the cashier just confirmed
+	// destroying. Neither side can unwind the other once the drain has claimed the
+	// row, so the fix is to stop the interleave happening. Same idiom as the
+	// queue's own transition chain: serialize, and let each resolution re-read
+	// state inside its own turn (both paths already do).
 	let resolutionChain: Promise<unknown> = Promise.resolve();
+	// This drain instance's id for the durable claim lease (task 43 follow-up):
+	// one per lane, so two Electron windows mint different ids and cannot both hold
+	// one row's claim. Minted lazily on first use — the lane may be constructed on a
+	// host without Web Crypto, and a lane that never drains must not pay for an id.
 	let drainInstanceIdOnce: string | null = null;
 	let resolutionInstanceIdOnce: string | null = null;
 	const ignore = (): undefined => undefined;
@@ -70,8 +84,8 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 		resolutionChain = run.then(ignore, ignore);
 		return run;
 	};
-	const onQueueChanged = async (database: RxDatabase): Promise<void> => {
-		queueDepth = (await queueFor(database).pending()).length;
+	const onQueueChanged = async (database: RxDatabase | null): Promise<void> => {
+		if (database) queueDepth = (await queueFor(database).pending()).length;
 		deps.onStatusChanged();
 	};
 	const drainLane = createWriteDrainLane({
@@ -117,6 +131,10 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 					`write: collection "${intent.collection}" is not client-writeable (no push/ack contract) — writeable collections: orders, products, variations, customers, coupons`
 				);
 			}
+			// Invariant 3's write() half: a pending switch/reset must settle before
+			// the enqueue captures a scope — otherwise the mutation could land in
+			// the OUTGOING store's queue mid-transition. FIFO ops are quick; wait
+			// them out rather than reject a caller-initiated durable write.
 			await deps.settled('write');
 			return deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
@@ -138,6 +156,10 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 				}
 				const receipt = result as WriteReceipt;
 				if (receipt.annihilated) {
+					// The honest terminal contract (gate2 #516 item 3): the delete was
+					// satisfied locally (chain cancelled, resident row removed) — ONE
+					// terminal event for the receipt mutationId, and no 'enqueued'
+					// diagnostics (nothing was enqueued).
 					deps.emitWriteEvent({
 						type: 'write-annihilated',
 						collection: intent.collection,

@@ -37,7 +37,11 @@ describe('decideWritePlacement', () => {
 	});
 
 	it.each([
-		['coalescing disabled', { canCoalesce: false }, [row({ operation: 'create' })]],
+		[
+			'coalescing disabled',
+			{ operation: 'delete', canCoalesce: false },
+			[row({ operation: 'create', attempts: 0 })],
+		],
 		['incoming operation is not delete', { operation: 'update' }, [row({ operation: 'create' })]],
 		['head is not create', { operation: 'delete' }, [row({ operation: 'update' })]],
 		[
@@ -90,22 +94,23 @@ describe('decideWritePlacement', () => {
 		).toEqual({ kind: 'append-if-unchanged', observedIds: ['a', 'z'] });
 	});
 
-	it('defers a revisionless delete only when a pending or claimed create is ahead', () => {
-		expect(
-			decide([row({ operation: 'create', status: 'claimed' })], {
-				operation: 'delete',
-				canCoalesce: false,
-				hasBaseRevision: false,
-			})
-		).toEqual({ kind: 'append', deferBaseRevision: true });
-		expect(
-			decide([row({ operation: 'create', status: 'conflicted' })], {
-				operation: 'delete',
-				canCoalesce: false,
-				hasBaseRevision: false,
-			})
-		).toEqual({ kind: 'append', deferBaseRevision: false });
-	});
+	it.each([
+		['revisionless delete with a claimed create ahead', 'delete', false, 'claimed', true],
+		['non-delete with a claimed create ahead', 'update', false, 'claimed', false],
+		['based delete with a claimed create ahead', 'delete', true, 'claimed', false],
+		['revisionless delete with only a terminal create ahead', 'delete', false, 'conflicted', false],
+	] as const)(
+		'defers the base for %s',
+		(_name, operation, hasBaseRevision, status, deferBaseRevision) => {
+			expect(
+				decide([row({ operation: 'create', status })], {
+					operation,
+					canCoalesce: false,
+					hasBaseRevision,
+				})
+			).toEqual({ kind: 'append', deferBaseRevision });
+		}
+	);
 });
 
 describe('coalescedPayload', () => {
