@@ -5,7 +5,7 @@ import type {
 	SyncEventType,
 	SyncObserver,
 } from '@wcpos/sync-core';
-import type { LogTerminalFields } from '@wcpos/utils/logger';
+import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
 import { presetFor } from '../components/health/performance-logic';
 import { normalizeSyncCollection } from './sync-status';
@@ -480,7 +480,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 	const observe: SyncObserver = (event: SyncEvent) => {
 		const fields = (event.fields ?? {}) as Record<string, unknown>;
 		const mapped = CONFORMANCE.get(event.type);
-		const level = mapped?.level ?? event.level;
+		const isInvisible = mapped?.visible === false;
+		const level = isInvisible ? 'debug' : (mapped?.level ?? event.level);
 		const isFailure = level === 'warn' || level === 'error';
 
 		// Tally BEFORE any gate, so successful attempts — which never persist — still
@@ -492,16 +493,12 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			if (attemptMs > httpMaxMs) httpMaxMs = attemptMs;
 			if (fields.status === 0 || num(fields.status) >= 400) httpErrors += 1;
 		}
-		if (mapped?.visible === false) return;
+		if (isInvisible && !isVerboseDiagnostics()) return;
 
-		// Debug narration never becomes a durable row (spec §1: "Debug never persists
-		// otherwise") — it belongs to the flight recorder. The one exception is a
-		// mapped type marked `forensic` (#899): those debug occurrences ARE forwarded,
-		// at debug — the logger routes them to the recorder ring and only persists
-		// them under verbose diagnostics. Everything else keeps the hard drop, so a
-		// mapped type that later gains a debug emit is never silently relabelled as
-		// `info`.
-		if (level === 'debug' && mapped?.forensic !== true) return;
+		// Debug narration never becomes a durable row unless verbose diagnostics
+		// explicitly admits it: forensic events and invisible internal evidence are
+		// forwarded at debug, which the logger persists only in that mode.
+		if (level === 'debug' && mapped?.forensic !== true && !isInvisible) return;
 
 		if (mapped === undefined && !isFailure) return;
 		// Unreachable for an event from THIS build — `CONFORMANCE` covers every
@@ -517,7 +514,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		// goes to `error` on completionLost/failureLost/renewalLost while
 		// `succeeded` and `failed` are both 0 — and gating those would silently
 		// drop exactly the lost-work evidence this observer exists to preserve.
-		if (conformance.didWork && !isFailure && !conformance.didWork(fields)) return;
+		if (conformance.didWork && !isFailure && !isInvisible && !conformance.didWork(fields)) return;
 
 		const collection =
 			event.collection !== undefined ? normalizeSyncCollection(event.collection) : undefined;
@@ -597,6 +594,9 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			const recordId = recordIdOf(fields);
 			if (recordId !== undefined && context.recordId === undefined) context.recordId = recordId;
 		}
+		if (event.type === 'push.dead-letter-unpersisted' && event.message !== undefined) {
+			context.detail = event.message;
+		}
 		// Only a REAL chain id is forwarded. Minting a synthetic one per event would
 		// make every row unique and so disable repeat-collapse for the ten ungated
 		// non-record types (apply.refresh, queue.write.enqueued/coalesce,
@@ -622,6 +622,11 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 					: {}),
 			}
 		);
+		// Presentation stays warn, but a lane crash still promotes the preceding
+		// recorder evidence just as its original error-level row did.
+		if (event.type === 'maintenance.lane.error') {
+			void promoteRecorder('maintenance.lane.error');
+		}
 	};
 
 	return { observe };

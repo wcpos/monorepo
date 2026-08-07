@@ -2,11 +2,19 @@
 // unless the registry is reset at module scope (same root cause as the loadX()
 // pattern in metrics.test.ts / create-app-engine.test.ts).
 import type { SyncEvent } from '@wcpos/sync-core';
-import type { LogTerminalFields } from '@wcpos/utils/logger';
+import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
 import { createSyncLogObserver } from './sync-log-observer';
 
+jest.mock('@wcpos/utils/logger', () => ({
+	isVerboseDiagnostics: jest.fn(() => false),
+	promoteRecorder: jest.fn(() => Promise.resolve(0)),
+}));
+
 jest.resetModules();
+
+const isVerboseDiagnosticsMock = jest.mocked(isVerboseDiagnostics);
+const promoteRecorderMock = jest.mocked(promoteRecorder);
 
 // `type` is widened back to `string` on purpose. `SyncEventType` closes the
 // vocabulary at compile time, but the observer still has to survive a name from
@@ -25,6 +33,8 @@ describe('createSyncLogObserver', () => {
 	let observer: ReturnType<typeof createSyncLogObserver>;
 
 	beforeEach(() => {
+		jest.clearAllMocks();
+		isVerboseDiagnosticsMock.mockReturnValue(false);
 		rows = [];
 		observer = createSyncLogObserver({
 			persist: (level, message, context, terminal) =>
@@ -445,7 +455,12 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0]).toMatchObject({
 			level: 'error',
 			message: 'orders 4711 — rejected change could not be saved for recovery',
-			context: { type: 'push.dead-letter-unpersisted', recordId: '4711', direction: 'push' },
+			context: {
+				type: 'push.dead-letter-unpersisted',
+				recordId: '4711',
+				direction: 'push',
+				detail: 'dead-letter verdict could not be written to the queue: database failed',
+			},
 			terminal: { operationType: 'sync.record', outcome: 'failed' },
 		});
 	});
@@ -460,6 +475,7 @@ describe('createSyncLogObserver', () => {
 			message: 'lane down',
 			terminal: { operationType: 'sync.lane', outcome: 'failed' },
 		});
+		expect(promoteRecorderMock).toHaveBeenCalledWith('maintenance.lane.error');
 	});
 
 	it('renders single-tab write leadership as a visible lifecycle warning', () => {
@@ -492,6 +508,30 @@ describe('createSyncLogObserver', () => {
 		observer.observe(event({ type: 'queue.drain.progress', level: 'debug' }));
 
 		expect(rows).toHaveLength(0);
+	});
+
+	it('persists invisible narration at debug under verbose diagnostics', () => {
+		isVerboseDiagnosticsMock.mockReturnValue(true);
+		observer.observe(
+			event({
+				type: 'browse-window.eviction-skipped',
+				level: 'warn',
+				message: 'reset won the race',
+				fields: { lane: 'products' },
+			})
+		);
+
+		expect(rows).toEqual([
+			expect.objectContaining({
+				level: 'debug',
+				message: 'reset won the race',
+				context: expect.objectContaining({
+					type: 'browse-window.eviction-skipped',
+					lane: 'products',
+				}),
+				terminal: { operationType: 'sync.other', outcome: 'failed' },
+			}),
+		]);
 	});
 
 	it('does not resolve inherited Object members as conformance entries', () => {
