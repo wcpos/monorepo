@@ -278,6 +278,39 @@ async function variationCreateRequest(
 	);
 }
 
+async function findCreatedVariation(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization,
+	productId: number,
+	sku: string
+): Promise<{ response: APIResponse; record: Record<string, unknown> | null }> {
+	const root = storeUrl.replace(/\/+$/, '');
+	const auth = storeRequestOptions(authorization);
+	const options = { ...auth, params: { ...auth.params, sku } };
+	let response = await request.get(
+		`${root}/wp-json/wc/v3/products/${productId}/variations`,
+		options
+	);
+	if (response.status() === 404) {
+		response = await request.get(
+			`${root}/index.php?rest_route=/wc/v3/products/${productId}/variations`,
+			options
+		);
+	}
+	if (!response.ok()) {
+		throw new Error(`Variation create adoption lookup failed (HTTP ${response.status()})`);
+	}
+	const body: unknown = await response.json().catch(() => null);
+	if (!Array.isArray(body)) {
+		throw new Error('Variation create adoption lookup returned a malformed variation list');
+	}
+	return {
+		response,
+		record: body.map(asRecord).find((record) => record?.sku === sku) ?? null,
+	};
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
 		? (value as Record<string, unknown>)
@@ -478,6 +511,9 @@ export async function createRunPrivateProduct(
 	const id = positiveId(parent);
 	const slug = typeof parent?.slug === 'string' && parent.slug ? parent.slug : null;
 	if (id === null || !slug) {
+		if (id !== null) {
+			await deleteSearchProbe({ request, storeUrl, authorization, collection: 'products', id });
+		}
 		throw new Error('Variable product probe create succeeded without its id and slug');
 	}
 
@@ -488,19 +524,22 @@ export async function createRunPrivateProduct(
 			['Red', 'red'],
 			['Blue', 'blue'],
 		] as const) {
+			const sku = `${token}${suffix}`;
 			const result = await productCreateResponse(
 				() =>
 					variationCreateRequest(request, storeUrl, authorization, id, {
-						sku: `${token}${suffix}`,
+						sku,
 						regular_price: '25.00',
 						status: 'publish',
 						manage_stock: false,
 						attributes: [{ name: attributeName, option }],
 					}),
 				true,
-				'Variation probe creation'
+				'Variation probe creation',
+				() => findCreatedVariation(request, storeUrl, authorization, id, sku)
 			);
-			const variation = unwrapRecord(await result.response.json().catch(() => null));
+			const variation =
+				result.adoptedRecord ?? unwrapRecord(await result.response.json().catch(() => null));
 			if (positiveId(variation) === null) {
 				throw new Error('Variation probe create succeeded without its id');
 			}

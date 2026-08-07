@@ -3,6 +3,7 @@ import { expect } from '@playwright/test';
 import {
 	addCheckoutProbeProduct,
 	findVariableProduct,
+	isolatedProductTest as simpleProductTest,
 	isolatedVariableProductTest as test,
 } from './checkout-probe';
 
@@ -104,9 +105,12 @@ test.describe('Products in POS', () => {
 		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialText);
 	});
 
-	test('should add a simple product to cart by clicking tile', async ({ posPage: page }) => {
-		await addCheckoutProbeProduct(page);
-	});
+	simpleProductTest(
+		'should add a simple product to cart by clicking tile',
+		async ({ posPage: page }) => {
+			await addCheckoutProbeProduct(page);
+		}
+	);
 
 	test('should show variable product tiles in grid view', async ({ posPage: page }) => {
 		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
@@ -127,7 +131,7 @@ test.describe('Products in POS', () => {
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('should add product to cart in table view', async ({ posPage: page }) => {
+	simpleProductTest('should add product to cart in table view', async ({ posPage: page }) => {
 		// Switch to table view
 		await page.getByTestId('view-mode-toggle').click();
 		await expect(page.getByRole('columnheader').first()).toBeVisible({ timeout: 15_000 });

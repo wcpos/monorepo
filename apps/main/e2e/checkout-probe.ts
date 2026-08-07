@@ -238,7 +238,7 @@ export async function addCheckoutProbeProduct(page: Page): Promise<void> {
 export async function findVariableProduct(page: Page, search: Locator): Promise<void> {
 	const probe = variableProbeByPage.get(page);
 	if (probe === undefined) {
-		throw new Error('Run-private product helper requires isolatedProductTest');
+		throw new Error('Run-private product helper requires isolatedVariableProductTest');
 	}
 	if (probe) {
 		await searchAndWaitForServer(page, search, 'products', probe.token);

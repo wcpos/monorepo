@@ -1,11 +1,21 @@
 import { expect, test } from '@playwright/test';
 
+import { findVariableProduct } from './checkout-probe';
 import {
+	createRunPrivateProduct,
 	findCreatedProductRecord,
 	plainPermalinkUrl,
 	productProbeFailureAction,
 	productWriterCredentialsDecision,
 } from './search-probe';
+
+function response(status: number, body: unknown) {
+	return {
+		ok: () => status >= 200 && status < 300,
+		status: () => status,
+		json: async () => body,
+	};
+}
 
 test('builds canonical rest_route URLs for plain WordPress permalinks', () => {
 	expect(plainPermalinkUrl('https://example.test/shop/', 'products')).toBe(
@@ -41,6 +51,75 @@ test.describe('search-probe pure logic', () => {
 			)
 		).toEqual(exact);
 		expect(findCreatedProductRecord([], 'zxexact')).toBeNull();
+	});
+
+	test('rejects malformed product adoption lists', () => {
+		expect(() => findCreatedProductRecord({ id: 42 }, 'zxexact')).toThrow(
+			'Product create adoption lookup returned a malformed product list'
+		);
+	});
+
+	test('names the variable fixture when its page registration is absent', async () => {
+		await expect(findVariableProduct({} as never, {} as never)).rejects.toThrow(
+			'isolatedVariableProductTest'
+		);
+	});
+
+	test('deletes a created variable parent whose response omits its slug', async () => {
+		let deletedUrl = '';
+		const request = {
+			post: async () => response(201, { id: 42 }),
+			delete: async (url: string) => {
+				deletedUrl = url;
+				return response(200, {});
+			},
+		};
+
+		await expect(
+			createRunPrivateProduct({
+				request: request as never,
+				storeUrl: 'https://example.test',
+				authorization: { transport: 'header', value: 'secret' },
+				kind: 'variable',
+				workerIndex: 0,
+			})
+		).rejects.toThrow('without its id and slug');
+		expect(deletedUrl).toBe('https://example.test/wp-json/wc/v3/products/42');
+	});
+
+	test('adopts a variation created before an ambiguous transport failure', async () => {
+		let redAttempts = 0;
+		let lookupCount = 0;
+		const request = {
+			post: async (url: string, options: { data: { sku?: string } }) => {
+				if (!url.includes('/variations')) {
+					return response(201, { id: 42, slug: 'e2e-variable-probe' });
+				}
+				if (options.data.sku?.endsWith('red')) {
+					redAttempts += 1;
+					if (redAttempts === 1) throw new Error('connection reset after write');
+					return response(400, { code: 'product_invalid_sku' });
+				}
+				return response(201, { id: 44 });
+			},
+			get: async (_url: string, options: { params: { sku: string } }) => {
+				lookupCount += 1;
+				return response(200, [{ id: 43, sku: options.params.sku }]);
+			},
+			delete: async () => response(200, {}),
+		};
+
+		await expect(
+			createRunPrivateProduct({
+				request: request as never,
+				storeUrl: 'https://example.test',
+				authorization: { transport: 'header', value: 'secret' },
+				kind: 'variable',
+				workerIndex: 0,
+			})
+		).resolves.toEqual(expect.objectContaining({ id: 42 }));
+		expect(lookupCount).toBe(1);
+		expect(redAttempts).toBe(1);
 	});
 
 	test('missing writer credentials keep product probes skippable', () => {
