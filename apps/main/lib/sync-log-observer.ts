@@ -1,4 +1,10 @@
-import type { SyncEvent, SyncObserver } from '@wcpos/sync-core';
+import type {
+	SyncEvent,
+	SyncEventFields,
+	SyncEventFieldsBase,
+	SyncEventType,
+	SyncObserver,
+} from '@wcpos/sync-core';
 import type { LogTerminalFields } from '@wcpos/utils/logger';
 
 import { presetFor } from '../components/health/performance-logic';
@@ -11,14 +17,24 @@ export type PersistLogRow = (
 	terminal?: LogTerminalFields
 ) => void;
 
-type Conformance = {
+/**
+ * Row policy for ONE event type. Generic in the type so the callbacks below see
+ * the field shape `@wcpos/sync-core` declares for it: `didWork` on `signal.cycle`
+ * reads `f.pulls` as a `number | undefined`, not an `unknown` that `num()` would
+ * quietly turn into 0 if the emitter ever renamed it.
+ *
+ * The callbacks are written in METHOD syntax on purpose: it keeps them bivariant,
+ * which is what lets a per-type row live in the erased `Map` the observer looks
+ * up at runtime.
+ */
+type Conformance<T extends SyncEventType = SyncEventType> = {
 	/** operationType written to the row; groups units of work in the UI. */
 	operationType: string;
 	/** Terminal outcome for this event type. */
 	outcome: NonNullable<LogTerminalFields['outcome']>;
 	/** Return false to route this occurrence to the check ring instead of a row
 	 *  (idle work). Omit to always persist. */
-	didWork?: (fields: Record<string, unknown>) => boolean;
+	didWork?(fields: SyncEventFields<T>): boolean;
 	/**
 	 * The row's persisted message. NOT the on-screen title: the Logs UI titles
 	 * every row by translating `context.type` through the event-label registry at
@@ -29,7 +45,7 @@ type Conformance = {
 	 * is what keeps two different failing records in two rows.
 	 * Falls back to event.message ?? event.type.
 	 */
-	message?: (event: SyncEvent, fields: Record<string, unknown>) => string;
+	message?(event: SyncEvent, fields: SyncEventFieldsBase): string;
 	/**
 	 * Debug-level occurrences of this type are forensic evidence (a transient
 	 * failure the arc later settled, #899): persist them AT debug, which the
@@ -38,6 +54,22 @@ type Conformance = {
 	 */
 	forensic?: boolean;
 };
+
+/**
+ * EVERY event type gets a row — that is the whole point of the table being typed
+ * `Record<SyncEventType, …>`. A new engine event does not compile until someone
+ * decides how a merchant should read it, instead of silently inheriting the
+ * `sync.other`/`failed` default and turning up in the failure bucket of the log.
+ *
+ * The `satisfies` clause below is the DEVELOPER-TIME signal: it names the
+ * missing key in your editor the moment you add an event type. It is not the
+ * merge gate — apps/main has no `typecheck` task in CI (13 pre-existing tsc
+ * errors keep it out), so nothing here would fail a build. The gate is
+ * `scripts/check-sync-event-types.mjs`, which re-checks this table against
+ * `SyncEventType` inside `pnpm test:scripts`, a chain CI does run. Delete
+ * neither until apps/main gets a typecheck task of its own.
+ */
+type ConformanceTable = { [T in SyncEventType]: Conformance<T> };
 
 /** The outcome vocabulary an emitter may stamp explicitly via `fields.outcome`. */
 const EXPLICIT_OUTCOMES = new Set<NonNullable<LogTerminalFields['outcome']>>([
@@ -76,11 +108,11 @@ function sanitizeReason(value: unknown): string | undefined {
  * message AND lose its repeat-collapse key, so consecutive escalations for
  * different records would fold into one row.
  */
-function recordIdOf(fields: Record<string, unknown>): unknown {
+function recordIdOf(fields: SyncEventFieldsBase): unknown {
 	return fields.recordId ?? fields.id;
 }
 
-function recordMessage(verb: string): Conformance['message'] {
+function recordMessage(verb: string): NonNullable<Conformance['message']> {
 	return (event, fields) => {
 		const recordId = recordIdOf(fields);
 		if (recordId === undefined || recordId === null) {
@@ -110,30 +142,42 @@ function recordMessage(verb: string): Conformance['message'] {
 }
 
 /**
- * Observer-side terminal-row policy. A Map makes event types sourced from data
- * unable to resolve inherited Object.prototype members.
+ * The policy an unclassified event type inherits: nothing but a FAILURE is worth
+ * a row, and when one comes it lands in `sync.other`.
+ *
+ * `didWork: () => false` is what preserves the pre-table behaviour exactly. The
+ * did-work gate is bypassed for warn/error (see the observer below), so an
+ * unclassified failure still persists as `sync.other`/`failed`, while an info
+ * narration is dropped — which is what an absent row did before. Without the
+ * gate, giving these types a row would START writing merchant-visible failure
+ * rows for routine narration.
  */
-const CONFORMANCE = new Map<string, Conformance>([
-	[
-		'signal.cycle',
-		{
-			operationType: 'sync.cycle',
-			outcome: 'ok',
-			didWork: (f) => num(f.pulls) + num(f.deletes) > 0,
-		},
-	],
-	['signal.cursor', { operationType: 'sync.cursor', outcome: 'unknown' }],
-	['signal.tick.error', { operationType: 'sync.cycle', outcome: 'failed' }],
-	[
-		'engine.lane.tick',
-		{
-			operationType: 'sync.lane',
-			outcome: 'ok',
-			didWork: (f) =>
-				f.status === 'error' ||
-				num(f.pushed) + num(f.conflicts) + num(f.deferred) + num(f.failed) + num(f.rejected) > 0,
-		},
-	],
+const INHERITED_DEFAULT = {
+	operationType: 'sync.other',
+	outcome: 'failed',
+	didWork: () => false,
+} satisfies Conformance;
+
+/**
+ * Every event type that reads as ordinary sync work rather than a defect, mapped
+ * to the row it writes. The `satisfies ConformanceTable` at the bottom is what
+ * makes the map TOTAL: a type missing from here fails the build.
+ */
+const CONFORMANCE_TABLE = {
+	'signal.cycle': {
+		operationType: 'sync.cycle',
+		outcome: 'ok',
+		didWork: (f) => num(f.pulls) + num(f.deletes) > 0,
+	},
+	'signal.cursor': { operationType: 'sync.cursor', outcome: 'unknown' },
+	'signal.tick.error': { operationType: 'sync.cycle', outcome: 'failed' },
+	'engine.lane.tick': {
+		operationType: 'sync.lane',
+		outcome: 'ok',
+		didWork: (f) =>
+			f.status === 'error' ||
+			num(f.pushed) + num(f.conflicts) + num(f.deferred) + num(f.failed) + num(f.rejected) > 0,
+	},
 	// Cadence rows (#846). All four are transitions, never steady state, so they
 	// are cheap enough to persist unconditionally — and they are the only record
 	// of how often a till was asking, which is the first question support has when
@@ -141,235 +185,234 @@ const CONFORMANCE = new Map<string, Conformance>([
 	// 'failed' on purpose: adapting to a struggling server is the app working,
 	// and the observer's derivation below still promotes an explicit
 	// `outcome: 'recovered'` when a back-off closes out (#899).
-	['cadence.start', { operationType: 'sync.cadence', outcome: 'ok' }],
-	['cadence.reconfigured', { operationType: 'sync.cadence', outcome: 'ok' }],
-	['cadence.backoff', { operationType: 'sync.cadence', outcome: 'ok' }],
-	['cadence.recovered', { operationType: 'sync.cadence', outcome: 'ok' }],
-	['engine.ready', { operationType: 'sync.startup', outcome: 'ok' }],
-	['engine.ready-failed', { operationType: 'sync.startup', outcome: 'failed' }],
-	['engine.ready-stalled', { operationType: 'sync.startup', outcome: 'unknown' }],
-	['engine.scope-switched', { operationType: 'sync.scope', outcome: 'ok' }],
-	['engine.collection-reset', { operationType: 'sync.reset', outcome: 'ok' }],
-	['engine.reset-needs-confirmation', { operationType: 'sync.reset', outcome: 'cancelled' }],
-	['engine.disposed', { operationType: 'sync.lifecycle', outcome: 'ok' }],
-	['engine.connectivity-error', { operationType: 'sync.lifecycle', outcome: 'failed' }],
-	['engine.pos-bootstrap-error', { operationType: 'sync.startup', outcome: 'failed' }],
-	['engine.guard', { operationType: 'sync.scope', outcome: 'cancelled' }],
-	[
-		'apply.pull',
-		{ operationType: 'sync.apply', outcome: 'ok', didWork: (f) => num(f.applied) > 0 },
-	],
-	[
-		'apply.delete',
-		{ operationType: 'sync.apply', outcome: 'ok', didWork: (f) => num(f.applied) > 0 },
-	],
-	['apply.rebaseline', { operationType: 'sync.apply', outcome: 'ok' }],
-	[
-		'apply.refetch',
-		{ operationType: 'sync.apply', outcome: 'ok', didWork: (f) => num(f.refetched) > 0 },
-	],
-	['apply.refresh', { operationType: 'sync.apply', outcome: 'ok' }],
-	['apply.barcode-rederive', { operationType: 'sync.apply', outcome: 'ok' }],
-	['targeted.pull.shortfall-prune', { operationType: 'sync.apply', outcome: 'recovered' }],
-	[
-		'apply.escalation',
-		{
-			operationType: 'sync.record',
-			outcome: 'failed',
-			message: recordMessage('pull escalation'),
-		},
-	],
-	[
-		'coverage.require.outcome',
-		{
-			operationType: 'sync.coverage',
-			outcome: 'ok',
-			didWork: (f) => num(f.documents) > 0 || num(f.requests) > 0,
-		},
-	],
-	['coverage.require.error', { operationType: 'sync.coverage', outcome: 'failed' }],
-	['coverage.existence-prime', { operationType: 'sync.coverage', outcome: 'ok' }],
-	[
-		'coverage.existence-reconcile',
-		{
-			operationType: 'sync.coverage',
-			outcome: 'ok',
-			didWork: (f) => num(f.pruned) + num(f.pulled) + num(f.repulled) > 0,
-		},
-	],
-	[
-		'coverage.compacted',
-		{
-			// Emitted on every retention pass, including the common no-op one; without
-			// this gate an idle terminal writes a recurring 'ok' row that records no work.
-			operationType: 'sync.coverage',
-			outcome: 'ok',
-			didWork: (f) => num(f.removed) > 0,
-		},
-	],
-	['coverage.ledger-rebuilt', { operationType: 'sync.coverage', outcome: 'recovered' }],
-	[
-		'transport.request',
-		{
-			operationType: 'sync.http',
-			outcome: 'ok',
-			// Failures only. A successful data-bearing request is a unit of work, but
-			// the engine issues them continuously (a poll every few seconds, several
-			// requests each), so persisting them would evict every other row well
-			// inside the 25 MiB retention cap and destroy the log's diagnostic value.
-			// Successful-attempt narration belongs in the flight recorder (WS3) and
-			// the metrics rollups, which are built for that volume. An attempt that is
-			// part of a refresh arc (carries an operationId, #899) is chain evidence,
-			// not idle traffic — rare (once per JWT TTL), and without it the recovered
-			// chain would be missing its successful ending under verbose.
-			didWork: (f) => f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
-			forensic: true,
-		},
-	],
-	[
-		'push.outcome',
-		{
-			operationType: 'sync.record',
-			outcome: 'ok',
-			message: recordMessage('push completed'),
-		},
-	],
-	[
-		'push.error',
-		{
-			operationType: 'sync.record',
-			outcome: 'failed',
-			message: recordMessage('push failed'),
-		},
-	],
-	[
-		'push.aborted',
-		{
-			operationType: 'sync.record',
-			outcome: 'cancelled',
-			message: recordMessage('push aborted'),
-		},
-	],
-	[
-		'push.conflict',
-		{
-			operationType: 'sync.record',
-			outcome: 'failed',
-			message: recordMessage('push conflict'),
-		},
-	],
-	[
-		'push.in_progress',
-		{
-			operationType: 'sync.record',
-			outcome: 'failed',
-			message: recordMessage('push already in progress'),
-		},
-	],
-	[
-		'push.rejected',
-		{
-			operationType: 'sync.record',
-			outcome: 'rejected',
-			message: recordMessage('rejected by server'),
-		},
-	],
-	[
-		// R1: the write SUCCEEDED — the server accepted the order and the till
-		// adopted its totals — but the money came back different, which is the one
-		// thing a cashier has to know about a sale that already left the counter.
-		//
-		// Deliberately NOT `sync.record`. That operationType means "this record's
-		// transfer", and `deriveStuckRecords` reads its newest `failed`/`rejected`
-		// row as "did not make it to the server". This row is written AFTER the
-		// `push.outcome` ok row — the push emits during the drain, the divergence
-		// rides the post-drain flush — so as a `sync.record` failure it won the tie
-		// and reported completed sales as undeliverable: "can't upload — server
-		// totals differ from the till", with a stuck pill on Orders. Observed on
-		// dev-next for 2 of 3 plain cash sales (70954-70956).
-		//
-		// `sync.money` keeps it at error, keeps the record named, keeps it
-		// filterable — and keeps it out of a derivation that is answering a
-		// different question. `failed` stays as the outcome because the POS's
-		// calculation genuinely did not survive; filtering by outcome must not hide
-		// it (the PY02001 lesson).
-		'push.money-divergence',
-		{
-			operationType: 'sync.money',
-			outcome: 'failed',
-			message: recordMessage('server totals differ from the till'),
-		},
-	],
-	[
-		'queue.write.needs-revision',
-		{
-			operationType: 'sync.record',
-			outcome: 'rejected',
-			message: recordMessage('needs revision'),
-		},
-	],
-	[
-		'queue.write.conflict-transition',
-		{
-			operationType: 'sync.record',
-			outcome: 'failed',
-			message: recordMessage('conflict transition failed'),
-		},
-	],
-	[
-		'queue.write.reschedule-failed',
-		{
-			operationType: 'sync.record',
-			outcome: 'failed',
-			message: recordMessage('reschedule failed'),
-		},
-	],
-	[
-		'queue.write.resolve',
-		{
-			operationType: 'sync.record',
-			outcome: 'ok',
-			message: recordMessage('conflict resolved'),
-		},
-	],
-	[
-		'queue.write.discard-repull-deferred',
-		{
-			operationType: 'sync.record',
-			outcome: 'unknown',
-			message: recordMessage('repull deferred'),
-		},
-	],
-	[
-		'queue.write.born-twice-requeue',
-		{
-			operationType: 'sync.record',
-			outcome: 'unknown',
-			message: recordMessage('requeued after duplicate create'),
-		},
-	],
-	[
-		'queue.write.drain',
-		{
-			operationType: 'sync.queue',
-			outcome: 'ok',
-			didWork: (f) => num(f.pushed) + num(f.conflicts) + num(f.failed) + num(f.rejected) > 0,
-		},
-	],
-	[
-		'queue.scheduler.drain',
-		{
-			operationType: 'sync.queue',
-			outcome: 'ok',
-			didWork: (f) => num(f.succeeded) + num(f.failed) > 0,
-		},
-	],
-	['queue.write.enqueued', { operationType: 'sync.queue', outcome: 'ok' }],
-	['queue.write.annihilate', { operationType: 'sync.queue', outcome: 'ok' }],
-	['queue.write.coalesce', { operationType: 'sync.queue', outcome: 'ok' }],
-	['queue.write.tick.error', { operationType: 'sync.queue', outcome: 'failed' }],
-	['engine.listener-error', { operationType: 'sync.lifecycle', outcome: 'failed' }],
-]);
+	'cadence.start': { operationType: 'sync.cadence', outcome: 'ok' },
+	'cadence.reconfigured': { operationType: 'sync.cadence', outcome: 'ok' },
+	'cadence.backoff': { operationType: 'sync.cadence', outcome: 'ok' },
+	'cadence.recovered': { operationType: 'sync.cadence', outcome: 'ok' },
+	'engine.ready': { operationType: 'sync.startup', outcome: 'ok' },
+	'engine.ready-failed': { operationType: 'sync.startup', outcome: 'failed' },
+	'engine.ready-stalled': { operationType: 'sync.startup', outcome: 'unknown' },
+	'engine.scope-switched': { operationType: 'sync.scope', outcome: 'ok' },
+	'engine.collection-reset': { operationType: 'sync.reset', outcome: 'ok' },
+	'engine.reset-needs-confirmation': { operationType: 'sync.reset', outcome: 'cancelled' },
+	'engine.disposed': { operationType: 'sync.lifecycle', outcome: 'ok' },
+	'engine.connectivity-error': { operationType: 'sync.lifecycle', outcome: 'failed' },
+	'engine.pos-bootstrap-error': { operationType: 'sync.startup', outcome: 'failed' },
+	'engine.guard': { operationType: 'sync.scope', outcome: 'cancelled' },
+	'apply.pull': { operationType: 'sync.apply', outcome: 'ok', didWork: (f) => num(f.applied) > 0 },
+	'apply.delete': {
+		operationType: 'sync.apply',
+		outcome: 'ok',
+		didWork: (f) => num(f.applied) > 0,
+	},
+	'apply.rebaseline': { operationType: 'sync.apply', outcome: 'ok' },
+	'apply.refetch': {
+		operationType: 'sync.apply',
+		outcome: 'ok',
+		didWork: (f) => num(f.refetched) > 0,
+	},
+	'apply.refresh': { operationType: 'sync.apply', outcome: 'ok' },
+	'apply.barcode-rederive': { operationType: 'sync.apply', outcome: 'ok' },
+	'targeted.pull.shortfall-prune': { operationType: 'sync.apply', outcome: 'recovered' },
+	'apply.escalation': {
+		operationType: 'sync.record',
+		outcome: 'failed',
+		message: recordMessage('pull escalation'),
+	},
+	'coverage.require.outcome': {
+		operationType: 'sync.coverage',
+		outcome: 'ok',
+		didWork: (f) => num(f.documents) > 0 || num(f.requests) > 0,
+	},
+	'coverage.require.error': { operationType: 'sync.coverage', outcome: 'failed' },
+	'coverage.existence-prime': { operationType: 'sync.coverage', outcome: 'ok' },
+	'coverage.existence-reconcile': {
+		operationType: 'sync.coverage',
+		outcome: 'ok',
+		didWork: (f) => num(f.pruned) + num(f.pulled) + num(f.repulled) > 0,
+	},
+	'coverage.compacted': {
+		// Emitted on every retention pass, including the common no-op one; without
+		// this gate an idle terminal writes a recurring 'ok' row that records no work.
+		operationType: 'sync.coverage',
+		outcome: 'ok',
+		didWork: (f) => num(f.removed) > 0,
+	},
+	'coverage.ledger-rebuilt': { operationType: 'sync.coverage', outcome: 'recovered' },
+	'transport.request': {
+		operationType: 'sync.http',
+		outcome: 'ok',
+		// Failures only. A successful data-bearing request is a unit of work, but
+		// the engine issues them continuously (a poll every few seconds, several
+		// requests each), so persisting them would evict every other row well
+		// inside the 25 MiB retention cap and destroy the log's diagnostic value.
+		// Successful-attempt narration belongs in the flight recorder (WS3) and
+		// the metrics rollups, which are built for that volume. An attempt that is
+		// part of a refresh arc (carries an operationId, #899) is chain evidence,
+		// not idle traffic — rare (once per JWT TTL), and without it the recovered
+		// chain would be missing its successful ending under verbose.
+		didWork: (f) => f.status === 0 || num(f.status) >= 400 || typeof f.operationId === 'string',
+		forensic: true,
+	},
+	'push.outcome': {
+		operationType: 'sync.record',
+		outcome: 'ok',
+		message: recordMessage('push completed'),
+	},
+	'push.error': {
+		operationType: 'sync.record',
+		outcome: 'failed',
+		message: recordMessage('push failed'),
+	},
+	'push.aborted': {
+		operationType: 'sync.record',
+		outcome: 'cancelled',
+		message: recordMessage('push aborted'),
+	},
+	'push.conflict': {
+		operationType: 'sync.record',
+		outcome: 'failed',
+		message: recordMessage('push conflict'),
+	},
+	'push.in_progress': {
+		operationType: 'sync.record',
+		outcome: 'failed',
+		message: recordMessage('push already in progress'),
+	},
+	'push.rejected': {
+		operationType: 'sync.record',
+		outcome: 'rejected',
+		message: recordMessage('rejected by server'),
+	},
+	// R1: the write SUCCEEDED — the server accepted the order and the till
+	// adopted its totals — but the money came back different, which is the one
+	// thing a cashier has to know about a sale that already left the counter.
+	//
+	// Deliberately NOT `sync.record`. That operationType means "this record's
+	// transfer", and `deriveStuckRecords` reads its newest `failed`/`rejected`
+	// row as "did not make it to the server". This row is written AFTER the
+	// `push.outcome` ok row — the push emits during the drain, the divergence
+	// rides the post-drain flush — so as a `sync.record` failure it won the tie
+	// and reported completed sales as undeliverable: "can't upload — server
+	// totals differ from the till", with a stuck pill on Orders. Observed on
+	// dev-next for 2 of 3 plain cash sales (70954-70956).
+	//
+	// `sync.money` keeps it at error, keeps the record named, keeps it
+	// filterable — and keeps it out of a derivation that is answering a
+	// different question. `failed` stays as the outcome because the POS's
+	// calculation genuinely did not survive; filtering by outcome must not hide
+	// it (the PY02001 lesson).
+	'push.money-divergence': {
+		operationType: 'sync.money',
+		outcome: 'failed',
+		message: recordMessage('server totals differ from the till'),
+	},
+	'queue.write.needs-revision': {
+		operationType: 'sync.record',
+		outcome: 'rejected',
+		message: recordMessage('needs revision'),
+	},
+	'queue.write.conflict-transition': {
+		operationType: 'sync.record',
+		outcome: 'failed',
+		message: recordMessage('conflict transition failed'),
+	},
+	'queue.write.reschedule-failed': {
+		operationType: 'sync.record',
+		outcome: 'failed',
+		message: recordMessage('reschedule failed'),
+	},
+	'queue.write.resolve': {
+		operationType: 'sync.record',
+		outcome: 'ok',
+		message: recordMessage('conflict resolved'),
+	},
+	'queue.write.discard-repull-deferred': {
+		operationType: 'sync.record',
+		outcome: 'unknown',
+		message: recordMessage('repull deferred'),
+	},
+	'queue.write.born-twice-requeue': {
+		operationType: 'sync.record',
+		outcome: 'unknown',
+		message: recordMessage('requeued after duplicate create'),
+	},
+	'queue.write.drain': {
+		operationType: 'sync.queue',
+		outcome: 'ok',
+		didWork: (f) => num(f.pushed) + num(f.conflicts) + num(f.failed) + num(f.rejected) > 0,
+	},
+	'queue.scheduler.drain': {
+		operationType: 'sync.queue',
+		outcome: 'ok',
+		didWork: (f) => num(f.succeeded) + num(f.failed) > 0,
+	},
+	'queue.write.enqueued': { operationType: 'sync.queue', outcome: 'ok' },
+	'queue.write.annihilate': { operationType: 'sync.queue', outcome: 'ok' },
+	'queue.write.coalesce': { operationType: 'sync.queue', outcome: 'ok' },
+	'queue.write.tick.error': { operationType: 'sync.queue', outcome: 'failed' },
+	'engine.listener-error': { operationType: 'sync.lifecycle', outcome: 'failed' },
+
+	// ————————————————————————————————————————————————————————————————————————
+	// Inherited defaults. Before the table was total these types had NO row and
+	// fell to the runtime default below: a warn/error occurrence was written as
+	// `sync.other`/`failed`, and a debug/info one was dropped. `INHERITED_DEFAULT`
+	// reproduces exactly that, byte for byte — closing the vocabulary was not the
+	// moment to re-classify 21 events. What HAS changed is that each is now a
+	// visible decision instead of a silent fallthrough. Every one carries a
+	// TODO(review) marker: grep for it to get the list still owed a ruling.
+	// ————————————————————————————————————————————————————————————————————————
+	// TODO(review): inherited default — reclassify?
+	'browse-window.backstop-reached': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'browse-window.eviction-skipped': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'browse-window.lanes-evicted': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'browse-window.page-budget-reached': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'browse-window.prefix-invalidated': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'coverage.gate.hit': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'coverage.gate.miss': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'coverage.require.log': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'customer.browse-window.sort-rejected': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'demand.activity-counter-underflow': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'engine.barcode-selector-hydrate-failed': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'engine.reconnect.retick': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'engine.write-leader.degraded': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'maintenance.lane.error': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'maintenance.lane.tick': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'product.browse-window.approximate': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'product.browse-window.brand-filter-ignored': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'push.dead-letter-unpersisted': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'queue.drain.progress': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'queue.write.requeue-rebuilt': INHERITED_DEFAULT,
+	// TODO(review): inherited default — reclassify?
+	'signal.log': INHERITED_DEFAULT,
+} satisfies ConformanceTable;
+
+/**
+ * Observer-side terminal-row policy. A Map makes event types sourced from data
+ * unable to resolve inherited Object.prototype members — which still matters
+ * after the table closed, because `event.type` is only typed at COMPILE time:
+ * an older build's observer can be handed `constructor` by anything downstream.
+ */
+const CONFORMANCE = new Map<string, Conformance>(Object.entries(CONFORMANCE_TABLE));
 
 /**
  * Pure event→persist mapping; the caller owns logger wiring and engine-identity
@@ -418,8 +461,13 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		if (event.level === 'debug' && mapped?.forensic !== true) return;
 
 		if (mapped === undefined && !isFailure) return;
-		const conformance =
-			mapped ?? ({ operationType: 'sync.other', outcome: 'failed' } satisfies Conformance);
+		// Unreachable for an event from THIS build — `CONFORMANCE` covers every
+		// member of `SyncEventType`, and a type outside it does not compile. It
+		// stays as defence against version skew: an engine bundle newer than the
+		// app shell (a web build served mid-deploy, a stale Electron shell) can
+		// still emit a name this table has never heard of, and a merchant's failure
+		// must never be dropped just because its label is unknown here.
+		const conformance: Conformance = mapped ?? INHERITED_DEFAULT;
 		// The did-work gate only ever suppresses IDLE work. A warn/error event is
 		// never idle, so it bypasses the gate entirely: several emitters raise the
 		// level on a signal their counters don't carry — `queue.scheduler.drain`
@@ -489,8 +537,14 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		// defined — turns "tierMs: 60000" into a row a merchant and a support
 		// engineer read the same way, without teaching the engine about app UI.
 		if (conformance.operationType === 'sync.cadence') {
-			const tierMs = fields.tierMs;
-			const batchSize = fields.pullBatchSize;
+			// `sync.cadence` is only ever reached by the four `cadence.*` types, which
+			// share one declared field shape. `SyncEvent` is not a discriminated union,
+			// so the assertion is how that proof reaches `fields` — it is the single
+			// place an open payload meets its declared shape, and the `typeof` guards
+			// below still hold the line at runtime.
+			const cadence = fields as SyncEventFields<'cadence.start'>;
+			const tierMs = cadence.tierMs;
+			const batchSize = cadence.pullBatchSize;
 			if (typeof tierMs === 'number' && typeof batchSize === 'number') {
 				context.preset = presetFor(tierMs, batchSize);
 			}

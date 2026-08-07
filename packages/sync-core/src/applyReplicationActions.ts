@@ -312,7 +312,7 @@ export async function applyReplicationActions(
 	};
 	/** Emit a count-bearing apply event (`apply.pull` / `apply.delete`), `warn` on a shortfall. */
 	const emitCount = (
-		type: string,
+		type: 'apply.pull' | 'apply.delete' | 'apply.rebaseline',
 		collection: HybridCollection,
 		requested: number,
 		applied: number

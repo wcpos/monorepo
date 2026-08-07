@@ -11,7 +11,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import type { SyncEvent } from '@wcpos/sync-core';
+import type { SyncEvent, SyncEventType } from '@wcpos/sync-core';
 
 import { createRxdbSyncEngine, type RxdbSyncEnginePorts } from './create-rxdb-sync-engine';
 import { memoryEngineStorage, scriptedConnectivity } from './testing';
@@ -155,8 +155,13 @@ async function harness(
 	};
 }
 
-const cadenceEvents = (events: SyncEvent[], type: string): SyncEvent[] =>
-	events.filter((event) => event.type === type);
+/** Filter AND narrow: the predicate keeps the discriminant, so `fields` reads
+ *  get the shape declared for `type` instead of the whole union. */
+const cadenceEvents = <T extends SyncEventType>(
+	events: SyncEvent[],
+	type: T
+): Extract<SyncEvent, { type: T }>[] =>
+	events.filter((event): event is Extract<SyncEvent, { type: T }> => event.type === type);
 
 afterEach(() => {
 	installedTimers = null;
