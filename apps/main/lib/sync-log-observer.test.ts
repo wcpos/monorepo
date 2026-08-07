@@ -431,22 +431,67 @@ describe('createSyncLogObserver', () => {
 		});
 	});
 
-	it('keeps the inherited default for the types that carry no policy of their own', () => {
-		// The TODO(review) rows. They are explicit entries now rather than a
-		// fallthrough, and they have to read exactly like the fallthrough did:
-		// a failure lands in sync.other, narration and debug are dropped.
+	it('renders an unpersisted dead letter as a record failure', () => {
+		observer.observe(
+			event({
+				type: 'push.dead-letter-unpersisted',
+				level: 'error',
+				collection: 'orders',
+				message: 'dead-letter verdict could not be written to the queue: database failed',
+				fields: { recordId: '4711', mutationId: 'mutation-1' },
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'error',
+			message: 'orders 4711 — rejected change could not be saved for recovery',
+			context: { type: 'push.dead-letter-unpersisted', recordId: '4711', direction: 'push' },
+			terminal: { operationType: 'sync.record', outcome: 'failed' },
+		});
+	});
+
+	it('renders a maintenance lane crash as a warning', () => {
 		observer.observe(
 			event({ type: 'maintenance.lane.error', level: 'error', message: 'lane down' })
 		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			message: 'lane down',
+			terminal: { operationType: 'sync.lane', outcome: 'failed' },
+		});
+	});
+
+	it('renders single-tab write leadership as a visible lifecycle warning', () => {
+		observer.observe(event({ type: 'engine.write-leader.degraded', level: 'warn' }));
+
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			terminal: { operationType: 'sync.lifecycle', outcome: 'unknown' },
+		});
+	});
+
+	it('promotes barcode selector hydration failure to a visible warning', () => {
+		observer.observe(
+			event({
+				type: 'engine.barcode-selector-hydrate-failed',
+				level: 'debug',
+				message: 'indexeddb unavailable',
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			terminal: { operationType: 'sync.startup', outcome: 'failed' },
+		});
+	});
+
+	it('keeps internal warning narration out of cashier logs', () => {
+		observer.observe(event({ type: 'browse-window.eviction-skipped', level: 'warn' }));
 		observer.observe(event({ type: 'signal.log', level: 'info', message: 'narration' }));
 		observer.observe(event({ type: 'queue.drain.progress', level: 'debug' }));
 
-		expect(rows).toHaveLength(1);
-		expect(rows[0]).toMatchObject({
-			level: 'error',
-			message: 'lane down',
-			terminal: { operationType: 'sync.other', outcome: 'failed' },
-		});
+		expect(rows).toHaveLength(0);
 	});
 
 	it('does not resolve inherited Object members as conformance entries', () => {

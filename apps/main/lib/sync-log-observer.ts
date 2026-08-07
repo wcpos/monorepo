@@ -32,6 +32,10 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
 	operationType: string;
 	/** Terminal outcome for this event type. */
 	outcome: NonNullable<LogTerminalFields['outcome']>;
+	/** False when this event is internal narration, even if its emitter raises the level. */
+	visible?: boolean;
+	/** Cashier-facing severity when it intentionally differs from the engine severity. */
+	level?: 'info' | 'warn' | 'error';
 	/** Return false to route this occurrence to the check ring instead of a row
 	 *  (idle work). Omit to always persist. */
 	didWork?(fields: SyncEventFields<T>): boolean;
@@ -157,6 +161,8 @@ const INHERITED_DEFAULT = {
 	outcome: 'failed',
 	didWork: () => false,
 } satisfies Conformance;
+
+const INVISIBLE = { ...INHERITED_DEFAULT, visible: false } satisfies Conformance;
 
 /**
  * Every event type that reads as ordinary sync work rather than a defect, mapped
@@ -354,56 +360,91 @@ const CONFORMANCE_TABLE = {
 	'engine.listener-error': { operationType: 'sync.lifecycle', outcome: 'failed' },
 
 	// ————————————————————————————————————————————————————————————————————————
-	// Inherited defaults. Before the table was total these types had NO row and
-	// fell to the runtime default below: a warn/error occurrence was written as
-	// `sync.other`/`failed`, and a debug/info one was dropped. `INHERITED_DEFAULT`
-	// reproduces exactly that, byte for byte — closing the vocabulary was not the
-	// moment to re-classify 21 events. What HAS changed is that each is now a
-	// visible decision instead of a silent fallthrough. Every one carries a
-	// TODO(review) marker: grep for it to get the list still owed a ruling.
+	// Explicit cashier-facing decisions for the 21 events that formerly inherited
+	// the runtime default. Invisible rows remain available to diagnostics only.
 	// ————————————————————————————————————————————————————————————————————————
-	// TODO(review): inherited default — reclassify?
-	'browse-window.backstop-reached': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'browse-window.eviction-skipped': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'browse-window.lanes-evicted': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'browse-window.page-budget-reached': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'browse-window.prefix-invalidated': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'coverage.gate.hit': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'coverage.gate.miss': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'coverage.require.log': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'customer.browse-window.sort-rejected': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'demand.activity-counter-underflow': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'engine.barcode-selector-hydrate-failed': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'engine.reconnect.retick': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'engine.write-leader.degraded': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'maintenance.lane.error': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'maintenance.lane.tick': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'product.browse-window.approximate': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'product.browse-window.brand-filter-ignored': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'push.dead-letter-unpersisted': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'queue.drain.progress': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'queue.write.requeue-rebuilt': INHERITED_DEFAULT,
-	// TODO(review): inherited default — reclassify?
-	'signal.log': INHERITED_DEFAULT,
+	// decided: visible — reaching the hard cap leaves the cashier's list incomplete.
+	'browse-window.backstop-reached': {
+		operationType: 'sync.coverage',
+		outcome: 'unknown',
+		didWork: () => true,
+	},
+	// decided: invisible — a racing reset only changes internal lane bookkeeping.
+	'browse-window.eviction-skipped': INVISIBLE,
+	// decided: invisible — evicting superseded lanes is routine internal housekeeping.
+	'browse-window.lanes-evicted': INVISIBLE,
+	// decided: invisible — the engine continues the bounded page walk automatically.
+	'browse-window.page-budget-reached': INVISIBLE,
+	// decided: invisible — the engine withdraws stale coverage and reloads it automatically.
+	'browse-window.prefix-invalidated': INVISIBLE,
+	// decided: invisible — serving a requirement locally is per-request engine narration.
+	'coverage.gate.hit': INVISIBLE,
+	// decided: invisible — fetching a requirement is per-request engine narration.
+	'coverage.gate.miss': INVISIBLE,
+	// decided: invisible — raw require-plane log lines belong in diagnostics.
+	'coverage.require.log': INVISIBLE,
+	// decided: visible — the requested customer ordering is unavailable to the cashier.
+	'customer.browse-window.sort-rejected': {
+		operationType: 'sync.coverage',
+		outcome: 'rejected',
+		didWork: () => true,
+	},
+	// decided: invisible — the activity counter self-corrects without changing cashier work.
+	'demand.activity-counter-underflow': INVISIBLE,
+	// decided: visible — missing barcode settings can degrade product scanning.
+	'engine.barcode-selector-hydrate-failed': {
+		operationType: 'sync.startup',
+		outcome: 'failed',
+		level: 'warn',
+		didWork: () => true,
+	},
+	// decided: invisible — scheduling a catch-up tick after reconnect is internal narration.
+	'engine.reconnect.retick': INVISIBLE,
+	// decided: visible — single-tab-only syncing explains multi-tab degradation.
+	'engine.write-leader.degraded': {
+		operationType: 'sync.lifecycle',
+		outcome: 'unknown',
+		didWork: () => true,
+	},
+	// decided: visible — a crashed background lane is cashier-visible degradation until retry.
+	'maintenance.lane.error': {
+		operationType: 'sync.lane',
+		outcome: 'failed',
+		level: 'warn',
+		didWork: () => true,
+	},
+	// decided: invisible — routine maintenance summaries are background narration.
+	'maintenance.lane.tick': INVISIBLE,
+	// decided: visible — approximate catalogue totals explain incomplete-looking results.
+	'product.browse-window.approximate': {
+		operationType: 'sync.coverage',
+		outcome: 'unknown',
+		didWork: () => true,
+	},
+	// decided: visible — an unsupported brand filter changes the products the cashier sees.
+	'product.browse-window.brand-filter-ignored': {
+		operationType: 'sync.coverage',
+		outcome: 'rejected',
+		didWork: () => true,
+	},
+	// decided: visible — an unsaved rejection can leave a cashier's sale unrecoverable.
+	'push.dead-letter-unpersisted': {
+		operationType: 'sync.record',
+		outcome: 'failed',
+		didWork: () => true,
+		message: recordMessage('rejected change could not be saved for recovery'),
+	},
+	// decided: invisible — periodic drain progress is high-volume loading narration.
+	'queue.drain.progress': INVISIBLE,
+	// decided: visible — rebuilding a refused write confirms the record is queued to retry.
+	'queue.write.requeue-rebuilt': {
+		operationType: 'sync.record',
+		outcome: 'recovered',
+		didWork: () => true,
+		message: recordMessage('queued to send again'),
+	},
+	// decided: invisible — raw change-signal log lines belong in diagnostics.
+	'signal.log': INVISIBLE,
 } satisfies ConformanceTable;
 
 /**
@@ -439,7 +480,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 	const observe: SyncObserver = (event: SyncEvent) => {
 		const fields = (event.fields ?? {}) as Record<string, unknown>;
 		const mapped = CONFORMANCE.get(event.type);
-		const isFailure = event.level === 'warn' || event.level === 'error';
+		const level = mapped?.level ?? event.level;
+		const isFailure = level === 'warn' || level === 'error';
 
 		// Tally BEFORE any gate, so successful attempts — which never persist — still
 		// reach the aggregate.
@@ -450,6 +492,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			if (attemptMs > httpMaxMs) httpMaxMs = attemptMs;
 			if (fields.status === 0 || num(fields.status) >= 400) httpErrors += 1;
 		}
+		if (mapped?.visible === false) return;
 
 		// Debug narration never becomes a durable row (spec §1: "Debug never persists
 		// otherwise") — it belongs to the flight recorder. The one exception is a
@@ -458,7 +501,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		// them under verbose diagnostics. Everything else keeps the hard drop, so a
 		// mapped type that later gains a debug emit is never silently relabelled as
 		// `info`.
-		if (event.level === 'debug' && mapped?.forensic !== true) return;
+		if (level === 'debug' && mapped?.forensic !== true) return;
 
 		if (mapped === undefined && !isFailure) return;
 		// Unreachable for an event from THIS build — `CONFORMANCE` covers every
@@ -565,7 +608,7 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		const operationId = typeof fields.operationId === 'string' ? fields.operationId : undefined;
 
 		options.persist(
-			isFailure ? event.level : event.level === 'debug' ? 'debug' : 'info',
+			isFailure ? level : level === 'debug' ? 'debug' : 'info',
 			conformance.message?.(event, { ...fields, ...(reason ? { reason } : {}) }) ??
 				event.message ??
 				event.type,
