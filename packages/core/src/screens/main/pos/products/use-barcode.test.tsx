@@ -124,8 +124,15 @@ const mockBarcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogge
 	success: jest.Mock;
 };
 const mockResolveScan = jest.requireMock('@wcpos/sync-core').__resolveScan as jest.Mock;
-const { setActiveBarcodeSelectors } =
-	jest.requireActual<typeof import('@wcpos/sync-core')>('@wcpos/sync-core');
+/** The ACTIVE SCOPE's barcode carriers — the scan reads them off the scope. */
+let scopeSelectors: { products: readonly string[]; variations: readonly string[] } = {
+	products: [],
+	variations: [],
+};
+
+function setSelectors(collection: 'products' | 'variations', list: readonly string[]): void {
+	scopeSelectors = { ...scopeSelectors, [collection]: list };
+}
 
 const mockSetSearch = jest.fn();
 const mockClearSearch = jest.fn();
@@ -213,8 +220,8 @@ function renderBarcodeHook() {
 
 describe('useBarcode online escalation', () => {
 	beforeEach(() => {
-		setActiveBarcodeSelectors('products', ['barcode']);
-		setActiveBarcodeSelectors('variations', ['barcode']);
+		setSelectors('products', ['barcode']);
+		setSelectors('variations', ['barcode']);
 		mockShowOutOfStock = true;
 		mockSoundEnabled = false;
 		for (const mock of [
@@ -249,6 +256,7 @@ describe('useBarcode online escalation', () => {
 				engineProducts.find((document) => document.wooProductId === productId) ?? null
 		);
 		mockEngineActive.mockImplementation(() => ({
+			barcodeSelectors: scopeSelectors,
 			database: {
 				collections: {
 					products: {
@@ -336,7 +344,7 @@ describe('useBarcode online escalation', () => {
 	);
 
 	it('falls back to resolve/barcode when an old envelope reports no active selectors', async () => {
-		setActiveBarcodeSelectors('products', []);
+		setSelectors('products', []);
 		engineProducts.push(productDocument(41, 'ONLINE-ONLY'));
 		mockFetcher.mockResolvedValue(onlineResponse());
 		renderBarcodeHook();

@@ -18,11 +18,7 @@ import {
 	useQueryRuntime,
 	type WriteableCollection,
 } from '@wcpos/query';
-import {
-	deriveBarcodeFromPayload,
-	getActiveBarcodeSelectors,
-	mapBarcodeEditToPayload,
-} from '@wcpos/sync-core';
+import { deriveBarcodeFromPayload, mapBarcodeEditToPayload } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -102,8 +98,31 @@ function ensureRecordMetadata(
 	return { ...payload, meta_data: metadata };
 }
 
-async function activeCollection(manager: QueryManager, collection: WriteableCollection) {
-	const scope = manager.engine.active() ?? (await manager.engine.ready);
+type EngineScope = NonNullable<ReturnType<QueryManager['engine']['active']>>;
+
+/**
+ * ONE resolution of the active scope. Callers that both READ a resident and map
+ * a barcode edit must derive the database and the carriers from the SAME scope
+ * object: resolving them separately straddles an await, and a store switch
+ * landing in that window would map the edit by the new scope's carriers (or by
+ * none, if that scope has not hydrated) and write it into the old scope's row.
+ */
+async function activeScope(manager: QueryManager): Promise<EngineScope> {
+	return manager.engine.active() ?? (await manager.engine.ready);
+}
+
+/** The barcode carriers of the scope an edit is being applied IN — never a
+ * later active one. `[]` for collections with no barcode facet, and for a scope
+ * that has not hydrated (the documented online-fallback reading). */
+function scopeBarcodeSelectors(
+	scope: EngineScope,
+	collection: WriteableCollection
+): readonly string[] {
+	if (collection !== 'products' && collection !== 'variations') return [];
+	return scope.barcodeSelectors[collection] ?? [];
+}
+
+function residentCollectionIn(scope: EngineScope, collection: WriteableCollection) {
 	const residentCollection = scope.database.collections[collection];
 	if (!residentCollection) {
 		throw new Error(`Engine collection "${collection}" is unavailable`);
@@ -111,13 +130,22 @@ async function activeCollection(manager: QueryManager, collection: WriteableColl
 	return residentCollection;
 }
 
+async function findEngineResidentIn(
+	scope: EngineScope,
+	collection: WriteableCollection,
+	recordId: string
+): Promise<EngineResident | null> {
+	return (await residentCollectionIn(scope, collection)
+		.findOne(recordId)
+		.exec()) as EngineResident | null;
+}
+
 export async function findEngineResident(
 	manager: QueryManager,
 	collection: WriteableCollection,
 	recordId: string
 ): Promise<EngineResident | null> {
-	const residentCollection = await activeCollection(manager, collection);
-	return (await residentCollection.findOne(recordId).exec()) as EngineResident | null;
+	return findEngineResidentIn(await activeScope(manager), collection, recordId);
 }
 
 export async function patchEngineResident(input: {
@@ -126,17 +154,24 @@ export async function patchEngineResident(input: {
 	recordId: string;
 	changes: Record<string, unknown>;
 }): Promise<EngineResident> {
-	const resident = await findEngineResident(input.manager, input.collection, input.recordId);
+	const scope = await activeScope(input.manager);
+	const resident = await findEngineResidentIn(scope, input.collection, input.recordId);
 	if (!resident) {
 		throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 	}
-	return applyEngineResidentChanges(resident, input.collection, input.changes);
+	return applyEngineResidentChanges(
+		resident,
+		input.collection,
+		input.changes,
+		scopeBarcodeSelectors(scope, input.collection)
+	);
 }
 
 async function applyEngineResidentChanges(
 	resident: EngineResident,
 	collection: WriteableCollection,
-	changes: Record<string, unknown>
+	changes: Record<string, unknown>,
+	selectors: readonly string[]
 ): Promise<EngineResident> {
 	return (await resident.incrementalModify((old) => {
 		const priorPayload = (old.payload ?? {}) as Record<string, unknown>;
@@ -145,7 +180,6 @@ async function applyEngineResidentChanges(
 			set(payload, field, value);
 		}
 		if (collection === 'products' || collection === 'variations') {
-			const selectors = getActiveBarcodeSelectors(collection);
 			const prior = typeof priorPayload.barcode === 'string' ? priorPayload.barcode.trim() : '';
 			const edited = typeof changes.barcode === 'string' ? changes.barcode.trim() : undefined;
 			if (edited !== undefined && edited !== prior) {
@@ -194,13 +228,25 @@ export async function patchAndEnqueueEngineResident(input: {
 	changes: Record<string, unknown>;
 }): Promise<void> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
-		const scopeId = input.manager.engine.status().activeScopeId;
-		const resident = await findEngineResident(input.manager, input.collection, input.recordId);
+		// The rollback guard's baseline is the CAPTURED scope's own id, not a
+		// second `status()` read. The resident, the barcode carriers and the
+		// keep-or-roll-back decision are then provably about ONE scope — with two
+		// independent reads the property held only because `engine.active()` is
+		// evaluated in the same synchronous turn as `status()`, which is a fact
+		// about the engine's internals rather than something this file states.
+		const scope = await activeScope(input.manager);
+		const scopeId = scope.scopeId;
+		const resident = await findEngineResidentIn(scope, input.collection, input.recordId);
 		if (!resident) {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 		}
 		const previousResident = cloneDeep(resident.toJSON());
-		await applyEngineResidentChanges(resident, input.collection, input.changes);
+		await applyEngineResidentChanges(
+			resident,
+			input.collection,
+			input.changes,
+			scopeBarcodeSelectors(scope, input.collection)
+		);
 
 		let writeError: unknown;
 		try {
@@ -243,7 +289,10 @@ export async function insertEngineResident(input: {
 	recordId: string;
 	payload: Record<string, unknown>;
 }): Promise<EngineResident> {
-	const residentCollection = await activeCollection(input.manager, input.collection);
+	const residentCollection = residentCollectionIn(
+		await activeScope(input.manager),
+		input.collection
+	);
 	const payload = ensureRecordMetadata(
 		syncableChanges(input.collection, input.payload),
 		input.recordId

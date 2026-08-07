@@ -47,7 +47,6 @@ import {
 	canonicalSiteKey,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
-	resetActiveBarcodeSelectors,
 	scopeDatabaseName,
 	scopeKeyFor,
 	StoreScopeManager,
@@ -87,7 +86,12 @@ import {
 	createServerPressureMonitor,
 	type ServerPressureTransition,
 } from './change-signal/server-pressure';
-import { hydrateActiveBarcodeSelectors } from './change-signal/config-fingerprint-source';
+import { hydrateBarcodeSelectors } from './change-signal/config-fingerprint-source';
+import {
+	type BarcodeSelectors,
+	createScopeBarcodeSelectors,
+	type ScopeBarcodeSelectors,
+} from './materialization/barcode-selectors';
 import { createWriteDrainLane, type WriteOutcomeEvent } from './write-path/write-drain-lane';
 import {
 	createRequirePlane,
@@ -294,6 +298,15 @@ export type ActiveScope = {
 	identity: StoreScopeIdentity;
 	scopeId: string;
 	database: RxDatabase;
+	/**
+	 * The barcode carriers THIS scope materializes `payload.barcode` from (ADR
+	 * 0006): read from the site's representation config at scope open and kept
+	 * current by every config-fingerprint poll. Empty until the scope has
+	 * hydrated — a scan then misses locally and falls back to the online resolve
+	 * rather than matching on a guessed field. Hosts that resolve or edit
+	 * barcodes read them here; there is no process-wide registry to consult.
+	 */
+	barcodeSelectors: BarcodeSelectors;
 };
 
 /** Public event union — deliberately epoch-free (invariant 1). `detail` is
@@ -683,10 +696,24 @@ export function createRxdbSyncEngine(
 	};
 	let announcedScopeId: string | null = null;
 	const bootstrappedScopes = new Set<string>();
-	// Process-local by design: a restart re-runs selector hydration before
-	// bootstrap, recreating this fact if hydration fails again.
-	const selectorHydrationMissedScopes = new Set<string>();
-	const selectorHydrationRecoveryScopes = new Set<string>();
+	/**
+	 * One barcode-carrier state per scope (materialization/barcode-selectors).
+	 * Keyed like `bootstrappedScopes`, and deliberately NOT dropped when a scope's
+	 * database closes: hydration runs once per scope per engine, so a scope
+	 * re-opened by a switch-back keeps the carriers it hydrated. Nothing here is
+	 * shared between scopes, so there is nothing to reset between them — and a
+	 * later engine (another site) owns its own map entirely.
+	 */
+	const scopeBarcodeSelectors = new Map<string, ScopeBarcodeSelectors>();
+	const barcodeSelectorsOf = (scopeId: string): ScopeBarcodeSelectors => {
+		const existing = scopeBarcodeSelectors.get(scopeId);
+		if (existing) return existing;
+		const created = createScopeBarcodeSelectors();
+		scopeBarcodeSelectors.set(scopeId, created);
+		return created;
+	};
+	const barcodeSelectorsFor = (scopeId: string): BarcodeSelectors =>
+		barcodeSelectorsOf(scopeId).current();
 	const bootstrapFailures = new Map<string, string>();
 	const laneLastTick = new Map<EngineLane, { atMs: number; status: SyncReport['status'] }>();
 	const laneNextDueAtMs = new Map<EngineLane, number>();
@@ -762,6 +789,7 @@ export function createRxdbSyncEngine(
 					database: db,
 					fetcher,
 					ports,
+					barcodeSelectors: () => barcodeSelectorsFor(scopeId),
 				}),
 				freshForMs: ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 				retainStaleForMs: COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS,
@@ -1101,7 +1129,7 @@ export function createRxdbSyncEngine(
 		if (!identity || !database) {
 			throw new Error(`Scope ${scopeId} is not open`);
 		}
-		return { identity, scopeId, database };
+		return { identity, scopeId, database, barcodeSelectors: barcodeSelectorsFor(scopeId) };
 	};
 
 	const assertNotDisposed = (): void => {
@@ -1164,17 +1192,24 @@ export function createRxdbSyncEngine(
 				const database = databaseByScopeId.get(scopeId);
 				if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
 				setLifecyclePhase('barcode-selector-hydrate');
-				// Reset BEFORE hydrating: a failed hydration must leave the registry
-				// empty (online-fallback scans), never a previous engine's carriers —
-				// the process-wide registry mirrors the single active engine (ADR 0018).
-				resetActiveBarcodeSelectors();
+				// The carriers land on THIS scope, so a failed hydration leaves this
+				// scope empty (online-fallback scans) without touching any other
+				// scope's — no reset, and nothing another engine could inherit.
+				const barcodeSelectors = barcodeSelectorsOf(scopeId);
+				// Each ATTEMPT starts from empty. This block re-runs whenever the scope
+				// has not bootstrapped yet (a failed seed leaves it so), and carriers a
+				// previous attempt resolved must not outlive an attempt that fails —
+				// the site's barcode setting may have changed in between.
+				barcodeSelectors.beginHydrationAttempt();
 				const hydrationAbort = new AbortController();
 				const hydrationTimeout = setTimeout(() => hydrationAbort.abort(), 5_000);
 				try {
 					await Promise.race([
-						hydrateActiveBarcodeSelectors({
+						hydrateBarcodeSelectors({
 							fetcher,
 							syncBaseUrl: ports.site.syncBaseUrl,
+							publishBarcodeSelectors: (collection, selectors) =>
+								barcodeSelectors.publish(collection, selectors),
 							signal: hydrationAbort.signal,
 						}),
 						new Promise<never>((_, reject) =>
@@ -1186,7 +1221,9 @@ export function createRxdbSyncEngine(
 						),
 					]);
 				} catch (error) {
-					selectorHydrationMissedScopes.add(scopeId);
+					// Bootstrap seeds (and pulls) into this scope with no carriers, so
+					// its documents carry no barcode until the recovery re-pulls them.
+					barcodeSelectors.noteHydrationFailed();
 					diagnostics({
 						type: 'engine.barcode-selector-hydrate-failed',
 						level: 'debug',
@@ -1236,12 +1273,7 @@ export function createRxdbSyncEngine(
 		fetcher,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		readBlob,
-		writeBlob: async (scopeId, key, value) => {
-			await writeBlob(scopeId, key, value);
-			if (selectorHydrationRecoveryScopes.delete(scopeId)) {
-				selectorHydrationMissedScopes.delete(scopeId);
-			}
-		},
+		writeBlob,
 		connectivity: () => {
 			try {
 				return connectivity();
@@ -1252,20 +1284,13 @@ export function createRxdbSyncEngine(
 		diagnostics,
 		withCollectionActivity,
 		pullBatchSize: () => pullBatchSize,
-		forceConfigStaleCollections: (scopeId, snapshot) => {
-			selectorHydrationRecoveryScopes.delete(scopeId);
-			if (!selectorHydrationMissedScopes.has(scopeId)) return [];
-			const stale = (['products', 'variations'] as const).filter(
-				(collection) => (snapshot.barcodeFields?.[collection]?.length ?? 0) > 0
-			);
-			if (stale.length > 0) selectorHydrationRecoveryScopes.add(scopeId);
-			return stale;
-		},
+		barcodeSelectorsFor: (scopeId) => barcodeSelectorsOf(scopeId),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const writeDrainLane = createWriteDrainLane({
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
+		barcodeSelectorsFor,
 		fetcher,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		connectivity: () => {
@@ -1288,6 +1313,7 @@ export function createRxdbSyncEngine(
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
+		barcodeSelectorsFor,
 		fetcher,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		diagnostics,
@@ -1321,6 +1347,7 @@ export function createRxdbSyncEngine(
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
+		barcodeSelectorsFor,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		fetcher,
 		connectivity: () => {
@@ -1468,6 +1495,7 @@ export function createRxdbSyncEngine(
 		diagnostics,
 		writeDrainLane,
 		scheduleStatusChange,
+		barcodeSelectorsFor,
 	});
 
 	// The readiness watchdog: while `ready` is unsettled, periodically name the
@@ -2212,9 +2240,6 @@ export function createRxdbSyncEngine(
 					await manager.closeScope(scopeId);
 				}
 				emitDb(null);
-				// A later engine (another site) must not inherit this engine's barcode
-				// carriers through the process-wide registry.
-				resetActiveBarcodeSelectors();
 				if (censusExpiryTimer !== null) {
 					clearTimeout(censusExpiryTimer);
 					censusExpiryTimer = null;

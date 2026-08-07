@@ -40,6 +40,7 @@ import type {
 	WooOrderPayload,
 } from '@wcpos/sync-core';
 
+import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import {
 	materializeGreedyPrunable,
 	materializeLocalOnly,
@@ -61,6 +62,17 @@ import type { SyncCollectionName } from './engine-collections';
 
 type WooPayload = Record<string, unknown> & { id?: number };
 
+/**
+ * Payload → stored document. `barcodeSelectors` are the ACTIVE SCOPE's barcode
+ * carriers (materialization/barcode-selectors): the projection is otherwise
+ * pure, so every caller must hand the scope it is writing into — omitting them
+ * materializes no `barcode` field.
+ */
+type RecordProjection = (
+	payload: WooPayload,
+	barcodeSelectors?: BarcodeSelectors
+) => Record<string, unknown>;
+
 /** shape: 'targeted' — pulled by id, deleted by tombstone. */
 export type TargetedDescriptor = {
 	shape: 'targeted';
@@ -78,7 +90,7 @@ export type TargetedDescriptor = {
 	 * descriptor's fact, not the puller's guess.
 	 */
 	parse: (body: unknown) => WooPayload[];
-	project: (payload: WooPayload) => Record<string, unknown>;
+	project: RecordProjection;
 	write: CollectionWriteFacet;
 };
 
@@ -122,7 +134,7 @@ export type GreedyPrunableDescriptor = {
 	collection: Extract<SyncCollectionName, 'categories' | 'brands' | 'tags' | 'coupons'>;
 	hybrid: ReferenceCollection;
 	refreshPath: string;
-	project: (payload: WooPayload) => Record<string, unknown>;
+	project: RecordProjection;
 	write?: CollectionWriteFacet;
 };
 
@@ -133,7 +145,7 @@ export type UpsertRefreshDescriptor = {
 	hybrid: Extract<HybridCollection, 'tax_rates'>;
 	refreshPath: string;
 	tombstoneIdFor: (wooId: number) => string;
-	project: (payload: WooPayload) => Record<string, unknown>;
+	project: RecordProjection;
 };
 
 /** A successful create/update push, resolved for the ack write-back. */
@@ -196,15 +208,26 @@ export type CollectionWriteFacet = {
 	>;
 	/** Stored field carrying the server numeric identity used by targeted refresh. */
 	remoteIdField: 'wooOrderId' | 'wooProductId' | 'wooId' | 'wooCustomerId';
-	/** Read one server document through this collection's existing include-pull shape. */
+	/**
+	 * Read one server document through this collection's existing include-pull
+	 * shape. `barcodeSelectors` are the calling SCOPE's carriers: the result is
+	 * materialized by the same projection an ordinary pull uses, so a caller that
+	 * WRITES the document (conflict discard restoring server truth) must pass
+	 * them or the restored row loses its `barcode`. A caller that only reads
+	 * `sync.revision` off the result may omit them.
+	 */
 	fetchServerDocument: (input: {
 		fetch: Fetcher;
 		syncBaseUrl: string;
 		remoteId: number;
 		signal?: AbortSignal;
+		barcodeSelectors?: BarcodeSelectors;
 	}) => Promise<Record<string, unknown> | null>;
 	/** Pull/ack payload → the exact stored shape used by ordinary materialization. */
-	documentFromServerPayload: (payload: Record<string, unknown>) => Record<string, unknown>;
+	documentFromServerPayload: (
+		payload: Record<string, unknown>,
+		barcodeSelectors?: BarcodeSelectors
+	) => Record<string, unknown>;
 	/** Missing-row ack/discard write-back through the collection's repository seam. */
 	upsertServerDocument: (db: RxDatabase, document: Record<string, unknown>) => Promise<void>;
 	/** Create/update ack: re-anchor sync.revision, capture the remote id, drop
@@ -353,17 +376,16 @@ function ackBookkeeping(options: {
 export type CollectionDescriptor =
 	TargetedDescriptor | GreedyPrunableDescriptor | UpsertRefreshDescriptor | LocalOnlyDescriptor;
 
-function productDocument(rawPayload: WooPayload): Record<string, unknown> {
-	return materializeTargeted('products', rawPayload).storedDocument;
-}
+const productDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
+	materializeTargeted('products', rawPayload, barcodeSelectorsFor(barcodeSelectors, 'products'))
+		.storedDocument;
 
-export function variationDocument(rawPayload: WooPayload): Record<string, unknown> {
-	return materializeTargeted('variations', rawPayload).storedDocument;
-}
+export const variationDocument: RecordProjection = (rawPayload, barcodeSelectors) =>
+	materializeTargeted('variations', rawPayload, barcodeSelectorsFor(barcodeSelectors, 'variations'))
+		.storedDocument;
 
-function customerDocument(rawPayload: WooPayload): Record<string, unknown> {
-	return materializeTargeted('customers', rawPayload).storedDocument;
-}
+const customerDocument: RecordProjection = (rawPayload) =>
+	materializeTargeted('customers', rawPayload).storedDocument;
 
 function referenceDocument(rawPayload: WooPayload): Record<string, unknown> {
 	return materializeGreedyPrunable(rawPayload as WooReferencePayload).storedDocument;
@@ -382,7 +404,7 @@ function createWriteFacet(input: {
 	remoteIdField: CollectionWriteFacet['remoteIdField'];
 	pullPath: string;
 	parse: (body: unknown) => WooPayload[];
-	project: (payload: WooPayload) => Record<string, unknown>;
+	project: RecordProjection;
 	createAckSource?: 'woo-rest';
 	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
 	preserveMetaKeys?: string[];
@@ -394,8 +416,9 @@ function createWriteFacet(input: {
 		collection: input.collection,
 		remoteIdField: input.remoteIdField,
 		...(input.graftAckIdentity ? { graftAckIdentity: input.graftAckIdentity } : {}),
-		documentFromServerPayload: (payload) => input.project(payload as WooPayload),
-		fetchServerDocument: async ({ fetch, syncBaseUrl, remoteId, signal }) => {
+		documentFromServerPayload: (payload, barcodeSelectors) =>
+			input.project(payload as WooPayload, barcodeSelectors),
+		fetchServerDocument: async ({ fetch, syncBaseUrl, remoteId, signal, barcodeSelectors }) => {
 			const search = new URLSearchParams({
 				include: String(remoteId),
 				per_page: '1',
@@ -407,7 +430,7 @@ function createWriteFacet(input: {
 				throw new Error(`${input.pullPath} revision refresh failed: HTTP ${response.status}`);
 			}
 			const [payload] = input.parse(await response.json());
-			return payload ? input.project(payload) : null;
+			return payload ? input.project(payload, barcodeSelectors) : null;
 		},
 		upsertServerDocument:
 			input.upsert ??

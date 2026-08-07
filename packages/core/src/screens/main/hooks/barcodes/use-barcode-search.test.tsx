@@ -3,7 +3,7 @@
  */
 import { renderHook } from '@testing-library/react';
 
-import { deriveBarcodeFromPayload, setActiveBarcodeSelectors } from '@wcpos/sync-core';
+import { deriveBarcodeFromPayload } from '@wcpos/sync-core';
 
 import { useBarcodeSearch } from './use-barcode-search';
 
@@ -18,6 +18,15 @@ interface FakeDoc {
 
 let productDocs: FakeDoc[] = [];
 let variationDocs: FakeDoc[] = [];
+/** The ACTIVE SCOPE's barcode carriers — the hook reads them off the scope. */
+let scopeSelectors: { products: readonly string[]; variations: readonly string[] } = {
+	products: [],
+	variations: [],
+};
+
+function setSelectors(collection: 'products' | 'variations', list: readonly string[]): void {
+	scopeSelectors = { ...scopeSelectors, [collection]: list };
+}
 
 function doc(id: string, payload: Payload, name: 'products' | 'variations' = 'products'): FakeDoc {
 	const d: FakeDoc = {
@@ -33,6 +42,7 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({
 		engine: {
 			active: () => ({
+				barcodeSelectors: scopeSelectors,
 				database: {
 					collections: {
 						products: { find: () => ({ exec: async () => productDocs }) },
@@ -55,8 +65,8 @@ function search(code: string) {
 beforeEach(() => {
 	productDocs = [];
 	variationDocs = [];
-	setActiveBarcodeSelectors('products', ['barcode']);
-	setActiveBarcodeSelectors('variations', ['barcode']);
+	setSelectors('products', ['barcode']);
+	setSelectors('variations', ['barcode']);
 });
 
 describe('barcodeSearch product visibility', () => {
@@ -65,7 +75,7 @@ describe('barcodeSearch product visibility', () => {
 		['global_unique_id', { global_unique_id: 'LOCAL-1' }],
 		['meta_data:_barcode', { meta_data: [{ key: '_barcode', value: 'LOCAL-1' }] }],
 	] as const)('resolves the materialized %s carrier fully offline', async (selector, raw) => {
-		setActiveBarcodeSelectors('products', [selector]);
+		setSelectors('products', [selector]);
 		productDocs = [
 			doc('local', {
 				...raw,
@@ -77,7 +87,7 @@ describe('barcodeSearch product visibility', () => {
 	});
 
 	it('returns no local match when an old envelope reports no active selectors', async () => {
-		setActiveBarcodeSelectors('products', []);
+		setSelectors('products', []);
 		productDocs = [
 			doc('old-plugin', {
 				sku: 'ONLINE-ONLY',
@@ -140,14 +150,14 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 	});
 
 	it('does not apply UPC equivalence when the active materialized carrier is SKU', async () => {
-		setActiveBarcodeSelectors('products', ['sku']);
+		setSelectors('products', ['sku']);
 		productDocs = [doc('active-sku', { sku: '012345678905', barcode: '012345678905' })];
 
 		expect(await search('0012345678905')).toEqual([]);
 	});
 
 	it('ranks a global-id equivalence above a coincidental exact SKU match', async () => {
-		setActiveBarcodeSelectors('products', ['meta_data:_barcode']);
+		setSelectors('products', ['meta_data:_barcode']);
 		productDocs = [
 			// An unrelated product whose SKU is literally the scanned 13-digit string
 			// (its materialized barcode carries a different custom-meta value).
@@ -162,7 +172,7 @@ describe('barcodeSearch UPC-A ↔ EAN-13 equivalence (#740)', () => {
 	});
 
 	it('still applies UPC equivalence to the global-id fallback when SKU is active', async () => {
-		setActiveBarcodeSelectors('products', ['sku']);
+		setSelectors('products', ['sku']);
 		productDocs = [
 			doc('global-fallback', {
 				sku: 'OTHER',

@@ -46,6 +46,7 @@ import {
 import { ORDER_BROWSE_WINDOW_GRAMMAR } from './order-browser-scheduler-descriptor';
 import { PRODUCT_BROWSE_WINDOW_GRAMMAR } from './product-browse-window-descriptor';
 
+import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { FetchTask, FetchTaskResult } from './replication-policy';
 
@@ -256,11 +257,21 @@ export type RunEngineSchedulerDrainInput = {
 		collection: FetchTask['collection'],
 		work: () => Promise<T>
 	) => Promise<T>;
+	/**
+	 * LIVE read of the barcode carriers of the SCOPE this drain runs over —
+	 * products and variations materialize `payload.barcode` from them (ADR 0006).
+	 * A reader, not a value: one drain executes many tasks over many pages, and a
+	 * concurrent config poll can move the carrier partway through. Freezing it
+	 * would let the tail of a slow drain overwrite freshly re-fetched rows with
+	 * the OLD carrier — and the fingerprint has already moved, so nothing would
+	 * come back to repair them.
+	 */
+	barcodeSelectors?: BarcodeSelectorsReader;
 };
 
 export type RunEngineSchedulerTaskInput = Pick<
 	RunEngineSchedulerDrainInput,
-	'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'signal' | 'nowMs' | 'onProgress'
+	'db' | 'coverage' | 'baseUrl' | 'fetcher' | 'signal' | 'nowMs' | 'onProgress' | 'barcodeSelectors'
 > & {
 	task: FetchTask;
 };
@@ -276,6 +287,7 @@ function createEngineSchedulerFetcherRegistry(
 		| 'diagnostics'
 		| 'nowMs'
 		| 'refreshBrowseWindowKey'
+		| 'barcodeSelectors'
 	>
 ) {
 	const db = input.db;
@@ -310,6 +322,7 @@ function createEngineSchedulerFetcherRegistry(
 		...(input.refreshBrowseWindowKey !== undefined
 			? { refreshBrowseWindowKey: input.refreshBrowseWindowKey }
 			: {}),
+		...(input.barcodeSelectors !== undefined ? { barcodeSelectors: input.barcodeSelectors } : {}),
 	};
 
 	return createSchedulerFetcherRegistry([

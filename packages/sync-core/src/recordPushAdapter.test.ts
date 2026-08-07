@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { RECORD_UUID_META_KEY } from './recordIdentity';
 import { type SyncEvent } from './telemetry';
-import { setActiveBarcodeSelectors } from './barcodeResolve';
 import {
 	pushEndpointResolver,
 	pushRecordMutation,
@@ -42,7 +41,6 @@ describe('pushRecordMutation', () => {
 	] as const)(
 		'maps a barcode edit to %s and never pushes the derived field',
 		async (selector, expected) => {
-			setActiveBarcodeSelectors('products', [selector]);
 			const fetcher = vi.fn(async (_url: string, _init?: RequestInit) =>
 				jsonResponse(200, { id: 1 })
 			);
@@ -51,6 +49,7 @@ describe('pushRecordMutation', () => {
 				mutation: mut({ operation: 'update', payload: { barcode: 'EDITED' } }),
 				resolveEndpoint,
 				fetcher,
+				barcodeSelectors: [selector],
 			});
 
 			const body = JSON.parse((fetcher.mock.calls[0][1] as RequestInit).body as string);

@@ -36,36 +36,13 @@ export const BARCODE_PAYLOAD_FIELDS = ['sku', 'barcode', 'global_unique_id'] as 
 
 export type BarcodeMaterializedCollection = 'products' | 'variations';
 
-const activeBarcodeSelectors: Record<BarcodeMaterializedCollection, string[]> = {
-	products: [],
-	variations: [],
-};
-
-export function setActiveBarcodeSelectors(
-	collection: BarcodeMaterializedCollection,
-	selectors: readonly string[]
-): void {
-	activeBarcodeSelectors[collection] = [...selectors];
-}
-
 /**
- * Clears both collections' selectors. The registry is a process-wide singleton
- * mirroring the SINGLE active engine (one engine per site per process, ADR
- * 0018), so the engine resets it at lifecycle boundaries — scope open before
- * hydration, and dispose — to keep one site's carriers from leaking into the
- * next site's session when its own hydration fails.
+ * The ACTIVE barcode carriers are per-STORE-SCOPE state, not module state: which
+ * payload field carries a scannable code comes from that site's representation
+ * config (ADR 0006), so two scopes can legitimately disagree. They are owned by
+ * the sync engine's scope (`ActiveScope.barcodeSelectors`) and travel to every
+ * consumer as an explicit `selectors` argument — this module stays pure.
  */
-export function resetActiveBarcodeSelectors(): void {
-	activeBarcodeSelectors.products = [];
-	activeBarcodeSelectors.variations = [];
-}
-
-export function getActiveBarcodeSelectors(
-	collection: BarcodeMaterializedCollection
-): readonly string[] {
-	return activeBarcodeSelectors[collection];
-}
-
 export function deriveBarcodeFromPayload(
 	rawPayload: Record<string, unknown>,
 	selectors: readonly string[]

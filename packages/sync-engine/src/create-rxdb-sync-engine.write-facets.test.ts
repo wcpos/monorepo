@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { setActiveBarcodeSelectors } from '@wcpos/sync-core';
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
@@ -315,7 +314,6 @@ describe('write facets beyond orders', () => {
 				remoteId: spec.remoteId,
 			})
 		);
-		setActiveBarcodeSelectors(spec.collection, ['sku']);
 		const scope = subject.active();
 		if (!scope) throw new Error('no active scope');
 		const handlers = buildReplicationHandlers({
@@ -324,6 +322,7 @@ describe('write facets beyond orders', () => {
 			syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 			persistState: async () => undefined,
 			log: () => undefined,
+			barcodeSelectors: () => ({ products: ['sku'], variations: ['sku'] }),
 		});
 
 		expect(await handlers.reFetchCollection(spec.collection)).toBe(1);
@@ -360,7 +359,6 @@ describe('write facets beyond orders', () => {
 				...storedDocument({ spec, id: UUID_B, label: 'dirty', remoteId: spec.remoteId + 1 }),
 				local: { dirty: true, pendingMutationIds: ['m1'] },
 			});
-			setActiveBarcodeSelectors(spec.collection, ['sku']);
 			const scope = subject.active();
 			if (!scope) throw new Error('no active scope');
 			const handlers = buildReplicationHandlers({
@@ -369,6 +367,7 @@ describe('write facets beyond orders', () => {
 				syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
 				persistState: async () => undefined,
 				log: () => undefined,
+				barcodeSelectors: () => ({ products: ['sku'], variations: ['sku'] }),
 			});
 
 			expect(await handlers.reFetchCollection(spec.collection)).toBe(1);
@@ -660,6 +659,75 @@ describe('write facets beyond orders', () => {
 							: { name: 'server-truth' }
 			);
 			expect(restored?.local).toEqual({ dirty: false, pendingMutationIds: [] });
+			await subject.dispose();
+		}
+	);
+
+	it.each(
+		FACETS.filter(({ collection }) => collection === 'products' || collection === 'variations')
+	)(
+		'$collection discard restores the server BARCODE CARRIER, not a barcode-less row',
+		async (spec) => {
+			if (spec.collection === 'customers' || spec.collection === 'coupons') {
+				throw new Error('unreachable');
+			}
+			// The discard pull re-materializes server truth through the ordinary
+			// projection and WRITES it back. Without the scope's carriers that
+			// restored row would silently lose payload.barcode, so a cashier who
+			// discarded a conflicted edit would end up with an unscannable product.
+			const truth = {
+				...payload(spec, UUID_A, 'server-truth', spec.remoteId),
+				global_unique_id: 'GTIN-RESTORED',
+				_rxdb_revision: 'sha256:server-base',
+			};
+			const route = routedServer(spec, () => truth);
+			route.server.seed(UUID_A, {
+				id: spec.remoteId,
+				revision: 'sha256:server-base',
+				collection: spec.collection,
+				payload: truth,
+			});
+			const subject = engine(async (url, init) =>
+				new URL(url).pathname.endsWith('/changes/config-fingerprint')
+					? Response.json({
+							fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
+							barcode_fields: {
+								products: ['global_unique_id'],
+								variations: ['global_unique_id'],
+								tax_rates: [],
+							},
+						})
+					: route.fetch(url, init)
+			);
+			await subject.ready;
+			expect(subject.active()!.barcodeSelectors[spec.collection]).toEqual(['global_unique_id']);
+
+			await insert(
+				subject,
+				spec,
+				storedDocument({
+					spec,
+					id: UUID_A,
+					label: 'local-stale',
+					remoteId: spec.remoteId,
+					revision: 'sha256:stale',
+				})
+			);
+			const receipt = await subject.write({
+				collection: spec.collection,
+				operation: 'update',
+				recordId: UUID_A,
+				payload: payload(spec, UUID_A, 'discard-me', spec.remoteId),
+			});
+			await subject.sync('write-drain');
+			await subject.resolveConflict(receipt.mutationId, 'discard');
+
+			expect(await subject.conflicts()).toEqual([]);
+			const restored = await record(subject, spec, UUID_A);
+			expect(restored?.payload).toMatchObject({
+				global_unique_id: 'GTIN-RESTORED',
+				barcode: 'GTIN-RESTORED',
+			});
 			await subject.dispose();
 		}
 	);

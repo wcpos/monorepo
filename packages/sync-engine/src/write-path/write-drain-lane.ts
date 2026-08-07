@@ -42,6 +42,7 @@ import {
 } from './order-money-divergence';
 import { queueFor, requeueBornTwiceSnapshot } from './write-intents';
 import { orderDocumentFromWooPayload } from '../scheduler';
+import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
@@ -231,6 +232,9 @@ export type WriteDrainLaneDeps = {
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	emitWriteEvent: (event: WriteOutcomeEvent) => void;
 	now?: () => number;
+	/** THIS scope's barcode carriers — the push maps an edited `barcode` back onto
+	 * the carrier field, and an ack re-materialization derives it again. */
+	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 };
 
 export type WriteDrainLane = {
@@ -265,6 +269,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 		try {
 			return await deps.manager.runGuarded(async (bound) => {
 				const database = deps.databaseFor(bound.scopeId);
+				// A LIVE read, never a tick-scoped snapshot: a drain works one row at a
+				// time and the change-signal lane can publish a new carrier between
+				// rows, so a captured value would map a later barcode edit onto the
+				// field the site stopped using.
+				const scopeBarcodeSelectors = (): BarcodeSelectors | undefined =>
+					deps.barcodeSelectorsFor?.(bound.scopeId) ?? undefined;
 				if (!database) {
 					return {
 						lane: 'write-drain' as const,
@@ -413,6 +423,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								return pushRecordMutation({
 									mutation: await withGraftedLineIdentity(database, mutation),
 									resolveEndpoint,
+									barcodeSelectors: barcodeSelectorsFor(
+										scopeBarcodeSelectors(),
+										mutation.collectionName
+									),
 									fetcher: (url, init) => {
 										// Absorb the adapter's signal — tickFetcher already merged
 										// it; forwarding would force AbortSignal.any in scopedFetch.
@@ -453,7 +467,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										}
 										await facet.upsertServerDocument(
 											database,
-											facet.documentFromServerPayload(pushResult.document)
+											facet.documentFromServerPayload(pushResult.document, scopeBarcodeSelectors())
 										);
 										ackCandidates.push({
 											type: 'write-ack-rematerialized',
