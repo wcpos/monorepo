@@ -113,6 +113,7 @@ import {
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
+import { createCoverageChangeHub } from './local-coverage/coverage-changes';
 import { createReconcilePorts } from './local-coverage/reconcile-port';
 import { enqueueWriteIntent, queueFor, type WriteIntent } from './write-path/write-intents';
 import {
@@ -135,6 +136,7 @@ import {
 	SEED_RETICK_LANES,
 } from './maintenance/lane-registry';
 
+import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
 export type {
@@ -505,6 +507,17 @@ export type RxdbSyncEngine = {
 	statusChanges(cb: (status: EngineStatus) => void): Unsubscribe;
 	/** Emits the current census snapshot, then updated cache/scope/freshness snapshots. */
 	censusChanges(cb: (totals: CensusTotals) => void): Unsubscribe;
+	/**
+	 * Emits the engine's coverage verdict for ONE target — how much of that query it holds and
+	 * what the authoritative total is — immediately on subscribe, then on every lane /
+	 * query-total write behind it, every scope switch or reset, and at each freshness deadline.
+	 *
+	 * The engine owns the semantics AND the lane keys: the `{lane:'reference'}` arm resolves a
+	 * boot/reference collection's key internally, so a caller never constructs one (CONTEXT.md).
+	 * Never throws once subscribed — no scope, no rows and no lane all publish `source:'unknown'`
+	 * with `total: null`, which is the engine declining to vouch rather than an answer of zero.
+	 */
+	coverageChanges(target: CoverageTarget, cb: (verdict: CoverageVerdict) => void): Unsubscribe;
 	/** Abort in-flight, close every scope db; terminal. */
 	dispose(): Promise<void>;
 };
@@ -913,6 +926,14 @@ export function createRxdbSyncEngine(
 		if (event.type === 'query-total-cache') publishCensusChanges();
 	};
 
+	// `activeDatabase` is read lazily: the hub outlives every scope, and a reset re-emits the
+	// SAME database with fresh collections, so it must resolve through the accessor each time.
+	const coverageChangeHub = createCoverageChangeHub({
+		activeDatabase: () => activeDatabase(),
+		now: nowMs,
+		diagnostics,
+	});
+
 	const emitDb = (db: RxDatabase | null): void => {
 		for (const cb of [...dbSubscribers]) {
 			try {
@@ -926,6 +947,7 @@ export function createRxdbSyncEngine(
 			}
 		}
 		publishCensusChanges();
+		coverageChangeHub.republish();
 	};
 
 	const activeDatabase = (): RxDatabase | null => {
@@ -2144,6 +2166,10 @@ export function createRxdbSyncEngine(
 				censusSubscribers.delete(cb);
 			};
 		},
+		coverageChanges: (target, cb) => {
+			assertNotDisposed();
+			return coverageChangeHub.subscribe(target, cb);
+		},
 		status: readStatus,
 		dispose: async () => {
 			assertNotDisposed();
@@ -2163,6 +2189,11 @@ export function createRxdbSyncEngine(
 				clearInterval(writeDrainTimer);
 				writeDrainTimer = null;
 			}
+			// Synchronous, unlike the census expiry timer below: these are live RxDB query
+			// subscriptions, and the lifecycle turn that runs next CLOSES every scope database
+			// under them. Dropping them here also makes publishing inert from this instant, so a
+			// pending expiry timer can never hand a subscriber a verdict after dispose.
+			coverageChangeHub.dispose();
 			for (const timer of maintenanceTimers.splice(0)) {
 				clearInterval(timer);
 			}
