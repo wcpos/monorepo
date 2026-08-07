@@ -1,11 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import {
-	becomesVisible,
-	isRouteTeardownError,
-	authenticatedTest as test,
-	tryAddProductBySku,
-} from './fixtures';
+import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import { becomesVisible, isRouteTeardownError, tryAddProductBySku } from './fixtures';
 import {
 	expectFullPrecision,
 	expectMoneyMatches,
@@ -50,6 +46,9 @@ function digitsOf(value: string): string {
  * Works in both grid and table view.
  */
 async function addTestProductToCart(page: Page) {
+	if (await tryAddRunPrivateSimpleProduct(page)) return;
+
+	// Secretless forks retain the pre-isolation shared-SKU path below.
 	const skuResult = await tryAddProductBySku(page);
 	if (skuResult === 'added') {
 		return;

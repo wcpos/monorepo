@@ -2,6 +2,12 @@ import { expect, type Page } from '@playwright/test';
 
 import { probeVariationSearch, coldStartTest as test } from './cold-start';
 import { becomesVisible, getStoreUrl } from './fixtures';
+import {
+	createRunPrivateProduct,
+	deleteSearchProbe,
+	productWriterAuthorization,
+	productWriterCredentialsConfigured,
+} from './search-probe';
 
 /**
  * Variation-SKU search on a THIN local catalogue — wcpos/monorepo#991,
@@ -52,53 +58,76 @@ test.describe('Cold start — variation SKU search', () => {
 		storeAuthorization,
 		request,
 	}, testInfo) => {
-		const probe = await probeVariationSearch(
-			request,
-			getStoreUrl(testInfo),
-			storeAuthorization(),
-			VARIATION_SKU_TERM
-		);
-		if (!probe.supported) {
-			test.skip(
-				true,
-				`needs wcpos/v2 variations search — wcpos/woocommerce-pos#1441 (${probe.reason})`
+		const storeUrl = getStoreUrl(testInfo);
+		const writer = productWriterCredentialsConfigured()
+			? await productWriterAuthorization(request, storeUrl)
+			: null;
+		const runPrivateProduct = writer
+			? await createRunPrivateProduct({
+					request,
+					storeUrl,
+					authorization: writer,
+					kind: 'variable',
+					workerIndex: testInfo.workerIndex,
+				})
+			: null;
+
+		try {
+			// Secretless forks retain the existing store-discovered variation SKU.
+			const searchTerm = runPrivateProduct?.variationSku ?? VARIATION_SKU_TERM;
+			const probe = await probeVariationSearch(request, storeUrl, storeAuthorization(), searchTerm);
+			if (!probe.supported) {
+				test.skip(
+					true,
+					`needs wcpos/v2 variations search — wcpos/woocommerce-pos#1441 (${probe.reason})`
+				);
+				return;
+			}
+
+			// The proof that a REMOTE lane ran: with the catalogue thin, a local-only
+			// search cannot produce this request, and cannot produce any result.
+			const variationSearchRequest = page.waitForRequest(
+				(candidate) =>
+					candidate.url().includes('/wcpos/v2/variations') &&
+					/[?&](search|sku)=/.test(candidate.url()),
+				{ timeout: 60_000 }
 			);
-			return;
+
+			await page.getByTestId('search-products').fill(probe.sku);
+			const variationRequest = await variationSearchRequest;
+			const requestUrl = new URL(variationRequest.url());
+			expect([requestUrl.searchParams.get('search'), requestUrl.searchParams.get('sku')]).toContain(
+				probe.sku
+			);
+
+			// The matching variation's PARENT is what the grid lists (the relational
+			// binding hydrates parents for child search hits).
+			const variableProduct = page
+				.getByTestId('variable-product-tile')
+				.or(page.getByTestId('variable-product-expand'))
+				.first();
+			await expect(variableProduct).toBeVisible({ timeout: 60_000 });
+
+			await ensureTableView(page);
+			await page.getByTestId('variable-product-expand').first().click();
+			const cartLines = page.getByTestId('cart-quantity-input');
+			const cartLineCount = await cartLines.count();
+			const addVariationButton = page.getByTestId('add-variation-to-cart-button').first();
+			await expect(addVariationButton).toBeVisible({
+				timeout: 30_000,
+			});
+			await addVariationButton.click();
+			await expect(cartLines).toHaveCount(cartLineCount + 1, { timeout: 30_000 });
+		} finally {
+			if (writer && runPrivateProduct) {
+				await deleteSearchProbe({
+					request,
+					storeUrl,
+					authorization: writer,
+					collection: 'products',
+					id: runPrivateProduct.id,
+				});
+			}
 		}
-
-		// The proof that a REMOTE lane ran: with the catalogue thin, a local-only
-		// search cannot produce this request, and cannot produce any result.
-		const variationSearchRequest = page.waitForRequest(
-			(candidate) =>
-				candidate.url().includes('/wcpos/v2/variations') &&
-				/[?&](search|sku)=/.test(candidate.url()),
-			{ timeout: 60_000 }
-		);
-
-		await page.getByTestId('search-products').fill(probe.sku);
-		const variationRequest = await variationSearchRequest;
-		const requestUrl = new URL(variationRequest.url());
-		expect([requestUrl.searchParams.get('search'), requestUrl.searchParams.get('sku')]).toContain(
-			probe.sku
-		);
-
-		// The matching variation's PARENT is what the grid lists (the relational
-		// binding hydrates parents for child search hits).
-		const variableProduct = page
-			.getByTestId('variable-product-tile')
-			.or(page.getByTestId('variable-product-expand'))
-			.first();
-		await expect(variableProduct).toBeVisible({ timeout: 60_000 });
-
-		await ensureTableView(page);
-		await page.getByTestId('variable-product-expand').first().click();
-		const cartLines = page.getByTestId('cart-quantity-input');
-		const cartLineCount = await cartLines.count();
-		const addVariationButton = page.getByTestId('add-variation-to-cart-button').first();
-		await expect(addVariationButton).toBeVisible({
-			timeout: 30_000,
-		});
-		await addVariationButton.click();
-		await expect(cartLines).toHaveCount(cartLineCount + 1, { timeout: 30_000 });
 	});
 });

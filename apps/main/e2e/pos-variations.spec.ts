@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { becomesVisible, authenticatedTest as test } from './fixtures';
+import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
+import { becomesVisible } from './fixtures';
 
 /**
  * Helper: ensure the POS products are in table view (not grid view).
@@ -47,17 +48,14 @@ async function ensureTableView(page: Page) {
 }
 
 /**
- * Helper: search for a variable product (WooCommerce sample data "hoodie")
- * and wait for results to appear. Variable products may take longer to sync
- * from WooCommerce in CI, so we use generous timeouts.
+ * Search the worker-private variable product and wait for it to render.
+ * Secretless forks retain the sample-catalog fallback in findVariableProduct.
  */
 async function searchForVariableProduct(page: Page) {
 	// These tests require table view — switch if needed
 	await ensureTableView(page);
 
-	const searchInput = page.getByTestId('search-products');
-	await searchInput.fill('hoodie');
-	await page.waitForTimeout(2_000);
+	await findVariableProduct(page);
 
 	// Verify we got results — product sync can be slow in CI
 	const countEl = page.getByTestId('data-table-count');

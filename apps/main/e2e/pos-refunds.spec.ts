@@ -1,11 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
-import {
-	becomesVisible,
-	getStoreVariant,
-	authenticatedTest as test,
-	tryAddProductBySku,
-} from './fixtures';
+import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import { becomesVisible, getStoreVariant, tryAddProductBySku } from './fixtures';
 import {
 	expectFullPrecision,
 	expectOrderPaid,
@@ -22,6 +18,9 @@ import {
  * product — and then to a misc product — on stores without the dedicated SKU.
  */
 async function addTestProductToCart(page: Page) {
+	if (await tryAddRunPrivateSimpleProduct(page)) return;
+
+	// Secretless forks retain the pre-isolation shared-SKU/misc-product path below.
 	const skuResult = await tryAddProductBySku(page);
 	if (skuResult === 'added') {
 		return;

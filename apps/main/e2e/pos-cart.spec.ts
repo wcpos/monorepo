@@ -1,23 +1,14 @@
 import { expect, type Page } from '@playwright/test';
 
-import { authenticatedTest as test } from './fixtures';
+import {
+	addCheckoutProbeProduct,
+	isolatedProductTest as test,
+	tryAddRunPrivateSimpleProduct,
+} from './checkout-probe';
 
-/** Helper to add the first simple product to the cart. Works in both grid and table view. */
+/** Add the run-private simple product, or the shared-SKU fallback on secretless forks. */
 async function addFirstProductToCart(page: Page) {
-	const tile = page.getByTestId('product-tile').first();
-	const tableButton = page.getByTestId('add-to-cart-button').first();
-
-	// Wait for products to render in whichever view mode is active
-	await expect(tile.or(tableButton)).toBeVisible({ timeout: 15_000 });
-
-	// One of the two markers has already settled visible above; a one-shot picks
-	// which view rendered (grid tile vs table button).
-	if (await tile.isVisible()) {
-		await tile.click();
-	} else {
-		await tableButton.click();
-	}
-	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
+	await addCheckoutProbeProduct(page);
 }
 
 /**
@@ -84,6 +75,12 @@ test.describe('POS Cart', () => {
 	});
 
 	test('should add multiple different products', async ({ posPage: page }) => {
+		if (await tryAddRunPrivateSimpleProduct(page)) {
+			expect(await tryAddRunPrivateSimpleProduct(page, 1)).toBe(true);
+			return;
+		}
+
+		// Secretless forks retain the former two-catalog-product path below.
 		// Works in both grid (product-tile) and table (add-to-cart-button) views
 		const tile = page.getByTestId('product-tile');
 		const tableButton = page.getByTestId('add-to-cart-button');

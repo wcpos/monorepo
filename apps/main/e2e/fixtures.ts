@@ -81,13 +81,13 @@ export function storeRequestOptions(authorization: StoreAuthorization | null): {
 }
 
 /**
- * SKU of the product the live payment specs should buy.
+ * Shared-SKU fallback for forks that do not receive product-writer secrets.
  *
  * These specs used to add whichever product happened to render first in the
  * catalogue. When that product is stock-managed, parallel CI shards check out
  * the same inventory and a shard can fail purely because another shard drained
- * the stock. Pinning the purchase to a known simple, non-stock-managed SKU
- * removes the contention.
+ * the stock. Writer-enabled CI now creates worker-private products; this
+ * remains only so secretless forks keep running the former degraded path.
  *
  * `woo-belt` is WooCommerce sample data (simple, published, `manage_stock`
  * false, `stock_status` instock) and is present on the free, pro and next dev
@@ -111,7 +111,7 @@ export async function becomesVisible(locator: Locator, timeout: number): Promise
 }
 
 /**
- * Try to add the dedicated E2E product to the cart by searching for its SKU.
+ * Try to add the fallback E2E product to the cart by searching for its SKU.
  *
  * Returns `added` when the product landed in the cart, `unavailable` when the
  * store cannot add the SKU directly, and `add_failed` when a simple product
