@@ -15,20 +15,200 @@
 export type SyncEventLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
+ * THE closed vocabulary of engine events — every dotted name the engine may emit.
+ *
+ * Closed on purpose. The observer that turns events into the cashier-facing log
+ * (`apps/main/lib/sync-log-observer.ts`) maps each type to a row policy, and an
+ * unmapped type used to fall to a `sync.other`/`failed` default: a brand-new
+ * engine event landed in the FAILURE bucket of a merchant's log unnoticed. That
+ * happened for real (`push.money-divergence`, reported as undeliverable sales —
+ * see the comment on its conformance row). With the vocabulary closed, the
+ * observer's map is `satisfies Record<SyncEventType, …>`, so a new event type is
+ * a COMPILE error until someone decides how it should read.
+ *
+ * Kept honest by `scripts/check-sync-event-types.mjs` (wired into
+ * `pnpm test:scripts`): it scans the engine sources for emitted type literals and
+ * fails when one is missing here — the same trick as the label gate next door.
+ *
+ * Not to be confused with `SyncEventType` from
+ * `@wcpos/utils/logger/generated/event-labels.generated` — that one is the
+ * merchant-LABEL vocabulary generated from `event-registry.json`, which is a
+ * different (overlapping) set: it also labels the receipt-email queue's
+ * `email.queue.*` rows, which never reach a `SyncObserver`. This union is the
+ * telemetry seam's own vocabulary; the label gate keeps every member of it
+ * labelled.
+ */
+export type SyncEventType =
+	// apply
+	| 'apply.barcode-rederive'
+	| 'apply.delete'
+	| 'apply.escalation'
+	| 'apply.pull'
+	| 'apply.rebaseline'
+	| 'apply.refetch'
+	| 'apply.refresh'
+	// browse-window
+	| 'browse-window.backstop-reached'
+	| 'browse-window.eviction-skipped'
+	| 'browse-window.lanes-evicted'
+	| 'browse-window.page-budget-reached'
+	| 'browse-window.prefix-invalidated'
+	// cadence
+	| 'cadence.backoff'
+	| 'cadence.reconfigured'
+	| 'cadence.recovered'
+	| 'cadence.start'
+	// coverage
+	| 'coverage.compacted'
+	| 'coverage.existence-prime'
+	| 'coverage.existence-reconcile'
+	| 'coverage.gate.hit'
+	| 'coverage.gate.miss'
+	| 'coverage.ledger-rebuilt'
+	| 'coverage.require.error'
+	| 'coverage.require.log'
+	| 'coverage.require.outcome'
+	// customer
+	| 'customer.browse-window.sort-rejected'
+	// demand
+	| 'demand.activity-counter-underflow'
+	// engine
+	| 'engine.barcode-selector-hydrate-failed'
+	| 'engine.collection-reset'
+	| 'engine.connectivity-error'
+	| 'engine.disposed'
+	| 'engine.guard'
+	| 'engine.lane.tick'
+	| 'engine.listener-error'
+	| 'engine.pos-bootstrap-error'
+	| 'engine.ready'
+	| 'engine.ready-failed'
+	| 'engine.ready-stalled'
+	| 'engine.reconnect.retick'
+	| 'engine.reset-needs-confirmation'
+	| 'engine.scope-switched'
+	| 'engine.write-leader.degraded'
+	// maintenance
+	| 'maintenance.lane.error'
+	| 'maintenance.lane.tick'
+	// product
+	| 'product.browse-window.approximate'
+	| 'product.browse-window.brand-filter-ignored'
+	// push
+	| 'push.aborted'
+	| 'push.conflict'
+	| 'push.dead-letter-unpersisted'
+	| 'push.error'
+	| 'push.in_progress'
+	| 'push.money-divergence'
+	| 'push.outcome'
+	| 'push.rejected'
+	// queue
+	| 'queue.drain.progress'
+	| 'queue.scheduler.drain'
+	| 'queue.write.annihilate'
+	| 'queue.write.born-twice-requeue'
+	| 'queue.write.coalesce'
+	| 'queue.write.conflict-transition'
+	| 'queue.write.discard-repull-deferred'
+	| 'queue.write.drain'
+	| 'queue.write.enqueued'
+	| 'queue.write.needs-revision'
+	| 'queue.write.requeue-rebuilt'
+	| 'queue.write.reschedule-failed'
+	| 'queue.write.resolve'
+	| 'queue.write.tick.error'
+	// signal
+	| 'signal.cursor'
+	| 'signal.cycle'
+	| 'signal.log'
+	| 'signal.tick.error'
+	// targeted
+	| 'targeted.pull.shortfall-prune'
+	// transport
+	| 'transport.request';
+
+/** The open payload every event carries; the shape below narrows it per type. */
+export type SyncEventFieldsBase = Readonly<Record<string, unknown>>;
+
+/**
+ * Declared `fields` shapes, for the event types whose payload a CONSUMER reads
+ * by name rather than just forwarding. Deliberately partial: the ~60 types not
+ * listed here keep the open record. This is the set the cashier-log observer
+ * reads today (its did-work gates and its cadence preset lookup) — the reads
+ * that used to be `unknown` and silently coerced through `num()`, so a field
+ * renamed at the emitter degraded to "did no work" instead of failing a build.
+ *
+ * These are declarations, not enforcement: `SyncEvent.fields` stays open, so an
+ * emitter may still send more. Everything listed is optional because most of
+ * these payloads are assembled conditionally.
+ */
+export type SyncEventFieldsByType = {
+	'signal.cycle': { readonly pulls?: number; readonly deletes?: number };
+	'engine.lane.tick': {
+		/** Lane report status — `'error'` is the one the observer keys on. */
+		readonly status?: string;
+		readonly pushed?: number;
+		readonly conflicts?: number;
+		readonly deferred?: number;
+		readonly failed?: number;
+		readonly rejected?: number;
+	};
+	'apply.pull': { readonly applied?: number };
+	'apply.delete': { readonly applied?: number };
+	'apply.refetch': { readonly refetched?: number };
+	'coverage.require.outcome': { readonly documents?: number; readonly requests?: number };
+	'coverage.existence-reconcile': {
+		readonly pruned?: number;
+		readonly pulled?: number;
+		readonly repulled?: number;
+	};
+	'coverage.compacted': { readonly removed?: number };
+	'transport.request': {
+		/** HTTP status, or `0` for a request that never reached the server. */
+		readonly status?: number;
+		readonly operationId?: string;
+	};
+	'queue.write.drain': {
+		readonly pushed?: number;
+		readonly conflicts?: number;
+		readonly failed?: number;
+		readonly rejected?: number;
+	};
+	'queue.scheduler.drain': { readonly succeeded?: number; readonly failed?: number };
+	'cadence.start': CadenceFields;
+	'cadence.reconfigured': CadenceFields;
+	'cadence.backoff': CadenceFields;
+	'cadence.recovered': CadenceFields;
+};
+
+/** The cadence a lane is running at — the four `cadence.*` events share it. */
+type CadenceFields = { readonly tierMs?: number; readonly pullBatchSize?: number };
+
+/** The declared field shape for `T`, or the open record when it has none. */
+export type SyncEventFields<T extends SyncEventType> = T extends keyof SyncEventFieldsByType
+	? SyncEventFieldsByType[T]
+	: SyncEventFieldsBase;
+
+/**
  * A structured engine event. `type` is a dotted name; metrics derive from `type`
  * + `fields`. Immutable: an event is fanned out to many sinks, so no sink may
  * mutate it (the type is `readonly` and `composeObservers` freezes it).
  */
 export type SyncEvent = {
-	/** Dotted event name, e.g. `pull.batch`, `push.outcome`, `change-signal.poll`. */
-	readonly type: string;
+	/** Dotted event name, e.g. `apply.pull`, `push.outcome`, `signal.cycle`. */
+	readonly type: SyncEventType;
 	readonly level: SyncEventLevel;
 	/** The collection this event concerns, when applicable (per-collection metrics). */
 	readonly collection?: string;
 	/** Human-readable one-line summary (for the logger sink). */
 	readonly message?: string;
-	/** Structured payload — `durationMs` is aggregated into timings; others are free-form. */
-	readonly fields?: Readonly<Record<string, unknown>>;
+	/**
+	 * Structured payload — `durationMs` is aggregated into timings; others are
+	 * free-form. Stays OPEN: {@link SyncEventFieldsByType} declares the shapes a
+	 * consumer reads by name, it does not close what an emitter may send.
+	 */
+	readonly fields?: SyncEventFieldsBase;
 	/** Epoch ms; the emitter fills it if absent. */
 	readonly at?: number;
 };

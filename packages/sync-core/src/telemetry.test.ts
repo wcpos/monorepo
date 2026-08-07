@@ -7,11 +7,16 @@ import {
 	type SyncEvent,
 } from './telemetry';
 
-const ev = (type: string, over: Partial<SyncEvent> = {}): SyncEvent => ({
-	type,
-	level: 'info',
-	...over,
-});
+// The metrics collector is deliberately vocabulary-agnostic — it keys its Maps by
+// whatever `type` string arrives, which is what lets it survive an event from a
+// newer engine build. These fixtures exercise that, so the assertion is the point:
+// they invent types that are NOT in `SyncEventType`.
+const ev = (type: string, over: Partial<SyncEvent> = {}): SyncEvent =>
+	({
+		type,
+		level: 'info',
+		...over,
+	}) as SyncEvent;
 
 describe('NOOP_OBSERVER', () => {
 	it('accepts an event and does nothing', () => {

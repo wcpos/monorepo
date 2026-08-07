@@ -8,7 +8,11 @@ import { createSyncLogObserver } from './sync-log-observer';
 
 jest.resetModules();
 
-const event = (partial: Partial<SyncEvent> & { type: string }): SyncEvent =>
+// `type` is widened back to `string` on purpose. `SyncEventType` closes the
+// vocabulary at compile time, but the observer still has to survive a name from
+// outside it at RUNTIME — a newer engine bundle under an older app shell, or a
+// key that resolves through Object.prototype — and those cases are tested below.
+const event = (partial: Partial<Omit<SyncEvent, 'type'>> & { type: string }): SyncEvent =>
 	({ level: 'info', ...partial }) as SyncEvent;
 
 describe('createSyncLogObserver', () => {
@@ -423,6 +427,24 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0]).toMatchObject({
 			level: 'error',
 			message: 'boom',
+			terminal: { operationType: 'sync.other', outcome: 'failed' },
+		});
+	});
+
+	it('keeps the inherited default for the types that carry no policy of their own', () => {
+		// The TODO(review) rows. They are explicit entries now rather than a
+		// fallthrough, and they have to read exactly like the fallthrough did:
+		// a failure lands in sync.other, narration and debug are dropped.
+		observer.observe(
+			event({ type: 'maintenance.lane.error', level: 'error', message: 'lane down' })
+		);
+		observer.observe(event({ type: 'signal.log', level: 'info', message: 'narration' }));
+		observer.observe(event({ type: 'queue.drain.progress', level: 'debug' }));
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({
+			level: 'error',
+			message: 'lane down',
 			terminal: { operationType: 'sync.other', outcome: 'failed' },
 		});
 	});

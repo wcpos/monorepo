@@ -42,4 +42,8 @@ export {
 } from './protocol';
 export { identifyRecord, webCryptoUuid } from './recordIdentity';
 // prettier-ignore
-export { composeObservers, createMetricsCollector, type MetricsSnapshot, type SyncEvent, type SyncObserver } from './telemetry';
+export {
+	composeObservers, createMetricsCollector, type MetricsSnapshot, type SyncEvent,
+	type SyncEventFields, type SyncEventFieldsBase, type SyncEventFieldsByType,
+	type SyncEventType, type SyncObserver,
+} from './telemetry';
