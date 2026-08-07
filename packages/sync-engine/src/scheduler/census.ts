@@ -53,3 +53,10 @@ export function censusTotalsFromCache(
 		})
 	) as CensusTotals;
 }
+
+export function censusNextExpiryMs(entries: QueryTotalCacheEntry[], nowMs: number): number | null {
+	const upcoming = entries
+		.map((entry) => entry.freshUntilMs)
+		.filter((deadline) => deadline > nowMs);
+	return upcoming.length > 0 ? Math.min(...upcoming) : null;
+}

@@ -9,7 +9,6 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import {
 	type CensusTotals,
-	createRxdbSyncEngine,
 	type EngineEvent,
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
@@ -18,7 +17,7 @@ import {
 import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
 import { ledgerRebuiltSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
-import { memoryEngineStorage } from './testing';
+import { createEngineHarness, memoryEngineStorage } from './testing';
 
 setPremiumFlag();
 
@@ -39,15 +38,14 @@ function engineWith(
 	overrides?: Partial<RxdbSyncEnginePorts>,
 	identity = freshIdentity()
 ): RxdbSyncEngine {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
-			storage: memoryEngineStorage(),
-			mode: 'manual',
-			...overrides,
-		},
-		identity
-	);
+	return createEngineHarness({
+		site: SITE,
+		identity,
+		mode: 'manual',
+		captureTimers: overrides?.mode === 'auto',
+		ports: { now: Date.now, ...overrides },
+		awaitReady: false,
+	}).engine;
 }
 
 async function taskRows(engine: RxdbSyncEngine): Promise<Record<string, unknown>[]> {
@@ -501,7 +499,6 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 	});
 
 	it('auto mode runs the seed lanes before the scheduler drain at boot', async () => {
-		vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 		const bootLanes = [
 			'reference-seed',
 			'product-browse-window-seed',

@@ -5,8 +5,8 @@ import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
 import { buildReplicationHandlers } from './change-signal/change-signal-handlers';
-import { createRxdbSyncEngine, type RxdbSyncEngine } from './create-rxdb-sync-engine';
-import { memoryEngineStorage } from './testing';
+import { type RxdbSyncEngine } from './create-rxdb-sync-engine';
+import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 
@@ -172,18 +172,13 @@ function routedServer(spec: FacetSpec, truth: () => Record<string, unknown> | nu
 }
 
 function engine(fetch: (url: string, init?: RequestInit) => Promise<Response>): RxdbSyncEngine {
-	return createRxdbSyncEngine(
-		{
-			site: {
-				syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
-				wpJsonRoot: `${SITE}/wp-json`,
-			},
-			storage: memoryEngineStorage(),
-			fetcher: fetch,
-			mode: 'manual',
-		},
-		identity()
-	);
+	return createEngineHarness({
+		site: SITE,
+		identity: identity(),
+		mode: 'manual',
+		fetch,
+		awaitReady: false,
+	}).engine;
 }
 
 async function insert(engine: RxdbSyncEngine, spec: FacetSpec, document: unknown): Promise<void> {

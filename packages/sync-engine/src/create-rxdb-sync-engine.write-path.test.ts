@@ -13,14 +13,13 @@ import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
 import {
-	createRxdbSyncEngine,
 	type EngineEvent,
 	type EngineFetcher,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
 import { writeFacetFor } from './collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
-import { memoryEngineStorage, scriptedConnectivity } from './testing';
+import { createEngineHarness, memoryEngineStorage, scriptedConnectivity } from './testing';
 
 import type { RxStorage } from 'rxdb';
 
@@ -49,25 +48,24 @@ function engineWith(input: {
 	mode?: 'auto' | 'manual';
 	writeDrainPollMs?: number;
 }): RxdbSyncEngine {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
-			storage: input.storage ?? memoryEngineStorage(),
-			fetcher: async (url, init) =>
-				url.endsWith('/changes/config-fingerprint')
-					? Response.json({ fingerprints: {} })
-					: input.fetch(url, init),
+	return createEngineHarness({
+		site: SITE,
+		identity: input.identity ?? freshIdentity(),
+		...(input.storage ? { storage: input.storage } : {}),
+		mode: input.mode ?? 'manual',
+		fetch: input.fetch,
+		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
+		ports: {
 			...(input.connectivity ? { connectivity: input.connectivity } : {}),
 			...(input.uuid ? { uuid: input.uuid } : {}),
 			...(input.now ? { now: input.now } : {}),
 			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
-			mode: input.mode ?? 'manual',
-			...(input.writeDrainPollMs !== undefined
-				? { intervals: { writeDrainPollMs: input.writeDrainPollMs } }
-				: {}),
 		},
-		input.identity ?? freshIdentity()
-	);
+		...(input.writeDrainPollMs !== undefined
+			? { intervals: { writeDrainPollMs: input.writeDrainPollMs } }
+			: {}),
+		awaitReady: false,
+	}).engine;
 }
 
 /** A resident born-local order the write path can create against. */

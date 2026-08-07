@@ -9,12 +9,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import {
-	createRxdbSyncEngine,
-	type RxdbSyncEngine,
-	type StoreScopeIdentity,
-} from './create-rxdb-sync-engine';
-import { memoryEngineStorage } from './testing';
+import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
+import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 
@@ -140,15 +136,12 @@ function scriptedCustomerSearchProxy(customers: Record<string, unknown>[]) {
 }
 
 function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>) {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
-			storage: memoryEngineStorage(),
-			fetcher: (url, init) => fetch(url, init),
-			mode: 'manual',
-		},
-		freshIdentity()
-	);
+	return createEngineHarness({
+		site: SITE,
+		identity: freshIdentity(),
+		fetch,
+		awaitReady: false,
+	}).engine;
 }
 
 async function seedProductsCensus(

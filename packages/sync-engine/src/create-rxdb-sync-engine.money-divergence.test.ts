@@ -26,12 +26,8 @@ import {
 } from '@wcpos/sync-core/testing';
 import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-core';
 
-import {
-	createRxdbSyncEngine,
-	type EngineEvent,
-	type RxdbSyncEngine,
-} from './create-rxdb-sync-engine';
-import { memoryEngineStorage } from './testing';
+import { type EngineEvent, type RxdbSyncEngine } from './create-rxdb-sync-engine';
+import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 
@@ -88,22 +84,15 @@ function engineWith(input: { serialize?: Serialize; diagnostics?: SyncObserver }
 	const server = createFakeWriteServer(
 		input.serialize ? { serialize: (payload) => input.serialize!(payload) } : {}
 	);
-	const engine = createRxdbSyncEngine(
-		{
-			site: {
-				syncBaseUrl: `${SITE}/wp-json/wcpos/v2`,
-				wpJsonRoot: `${SITE}/wp-json`,
-			},
-			storage: memoryEngineStorage(),
-			fetcher: async (url, init) =>
-				url.endsWith('/changes/config-fingerprint')
-					? Response.json({ fingerprints: {} })
-					: server.fetch(url, init as never),
-			mode: 'manual',
-			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
-		},
-		freshIdentity()
-	);
+	const engine = createEngineHarness({
+		site: SITE,
+		identity: freshIdentity(),
+		mode: 'manual',
+		fetch: (url, init) => server.fetch(url, init as never),
+		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
+		ports: input.diagnostics ? { diagnostics: input.diagnostics } : {},
+		awaitReady: false,
+	}).engine;
 	return { engine, server };
 }
 

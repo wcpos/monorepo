@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRxdbSyncEngine } from './index';
-import { memoryEngineStorage } from './testing';
+import { createEngineHarness } from './testing';
 
 import type { EngineHostTransport } from './create-rxdb-sync-engine';
 
@@ -11,19 +10,17 @@ describe('RxdbSyncEngine host transport reflection', () => {
 		setPremiumFlag();
 		const fetcher = vi.fn(async () => new Response('{}'));
 		const syncBaseUrl = 'https://example.test/wp-json/wcpos/v2';
-		const engine = createRxdbSyncEngine(
-			{
-				site: { syncBaseUrl, wpJsonRoot: 'https://example.test/wp-json/' },
-				storage: memoryEngineStorage(),
-				fetcher,
-				mode: 'manual',
-			},
-			{
+		const engine = createEngineHarness({
+			site: { syncBaseUrl, wpJsonRoot: 'https://example.test/wp-json/' },
+			identity: {
 				site: 'https://example.test',
 				storeId: 1,
 				cashierId: `host-transport-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
-			}
-		);
+			},
+			mode: 'manual',
+			fetch: fetcher,
+			awaitReady: false,
+		}).engine;
 
 		const transport: EngineHostTransport = engine.hostTransport();
 

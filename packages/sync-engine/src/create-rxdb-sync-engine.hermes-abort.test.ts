@@ -12,12 +12,8 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
 
-import {
-	createRxdbSyncEngine,
-	type RxdbSyncEngine,
-	type StoreScopeIdentity,
-} from './create-rxdb-sync-engine';
-import { memoryEngineStorage } from './testing';
+import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
+import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 
@@ -63,18 +59,14 @@ function engineWith(
 	fetch: (url: string, init?: RequestInit) => Promise<Response>,
 	site = { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` }
 ): RxdbSyncEngine {
-	return createRxdbSyncEngine(
-		{
-			site,
-			storage: memoryEngineStorage(),
-			fetcher: async (url, init) =>
-				url.endsWith('/changes/config-fingerprint')
-					? Response.json({ fingerprints: {} })
-					: fetch(url, init),
-			mode: 'manual',
-		},
-		freshIdentity()
-	);
+	return createEngineHarness({
+		site,
+		identity: freshIdentity(),
+		mode: 'manual',
+		fetch,
+		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
+		awaitReady: false,
+	}).engine;
 }
 
 describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {

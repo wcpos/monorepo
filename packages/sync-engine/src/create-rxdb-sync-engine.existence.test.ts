@@ -2,17 +2,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import {
-	createRxdbSyncEngine,
-	type RxdbSyncEnginePorts,
-	type StoreScopeIdentity,
-} from './create-rxdb-sync-engine';
-import { memoryEngineStorage, scriptedConnectivity } from './testing';
+import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
+import { createEngineHarness, scriptedConnectivity } from './testing';
 
 setPremiumFlag();
 
 const SITE = 'https://existence.example.test';
-const BASE = `${SITE}/wp-json/wcpos/v2`;
 let scope = 0;
 const identity = (): StoreScopeIdentity => ({
 	site: SITE,
@@ -29,19 +24,15 @@ function engine(
 	fetcher: RxdbSyncEnginePorts['fetcher'],
 	overrides: Partial<RxdbSyncEnginePorts> = {}
 ) {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: BASE, wpJsonRoot: `${SITE}/wp-json` },
-			storage: memoryEngineStorage(),
-			mode: 'manual',
-			fetcher: async (url, init) =>
-				url.endsWith('/changes/config-fingerprint')
-					? Response.json({ fingerprints: {} })
-					: (fetcher?.(url, init) ?? Promise.reject(new Error(`unexpected ${url}`))),
-			...overrides,
-		},
-		identity()
-	);
+	return createEngineHarness({
+		site: SITE,
+		identity: identity(),
+		mode: 'manual',
+		fetch: (url, init) => fetcher?.(url, init) ?? Promise.reject(new Error(`unexpected ${url}`)),
+		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
+		ports: overrides,
+		awaitReady: false,
+	}).engine;
 }
 
 async function seed(

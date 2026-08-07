@@ -6,15 +6,11 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-	createRxdbSyncEngine,
-	type RxdbSyncEngine,
-	type StoreScopeIdentity,
-} from './create-rxdb-sync-engine';
+import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
 import { createRequirePlane } from './require-plane';
 import * as orderTaskSeeder from './scheduler/rx-order-scheduler-task-seeder';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
-import { memoryEngineStorage } from './testing';
+import { createEngineHarness } from './testing';
 
 import type { PersistedSchedulerTaskOutcomeKind } from './scheduler';
 
@@ -164,15 +160,12 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 }
 
 function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>): RxdbSyncEngine {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
-			storage: memoryEngineStorage(),
-			fetcher: (url, init) => fetch(url, init),
-			mode: 'manual',
-		},
-		freshIdentity()
-	);
+	return createEngineHarness({
+		site: SITE,
+		identity: freshIdentity(),
+		fetch,
+		awaitReady: false,
+	}).engine;
 }
 
 describe('require() for orders (slice 5f — the durable path)', () => {
