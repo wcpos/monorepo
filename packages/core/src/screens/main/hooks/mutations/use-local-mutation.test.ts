@@ -10,14 +10,21 @@ const mockConvertLocalDateToUTCString = jest.fn((_date: Date) => '2026-03-02T00:
 const mockWrite = jest.fn();
 const mockFindOneExec = jest.fn();
 const mockStatus = jest.fn();
-/** The ACTIVE SCOPE's barcode carriers — the mutation reads them off the scope. */
-let scopeSelectors: { products: readonly string[]; variations: readonly string[] } = {
+type ScopeSelectors = { products: readonly string[]; variations: readonly string[] };
+
+const EMPTY_SCOPE_SELECTORS: ScopeSelectors = {
 	products: [],
 	variations: [],
 };
+let scopeSelectorsByScopeId = new Map<string, ScopeSelectors>();
 
-function setSelectors(collection: 'products' | 'variations', list: readonly string[]): void {
-	scopeSelectors = { ...scopeSelectors, [collection]: list };
+function setSelectors(
+	scopeId: string,
+	collection: 'products' | 'variations',
+	list: readonly string[]
+): void {
+	const current = scopeSelectorsByScopeId.get(scopeId) ?? EMPTY_SCOPE_SELECTORS;
+	scopeSelectorsByScopeId.set(scopeId, { ...current, [collection]: list });
 }
 
 /** The id `engine.active()` reports. `status().activeScopeId` is mocked
@@ -36,7 +43,10 @@ const scopeDatabase = {
 
 const engineScope = (scopeId: string | null) => ({
 	scopeId,
-	barcodeSelectors: scopeSelectors,
+	barcodeSelectors:
+		scopeId === null
+			? EMPTY_SCOPE_SELECTORS
+			: (scopeSelectorsByScopeId.get(scopeId) ?? EMPTY_SCOPE_SELECTORS),
 	database: scopeDatabase,
 });
 
@@ -76,7 +86,7 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 describe('useLocalMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		scopeSelectors = { products: [], variations: [] };
+		scopeSelectorsByScopeId = new Map();
 		activeScopeId = 'scope-1';
 		activeReturnsNullOnce = false;
 		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
@@ -93,7 +103,7 @@ describe('useLocalMutation', () => {
 	] as const)(
 		'keeps a barcode edit and its %s carrier consistent locally',
 		async (selector, carrier) => {
-			setSelectors('products', [selector]);
+			setSelectors('scope-1', 'products', [selector]);
 			const stored: Record<string, unknown> = {
 				id: 'product-uuid',
 				wooProductId: 42,
@@ -130,7 +140,7 @@ describe('useLocalMutation', () => {
 	);
 
 	it('keeps the resident and barcode carrier on one scope through an A→B→A switch', async () => {
-		setSelectors('products', ['sku']);
+		setSelectors('scope-1', 'products', ['sku']);
 		const stored: Record<string, unknown> = {
 			id: 'product-uuid',
 			wooProductId: 42,
@@ -141,7 +151,7 @@ describe('useLocalMutation', () => {
 		mockFindOneExec.mockImplementationOnce(async () => {
 			// The resident came from scope A, then scope B became active while the
 			// lookup yielded. The status returns to A during the write below.
-			setSelectors('products', ['global_unique_id']);
+			setSelectors('scope-2', 'products', ['global_unique_id']);
 			return {
 				incrementalModify: async (
 					modifier: (old: Record<string, unknown>) => Record<string, unknown>
@@ -153,7 +163,7 @@ describe('useLocalMutation', () => {
 			};
 		});
 		mockWrite.mockImplementationOnce(async () => {
-			setSelectors('products', ['sku']);
+			setSelectors('scope-1', 'products', ['sku']);
 			return { mutationId: 'mutation-1', recordId: 'product-uuid' };
 		});
 		const document = {
@@ -194,7 +204,7 @@ describe('useLocalMutation', () => {
 	] as const)(
 		'a direct %s carrier edit wins over the echoed unchanged barcode',
 		async (selector, priorCarrier, carrierEdit, expected) => {
-			setSelectors('products', [selector]);
+			setSelectors('scope-1', 'products', [selector]);
 			const stored: Record<string, unknown> = {
 				id: 'product-uuid',
 				wooProductId: 42,
@@ -476,7 +486,7 @@ describe('useLocalMutation', () => {
 		// from that one object — so the write that is kept is the A write it
 		// always was, mapped by A's carriers.
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
-		setSelectors('products', ['sku']);
+		setSelectors('scope-1', 'products', ['sku']);
 		const stored: Record<string, unknown> = {
 			id: 'product-uuid',
 			wooProductId: 42,
@@ -488,7 +498,9 @@ describe('useLocalMutation', () => {
 			// B becomes active while the resident lookup is in flight, and brings
 			// its own (different) carriers with it.
 			activeScopeId = 'scope-2';
-			setSelectors('products', ['global_unique_id']);
+			setSelectors('scope-2', 'products', ['global_unique_id']);
+			expect(engineScope('scope-1').barcodeSelectors.products).toEqual(['sku']);
+			expect(engineScope('scope-2').barcodeSelectors.products).toEqual(['global_unique_id']);
 			return {
 				incrementalModify: async (
 					modifier: (old: Record<string, unknown>) => Record<string, unknown>
@@ -502,7 +514,7 @@ describe('useLocalMutation', () => {
 		mockWrite.mockImplementationOnce(async () => {
 			// ...and back to A before the guard reads.
 			activeScopeId = 'scope-1';
-			setSelectors('products', ['sku']);
+			setSelectors('scope-1', 'products', ['sku']);
 			return { mutationId: 'mutation-1', recordId: 'product-uuid' };
 		});
 		const document = {
