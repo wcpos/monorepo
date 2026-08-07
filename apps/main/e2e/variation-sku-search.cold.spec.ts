@@ -77,6 +77,9 @@ test.describe('Cold start — variation SKU search', () => {
 			const searchTerm = runPrivateProduct?.variationSku ?? VARIATION_SKU_TERM;
 			const probe = await probeVariationSearch(request, storeUrl, storeAuthorization(), searchTerm);
 			if (!probe.supported) {
+				if (runPrivateProduct) {
+					throw new Error(`Created variation SKU was not served by wcpos/v2: ${probe.reason}`);
+				}
 				test.skip(
 					true,
 					`needs wcpos/v2 variations search — wcpos/woocommerce-pos#1441 (${probe.reason})`

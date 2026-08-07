@@ -23,7 +23,13 @@ import type { WcposTestOptions } from '../playwright.config';
 type ProductProbeWorkerFixtures = {
 	productProbeRequest: APIRequestContext;
 	productWriter: StoreAuthorization | null;
+};
+
+type SimpleProductProbeWorkerFixtures = {
 	runPrivateSimpleProducts: SearchProbe[] | null;
+};
+
+type VariableProductProbeWorkerFixtures = {
 	runPrivateVariableProduct: SearchProbe | null;
 };
 
@@ -42,7 +48,7 @@ function workerStoreUrl(workerInfo: WorkerInfo): string {
  * Worker-private products are reused by that worker's serial test executions,
  * but their random tokens keep concurrent workers and CI runs disjoint.
  */
-export const isolatedProductTest = authenticatedTest.extend<
+const productProbeTest = authenticatedTest.extend<
 	ProductProbeTestFixtures,
 	ProductProbeWorkerFixtures
 >({
@@ -82,6 +88,13 @@ export const isolatedProductTest = authenticatedTest.extend<
 		},
 		{ scope: 'worker' },
 	],
+});
+
+/** Simple-product suites provision only their two checkout products. */
+export const isolatedProductTest = productProbeTest.extend<
+	ProductProbeTestFixtures,
+	SimpleProductProbeWorkerFixtures
+>({
 	runPrivateSimpleProducts: [
 		async ({ productProbeRequest, productWriter }, use, workerInfo) => {
 			if (!productWriter) {
@@ -117,6 +130,22 @@ export const isolatedProductTest = authenticatedTest.extend<
 		},
 		{ scope: 'worker' },
 	],
+	posPage: async ({ posPage, runPrivateSimpleProducts }, use) => {
+		simpleProbesByPage.set(posPage, runPrivateSimpleProducts);
+		try {
+			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
+			await use(posPage);
+		} finally {
+			simpleProbesByPage.delete(posPage);
+		}
+	},
+});
+
+/** Variable-product suites opt into variation provisioning without coupling checkout-only suites. */
+export const isolatedVariableProductTest = productProbeTest.extend<
+	ProductProbeTestFixtures,
+	VariableProductProbeWorkerFixtures
+>({
 	runPrivateVariableProduct: [
 		async ({ productProbeRequest, productWriter }, use, workerInfo) => {
 			if (!productWriter) {
@@ -145,19 +174,6 @@ export const isolatedProductTest = authenticatedTest.extend<
 		},
 		{ scope: 'worker' },
 	],
-	posPage: async ({ posPage, runPrivateSimpleProducts }, use) => {
-		simpleProbesByPage.set(posPage, runPrivateSimpleProducts);
-		try {
-			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
-			await use(posPage);
-		} finally {
-			simpleProbesByPage.delete(posPage);
-		}
-	},
-});
-
-/** Variable-product suites opt into variation provisioning without coupling checkout-only suites. */
-export const isolatedVariableProductTest = isolatedProductTest.extend({
 	posPage: async ({ posPage, runPrivateVariableProduct }, use) => {
 		variableProbeByPage.set(posPage, runPrivateVariableProduct);
 		try {
@@ -177,14 +193,18 @@ export async function tryAddRunPrivateSimpleProduct(page: Page, index = 0): Prom
 	}
 	const probe = probes?.[index] ?? null;
 	if (probe) {
+		if (!probe.rowTestId) {
+			throw new Error('Run-private simple product is missing its slug-derived row testID');
+		}
 		await searchAndWaitForServer(
 			page,
 			page.getByTestId('search-products'),
 			'products',
 			probe.token
 		);
-		const tile = page.getByTestId('product-tile').first();
-		const tableButton = page.getByTestId('add-to-cart-button').first();
+		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
+		const tile = posScreen.getByTestId('product-tile').filter({ hasText: probe.token });
+		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
 		await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
 		if (await tile.isVisible()) await tile.click();
 		else await tableButton.click();

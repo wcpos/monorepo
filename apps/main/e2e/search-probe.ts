@@ -33,8 +33,28 @@ interface CreateSearchProbeOptions {
 	writerConfigured?: boolean;
 }
 
+export function productWriterCredentialsDecision(
+	user: string | undefined,
+	pass: string | undefined
+): boolean {
+	if (user && !pass) {
+		throw new Error(
+			'E2E product-writer credentials are incomplete: E2E_PRODUCT_WRITER_PASS is missing'
+		);
+	}
+	if (!user && pass) {
+		throw new Error(
+			'E2E product-writer credentials are incomplete: E2E_PRODUCT_WRITER_USER is missing'
+		);
+	}
+	return Boolean(user && pass);
+}
+
 export function productWriterCredentialsConfigured(): boolean {
-	return Boolean(process.env.E2E_PRODUCT_WRITER_USER && process.env.E2E_PRODUCT_WRITER_PASS);
+	return productWriterCredentialsDecision(
+		process.env.E2E_PRODUCT_WRITER_USER,
+		process.env.E2E_PRODUCT_WRITER_PASS
+	);
 }
 
 export function productProbeFailureAction({
@@ -86,6 +106,7 @@ export async function productWriterAuthorization(
 ): Promise<StoreAuthorization | null> {
 	const user = process.env.E2E_PRODUCT_WRITER_USER;
 	const pass = process.env.E2E_PRODUCT_WRITER_PASS;
+	productWriterCredentialsDecision(user, pass);
 	if (!user || !pass) return null;
 
 	for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -192,8 +213,9 @@ async function probeRequest(
 async function productCreateResponse(
 	create: () => Promise<APIResponse>,
 	writerConfigured: boolean,
-	label: string
-): Promise<APIResponse> {
+	label: string,
+	findExisting?: () => Promise<{ response: APIResponse; record: Record<string, unknown> | null }>
+): Promise<{ response: APIResponse; adoptedRecord?: Record<string, unknown> }> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		let response: APIResponse;
 		try {
@@ -204,22 +226,34 @@ async function productCreateResponse(
 				failure: 'transport',
 				retryAvailable: attempt === 0,
 			});
-			if (action === 'retry') continue;
+			if (action === 'retry') {
+				const existing = await findExisting?.();
+				if (existing?.record) {
+					return { response: existing.response, adoptedRecord: existing.record };
+				}
+				continue;
+			}
 			throw new Error(`${label} transport failed after one retry`);
 		}
-		if (response.ok()) return response;
+		if (response.ok()) return { response };
 		const failure = isNetworkishStatus(response.status()) ? 'transport' : 'http';
 		const action = productProbeFailureAction({
 			writerConfigured,
 			failure,
 			retryAvailable: attempt === 0,
 		});
-		if (action === 'retry') continue;
+		if (action === 'retry') {
+			const existing = await findExisting?.();
+			if (existing?.record) {
+				return { response: existing.response, adoptedRecord: existing.record };
+			}
+			continue;
+		}
 		if (action === 'fail') {
 			const transport = failure === 'transport' ? ' transport failed after one retry' : '';
 			throw new Error(`${label}${transport} (HTTP ${response.status()})`);
 		}
-		return response;
+		return { response };
 	}
 	throw new Error(`${label} failed`);
 }
@@ -266,6 +300,37 @@ function positiveId(record: Record<string, unknown> | null): number | null {
 	return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+export function findCreatedProductRecord(
+	body: unknown,
+	token: string
+): Record<string, unknown> | null {
+	if (!Array.isArray(body)) {
+		throw new Error('Product create adoption lookup returned a malformed product list');
+	}
+	const expectedNames = new Set([`E2E Probe ${token}`, `E2E Variable ${token}`]);
+	return body.map(asRecord).find((record) => expectedNames.has(String(record?.name))) ?? null;
+}
+
+async function findCreatedProduct(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization | null,
+	token: string
+): Promise<{ response: APIResponse; record: Record<string, unknown> | null }> {
+	const auth = storeRequestOptions(authorization);
+	const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+		...auth,
+		params: { ...auth.params, search: token, per_page: '100' },
+	});
+	if (!response.ok()) {
+		throw new Error(`Product create adoption lookup failed (HTTP ${response.status()})`);
+	}
+	return {
+		response,
+		record: findCreatedProductRecord(await response.json().catch(() => null), token),
+	};
+}
+
 /**
  * Create one server-side product/customer that cannot already be resident in the restored POS
  * snapshot. A rejected or unreachable write is returned as an explicit skip reason; malformed
@@ -304,10 +369,16 @@ export async function createSearchProbe(
 				...storeRequestOptions(authorization),
 				data,
 			});
-		const response =
+		const result =
 			collection === 'products'
-				? await productCreateResponse(create, writerConfigured, 'products search-probe creation')
-				: await create();
+				? await productCreateResponse(
+						create,
+						writerConfigured,
+						'products search-probe creation',
+						() => findCreatedProduct(request, storeUrl, authorization, token)
+					)
+				: { response: await create(), adoptedRecord: undefined };
+		const { response } = result;
 		if (!response.ok()) {
 			if (collection === 'products') {
 				const reason = `Store rejected products search-probe creation (HTTP ${response.status()})`;
@@ -319,7 +390,7 @@ export async function createSearchProbe(
 			};
 		}
 
-		const record = unwrapRecord(await response.json().catch(() => null));
+		const record = result.adoptedRecord ?? unwrapRecord(await response.json().catch(() => null));
 		const id = positiveId(record);
 		if (!record || id === null) {
 			throw new Error(`${collection} search-probe create succeeded without a record id`);
@@ -376,7 +447,7 @@ export async function createRunPrivateProduct(
 
 	const token = mintSearchProbeToken(workerIndex);
 	const attributeName = `Choice ${token.slice(-6)}`;
-	const parentResponse = await productCreateResponse(
+	const parentResult = await productCreateResponse(
 		() =>
 			probeRequest(request, 'post', storeUrl, 'products', undefined, {
 				...storeRequestOptions(authorization),
@@ -397,10 +468,13 @@ export async function createRunPrivateProduct(
 				},
 			}),
 		true,
-		'Variable product probe creation'
+		'Variable product probe creation',
+		() => findCreatedProduct(request, storeUrl, authorization, token)
 	);
 
-	const parent = unwrapRecord(await parentResponse.json().catch(() => null));
+	const parent =
+		parentResult.adoptedRecord ??
+		unwrapRecord(await parentResult.response.json().catch(() => null));
 	const id = positiveId(parent);
 	const slug = typeof parent?.slug === 'string' && parent.slug ? parent.slug : null;
 	if (id === null || !slug) {
@@ -414,7 +488,7 @@ export async function createRunPrivateProduct(
 			['Red', 'red'],
 			['Blue', 'blue'],
 		] as const) {
-			const response = await productCreateResponse(
+			const result = await productCreateResponse(
 				() =>
 					variationCreateRequest(request, storeUrl, authorization, id, {
 						sku: `${token}${suffix}`,
@@ -426,7 +500,7 @@ export async function createRunPrivateProduct(
 				true,
 				'Variation probe creation'
 			);
-			const variation = unwrapRecord(await response.json().catch(() => null));
+			const variation = unwrapRecord(await result.response.json().catch(() => null));
 			if (positiveId(variation) === null) {
 				throw new Error('Variation probe create succeeded without its id');
 			}
