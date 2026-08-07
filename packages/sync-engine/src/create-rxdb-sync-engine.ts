@@ -1273,11 +1273,7 @@ export function createRxdbSyncEngine(
 		fetcher,
 		syncBaseUrl: ports.site.syncBaseUrl,
 		readBlob,
-		writeBlob: async (scopeId, key, value) => {
-			await writeBlob(scopeId, key, value);
-			// A forced re-pull only counts once the tick that carried it persisted.
-			barcodeSelectorsOf(scopeId).noteRecoveryPersisted();
-		},
+		writeBlob,
 		connectivity: () => {
 			try {
 				return connectivity();

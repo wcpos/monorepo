@@ -262,6 +262,12 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 									CHANGE_SIGNAL_STATE_KEY,
 									serializeChangeSignalState(state)
 								);
+								// THIS persist — the change-signal state of the tick that carried
+								// the forced re-pull — is what spends a hydration-miss recovery.
+								// It lives here, not on the shared blob seam: that seam is also
+								// the customer trickle's cursor store, and a write from any other
+								// lane must not retire a recovery this lane has not yet landed.
+								deps.barcodeSelectorsFor?.(scopeId)?.noteRecoveryPersisted();
 							},
 							log: (line) =>
 								deps.diagnostics({ type: 'signal.log', level: 'debug', message: line }),

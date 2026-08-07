@@ -20,6 +20,26 @@ function setSelectors(collection: 'products' | 'variations', list: readonly stri
 	scopeSelectors = { ...scopeSelectors, [collection]: list };
 }
 
+/** The id `engine.active()` reports. `status().activeScopeId` is mocked
+ * separately so a test can drive the two apart the way the engine's fallback
+ * paths can. */
+let activeScopeId: string | null = 'scope-1';
+/** Set to make `engine.active()` answer null once, forcing `?? await ready`. */
+let activeReturnsNullOnce = false;
+
+const scopeDatabase = {
+	collections: {
+		orders: { findOne: () => ({ exec: mockFindOneExec }) },
+		products: { findOne: () => ({ exec: mockFindOneExec }) },
+	},
+};
+
+const engineScope = (scopeId: string | null) => ({
+	scopeId,
+	barcodeSelectors: scopeSelectors,
+	database: scopeDatabase,
+});
+
 jest.mock('@wcpos/query', () => ({
 	// The write-direction projections are the code under test here (parity with the
 	// old hand-written promotion switch) — pull the real implementations, mock the rest.
@@ -30,15 +50,15 @@ jest.mock('@wcpos/query', () => ({
 	})(),
 	useQueryRuntime: () => ({
 		engine: {
-			active: () => ({
-				barcodeSelectors: scopeSelectors,
-				database: {
-					collections: {
-						orders: { findOne: () => ({ exec: mockFindOneExec }) },
-						products: { findOne: () => ({ exec: mockFindOneExec }) },
-					},
-				},
-			}),
+			active: () => {
+				if (activeReturnsNullOnce) {
+					activeReturnsNullOnce = false;
+					return null;
+				}
+				return engineScope(activeScopeId);
+			},
+			// The initial open's scope — what `?? await ready` resolves to.
+			ready: Promise.resolve(engineScope('scope-1')),
 			write: mockWrite,
 			status: mockStatus,
 		},
@@ -57,6 +77,8 @@ describe('useLocalMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		scopeSelectors = { products: [], variations: [] };
+		activeScopeId = 'scope-1';
+		activeReturnsNullOnce = false;
 		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
 		mockStatus.mockReturnValue({ activeScopeId: 'scope-1' });
 		mockUseT.mockReturnValue((_key: string, options?: Record<string, unknown>) =>
@@ -446,8 +468,115 @@ describe('useLocalMutation', () => {
 		});
 	});
 
+	it('keeps an A→B→A mutation: the resident, the carriers and the guard are all scope A', async () => {
+		// The reviewed claim: a switch to B and back to A during the write leaves
+		// the guard comparing A against A, so nothing rolls back while the write
+		// "really" belonged to B. It does not: the scope is captured ONCE, up
+		// front, and the resident, the carriers and the rollback baseline all come
+		// from that one object — so the write that is kept is the A write it
+		// always was, mapped by A's carriers.
+		mockStatus.mockImplementation(() => ({ activeScopeId }));
+		setSelectors('products', ['sku']);
+		const stored: Record<string, unknown> = {
+			id: 'product-uuid',
+			wooProductId: 42,
+			payload: { id: 42 },
+			sync: { revision: 'rev-1' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		mockFindOneExec.mockImplementation(async () => {
+			// B becomes active while the resident lookup is in flight, and brings
+			// its own (different) carriers with it.
+			activeScopeId = 'scope-2';
+			setSelectors('products', ['global_unique_id']);
+			return {
+				incrementalModify: async (
+					modifier: (old: Record<string, unknown>) => Record<string, unknown>
+				) => {
+					Object.assign(stored, modifier(stored));
+					return stored;
+				},
+				toJSON: () => JSON.parse(JSON.stringify(stored)),
+			};
+		});
+		mockWrite.mockImplementationOnce(async () => {
+			// ...and back to A before the guard reads.
+			activeScopeId = 'scope-1';
+			setSelectors('products', ['sku']);
+			return { mutationId: 'mutation-1', recordId: 'product-uuid' };
+		});
+		const document = {
+			uuid: 'product-uuid',
+			id: 42,
+			collection: { name: 'products' },
+			getLatest: () => document,
+		};
+
+		const { result } = renderHook(() => useLocalMutation());
+		await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { barcode: 'EDITED' } as never,
+			})
+		);
+
+		// Kept (not rolled back), and mapped by A's carrier — never B's.
+		expect(mockWrite).toHaveBeenCalledTimes(1);
+		expect(stored.payload).toMatchObject({ barcode: 'EDITED', sku: 'EDITED' });
+		expect(stored.payload).not.toHaveProperty('global_unique_id');
+	});
+
+	it('rolls back when the CAPTURED scope is not the one still active at the end', async () => {
+		// `engine.active()` can answer null while `status()` still names a scope
+		// (the engine's own fallback window), and `?? await ready` then hands back
+		// the INITIAL scope. Baselining the guard on a second `status()` read
+		// would compare scope-2 with scope-2 and keep a write whose resident and
+		// carriers came from scope-1; baselining it on the captured scope catches
+		// exactly that.
+		activeScopeId = 'scope-2';
+		activeReturnsNullOnce = true;
+		mockStatus.mockImplementation(() => ({ activeScopeId }));
+		const stored: Record<string, unknown> = {
+			id: 'order-uuid',
+			wooOrderId: 42,
+			status: 'pending',
+			payload: { id: 42, status: 'pending' },
+		};
+		const makeResident = () => ({
+			incrementalModify: jest.fn(
+				async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
+					Object.assign(stored, modifier(stored));
+					return stored;
+				}
+			),
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+		});
+		mockFindOneExec.mockResolvedValue(makeResident());
+		mockWrite.mockResolvedValue({ mutationId: 'mutation-1', recordId: 'order-uuid' });
+		const document = {
+			uuid: 'order-uuid',
+			id: 42,
+			collection: { name: 'orders' },
+			getLatest: () => document,
+		};
+
+		const { result } = renderHook(() => useLocalMutation());
+		// Attempt 1 rolls back and retries; attempt 2 captures scope-2 and agrees.
+		await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { status: 'processing' } as never,
+			})
+		);
+
+		expect(mockWrite).toHaveBeenCalledTimes(2);
+		expect(stored).toMatchObject({ status: 'processing' });
+	});
+
 	it('compensates and retries the resident patch once when the active scope changes', async () => {
-		let activeScopeId = 'scope-1';
+		// One source of truth for the switch: `engine.active()` and `status()` are
+		// the same engine, so a test that moved only one of them would model a
+		// state the engine cannot be in.
 		mockStatus.mockImplementation(() => ({ activeScopeId }));
 		const firstStored: Record<string, unknown> = {
 			id: 'order-uuid',

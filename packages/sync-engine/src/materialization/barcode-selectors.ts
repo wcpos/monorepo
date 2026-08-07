@@ -102,9 +102,12 @@ export type ScopeBarcodeSelectors = {
 		snapshot: ConfigFingerprintSnapshot
 	): readonly BarcodeConfigCollection[];
 	/**
-	 * The tick that carried a forced re-pull PERSISTED its state. Only now is the
-	 * recovery spent: a tick that threw before persisting has not re-pulled
-	 * anything, so the miss must survive and force the collections again.
+	 * The change-signal tick that carried a forced re-pull PERSISTED ITS OWN
+	 * STATE. Only now is the recovery spent: a tick that threw before persisting
+	 * has not re-pulled anything, so the miss must survive and force the
+	 * collections again. Call this ONLY from that persist — the engine's blob
+	 * seam is shared (the customer trickle stores its cursor through it), and a
+	 * write from another lane must not retire a recovery no re-pull has landed.
 	 */
 	noteRecoveryPersisted(): void;
 };

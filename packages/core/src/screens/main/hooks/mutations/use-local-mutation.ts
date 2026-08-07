@@ -228,8 +228,14 @@ export async function patchAndEnqueueEngineResident(input: {
 	changes: Record<string, unknown>;
 }): Promise<void> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
-		const scopeId = input.manager.engine.status().activeScopeId;
+		// The rollback guard's baseline is the CAPTURED scope's own id, not a
+		// second `status()` read. The resident, the barcode carriers and the
+		// keep-or-roll-back decision are then provably about ONE scope — with two
+		// independent reads the property held only because `engine.active()` is
+		// evaluated in the same synchronous turn as `status()`, which is a fact
+		// about the engine's internals rather than something this file states.
 		const scope = await activeScope(input.manager);
+		const scopeId = scope.scopeId;
 		const resident = await findEngineResidentIn(scope, input.collection, input.recordId);
 		if (!resident) {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
