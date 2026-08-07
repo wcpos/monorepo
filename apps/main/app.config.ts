@@ -32,12 +32,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		scheme: 'wcpos',
 		userInterfaceStyle: 'automatic',
 
-		splash: {
-			image: './assets/images/splash-icon.png',
-			resizeMode: 'contain',
-			backgroundColor: '#F0F6FD',
-		},
-
 		ios: {
 			...config.ios,
 			supportsTablet: true,

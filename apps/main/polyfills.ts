@@ -21,5 +21,5 @@ if (!global.atob) {
 }
 
 if (!global.Blob) {
-	global.Blob = Blob;
+	global.Blob = Blob as unknown as typeof globalThis.Blob;
 }

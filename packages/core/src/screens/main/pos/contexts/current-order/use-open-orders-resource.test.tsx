@@ -143,6 +143,20 @@ describe('useOpenOrdersResource', () => {
 		expect(result.current.read().map((hit) => hit.id)).toEqual(['next-scope']);
 	});
 
+	it('uses cashier-only filtering when the store id is unavailable', () => {
+		activeDatabase = databaseWith(
+			new BehaviorSubject([
+				order('first-store', 2, '2026-07-14T10:00:00', 7, 2),
+				order('second-store', 3, '2026-07-14T11:00:00', 7, 9),
+				order('wrong-cashier', 4, '2026-07-14T12:00:00', 8, 2),
+			])
+		);
+
+		const { result } = renderHook(() => useOpenOrdersResource(7, undefined));
+
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['first-store', 'second-store']);
+	});
+
 	it('holds pos-open order demand for its lifetime without coupling demand failures to residents', async () => {
 		const orders$ = new BehaviorSubject([order('resident', 2, '2026-07-14T10:00:00', 7, 2)]);
 		activeDatabase = databaseWith(orders$);

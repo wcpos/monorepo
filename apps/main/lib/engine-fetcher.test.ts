@@ -119,6 +119,7 @@ describe('createEngineFetcher', () => {
 		const total = await fetchWooQueryTotal({
 			request: {
 				queryKey: `census:${collection}`,
+				method: 'GET',
 				endpoint: collection,
 				params: { ignored: 'value', page: 9, per_page: 50 },
 				totalHeader: 'X-WP-Total',
@@ -142,6 +143,7 @@ describe('createEngineFetcher', () => {
 		const total = await fetchWooQueryTotal({
 			request: {
 				queryKey: 'census:variations',
+				method: 'GET',
 				endpoint: 'variations',
 				params: { page: 1, per_page: 1 },
 				totalHeader: 'X-WP-Total',
@@ -166,6 +168,7 @@ describe('createEngineFetcher', () => {
 		const total = await fetchWooQueryTotal({
 			request: {
 				queryKey: 'census:unknown',
+				method: 'GET',
 				endpoint: 'unknown',
 				params: { page: 1, per_page: 1 },
 				totalHeader: 'X-WP-Total',
@@ -192,6 +195,7 @@ describe('createEngineFetcher', () => {
 				fetchWooQueryTotal({
 					request: {
 						queryKey: 'census:orders',
+						method: 'GET',
 						endpoint: 'orders',
 						params: {},
 						totalHeader: 'X-WP-Total',

@@ -65,13 +65,10 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
  * decides how a merchant should read it, instead of silently inheriting the
  * `sync.other`/`failed` default and turning up in the failure bucket of the log.
  *
- * The `satisfies` clause below is the DEVELOPER-TIME signal: it names the
- * missing key in your editor the moment you add an event type. It is not the
- * merge gate — apps/main has no `typecheck` task in CI (13 pre-existing tsc
- * errors keep it out), so nothing here would fail a build. The gate is
- * `scripts/check-sync-event-types.mjs`, which re-checks this table against
- * `SyncEventType` inside `pnpm test:scripts`, a chain CI does run. Delete
- * neither until apps/main gets a typecheck task of its own.
+ * The `satisfies` clause below is the developer-time signal: it names the
+ * missing key in your editor the moment you add an event type. The apps/main
+ * typecheck task also makes it a merge gate; `scripts/check-sync-event-types.mjs`
+ * retains the focused check in `pnpm test:scripts`.
  */
 type ConformanceTable = { [T in SyncEventType]: Conformance<T> };
 
@@ -88,11 +85,10 @@ const EXPLICIT_OUTCOMES = new Set<NonNullable<LogTerminalFields['outcome']>>([
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 
 function sanitizeReason(value: unknown): string | undefined {
-	if (typeof value !== 'string') {
-		if (typeof value !== 'number' && typeof value !== 'boolean') return undefined;
-		value = String(value);
+	if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+		return undefined;
 	}
-	const sanitized = value
+	const sanitized = String(value)
 		.trim()
 		.replace(/\s+/g, ' ')
 		// Query strings can carry tokens, so any `?`-introduced run is stripped
