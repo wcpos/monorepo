@@ -27,12 +27,14 @@ import { AddMiscProduct } from './add-misc-product';
 import { AddShipping } from './add-shipping';
 import { useT } from '../../../../contexts/translations';
 import { useLicense } from '../../hooks/use-license';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 type DialogType = 'customer' | 'misc-product' | 'fee' | 'shipping' | 'coupon' | null;
 
 export function AddCartItemsMenu() {
 	const t = useT();
 	const { isPro } = useLicense();
+	const { caps } = useUserCapabilities();
 	const [openDialog, setOpenDialog] = React.useState<DialogType>(null);
 
 	return (
@@ -42,13 +44,13 @@ export function AddCartItemsMenu() {
 					<IconButton name="plus" testID="add-cart-item-menu" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end" portalHost="pos">
-					{isPro ? (
+					{isPro && caps.canCreateCustomers ? (
 						<DropdownMenuItem testID="menu-add-customer" onPress={() => setOpenDialog('customer')}>
 							<Icon name="userPlus" />
 							<Text>{t('common.add_new_customer')}</Text>
 						</DropdownMenuItem>
 					) : (
-						<Tooltip>
+						<Tooltip showOnNative={isPro && !caps.canCreateCustomers}>
 							<TooltipTrigger asChild>
 								<DropdownMenuItem testID="menu-add-customer" disabled>
 									<Icon name="userPlus" />
@@ -56,7 +58,9 @@ export function AddCartItemsMenu() {
 								</DropdownMenuItem>
 							</TooltipTrigger>
 							<TooltipContent>
-								<Text>{t('common.upgrade_to_pro')}</Text>
+								<Text>
+									{isPro ? t('capability_hints.create_customers') : t('common.upgrade_to_pro')}
+								</Text>
 							</TooltipContent>
 						</Tooltip>
 					)}

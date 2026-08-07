@@ -26,8 +26,10 @@ import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
-import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -42,6 +44,7 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 	const t = useT();
 	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 
 	const handleRefresh = React.useCallback(() => {
 		if (!product.id) return;
@@ -90,48 +93,57 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 					<IconButton name="ellipsisVertical" testID="product-actions-button" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					<DropdownMenuItem
-						onPress={() => {
-							router.push({
-								pathname: `/(app)/(drawer)/products/(modals)/edit/product/${product.uuid}`,
-							});
-						}}
-					>
-						<Icon name="penToSquare" />
-						<Text>{t('common.edit')}</Text>
-					</DropdownMenuItem>
+					<CapabilityTooltip show={!caps.canEditProducts} hint="editProducts">
+						<DropdownMenuItem
+							disabled={!caps.canEditProducts}
+							onPress={() => {
+								router.push({
+									pathname: `/(app)/(drawer)/products/(modals)/edit/product/${product.uuid}`,
+								});
+							}}
+						>
+							<Icon name="penToSquare" />
+							<Text>{t('common.edit')}</Text>
+						</DropdownMenuItem>
+					</CapabilityTooltip>
 					{product.id && (
 						<DropdownMenuItem onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
-					<DropdownMenuSeparator />
-					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
-						<Icon
-							name="trash"
-							className="fill-destructive web:group-focus:fill-accent-foreground"
-						/>
-						<Text>{t('common.delete')}</Text>
-					</DropdownMenuItem>
+					{caps.canDeleteProducts && (
+						<>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+								<Icon
+									name="trash"
+									className="fill-destructive web:group-focus:fill-accent-foreground"
+								/>
+								<Text>{t('common.delete')}</Text>
+							</DropdownMenuItem>
+						</>
+					)}
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>{t('products.delete', { product: product.name })}</AlertDialogTitle>
-						<AlertDialogDescription>
-							{t('products.are_you_sure_you_want_to')}
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleDelete}>
-							{t('common.delete')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			{caps.canDeleteProducts && (
+				<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>{t('products.delete', { product: product.name })}</AlertDialogTitle>
+							<AlertDialogDescription>
+								{t('products.are_you_sure_you_want_to')}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+							<AlertDialogAction variant="destructive" onPress={handleDelete}>
+								{t('common.delete')}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+			)}
 		</>
 	);
 }

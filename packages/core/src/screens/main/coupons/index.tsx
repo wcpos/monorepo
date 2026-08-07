@@ -34,6 +34,7 @@ import { UISettingsDialog } from '../components/ui-settings';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
 import { useMutation } from '../hooks/mutations/use-mutation';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
 	QueryStateProvider,
 	useCollectionBinding,
@@ -71,7 +72,10 @@ const COUPON_SORT_FIELDS = [
 	'date_created_gmt',
 	'date_modified_gmt',
 ] as const satisfies readonly SortFieldsByCollection['coupons'][];
-const DEFAULT_COUPON_SORT = { field: 'date_created_gmt', direction: 'desc' } as const;
+const DEFAULT_COUPON_SORT = {
+	field: 'date_created_gmt',
+	direction: 'desc',
+} as const;
 
 function isCouponSortField(field: unknown): field is SortFieldsByCollection['coupons'] {
 	return COUPON_SORT_FIELDS.some((sortField) => sortField === field);
@@ -113,6 +117,7 @@ function CouponsScreenContent() {
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 	const { patch } = useMutation({ collectionName: 'coupons' });
 
 	const tableConfig = React.useMemo(
@@ -148,17 +153,23 @@ function CouponsScreenContent() {
 								className="flex-1"
 								testID="search-coupons"
 							/>
-							<Tooltip>
+							<Tooltip showOnNative={!readOnly && !caps.canCreateCoupons}>
 								<TooltipTrigger asChild>
 									<IconButton
 										testID="coupons-add-button"
 										name="plus"
 										onPress={() => router.push({ pathname: '/coupons/add' })}
-										disabled={readOnly}
+										disabled={readOnly || !caps.canCreateCoupons}
 									/>
 								</TooltipTrigger>
 								<TooltipContent>
-									<Text>{readOnly ? t('common.upgrade_to_pro') : t('coupons.add_coupon')}</Text>
+									<Text>
+										{readOnly
+											? t('common.upgrade_to_pro')
+											: !caps.canCreateCoupons
+												? t('capability_hints.create_coupons')
+												: t('coupons.add_coupon')}
+									</Text>
 								</TooltipContent>
 							</Tooltip>
 							<UISettingsDialog title={t('coupons.coupon_settings')}>

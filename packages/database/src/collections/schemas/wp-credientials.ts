@@ -1,6 +1,6 @@
 export const wpCredentialsLiteral = {
 	title: 'WP Credentials schema',
-	version: 4,
+	version: 5,
 	description: 'WordPress credentials',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -35,6 +35,13 @@ export const wpCredentialsLiteral = {
 			description: 'WordPress role slugs for this cashier. Cashiers may have multiple roles.',
 			type: 'array',
 			default: [],
+			items: {
+				type: 'string',
+			},
+		},
+		capabilities: {
+			description: 'Granted WordPress capability names for this cashier.',
+			type: 'array',
 			items: {
 				type: 'string',
 			},

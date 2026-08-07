@@ -4,11 +4,14 @@ import { useObservableEagerState } from 'observable-hooks';
 import get from 'lodash/get';
 
 import { CurrencyInput } from '../../components/currency-input';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductDocument =
+	import('@wcpos/database').ProductDocument | import('@wcpos/database').ProductVariationDocument;
 
 /**
  *
@@ -24,30 +27,34 @@ export function COGS({
 		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
 	};
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
+	const canEdit = product.type === 'variation' ? caps.canEditVariations : caps.canEditProducts;
 
 	/**
 	 *
 	 */
 	return (
-		<CurrencyInput
-			value={defined_value}
-			disabled={readOnly}
-			onChangeText={(newValue) => {
-				// Construct a plain object update (RxDB Proxy objects can't be cloned)
-				const updatedCogs = {
-					total_value: cogs?.total_value ?? 0,
-					values: [
-						{
-							defined_value: newValue,
-							effective_value: cogs?.values?.[0]?.effective_value ?? 0,
-						},
-					],
-				};
-				meta.onChange({
-					document: product,
-					changes: { cost_of_goods_sold: updatedCogs },
-				});
-			}}
-		/>
+		<CapabilityTooltip show={!readOnly && !canEdit} hint="editProducts">
+			<CurrencyInput
+				value={defined_value}
+				disabled={readOnly || !canEdit}
+				onChangeText={(newValue) => {
+					// Construct a plain object update (RxDB Proxy objects can't be cloned)
+					const updatedCogs = {
+						total_value: cogs?.total_value ?? 0,
+						values: [
+							{
+								defined_value: newValue,
+								effective_value: cogs?.values?.[0]?.effective_value ?? 0,
+							},
+						],
+					};
+					meta.onChange({
+						document: product,
+						changes: { cost_of_goods_sold: updatedCogs },
+					});
+				}}
+			/>
+		</CapabilityTooltip>
 	);
 }

@@ -26,6 +26,7 @@ import { DateCell } from '../components/date';
 import { UISettingsDialog } from '../components/ui-settings';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
 	QueryStateProvider,
 	useCollectionBinding,
@@ -71,7 +72,10 @@ function getInitialCustomerSort(
 ): QueryStateOf<'customers'>['sort'] {
 	if (!isCustomerSortField(sortBy)) return DEFAULT_CUSTOMER_SORT;
 
-	return { field: sortBy, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
+	return {
+		field: sortBy,
+		direction: sortDirection === 'desc' ? 'desc' : 'asc',
+	};
 }
 
 function renderCell(columnKey: string, info: Record<string, unknown>) {
@@ -101,6 +105,7 @@ function CustomersScreenContent() {
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 
 	/**
 	 *
@@ -120,17 +125,23 @@ function CustomersScreenContent() {
 							className="flex-1"
 							testID="search-customers"
 						/>
-						<Tooltip>
+						<Tooltip showOnNative={!readOnly && !caps.canCreateCustomers}>
 							<TooltipTrigger asChild>
 								<IconButton
 									testID="customers-add-button"
 									name="userPlus"
 									onPress={() => router.push({ pathname: '/customers/add' })}
-									disabled={readOnly}
+									disabled={readOnly || !caps.canCreateCustomers}
 								/>
 							</TooltipTrigger>
 							<TooltipContent>
-								<Text>{readOnly ? t('common.upgrade_to_pro') : t('common.add_new_customer')}</Text>
+								<Text>
+									{readOnly
+										? t('common.upgrade_to_pro')
+										: !caps.canCreateCustomers
+											? t('capability_hints.create_customers')
+											: t('common.add_new_customer')}
+								</Text>
 							</TooltipContent>
 						</Tooltip>
 						<UISettingsDialog title={t('customers.customer_settings')}>

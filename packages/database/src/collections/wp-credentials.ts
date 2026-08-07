@@ -20,6 +20,7 @@ export type WPCredentialsData = Partial<Record<StringField, string>> & {
 	id?: number;
 	expires_at?: number;
 	roles?: string[];
+	capabilities?: string[];
 	stores?: string[];
 };
 
@@ -34,8 +35,13 @@ const sanitizeStringArray = (value: unknown): string[] | undefined => {
 	return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
 };
 
+const sanitizeUniqueStringArray = (value: unknown): string[] | undefined => {
+	const strings = sanitizeStringArray(value);
+	return strings ? [...new Set(strings)] : undefined;
+};
+
 const sanitizeRoles = (data: Record<string, unknown>): string[] | undefined => {
-	const roles = sanitizeStringArray(data.roles);
+	const roles = sanitizeUniqueStringArray(data.roles);
 	if (roles && roles.length > 0) {
 		return roles;
 	}
@@ -76,6 +82,11 @@ export const sanitizeWPCredentialsData = (data: unknown): WPCredentialsData => {
 	const roles = sanitizeRoles(data);
 	if (roles !== undefined) {
 		sanitized.roles = roles;
+	}
+
+	const capabilities = sanitizeUniqueStringArray(data.capabilities);
+	if (capabilities !== undefined) {
+		sanitized.capabilities = capabilities;
 	}
 
 	const stores = sanitizeStringArray(data.stores);
