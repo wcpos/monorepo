@@ -11,11 +11,7 @@ import { act, cleanup, render, renderHook, waitFor } from '@testing-library/reac
 import { useObservableSuspense } from 'observable-hooks';
 import { filter, firstValueFrom } from 'rxjs';
 
-import {
-	coverageLaneSchema,
-	engineSyncCollectionCreators,
-	queryTotalCacheSchema,
-} from '@wcpos/sync-engine/testing';
+import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import { QueryProvider, useQueryRuntime } from '@wcpos/query';
 import type { QueryResult } from '@wcpos/query';
 import {
@@ -424,24 +420,22 @@ describe('query bindings', () => {
 		);
 	});
 
+	/**
+	 * The lane rows themselves are the ENGINE's business — precedence, freshness and the
+	 * ranged-walk cursor are settled behind `coverageChanges` and covered against real storage
+	 * in packages/sync-engine. What these fixtures pin is the half that stayed here: which
+	 * coverage TARGET a given query state resolves to, and how a verdict is composed with the
+	 * resident count. So the fixture seeds the verdict for the exact key it expects the binding
+	 * to ask about — seeding the wrong key is indistinguishable from asking the wrong question.
+	 */
 	async function expectCoverageTotalSource(
 		queryKey: string,
 		filters: QueryStateOf<'orders'>['filters']
 	) {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: `orders::${queryKey}`,
-			collectionName: 'orders',
-			queryKey,
-			complete: true,
-			expectedRecordIds: ['order-1', 'order-2'],
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		engine.setCoverageVerdict(
+			{ collection: 'orders', queryKey },
+			{ total: 2, source: 'lane', complete: true, fresh: true }
+		);
 		const { result } = renderHook(
 			() =>
 				useCollectionBinding('orders', {
@@ -475,27 +469,17 @@ describe('query bindings', () => {
 		);
 	});
 
-	// #954: the lane's continuation cursor IS the "still downloading" signal — the reports
-	// progress line reads downloaded-vs-total straight off the lane it is already projecting
-	// the total from, so the two can never disagree.
+	// #954: an incomplete ranged lane reports progress and NO total — the reports progress line
+	// reads downloaded-vs-total off the same verdict the footer projects its total from, so the
+	// two can never disagree. (The downloadedRecords fallback that produces `downloaded: 3` from
+	// a cursor-less-count lane is the engine's rule; it is pinned in packages/sync-engine.)
 	it('reports ranged download progress while a fetch-to-completion lane carries a cursor', async () => {
 		const queryKey =
 			'orders:browser:status=processing:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25';
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: `orders::${queryKey}`,
-			collectionName: 'orders',
-			queryKey,
-			complete: false,
-			expectedRecordIds: Array.from({ length: 3 }, (_, index) => `order-${index}`),
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			rangedResume: { beforeSeconds: 1_783_000_000, excludeWooIds: [7], totalRecords: 30_000 },
-			schemaVersion: 3,
-		});
+		engine.setCoverageVerdict(
+			{ collection: 'orders', queryKey },
+			{ complete: false, fresh: true, progress: { downloaded: 3, total: 30_000 } }
+		);
 		const { result } = renderHook(
 			() =>
 				useCollectionBinding('orders', {
@@ -518,20 +502,10 @@ describe('query bindings', () => {
 	it('reports no ranged progress once the lane has nothing left to resume', async () => {
 		const queryKey =
 			'orders:browser:status=processing:after=1782864000:before=1783987200:orderby=date:order=desc:search=:limit=25';
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: `orders::${queryKey}`,
-			collectionName: 'orders',
-			queryKey,
-			complete: true,
-			expectedRecordIds: ['order-1'],
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		engine.setCoverageVerdict(
+			{ collection: 'orders', queryKey },
+			{ total: 1, source: 'lane', complete: true, fresh: true, progress: null }
+		);
 		const { result } = renderHook(
 			() =>
 				useCollectionBinding('orders', {
@@ -554,21 +528,11 @@ describe('query bindings', () => {
 	// dropped from the key, so the lane it names is the UNRANGED browse — reporting its
 	// size would over-count the ranged grid.
 	it('keeps the total local when a range bound is not representable in the descriptor', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		const unrangedKey = 'orders:browser:status=processing:orderby=date:order=desc:search=:limit=25';
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: `orders::${unrangedKey}`,
-			collectionName: 'orders',
-			queryKey: unrangedKey,
-			complete: true,
-			expectedRecordIds: ['order-1', 'order-2'],
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		engine.setCoverageVerdict(
+			{ collection: 'orders', queryKey: unrangedKey },
+			{ total: 2, source: 'lane', complete: true, fresh: true }
+		);
 		const { result } = renderHook(
 			() =>
 				useCollectionBinding('orders', {
@@ -589,6 +553,8 @@ describe('query bindings', () => {
 		subscription.unsubscribe();
 		expect(sources.length).toBeGreaterThan(0);
 		expect(sources).not.toContain('coverage');
+		// Not merely "the answer was local": the binding never ASKED, which is the gate working.
+		expect(engine.coverageSubscribeCalls).toEqual([]);
 	});
 
 	it('uses coverage for a reports-shaped order selector (cashier, store and range)', async () => {
@@ -646,10 +612,6 @@ describe('query bindings', () => {
 	});
 
 	it('exposes coverage-aware total and totalSource rather than the loaded window', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'resident', id: 1, name: 'Resident' })
 		);
@@ -672,16 +634,15 @@ describe('query bindings', () => {
 
 		// #909: the browse-window coverage key follows the DESCRIPTOR — this grid sorts by
 		// name, so it reports against the title-sorted window, not a hardcoded limit=100.
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: 'products::products:browse-window:limit=100:orderby=title:order=asc',
-			collectionName: 'products',
-			queryKey: 'products:browse-window:limit=100:orderby=title:order=asc',
-			complete: true,
-			expectedRecordIds: ['p1', 'p2', 'p3'],
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		// Seeding it mid-test is the live flip: the footer must move off the resident count the
+		// moment the engine's verdict changes, without a re-render or a re-declare.
+		engine.setCoverageVerdict(
+			{
+				collection: 'products',
+				queryKey: 'products:browse-window:limit=100:orderby=title:order=asc',
+			},
+			{ total: 3, source: 'lane', complete: true, fresh: true }
+		);
 		await expect(
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 3)))
 		).resolves.toBe(3);
@@ -697,23 +658,16 @@ describe('query bindings', () => {
 	// the out-of-stock toggle. `status` carries no key dimension but the fetcher hardcodes
 	// `status=publish` on the wire, so this grid must keep its coverage total.
 	it('projects browse-window coverage for the POS grid filter shape', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'resident', id: 1, name: 'Resident' })
 		);
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: 'products::products:browse-window:limit=100:stock_status=instock',
-			collectionName: 'products',
-			queryKey: 'products:browse-window:limit=100:stock_status=instock',
-			complete: true,
-			expectedRecordIds: ['p1', 'p2', 'p3', 'p4', 'p5'],
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		engine.setCoverageVerdict(
+			{
+				collection: 'products',
+				queryKey: 'products:browse-window:limit=100:stock_status=instock',
+			},
+			{ total: 5, source: 'lane', complete: true, fresh: true }
+		);
 
 		const posShaped: QueryStateOf<'products'> = {
 			search: '',
@@ -744,24 +698,17 @@ describe('query bindings', () => {
 	// superset of what the grid shows. Right for demand, wrong for a total — the lane's
 	// encoder reports the leftover and the projection falls back to the local count.
 	it('ignores browse-window coverage when the products filter is only partly on the wire', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		await engineDB.collections.products.insert(
 			engineProduct({ uuid: 'resident', id: 1, name: 'Resident' })
 		);
 		// The lane the wire window would fill: stock_status only — `status` never gets there.
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: 'products::products:browse-window:limit=100:stock_status=instock',
-			collectionName: 'products',
-			queryKey: 'products:browse-window:limit=100:stock_status=instock',
-			complete: true,
-			expectedRecordIds: ['p1', 'p2', 'p3', 'p4'],
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		engine.setCoverageVerdict(
+			{
+				collection: 'products',
+				queryKey: 'products:browse-window:limit=100:stock_status=instock',
+			},
+			{ total: 4, source: 'lane', complete: true, fresh: true }
+		);
 
 		const partly: QueryStateOf<'products'> = {
 			search: '',
@@ -784,13 +731,11 @@ describe('query bindings', () => {
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		subscription.unsubscribe();
 		expect(sources).not.toContain('coverage');
+		// The superset lane exists and is fresh; the binding simply never asks about it.
+		expect(engine.coverageSubscribeCalls).toEqual([]);
 	});
 
 	it('uses coupons:all coverage only for the unfiltered reference lane', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		await engineDB.collections.coupons.insert({
 			id: 'coupon-1',
 			wooId: 1,
@@ -804,16 +749,10 @@ describe('query bindings', () => {
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
 		});
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: 'coupons::coupons:all',
-			collectionName: 'coupons',
-			queryKey: 'coupons:all',
-			complete: true,
-			expectedRecordIds: ['coupon-1', 'coupon-2', 'coupon-3'],
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		engine.setCoverageVerdict(
+			{ collection: 'coupons', queryKey: 'coupons:all' },
+			{ total: 3, source: 'lane', complete: true, fresh: true }
+		);
 		const base: QueryStateOf<'coupons'> = {
 			search: '',
 			filters: {},
@@ -842,27 +781,21 @@ describe('query bindings', () => {
 		).resolves.toBe('local');
 	});
 
+	// Tier 0. Tax rates are seeded by the engine's BOOT lane, so requirementsForQuery declares
+	// nothing for them and there is no handle to carry a key. The binding must therefore ask
+	// through the reference arm and let the engine resolve `taxRates:all` itself — seeding the
+	// verdict under `{lane:'reference'}` is what proves it never spells the key out.
 	it('projects taxRates:all coverage and idle binding activity for Tier 0', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		await engineDB.collections.taxRates.insert({
 			id: 'woo-tax-rate:1',
 			wooTaxRateId: 1,
 			payload: { id: 1, name: 'Standard', class: 'standard' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 		});
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: 'taxRates::taxRates:all',
-			collectionName: 'taxRates',
-			queryKey: 'taxRates:all',
-			complete: true,
-			expectedRecordIds: ['woo-tax-rate:1', 'woo-tax-rate:2'],
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		engine.setCoverageVerdict(
+			{ collection: 'taxRates', lane: 'reference' },
+			{ total: 2, source: 'lane', complete: true, fresh: true }
+		);
 		const state: QueryStateOf<'tax-rates'> = {
 			search: '',
 			filters: {},
@@ -885,20 +818,13 @@ describe('query bindings', () => {
 	});
 
 	it('keeps customer search cold until engine results land locally and reports local totals', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
-		await engineDB.collections.coverageLanes.insert({
-			laneKey: 'customers::customers:search=ada:limit=10',
-			collectionName: 'customers',
-			queryKey: 'customers:search=ada:limit=10',
-			complete: true,
-			expectedRecordIds: Array.from({ length: 9 }, (_, index) => `customer-${index}`),
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 3,
-		});
+		// A search lane exists and is complete, but a search is not a browse: the engine hands
+		// out no queryKey for it, so the binding has no coverage target and must report the
+		// residents it can actually show. The lane is seeded to prove it is IGNORED.
+		engine.setCoverageVerdict(
+			{ collection: 'customers', queryKey: 'customers:search=ada:limit=10' },
+			{ total: 9, source: 'lane', complete: true, fresh: true }
+		);
 		const state: QueryStateOf<'customers'> = {
 			search: 'ada',
 			filters: {},
@@ -939,16 +865,13 @@ describe('query bindings', () => {
 			firstValueFrom(result.current.total$.pipe(filter((total) => total === 1)))
 		).resolves.toBe(1);
 		expect(engine.searchRequireCalls).toHaveLength(1);
+		expect(engine.coverageSubscribeCalls).toEqual([]);
 	});
 
 	// #951. A sorted customers grid declares a browse window, and its footer must report the
 	// SERVER's count for that view — a windowed browse is deliberately incomplete, so reading
 	// the resident count as the total is the false-complete bug (#894/#945).
 	it('reports the server total for a sorted customers browse, not the resident count', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		await engineDB.collections.customers.insert({
 			id: 'customer-ada',
 			wooCustomerId: 103,
@@ -956,13 +879,15 @@ describe('query bindings', () => {
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
 		});
-		await engineDB.collections.queryTotalCacheEntries.insert({
-			queryKey: 'customers:browse-window:limit=100:orderby=registered_date:order=desc',
-			totalMatchingRecords: 4_200,
-			freshUntilMs: Date.now() + 60_000,
-			updatedAtMs: Date.now(),
-			schemaVersion: 1,
-		});
+		// `complete: false` on purpose — a windowed browse never completes, which is exactly
+		// why the cached server total, not the lane, has to carry the number.
+		engine.setCoverageVerdict(
+			{
+				collection: 'customers',
+				queryKey: 'customers:browse-window:limit=100:orderby=registered_date:order=desc',
+			},
+			{ total: 4_200, source: 'query-total', complete: false, fresh: true }
+		);
 
 		const state: QueryStateOf<'customers'> = {
 			search: '',
@@ -995,10 +920,6 @@ describe('query bindings', () => {
 	// #1028 follow-on: the plugin proxy (#1488/#1500) now handles last_name, so the grid's
 	// DEFAULT sort drives a server-sorted browse window rather than a local-only sort.
 	it('declares a browse window for the last_name sort now that the plugin proxies it', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		await engineDB.collections.customers.insert({
 			id: 'customer-ada',
 			wooCustomerId: 103,
@@ -1027,10 +948,6 @@ describe('query bindings', () => {
 	// role now sorts server-side by staff hierarchy (#1500) — the client passes orderby=role and
 	// does NO local rank mapping.
 	it('drives a server browse window for the role sort with no client-side rank mapping', async () => {
-		await engineDB.addCollections({
-			coverageLanes: { schema: coverageLaneSchema },
-			queryTotalCacheEntries: { schema: queryTotalCacheSchema },
-		} as never);
 		await engineDB.collections.customers.insert({
 			id: 'customer-ada',
 			wooCustomerId: 103,

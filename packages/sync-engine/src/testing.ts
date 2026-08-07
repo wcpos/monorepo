@@ -65,7 +65,6 @@ export function scriptedConnectivity(initial: EngineConnectivity = 'online'): {
 }
 
 export { type LocalCustomerDocument } from './collections/customer-schema';
-export { coverageLaneSchema } from './local-coverage/coverage-schema';
 export {
 	existenceManifestDocument,
 	existenceManifestSchema,
@@ -76,7 +75,10 @@ export {
 	customerBrowseWindowQueryKeyFromDimensions,
 	productBrowseWindowQueryKeyFromDimensions,
 } from './scheduler';
-export { queryTotalCacheSchema } from './scheduler';
+// The coverage lane / query-total SCHEMAS are deliberately absent: they were here only so a
+// consumer's tests could hand-build the engine's private tables. `engine.coverageChanges` now
+// answers what those rows were being read for, and the engine's own tests reach the schemas
+// through their real modules.
 export {
 	schedulerTaskStateKey,
 	schedulerTaskStateSchema,

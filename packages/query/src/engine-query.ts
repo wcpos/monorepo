@@ -2,7 +2,7 @@ import { defer, EMPTY, from, Observable, of, throwError } from 'rxjs';
 import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 import get from 'lodash/get';
 
-import type { RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 import {
 	engineCollectionNameFor,
@@ -72,6 +72,22 @@ export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDat
 		void engine.ready.then((scope) => publishIfChanged(scope.database)).catch(() => undefined);
 		return unsubscribe;
 	});
+}
+
+/**
+ * The engine's coverage verdict for one target, as an Observable.
+ *
+ * The door is callback-shaped on purpose — the engine carries no RxJS — so the adaptation lives
+ * here, next to `observeEngineDatabases`. It publishes synchronously on subscribe, so a caller
+ * combining it with a local count never waits on a first emission.
+ */
+export function observeCoverage(
+	engine: RxdbSyncEngine,
+	target: CoverageTarget
+): Observable<CoverageVerdict> {
+	return new Observable<CoverageVerdict>((subscriber) =>
+		engine.coverageChanges(target, (verdict) => subscriber.next(verdict))
+	);
 }
 
 function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): LegacyMangoSelector {

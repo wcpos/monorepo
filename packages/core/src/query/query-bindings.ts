@@ -4,7 +4,6 @@ import { ObservableResource } from 'observable-hooks';
 import {
 	BehaviorSubject,
 	combineLatest,
-	EMPTY,
 	firstValueFrom,
 	from,
 	Observable,
@@ -12,22 +11,14 @@ import {
 	race,
 	timer,
 } from 'rxjs';
-import {
-	distinctUntilChanged,
-	expand,
-	filter,
-	map,
-	shareReplay,
-	startWith,
-	switchMap,
-} from 'rxjs/operators';
+import { distinctUntilChanged, filter, map, shareReplay, switchMap } from 'rxjs/operators';
 
 import {
 	declareRequirements,
 	engineCollectionNameFor,
 	type EngineQueryDescriptor,
 	observeCollectionActive,
-	observeEngineDatabases,
+	observeCoverage,
 	observeEngineQuery,
 	type QueryResult,
 	requirementsForQuery,
@@ -36,9 +27,9 @@ import {
 	useQueryRuntime,
 } from '@wcpos/query';
 import type {
-	CoverageLaneDocument,
 	CoverageOutcome,
-	QueryTotalCacheDocument,
+	CoverageTarget,
+	CoverageVerdict,
 	RequirementHandle,
 	RxdbSyncEngine,
 	SyncCollectionName,
@@ -47,7 +38,7 @@ import type {
 import { translateQueryState } from './query-state-translator';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
-import type { MangoQuerySortPart, RxCollection, RxDatabase, RxDocument } from 'rxdb';
+import type { MangoQuerySortPart, RxCollection, RxDatabase } from 'rxdb';
 
 type LegacyCollectionName = EngineQueryDescriptor['collection'];
 type TotalSource = 'coverage' | 'local';
@@ -76,15 +67,6 @@ export interface QueryBinding {
 	laneProgress$: Observable<QueryLaneProgress | null>;
 	sync(): Promise<void>;
 }
-
-/**
- * Tax rates are seeded by the engine's boot lane, but requirementsForQuery declares no
- * requirement for them, so there is no handle to carry the key. The engine-side declaration
- * lives in rx-pos-bootstrap-seeder.ts.
- */
-const BOOT_LANE_QUERY_KEYS: Partial<Record<LegacyCollectionName, string>> = {
-	taxes: 'taxRates:all',
-};
 
 const DEMAND_RETRY_BACKOFF_MS = 250;
 const LOCAL_TOTAL_SOURCE$ = of('local' as const);
@@ -134,8 +116,37 @@ function readinessFrom(outcomes: CoverageOutcome[]): DemandReadiness {
 	return { attempted: outcomes.every((outcome) => outcome.action !== 'released') };
 }
 
+/**
+ * Which coverage key this binding's totals may be read from, or null when nothing the engine
+ * tracks stands for this query.
+ *
+ * `handle.queryKey` is the engine's own answer for a browse/refresh lane, so it wins whenever
+ * there is one. A collection seeded by a boot lane (tax rates) declares no requirement at all,
+ * so there is no handle to carry a key — the `{lane:'reference'}` arm asks the ENGINE to
+ * resolve its own lane key rather than having this layer spell one out (CONTEXT.md: callers
+ * never construct lane keys).
+ *
+ * The `represented || isUnfiltered` gate is what keeps a lane from standing in for a query it
+ * only partly covers: a descriptor carrying a condition the wire key cannot express names a
+ * DELIBERATE superset, right for demand and wrong for a total. `isUnfiltered` re-admits the
+ * reference collections, whose branch reports `represented: false` unconditionally even though
+ * an unfiltered view of them maps exactly onto their `<collection>:all` lane.
+ */
+function coverageTargetFor(input: {
+	collection: SyncCollectionName;
+	handleQueryKey: string | null;
+	represented: boolean;
+	isUnfiltered: boolean;
+}): CoverageTarget | null {
+	if (!input.represented && !input.isUnfiltered) return null;
+	if (input.handleQueryKey !== null) {
+		return { collection: input.collection, queryKey: input.handleQueryKey };
+	}
+	return input.isUnfiltered ? { collection: input.collection, lane: 'reference' } : null;
+}
+
 type DemandProjection = {
-	queryKey$: Observable<string | null>;
+	coverageTarget$: Observable<CoverageTarget | null>;
 	/** Readiness of the STANDING declaration — the one the binding keeps alive while mounted. */
 	whenReady(): Promise<DemandReadiness>;
 	/** Declares the same requirements once more and releases them; the re-arm after a release. */
@@ -163,7 +174,10 @@ function useDemand(
 	descriptor: EngineQueryDescriptor,
 	enabled: boolean
 ): DemandProjection {
-	const queryKey$ = React.useMemo(() => new BehaviorSubject<string | null>(null), [engine, id]);
+	const coverageTarget$ = React.useMemo(
+		() => new BehaviorSubject<CoverageTarget | null>(null),
+		[engine, id]
+	);
 	const ready = React.useRef<Promise<DemandReadiness>>(Promise.resolve(ATTEMPTED));
 	const selector = selectorWithSearch(descriptor);
 	const selectorKey = JSON.stringify(selector);
@@ -175,7 +189,7 @@ function useDemand(
 
 	React.useEffect(() => {
 		if (!enabled) {
-			queryKey$.next(null);
+			coverageTarget$.next(null);
 			ready.current = Promise.resolve(ATTEMPTED);
 			return undefined;
 		}
@@ -201,10 +215,14 @@ function useDemand(
 		const declare = (retryOnReject: boolean) => {
 			if (cancelled) return;
 			handles = declareRequirements(engine, requirements);
-			const handleQueryKey = handles.find((handle) => handle.queryKey !== null)?.queryKey ?? null;
-			const isUnfiltered = Object.keys(stableSelector).length === 0;
-			const fixedKey = isUnfiltered ? (BOOT_LANE_QUERY_KEYS[descriptor.collection] ?? null) : null;
-			queryKey$.next(plan.represented || isUnfiltered ? (handleQueryKey ?? fixedKey) : null);
+			coverageTarget$.next(
+				coverageTargetFor({
+					collection: engineCollection,
+					handleQueryKey: handles.find((handle) => handle.queryKey !== null)?.queryKey ?? null,
+					represented: plan.represented,
+					isUnfiltered: Object.keys(stableSelector).length === 0,
+				})
+			);
 			const settled = Promise.all(handles.map((handle) => handle.ready)).then(readinessFrom);
 			// The readiness barrier must stay PENDING across the scheduled retry: settling
 			// through the rejection would let whenReady() complete while nothing is in
@@ -242,22 +260,23 @@ function useDemand(
 		};
 	}, [
 		coverageGeneration,
+		coverageTarget$,
 		descriptor.collection,
 		descriptor.limit,
 		descriptor.search,
 		enabled,
 		engine,
+		engineCollection,
 		id,
-		queryKey$,
 		selectorKey,
 		sortKey,
 	]);
 
 	React.useEffect(
 		() => () => {
-			queryKey$.complete();
+			coverageTarget$.complete();
 		},
-		[queryKey$]
+		[coverageTarget$]
 	);
 
 	const sync = React.useCallback(async () => {
@@ -319,131 +338,62 @@ function useDemand(
 	);
 
 	const whenReady = React.useCallback(() => ready.current.catch(() => NOT_ATTEMPTED), []);
-	return { queryKey$, sync, whenReady, declareOnce, generation: coverageGeneration };
+	return { coverageTarget$, sync, whenReady, declareOnce, generation: coverageGeneration };
 }
 
-function coverageFreshnessTicks(
-	lanes: CoverageLaneDocument[],
-	queryTotals: QueryTotalCacheDocument[]
-): Observable<number> {
-	const expiries = [...lanes, ...queryTotals].map(({ freshUntilMs }) => freshUntilMs);
-	return of(Date.now()).pipe(
-		expand((nowMs) => {
-			const nextExpiry = expiries.reduce<number | undefined>(
-				(next, expiry) => (expiry > nowMs && (next === undefined || expiry < next) ? expiry : next),
-				undefined
-			);
-			return nextExpiry === undefined
-				? EMPTY
-				: timer(Math.max(0, nextExpiry - nowMs + 1)).pipe(map(() => Date.now()));
-		})
-	);
-}
+/** The engine declining to vouch — what a binding with no coverage target reports. */
+const UNKNOWN_COVERAGE: CoverageVerdict = {
+	total: null,
+	source: 'unknown',
+	complete: false,
+	fresh: false,
+	progress: null,
+};
+const UNKNOWN_COVERAGE$ = of(UNKNOWN_COVERAGE);
 
-function projectTotal(input: {
-	localCount: number;
-	queryKey: string | null;
-	lanes: CoverageLaneDocument[];
-	queryTotals: QueryTotalCacheDocument[];
-	nowMs: number;
-}): { total: number; source: TotalSource } {
-	if (input.queryKey === null) return { total: input.localCount, source: 'local' };
-	const queryTotal = input.queryTotals.find(
-		(candidate) => candidate.queryKey === input.queryKey && candidate.freshUntilMs > input.nowMs
-	);
-	if (queryTotal) return { total: queryTotal.totalMatchingRecords, source: 'coverage' };
-	const lane = input.lanes.find(
-		(candidate) =>
-			candidate.queryKey === input.queryKey &&
-			candidate.complete &&
-			candidate.freshUntilMs > input.nowMs
-	);
-	return lane
-		? { total: lane.expectedRecordIds.length, source: 'coverage' }
-		: { total: input.localCount, source: 'local' };
+/**
+ * Identity of a coverage target, so that a RE-declaration naming the same target does not
+ * resubscribe the verdict. Every declare pushes a freshly built object; without this the
+ * switchMap below would tear the subscription down and republish `unknown`, blinking the
+ * footer back to the resident count on every re-declare.
+ */
+function coverageTargetKey(target: CoverageTarget | null): string {
+	if (target === null) return '';
+	return 'queryKey' in target
+		? `${target.collection}::${target.queryKey}`
+		: `${target.collection}::@reference`;
 }
 
 /**
- * The mid-flight half of the same coverage lane the total is projected from. `rangedResume` is
- * present on exactly one kind of lane — a ranged fetch-to-completion walk that has not reached
- * the end of its range — so its presence IS the "still downloading" signal, with no second
- * source of truth to drift from. Freshness is deliberately not consulted: the walk's progress
- * is work already done, and a large range routinely outlives the lane's freshness window.
+ * The footer's three numbers, composed from the engine's verdict and this binding's own
+ * resident count.
+ *
+ * The verdict is the engine's answer and is taken as given — precedence, freshness and the
+ * ranged-walk progress all live behind `coverageChanges`. What stays here is the one thing the
+ * engine cannot know: the local count, and the decision to fall back to it when the engine
+ * declines to vouch (`total: null`). `unknown` therefore surfaces as `local`, which is what
+ * every consumer of `totalSource$` already means by it.
  */
-function projectLaneProgress(input: {
-	queryKey: string | null;
-	lanes: CoverageLaneDocument[];
-}): QueryLaneProgress | null {
-	if (input.queryKey === null) return null;
-	const lane = input.lanes.find((candidate) => candidate.queryKey === input.queryKey);
-	if (!lane?.rangedResume) return null;
-	return {
-		// The walk publishes its running count per page; the id set is only written when a pass
-		// ends, so it is the fallback for lanes written before the per-page publish.
-		downloaded: lane.rangedResume.downloadedRecords ?? lane.expectedRecordIds.length,
-		total: lane.rangedResume.totalRecords,
-	};
-}
-
-function coverageDocuments$<T>(
-	database$: Observable<RxDatabase | null>,
-	collectionName: string
-): Observable<T[]> {
-	return database$.pipe(
-		switchMap((database) => {
-			const collection = database?.collections[collectionName] as RxCollection<T> | undefined;
-			if (!collection) return of([] as T[]);
-			return collection.find().$.pipe(
-				map((documents: RxDocument<T>[]) =>
-					documents.map((document) => document.toJSON() as unknown as T)
-				),
-				startWith([] as T[])
-			);
-		})
-	);
-}
-
 function coverageProjection$(
 	engine: RxdbSyncEngine,
-	descriptor: EngineQueryDescriptor,
 	result$: Observable<QueryResult<RxCollection>>,
-	queryKey$: Observable<string | null>
+	coverageTarget$: Observable<CoverageTarget | null>
 ): Observable<{ total: number; source: TotalSource; laneProgress: QueryLaneProgress | null }> {
-	const database$ = observeEngineDatabases(engine).pipe(
-		shareReplay({ bufferSize: 1, refCount: true })
-	);
-	const lanes$ = coverageDocuments$<CoverageLaneDocument>(database$, 'coverageLanes');
-	// Collections whose browse lane caches the server's X-WP-Total against its queryKey. A
-	// windowed browse is almost never a COMPLETE coverage lane (that is the point — it holds
-	// the first N of a much larger set), so without the cached total the footer would fall
-	// back to the resident count and read as "that's all there is" (#894/#945). Customers
-	// joined orders here with the browse window in #951.
-	const totals$ =
-		descriptor.collection === 'orders' || descriptor.collection === 'customers'
-			? coverageDocuments$<QueryTotalCacheDocument>(database$, 'queryTotalCacheEntries')
-			: of([] as QueryTotalCacheDocument[]);
-	const coverage$ = combineLatest([lanes$, totals$]).pipe(
-		switchMap(([lanes, queryTotals]) =>
-			coverageFreshnessTicks(lanes, queryTotals).pipe(
-				map((nowMs) => ({ lanes, queryTotals, nowMs }))
-			)
-		)
+	const verdict$ = coverageTarget$.pipe(
+		distinctUntilChanged(
+			(previous, current) => coverageTargetKey(previous) === coverageTargetKey(current)
+		),
+		switchMap((target) => (target === null ? UNKNOWN_COVERAGE$ : observeCoverage(engine, target)))
 	);
 	return combineLatest([
 		result$.pipe(map((result) => result.count ?? result.hits.length)),
-		coverage$,
-		queryKey$,
+		verdict$,
 	]).pipe(
-		map(([localCount, { lanes, queryTotals, nowMs }, queryKey]) => ({
-			...projectTotal({
-				localCount,
-				queryKey,
-				lanes,
-				queryTotals,
-				nowMs,
-			}),
-			laneProgress: projectLaneProgress({ queryKey, lanes }),
-		})),
+		map(([localCount, verdict]) =>
+			verdict.total === null
+				? { total: localCount, source: 'local' as const, laneProgress: verdict.progress }
+				: { total: verdict.total, source: 'coverage' as const, laneProgress: verdict.progress }
+		),
 		distinctUntilChanged(
 			(previous, current) =>
 				previous.total === current.total &&
@@ -524,8 +474,8 @@ function useEngineBinding(
 		);
 	}, [descriptor, enabled, runtime.engine, runtime.locale]);
 	const projection$ = React.useMemo(
-		() => coverageProjection$(runtime.engine, descriptor, result$, demand.queryKey$),
-		[demand.queryKey$, descriptor, result$, runtime.engine]
+		() => coverageProjection$(runtime.engine, result$, demand.coverageTarget$),
+		[demand.coverageTarget$, result$, runtime.engine]
 	);
 	const resource = useObservableResource(result$);
 	const total$ = React.useMemo(() => projection$.pipe(map(({ total }) => total)), [projection$]);
@@ -693,8 +643,8 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 	}, [bindingId, childDescriptor, descriptor, runtime.engine, runtime.locale, translated.search]);
 	const resource = useObservableResource(result$);
 	const projection$ = React.useMemo(
-		() => coverageProjection$(runtime.engine, descriptor, result$, parentDemand.queryKey$),
-		[descriptor, parentDemand.queryKey$, result$, runtime.engine]
+		() => coverageProjection$(runtime.engine, result$, parentDemand.coverageTarget$),
+		[parentDemand.coverageTarget$, result$, runtime.engine]
 	);
 	const active$ = React.useMemo(
 		() =>

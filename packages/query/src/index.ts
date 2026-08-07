@@ -17,6 +17,7 @@ export {
 } from './engine-adapter/collection-map';
 export type { EngineRxDocument } from './engine-adapter/execute-query';
 export {
+	observeCoverage,
 	observeEngineDatabases,
 	observeEngineQuery,
 	type EngineQueryDescriptor,

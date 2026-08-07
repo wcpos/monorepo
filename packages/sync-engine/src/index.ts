@@ -24,6 +24,9 @@ export { rejectionSuggestsServerRecord } from './write-path/conflict-resolution'
 // prettier-ignore
 export { MUTATION_QUEUE_RXDB_COLLECTION, SYNC_COLLECTION_NAMES } from './collections/engine-collections';
 
-export type { CoverageLaneDocument } from './local-coverage/coverage-schema';
-export type { QueryTotalCacheDocument } from './scheduler';
+// The coverage TABLES stay private: `coverageChanges` answers the questions their rows were
+// being read for, so no caller re-implements the engine's precedence/freshness rules.
+export type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
+/** PORT type: the request contract of `ports.queryTotal`, implemented host-side
+ * (apps/main/lib/engine-fetcher.ts) — not a storage document. */
 export type { QueryTotalWooRequest } from './scheduler';

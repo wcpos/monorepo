@@ -25,7 +25,6 @@ describe('package exports', () => {
 	it("keeps the testing door's runtime values curated", async () => {
 		const testing = await import('./testing');
 		expect(Object.keys(testing).sort()).toEqual([
-			'coverageLaneSchema',
 			'customerBrowseWindowQueryKeyFromDimensions',
 			'engineSyncCollectionCreators',
 			'existenceManifestDocument',
@@ -34,7 +33,6 @@ describe('package exports', () => {
 			'memoryStringStore',
 			'orderBrowserQueryKey',
 			'productBrowseWindowQueryKeyFromDimensions',
-			'queryTotalCacheSchema',
 			'schedulerTaskStateKey',
 			'schedulerTaskStateSchema',
 			'scriptedConnectivity',

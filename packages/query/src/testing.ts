@@ -11,6 +11,8 @@ import {
 	productBrowseWindowQueryKeyFromDimensions,
 } from '@wcpos/sync-engine/testing';
 import type {
+	CoverageTarget,
+	CoverageVerdict,
 	EngineRequirement,
 	EngineStatus,
 	RequirementHandle,
@@ -92,6 +94,18 @@ export interface FakeEngine extends RxdbSyncEngine {
 	refreshReleased?: boolean;
 	resetCalls: string[];
 	syncCalls: (string | undefined)[];
+	/**
+	 * Every target `coverageChanges` has been subscribed for. A binding that must NOT read
+	 * coverage — an unrepresented selector, a search — is proved by this staying empty, which
+	 * is stronger than watching for a `'coverage'` value that could simply be late.
+	 */
+	coverageSubscribeCalls: CoverageTarget[];
+	/**
+	 * Seed the engine's verdict for one target. Fields left out keep their unknown default, so
+	 * a fixture states only what its scenario is about. Live subscribers are notified
+	 * synchronously — the mid-flight "a lane just landed" flip.
+	 */
+	setCoverageVerdict(target: CoverageTarget, verdict: Partial<CoverageVerdict>): void;
 	setCollectionStatus(
 		collection: SyncCollectionName,
 		state: Partial<EngineStatus['collections'][SyncCollectionName]>
@@ -122,6 +136,25 @@ const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 		return refreshLaneKeys[requirement.collection] ?? null;
 	}
 	return null;
+};
+
+/**
+ * The engine keys a verdict by (collection, queryKey) — or by (collection, reference lane) when
+ * it resolves the key itself. The fake keys its seeded verdicts the same way, so a fixture that
+ * seeds `{lane:'reference'}` proves the binding took the reference arm rather than spelling out
+ * a lane key of its own.
+ */
+const coverageTargetKey = (target: CoverageTarget): string =>
+	'queryKey' in target
+		? `${target.collection}::${target.queryKey}`
+		: `${target.collection}::@reference`;
+
+const UNKNOWN_COVERAGE_VERDICT: CoverageVerdict = {
+	total: null,
+	source: 'unknown',
+	complete: false,
+	fresh: false,
+	progress: null,
 };
 
 const num = (value: unknown): number => {
@@ -260,6 +293,15 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 	const searchRequireCalls: RecordedSearchRequirement[] = [];
 	const resetCalls: string[] = [];
 	const syncCalls: (string | undefined)[] = [];
+	const coverageSubscribeCalls: CoverageTarget[] = [];
+	const coverageVerdicts = new Map<string, CoverageVerdict>();
+	const coverageListeners = new Map<string, Set<(verdict: CoverageVerdict) => void>>();
+	const setCoverageVerdict = (target: CoverageTarget, verdict: Partial<CoverageVerdict>) => {
+		const key = coverageTargetKey(target);
+		const next = { ...UNKNOWN_COVERAGE_VERDICT, ...verdict };
+		coverageVerdicts.set(key, next);
+		for (const listener of [...(coverageListeners.get(key) ?? [])]) listener(next);
+	};
 	const collectionNames: SyncCollectionName[] = [
 		'orders',
 		'products',
@@ -304,6 +346,8 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		searchRequireCalls,
 		resetCalls,
 		syncCalls,
+		coverageSubscribeCalls,
+		setCoverageVerdict,
 		ready: Promise.resolve(activeScope),
 		active: () => activeScope,
 		db$: () => () => undefined,
@@ -368,6 +412,18 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 			return { lane: (lane ?? 'all') as never, status: 'ran' as const };
 		},
 		events: () => () => undefined,
+		coverageChanges: (target: CoverageTarget, cb: (verdict: CoverageVerdict) => void) => {
+			const key = coverageTargetKey(target);
+			coverageSubscribeCalls.push(target);
+			const listeners = coverageListeners.get(key) ?? new Set<(verdict: CoverageVerdict) => void>();
+			coverageListeners.set(key, listeners);
+			listeners.add(cb);
+			// The real door publishes synchronously on subscribe.
+			cb(coverageVerdicts.get(key) ?? UNKNOWN_COVERAGE_VERDICT);
+			return () => {
+				listeners.delete(cb);
+			};
+		},
 		setCollectionStatus,
 		onScopeEvent: () => () => undefined,
 		status,
@@ -467,6 +523,11 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 			return { lane: (lane ?? 'all') as never, status: 'ran' as const };
 		},
 		events: () => () => undefined,
+		// A cold engine vouches for nothing — the degraded window this fake exists to model.
+		coverageChanges: (_target: CoverageTarget, cb: (verdict: CoverageVerdict) => void) => {
+			cb(UNKNOWN_COVERAGE_VERDICT);
+			return () => undefined;
+		},
 		setCollectionStatus: () => undefined,
 		onScopeEvent: () => () => undefined,
 		status,
