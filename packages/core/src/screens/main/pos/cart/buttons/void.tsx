@@ -9,6 +9,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
+import { requestServerDelete } from '../../../hooks/mutations/request-server-delete';
 import {
 	findEngineResident,
 	insertEngineResident,
@@ -153,9 +154,8 @@ export function VoidButton() {
 		const isCannotDelete = (error: unknown) =>
 			error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE;
 
-		const receipt = await manager.engine.write({
+		const receipt = await requestServerDelete(manager.engine, {
 			collection: 'orders',
-			operation: 'delete',
 			recordId,
 		});
 

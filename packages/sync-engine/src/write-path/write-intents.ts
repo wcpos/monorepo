@@ -10,6 +10,13 @@
  * orders, products, variations, customers, and coupons today. `write()` on
  * any other collection is caller misuse: an exception (invariant 5).
  *
+ * `operation: 'delete'` is a SERVER delete — durable, replayed across
+ * restarts, drained to a wc/v3 DELETE (#1093). It is NEVER a cache
+ * eviction: local record removal rides `scope.resetCollection()` (or a
+ * future targeted evict primitive), which refuses to destroy pending queue
+ * work and touches no server state. UI callers go through
+ * requestServerDelete() (packages/core), enforced by lint.
+ *
  * Same-record coalescing (#507, tightened by gate2 #516): the incoming intent
  * coalesces into the LAST (highest-seq) PENDING queue entry for the record —
  * and ONLY when that entry has never been claimed or pushed (`attempts === 0`).

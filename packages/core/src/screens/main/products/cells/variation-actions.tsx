@@ -25,6 +25,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useProAccess } from '../../contexts/pro-access';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -75,9 +76,8 @@ export function VariationActions({
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		await runtime.engine.write({
+		await requestServerDelete(runtime.engine, {
 			collection: 'variations',
-			operation: 'delete',
 			recordId: variation.uuid!,
 		});
 	}, [runtime, variation.uuid]);

@@ -26,6 +26,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
 import { useProAccess } from '../../contexts/pro-access';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -69,9 +70,8 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 	 * Handle delete button click
 	 */
 	const handleDelete = React.useCallback(async () => {
-		await runtime.engine.write({
+		await requestServerDelete(runtime.engine, {
 			collection: 'products',
-			operation: 'delete',
 			recordId: product.uuid!,
 		});
 	}, [runtime, product.uuid]);

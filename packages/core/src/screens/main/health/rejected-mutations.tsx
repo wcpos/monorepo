@@ -54,6 +54,7 @@ export function RejectedMutationsPanel() {
 	const relative = useRelativeTime();
 	const [busyId, setBusyId] = React.useState<string | null>(null);
 	const [discarding, setDiscarding] = React.useState<RejectedMutation | null>(null);
+	const [requeueingDelete, setRequeueingDelete] = React.useState<RejectedMutation | null>(null);
 
 	// "Cannot read rejected sales" must never render as "no rejected sales" — the
 	// row this panel fails to show may be a completed sale that exists only on this
@@ -155,6 +156,13 @@ export function RejectedMutationsPanel() {
 						<View className="min-w-0 flex-1">
 							<HStack className="items-center gap-2">
 								<Text className="font-medium">{describeRecord(row, t)}</Text>
+								{/* A rejected DELETE must never look like a rejected edit: requeuing
+								    it destroys the record on the server (#1093 audit, Q2). */}
+								{row.operation === 'delete' ? (
+									<Pill tone="destructive" testID={`db-rejected-delete-${row.mutationId}`}>
+										{t('health.database.rejected.delete_pill')}
+									</Pill>
+								) : null}
 								{row.requeueCount > 0 ? (
 									<Pill tone="warning" testID={`db-rejected-tries-${row.mutationId}`}>
 										{t('health.database.rejected.tries', {
@@ -188,7 +196,13 @@ export function RejectedMutationsPanel() {
 								size="sm"
 								testID={`db-rejected-requeue-${row.mutationId}`}
 								disabled={busyId !== null || row.residentMissing}
-								onPress={() => void settle(row, 'requeue-rebuilt')}
+								// Requeuing a DELETE is a destructive server action; it gets the
+								// same explicit confirm discipline as Discard (#1093 audit, Q2).
+								onPress={() =>
+									row.operation === 'delete'
+										? setRequeueingDelete(row)
+										: void settle(row, 'requeue-rebuilt')
+								}
 							>
 								<ButtonText>{t('health.database.rejected.requeue')}</ButtonText>
 							</Button>
@@ -212,6 +226,45 @@ export function RejectedMutationsPanel() {
 					</HStack>
 				))}
 			</VStack>
+
+			<AlertDialog
+				open={requeueingDelete !== null}
+				onOpenChange={(open: boolean) => {
+					if (!open) setRequeueingDelete(null);
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{t('health.database.rejected.requeue_delete_title')}
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{requeueingDelete
+								? t('health.database.rejected.requeue_delete_body', {
+										record: describeRecord(requeueingDelete, t),
+									})
+								: null}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel testID="db-rejected-requeue-delete-cancel">
+							<Text>{t('common.cancel')}</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction
+							testID="db-rejected-requeue-delete-confirm"
+							onPress={() => {
+								const row = requeueingDelete;
+								setRequeueingDelete(null);
+								if (row) void settle(row, 'requeue-rebuilt');
+							}}
+						>
+							<Text className="text-destructive">
+								{t('health.database.rejected.requeue_delete_confirm')}
+							</Text>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			<AlertDialog
 				open={discarding !== null}

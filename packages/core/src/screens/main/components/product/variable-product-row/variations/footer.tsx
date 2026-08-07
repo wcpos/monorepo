@@ -4,11 +4,11 @@ import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { useQueryRuntime } from '@wcpos/query';
 import type { ProductDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../../contexts/translations';
 import { SyncButton } from '../../../../components/sync-button';
+import { useCollectionReset } from '../../../../hooks/use-collection-reset';
 
 interface VariationTableFooterProps {
 	binding: Pick<
@@ -23,26 +23,20 @@ interface VariationTableFooterProps {
  *
  */
 export function VariationTableFooter({ binding, parent, count }: VariationTableFooterProps) {
-	const runtime = useQueryRuntime();
 	const loading = useObservableEagerState(binding.active$);
+	const { clearAndSync } = useCollectionReset('variations');
 
 	/**
-	 *
+	 * Local cache eviction ONLY (#1093): the guarded reset funnel drops the local
+	 * variations collection and refills — it never enqueues mutations, and a
+	 * pending variation edit makes it return needs-confirmation instead of
+	 * destroying the queue. `engine.write({operation:'delete'})` is a durable
+	 * SERVER delete and must never appear in a refresh affordance.
 	 */
 	const handleClearVariations = React.useCallback(async () => {
-		const scope = runtime.engine.active() ?? (await runtime.engine.ready);
-		const variations = await scope.database.collections.variations
-			.find({ selector: { parentId: parent.id } })
-			.exec();
-		for (const variation of variations) {
-			await runtime.engine.write({
-				collection: 'variations',
-				operation: 'delete',
-				recordId: String(variation.primary),
-			});
-		}
+		await clearAndSync();
 		return binding.sync();
-	}, [binding, runtime, parent.id]);
+	}, [binding, clearAndSync]);
 
 	/**
 	 * Prefer the parent product's server variation ids over the local collection total.
