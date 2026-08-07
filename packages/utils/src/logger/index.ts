@@ -450,6 +450,16 @@ const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
 	error: 3,
 };
 
+// `__DEV__` only exists where a bundler defines it (Metro, jest-expo). This module is also
+// loaded by plain Node — the Playwright E2E runner imports it through e2e/fixtures.ts — where
+// a bare reference throws at import time. Read lazily, not cached: call sites historically
+// observed the live global (tests flip it). Unknown environments resolve to production behavior.
+function isDev(): boolean {
+	return typeof __DEV__ !== 'undefined'
+		? __DEV__
+		: typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+}
+
 // Initialize log level from localStorage (if available) or use default
 function getInitialLogLevel(): LogLevel {
 	if (typeof window !== 'undefined' && window.localStorage) {
@@ -458,7 +468,7 @@ function getInitialLogLevel(): LogLevel {
 			return stored as LogLevel;
 		}
 	}
-	return __DEV__ ? 'debug' : 'info';
+	return isDev() ? 'debug' : 'info';
 }
 
 let currentLogLevel: LogLevel = getInitialLogLevel();
@@ -595,7 +605,7 @@ const mainTransport = (props: any) => {
 
 	// Production only sends warnings and errors to the console; toast/db remain available for all levels.
 	const shouldLogToConsole =
-		levelSeverity >= currentSeverity && (__DEV__ || levelName === 'warn' || levelName === 'error');
+		levelSeverity >= currentSeverity && (isDev() || levelName === 'warn' || levelName === 'error');
 
 	// 1. Log to console if level permits
 	if (shouldLogToConsole) {
@@ -605,7 +615,7 @@ const mainTransport = (props: any) => {
 		const contextStr = options.context ? ` | Context: ${safeStringify(options.context)}` : '';
 		const formattedMessage = `${timestamp} | ${levelText} : ${message}${contextStr}`;
 
-		if (__DEV__) {
+		if (isDev()) {
 			// console.errors open a redbox in development which is annoying
 			console.log(formattedMessage);
 		} else if (levelName === 'warn') {
@@ -763,7 +773,7 @@ const resetLevel = () => {
 	if (typeof window !== 'undefined' && window.localStorage) {
 		localStorage.removeItem('wcpos_log_level');
 	}
-	currentLogLevel = __DEV__ ? 'debug' : 'info';
+	currentLogLevel = isDev() ? 'debug' : 'info';
 	console.log(`Log level reset to default: ${currentLogLevel}`);
 };
 
