@@ -157,7 +157,7 @@ async function annihilateNeverPushedChains(input: {
 	const pending = await input.queue.pending();
 	const byRecord = new Map<string, QueuedMutation[]>();
 	for (const row of pending) {
-		const key = `${row.collectionName} ${row.recordId}`;
+		const key = `${row.collectionName}\u0000${row.recordId}`;
 		const bucket = byRecord.get(key);
 		if (bucket) bucket.push(row);
 		else byRecord.set(key, [row]);
