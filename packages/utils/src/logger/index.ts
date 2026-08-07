@@ -457,7 +457,7 @@ const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
 function isDev(): boolean {
 	return typeof __DEV__ !== 'undefined'
 		? __DEV__
-		: typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+		: typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
 }
 
 // Initialize log level from localStorage (if available) or use default
