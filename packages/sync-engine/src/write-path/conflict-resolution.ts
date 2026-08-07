@@ -79,10 +79,9 @@ type ConflictResolutionDeps = {
 export function createConflictResolution(deps: ConflictResolutionDeps) {
 	// prettier-ignore
 	const { assertNotDisposed, readySettledForSync, manager, databaseByScopeId, activeDatabase, fetcher, ports, mintUuid, requirePlane, diagnostics, writeDrainLane, scheduleStatusChange } = deps;
-	const activeBarcodeSelectors = (): BarcodeSelectors | undefined => {
-		const scopeId = manager.activeScope;
-		return (scopeId === null ? null : deps.barcodeSelectorsFor?.(scopeId)) ?? undefined;
-	};
+	/** The carriers of the scope this resolution is BOUND to — never a later active one. */
+	const boundBarcodeSelectors = (scopeId: string): BarcodeSelectors | undefined =>
+		deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
 
 	// Resolutions run ONE AT A TIME (#832 follow-up, R7b). Two different choices
 	// racing on the same dead letter is not a hypothetical: requeue durably
@@ -275,10 +274,14 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 								(entry.payload as Record<string, unknown>).id ??
 								(entry.conflictDocument as Record<string, unknown> | undefined)?.id;
 							if (typeof remoteId === 'number') {
+								// Discard WRITES this document back as server truth — without the
+								// scope's carriers the restored row would lose its barcode.
+								const barcodeSelectors = boundBarcodeSelectors(bound.scopeId);
 								discardServerDocument = await facet.fetchServerDocument({
 									fetch: bound.bindFetch(fetcher as never),
 									syncBaseUrl: ports.site.syncBaseUrl,
 									remoteId,
+									...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 								});
 								// The server no longer has it: no truth to restore, so discard
 								// tombstones the resident. A born-local create is decided separately,
@@ -475,7 +478,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 															: { ...payload, ...mutation.payload },
 													serverPayload
 												),
-												activeBarcodeSelectors()
+												boundBarcodeSelectors(bound.scopeId)
 											);
 										const local = (optimistic.local ?? {}) as {
 											dirty?: boolean;

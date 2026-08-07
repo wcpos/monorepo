@@ -466,6 +466,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					coverage,
 					baseUrl: deps.syncBaseUrl,
 					ownerId: 'require-plane',
+					...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 					fetcher: schedulerFetcher,
 					diagnostics: deps.diagnostics,
 					...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),

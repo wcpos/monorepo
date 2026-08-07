@@ -66,9 +66,12 @@ function productPayload(id: number, menuOrder: number, price: string): Record<st
  * A catalog of `count` products with distinct menu_order, served in whatever order the
  * request's `orderby`/`order` asks for. Records every request's per_page and sort.
  */
-function scriptedCatalog(count: number) {
+function scriptedCatalog(
+	count: number,
+	decorate: (payload: Record<string, unknown>) => Record<string, unknown> = (payload) => payload
+) {
 	const catalog = Array.from({ length: count }, (_, index) =>
-		productPayload(index + 1, index, String(1_000 - index))
+		decorate(productPayload(index + 1, index, String(1_000 - index)))
 	);
 	const state = { perPages: [] as number[], sorts: [] as string[] };
 	const fetch = async (url: string): Promise<Response> => {
@@ -144,6 +147,59 @@ describe('require() for the products browse window', () => {
 		const ids = await productIds(engine);
 		expect(ids).toHaveLength(200);
 		expect(ids[199]).toBe(200);
+
+		await engine.dispose();
+	});
+
+	it('materializes payload.barcode on the demand drain (the carriers ride the scope)', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		// The browse window is the grid's scroll path and it drains through
+		// require(), NOT the background maintenance lane. Both must materialize the
+		// barcode, or which lane happened to pull a product would decide whether it
+		// is scannable.
+		const server = scriptedCatalog(120, (payload) => ({
+			...payload,
+			global_unique_id: `GTIN-${payload.id}`,
+		}));
+		const engine = engineWith(async (url) =>
+			new URL(url).pathname.endsWith('/changes/config-fingerprint')
+				? json({
+						fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
+						barcode_fields: {
+							products: ['global_unique_id'],
+							variations: ['global_unique_id'],
+							tax_rates: [],
+						},
+					})
+				: server.fetch(url)
+		);
+		await engine.ready;
+		expect(engine.active()!.barcodeSelectors.products).toEqual(['global_unique_id']);
+
+		const handle = engine.require({
+			id: 'browse-barcode',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		expect(await handle.ready).toMatchObject({ action: 'fetched' });
+
+		const scope = engine.active()!;
+		const documents = await (
+			scope.database.collections.products as {
+				find(): { exec(): Promise<{ toJSON(): Record<string, unknown> }[]> };
+			}
+		)
+			.find()
+			.exec();
+		expect(documents.length).toBeGreaterThan(0);
+		for (const document of documents) {
+			const row = document.toJSON();
+			expect(row.payload).toMatchObject({
+				barcode: `GTIN-${(row.payload as { id: number }).id}`,
+			});
+		}
 
 		await engine.dispose();
 	});

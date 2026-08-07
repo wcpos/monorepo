@@ -208,12 +208,20 @@ export type CollectionWriteFacet = {
 	>;
 	/** Stored field carrying the server numeric identity used by targeted refresh. */
 	remoteIdField: 'wooOrderId' | 'wooProductId' | 'wooId' | 'wooCustomerId';
-	/** Read one server document through this collection's existing include-pull shape. */
+	/**
+	 * Read one server document through this collection's existing include-pull
+	 * shape. `barcodeSelectors` are the calling SCOPE's carriers: the result is
+	 * materialized by the same projection an ordinary pull uses, so a caller that
+	 * WRITES the document (conflict discard restoring server truth) must pass
+	 * them or the restored row loses its `barcode`. A caller that only reads
+	 * `sync.revision` off the result may omit them.
+	 */
 	fetchServerDocument: (input: {
 		fetch: Fetcher;
 		syncBaseUrl: string;
 		remoteId: number;
 		signal?: AbortSignal;
+		barcodeSelectors?: BarcodeSelectors;
 	}) => Promise<Record<string, unknown> | null>;
 	/** Pull/ack payload → the exact stored shape used by ordinary materialization. */
 	documentFromServerPayload: (
@@ -410,7 +418,7 @@ function createWriteFacet(input: {
 		...(input.graftAckIdentity ? { graftAckIdentity: input.graftAckIdentity } : {}),
 		documentFromServerPayload: (payload, barcodeSelectors) =>
 			input.project(payload as WooPayload, barcodeSelectors),
-		fetchServerDocument: async ({ fetch, syncBaseUrl, remoteId, signal }) => {
+		fetchServerDocument: async ({ fetch, syncBaseUrl, remoteId, signal, barcodeSelectors }) => {
 			const search = new URLSearchParams({
 				include: String(remoteId),
 				per_page: '1',
@@ -422,7 +430,7 @@ function createWriteFacet(input: {
 				throw new Error(`${input.pullPath} revision refresh failed: HTTP ${response.status}`);
 			}
 			const [payload] = input.parse(await response.json());
-			return payload ? input.project(payload) : null;
+			return payload ? input.project(payload, barcodeSelectors) : null;
 		},
 		upsertServerDocument:
 			input.upsert ??
