@@ -9,7 +9,7 @@ import {
 	sortTiebreakFor,
 	wooOrderbyFor,
 } from '@wcpos/query/collection-map';
-import { variationAllMatch } from '@wcpos/query';
+import { FLEXSEARCH_MIN_TERM_LENGTH, variationAllMatch } from '@wcpos/query';
 import type { CompiledQueryRead, CompiledSortPart } from '@wcpos/query';
 import type {
 	EngineRequirement,
@@ -21,34 +21,14 @@ import { parseRemoteId } from '../utils/parse-remote-id';
 
 import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
 
-type Operator =
-	| 'taxonomy-many'
-	| 'value'
-	| 'metadata'
-	| 'store'
-	| 'date-range'
-	| 'all-match'
-	| 'in'
-	| 'prefix-range'
-	| 'exists';
-type FilterTranslator = {
-	legacyPath: string;
-	operator: Operator;
-	mapping?: WireField;
-};
+type Operator = 'taxonomy-many' | 'value' | 'metadata' | 'store' | 'date-range' | 'all-match';
 
 type WireField = FieldMapEntry & {
 	wireFace: NonNullable<FieldMapEntry['wireFace']>;
 };
-type MappedFilterTranslator = FilterTranslator & { mapping: WireField };
-
-const entry = (legacyPath: string, operator: Operator = 'value'): FilterTranslator => ({
-	legacyPath,
-	operator,
-});
+type MappedFilterTranslator = { operator: Operator; mapping: WireField };
 
 const mappedEntry = (mapping: WireField, operator: Operator = 'value'): MappedFilterTranslator => ({
-	legacyPath: mapping.legacy,
 	operator,
 	mapping,
 });
@@ -81,14 +61,9 @@ export const FILTER_TRANSLATORS = {
 	},
 	customers: {},
 	'tax-rates': {},
-	logs: {
-		level: entry('level', 'in'),
-		category_prefix: entry('category', 'prefix-range'),
-		has_actor: entry('actor', 'exists'),
-	},
 } as const satisfies {
-	[C in CollectionKey]: {
-		[F in keyof FiltersOf<C>]-?: C extends 'logs' ? FilterTranslator : MappedFilterTranslator;
+	[C in Exclude<CollectionKey, 'logs'>]: {
+		[F in keyof FiltersOf<C>]-?: MappedFilterTranslator;
 	};
 };
 
@@ -136,14 +111,23 @@ function compileReadFilter(
 	value: unknown
 ): {
 	prefilter?: Record<string, unknown>;
+	complete?: boolean;
 	matches: (document: EngineDocument) => boolean;
 } {
 	const { mapping, operator } = entryValue;
 	const actual = (document: EngineDocument) => mappedValue(mapping, document);
 	if (operator === 'taxonomy-many') {
 		const ids = [...new Set(value as number[])].sort((a, b) => a - b);
+		const prefilter =
+			mapping.kind === 'promoted'
+				? { [mapping.enginePath]: { $in: ids } }
+				: {
+						$or: ids.map((id) => ({
+							[mapping.enginePath]: { $elemMatch: { id } },
+						})),
+					};
 		return {
-			...(mapping.kind === 'promoted' ? { prefilter: { [mapping.enginePath]: { $in: ids } } } : {}),
+			prefilter,
 			matches: (document) =>
 				Array.isArray(actual(document)) &&
 				(actual(document) as unknown[]).some((item) => {
@@ -154,11 +138,23 @@ function compileReadFilter(
 	}
 	if (operator === 'metadata') {
 		const id = parseRemoteId(value)!;
-		return { matches: (document) => String(actual(document)) === String(id) };
+		return {
+			prefilter: {
+				[mapping.enginePath]: { $elemMatch: { key: '_pos_user', value: String(id) } },
+			},
+			matches: (document) => String(actual(document)) === String(id),
+		};
 	}
 	if (operator === 'store') {
 		const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
 		return {
+			prefilter: numeric
+				? {
+						[mapping.enginePath]: {
+							$elemMatch: { key: '_pos_store', value: String(value) },
+						},
+					}
+				: { 'payload.created_via': value },
 			matches: (document) => {
 				const payload = readEnginePath(document, 'payload') as Record<string, unknown> | undefined;
 				if (!numeric) return payload?.created_via === value;
@@ -177,7 +173,11 @@ function compileReadFilter(
 		};
 	}
 	if (operator === 'all-match') {
+		const [first] = value as Record<string, unknown>[];
 		return {
+			...(first ? { prefilter: { [mapping.enginePath]: { $elemMatch: first } } } : {}),
+			complete: false,
+			// Reproduce translate-selector.ts:248's variations enginePath bypass, not its payload path.
 			matches: (document) => variationAllMatch(readEnginePath(document, mapping.enginePath), value),
 		};
 	}
@@ -187,9 +187,7 @@ function compileReadFilter(
 					$gte: (value as { from: string }).from,
 					$lte: (value as { to: string }).to,
 				}
-			: operator === 'in'
-				? { $in: value }
-				: value;
+			: value;
 	const pushable = !mapping.compute && mapping.readEnginePath === undefined;
 	return {
 		...(pushable ? { prefilter: { [mapping.enginePath]: condition } } : {}),
@@ -199,7 +197,6 @@ function compileReadFilter(
 				const range = value as { from: string; to: string };
 				return String(current) >= range.from && String(current) <= range.to;
 			}
-			if (operator === 'in') return (value as unknown[]).some((item) => Object.is(current, item));
 			return Object.is(current, value);
 		},
 	};
@@ -297,10 +294,11 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	const read: CompiledQueryRead = {
 		prefilter: (prefilters.length === 1 ? prefilters[0] : { $and: prefilters }) as never,
 		residual: (document) => readFilters.every((filter) => filter.matches(document)),
-		complete: prefilters.length === readFilters.length,
+		complete:
+			prefilters.length === readFilters.length &&
+			readFilters.every((filter) => filter.complete !== false),
 		sort,
 		sortPushable: sort.every((part) => part.enginePath !== undefined),
-		skip: 0,
 		limit: state.limit,
 		search,
 		searchFields: options.searchFields,
@@ -329,7 +327,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		search &&
 		(['products', 'customers', 'variations'] as string[]).includes(collection) &&
 		(collection !== 'variations' || !targeted?.length) &&
-		(collection !== 'customers' || search.length >= 3)
+		(collection !== 'customers' || search.length >= FLEXSEARCH_MIN_TERM_LENGTH)
 	) {
 		demand.push({
 			id: requirementId(options.id, 'search'),
@@ -341,13 +339,15 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	}
 	if (demand.length > 0) return { collection: legacyCollection, demand, represented: false, read };
 
-	let represented = active.every(({ translator }) => translator.mapping.wireFace !== 'local-only');
+	let represented =
+		active.every(({ translator }) => translator.mapping.wireFace !== 'local-only') &&
+		(!search || collection === 'orders');
 	if (collection === 'orders') {
 		const wooOrderby = wooOrderbyFor('orders', uiSortField);
 		const dimensions: OrderBrowseDimensions = { limit: state.limit };
 		let scoped = false;
 		for (const { field, value } of active) {
-			if (field === 'status' && typeof value === 'string' && value) dimensions.status = value;
+			if (field === 'status' && typeof value === 'string') dimensions.status = value;
 			else if (field === 'customer_id' && Number.isSafeInteger(value) && Number(value) >= 0) {
 				dimensions.customerId = Number(value);
 				scoped = true;
@@ -364,11 +364,12 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 				} else represented = false;
 			} else if (field === 'dateRange') {
 				const range = value as { from: string; to: string };
-				dimensions.afterSeconds = orderRangeBoundSeconds(range.from);
-				dimensions.beforeSeconds = orderRangeBoundSeconds(range.to);
-				scoped = dimensions.afterSeconds !== undefined || dimensions.beforeSeconds !== undefined;
-				if (dimensions.afterSeconds === undefined || dimensions.beforeSeconds === undefined)
-					represented = false;
+				const afterSeconds = orderRangeBoundSeconds(range.from);
+				const beforeSeconds = orderRangeBoundSeconds(range.to);
+				if (afterSeconds !== undefined) dimensions.afterSeconds = afterSeconds;
+				if (beforeSeconds !== undefined) dimensions.beforeSeconds = beforeSeconds;
+				scoped ||= afterSeconds !== undefined || beforeSeconds !== undefined;
+				if (afterSeconds === undefined || beforeSeconds === undefined) represented = false;
 			}
 		}
 		if (search) dimensions.search = search;
@@ -391,20 +392,29 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	} else if (collection === 'products') {
 		const wooOrderby = wooOrderbyFor('products', uiSortField);
 		const dimensions: ProductBrowseDimensions = { limit: state.limit };
+		let filtered = false;
 		for (const { field, value } of active) {
 			if (field === 'categories' || field === 'tags' || field === 'brands') {
+				const unique = new Set(value as number[]);
 				const ids = [
-					...new Set((value as number[]).filter((id) => Number.isSafeInteger(id) && id > 0)),
+					...new Set([...unique].filter((id) => Number.isSafeInteger(id) && id > 0)),
 				].sort((a, b) => a - b);
-				dimensions[field === 'categories' ? 'category' : (field.slice(0, -1) as 'tag' | 'brand')] =
-					ids;
-				if (ids.length !== new Set(value as number[]).size) represented = false;
-			} else if (field === 'featured' || field === 'on_sale') dimensions[field] = Boolean(value);
+				if (ids.length > 0 && ids.length === unique.size) {
+					dimensions[
+						field === 'categories' ? 'category' : (field.slice(0, -1) as 'tag' | 'brand')
+					] = ids;
+					filtered = true;
+				} else represented = false;
+			} else if ((field === 'featured' || field === 'on_sale') && typeof value === 'boolean') {
+				dimensions[field] = value;
+				filtered = true;
+			} else if (field === 'featured' || field === 'on_sale') represented = false;
 			else if (
 				field === 'stock_status' &&
 				['instock', 'outofstock', 'onbackorder'].includes(String(value))
 			) {
 				dimensions.stock_status = value as ProductBrowseDimensions['stock_status'];
+				filtered = true;
 			} else if (field === 'stock_status' || (field === 'status' && value !== 'publish'))
 				represented = false;
 		}
@@ -417,7 +427,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 			collection: 'products',
 			kind: 'product-browse',
 			...dimensions,
-			...(active.some(({ field }) => field !== 'status') ? { priority: 700 } : {}),
+			...(filtered ? { priority: 700 } : {}),
 		});
 	} else if (collection === 'customers' && wooOrderbyFor('customers', uiSortField)) {
 		const wooOrderby = wooOrderbyFor('customers', uiSortField)!;

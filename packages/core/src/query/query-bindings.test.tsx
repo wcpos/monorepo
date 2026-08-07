@@ -187,6 +187,24 @@ describe('query bindings', () => {
 		);
 	});
 
+	it('declares nothing and serves empty for a grouped product with no grouped products', async () => {
+		await engineDB.collections.products.insert(
+			engineProduct({ uuid: 'resident', id: 1, name: 'Resident product' })
+		);
+		const state: QueryStateOf<'products'> = {
+			search: '',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'id', direction: 'asc' },
+			limit: 1,
+		};
+		const { result } = renderHook(() => useCollectionBinding('products', state, { wooIds: [] }), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+		expect(engine.requireCalls).toEqual([]);
+	});
+
 	it('re-declares the footer binding current descriptor after a reset generation bump', async () => {
 		const base: QueryStateOf<'products'> = {
 			search: '',

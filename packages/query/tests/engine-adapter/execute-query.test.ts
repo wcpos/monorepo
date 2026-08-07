@@ -154,6 +154,57 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
+	it('keeps a compiled cashier, store, and date grid on the pushed fast path', async () => {
+		const { database, orders } = await openOrdersDatabase();
+		const originalFind = orders.find.bind(orders);
+		const find = jest
+			.spyOn(orders, 'find')
+			.mockImplementation((query) => originalFind(query as never));
+		const prefilter = {
+			$and: [
+				{ 'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '6' } } },
+				{ 'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '2' } } },
+				{
+					dateCreatedGmt: {
+						$gte: '2026-07-01T00:00:00',
+						$lte: '2026-07-31T23:59:59',
+					},
+				},
+			],
+		};
+
+		await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'orders',
+				skip: 3,
+				read: {
+					prefilter,
+					residual: () => true,
+					complete: true,
+					sort: [
+						{
+							enginePath: 'dateCreatedGmt',
+							direction: 'desc',
+							value: (document) => document.dateCreatedGmt,
+						},
+					],
+					sortPushable: true,
+					limit: 10,
+					search: '',
+				},
+			})
+		);
+
+		expect(find).toHaveBeenCalledWith({
+			selector: prefilter,
+			sort: [{ dateCreatedGmt: 'desc' }],
+			skip: 3,
+			limit: 10,
+		});
+		await database.close();
+	});
+
 	it('pushes the engine ID order when no sort is supplied', async () => {
 		const { database, products } = await openProductsDatabase();
 		const originalFind = products.find.bind(products);
@@ -304,6 +355,7 @@ describe('executeAdapterQuery', () => {
 				database: database as unknown as AdapterDatabase,
 				collection: 'products',
 				selector: {},
+				skip: 1,
 				read: {
 					prefilter: { categoryIds: { $in: [7] } },
 					residual: (document) =>
@@ -316,7 +368,6 @@ describe('executeAdapterQuery', () => {
 						},
 					],
 					sortPushable: false,
-					skip: 1,
 					limit: 1,
 					search: '',
 				},

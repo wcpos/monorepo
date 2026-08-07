@@ -48,7 +48,6 @@ export type CompiledQueryRead = {
 	complete: boolean;
 	sort: CompiledSortPart[];
 	sortPushable: boolean;
-	skip: number;
 	limit?: number;
 	search: string;
 	searchFields?: string[];
@@ -194,7 +193,7 @@ export function executeAdapterQuery({
 				sort: read.sort.map((part) => ({ [part.enginePath!]: part.direction })),
 			}
 		: translateSort(collection, sort);
-	const effectiveSkip = read?.skip ?? skip;
+	const effectiveSkip = skip;
 	const effectiveLimit = read?.limit ?? limit;
 	const engineCollectionName = collectionMap[collection].engineCollection;
 	const engineCollection = database.collections[engineCollectionName];

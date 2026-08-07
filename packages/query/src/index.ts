@@ -22,6 +22,7 @@ export type {
 } from './engine-adapter/execute-query';
 export { variationAllMatch } from './engine-adapter/translate-selector';
 export {
+	FLEXSEARCH_MIN_TERM_LENGTH,
 	observeCoverage,
 	observeEngineDatabases,
 	observeEngineQuery,
