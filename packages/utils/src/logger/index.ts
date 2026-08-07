@@ -450,6 +450,10 @@ const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
 	error: 3,
 };
 
+function isDevelopment(): boolean {
+	return typeof __DEV__ !== 'undefined' && __DEV__;
+}
+
 // Initialize log level from localStorage (if available) or use default
 function getInitialLogLevel(): LogLevel {
 	if (typeof window !== 'undefined' && window.localStorage) {
@@ -458,7 +462,7 @@ function getInitialLogLevel(): LogLevel {
 			return stored as LogLevel;
 		}
 	}
-	return __DEV__ ? 'debug' : 'info';
+	return isDevelopment() ? 'debug' : 'info';
 }
 
 let currentLogLevel: LogLevel = getInitialLogLevel();
@@ -595,7 +599,8 @@ const mainTransport = (props: any) => {
 
 	// Production only sends warnings and errors to the console; toast/db remain available for all levels.
 	const shouldLogToConsole =
-		levelSeverity >= currentSeverity && (__DEV__ || levelName === 'warn' || levelName === 'error');
+		levelSeverity >= currentSeverity &&
+		(isDevelopment() || levelName === 'warn' || levelName === 'error');
 
 	// 1. Log to console if level permits
 	if (shouldLogToConsole) {
@@ -605,7 +610,7 @@ const mainTransport = (props: any) => {
 		const contextStr = options.context ? ` | Context: ${safeStringify(options.context)}` : '';
 		const formattedMessage = `${timestamp} | ${levelText} : ${message}${contextStr}`;
 
-		if (__DEV__) {
+		if (isDevelopment()) {
 			// console.errors open a redbox in development which is annoying
 			console.log(formattedMessage);
 		} else if (levelName === 'warn') {
@@ -763,7 +768,7 @@ const resetLevel = () => {
 	if (typeof window !== 'undefined' && window.localStorage) {
 		localStorage.removeItem('wcpos_log_level');
 	}
-	currentLogLevel = __DEV__ ? 'debug' : 'info';
+	currentLogLevel = isDevelopment() ? 'debug' : 'info';
 	console.log(`Log level reset to default: ${currentLogLevel}`);
 };
 
