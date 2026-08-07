@@ -70,7 +70,6 @@ import {
 	SYNC_COLLECTION_NAMES,
 	type SyncCollectionName,
 } from './collections/engine-collections';
-import { writeFacetFor } from './collections/collection-descriptors';
 import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
@@ -92,7 +91,6 @@ import {
 	createScopeBarcodeSelectors,
 	type ScopeBarcodeSelectors,
 } from './materialization/barcode-selectors';
-import { createWriteDrainLane, type WriteOutcomeEvent } from './write-path/write-drain-lane';
 import {
 	createRequirePlane,
 	type EngineRequirement,
@@ -105,6 +103,7 @@ import {
 	censusTotalsFromCache,
 	ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 	seedPosBootstrapLanes,
+	seedTargetedOrderSchedulerTask,
 } from './scheduler';
 import {
 	COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS,
@@ -119,11 +118,11 @@ import {
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
 import { createReconcilePorts } from './local-coverage/reconcile-port';
-import { enqueueWriteIntent, queueFor, type WriteIntent } from './write-path/write-intents';
 import {
 	type ConflictResolutionChoice,
-	createConflictResolution,
-} from './write-path/conflict-resolution';
+	createWritePlane,
+	type WriteIntent,
+} from './write-path/write-plane';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 import { CHANGE_SIGNAL_STATE_ID } from './change-signal/change-signal-state-schema';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
@@ -157,8 +156,7 @@ export type {
 	QueryTotalPort,
 	QueryTotalCacheEvent,
 } from './maintenance/maintenance-lanes';
-export type { WriteIntent } from './write-path/write-intents';
-export type { ConflictResolutionChoice } from './write-path/conflict-resolution';
+export type { ConflictResolutionChoice, WriteIntent } from './write-path/write-plane';
 export type { CensusTotal, CensusTotals } from './scheduler';
 
 export type EngineLane = EngineLaneName;
@@ -1287,25 +1285,6 @@ export function createRxdbSyncEngine(
 		barcodeSelectorsFor: (scopeId) => barcodeSelectorsOf(scopeId),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
-	const writeDrainLane = createWriteDrainLane({
-		manager,
-		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
-		barcodeSelectorsFor,
-		fetcher,
-		syncBaseUrl: ports.site.syncBaseUrl,
-		connectivity: () => {
-			try {
-				return connectivity();
-			} catch {
-				return 'offline';
-			}
-		},
-		diagnostics,
-		onActivityChange: changeCollectionActivity,
-		emitWriteEvent: (event: WriteOutcomeEvent) => emitEngineEvent(event),
-		...(ports.now !== undefined ? { now: ports.now } : {}),
-	});
-
 	const requirePlane = createRequirePlane({
 		// Lazy: readySettledForSync is created after `ready` below; requirements
 		// enqueued before then await the settled initial open, never 'no active scope'.
@@ -1339,6 +1318,56 @@ export function createRxdbSyncEngine(
 			return count - sentinel.size >= entry.totalMatchingRecords;
 		},
 		...(ports.now !== undefined ? { now: ports.now } : {}),
+	});
+	const writePlane = createWritePlane({
+		assertUsable: assertNotDisposed,
+		settled: async (kind) => {
+			await readySettledForSync;
+			if (kind === 'read') return;
+			assertNotDisposed();
+			while (pendingLifecycleOps > 0) {
+				await lifecycleChain;
+				assertNotDisposed();
+			}
+		},
+		manager,
+		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
+		fetcher,
+		syncBaseUrl: ports.site.syncBaseUrl,
+		mintUuid: uuid,
+		now: nowMs,
+		diagnostics,
+		onStatusChanged: scheduleStatusChange,
+		connectivity: () => {
+			try {
+				return connectivity();
+			} catch {
+				return 'offline';
+			}
+		},
+		isWritePlaneOwner: writePlaneOwner,
+		emitWriteEvent: (event) => emitEngineEvent(event),
+		onActivityChange: changeCollectionActivity,
+		barcodeSelectorsFor,
+		persistOrderRepull: async ({ database, wooIds, nowMs: repullNowMs }) => {
+			await seedTargetedOrderSchedulerTask({
+				orderIds: wooIds,
+				priority: 1_000,
+				completedDedupeForMs: 0,
+				...(repullNowMs === undefined ? {} : { nowMs: repullNowMs }),
+				database,
+			});
+		},
+		repullOrdersNow: async ({ wooIds, reason }) => {
+			await requirePlane.require({
+				id: reason,
+				collection: 'orders',
+				kind: 'targeted-records',
+				wooIds,
+				forceRefresh: true,
+				priority: 1_000,
+			}).ready;
+		},
 	});
 
 	// --- The maintenance lanes (slice 5d) --------------------------------------
@@ -1382,7 +1411,7 @@ export function createRxdbSyncEngine(
 	};
 	const laneTargets: Record<LaneTargetKey, LaneTarget | null> = {
 		changeSignal: changeSignalLane,
-		writeDrain: writeDrainLane,
+		writeDrain: writePlane,
 		...maintenanceLanes,
 	};
 	const dispatchLaneTick = (name: EngineLane, signal?: AbortSignal): Promise<SyncReport> => {
@@ -1393,9 +1422,6 @@ export function createRxdbSyncEngine(
 				status: 'skipped',
 				reason: 'no queryTotal port provided',
 			});
-		}
-		if (name === 'write-drain' && !writePlaneOwner()) {
-			return Promise.resolve({ lane: 'write-drain', status: 'ran', pushed: 0 });
 		}
 		if (name === 'change-signal') {
 			return target.tick(signal).then((report) => {
@@ -1482,22 +1508,6 @@ export function createRxdbSyncEngine(
 		() => undefined,
 		() => undefined
 	);
-	const conflictResolution = createConflictResolution({
-		assertNotDisposed,
-		readySettledForSync,
-		manager,
-		databaseByScopeId,
-		activeDatabase,
-		fetcher,
-		ports,
-		mintUuid: uuid,
-		requirePlane,
-		diagnostics,
-		writeDrainLane,
-		scheduleStatusChange,
-		barcodeSelectorsFor,
-	});
-
 	// The readiness watchdog: while `ready` is unsettled, periodically name the
 	// exact phase the open chain is waiting on, and report a rejection the same
 	// way — a hung storage worker or a corrupt persisted document otherwise
@@ -1920,7 +1930,7 @@ export function createRxdbSyncEngine(
 					laneStatus(laneName, laneTargets[targetKey]?.lastError() ?? null),
 				])
 			) as EngineStatus['lanes'],
-			queueDepth: writeDrainLane.lastKnownQueueDepth(),
+			queueDepth: writePlane.queueDepth(),
 			collections: Object.fromEntries(
 				SYNC_COLLECTION_NAMES.map((collection) => [
 					collection,
@@ -1990,88 +2000,9 @@ export function createRxdbSyncEngine(
 				});
 			},
 		},
-		write: async (intent) => {
-			assertNotDisposed();
-			if (!writeFacetFor(intent.collection)) {
-				throw new Error(
-					`write: collection "${intent.collection}" is not client-writeable (no push/ack contract) — writeable collections: orders, products, variations, customers, coupons`
-				);
-			}
-			await readySettledForSync;
-			assertNotDisposed();
-			// Invariant 3's write() half: a pending switch/reset must settle before
-			// the enqueue captures a scope — otherwise the mutation could land in
-			// the OUTGOING store's queue mid-transition. FIFO ops are quick; wait
-			// them out rather than reject a caller-initiated durable write.
-			while (pendingLifecycleOps > 0) {
-				await lifecycleChain;
-				assertNotDisposed();
-			}
-			// The enqueue is a LOCAL write into the active scope's queue — scope-
-			// guarded like every other write: racing a switch/reset drops it and
-			// the caller retries against the settled scope (an exception, not a
-			// silent enqueue into the wrong store).
-			return manager.runGuarded(async (bound) => {
-				const database = databaseByScopeId.get(bound.scopeId);
-				if (!database) throw new Error('write: scope database not open');
-				let result: { mutationId: string; recordId: string; annihilated?: boolean } | null = null;
-				const wrote = await bound.guardWrite(async () => {
-					result = await enqueueWriteIntent({
-						db: database,
-						intent,
-						mintUuid: uuid,
-						now: () => new Date(ports.now !== undefined ? ports.now() : Date.now()).toISOString(),
-						observe: diagnostics,
-						canCoalesce: writePlaneOwner(),
-					});
-					writeDrainLane.noteQueueDepth((await queueFor(database).pending()).length);
-					scheduleStatusChange();
-				});
-				if (wrote === 'dropped' || result === null) {
-					throw new Error('write: scope moved during enqueue — retry against the settled scope');
-				}
-				const enqueueResult = result as {
-					mutationId: string;
-					recordId: string;
-					annihilated?: boolean;
-				};
-				if (enqueueResult.annihilated) {
-					// The honest terminal contract (gate2 #516 item 3): the delete was
-					// satisfied locally (chain cancelled, resident row removed) — ONE
-					// terminal event for the receipt mutationId, and no 'enqueued'
-					// diagnostics (nothing was enqueued).
-					emitEngineEvent({
-						type: 'write-annihilated',
-						collection: intent.collection,
-						recordId: enqueueResult.recordId,
-						mutationId: enqueueResult.mutationId,
-					});
-					return enqueueResult;
-				}
-				diagnostics({
-					type: 'queue.write.enqueued',
-					level: 'info',
-					collection: intent.collection,
-					fields: {
-						mutationId: enqueueResult.mutationId,
-						recordId: enqueueResult.recordId,
-						queueDepth: writeDrainLane.lastKnownQueueDepth(),
-					},
-				});
-				return enqueueResult;
-			});
-		},
-		conflicts: () => conflictResolution.conflicts(),
-		resolveConflict: async (mutationId, resolution) => {
-			if (!writePlaneOwner()) {
-				const error = new Error(
-					'resolveConflict: another tab is the active window completing this — switch to it, or wait for it to finish'
-				);
-				error.name = 'WritePlaneFollowerError';
-				throw error;
-			}
-			return conflictResolution.resolveConflict(mutationId, resolution);
-		},
+		write: (intent) => writePlane.write(intent),
+		conflicts: () => writePlane.conflicts(),
+		resolveConflict: (mutationId, resolution) => writePlane.resolveConflict(mutationId, resolution),
 		require: (requirement) => {
 			assertNotDisposed();
 			return requirePlane.require(requirement);

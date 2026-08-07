@@ -29,6 +29,8 @@ setPremiumFlag();
 const SITE = 'https://write.example.test';
 const UUID_A = '22222222-2222-4222-8222-222222222222';
 const UUID_MINT = '33333333-3333-4333-8333-333333333333';
+const UUID_CLAIM = '44444444-4444-4444-8444-444444444444';
+const UUID_FOLLOW_UP = '55555555-5555-4555-8555-555555555555';
 
 let uniqueScope = 0;
 function freshIdentity(): StoreScopeIdentity {
@@ -393,11 +395,14 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
-	it('uses the host UUID generator for queued mutation identity', async () => {
+	it('uses the host UUID generator for mutation, drain claim, and born-twice follow-up ids', async () => {
 		const server = createFakeWriteServer();
+		server.seed(UUID_A, { id: 43, revision: 'sha256:existing' });
+		const ids = [UUID_MINT, UUID_CLAIM, UUID_FOLLOW_UP];
+		const uuid = vi.fn(() => ids.shift()!);
 		const engine = engineWith({
 			fetch: (url, init) => server.fetch(url, init as never),
-			uuid: () => UUID_MINT,
+			uuid,
 		});
 		try {
 			await engine.ready;
@@ -410,6 +415,11 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			});
 
 			expect(receipt.mutationId).toBe(UUID_MINT);
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1 });
+			expect(await queueRows(engine)).toEqual([
+				expect.objectContaining({ mutationId: UUID_FOLLOW_UP, operation: 'update' }),
+			]);
+			expect(uuid).toHaveBeenCalledTimes(3);
 		} finally {
 			await engine.dispose();
 		}

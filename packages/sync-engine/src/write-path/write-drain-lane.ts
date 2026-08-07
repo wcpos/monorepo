@@ -32,7 +32,13 @@ import {
 	pushRecordMutation,
 	reconcileCreateAck,
 } from '@wcpos/sync-core';
-import type { Fetcher, QueuedMutation, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
+import type {
+	Fetcher,
+	QueuedMutation,
+	RecordMutationQueue,
+	StoreScopeManager,
+	SyncObserver,
+} from '@wcpos/sync-core';
 
 import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
 import {
@@ -40,13 +46,16 @@ import {
 	type MoneyDivergenceField,
 	type MoneyPrecisionMode,
 } from './order-money-divergence';
-import { queueFor, requeueBornTwiceSnapshot } from './write-intents';
-import { orderDocumentFromWooPayload } from '../scheduler';
+import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
+import { fetchOrderServerRevision } from './order-server-revision';
 
 import type { SyncCollectionName } from '../collections/engine-collections';
 import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
 import type { RxDatabase } from 'rxdb';
+
+// Transitional re-export: callers should migrate to order-server-revision.
+export { fetchOrderServerRevision } from './order-server-revision';
 
 /**
  * The OUTGOING half of the #818 identity graft: re-stamp the record's known
@@ -86,30 +95,6 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 	const payload = (mutation.payload ?? {}) as Record<string, unknown>;
 	const grafted = facet.graftAckIdentity(payload, residentPayload as Record<string, unknown>);
 	return grafted === payload ? mutation : { ...mutation, payload: grafted };
-}
-
-/**
- * One targeted, read-only fetch of an order's CURRENT server revision (the
- * 428-recovery seam). Shared by the drain's `refreshRevision` port and the
- * facade's resolveConflict refresh-first retry on a 'needs-revision' row —
- * both must observe the same server truth the same way. Returns null when the
- * server no longer returns the record; throws on a transport/HTTP failure.
- */
-export async function fetchOrderServerRevision(input: {
-	fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
-	syncBaseUrl: string;
-	wooOrderId: number;
-}): Promise<string | null> {
-	// No `dp` — see the monetary-precision note in rx-scheduler-order-fetcher (#946). This
-	// read is the sharpest case: it exists ONLY to adopt the server's stamped revision, so a
-	// `dp`-shifted payload here would hand the drain a hash the push side can never match.
-	const response = await input.fetch(
-		`${input.syncBaseUrl}/orders?include=${input.wooOrderId}&per_page=1&orderby=include`
-	);
-	if (!response.ok) throw new Error(`revision refresh failed: HTTP ${response.status}`);
-	const [payload] = (await response.json()) as Record<string, unknown>[];
-	if (!payload) return null;
-	return orderDocumentFromWooPayload(payload as never).sync.revision || null;
 }
 
 /**
@@ -231,6 +216,11 @@ export type WriteDrainLaneDeps = {
 	diagnostics: SyncObserver;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	emitWriteEvent: (event: WriteOutcomeEvent) => void;
+	mintUuid: () => string;
+	queueFor: (database: RxDatabase) => RecordMutationQueue;
+	drainInstanceIdFor: () => string;
+	setQueueDepth: (depth: number) => void;
+	setLastError: (error: string | null) => void;
 	now?: () => number;
 	/** THIS scope's barcode carriers — the push maps an edited `barcode` back onto
 	 * the carrier field, and an ack re-materialization derives it again. */
@@ -239,23 +229,9 @@ export type WriteDrainLaneDeps = {
 
 export type WriteDrainLane = {
 	tick(signal?: AbortSignal): Promise<WriteDrainReport>;
-	/** Pending mutation count of the ACTIVE scope, cached from the last tick/enqueue. */
-	lastKnownQueueDepth(): number | null;
-	noteQueueDepth(depth: number): void;
-	lastError(): string | null;
 };
 
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
-	let chain: Promise<unknown> = Promise.resolve();
-	let lastError: string | null = null;
-	let queueDepth: number | null = null;
-	// This drain instance's id for the durable claim lease (task 43 follow-up):
-	// one per lane, so two Electron windows mint different ids and cannot both hold
-	// one row's claim. Minted lazily on first use — the lane may be constructed on a
-	// host without Web Crypto, and a lane that never drains must not pay for an id.
-	let drainInstanceIdOnce: string | null = null;
-	const drainInstanceIdFor = (): string => (drainInstanceIdOnce ??= globalThis.crypto.randomUUID());
-
 	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
 		if (signal?.aborted) {
 			return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
@@ -282,7 +258,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						reason: 'scope database not open',
 					};
 				}
-				const queue = queueFor(database);
+				const queue = deps.queueFor(database);
 				const resolveEndpoint = pushEndpointResolver(deps.syncBaseUrl);
 				// A switch/reset mid-drain must read as CANCELLATION, not failure —
 				// without a signal the drain would classify the aborted push as a
@@ -522,7 +498,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 											db: database,
 											mutation,
 											ackRevision: pushResult.currentRevision,
-											mintUuid: () => globalThis.crypto.randomUUID(),
+											mintUuid: deps.mintUuid,
 											now: () =>
 												new Date(deps.now !== undefined ? deps.now() : Date.now()).toISOString(),
 											observe: deps.diagnostics,
@@ -538,7 +514,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								});
 							},
 							observe: deps.diagnostics,
-							drainInstanceId: drainInstanceIdFor(),
+							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
 						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));
@@ -612,7 +588,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								reason,
 							});
 						}
-						queueDepth = stillPending.size;
+						deps.setQueueDepth(stillPending.size);
 						report = {
 							lane: 'write-drain',
 							status: 'ran',
@@ -637,37 +613,20 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 						reason: 'scope moved mid-tick (writes dropped)',
 					};
 				}
-				lastError = null;
+				deps.setLastError(null);
 				return report;
 			});
 		} catch (error) {
 			if (signal?.aborted) {
-				lastError = null;
+				deps.setLastError(null);
 				return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
 			}
 			const message = error instanceof Error ? error.message : String(error);
-			lastError = message;
+			deps.setLastError(message);
 			deps.diagnostics({ type: 'queue.write.tick.error', level: 'error', message });
 			return { lane: 'write-drain', status: 'error', error: message };
 		}
 	}
 
-	return {
-		tick: (signal) => {
-			const run = chain.then(
-				() => runTick(signal),
-				() => runTick(signal)
-			);
-			chain = run.then(
-				() => undefined,
-				() => undefined
-			);
-			return run;
-		},
-		lastKnownQueueDepth: () => queueDepth,
-		noteQueueDepth: (depth) => {
-			queueDepth = depth;
-		},
-		lastError: () => lastError,
-	};
+	return { tick: runTick };
 }
