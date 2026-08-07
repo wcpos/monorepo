@@ -7,7 +7,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { existenceManifestDocument, existenceManifestSchema } from '@wcpos/sync-engine/testing';
 
 import {
-	maxManifestWooId,
+	occupiedManifestBucketIndexes,
 	readManifestRange,
 	removeManifestByWooIds,
 	upsertManifestRows,
@@ -89,7 +89,7 @@ describe('existence manifest repository', () => {
 	});
 });
 
-describe('maxManifestWooId (chunked page walk, #949)', () => {
+describe('occupiedManifestBucketIndexes (chunked page walk, #949)', () => {
 	const rowsUpTo = (max: number) =>
 		Array.from({ length: max }, (_unused, index) =>
 			existenceManifestDocument({
@@ -99,24 +99,33 @@ describe('maxManifestWooId (chunked page walk, #949)', () => {
 			})
 		);
 
-	it('returns 0 for an empty manifest, so the reconcile walks no buckets', async () => {
-		expect(await maxManifestWooId(await manifestCollection())).toBe(0);
+	it('returns no buckets for an empty manifest', async () => {
+		expect(await occupiedManifestBucketIndexes(await manifestCollection(), 100)).toEqual([]);
 	});
 
-	it('finds the max across MANY pages, not just the first', async () => {
+	it('finds occupied buckets across MANY pages, not just the first', async () => {
 		const c = await manifestCollection();
 		await upsertManifestRows(c, rowsUpTo(250));
 		// A page size well below the row count forces the multi-page path — a single-page walk
-		// would report 10 here.
-		expect(await maxManifestWooId(c, 10)).toBe(250);
+		// would report only bucket 0 here.
+		expect(await occupiedManifestBucketIndexes(c, 100, 10)).toEqual([0, 1, 2]);
 	});
 
 	it('agrees with the single-page walk regardless of page size', async () => {
 		const c = await manifestCollection();
 		await upsertManifestRows(c, rowsUpTo(97));
 		for (const pageSize of [1, 2, 96, 97, 98, 1_000]) {
-			expect(await maxManifestWooId(c, pageSize)).toBe(97);
+			expect(await occupiedManifestBucketIndexes(c, 100, pageSize)).toEqual([0]);
 		}
+	});
+
+	it('returns only occupied indexes for sparse high IDs', async () => {
+		const c = await manifestCollection();
+		await upsertManifestRows(c, [
+			existenceManifestDocument({ wooId: 3, objectType: 'product', digest: 'low' }),
+			existenceManifestDocument({ wooId: 10_003, objectType: 'product', digest: 'high' }),
+		]);
+		expect(await occupiedManifestBucketIndexes(c, 1000)).toEqual([0, 10]);
 	});
 
 	it('keyset-pages by VALUE, so rows deleted mid-walk cannot make it skip live rows', async () => {
@@ -125,28 +134,33 @@ describe('maxManifestWooId (chunked page walk, #949)', () => {
 		// Emulate a prune landing between pages: an offset-based walk would shift and miss the
 		// tail; a value cursor just steps over the gap.
 		await removeManifestByWooIds(c, [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
-		expect(await maxManifestWooId(c, 10)).toBe(40);
+		expect(await occupiedManifestBucketIndexes(c, 10, 10)).toEqual([0, 1, 2, 3, 4]);
 	});
 
-	it('rejects a page size that would never advance', async () => {
+	it('rejects a bucket or page size that would never advance', async () => {
 		const c = await manifestCollection();
+		for (const bucketSize of [0, -5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+			await expect(occupiedManifestBucketIndexes(c, bucketSize)).rejects.toThrow(RangeError);
+		}
 		for (const pageSize of [0, -5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-			await expect(maxManifestWooId(c, pageSize)).rejects.toThrow(RangeError);
+			await expect(occupiedManifestBucketIndexes(c, 100, pageSize)).rejects.toThrow(RangeError);
 		}
 	});
 
-	it('THROWS rather than reporting a truncated max when the page cap is exhausted', async () => {
-		// Silently returning the partial max would not self-heal: every pass restarts from the same
+	it('THROWS rather than reporting truncated buckets when the page cap is exhausted', async () => {
+		// Silently returning partial buckets would not self-heal: every pass restarts from the same
 		// cursor, so the audit would hide every id above the cap forever.
 		const c = await manifestCollection();
 		await upsertManifestRows(c, rowsUpTo(10));
-		await expect(maxManifestWooId(c, 2, 3)).rejects.toThrow(/refusing to report a truncated max/);
+		await expect(occupiedManifestBucketIndexes(c, 10, 2, 3)).rejects.toThrow(
+			/refusing to report truncated occupied buckets/
+		);
 	});
 
 	it('does not throw when the last allowed page is the one that exhausts the index', async () => {
 		const c = await manifestCollection();
 		await upsertManifestRows(c, rowsUpTo(6));
 		// 6 rows at 2/page = 3 full pages, then a 4th empty page proves exhaustion.
-		expect(await maxManifestWooId(c, 2, 4)).toBe(6);
+		expect(await occupiedManifestBucketIndexes(c, 10, 2, 4)).toEqual([0]);
 	});
 });

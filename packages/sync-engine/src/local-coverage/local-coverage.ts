@@ -66,7 +66,7 @@ export type ReconcileRequest = {
 
 export type LocalCoverageReconcilePort = {
 	bucketSize: number;
-	maxWooId: () => Promise<number>;
+	occupiedBucketIndexes: () => Promise<readonly number[]>;
 	readManifestRange: (lo: number, hi: number) => Promise<ExistenceManifestDocument[]>;
 	dirtyWooIds: () => Promise<ReadonlySet<number>>;
 	fetchServerBucket: (

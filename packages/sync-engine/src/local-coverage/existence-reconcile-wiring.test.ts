@@ -3,27 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ExistenceManifestDocument } from '@wcpos/sync-engine/testing';
 
-import {
-	bucketIndexesForMaxWooId,
-	partitionActionsByLane,
-	reconcileExistence,
-	resolveDirtyWooIds,
-} from './reconciliation';
+import { partitionActionsByLane, reconcileExistence, resolveDirtyWooIds } from './reconciliation';
 
 import type { ServerDigestEntry } from '../reconcile-bucket-plan';
-
-describe('bucketIndexesForMaxWooId', () => {
-	it('covers every id up to the max in fixed-width buckets', () => {
-		expect(bucketIndexesForMaxWooId(2500, 1000)).toEqual([0, 1, 2]); // id 2500 lives in bucket 2
-		expect(bucketIndexesForMaxWooId(1000, 1000)).toEqual([0, 1]); // id 1000 spills into bucket 1
-		expect(bucketIndexesForMaxWooId(1, 1000)).toEqual([0]);
-	});
-
-	it('is empty when there are no local ids', () => {
-		expect(bucketIndexesForMaxWooId(0, 1000)).toEqual([]);
-		expect(bucketIndexesForMaxWooId(-5, 1000)).toEqual([]);
-	});
-});
 
 describe('partitionActionsByLane', () => {
 	it('splits actions into product and variation wooId lists', () => {
@@ -95,7 +77,7 @@ describe('reconcileExistence', () => {
 
 		const summary = await reconcileExistence({
 			bucketSize: 1000,
-			maxWooId: async () => 1300,
+			occupiedBucketIndexes: async () => [0, 1],
 			readManifestRange: async (lo) => local[lo / 1000] ?? [],
 			dirtyWooIds: async () => new Set<number>(),
 			fetchServerBucket: async (bucket) => serverByBucket[bucket] ?? [],
@@ -116,11 +98,32 @@ describe('reconcileExistence', () => {
 		});
 	});
 
+	it('reads only occupied buckets for a sparse high-ID manifest', async () => {
+		const readManifestRange = vi.fn(async (lo: number) =>
+			lo === 0 ? [manifest(3, 'low')] : lo === 10_000 ? [manifest(10_003, 'high')] : []
+		);
+
+		await reconcileExistence({
+			bucketSize: 1000,
+			occupiedBucketIndexes: async () => [0, 10],
+			readManifestRange,
+			dirtyWooIds: async () => new Set<number>(),
+			fetchServerBucket: async () => [],
+			deleteProducts: vi.fn(async () => undefined),
+			deleteVariations: vi.fn(async () => undefined),
+		});
+
+		expect(readManifestRange.mock.calls).toEqual([
+			[0, 1000],
+			[10_000, 11_000],
+		]);
+	});
+
 	it('never prunes a record with a pending local write (dirty from the mutation queue)', async () => {
 		const deleteProducts = vi.fn(async () => undefined);
 		const summary = await reconcileExistence({
 			bucketSize: 1000,
-			maxWooId: async () => 5,
+			occupiedBucketIndexes: async () => [0],
 			readManifestRange: async () => [manifest(3, 'gone')], // server-absent, but dirty
 			dirtyWooIds: async () => new Set<number>([3]),
 			fetchServerBucket: async () => [],
@@ -135,7 +138,7 @@ describe('reconcileExistence', () => {
 		const fetchServerBucket = vi.fn(async () => [] as ServerDigestEntry[]);
 		const summary = await reconcileExistence({
 			bucketSize: 1000,
-			maxWooId: async () => 0,
+			occupiedBucketIndexes: async () => [],
 			readManifestRange: async () => [],
 			dirtyWooIds: async () => new Set<number>(),
 			fetchServerBucket,

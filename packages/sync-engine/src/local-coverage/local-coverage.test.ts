@@ -262,7 +262,7 @@ describe('LocalCoverage interface', () => {
 			freshForMs: 1,
 			reconcile: {
 				bucketSize: 100,
-				maxWooId: async () => 30,
+				occupiedBucketIndexes: async () => [0],
 				readManifestRange: async () => [
 					{ id: '10', wooId: 10, objectType: 'product', digest: 'gone' },
 					{ id: '20', wooId: 20, objectType: 'product', digest: 'keep-dirty' },
@@ -291,9 +291,9 @@ describe('LocalCoverage interface', () => {
 			releaseSlow = resolve;
 		});
 		let slowCompleted = false;
-		const port = (maxWooId: () => Promise<number>) => ({
+		const port = (occupiedBucketIndexes: () => Promise<readonly number[]>) => ({
 			bucketSize: 100,
-			maxWooId,
+			occupiedBucketIndexes,
 			readManifestRange: async () => [],
 			dirtyWooIds: async () => new Set<number>(),
 			fetchServerBucket: async () => [],
@@ -310,7 +310,7 @@ describe('LocalCoverage interface', () => {
 				port(async () => {
 					await slowGate;
 					slowCompleted = true;
-					return 0;
+					return [];
 				}),
 			],
 		});

@@ -10,15 +10,6 @@ import type { ReconcileAction, ServerDigestEntry } from '../reconcile-bucket-pla
  * itself driven by injected deps so it remains unit-testable end-to-end with fakes.
  */
 
-/** Bucket indices [0..floor(maxWooId/bucketSize)] covering every id in [1, maxWooId]. Empty if no ids. */
-export function bucketIndexesForMaxWooId(maxWooId: number, bucketSize: number): number[] {
-	if (maxWooId <= 0 || bucketSize <= 0) {
-		return [];
-	}
-	const count = Math.floor(maxWooId / bucketSize) + 1;
-	return Array.from({ length: count }, (_unused, index) => index);
-}
-
 /** Split reconcile actions into the product and variation wooId lists (products and variations share the id space). */
 export function partitionActionsByLane(actions: readonly ReconcileAction[]): {
 	productWooIds: number[];
@@ -60,13 +51,13 @@ export async function resolveDirtyWooIds(
 }
 
 /**
- * Run one existence-reconcile audit. Derives the bucket span from the max local wooId, marks dirty
+ * Run one existence-reconcile audit. Reads the occupied local bucket indexes, marks dirty
  * records from the pending-mutation queue, and drives the pure walk — pruning stale records (reusing the
  * lane delete handlers, which already remove the doc AND its manifest row) and reporting missing/changed.
  */
 export async function reconcileExistence(deps: {
 	bucketSize: number;
-	maxWooId: () => Promise<number>;
+	occupiedBucketIndexes: () => Promise<readonly number[]>;
 	readManifestRange: (lo: number, hi: number) => Promise<ExistenceManifestDocument[]>;
 	dirtyWooIds: () => Promise<ReadonlySet<number>>;
 	fetchServerBucket: (bucket: number, bucketSize: number) => Promise<ServerDigestEntry[]>;
@@ -83,8 +74,7 @@ export async function reconcileExistence(deps: {
 		changed: 0,
 		skippedDirty: 0,
 	};
-	const maxWooId = await deps.maxWooId();
-	const buckets = bucketIndexesForMaxWooId(maxWooId, deps.bucketSize);
+	const buckets = await deps.occupiedBucketIndexes();
 	if (buckets.length === 0) {
 		return emptySummary;
 	}

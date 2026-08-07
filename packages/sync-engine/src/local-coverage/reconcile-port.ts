@@ -4,7 +4,7 @@ import { forEachYielding } from '../event-loop-yield';
 import { EngineOrderRepository } from '../write-path/engine-order-repository';
 import { hasPendingLocalWork } from '../write-path/local-work-guard';
 import {
-	maxManifestWooId,
+	occupiedManifestBucketIndexes,
 	readManifestRange,
 	removeManifestByWooIds,
 } from './rx-existence-manifest-repository';
@@ -87,7 +87,7 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 		};
 		return {
 			bucketSize: 1000,
-			maxWooId: () => maxManifestWooId(manifest),
+			occupiedBucketIndexes: () => occupiedManifestBucketIndexes(manifest, 1000),
 			readManifestRange: (lo: number, hi: number) => readManifestRange(manifest, lo, hi),
 			dirtyWooIds,
 			fetchServerBucket: async (bucket: number, bucketSize: number, request?: ReconcileRequest) => {
