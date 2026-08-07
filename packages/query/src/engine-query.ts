@@ -12,6 +12,7 @@ import {
 import { wrapEngineDocument } from './engine-adapter/document-proxy';
 import {
 	type AdapterDatabase,
+	type CompiledQueryRead,
 	type EngineRxDocument,
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
@@ -51,6 +52,8 @@ export interface EngineQueryDescriptor {
 	limit?: number;
 	search?: string;
 	searchFields?: string[];
+	/** Precompiled query-state read face; selectors remain the escape hatch for hand-built queries. */
+	read?: CompiledQueryRead;
 }
 
 export function observeEngineDatabases(engine: RxdbSyncEngine): Observable<RxDatabase | null> {
@@ -103,7 +106,7 @@ function matchingSelectors$(
 	locale: string
 ): Observable<LegacyMangoSelector> {
 	const selector = descriptor.selector ?? {};
-	const search = descriptor.search?.trim() ?? '';
+	const search = (descriptor.read?.search ?? descriptor.search)?.trim() ?? '';
 	if (!search) return of(selector);
 
 	const collectionName = engineCollectionNameFor(descriptor.collection);
@@ -116,7 +119,11 @@ function matchingSelectors$(
 	if (search.length < FLEXSEARCH_MIN_TERM_LENGTH) {
 		const prefix = search.toLowerCase();
 		// Mirror initSearch's fallback so short and indexed terms search the same fields.
-		const searchFields = descriptor.searchFields ?? collection.options?.searchFields ?? [];
+		const searchFields =
+			descriptor.read?.searchFields ??
+			descriptor.searchFields ??
+			collection.options?.searchFields ??
+			[];
 		// No SEARCH_INDEX_ERROR tagging here: this path has no search index, so a failure
 		// is a genuine collection read error and must stay eligible for storage recovery.
 		return collection.$.pipe(
@@ -143,7 +150,7 @@ function matchingSelectors$(
 	return defer(() =>
 		from(
 			collection.initSearch(locale, {
-				searchFields: descriptor.searchFields,
+				searchFields: descriptor.read?.searchFields ?? descriptor.searchFields,
 				documentSnapshot,
 			})
 		)
@@ -197,6 +204,7 @@ export function observeEngineQuery(
 						sort: descriptor.sort,
 						skip: descriptor.skip,
 						limit: descriptor.limit,
+						read: descriptor.read,
 					})
 				),
 				map((result): QueryResult<RxCollection> => ({

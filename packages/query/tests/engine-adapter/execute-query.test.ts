@@ -290,6 +290,44 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
+	it('executes a precompiled read without rebuilding the query from Mango', async () => {
+		const { database, products } = await openProductsDatabase();
+		await products.bulkInsert([
+			product('product-b', 2, 'B', '1.004', [9]),
+			product('product-a', 1, 'A', '1.003', [9]),
+			product('product-c', 3, 'C', '2.00', [9]),
+			product('product-x', 4, 'X', '0.50', [8]),
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'products',
+				selector: {},
+				read: {
+					prefilter: { categoryIds: { $in: [7] } },
+					residual: (document) =>
+						(document.payload.tags as { id: number }[]).some(({ id }) => id === 9),
+					complete: false,
+					sort: [
+						{
+							direction: 'asc',
+							value: (document) => Number(document.payload.price),
+						},
+					],
+					sortPushable: false,
+					skip: 1,
+					limit: 1,
+					search: '',
+				},
+			})
+		);
+
+		expect(result.count).toBe(3);
+		expect(result.hits.map((document) => document.id)).toEqual(['product-b']);
+		await database.close();
+	});
+
 	it('uses engine id as a stable sort tiebreaker', async () => {
 		const { database, products } = await openProductsDatabase();
 		await products.bulkInsert([

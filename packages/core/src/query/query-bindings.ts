@@ -35,12 +35,17 @@ import type {
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
 
-import { translateQueryState } from './query-state-translator';
+import {
+	compileQuery,
+	requirementsForCompiledQuery,
+	translateLogsQueryState,
+} from './query-state-translator';
 
 import type { CollectionKey, QueryStateOf } from './query-state-types';
-import type { MangoQuerySortPart, RxCollection, RxDatabase } from 'rxdb';
+import type { RxCollection, RxDatabase } from 'rxdb';
 
 type LegacyCollectionName = EngineQueryDescriptor['collection'];
+type CompiledQuery = ReturnType<typeof compileQuery>;
 type TotalSource = 'coverage' | 'local';
 
 /**
@@ -74,8 +79,14 @@ const INACTIVE$ = of(false);
 const NO_LANE_PROGRESS$ = of(null as QueryLaneProgress | null);
 
 function useStableDescriptor(descriptor: EngineQueryDescriptor): EngineQueryDescriptor {
-	const key = JSON.stringify(descriptor);
-	return React.useMemo(() => JSON.parse(key) as EngineQueryDescriptor, [key]);
+	const key = JSON.stringify({ ...descriptor, read: undefined });
+	return React.useMemo(
+		() => ({
+			...(JSON.parse(key) as EngineQueryDescriptor),
+			...(descriptor.read ? { read: descriptor.read } : {}),
+		}),
+		[key, descriptor.read]
+	);
 }
 
 function selectorWithSearch(descriptor: EngineQueryDescriptor): Record<string, unknown> {
@@ -113,7 +124,9 @@ const ATTEMPTED: DemandReadiness = { attempted: true };
 const NOT_ATTEMPTED: DemandReadiness = { attempted: false };
 
 function readinessFrom(outcomes: CoverageOutcome[]): DemandReadiness {
-	return { attempted: outcomes.every((outcome) => outcome.action !== 'released') };
+	return {
+		attempted: outcomes.every((outcome) => outcome.action !== 'released'),
+	};
 }
 
 /**
@@ -172,7 +185,8 @@ function useDemand(
 	engine: RxdbSyncEngine,
 	id: string,
 	descriptor: EngineQueryDescriptor,
-	enabled: boolean
+	enabled: boolean,
+	compiled?: CompiledQuery
 ): DemandProjection {
 	const coverageTarget$ = React.useMemo(
 		() => new BehaviorSubject<CoverageTarget | null>(null),
@@ -184,6 +198,7 @@ function useDemand(
 	// The products browse window travels with the grid's sort (#909), so the sort is part
 	// of what the demand effect depends on — a serialized key keeps the array identity out.
 	const sortKey = JSON.stringify(descriptor.sort ?? []);
+	const demandKey = JSON.stringify(compiled?.demand ?? []);
 	const engineCollection = engineCollectionNameFor(descriptor.collection);
 	const coverageGeneration = useCoverageGeneration(engine, engineCollection);
 
@@ -201,7 +216,12 @@ function useDemand(
 			limit: descriptor.limit,
 			sort: JSON.parse(sortKey) as RequirementSortPart[],
 		};
-		const plan = requirementsForQuery(binding);
+		const plan = compiled
+			? {
+					requirements: requirementsForCompiledQuery(compiled.demand, { id }),
+					represented: compiled.represented,
+				}
+			: requirementsForQuery(binding);
 		const requirements = plan.requirements;
 		let handles: RequirementHandle[] = [];
 		let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -215,12 +235,17 @@ function useDemand(
 		const declare = (retryOnReject: boolean) => {
 			if (cancelled) return;
 			handles = declareRequirements(engine, requirements);
+			const isUnfiltered = compiled
+				? compiled.read.complete &&
+					Object.keys(compiled.read.prefilter).length === 0 &&
+					compiled.read.search === ''
+				: Object.keys(stableSelector).length === 0;
 			coverageTarget$.next(
 				coverageTargetFor({
 					collection: engineCollection,
 					handleQueryKey: handles.find((handle) => handle.queryKey !== null)?.queryKey ?? null,
 					represented: plan.represented,
-					isUnfiltered: Object.keys(stableSelector).length === 0,
+					isUnfiltered,
 				})
 			);
 			const settled = Promise.all(handles.map((handle) => handle.ready)).then(readinessFrom);
@@ -261,6 +286,8 @@ function useDemand(
 	}, [
 		coverageGeneration,
 		coverageTarget$,
+		compiled,
+		demandKey,
 		descriptor.collection,
 		descriptor.limit,
 		descriptor.search,
@@ -281,15 +308,21 @@ function useDemand(
 
 	const sync = React.useCallback(async () => {
 		if (!enabled) return;
-		const requirements = requirementsForQuery({
-			id: `${id}:sync`,
-			collectionName: descriptor.collection,
-			selector: selectorWithSearch(descriptor),
-			limit: descriptor.limit,
-			sort: descriptor.sort as RequirementSortPart[] | undefined,
-			priority: 1000,
-			forceRefresh: true,
-		}).requirements;
+		const requirements = compiled
+			? requirementsForCompiledQuery(compiled.demand, {
+					id: `${id}:sync`,
+					priority: 1000,
+					forceRefresh: true,
+				})
+			: requirementsForQuery({
+					id: `${id}:sync`,
+					collectionName: descriptor.collection,
+					selector: selectorWithSearch(descriptor),
+					limit: descriptor.limit,
+					sort: descriptor.sort as RequirementSortPart[] | undefined,
+					priority: 1000,
+					forceRefresh: true,
+				}).requirements;
 		const handles = declareRequirements(engine, requirements);
 		try {
 			await Promise.all(handles.map((handle) => handle.ready.catch(() => undefined)));
@@ -297,7 +330,7 @@ function useDemand(
 		} finally {
 			releaseHandles(handles);
 		}
-	}, [descriptor, enabled, engine, id]);
+	}, [compiled, descriptor, enabled, engine, id]);
 
 	/**
 	 * Re-declare the standing requirements once and release them again.
@@ -312,13 +345,15 @@ function useDemand(
 		async (signal?: AbortSignal): Promise<DemandReadiness> => {
 			if (!enabled) return ATTEMPTED;
 			if (signal?.aborted) return NOT_ATTEMPTED;
-			const requirements = requirementsForQuery({
-				id: `${id}:rearm`,
-				collectionName: descriptor.collection,
-				selector: selectorWithSearch(descriptor),
-				limit: descriptor.limit,
-				sort: descriptor.sort as RequirementSortPart[] | undefined,
-			}).requirements;
+			const requirements = compiled
+				? requirementsForCompiledQuery(compiled.demand, { id: `${id}:rearm` })
+				: requirementsForQuery({
+						id: `${id}:rearm`,
+						collectionName: descriptor.collection,
+						selector: selectorWithSearch(descriptor),
+						limit: descriptor.limit,
+						sort: descriptor.sort as RequirementSortPart[] | undefined,
+					}).requirements;
 			const handles = declareRequirements(engine, requirements);
 			// `release()` IS the engine's cancellation verb — it aborts queued or in-flight
 			// foreground work and settles `ready` as `released`. Without this an aborted caller
@@ -334,7 +369,7 @@ function useDemand(
 				releaseHandles(handles);
 			}
 		},
-		[descriptor, enabled, engine, id]
+		[compiled, descriptor, enabled, engine, id]
 	);
 
 	const whenReady = React.useCallback(() => ready.current.catch(() => NOT_ATTEMPTED), []);
@@ -418,7 +453,7 @@ function emptyResult(): QueryResult<RxCollection> {
 }
 
 export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
-	const translated = translateQueryState('logs', state);
+	const translated = translateLogsQueryState(state);
 	const local = useLocalQuery({
 		collectionName: 'logs',
 		selector: translated.selector,
@@ -439,7 +474,9 @@ export function useLogsBinding(state: QueryStateOf<'logs'>): QueryBinding {
 
 function useEngineBinding(
 	descriptorInput: EngineQueryDescriptor,
-	enabled = true
+	enabled = true,
+	compiled?: CompiledQuery,
+	compiledId?: string
 ): QueryBinding & {
 	result$: Observable<QueryResult<RxCollection>>;
 	whenReady(): Promise<DemandReadiness>;
@@ -447,12 +484,20 @@ function useEngineBinding(
 	generation: number;
 } {
 	const runtime = useQueryRuntime();
-	const bindingId = React.useId();
+	const generatedId = React.useId();
+	const bindingId = compiledId ?? generatedId;
+	const searchFields = searchFieldsFor(runtime.localDB, descriptorInput.collection);
+	const searchFieldsKey = JSON.stringify(searchFields);
+	const read = React.useMemo(
+		() => (descriptorInput.read ? { ...descriptorInput.read, searchFields } : undefined),
+		[descriptorInput.read, searchFieldsKey]
+	);
 	const descriptor = useStableDescriptor({
 		...descriptorInput,
-		searchFields: searchFieldsFor(runtime.localDB, descriptorInput.collection),
+		searchFields,
+		read,
 	});
-	const demand = useDemand(runtime.engine, bindingId, descriptor, enabled);
+	const demand = useDemand(runtime.engine, bindingId, descriptor, enabled, compiled);
 	const active$ = React.useMemo(
 		() =>
 			enabled
@@ -468,7 +513,7 @@ function useEngineBinding(
 		return observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
 			map((result) => ({
 				...result,
-				searchActive: Boolean(descriptor.search?.trim()),
+				searchActive: Boolean((descriptor.read?.search ?? descriptor.search)?.trim()),
 			})),
 			shareReplay({ bufferSize: 1, refCount: true })
 		);
@@ -506,27 +551,27 @@ export function useCollectionBinding<C extends Exclude<CollectionKey, 'logs'>>(
 	state: QueryStateOf<C>,
 	options: { wooIds?: readonly number[] } = {}
 ): QueryBinding {
-	const translated = translateQueryState(collection, state);
-	const selector =
-		options.wooIds === undefined
-			? translated.selector
-			: { ...translated.selector, id: { $in: [...options.wooIds] } };
+	const runtime = useQueryRuntime();
+	const bindingId = React.useId();
+	const searchFields = searchFieldsFor(
+		runtime.localDB,
+		(collection === 'tax-rates' ? 'taxes' : collection) as LegacyCollectionName
+	);
+	const compileKey = JSON.stringify([collection, state, options.wooIds, searchFields]);
+	const compiled = React.useMemo(
+		() =>
+			compileQuery(collection, state, {
+				id: bindingId,
+				targeted: options.wooIds,
+				searchFields,
+			}),
+		[compileKey, bindingId]
+	);
 	const engineDescriptor: EngineQueryDescriptor = {
-		collection: translated.collectionName as LegacyCollectionName,
-		selector,
-		sort: translated.sort as MangoQuerySortPart<Record<string, unknown>>[],
-		limit: translated.limit,
-		search: translated.search,
+		collection: compiled.collection,
+		read: compiled.read,
 	};
-	return useEngineBinding(engineDescriptor);
-}
-
-function andSelector(
-	left: Record<string, unknown>,
-	right: Record<string, unknown>
-): Record<string, unknown> {
-	if (Object.keys(left).length === 0) return right;
-	return { $and: [left, right] };
+	return useEngineBinding(engineDescriptor, true, compiled, bindingId);
 }
 
 function releaseHandles(handles: RequirementHandle[]): void {
@@ -565,38 +610,44 @@ function observeParentLookup(
 export function useRelationalCollectionBinding(state: QueryStateOf<'products'>): QueryBinding {
 	const runtime = useQueryRuntime();
 	const bindingId = React.useId();
-	const translated = translateQueryState('products', state);
+	const parentSearchFields = searchFieldsFor(runtime.localDB, 'products');
+	const compileKey = JSON.stringify([state, parentSearchFields]);
+	const compiled = React.useMemo(
+		() =>
+			compileQuery('products', state, {
+				id: `${bindingId}:parent`,
+				searchFields: parentSearchFields,
+			}),
+		[bindingId, compileKey]
+	);
 	const descriptor = useStableDescriptor({
 		collection: 'products',
-		selector: translated.selector,
-		sort: translated.sort as MangoQuerySortPart<Record<string, unknown>>[],
-		limit: translated.limit,
-		search: translated.search,
-		searchFields: searchFieldsFor(runtime.localDB, 'products'),
+		read: compiled.read,
+		searchFields: parentSearchFields,
 	});
 	const childDescriptor = useStableDescriptor({
 		collection: 'variations',
 		selector: state.filters.status ? { status: state.filters.status } : {},
 		sort: [{ id: 'asc' }],
-		search: translated.search,
+		search: compiled.read.search,
 		searchFields: searchFieldsFor(runtime.localDB, 'variations'),
 	});
-	const parentDemand = useDemand(runtime.engine, `${bindingId}:parent`, descriptor, true);
+	const parentDemand = useDemand(runtime.engine, `${bindingId}:parent`, descriptor, true, compiled);
 	const childDemand = useDemand(
 		runtime.engine,
 		`${bindingId}:child`,
 		childDescriptor,
-		Boolean(translated.search)
+		Boolean(compiled.read.search)
 	);
 	const result$ = React.useMemo(() => {
-		if (!translated.search) {
+		if (!compiled.read.search) {
 			return observeEngineQuery(runtime.engine, runtime.locale, descriptor).pipe(
 				shareReplay({ bufferSize: 1, refCount: true })
 			);
 		}
 		const direct$ = observeEngineQuery(runtime.engine, runtime.locale, {
 			...descriptor,
-			limit: undefined,
+			read: { ...compiled.read, limit: undefined },
 		});
 		const children$ = observeEngineQuery(runtime.engine, runtime.locale, childDescriptor);
 		return combineLatest([direct$, children$]).pipe(
@@ -619,10 +670,8 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 				const uuids = [...new Set([...direct.hits, ...lookup.hits].map((hit) => hit.id))];
 				return observeEngineQuery(runtime.engine, runtime.locale, {
 					...descriptor,
-					search: '',
-					selector: andSelector((descriptor.selector ?? {}) as Record<string, unknown>, {
-						uuid: { $in: uuids },
-					}),
+					read: { ...compiled.read, search: '' },
+					selector: { uuid: { $in: uuids } },
 				}).pipe(
 					map((result) => ({
 						...result,
@@ -632,7 +681,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 							return {
 								...hit,
 								childrenSearchCount: counts.get(wooId) ?? 0,
-								parentSearchTerm: translated.search,
+								parentSearchTerm: compiled.read.search,
 							};
 						}),
 					}))
@@ -640,7 +689,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>):
 			}),
 			shareReplay({ bufferSize: 1, refCount: true })
 		);
-	}, [bindingId, childDescriptor, descriptor, runtime.engine, runtime.locale, translated.search]);
+	}, [bindingId, childDescriptor, compiled.read, descriptor, runtime.engine, runtime.locale]);
 	const resource = useObservableResource(result$);
 	const projection$ = React.useMemo(
 		() => coverageProjection$(runtime.engine, result$, parentDemand.coverageTarget$),

@@ -15,7 +15,12 @@ export {
 	type LegacyCollectionName,
 	type WriteableCollection,
 } from './engine-adapter/collection-map';
-export type { EngineRxDocument } from './engine-adapter/execute-query';
+export type {
+	CompiledQueryRead,
+	CompiledSortPart,
+	EngineRxDocument,
+} from './engine-adapter/execute-query';
+export { variationAllMatch } from './engine-adapter/translate-selector';
 export {
 	observeCoverage,
 	observeEngineDatabases,
