@@ -1,6 +1,7 @@
 import {
 	type APIRequestContext,
 	expect,
+	type Locator,
 	type Page,
 	request as playwrightRequest,
 	type WorkerInfo,
@@ -14,6 +15,7 @@ import {
 	productWriterCredentialsConfigured,
 	searchAndWaitForServer,
 	type SearchProbe,
+	sweepOrphanedProductProbes,
 } from './search-probe';
 
 import type { WcposTestOptions } from '../playwright.config';
@@ -32,7 +34,8 @@ const simpleProbesByPage = new WeakMap<Page, SearchProbe[] | null>();
 const variableProbeByPage = new WeakMap<Page, SearchProbe | null>();
 
 function workerStoreUrl(workerInfo: WorkerInfo): string {
-	return (workerInfo.project.use as WcposTestOptions).storeUrl;
+	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
+	return (workerInfo.project.use as WcposTestOptions).storeUrl || 'https://dev-free.wcpos.com';
 }
 
 /**
@@ -62,7 +65,20 @@ export const isolatedProductTest = authenticatedTest.extend<
 				await use(null);
 				return;
 			}
-			await use(await productWriterAuthorization(productProbeRequest, workerStoreUrl(workerInfo)));
+			const writer = await productWriterAuthorization(
+				productProbeRequest,
+				workerStoreUrl(workerInfo)
+			);
+			try {
+				// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook.
+				await use(writer);
+			} finally {
+				await sweepOrphanedProductProbes({
+					request: productProbeRequest,
+					storeUrl: workerStoreUrl(workerInfo),
+					authorization: writer,
+				});
+			}
 		},
 		{ scope: 'worker' },
 	],
@@ -199,12 +215,11 @@ export async function addCheckoutProbeProduct(page: Page): Promise<void> {
 }
 
 /** Search a private variable product, with the current sample-data fallback for forks. */
-export async function findVariableProduct(page: Page): Promise<void> {
+export async function findVariableProduct(page: Page, search: Locator): Promise<void> {
 	const probe = variableProbeByPage.get(page);
 	if (probe === undefined) {
 		throw new Error('Run-private product helper requires isolatedProductTest');
 	}
-	const search = page.getByTestId('search-products');
 	if (probe) {
 		await searchAndWaitForServer(page, search, 'products', probe.token);
 		return;

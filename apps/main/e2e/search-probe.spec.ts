@@ -13,13 +13,39 @@ test('builds canonical rest_route URLs for plain WordPress permalinks', () => {
 
 test.describe('search-probe pure logic', () => {
 	test('missing writer credentials keep product probes skippable', () => {
-		expect(productProbeFailureAction({ writerConfigured: false, status: null })).toBe('skip');
-		expect(productProbeFailureAction({ writerConfigured: false, status: 403 })).toBe('skip');
+		expect(
+			productProbeFailureAction({
+				writerConfigured: false,
+				failure: 'http',
+				retryAvailable: false,
+			})
+		).toBe('skip');
 	});
 
-	test('configured writer failures fail regardless of HTTP status', () => {
-		expect(productProbeFailureAction({ writerConfigured: true, status: 403 })).toBe('fail');
-		expect(productProbeFailureAction({ writerConfigured: true, status: 500 })).toBe('fail');
-		expect(productProbeFailureAction({ writerConfigured: true, status: null })).toBe('fail');
+	test('configured HTTP failures fail immediately, including variable-product creation', () => {
+		expect(
+			productProbeFailureAction({
+				writerConfigured: true,
+				failure: 'http',
+				retryAvailable: true,
+			})
+		).toBe('fail');
+	});
+
+	test('transport failures retry once, then retain configured-writer failure policy', () => {
+		expect(
+			productProbeFailureAction({
+				writerConfigured: true,
+				failure: 'transport',
+				retryAvailable: true,
+			})
+		).toBe('retry');
+		expect(
+			productProbeFailureAction({
+				writerConfigured: true,
+				failure: 'transport',
+				retryAvailable: false,
+			})
+		).toBe('fail');
 	});
 });

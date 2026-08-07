@@ -13,7 +13,9 @@ import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
  * cashier endpoint already assigned. Full isolation therefore needs server-side
  * provisioning of e2e-cashier-1..8 as POS-capable cashiers on the target store;
  * the orchestrator can select one username/password pair by shard/run slot via
- * the existing E2E_USERNAME/E2E_PASSWORD login parameters.
+ * the existing E2E_USERNAME/E2E_PASSWORD login parameters. The slot key must
+ * include the RUN id as well as the shard index because push- and PR-event runs
+ * can overlap across separate concurrency groups.
  */
 
 /** Helper to navigate to Orders page and wait for load */

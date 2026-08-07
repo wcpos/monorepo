@@ -55,7 +55,7 @@ async function searchForVariableProduct(page: Page) {
 	// These tests require table view — switch if needed
 	await ensureTableView(page);
 
-	await findVariableProduct(page);
+	await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
 	// Verify we got results — product sync can be slow in CI
 	const countEl = page.getByTestId('data-table-count');

@@ -109,7 +109,7 @@ test.describe('Products in POS', () => {
 	});
 
 	test('should show variable product tiles in grid view', async ({ posPage: page }) => {
-		await findVariableProduct(page);
+		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
 		const variableTiles = page.getByTestId('variable-product-tile');
 		await expect(variableTiles.first()).toBeVisible({ timeout: 10_000 });
@@ -118,7 +118,7 @@ test.describe('Products in POS', () => {
 	test('should open variation popover when clicking variable product tile', async ({
 		posPage: page,
 	}) => {
-		await findVariableProduct(page);
+		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
 		const variableTile = page.getByTestId('variable-product-tile');
 		await expect(variableTile.first()).toBeVisible({ timeout: 10_000 });

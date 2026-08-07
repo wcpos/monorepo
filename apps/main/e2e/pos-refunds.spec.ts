@@ -298,7 +298,6 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			liveTest.slow();
 
 			const label = newRunLabel();
-			const refundAmount = '1.00';
 
 			await addTestProductToCart(page);
 			await stampRunLabel(page, label);
@@ -313,12 +312,14 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			// the wrong reason.
 			const paid = await readOrder(request, testInfo, storeAuthorization(), orderId);
 			expect(paid.customer_note, 'must refund the order this test created').toBe(label);
+			const orderTotal = Number(paid.total);
+			const refundAmount = (orderTotal / 2).toFixed(2);
 			// WooCommerce will record a refund against an order that never took
 			// payment, so "not pos-open" would let this test pass while covering only
 			// half of the payment-then-refund lifecycle it is named for.
 			expectOrderPaid(paid);
 			expect(
-				Number(paid.total),
+				orderTotal,
 				`refund of ${refundAmount} must not exceed the order total`
 			).toBeGreaterThan(Number(refundAmount));
 

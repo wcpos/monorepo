@@ -174,7 +174,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
-		await findVariableProduct(page);
+		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		// Click the expand link on the variable product
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
@@ -199,7 +199,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
-		await findVariableProduct(page);
+		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
@@ -231,7 +231,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
-		await findVariableProduct(page);
+		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
