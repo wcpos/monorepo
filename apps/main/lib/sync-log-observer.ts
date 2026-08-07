@@ -60,6 +60,14 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
  * `Record<SyncEventType, …>`. A new engine event does not compile until someone
  * decides how a merchant should read it, instead of silently inheriting the
  * `sync.other`/`failed` default and turning up in the failure bucket of the log.
+ *
+ * The `satisfies` clause below is the DEVELOPER-TIME signal: it names the
+ * missing key in your editor the moment you add an event type. It is not the
+ * merge gate — apps/main has no `typecheck` task in CI (13 pre-existing tsc
+ * errors keep it out), so nothing here would fail a build. The gate is
+ * `scripts/check-sync-event-types.mjs`, which re-checks this table against
+ * `SyncEventType` inside `pnpm test:scripts`, a chain CI does run. Delete
+ * neither until apps/main gets a typecheck task of its own.
  */
 type ConformanceTable = { [T in SyncEventType]: Conformance<T> };
 

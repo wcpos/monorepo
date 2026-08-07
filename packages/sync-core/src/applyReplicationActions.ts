@@ -29,7 +29,7 @@
  *     and the cursor/baselines are NOT persisted, so the next poll re-drains.
  */
 
-import { type SyncEvent, type SyncEventType, type SyncObserver } from './telemetry';
+import { type SyncEvent, type SyncObserver } from './telemetry';
 import { rebuildBarcodeIndexForConfig, type RebuildBarcodeIndexResult } from './barcodeResolve';
 import {
 	type HybridCollection,
@@ -312,7 +312,7 @@ export async function applyReplicationActions(
 	};
 	/** Emit a count-bearing apply event (`apply.pull` / `apply.delete`), `warn` on a shortfall. */
 	const emitCount = (
-		type: SyncEventType,
+		type: 'apply.pull' | 'apply.delete' | 'apply.rebaseline',
 		collection: HybridCollection,
 		requested: number,
 		applied: number

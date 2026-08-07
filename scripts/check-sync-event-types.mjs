@@ -26,6 +26,14 @@ import { collectEmittedEventTypes, maskLiterals } from './check-event-labels.mjs
  *   2. Declared but emitted nowhere — a stale member, and with it a stale
  *      conformance row. (Warning: the scanner reads emit sites in the sync
  *      sources only, so a legitimately host-emitted type would false-positive.)
+ *
+ * It then checks the observer's conformance table against the same union, both
+ * ways. That duplicates what `satisfies Record<SyncEventType, …>` already proves
+ * to the compiler, on purpose: apps/main has no `typecheck` task in CI (13
+ * pre-existing tsc errors keep it out), so nothing would FAIL a merge on the
+ * satisfies clause alone. The clause stays as the developer-time signal — it is
+ * the one that names the missing key in your editor — and this is the gate that
+ * actually blocks, until apps/main earns a typecheck task of its own.
  */
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -50,8 +58,10 @@ export const MENTION_ONLY_FILES = new Set([
 ]);
 
 export const TELEMETRY_PATH = path.join(repoRoot, 'packages/sync-core/src/telemetry.ts');
+export const OBSERVER_PATH = path.join(repoRoot, 'apps/main/lib/sync-log-observer.ts');
 
 const UNION_DECLARATION = 'export type SyncEventType =';
+const TABLE_DECLARATION = 'const CONFORMANCE_TABLE = {';
 
 /**
  * The members of the `SyncEventType` union.
@@ -80,6 +90,39 @@ export function unionTypesIn(source) {
 	return types;
 }
 
+/**
+ * The event types the observer's conformance table maps.
+ *
+ * Same masking trick as the union, plus brace depth: only a quoted string that
+ * sits at the table's own level AND is followed by `:` is a key, so neither a
+ * `recordMessage('push failed')` argument nor a `f.status === 'error'` comparison
+ * inside a row can be mistaken for one.
+ */
+export function conformanceKeysIn(source) {
+	const masked = maskLiterals(source);
+	const declaration = masked.indexOf(TABLE_DECLARATION);
+	if (declaration === -1) throw new Error(`No \`${TABLE_DECLARATION}\` declaration found`);
+	const open = declaration + TABLE_DECLARATION.length - 1;
+	const keys = [];
+	let depth = 0;
+	for (let index = open; index < masked.length; index += 1) {
+		const char = masked[index];
+		if ('([{'.includes(char)) depth += 1;
+		else if (')]}'.includes(char)) {
+			depth -= 1;
+			if (depth === 0) return keys;
+		} else if (depth === 1 && (char === "'" || char === '"')) {
+			const close = masked.indexOf(char, index + 1);
+			if (close === -1) break;
+			let after = close + 1;
+			while (after < masked.length && /\s/.test(masked[after])) after += 1;
+			if (masked[after] === ':') keys.push(source.slice(index + 1, close));
+			index = close;
+		}
+	}
+	throw new Error(`\`${TABLE_DECLARATION}\` is unterminated`);
+}
+
 /** Types emitted somewhere that is not a mention-only file. */
 export function emittedTypesIn(emitted) {
 	return new Set(
@@ -99,7 +142,21 @@ export function diffVocabulary(emitted, union) {
 	};
 }
 
-export async function checkSyncEventTypes(telemetryPath = TELEMETRY_PATH) {
+/** The union against the observer's table, both ways. */
+export function diffConformance(union, keys) {
+	const declared = new Set(union);
+	const mapped = new Set(keys);
+	return {
+		unmapped: union.filter((type) => !mapped.has(type)).sort(),
+		orphaned: keys.filter((type) => !declared.has(type)).sort(),
+		duplicates: [...new Set(keys.filter((type, index) => keys.indexOf(type) !== index))].sort(),
+	};
+}
+
+export async function checkSyncEventTypes(
+	telemetryPath = TELEMETRY_PATH,
+	observerPath = OBSERVER_PATH
+) {
 	const union = unionTypesIn(await readFile(telemetryPath, 'utf8'));
 	const emitted = await collectEmittedEventTypes(SYNC_EVENT_SOURCE_ROOTS, union);
 	const { missing, unemitted, duplicates } = diffVocabulary(emitted, union);
@@ -123,7 +180,34 @@ export async function checkSyncEventTypes(telemetryPath = TELEMETRY_PATH) {
 				'conformance row in apps/main/lib/sync-log-observer.ts (the build will insist).'
 		);
 	}
-	console.log(`✓ ${union.length} sync event types declared, every emitted type covered`);
+
+	const keys = conformanceKeysIn(await readFile(observerPath, 'utf8'));
+	const conformance = diffConformance(union, keys);
+	if (conformance.duplicates.length > 0) {
+		throw new Error(
+			`The conformance table maps ${conformance.duplicates.length} type(s) twice — the later row ` +
+				`silently wins: ${conformance.duplicates.join(', ')}`
+		);
+	}
+	if (conformance.unmapped.length > 0) {
+		throw new Error(
+			`${conformance.unmapped.length} sync event type(s) have no conformance row:\n  ` +
+				`${conformance.unmapped.join('\n  ')}\n` +
+				'Add a row to CONFORMANCE_TABLE in apps/main/lib/sync-log-observer.ts. Without one the ' +
+				"event inherits sync.other/'failed' and reads to a merchant as a sync failure."
+		);
+	}
+	if (conformance.orphaned.length > 0) {
+		throw new Error(
+			`${conformance.orphaned.length} conformance row(s) map a type that is not in ` +
+				`SyncEventType:\n  ${conformance.orphaned.join('\n  ')}\n` +
+				'Either the row is stale, or the type belongs in the union.'
+		);
+	}
+	console.log(
+		`✓ ${union.length} sync event types declared, every emitted type covered, ` +
+			`every type mapped by a conformance row`
+	);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

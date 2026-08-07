@@ -139,51 +139,122 @@ export type SyncEventFieldsBase = Readonly<Record<string, unknown>>;
  * that used to be `unknown` and silently coerced through `num()`, so a field
  * renamed at the emitter degraded to "did no work" instead of failing a build.
  *
- * These are declarations, not enforcement: `SyncEvent.fields` stays open, so an
- * emitter may still send more. Everything listed is optional because most of
- * these payloads are assembled conditionally.
+ * These shapes are ENFORCED at the emit site, not just at the read site:
+ * `SyncEvent` is a union over `SyncEventType` (below), so an emitter of one of
+ * these types is checked against its shape. That is the point — a field the
+ * cashier-facing log reads is REQUIRED here whenever the emitter always sends
+ * it, so renaming `pulls` to `pulled` fails the build instead of quietly
+ * zeroing a merchant's row through `num(undefined)`. Fields the emitter only
+ * sometimes sends stay optional, and the shapes are otherwise CLOSED: an
+ * unknown key is an excess-property error, which catches the rename from the
+ * other side too.
  */
 export type SyncEventFieldsByType = {
-	'signal.cycle': { readonly pulls?: number; readonly deletes?: number };
+	'signal.cycle': {
+		readonly collectionsChecked?: readonly string[];
+		readonly pulls: number;
+		readonly deletes: number;
+		readonly durationMs?: number;
+		readonly cursor?: number;
+		readonly cursorFrom?: number;
+		readonly head?: number;
+		readonly backlog?: number;
+	};
 	'engine.lane.tick': {
+		readonly lane?: string;
 		/** Lane report status — `'error'` is the one the observer keys on. */
-		readonly status?: string;
+		readonly status: string;
+		readonly reason?: string;
 		readonly pushed?: number;
+		readonly held?: number;
 		readonly conflicts?: number;
 		readonly deferred?: number;
 		readonly failed?: number;
 		readonly rejected?: number;
+		readonly durationMs?: number;
 	};
-	'apply.pull': { readonly applied?: number };
-	'apply.delete': { readonly applied?: number };
-	'apply.refetch': { readonly refetched?: number };
-	'coverage.require.outcome': { readonly documents?: number; readonly requests?: number };
+	'apply.pull': ApplyCountFields;
+	'apply.delete': ApplyCountFields;
+	'apply.refetch': { readonly refetched: number; readonly reason?: string };
+	'coverage.require.outcome': {
+		readonly requirementId?: string;
+		readonly kind?: string;
+		readonly action?: string;
+		readonly documents: number;
+		readonly requests: number;
+		readonly durationMs?: number;
+	};
 	'coverage.existence-reconcile': {
-		readonly pruned?: number;
-		readonly pulled?: number;
-		readonly repulled?: number;
+		readonly buckets?: number;
+		readonly pruned: number;
+		readonly pulled: number;
+		readonly repulled: number;
+		readonly skippedDirty?: number;
+		readonly durationMs?: number;
 	};
-	'coverage.compacted': { readonly removed?: number };
+	'coverage.compacted': { readonly removed: number };
 	'transport.request': {
+		readonly durationMs?: number;
+		readonly bytes?: number;
 		/** HTTP status, or `0` for a request that never reached the server. */
-		readonly status?: number;
+		readonly status: number;
+		readonly method?: string;
+		readonly path?: string;
 		readonly operationId?: string;
+		readonly outcome?: string;
+		/**
+		 * OPEN, unlike its neighbours. The fetcher assembles this payload from two
+		 * computed spreads (the refresh-arc fields and the per-classification
+		 * extras), so an exhaustive key list here would be a running inventory of
+		 * another module's internals. `status` is still required, which is the read
+		 * the observer's did-work gate depends on.
+		 */
+		readonly [key: string]: unknown;
 	};
 	'queue.write.drain': {
-		readonly pushed?: number;
-		readonly conflicts?: number;
-		readonly failed?: number;
-		readonly rejected?: number;
+		readonly scanned?: number;
+		readonly attempted?: number;
+		readonly pushed: number;
+		readonly annihilated?: number;
+		readonly held?: number;
+		readonly deferred?: number;
+		readonly conflicts: number;
+		readonly failed: number;
+		readonly rejected: number;
 	};
-	'queue.scheduler.drain': { readonly succeeded?: number; readonly failed?: number };
+	'queue.scheduler.drain': {
+		readonly scanned?: number;
+		readonly succeeded: number;
+		readonly failed: number;
+		readonly claimLost?: number;
+		readonly completionLost?: number;
+		readonly failureLost?: number;
+		readonly renewalLost?: number;
+		readonly documents?: number;
+		readonly requests?: number;
+	};
 	'cadence.start': CadenceFields;
 	'cadence.reconfigured': CadenceFields;
 	'cadence.backoff': CadenceFields;
 	'cadence.recovered': CadenceFields;
 };
 
+/** `apply.pull` and `apply.delete` are both emitted by the same count helper. */
+type ApplyCountFields = { readonly requested: number; readonly applied: number };
+
 /** The cadence a lane is running at — the four `cadence.*` events share it. */
-type CadenceFields = { readonly tierMs?: number; readonly pullBatchSize?: number };
+type CadenceFields = {
+	readonly tierMs: number;
+	readonly pullBatchSize?: number;
+	readonly intervalMs?: number;
+	readonly fromIntervalMs?: number;
+	readonly toIntervalMs?: number;
+	readonly pressureMultiplier?: number;
+	readonly signal?: string;
+	readonly retryAfterMs?: number;
+	/** Stamped by a back-off that closed out, so the arc reads as recovered (#899). */
+	readonly outcome?: 'recovered';
+};
 
 /** The declared field shape for `T`, or the open record when it has none. */
 export type SyncEventFields<T extends SyncEventType> = T extends keyof SyncEventFieldsByType
@@ -191,13 +262,13 @@ export type SyncEventFields<T extends SyncEventType> = T extends keyof SyncEvent
 	: SyncEventFieldsBase;
 
 /**
- * A structured engine event. `type` is a dotted name; metrics derive from `type`
- * + `fields`. Immutable: an event is fanned out to many sinks, so no sink may
- * mutate it (the type is `readonly` and `composeObservers` freezes it).
+ * One event, for one type. Immutable: an event is fanned out to many sinks, so
+ * no sink may mutate it (the properties are `readonly` and `composeObservers`
+ * freezes it).
  */
-export type SyncEvent = {
+type SyncEventOf<T extends SyncEventType> = {
 	/** Dotted event name, e.g. `apply.pull`, `push.outcome`, `signal.cycle`. */
-	readonly type: SyncEventType;
+	readonly type: T;
 	readonly level: SyncEventLevel;
 	/** The collection this event concerns, when applicable (per-collection metrics). */
 	readonly collection?: string;
@@ -205,13 +276,22 @@ export type SyncEvent = {
 	readonly message?: string;
 	/**
 	 * Structured payload — `durationMs` is aggregated into timings; others are
-	 * free-form. Stays OPEN: {@link SyncEventFieldsByType} declares the shapes a
-	 * consumer reads by name, it does not close what an emitter may send.
+	 * free-form. Tied to `type`: a type with a declared shape must satisfy it,
+	 * every other type keeps the open record.
 	 */
-	readonly fields?: SyncEventFieldsBase;
+	readonly fields?: SyncEventFields<T>;
 	/** Epoch ms; the emitter fills it if absent. */
 	readonly at?: number;
 };
+
+/**
+ * A structured engine event — the union of every per-type event, so `fields` is
+ * tied to `type` rather than being an arbitrary record on all of them. Built by
+ * mapping over the vocabulary and indexing back out (the standard trick for
+ * distributing a generic over a union), which is what gives emitters a
+ * discriminated union to be checked against.
+ */
+export type SyncEvent = { [T in SyncEventType]: SyncEventOf<T> }[SyncEventType];
 
 /** The single seam the engine emits to. Sinks (metrics, logger, host pipeline) implement it. */
 export type SyncObserver = (event: SyncEvent) => void;
