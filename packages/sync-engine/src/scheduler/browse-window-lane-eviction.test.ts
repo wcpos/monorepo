@@ -236,6 +236,38 @@ describe('planBrowseWindowLaneEviction', () => {
 	});
 });
 
+describe('productBrowseWindowLaneIdentity', () => {
+	// The view identity groups lanes for eviction, so its bytes decide what a completed
+	// window is allowed to delete. Pinned for the same reason the orders one below is.
+	it('splits a products window into its view and its limit', () => {
+		expect(productBrowseWindowLaneIdentity('products:browse-window:limit=400')).toEqual({
+			viewKey: 'products:browse-window:limit=',
+			limit: 400,
+		});
+		expect(
+			productBrowseWindowLaneIdentity(
+				'products:browse-window:limit=400:orderby=price:order=desc:category=3,5:featured=1'
+			)
+		).toEqual({
+			viewKey: 'products:browse-window:limit=:orderby=price:order=desc:category=3,5:featured=1',
+			limit: 400,
+		});
+	});
+
+	// A sort or a filter is part of the VIEW: `price desc` and the default catalogue order are
+	// different slices, and the larger does not contain the smaller.
+	it('never groups two different views under one identity', () => {
+		const viewKeys = [
+			'products:browse-window:limit=400',
+			'products:browse-window:limit=400:orderby=price:order=desc',
+			'products:browse-window:limit=400:category=3',
+			'products:browse-window:limit=400:category=3,5',
+			'products:browse-window:limit=400:featured=1',
+		].map((queryKey) => productBrowseWindowLaneIdentity(queryKey)?.viewKey);
+		expect(new Set(viewKeys).size).toBe(viewKeys.length);
+	});
+});
+
 describe('orderBrowseWindowLaneIdentity', () => {
 	const orderWindow = (limit: number | 'all', tail = '') =>
 		`orders:browser:status=all${tail}:search=:limit=${limit}`;
@@ -243,6 +275,19 @@ describe('orderBrowseWindowLaneIdentity', () => {
 	it('splits an orders window into its view and its limit', () => {
 		expect(orderBrowseWindowLaneIdentity(orderWindow(200))).toEqual({
 			viewKey: 'orders:browser:status=all:search=:limit=',
+			limit: 200,
+		});
+	});
+
+	/**
+	 * A key that parses but is not the key the encoder would have written gets NO identity, so
+	 * eviction cannot delete it on the authority of the canonical view's survivor.
+	 */
+	it('refuses a non-canonical spelling of an otherwise valid window', () => {
+		expect(orderBrowseWindowLaneIdentity(orderWindow('0200' as unknown as number))).toBeNull();
+		expect(orderBrowseWindowLaneIdentity(orderWindow(200, ':customer=007'))).toBeNull();
+		expect(orderBrowseWindowLaneIdentity(orderWindow(200, ':customer=7'))).toEqual({
+			viewKey: 'orders:browser:status=all:customer=7:search=:limit=',
 			limit: 200,
 		});
 	});

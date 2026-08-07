@@ -20,7 +20,9 @@
 import {
 	CUSTOMER_BROWSE_WINDOW_GRAMMAR,
 	CUSTOMER_BROWSE_WINDOW_ORDERBY_VALUES,
+	CUSTOMER_BROWSE_WINDOW_QUERY_KEY_PREFIX,
 	type CustomerBrowseWindowDescriptor,
+	normalizeCustomerBrowseWindowLimit,
 } from './customer-browse-window-descriptor';
 import {
 	normalizeOrderBrowseWindowLimit,
@@ -29,11 +31,17 @@ import {
 	type OrderBrowseWindowFields,
 } from './order-browser-scheduler-descriptor';
 import {
+	normalizeProductBrowseWindowLimit,
 	PRODUCT_BROWSE_WINDOW_GRAMMAR,
 	PRODUCT_BROWSE_WINDOW_ORDERBY_VALUES,
+	PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX,
 	type ProductBrowseWindowDescriptor,
 } from './product-browse-window-descriptor';
-import { assertBrowseWindowKeyLengths, type BrowseWindowGrammar } from './browse-window-grammar';
+import {
+	assertBrowseWindowKeyLengths,
+	type BrowseWindowGrammar,
+	browseWindowLaneIdentity,
+} from './browse-window-grammar';
 
 // ---------------------------------------------------------------------------
 // 1. The bytes — literal pins
@@ -185,23 +193,21 @@ describe('browse-window lane identities are persisted bytes', () => {
 			[1, 10, 100, 101, 150, 200, 4_250, 100_001].map(normalizeOrderBrowseWindowLimit)
 		).toEqual([1, 10, 100, 200, 200, 200, 4_300, 100_000]);
 		expect(
-			[undefined, 1, 10, 100, 101, 1_000, 4_250].map(PRODUCT_BROWSE_WINDOW_GRAMMAR.normalizeLimit)
+			[undefined, 1, 10, 100, 101, 1_000, 4_250].map(normalizeProductBrowseWindowLimit)
 		).toEqual([100, 100, 100, 100, 200, 1_000, 4_300]);
 		expect(
-			[undefined, 10, 100, 110, 801, 1_340, 5_000].map(
-				CUSTOMER_BROWSE_WINDOW_GRAMMAR.normalizeLimit
-			)
+			[undefined, 10, 100, 110, 801, 1_340, 5_000].map(normalizeCustomerBrowseWindowLimit)
 		).toEqual([100, 100, 100, 200, 1_600, 1_600, 6_400]);
 
 		// Every growth step is a DISTINCT key: the #957 dedupe-collapse bug was a growth that
 		// re-minted the previous key, which the scheduler deduped away into silence.
-		for (const grammar of [PRODUCT_BROWSE_WINDOW_GRAMMAR, CUSTOMER_BROWSE_WINDOW_GRAMMAR]) {
-			const keys = [10, 110, 250, 1_010, 4_250].map((requested) =>
-				grammar.encode({ limit: grammar.normalizeLimit(requested) } as never)
-			);
-			expect(new Set(keys).size).toBe(
-				new Set([10, 110, 250, 1_010, 4_250].map(grammar.normalizeLimit)).size
-			);
+		const requested = [10, 110, 250, 1_010, 4_250];
+		for (const [grammar, normalize] of [
+			[PRODUCT_BROWSE_WINDOW_GRAMMAR, normalizeProductBrowseWindowLimit],
+			[CUSTOMER_BROWSE_WINDOW_GRAMMAR, normalizeCustomerBrowseWindowLimit],
+		] as unknown as [BrowseWindowGrammar<never>, (limit: number) => number][]) {
+			const keys = requested.map((rows) => grammar.encode({ limit: normalize(rows) } as never));
+			expect(new Set(keys).size).toBe(new Set(requested.map(normalize)).size);
 		}
 	});
 
@@ -358,12 +364,22 @@ const CUSTOMER_DOMAIN: CustomerBrowseWindowDescriptor[] =
 	);
 
 const GRAMMARS = [
-	['orders', ORDER_BROWSE_WINDOW_GRAMMAR, ORDER_DOMAIN],
-	['products', PRODUCT_BROWSE_WINDOW_GRAMMAR, PRODUCT_DOMAIN],
-	['customers', CUSTOMER_BROWSE_WINDOW_GRAMMAR, CUSTOMER_DOMAIN],
-] as unknown as [string, BrowseWindowGrammar<never>, unknown[]][];
+	['orders', ORDER_BROWSE_WINDOW_GRAMMAR, ORDER_DOMAIN, 'orders:browser:'],
+	[
+		'products',
+		PRODUCT_BROWSE_WINDOW_GRAMMAR,
+		PRODUCT_DOMAIN,
+		PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX,
+	],
+	[
+		'customers',
+		CUSTOMER_BROWSE_WINDOW_GRAMMAR,
+		CUSTOMER_DOMAIN,
+		CUSTOMER_BROWSE_WINDOW_QUERY_KEY_PREFIX,
+	],
+] as unknown as [string, BrowseWindowGrammar<never>, unknown[], string][];
 
-describe.each(GRAMMARS)('%s browse-window grammar', (_name, grammar, domain) => {
+describe.each(GRAMMARS)('%s browse-window grammar', (_name, grammar, domain, queryKeyPrefix) => {
 	/**
 	 * The encoder must never build a key the parser rejects. A one-sided key would seed a task
 	 * the drain permanently refuses — and for an out-of-enum orderby it would be the one route
@@ -381,7 +397,7 @@ describe.each(GRAMMARS)('%s browse-window grammar', (_name, grammar, domain) => 
 
 	it('starts every key it builds with this lane s prefix, and claims no other lane s keys', () => {
 		for (const window of domain as never[]) {
-			expect(grammar.encode(window).startsWith(grammar.queryKeyPrefix)).toBe(true);
+			expect(grammar.encode(window).startsWith(queryKeyPrefix)).toBe(true);
 		}
 		for (const foreign of [
 			'orders:custom-pull',
@@ -392,7 +408,7 @@ describe.each(GRAMMARS)('%s browse-window grammar', (_name, grammar, domain) => 
 			'customers:search=smith:limit=25',
 			'taxRates:all',
 		]) {
-			if (foreign.startsWith(grammar.queryKeyPrefix)) continue;
+			if (foreign.startsWith(queryKeyPrefix)) continue;
 			expect(grammar.parse(foreign)).toBeNull();
 		}
 	});
@@ -419,6 +435,25 @@ describe.each(GRAMMARS)('%s browse-window grammar', (_name, grammar, domain) => 
 		}
 	});
 
+	/**
+	 * Eviction DELETES lanes on the authority of a survivor of the same view, so a key that
+	 * parses but is not the key this encoder would have written must not be grouped into the
+	 * canonical view. Unreachable from any encoder — which is exactly why it is pinned rather
+	 * than left to the next reader to rediscover.
+	 */
+	it('gives a non-canonical spelling no lane identity at all', () => {
+		const identify = browseWindowLaneIdentity(grammar);
+		for (const window of (domain as never[]).slice(0, 8)) {
+			const canonical = grammar.encode(window);
+			if (grammar.limitOf(window) === 'all') continue;
+			expect(identify(canonical)).not.toBeNull();
+			expect(identify(canonical.replace(/:limit=(\d+)/, ':limit=0$1'))).toBeNull();
+			if (canonical.includes(':customer=')) {
+				expect(identify(canonical.replace(/:customer=(\d+)/, ':customer=00$1'))).toBeNull();
+			}
+		}
+	});
+
 	it('gives one window exactly one lane identity for the default sort', () => {
 		// A restated default sort is not a second spelling of the same window — it is rejected,
 		// so a lane cannot be forked in two by the door it came through.
@@ -442,13 +477,78 @@ describe.each(GRAMMARS)('%s browse-window grammar', (_name, grammar, domain) => 
 // ---------------------------------------------------------------------------
 
 /**
- * The pre-consolidation encoders, copied verbatim (minus their input validation, which the
- * matrix below never trips) from order-browser-scheduler-descriptor.ts,
- * rx-order-scheduler-task-seeder.ts, rx-scheduler-product-task-seeder.ts and
+ * The pre-consolidation encoders as they stood at ad00dfa82, copied from
+ * order-browser-scheduler-descriptor.ts (BOTH orders doors — the demand plane's
+ * `orderBrowserQueryKey`, verbatim including its validation, and the seeder's hand-built
+ * key), rx-order-scheduler-task-seeder.ts, rx-scheduler-product-task-seeder.ts and
  * rx-scheduler-customer-task-seeder.ts. They exist to prove the consolidation moved no
  * bytes; a deliberate future change to a key format has to change these too, which is
  * exactly the friction a persisted identity deserves.
+ *
+ * The products/customers/orders-seeder fixtures drop their callers' input validation (the
+ * matrices below never trip it). The orders DEMAND-door fixture keeps every validation
+ * verbatim, because the question it answers is precisely which inputs are refused before
+ * reaching the sort tail — see the half-sort parity test.
  */
+type LegacyOrderBrowseDimensions = {
+	status?: string;
+	search?: string;
+	limit: number | 'all';
+	customerId?: number;
+	cashierId?: number;
+	store?: string;
+	afterSeconds?: number;
+	beforeSeconds?: number;
+	orderby?: string;
+	order?: string;
+};
+
+function legacyOrderBrowserDemandKey(dims: LegacyOrderBrowseDimensions): string {
+	const status = (dims.status ?? 'all').trim();
+	const search = (dims.search ?? '').trim();
+	const safeNonNegativeInteger = (value: number | undefined): number | undefined =>
+		value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+	const afterSeconds = safeNonNegativeInteger(dims.afterSeconds);
+	const beforeSeconds = safeNonNegativeInteger(dims.beforeSeconds);
+	if (status === '') throw new TypeError('orders browse status must not be empty');
+	if (status.includes(':')) throw new TypeError('orders browse status must not contain ":"');
+	if ((dims.orderby === undefined) !== (dims.order === undefined)) {
+		throw new TypeError('orders browse orderby and order must be provided together');
+	}
+	if (
+		dims.orderby !== undefined &&
+		dims.orderby !== 'date' &&
+		dims.orderby !== 'modified' &&
+		dims.orderby !== 'id' &&
+		dims.orderby !== 'status' &&
+		dims.orderby !== 'customer_id' &&
+		dims.orderby !== 'payment_method' &&
+		dims.orderby !== 'total'
+	) {
+		throw new TypeError(`unsupported orders browse orderby "${dims.orderby}"`);
+	}
+	if (dims.order !== undefined && dims.order !== 'asc' && dims.order !== 'desc') {
+		throw new TypeError(`unsupported orders browse order "${dims.order}"`);
+	}
+	if (dims.limit === 'all' && afterSeconds === undefined && beforeSeconds === undefined) {
+		throw new TypeError("orders browse limit 'all' requires a date range bound");
+	}
+
+	const dimension = (name: string, value: number | string | undefined): string =>
+		value === undefined ? '' : `:${name}=${value}`;
+	const store = dims.store && /^(?:\d+|[a-z0-9_-]+)$/.test(dims.store) ? dims.store : undefined;
+	const sortPart =
+		dims.limit === 'all' ||
+		dims.orderby === undefined ||
+		(dims.orderby === 'id' && dims.order === 'desc')
+			? ''
+			: `:orderby=${dims.orderby}:order=${dims.order}`;
+	const limit =
+		dims.limit === 'all' ? 'all' : normalizeOrderBrowseWindowLimit(dims.limit as number);
+
+	return `orders:browser:status=${status}${dimension('customer', safeNonNegativeInteger(dims.customerId))}${dimension('cashier', safeNonNegativeInteger(dims.cashierId))}${dimension('store', store)}${dimension('after', afterSeconds)}${dimension('before', beforeSeconds)}${sortPart}:search=${search}:limit=${limit}`;
+}
+
 function legacyOrderSeederIdentity(input: {
 	status: string;
 	search: string;
@@ -536,7 +636,73 @@ function legacyCustomerIdentity(descriptor: CustomerBrowseWindowDescriptor): {
 	};
 }
 
+/** The orders DEMAND door's own input shape, for the fixture comparison. */
+function orderDemandDimensions(window: OrderBrowseWindowFields): LegacyOrderBrowseDimensions {
+	return {
+		status: window.status,
+		search: window.search,
+		limit: window.limit,
+		...(window.customerId !== undefined ? { customerId: window.customerId } : {}),
+		...(window.cashierId !== undefined ? { cashierId: window.cashierId } : {}),
+		...(window.store !== undefined ? { store: window.store } : {}),
+		...(window.afterSeconds !== undefined ? { afterSeconds: window.afterSeconds } : {}),
+		...(window.beforeSeconds !== undefined ? { beforeSeconds: window.beforeSeconds } : {}),
+		...(window.orderby !== undefined ? { orderby: window.orderby } : {}),
+		...(window.order !== undefined ? { order: window.order } : {}),
+	};
+}
+
 describe('the consolidated grammar emits the pre-consolidation bytes', () => {
+	it('matches the legacy ORDERS demand-plane encoder across the dimension matrix', () => {
+		for (const window of ORDER_DOMAIN) {
+			const dims = orderDemandDimensions(window);
+			expect(orderBrowserQueryKey(dims as never)).toBe(legacyOrderBrowserDemandKey(dims));
+		}
+	});
+
+	/**
+	 * HALF A SORT PAIR, at both doors.
+	 *
+	 * The old demand-door encoder short-circuited its sort tail on `orderby === undefined`
+	 * ALONE, while the consolidated one short-circuits only when BOTH halves are absent —
+	 * which reads like a semantic change and is why this test exists. It is not one: the
+	 * pairing REFUSAL above the tail is unchanged, so neither the old nor the new door ever
+	 * reaches the tail with half a pair. Both throw, with the same message.
+	 *
+	 * The SEEDER door is where a half pair is representable, and there both encoders emit the
+	 * same one-sided key — which the parser then rejects, so the seed is refused rather than
+	 * silently seeding an unsorted lane. Emitting `''` there instead (the demand door's rule)
+	 * would DROP the stray `order` and seed the default-sorted window, which is why the two
+	 * doors must not be collapsed onto the demand rule.
+	 */
+	it('refuses half a sort pair at the demand door and one-sided-encodes it at the seeder door', () => {
+		for (const half of [
+			{ status: 'processing', search: '', limit: 50, order: 'asc' as const },
+			{ status: 'processing', search: '', limit: 50, orderby: 'date' as const },
+		]) {
+			expect(() => legacyOrderBrowserDemandKey(half)).toThrow(
+				'orders browse orderby and order must be provided together'
+			);
+			expect(() => orderBrowserQueryKey(half as never)).toThrow(
+				'orders browse orderby and order must be provided together'
+			);
+
+			const legacySeeder = legacyOrderSeederIdentity(half);
+			expect(ORDER_BROWSE_WINDOW_GRAMMAR.encode(half as OrderBrowseWindowFields)).toBe(
+				legacySeeder.queryKey
+			);
+			expect(ORDER_BROWSE_WINDOW_GRAMMAR.requirementId(half as OrderBrowseWindowFields)).toBe(
+				legacySeeder.requirementId
+			);
+			// One-sided, therefore not a lane identity anything can seed or drain.
+			expect(
+				ORDER_BROWSE_WINDOW_GRAMMAR.parse(
+					ORDER_BROWSE_WINDOW_GRAMMAR.encode(half as OrderBrowseWindowFields)
+				)
+			).toBeNull();
+		}
+	});
+
 	it('matches the legacy ORDERS seeder encoder across the dimension matrix', () => {
 		for (const window of ORDER_DOMAIN) {
 			const legacy = legacyOrderSeederIdentity({

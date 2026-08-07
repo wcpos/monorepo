@@ -69,9 +69,11 @@ export type BrowseWindowTailWriter = {
 };
 
 export type BrowseWindowTailOutcome = {
-	/** The carried prefix was lost mid-walk; the window restarts from the top next pass. */
-	demoted: boolean;
-	/** Whether this pass moved the window past what it already held. */
+	/**
+	 * Whether this pass moved the window past what it already held. A pass that DEMOTED (lost
+	 * its carried prefix mid-walk) reports `true`: the window restarts from the top next pass
+	 * regardless, so the caller must not send it round again in this one.
+	 */
 	progressed: boolean;
 };
 
@@ -165,7 +167,7 @@ export async function finalizeBrowseWindowLane(
 		await writer.recordLane?.({ recordIds: [], complete: false, prefixAncestry: undefined });
 		// The prefix is gone, so the next pass must re-walk from the top regardless; do not send
 		// the caller round again in this one.
-		return { demoted: true, progressed: true };
+		return { progressed: true };
 	}
 
 	if (!input.pageBudget.emitBeforeAncestryCheck) emitPageBudget();
@@ -185,12 +187,12 @@ export async function finalizeBrowseWindowLane(
 	// only ids the prefix already held has not.
 	const progressed = laneRecordIds.length > covered || input.serverExhausted;
 	if (input.skipLaneWriteWithoutProgress && !progressed) {
-		return { demoted: false, progressed: false };
+		return { progressed: false };
 	}
 
 	if (!writer.recordLane) {
 		await writer.recordRecordsOnly(laneRecordIds);
-		return { demoted: false, progressed: true };
+		return { progressed: true };
 	}
 
 	await writer.recordLane({
@@ -227,5 +229,5 @@ export async function finalizeBrowseWindowLane(
 		diagnostics: input.diagnostics,
 	});
 
-	return { demoted: false, progressed: true };
+	return { progressed: true };
 }

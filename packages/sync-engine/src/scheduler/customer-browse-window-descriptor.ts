@@ -252,15 +252,13 @@ export function isCustomerBrowseWindowQueryKey(queryKey: string): boolean {
  * The customers lane, as a value the shared browse-window engine consumes
  * (browse-window-grammar.ts).
  *
- * `predecessor` is deliberately null: this lane grows GEOMETRICALLY, so the window one step
- * back is half the size and its coverage is not a page-aligned prefix of this one. The
- * customers fetcher therefore carries no continuation or eviction — see
- * rx-scheduler-customer-fetcher.ts, which walks each window from page 1.
+ * This lane grows GEOMETRICALLY, so the window one step back is half the size and its
+ * coverage is not a page-aligned prefix of this one. The customers fetcher therefore carries
+ * no continuation and no eviction — see rx-scheduler-customer-fetcher.ts, which walks each
+ * window from page 1.
  */
 export const CUSTOMER_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<CustomerBrowseWindowDescriptor> = {
 	collection: 'customers',
-	queryKeyPrefix: CUSTOMER_BROWSE_WINDOW_QUERY_KEY_PREFIX,
-	normalizeLimit: normalizeCustomerBrowseWindowLimit,
 	encode: (descriptor) =>
 		customerBrowseWindowQueryKey(descriptor.limit, {
 			orderby: descriptor.orderby,
@@ -269,7 +267,6 @@ export const CUSTOMER_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<CustomerBrowseW
 	parse: parseCustomerBrowseWindowDescriptor,
 	limitOf: (descriptor) => descriptor.limit,
 	requirementId: customerBrowseWindowRequirementId,
-	predecessor: () => null,
 	viewKey: (descriptor) => encodeCustomerBrowseWindowKey('', descriptor.orderby, descriptor.order),
 	schemaCeilingLabel: 'Customer browse-window scheduler',
 	measureTaskIdAgainstCeiling: true,

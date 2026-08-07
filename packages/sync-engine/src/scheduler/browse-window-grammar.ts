@@ -57,15 +57,6 @@ export type BrowseWindowLaneIdentifier = (queryKey: string) => BrowseWindowLaneI
 export type BrowseWindowGrammar<TWindow> = {
 	/** Collection the lane's tasks and coverage belong to. */
 	collection: string;
-	/** Literal prefix every key of this lane starts with. */
-	queryKeyPrefix: string;
-	/**
-	 * Quantize a grid-requested limit onto THIS lane's growth curve. Kept as data because the
-	 * curves genuinely differ: orders and products round up to a fixed step, customers double
-	 * (see CUSTOMER_BROWSE_WINDOW_GROWTH_FACTOR — every customers window is a fresh walk, so a
-	 * fixed step would make scroll depth quadratic).
-	 */
-	normalizeLimit: (limit: number | undefined) => number;
 	/** The ENCODER half: descriptor → the persisted lane key. */
 	encode: (window: TWindow) => string;
 	/** The PARSER half: lane key → descriptor, or null when the key is not this lane's. */
@@ -74,8 +65,6 @@ export type BrowseWindowGrammar<TWindow> = {
 	limitOf: (window: TWindow) => number | 'all';
 	/** The persisted requirement identity for this window. */
 	requirementId: (window: TWindow) => string;
-	/** The lane ONE GROWTH STEP smaller — the prefix a growing window resumes from. */
-	predecessor: (window: TWindow) => { queryKey: string; limit: number } | null;
 	/**
 	 * The view identity — the key with the window size REMOVED — or null when the lane is not
 	 * a scroll window and so can neither supersede nor be superseded (orders' `limit=all`).
@@ -103,6 +92,15 @@ export function browseWindowKeyPart(name: string, value: number | string | undef
 /**
  * The eviction seam's {@link BrowseWindowLaneIdentifier} for a grammar — one function
  * instead of the per-collection identity each lane used to hand-roll.
+ *
+ * ONLY CANONICAL KEYS GET AN IDENTITY. A key that parses but is not the key this encoder
+ * would have written — `:limit=0050`, `:customer=007` — is refused rather than grouped into
+ * the canonical view. Eviction DELETES lanes, so the cost of grouping two spellings that
+ * some other writer may treat as distinct is asymmetric: the lane a non-canonical key names
+ * would be deleted on the authority of a survivor that is not, strictly, the same view. The
+ * orders identity used to state this as an `endsWith(':limit=<N>')` check; re-encoding is
+ * the general form of the same guard, and it covers every dimension rather than the limit
+ * alone.
  */
 export function browseWindowLaneIdentity<TWindow>(
 	grammar: BrowseWindowGrammar<TWindow>
@@ -112,6 +110,7 @@ export function browseWindowLaneIdentity<TWindow>(
 		if (!window) return null;
 		const limit = grammar.limitOf(window);
 		if (limit === 'all') return null;
+		if (grammar.encode(window) !== queryKey) return null;
 		const viewKey = grammar.viewKey(window);
 		return viewKey === null ? null : { viewKey, limit };
 	};

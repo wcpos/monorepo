@@ -296,23 +296,13 @@ export function parseProductBrowseWindowLimit(queryKey: string): number | null {
 export function productBrowseWindowPredecessorQueryKey(
 	descriptor: ProductBrowseWindowDescriptor
 ): string | null {
-	return productBrowseWindowPredecessor(descriptor)?.queryKey ?? null;
-}
-
-/** {@link productBrowseWindowPredecessorQueryKey} with the size the prefix must have. */
-export function productBrowseWindowPredecessor(
-	descriptor: ProductBrowseWindowDescriptor
-): { queryKey: string; limit: number } | null {
 	const previous = descriptor.limit - PRODUCT_BROWSE_WINDOW_STEP;
 	if (previous < PRODUCT_BROWSE_WINDOW_STEP) return null;
-	return {
-		queryKey: productBrowseWindowQueryKey(
-			previous,
-			{ orderby: descriptor.orderby, order: descriptor.order },
-			descriptor
-		),
-		limit: previous,
-	};
+	return productBrowseWindowQueryKey(
+		previous,
+		{ orderby: descriptor.orderby, order: descriptor.order },
+		descriptor
+	);
 }
 
 /**
@@ -322,8 +312,6 @@ export function productBrowseWindowPredecessor(
  */
 export const PRODUCT_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<ProductBrowseWindowDescriptor> = {
 	collection: 'products',
-	queryKeyPrefix: PRODUCT_BROWSE_WINDOW_QUERY_KEY_PREFIX,
-	normalizeLimit: normalizeProductBrowseWindowLimit,
 	encode: (descriptor) =>
 		productBrowseWindowQueryKey(
 			descriptor.limit,
@@ -333,7 +321,6 @@ export const PRODUCT_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<ProductBrowseWin
 	parse: parseProductBrowseWindowDescriptor,
 	limitOf: (descriptor) => descriptor.limit,
 	requirementId: productBrowseWindowRequirementId,
-	predecessor: productBrowseWindowPredecessor,
 	viewKey: (descriptor) =>
 		encodeProductBrowseWindowKey('', descriptor.orderby, descriptor.order, descriptor),
 	schemaCeilingLabel: 'Product browse-window scheduler',

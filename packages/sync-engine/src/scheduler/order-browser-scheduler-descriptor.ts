@@ -353,8 +353,6 @@ export function orderBrowseWindowFields(
  */
 export const ORDER_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<OrderBrowseWindowFields> = {
 	collection: 'orders',
-	queryKeyPrefix: 'orders:browser:',
-	normalizeLimit: (limit) => normalizeOrderBrowseWindowLimit(limit ?? Number.NaN),
 	encode: orderBrowseWindowQueryKey,
 	parse: (queryKey) => {
 		const decision = parseOrderBrowserSchedulerDescriptor(queryKey);
@@ -362,10 +360,6 @@ export const ORDER_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<OrderBrowseWindowF
 	},
 	limitOf: (fields) => fields.limit,
 	requirementId: orderBrowseWindowRequirementId,
-	predecessor: (fields) =>
-		fields.limit === 'all'
-			? null
-			: orderBrowserPredecessorWindow(orderBrowseWindowQueryKey(fields), fields.limit),
 	viewKey: (fields) => encodeOrderBrowseWindowKey(fields, ''),
 	schemaCeilingLabel: 'Browser order scheduler descriptor',
 	measureTaskIdAgainstCeiling: false,
