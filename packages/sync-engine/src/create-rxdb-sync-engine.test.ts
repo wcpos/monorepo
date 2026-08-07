@@ -20,12 +20,11 @@ import {
 } from '@wcpos/sync-core';
 
 import {
-	createRxdbSyncEngine,
 	type EngineEvent,
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
-import { memoryEngineStorage, memoryStringStore, scriptedConnectivity } from './testing';
+import { createEngineHarness, memoryStringStore, scriptedConnectivity } from './testing';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 setPremiumFlag();
@@ -48,12 +47,18 @@ function freshIdentities(): { a: StoreScopeIdentity; b: StoreScopeIdentity } {
 }
 
 function engineWith(overrides?: Partial<RxdbSyncEnginePorts>, initial?: StoreScopeIdentity) {
-	const ports: RxdbSyncEnginePorts = {
-		site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
-		storage: memoryEngineStorage(),
-		...overrides,
-	};
-	return createRxdbSyncEngine(ports, initial ?? freshIdentities().a);
+	const { now, diagnostics, connectivity, fetcher, ...ports } = overrides ?? {};
+	return createEngineHarness({
+		site: SITE,
+		identity: initial ?? freshIdentities().a,
+		mode: 'auto',
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
+		...(fetcher === undefined ? {} : { fetch: fetcher }),
+		ports,
+		awaitReady: false,
+	}).engine;
 }
 
 async function insertOrder(

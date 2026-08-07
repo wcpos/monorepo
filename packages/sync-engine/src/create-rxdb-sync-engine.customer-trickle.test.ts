@@ -3,17 +3,12 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { scopeKeyFor } from '@wcpos/sync-core';
 
-import {
-	createRxdbSyncEngine,
-	type RxdbSyncEnginePorts,
-	type StoreScopeIdentity,
-} from './create-rxdb-sync-engine';
-import { memoryEngineStorage, memoryStringStore } from './testing';
+import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
+import { createEngineHarness, memoryEngineStorage, memoryStringStore } from './testing';
 
 setPremiumFlag();
 
 const SITE = 'https://lab.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const TRICKLE_STATE_KEY = 'customer-trickle:state';
 let uniqueStore = 0;
 
@@ -58,24 +53,19 @@ function isTrickleUrl(url: string): boolean {
 }
 
 function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}, storeIdentity = identity()) {
-	const fetcher = overrides.fetcher ?? (async () => json([]));
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
-			storage: memoryEngineStorage(),
-			mode: 'manual',
-			...overrides,
-			// Scope open issues one barcode-selector hydration request
-			// (/changes/config-fingerprint, #862) before any lane runs. Answer it
-			// here so the per-test fetchers record only the customer traffic they
-			// assert on.
-			fetcher: async (url, init) =>
-				new URL(url).pathname.endsWith('/changes/config-fingerprint')
-					? json({})
-					: fetcher(url, init),
-		},
-		storeIdentity
-	);
+	const { fetcher, now, diagnostics, connectivity, ...ports } = overrides;
+	return createEngineHarness({
+		site: SITE,
+		identity: storeIdentity,
+		mode: 'manual',
+		fetch: fetcher ?? (async () => json([])),
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
+		routes: { '/changes/config-fingerprint': {} },
+		ports,
+		awaitReady: false,
+	}).engine;
 }
 
 describe('customer-trickle maintenance lane', () => {

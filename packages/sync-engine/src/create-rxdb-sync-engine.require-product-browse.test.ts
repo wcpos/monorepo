@@ -10,15 +10,10 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-	createRxdbSyncEngine,
-	type RxdbSyncEngine,
-	type StoreScopeIdentity,
-} from './create-rxdb-sync-engine';
-import { memoryEngineStorage } from './testing';
+import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
+import { createEngineHarness } from './testing';
 
 const SITE = 'https://lab.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 let uniqueStore = 0;
 
 const productUuid = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -89,15 +84,12 @@ function scriptedCatalog(
 }
 
 function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>) {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
-			storage: memoryEngineStorage(),
-			fetcher: (url, init) => fetch(url, init),
-			mode: 'manual',
-		},
-		freshIdentity()
-	);
+	return createEngineHarness({
+		site: SITE,
+		identity: freshIdentity(),
+		fetch,
+		awaitReady: false,
+	}).engine;
 }
 
 async function productIds(engine: RxdbSyncEngine): Promise<number[]> {

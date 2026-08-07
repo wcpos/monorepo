@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	CENSUS_COLLECTIONS,
 	censusCollectionFromQueryKey,
+	censusNextExpiryMs,
 	censusQueryKey,
 	censusTotalsFromCache,
 	SUPPORTED_CENSUS_COLLECTIONS,
@@ -85,4 +86,21 @@ describe('collection census', () => {
 		expect(totals.variations).toBeNull();
 		expect(totals.customers).toBeNull();
 	});
+
+	it('finds only the earliest future freshness deadline', () => {
+		expect(
+			censusNextExpiryMs(
+				[
+					{ ...entryForTest('census:orders', 90) },
+					{ ...entryForTest('census:products', 120) },
+					{ ...entryForTest('census:customers', 110) },
+				],
+				100
+			)
+		).toBe(110);
+	});
 });
+
+function entryForTest(queryKey: string, freshUntilMs: number) {
+	return { queryKey, totalMatchingRecords: 1, updatedAtMs: 50, freshUntilMs };
+}

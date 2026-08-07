@@ -12,19 +12,17 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { customerDocumentId } from '@wcpos/sync-core';
 
 import {
-	createRxdbSyncEngine,
 	type RxdbSyncEngine,
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
-import { memoryEngineStorage } from './testing';
+import { createEngineHarness } from './testing';
 import { seedTargetedProductSchedulerTask } from './scheduler/rx-scheduler-product-task-seeder';
 import { seedTargetedLane } from './scheduler/rx-targeted-lane-seeder';
 
 setPremiumFlag();
 
 const SITE = 'https://lab.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const UUID_1 = '11111111-1111-4111-8111-111111111111';
 let uniqueStore = 0;
 
@@ -94,16 +92,18 @@ function engineWith(
 	fetch: (url: string) => Promise<Response>,
 	overrides?: Partial<RxdbSyncEnginePorts>
 ): RxdbSyncEngine {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
-			storage: memoryEngineStorage(),
-			fetcher: (url) => fetch(url),
-			mode: 'manual',
-			...overrides,
-		},
-		freshIdentity()
-	);
+	const { now, diagnostics, connectivity, fetcher, ...ports } = overrides ?? {};
+	return createEngineHarness({
+		site: SITE,
+		identity: freshIdentity(),
+		mode: 'manual',
+		fetch: fetcher ?? fetch,
+		now,
+		diagnostics,
+		connectivitySignal: connectivity,
+		ports,
+		awaitReady: false,
+	}).engine;
 }
 
 describe('scheduler drain through the public handle (slice 5e)', () => {

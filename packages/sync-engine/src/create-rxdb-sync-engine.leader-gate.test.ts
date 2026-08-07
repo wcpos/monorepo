@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
-import { createRxdbSyncEngine, type RxdbSyncEnginePorts } from './create-rxdb-sync-engine';
-import { memoryEngineStorage } from './testing';
+import { createRxdbSyncEngine } from './create-rxdb-sync-engine';
+import { createEngineHarness } from './testing';
 
 setPremiumFlag();
 
@@ -14,21 +14,15 @@ function engineWith(writePlaneOwner?: () => boolean) {
 	const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => {
 		throw new Error('the follower must not use the write transport');
 	});
-	const ports = {
-		site: { syncBaseUrl: `${SITE}/wp-json/wcpos/v2`, wpJsonRoot: `${SITE}/wp-json` },
-		storage: memoryEngineStorage(),
-		fetcher: async (url: string, init?: RequestInit) =>
-			url.endsWith('/changes/config-fingerprint')
-				? Response.json({ fingerprints: {} })
-				: fetcher(url, init),
-		mode: 'manual' as const,
-		writePlaneOwner,
-	};
-	const engine = createRxdbSyncEngine(ports as RxdbSyncEnginePorts, {
+	const engine = createEngineHarness({
 		site: SITE,
-		storeId: 1,
-		cashierId: `leader-gate-${++scope}`,
-	});
+		identity: { site: SITE, storeId: 1, cashierId: `leader-gate-${++scope}` },
+		mode: 'manual',
+		fetch: fetcher,
+		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
+		ports: { writePlaneOwner },
+		awaitReady: false,
+	}).engine;
 	return { engine, fetcher };
 }
 

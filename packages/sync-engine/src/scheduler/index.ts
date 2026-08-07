@@ -75,6 +75,7 @@ export {
 export {
 	CENSUS_COLLECTIONS,
 	censusCollectionFromQueryKey,
+	censusNextExpiryMs,
 	censusQueryKey,
 	censusTotalsFromCache,
 	SUPPORTED_CENSUS_COLLECTIONS,

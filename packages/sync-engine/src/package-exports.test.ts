@@ -25,6 +25,7 @@ describe('package exports', () => {
 	it("keeps the testing door's runtime values curated", async () => {
 		const testing = await import('./testing');
 		expect(Object.keys(testing).sort()).toEqual([
+			'createEngineHarness',
 			'customerBrowseWindowQueryKeyFromDimensions',
 			'engineSyncCollectionCreators',
 			'existenceManifestDocument',

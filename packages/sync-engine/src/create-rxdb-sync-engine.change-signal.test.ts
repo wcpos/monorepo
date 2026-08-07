@@ -14,19 +14,22 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { scopeKeyFor, type StoreScopeIdentity, type SyncEvent } from '@wcpos/sync-core';
 
 import {
-	createRxdbSyncEngine,
 	type EngineEvent,
 	EngineStringStore,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
-import { memoryEngineStorage, memoryStringStore, scriptedConnectivity } from './testing';
+import {
+	createEngineHarness,
+	memoryEngineStorage,
+	memoryStringStore,
+	scriptedConnectivity,
+} from './testing';
 
 import type { RxStorage } from 'rxdb';
 
 setPremiumFlag();
 
 const SITE = 'https://signal.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 const UUID_9 = '11111111-1111-4111-8111-111111111111';
 const variationUuid = (id: number) => `22222222-2222-4222-8222-${String(id).padStart(12, '0')}`;
 
@@ -222,24 +225,23 @@ function engineWith(input: {
 	diagnostics?: (event: SyncEvent) => void;
 	checkpoints?: EngineStringStore;
 }): RxdbSyncEngine {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
-			storage: input.storage,
-			fetcher: async (url, init) =>
-				url.endsWith('/changes/config-fingerprint')
-					? Response.json({
-							fingerprints: { products: 'fp-1', variations: 'fp-1', tax_rates: 'fp-1' },
-							barcode_fields: { products: ['sku'], variations: ['sku'], tax_rates: [] },
-						})
-					: input.fetch(url, init),
-			...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
-			...(input.connectivity ? { connectivity: input.connectivity } : {}),
-			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
-			mode: 'manual',
+	return createEngineHarness({
+		site: SITE,
+		identity: input.identity,
+		storage: input.storage,
+		mode: 'manual',
+		fetch: input.fetch,
+		routes: {
+			'/changes/config-fingerprint': {
+				fingerprints: { products: 'fp-1', variations: 'fp-1', tax_rates: 'fp-1' },
+				barcode_fields: { products: ['sku'], variations: ['sku'], tax_rates: [] },
+			},
 		},
-		input.identity
-	);
+		...(input.checkpoints ? { checkpoints: input.checkpoints } : {}),
+		connectivitySignal: input.connectivity,
+		diagnostics: input.diagnostics,
+		awaitReady: false,
+	}).engine;
 }
 
 async function productCount(engine: RxdbSyncEngine): Promise<number> {
@@ -631,40 +633,32 @@ describe('sync("change-signal") through the public handle', () => {
 		await checkpoints.set(key, JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }));
 		server.state.head = 9_000;
 
-		// The change-signal cadence is a self-rescheduling setTimeout chain
-		// (jittered — pinned to exactly 10s here via random: 0.5); capture with
-		// pass-through so this test's own real timers keep working.
-		const timeouts: { callback: () => void; delay: number }[] = [];
-		const realSetTimeout = globalThis.setTimeout;
-		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
-			callback: () => void,
-			delay: number
-		) => {
-			timeouts.push({ callback, delay });
-			return realSetTimeout(callback, delay);
-		}) as typeof setTimeout);
+		const harness = createEngineHarness({
+			site: SITE,
+			identity,
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			checkpoints,
+			mode: 'auto',
+			random: () => 0.5,
+			captureTimers: true,
+			awaitReady: false,
+		});
+		const timers = harness.timers!;
 		const fireChangeSignalTimeout = () => {
-			const timer = [...timeouts].reverse().find(({ delay }) => delay === 10_000);
-			if (!timer) throw new Error('change-signal timeout not armed');
-			timer.callback();
+			let index = timers.timeouts.length - 1;
+			while (index >= 0 && timers.timeouts[index]!.delayMs !== 10_000) index -= 1;
+			if (index < 0) throw new Error('change-signal timeout not armed');
+			timers.fireTimeout(index);
 		};
-
-		const engine = createRxdbSyncEngine(
-			{
-				site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
-				storage: memoryEngineStorage(),
-				fetcher: (url) => server.fetch(url),
-				checkpoints,
-				mode: 'auto',
-				random: () => 0.5,
-			},
-			identity
-		);
+		const engine = harness.engine;
 		try {
 			const events: EngineEvent[] = [];
 			engine.events((event) => events.push(event));
 			await engine.ready;
-			await vi.waitFor(() => expect(timeouts.some(({ delay }) => delay === 10_000)).toBe(true));
+			await vi.waitFor(() =>
+				expect(timers.timeouts.some(({ delayMs }) => delayMs === 10_000)).toBe(true)
+			);
 			events.length = 0;
 
 			// Fire the change-signal timer: the tick rebaselines (cursor 0 →
@@ -696,8 +690,7 @@ describe('sync("change-signal") through the public handle', () => {
 				events.filter((event) => event.type === 'lane-start' && event.lane === 'existence-prime')
 			).toHaveLength(0);
 		} finally {
-			vi.restoreAllMocks();
-			await engine.dispose();
+			await harness.dispose();
 		}
 	});
 

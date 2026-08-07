@@ -15,20 +15,16 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-	createRxdbSyncEngine,
-	type RxdbSyncEngine,
-	type StoreScopeIdentity,
-} from './create-rxdb-sync-engine';
+import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
 import { seedOrderFilterSchedulerTask } from './scheduler';
 import { seedTaxRatesLane } from './scheduler/rx-pos-bootstrap-seeder';
-import { memoryEngineStorage } from './testing';
+import { createEngineHarness } from './testing';
 
 const SITE = 'https://lab.example.test';
-const SYNC_BASE = `${SITE}/wp-json/wcpos/v2`;
 let uniqueStore = 0;
 
-afterEach(() => {
+afterEach(async () => {
+	await createEngineHarness.disposeTrackedEngines();
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 });
@@ -106,15 +102,12 @@ function productsHealthyOrdersBroken() {
 }
 
 function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>) {
-	return createRxdbSyncEngine(
-		{
-			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
-			storage: memoryEngineStorage(),
-			fetcher: (url, init) => fetch(url, init),
-			mode: 'manual',
-		},
-		freshIdentity()
-	);
+	return createEngineHarness({
+		site: SITE,
+		identity: freshIdentity(),
+		fetch,
+		awaitReady: false,
+	}).engine;
 }
 
 async function residentTaxRateCount(engine: RxdbSyncEngine): Promise<number> {
