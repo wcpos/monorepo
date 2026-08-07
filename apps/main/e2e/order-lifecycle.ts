@@ -22,12 +22,8 @@ import { randomUUID } from 'crypto';
 
 import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
 
-import {
-	authenticatedTest,
-	getStoreUrl,
-	type StoreAuthorization,
-	storeRequestOptions,
-} from './fixtures';
+import { isolatedProductTest } from './checkout-probe';
+import { getStoreUrl, type StoreAuthorization, storeRequestOptions } from './fixtures';
 
 /** POST target the app uses to persist an order. */
 const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
@@ -601,7 +597,7 @@ export async function trashOrder(
  * have left an order behind. A `finally` inside the test body does not survive
  * a hard timeout.
  */
-export const liveOrderTest = authenticatedTest.extend<{
+export const liveOrderTest = isolatedProductTest.extend<{
 	trackOrder: (order: TrackedOrder) => void;
 }>({
 	trackOrder: async ({ request, storeAuthorization }, use, testInfo) => {

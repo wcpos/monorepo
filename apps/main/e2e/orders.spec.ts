@@ -1,14 +1,22 @@
 import { expect, type Page } from '@playwright/test';
 
-import {
-	getStoreVariant,
-	navigateToPage,
-	authenticatedTest as test,
-	tryAddProductBySku,
-} from './fixtures';
+import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import { getStoreVariant, navigateToPage, tryAddProductBySku } from './fixtures';
 import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
 import { stampRunLabel } from './order-lifecycle';
 import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
+
+/**
+ * Layer 2 status: order queries are already cashier/store-relative (#1071), but
+ * the client cannot mint a disjoint scope. The checked-in wc/v3 REST index's
+ * customer POST has no role field, and StoreSelect can only choose stores the
+ * cashier endpoint already assigned. Full isolation therefore needs server-side
+ * provisioning of e2e-cashier-1..8 as POS-capable cashiers on the target store;
+ * the orchestrator can select one username/password pair by shard/run slot via
+ * the existing E2E_USERNAME/E2E_PASSWORD login parameters. The slot key must
+ * include the RUN id as well as the shard index because push- and PR-event runs
+ * can overlap across separate concurrency groups.
+ */
 
 /** Helper to navigate to Orders page and wait for load */
 async function navigateToOrders(page: Page) {
@@ -20,6 +28,9 @@ async function navigateToOrders(page: Page) {
 
 /** Add a resident simple product so Save creates an order with the active POS scope meta. */
 async function addOrderProbeProduct(page: Page) {
+	if (await tryAddRunPrivateSimpleProduct(page)) return;
+
+	// Secretless forks retain the pre-isolation shared-SKU path below.
 	const skuResult = await tryAddProductBySku(page);
 	if (skuResult === 'added') return;
 	if (skuResult === 'add_failed') {

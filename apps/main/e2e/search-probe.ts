@@ -4,7 +4,7 @@ import { log } from '@wcpos/utils/logger';
 
 import { type StoreAuthorization, storeRequestOptions } from './fixtures';
 
-import type { APIRequestContext, Locator, Page } from '@playwright/test';
+import type { APIRequestContext, APIResponse, Locator, Page } from '@playwright/test';
 
 type ProbeCollection = 'products' | 'customers';
 type SearchCollection = ProbeCollection | 'orders';
@@ -16,6 +16,11 @@ export interface SearchProbe {
 	token: string;
 }
 
+export type RunPrivateProductKind = 'simple' | 'variable';
+export interface RunPrivateProductProbe extends SearchProbe {
+	variationSku?: string;
+}
+
 export type SearchProbeResult = { ok: true; probe: SearchProbe } | { ok: false; reason: string };
 
 interface CreateSearchProbeOptions {
@@ -24,6 +29,58 @@ interface CreateSearchProbeOptions {
 	authorization: StoreAuthorization | null;
 	collection: ProbeCollection;
 	workerIndex: number;
+	/** True when CI declared product-writer secrets; failures must then fail, never skip. */
+	writerConfigured?: boolean;
+}
+
+export function productWriterCredentialsDecision(
+	user: string | undefined,
+	pass: string | undefined
+): boolean {
+	if (user && !pass) {
+		throw new Error(
+			'E2E product-writer credentials are incomplete: E2E_PRODUCT_WRITER_PASS is missing'
+		);
+	}
+	if (!user && pass) {
+		throw new Error(
+			'E2E product-writer credentials are incomplete: E2E_PRODUCT_WRITER_USER is missing'
+		);
+	}
+	return Boolean(user && pass);
+}
+
+export function productWriterCredentialsConfigured(): boolean {
+	return productWriterCredentialsDecision(
+		process.env.E2E_PRODUCT_WRITER_USER,
+		process.env.E2E_PRODUCT_WRITER_PASS
+	);
+}
+
+export function productProbeFailureAction({
+	writerConfigured,
+	failure,
+	retryAvailable,
+}: {
+	writerConfigured: boolean;
+	failure: 'http' | 'transport';
+	retryAvailable: boolean;
+}): 'skip' | 'retry' | 'fail' {
+	if (failure === 'transport' && retryAvailable) return 'retry';
+	return writerConfigured ? 'fail' : 'skip';
+}
+
+function isNetworkishStatus(status: number): boolean {
+	return status === 408 || status === 429 || status >= 500;
+}
+
+class WriterAuthenticationFailure extends Error {
+	constructor(
+		readonly kind: 'http' | 'transport',
+		readonly status: number | null
+	) {
+		super(kind);
+	}
 }
 
 /** A single alphanumeric FlexSearch token, unique across workers, retries and parallel runs. */
@@ -40,7 +97,8 @@ export function mintSearchProbeToken(workerIndex: number): string {
  * with it. Absent credentials → null → the caller falls back to the captured
  * auth, and a 403 surfaces as the spec's skip-with-reason.
  *
- * The token is never logged; a failed login degrades to null, never a throw.
+ * The token is never logged. Missing credentials return null; declared but
+ * broken credentials throw so CI cannot disguise a provisioning failure as a skip.
  */
 export async function productWriterAuthorization(
 	request: APIRequestContext,
@@ -48,33 +106,66 @@ export async function productWriterAuthorization(
 ): Promise<StoreAuthorization | null> {
 	const user = process.env.E2E_PRODUCT_WRITER_USER;
 	const pass = process.env.E2E_PRODUCT_WRITER_PASS;
+	productWriterCredentialsDecision(user, pass);
 	if (!user || !pass) return null;
 
-	try {
-		const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe`;
-		const pageResponse = await request.get(authUrl);
-		const html = await pageResponse.text();
-		const nonce = /name="_wpnonce" value="([^"]+)"/.exec(html)?.[1];
-		const session = /name="auth_session" value="([^"]+)"/.exec(html)?.[1];
-		if (!nonce || !session) return null;
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		try {
+			const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe`;
+			const pageResponse = await request.get(authUrl);
+			if (isNetworkishStatus(pageResponse.status())) {
+				throw new WriterAuthenticationFailure('transport', pageResponse.status());
+			}
+			if (!pageResponse.ok()) {
+				throw new WriterAuthenticationFailure('http', pageResponse.status());
+			}
+			const html = await pageResponse.text();
+			const nonce = /name="_wpnonce" value="([^"]+)"/.exec(html)?.[1];
+			const session = /name="auth_session" value="([^"]+)"/.exec(html)?.[1];
+			if (!nonce || !session) {
+				throw new WriterAuthenticationFailure('http', pageResponse.status());
+			}
 
-		const submit = await request.post(authUrl, {
-			form: {
-				'wcpos-log': user,
-				'wcpos-pwd': pass,
-				_wpnonce: nonce,
-				auth_session: session,
-				'wcpos-submit': '1',
-			},
-			maxRedirects: 0,
-		});
-		const location = submit.headers()['location'] ?? '';
-		const token = /access_token=([^&]+)/.exec(location)?.[1];
-		return token ? { transport: 'header', value: `Bearer ${token}` } : null;
-	} catch {
-		log.warn('[search-probe] product-writer login failed; falling back to captured auth');
-		return null;
+			const submit = await request.post(authUrl, {
+				form: {
+					'wcpos-log': user,
+					'wcpos-pwd': pass,
+					_wpnonce: nonce,
+					auth_session: session,
+					'wcpos-submit': '1',
+				},
+				maxRedirects: 0,
+			});
+			if (isNetworkishStatus(submit.status())) {
+				throw new WriterAuthenticationFailure('transport', submit.status());
+			}
+			const location = submit.headers()['location'] ?? '';
+			const token = /access_token=([^&]+)/.exec(location)?.[1];
+			if (!token) throw new WriterAuthenticationFailure('http', submit.status());
+			return { transport: 'header', value: `Bearer ${token}` };
+		} catch (error) {
+			const failure =
+				error instanceof WriterAuthenticationFailure
+					? error
+					: new WriterAuthenticationFailure('transport', null);
+			const action = productProbeFailureAction({
+				writerConfigured: true,
+				failure: failure.kind,
+				retryAvailable: attempt === 0,
+			});
+			if (action === 'retry') continue;
+			const status = failure.status === null ? '' : ` (HTTP ${failure.status})`;
+			if (failure.kind === 'transport') {
+				log.warn('[search-probe] configured product-writer login transport failed');
+				throw new Error(
+					`Configured product-writer authentication transport failed after one retry${status}`
+				);
+			}
+			log.warn('[search-probe] configured product-writer login was rejected');
+			throw new Error(`Configured product-writer authentication failed${status}`);
+		}
 	}
+	throw new Error('Configured product-writer authentication failed');
 }
 
 function collectionUrl(storeUrl: string, collection: ProbeCollection, id?: number): string {
@@ -108,7 +199,7 @@ type ProbeRequestOptions = {
  */
 async function probeRequest(
 	request: APIRequestContext,
-	method: 'post' | 'delete',
+	method: 'get' | 'post' | 'delete',
 	storeUrl: string,
 	collection: ProbeCollection,
 	id: number | undefined,
@@ -117,6 +208,107 @@ async function probeRequest(
 	const pretty = await request[method](collectionUrl(storeUrl, collection, id), options);
 	if (pretty.status() !== 404) return pretty;
 	return request[method](plainPermalinkUrl(storeUrl, collection, id), options);
+}
+
+async function productCreateResponse(
+	create: () => Promise<APIResponse>,
+	writerConfigured: boolean,
+	label: string,
+	findExisting?: () => Promise<{ response: APIResponse; record: Record<string, unknown> | null }>
+): Promise<{ response: APIResponse; adoptedRecord?: Record<string, unknown> }> {
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		let response: APIResponse;
+		try {
+			response = await create();
+		} catch {
+			const action = productProbeFailureAction({
+				writerConfigured,
+				failure: 'transport',
+				retryAvailable: attempt === 0,
+			});
+			if (action === 'retry') {
+				const existing = await findExisting?.();
+				if (existing?.record) {
+					return { response: existing.response, adoptedRecord: existing.record };
+				}
+				continue;
+			}
+			throw new Error(`${label} transport failed after one retry`);
+		}
+		if (response.ok()) return { response };
+		const failure = isNetworkishStatus(response.status()) ? 'transport' : 'http';
+		const action = productProbeFailureAction({
+			writerConfigured,
+			failure,
+			retryAvailable: attempt === 0,
+		});
+		if (action === 'retry') {
+			const existing = await findExisting?.();
+			if (existing?.record) {
+				return { response: existing.response, adoptedRecord: existing.record };
+			}
+			continue;
+		}
+		if (action === 'fail') {
+			const transport = failure === 'transport' ? ' transport failed after one retry' : '';
+			throw new Error(`${label}${transport} (HTTP ${response.status()})`);
+		}
+		return { response };
+	}
+	throw new Error(`${label} failed`);
+}
+
+async function variationCreateRequest(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization,
+	productId: number,
+	data: unknown
+) {
+	const root = storeUrl.replace(/\/+$/, '');
+	const options = { ...storeRequestOptions(authorization), data };
+	const pretty = await request.post(
+		`${root}/wp-json/wc/v3/products/${productId}/variations`,
+		options
+	);
+	if (pretty.status() !== 404) return pretty;
+	return request.post(
+		`${root}/index.php?rest_route=/wc/v3/products/${productId}/variations`,
+		options
+	);
+}
+
+async function findCreatedVariation(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization,
+	productId: number,
+	sku: string
+): Promise<{ response: APIResponse; record: Record<string, unknown> | null }> {
+	const root = storeUrl.replace(/\/+$/, '');
+	const auth = storeRequestOptions(authorization);
+	const options = { ...auth, params: { ...auth.params, sku } };
+	let response = await request.get(
+		`${root}/wp-json/wc/v3/products/${productId}/variations`,
+		options
+	);
+	if (response.status() === 404) {
+		response = await request.get(
+			`${root}/index.php?rest_route=/wc/v3/products/${productId}/variations`,
+			options
+		);
+	}
+	if (!response.ok()) {
+		throw new Error(`Variation create adoption lookup failed (HTTP ${response.status()})`);
+	}
+	const body: unknown = await response.json().catch(() => null);
+	if (!Array.isArray(body)) {
+		throw new Error('Variation create adoption lookup returned a malformed variation list');
+	}
+	return {
+		response,
+		record: body.map(asRecord).find((record) => record?.sku === sku) ?? null,
+	};
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -141,6 +333,37 @@ function positiveId(record: Record<string, unknown> | null): number | null {
 	return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+export function findCreatedProductRecord(
+	body: unknown,
+	token: string
+): Record<string, unknown> | null {
+	if (!Array.isArray(body)) {
+		throw new Error('Product create adoption lookup returned a malformed product list');
+	}
+	const expectedNames = new Set([`E2E Probe ${token}`, `E2E Variable ${token}`]);
+	return body.map(asRecord).find((record) => expectedNames.has(String(record?.name))) ?? null;
+}
+
+async function findCreatedProduct(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization | null,
+	token: string
+): Promise<{ response: APIResponse; record: Record<string, unknown> | null }> {
+	const auth = storeRequestOptions(authorization);
+	const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+		...auth,
+		params: { ...auth.params, search: token, per_page: '100' },
+	});
+	if (!response.ok()) {
+		throw new Error(`Product create adoption lookup failed (HTTP ${response.status()})`);
+	}
+	return {
+		response,
+		record: findCreatedProductRecord(await response.json().catch(() => null), token),
+	};
+}
+
 /**
  * Create one server-side product/customer that cannot already be resident in the restored POS
  * snapshot. A rejected or unreachable write is returned as an explicit skip reason; malformed
@@ -149,7 +372,14 @@ function positiveId(record: Record<string, unknown> | null): number | null {
 export async function createSearchProbe(
 	options: CreateSearchProbeOptions
 ): Promise<SearchProbeResult> {
-	const { request, storeUrl, authorization, collection, workerIndex } = options;
+	const {
+		request,
+		storeUrl,
+		authorization,
+		collection,
+		workerIndex,
+		writerConfigured = false,
+	} = options;
 	const token = mintSearchProbeToken(workerIndex);
 	const data =
 		collection === 'products'
@@ -157,7 +387,7 @@ export async function createSearchProbe(
 					name: `E2E Probe ${token}`,
 					type: 'simple',
 					status: 'publish',
-					regular_price: '1.00',
+					regular_price: '25.00',
 					manage_stock: false,
 				}
 			: {
@@ -167,16 +397,25 @@ export async function createSearchProbe(
 				};
 
 	try {
-		const response = await probeRequest(request, 'post', storeUrl, collection, undefined, {
-			...storeRequestOptions(authorization),
-			data,
-		});
+		const create = () =>
+			probeRequest(request, 'post', storeUrl, collection, undefined, {
+				...storeRequestOptions(authorization),
+				data,
+			});
+		const result =
+			collection === 'products'
+				? await productCreateResponse(
+						create,
+						writerConfigured,
+						'products search-probe creation',
+						() => findCreatedProduct(request, storeUrl, authorization, token)
+					)
+				: { response: await create(), adoptedRecord: undefined };
+		const { response } = result;
 		if (!response.ok()) {
-			if (collection === 'products' && response.status() === 403) {
-				return {
-					ok: false,
-					reason: `Store lacks product write capability (HTTP ${response.status()}); skipping product search probe`,
-				};
+			if (collection === 'products') {
+				const reason = `Store rejected products search-probe creation (HTTP ${response.status()})`;
+				return { ok: false, reason: `${reason}; product-writer credentials are required` };
 			}
 			return {
 				ok: false,
@@ -184,7 +423,7 @@ export async function createSearchProbe(
 			};
 		}
 
-		const record = unwrapRecord(await response.json().catch(() => null));
+		const record = result.adoptedRecord ?? unwrapRecord(await response.json().catch(() => null));
 		const id = positiveId(record);
 		if (!record || id === null) {
 			throw new Error(`${collection} search-probe create succeeded without a record id`);
@@ -205,12 +444,118 @@ export async function createSearchProbe(
 			},
 		};
 	} catch (error) {
+		if (collection === 'products' && writerConfigured) {
+			throw error instanceof Error
+				? error
+				: new Error('Configured product-writer product creation failed');
+		}
 		if (error instanceof Error && error.message.includes('create succeeded')) throw error;
 		return {
 			ok: false,
 			reason: `Store could not create the ${collection} search probe; server write access is required`,
 		};
 	}
+}
+
+/** Create a worker-private purchasable product; declared writer failures always throw. */
+export async function createRunPrivateProduct(
+	options: Omit<CreateSearchProbeOptions, 'authorization' | 'collection' | 'writerConfigured'> & {
+		authorization: StoreAuthorization;
+		kind: RunPrivateProductKind;
+	}
+): Promise<RunPrivateProductProbe> {
+	const { request, storeUrl, authorization, kind, workerIndex } = options;
+	if (kind === 'simple') {
+		const created = await createSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'products',
+			workerIndex,
+			writerConfigured: true,
+		});
+		if (!created.ok) throw new Error(created.reason);
+		return created.probe;
+	}
+
+	const token = mintSearchProbeToken(workerIndex);
+	const attributeName = `Choice ${token.slice(-6)}`;
+	const parentResult = await productCreateResponse(
+		() =>
+			probeRequest(request, 'post', storeUrl, 'products', undefined, {
+				...storeRequestOptions(authorization),
+				data: {
+					name: `E2E Variable ${token}`,
+					type: 'variable',
+					status: 'publish',
+					manage_stock: false,
+					attributes: [
+						{
+							name: attributeName,
+							position: 0,
+							visible: true,
+							variation: true,
+							options: ['Red', 'Blue'],
+						},
+					],
+				},
+			}),
+		true,
+		'Variable product probe creation',
+		() => findCreatedProduct(request, storeUrl, authorization, token)
+	);
+
+	const parent =
+		parentResult.adoptedRecord ??
+		unwrapRecord(await parentResult.response.json().catch(() => null));
+	const id = positiveId(parent);
+	const slug = typeof parent?.slug === 'string' && parent.slug ? parent.slug : null;
+	if (id === null || !slug) {
+		if (id !== null) {
+			await deleteSearchProbe({ request, storeUrl, authorization, collection: 'products', id });
+		}
+		throw new Error('Variable product probe create succeeded without its id and slug');
+	}
+
+	try {
+		// A wildcard sibling matches every selection, so count===1 popover resolution
+		// and wildcard coverage are mutually exclusive on one shared product.
+		for (const [option, suffix] of [
+			['Red', 'red'],
+			['Blue', 'blue'],
+		] as const) {
+			const sku = `${token}${suffix}`;
+			const result = await productCreateResponse(
+				() =>
+					variationCreateRequest(request, storeUrl, authorization, id, {
+						sku,
+						regular_price: '25.00',
+						status: 'publish',
+						manage_stock: false,
+						attributes: [{ name: attributeName, option }],
+					}),
+				true,
+				'Variation probe creation',
+				() => findCreatedVariation(request, storeUrl, authorization, id, sku)
+			);
+			const variation =
+				result.adoptedRecord ?? unwrapRecord(await result.response.json().catch(() => null));
+			if (positiveId(variation) === null) {
+				throw new Error('Variation probe create succeeded without its id');
+			}
+		}
+	} catch (error) {
+		await deleteSearchProbe({ request, storeUrl, authorization, collection: 'products', id });
+		throw error;
+	}
+
+	return {
+		collection: 'products',
+		id,
+		rowTestId: `data-table-row-${slug}`,
+		token,
+		variationSku: `${token}red`,
+	};
 }
 
 /** Force-delete a probe without ever turning teardown trouble into a test failure. */
@@ -229,6 +574,40 @@ export async function deleteSearchProbe(
 	} catch {
 		// Do not print the request error: query-auth stores can include the JWT in its URL.
 		log.warn(`[search-probe] delete ${collection} ${id} threw`);
+	}
+}
+
+/** Best-effort cleanup for probes left behind when a prior worker was interrupted. */
+export async function sweepOrphanedProductProbes(
+	options: Pick<CreateSearchProbeOptions, 'request' | 'storeUrl' | 'authorization'>
+): Promise<void> {
+	const { request, storeUrl, authorization } = options;
+	try {
+		const auth = storeRequestOptions(authorization);
+		const response = await probeRequest(request, 'get', storeUrl, 'products', undefined, {
+			...auth,
+			params: { ...auth.params, search: 'E2E ', per_page: '100' },
+		});
+		if (!response.ok()) throw new Error(`HTTP ${response.status()}`);
+		const body: unknown = await response.json();
+		if (!Array.isArray(body)) throw new Error('response was not a product list');
+		const cutoff = Date.now() - 2 * 60 * 60 * 1_000;
+		for (const value of body) {
+			const product = asRecord(value);
+			const name = typeof product?.name === 'string' ? product.name : '';
+			const createdGmt =
+				typeof product?.date_created_gmt === 'string' ? product.date_created_gmt : '';
+			const id = positiveId(product);
+			if (
+				id !== null &&
+				(name.startsWith('E2E Probe ') || name.startsWith('E2E Variable ')) &&
+				Date.parse(`${createdGmt}Z`) < cutoff
+			) {
+				await deleteSearchProbe({ request, storeUrl, authorization, collection: 'products', id });
+			}
+		}
+	} catch {
+		log.warn('[search-probe] orphan product sweep failed');
 	}
 }
 

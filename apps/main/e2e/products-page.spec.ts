@@ -1,15 +1,12 @@
 import { expect } from '@playwright/test';
 
-import {
-	getStoreUrl,
-	getStoreVariant,
-	navigateToPage,
-	authenticatedTest as test,
-} from './fixtures';
+import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
+import { getStoreUrl, getStoreVariant, navigateToPage } from './fixtures';
 import {
 	createSearchProbe,
 	deleteSearchProbe,
 	productWriterAuthorization,
+	productWriterCredentialsConfigured,
 	searchAndWaitForServer,
 } from './search-probe';
 
@@ -116,6 +113,7 @@ test.describe('Products Page (Pro)', () => {
 			authorization,
 			collection: 'products',
 			workerIndex: testInfo.workerIndex,
+			writerConfigured: productWriterCredentialsConfigured(),
 		});
 		if (!created.ok) {
 			const hint = writerAuthorization
@@ -176,10 +174,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
-		// Search for a variable product
-		const searchInput = screen.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(2_000);
+		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		// Click the expand link on the variable product
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
@@ -204,10 +199,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
-		// Search for a variable product and expand it
-		const searchInput = screen.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(2_000);
+		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });
@@ -239,10 +231,7 @@ test.describe('Products Page (Pro)', () => {
 			timeout: 60_000,
 		});
 
-		// Search and expand
-		const searchInput = screen.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(2_000);
+		await findVariableProduct(page, screen.getByTestId('search-products'));
 
 		const expandLink = screen.locator('[data-testid="variable-product-expand"]:visible').first();
 		await expect(expandLink).toBeVisible({ timeout: 30_000 });

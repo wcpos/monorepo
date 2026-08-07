@@ -1,6 +1,11 @@
 import { expect } from '@playwright/test';
 
-import { authenticatedTest as test } from './fixtures';
+import {
+	addCheckoutProbeProduct,
+	findVariableProduct,
+	isolatedProductTest as simpleProductTest,
+	isolatedVariableProductTest as test,
+} from './checkout-probe';
 
 /**
  * Product browsing and search in the POS panel (both free and pro).
@@ -100,18 +105,16 @@ test.describe('Products in POS', () => {
 		await expect.poll(() => countEl.textContent(), { timeout: 15_000 }).not.toBe(initialText);
 	});
 
-	test('should add a simple product to cart by clicking tile', async ({ posPage: page }) => {
-		// In grid view, clicking a product tile adds it to the cart
-		await page.getByTestId('product-tile').first().click();
-		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
-	});
+	simpleProductTest(
+		'should add a simple product to cart by clicking tile',
+		async ({ posPage: page }) => {
+			await addCheckoutProbeProduct(page);
+		}
+	);
 
 	test('should show variable product tiles in grid view', async ({ posPage: page }) => {
-		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_500);
+		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
-		// Seed data must include "hoodie" as a variable product
 		const variableTiles = page.getByTestId('variable-product-tile');
 		await expect(variableTiles.first()).toBeVisible({ timeout: 10_000 });
 	});
@@ -119,9 +122,7 @@ test.describe('Products in POS', () => {
 	test('should open variation popover when clicking variable product tile', async ({
 		posPage: page,
 	}) => {
-		const searchInput = page.getByTestId('search-products');
-		await searchInput.fill('hoodie');
-		await page.waitForTimeout(1_500);
+		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
 
 		const variableTile = page.getByTestId('variable-product-tile');
 		await expect(variableTile.first()).toBeVisible({ timeout: 10_000 });
@@ -130,13 +131,11 @@ test.describe('Products in POS', () => {
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('should add product to cart in table view', async ({ posPage: page }) => {
+	simpleProductTest('should add product to cart in table view', async ({ posPage: page }) => {
 		// Switch to table view
 		await page.getByTestId('view-mode-toggle').click();
 		await expect(page.getByRole('columnheader').first()).toBeVisible({ timeout: 15_000 });
 
-		// Table view uses the add-to-cart-button in each row
-		await page.getByTestId('add-to-cart-button').first().click();
-		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
+		await addCheckoutProbeProduct(page);
 	});
 });

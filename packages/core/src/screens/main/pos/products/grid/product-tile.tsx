@@ -70,7 +70,7 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 			className="bg-card border-border m-1 flex-1 overflow-hidden rounded-lg border"
 			testID="product-tile"
 		>
-			<View className="aspect-square">
+			<View className="aspect-square" testID={`product-tile-${product.id}`}>
 				<TileImage product={product} />
 			</View>
 			{hasAnyField && (
