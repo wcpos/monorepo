@@ -21,7 +21,7 @@ import { createOrdersSchedulerFetcher } from './rx-scheduler-order-fetcher';
 import { createProductsSchedulerFetcher } from './rx-scheduler-product-fetcher';
 import { createVariationsSchedulerFetcher } from './rx-scheduler-variation-fetcher';
 import { createCustomerSchedulerFetcher } from './rx-scheduler-customer-fetcher';
-import { parseCustomerBrowseWindowDescriptor } from './customer-browse-window-descriptor';
+import { CUSTOMER_BROWSE_WINDOW_GRAMMAR } from './customer-browse-window-descriptor';
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { createTaxRateSchedulerFetcher } from './rx-scheduler-tax-rate-fetcher';
 import {
@@ -43,8 +43,8 @@ import {
 	EngineOrderRepository,
 	type OrderRepositoryDatabase,
 } from '../write-path/engine-order-repository';
-import { parseOrderBrowserSchedulerDescriptor } from './order-browser-scheduler-descriptor';
-import { parseProductBrowseWindowDescriptor } from './product-browse-window-descriptor';
+import { ORDER_BROWSE_WINDOW_GRAMMAR } from './order-browser-scheduler-descriptor';
+import { PRODUCT_BROWSE_WINDOW_GRAMMAR } from './product-browse-window-descriptor';
 
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { FetchTask, FetchTaskResult } from './replication-policy';
@@ -63,8 +63,10 @@ const SUPPORTED_TARGETED_ORDER_QUERY_KEY_PREFIX = 'orders:ids:';
 const SUPPORTED_TARGETED_PRODUCT_QUERY_KEY_PREFIX = 'products:ids:';
 const SUPPORTED_PRODUCT_SEARCH_QUERY_KEY_PATTERN = /^products:search:.+$/;
 const SUPPORTED_VARIATION_SEARCH_QUERY_KEY_PATTERN = /^variations:search:.+$/;
+// All three browse predicates ask the same question of the same shared grammar: does this
+// key parse as this lane's browse window? (browse-window-grammar.ts)
 const isSupportedProductBrowseWindowQueryKey = (queryKey: string): boolean =>
-	parseProductBrowseWindowDescriptor(queryKey) !== null;
+	PRODUCT_BROWSE_WINDOW_GRAMMAR.parse(queryKey) !== null;
 const SUPPORTED_TARGETED_CUSTOMER_QUERY_KEY_PREFIX = 'customers:ids:';
 const SUPPORTED_CUSTOMER_SEARCH_QUERY_KEY_PATTERN = /^customers:search=([^:]*):limit=(\d+)$/;
 const SUPPORTED_TAX_RATE_QUERY_KEY = 'taxRates:all';
@@ -78,8 +80,7 @@ function hasTargetedIds(task: SchedulerTaskSupportCandidate): boolean {
 }
 
 function isSupportedBrowserOrderQueryKey(queryKey: string): boolean {
-	const decision = parseOrderBrowserSchedulerDescriptor(queryKey);
-	return !!decision && 'descriptor' in decision;
+	return ORDER_BROWSE_WINDOW_GRAMMAR.parse(queryKey) !== null;
 }
 
 function isSupportedOrderSchedulerTask(task: SchedulerTaskSupportCandidate): boolean {
@@ -125,7 +126,7 @@ function isSupportedCustomerSchedulerTask(task: SchedulerTaskSupportCandidate): 
 	// The browse window (#951). Its limit is the WINDOW size and must match the key, the same
 	// contract the search lane holds — a task whose limit disagrees with its key would fetch a
 	// different number of rows than the coverage lane it writes claims to hold.
-	const browseWindow = parseCustomerBrowseWindowDescriptor(task.queryKey);
+	const browseWindow = CUSTOMER_BROWSE_WINDOW_GRAMMAR.parse(task.queryKey);
 	if (browseWindow !== null) {
 		return task.limit === browseWindow.limit && task.mode === 'windowed' && hasNoTargetedIds(task);
 	}

@@ -34,6 +34,12 @@ export {
 	laneHoldsBrowseWindowPrefix,
 } from './browse-window-continuation';
 export {
+	assertBrowseWindowKeyLengths,
+	type BrowseWindowGrammar,
+	browseWindowLaneIdentity,
+	type BrowseWindowLaneIdentity,
+} from './browse-window-grammar';
+export {
 	type BrowseWindowLaneEvictionRepository,
 	type BrowseWindowLaneIdentifier,
 	type BrowseWindowLaneSnapshot,

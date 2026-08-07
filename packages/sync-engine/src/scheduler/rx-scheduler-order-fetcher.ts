@@ -16,14 +16,12 @@ import { materializeLocalOnly } from '../materialization/record-materialization'
 import {
 	BROWSE_WINDOW_MAX_PAGES_PER_DRAIN,
 	type BrowseWindowContinuation,
-	browseWindowPrefixSurvived,
-	mergeBrowseWindowRecordIds,
 	NO_BROWSE_WINDOW_CONTINUATION,
 	readBrowseWindowContinuation,
 } from './browse-window-continuation';
+import { finalizeBrowseWindowLane } from './browse-window-fetcher-tail';
 import {
 	type BrowseWindowLaneEvictionRepository,
-	evictSupersededBrowseWindowLanes,
 	orderBrowseWindowLaneIdentity,
 } from './browse-window-lane-eviction';
 import {
@@ -819,66 +817,11 @@ async function fetchBrowserOrderQuery(
 	// The per-drain page budget bit before the window filled: the lane must not claim
 	// completeness, and the next drain resumes from the prefix this one leaves.
 	const truncatedByPageBudget = resumable && !exhausted && documentCount < recordLimit;
-	if (truncatedByPageBudget) {
-		input.diagnostics?.({
-			type: 'browse-window.page-budget-reached',
-			level: 'warn',
-			collection: 'orders',
-			message: `Orders browse window paused after ${requestCount} pages with ${covered + documentCount} of ${windowLimit} rows covered; the next drain resumes from there`,
-		});
-	}
-
-	// Ancestry guard — the same principle #954 applies to its ranged cursor: only assert the
-	// carried prefix if the lane it came from still holds exactly it. A Clear & Sync or
-	// ledger rebuild landing mid-walk would otherwise resurrect coverage for orders it just
-	// deleted.
-	const prefixSurvived = await browseWindowPrefixSurvived({
-		collection: 'orders',
-		continuation,
-		nowMs: coverageNowMs(input),
-		readLane: input.coverageRepository?.readLocalLaneCoverage,
-	});
-	if (!prefixSurvived) {
-		input.diagnostics?.({
-			type: 'browse-window.prefix-invalidated',
-			level: 'warn',
-			collection: 'orders',
-			message: `Orders browse window ${windowLimit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
-		});
-		// The lane claims NOTHING, not this pass's rows: the walk resumed at an offset, so what
-		// it holds is a TAIL of the listing, and readBrowseWindowContinuation reads a
-		// page-aligned incomplete lane as the LEADING prefix — storing the tail would make the
-		// next pass offset past rows nobody fetched and splice the window permanently.
-		// The rows are real and already resident, so their RECORD coverage stands; only the
-		// window claim is withdrawn. This matches the persistence-path demotion, which keeps
-		// record coverage for the same reason.
-		await recordOrderFetchedRecords(input, task, fetchedDocumentIds);
-		if (descriptor.search === '') {
-			await recordOrderFetchCoverage(input, task, [], false);
-		}
-		return {
-			taskId: task.id,
-			documentCount,
-			requestCount,
-			completed: descriptor.complete ? exhausted : true,
-		};
-	}
-
-	// The lane records the WHOLE window — the covered prefix unioned with this drain's
-	// delta. The grid's footer total reads `expectedRecordIds.length` for exactly this
-	// key when no census total is fresh, so a delta-only lane would make a grown window
-	// report the size of its last growth step.
-	const laneRecordIds = mergeBrowseWindowRecordIds(continuation.recordIds, fetchedDocumentIds);
-	// A WINDOWED merge that came back SHORT means the resume page re-delivered rows the
-	// prefix already held — an order was created or trashed between two growth steps, so the
-	// wire listing shifted under the offset. The short count is not page-aligned, so the
-	// continuation gate refuses to offset from it and the next pass re-walks in full;
-	// recording it incomplete is what routes it there instead of freezing the window with a
-	// hole in it. The ranged branch below has its own completion contract (#954) and is
-	// unaffected.
-	const filledTheWindow = exhausted || laneRecordIds.length >= windowLimit;
 
 	if (descriptor.complete && descriptor.search === '') {
+		// The RANGED (Reports) lane keeps its own completion contract (#954): it is written
+		// cumulatively from its date cursor, not from a window prefix, so it does not run the
+		// shared browse-window tail at all.
 		await recordRangedOrderFetchCoverage(input, task, {
 			documentIds: fetchedDocumentIds,
 			// A superset from a server that ignored the POS dimensions is still worth keeping
@@ -893,48 +836,50 @@ async function fetchBrowserOrderQuery(
 			dimensionsHonored,
 			publishedResume,
 		});
-	} else if (descriptor.search === '') {
+	} else {
 		// A superset from a server that ignored the POS dimensions is still worth keeping
-		// locally — it is real order data — but this lane must claim NO coverage for it.
-		// `complete:false` alone does not prevent it being SERVED: a filled-but-incomplete
-		// lane is exactly what an ordinary un-exhausted window looks like, so the
-		// serve-local gate would answer a cashier/store-filtered window from rows that were
-		// never filtered, for a whole freshness window.
-		await recordOrderFetchCoverage(
-			input,
-			task,
-			dimensionsHonored ? laneRecordIds : [],
-			exhausted && dimensionsHonored && !truncatedByPageBudget && filledTheWindow,
-			// Re-check the carried prefix INSIDE the write. The guard above runs before the
-			// walk, but `withLedgerRecovery` replays this write verbatim after a rebuild drops
-			// `coverageLanes` — the one window that guard cannot close (#1030 residual).
-			continuation.covered > 0 && continuation.sourceQueryKey
-				? {
-						sourceQueryKey: continuation.sourceQueryKey,
-						recordIds: continuation.recordIds,
-						// Same dimension gate as the primary write above: a superset from a server
-						// that ignored `pos_cashier`/`pos_store` must not be recorded as coverage
-						// through the demotion path either.
-						fallbackRecordIds: dimensionsHonored ? fetchedDocumentIds : [],
-					}
-				: undefined
-		);
-		// STRICTLY AFTER the write. The smaller lanes this window supersedes include the one
-		// the continuation resumed from, and the ancestry guard above re-reads exactly that
-		// lane — evicting before the write would demote the pass to an incomplete delta.
-		// Only this branch: a searched window records RECORDS and no lane, so it has nothing
-		// to supersede with.
-		await evictSupersededBrowseWindowLanes({
+		// locally — it is real order data — but the lane must claim NO coverage for it.
+		// `complete:false` alone does not prevent it being SERVED: a filled-but-incomplete lane
+		// is exactly what an ordinary un-exhausted window looks like, so the serve-local gate
+		// would answer a cashier/store-filtered window from rows that were never filtered, for
+		// a whole freshness window.
+		await finalizeBrowseWindowLane({
 			collection: 'orders',
-			triggerQueryKey: task.queryKey,
+			queryKey: task.queryKey,
+			windowLimit,
+			continuation,
+			deltaRecordIds: fetchedDocumentIds,
+			serverExhausted: exhausted,
+			truncatedByPageBudget,
+			dimensionsHonored,
+			// An orders window is complete only when the SERVER ran out of matching orders: a
+			// merge that came back short means the listing shifted under the resume offset (an
+			// order created or trashed between two growth steps), and recording that complete
+			// would freeze the window with a hole in it.
+			requireServerExhaustedForComplete: true,
+			skipLaneWriteWithoutProgress: false,
+			pageBudget: {
+				message: `Orders browse window paused after ${requestCount} pages with ${covered + documentCount} of ${windowLimit} rows covered; the next drain resumes from there`,
+				emitBeforeAncestryCheck: true,
+			},
+			prefixInvalidatedMessage: `Orders browse window ${windowLimit} lost the coverage it was continuing from mid-walk; restarting it from the top next pass`,
 			identify: orderBrowseWindowLaneIdentity,
-			repository: input.coverageRepository,
+			evictionRepository: input.coverageRepository,
 			readLane: input.coverageRepository?.readLocalLaneCoverage,
 			nowMs: coverageNowMs(input),
 			diagnostics: input.diagnostics,
+			writer: {
+				recordRecordsOnly: (recordIds) => recordOrderFetchedRecords(input, task, recordIds),
+				// A SEARCH-scoped window writes no lane: its coverage goes to records only, so it
+				// has nothing to supersede with and nothing a later pass could resume from.
+				...(descriptor.search === ''
+					? {
+							recordLane: ({ recordIds, complete, prefixAncestry }) =>
+								recordOrderFetchCoverage(input, task, recordIds, complete, prefixAncestry),
+						}
+					: {}),
+			},
 		});
-	} else {
-		await recordOrderFetchedRecords(input, task, laneRecordIds);
 	}
 
 	return {

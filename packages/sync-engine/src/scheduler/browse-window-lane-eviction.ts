@@ -128,13 +128,14 @@
 
 import type { SyncObserver } from '@wcpos/sync-core';
 
-import { parseOrderBrowserSchedulerDescriptor } from './order-browser-scheduler-descriptor';
-import {
-	parseProductBrowseWindowDescriptor,
-	productBrowseWindowQueryKey,
-} from './product-browse-window-descriptor';
+import { browseWindowLaneIdentity } from './browse-window-grammar';
+import { ORDER_BROWSE_WINDOW_GRAMMAR } from './order-browser-scheduler-descriptor';
+import { PRODUCT_BROWSE_WINDOW_GRAMMAR } from './product-browse-window-descriptor';
 
 import type { BrowseWindowLaneReader } from './browse-window-continuation';
+import type { BrowseWindowLaneIdentifier, BrowseWindowLaneIdentity } from './browse-window-grammar';
+
+export type { BrowseWindowLaneIdentifier, BrowseWindowLaneIdentity };
 
 /** The subset of a stored coverage lane that eviction reasons about. */
 export type BrowseWindowLaneSnapshot = {
@@ -149,17 +150,6 @@ export type BrowseWindowLaneSnapshot = {
 	updatedAtMs: number;
 };
 
-/** A browse-window lane key split into "which view" and "how deep". */
-export type BrowseWindowLaneIdentity = {
-	/** Canonical identity of the view: every dimension EXCEPT the window size. */
-	viewKey: string;
-	/** The window size the lane describes. */
-	limit: number;
-};
-
-/** Maps a lane's queryKey to its view/limit identity; null when it is not a browse window. */
-export type BrowseWindowLaneIdentifier = (queryKey: string) => BrowseWindowLaneIdentity | null;
-
 export type BrowseWindowLaneEviction = {
 	/** The lane to delete. */
 	queryKey: string;
@@ -168,42 +158,26 @@ export type BrowseWindowLaneEviction = {
 };
 
 /**
- * The products lane family. The limit is the FIRST field of that grammar, so the view
- * identity is re-encoded through the canonical encoder with a sentinel limit rather than by
- * string surgery — a dimension the encoder can express but a hand-rolled strip could not
- * would otherwise collapse two views into one and evict across filters.
- */
-export const productBrowseWindowLaneIdentity: BrowseWindowLaneIdentifier = (queryKey) => {
-	const descriptor = parseProductBrowseWindowDescriptor(queryKey);
-	if (!descriptor) return null;
-	return {
-		viewKey: productBrowseWindowQueryKey(
-			0,
-			{ orderby: descriptor.orderby, order: descriptor.order },
-			descriptor
-		),
-		limit: descriptor.limit,
-	};
-};
-
-/**
- * The orders lane family. `:limit=N` is the LAST field of that grammar (search is free text
- * and must stay second-to-last), so stripping the suffix is exact — the same move
- * `orderBrowserPredecessorWindow` makes.
+ * The products and orders lane families — one line each now, because "which part of the key
+ * is the window size" is a fact each grammar already states (`viewKey`/`limitOf`, see
+ * browse-window-grammar.ts) rather than one this module re-derives per collection.
  *
- * `limit=all` is deliberately excluded: a ranged fetch-to-completion (Reports) is not a
+ * Both view identities are re-encoded through the canonical encoder rather than cut out of
+ * the key by string surgery: a dimension the encoder can express but a hand-rolled strip
+ * could not would otherwise collapse two views into one and evict across filters.
+ *
+ * Orders' `limit=all` is excluded by the grammar (a ranged fetch-to-completion is not a
  * scroll window, its lane is written cumulatively, and it must be neither survivor nor
- * victim. The orders baseline marker keys (`…:baseline-in-progress:<taskId>`) do not parse
- * as descriptors at all, so they are excluded by construction.
+ * victim), and the orders baseline marker keys (`…:baseline-in-progress:<taskId>`) do not
+ * parse as descriptors at all, so they are excluded by construction.
  */
-export const orderBrowseWindowLaneIdentity: BrowseWindowLaneIdentifier = (queryKey) => {
-	const descriptor = parseOrderBrowserSchedulerDescriptor(queryKey)?.descriptor;
-	// `complete` on an orders descriptor means `limit=all`, not "the walk finished".
-	if (!descriptor || descriptor.complete) return null;
-	const suffix = `:limit=${descriptor.limit}`;
-	if (!queryKey.endsWith(suffix)) return null;
-	return { viewKey: `${queryKey.slice(0, -suffix.length)}:limit=`, limit: descriptor.limit };
-};
+export const productBrowseWindowLaneIdentity: BrowseWindowLaneIdentifier = browseWindowLaneIdentity(
+	PRODUCT_BROWSE_WINDOW_GRAMMAR
+);
+
+export const orderBrowseWindowLaneIdentity: BrowseWindowLaneIdentifier = browseWindowLaneIdentity(
+	ORDER_BROWSE_WINDOW_GRAMMAR
+);
 
 /**
  * A window is SETTLED when the walk that wrote it either exhausted the server or filled the

@@ -3,6 +3,7 @@ import {
 	clampToBrowseWindowBackstop,
 	isBrowseWindowLimit,
 } from './browse-window-continuation';
+import { type BrowseWindowGrammar, browseWindowKeyPart } from './browse-window-grammar';
 
 import type { OrderBrowseDimensions } from '../require-plane';
 
@@ -84,6 +85,99 @@ export type OrderBrowserSchedulerDescriptorDecision =
 	| { descriptor: OrderBrowserSchedulerDescriptor; skipReason?: never }
 	| { descriptor?: never; skipReason: string };
 
+/**
+ * The dimensions of an orders browse window, ALREADY NORMALIZED — the grammar's own input
+ * shape and the one thing its encoder writes bytes from.
+ *
+ * Two doors reach it and each normalizes differently, which is exactly why the encoding
+ * lives here and not at either door: the demand plane quantizes the grid's limit onto the
+ * growth curve ({@link orderBrowserQueryKey}), while the seeder honours the caller's limit
+ * verbatim (a Reports range asks for the rows it asks for). They must nonetheless emit the
+ * SAME BYTES for the same window, or one browse gets two persisted lane identities
+ * depending on which door it came through — the duplication rx-order-scheduler-task-seeder
+ * used to carry, complete with a runtime round-trip assertion admitting it.
+ */
+export type OrderBrowseWindowFields = {
+	status: string;
+	search: string;
+	/** `'all'` for a RANGED fetch-to-completion lane (Reports); a row count otherwise. */
+	limit: number | 'all';
+	customerId?: number | undefined;
+	cashierId?: number | undefined;
+	store?: string | undefined;
+	afterSeconds?: number | undefined;
+	beforeSeconds?: number | undefined;
+	orderby?: OrderBrowserSchedulerDescriptor['orderby'];
+	order?: OrderBrowserSchedulerDescriptor['order'];
+};
+
+/**
+ * The sort tail of the key.
+ *
+ * A RANGED (`limit=all`) lane is sort-agnostic. It fetches the whole range to completion and
+ * always walks `date desc` on the wire — the dimension its resume cursor is expressed in
+ * (#954) — so the grid's sort cannot change which records the lane ends up holding, and its
+ * `expectedRecordIds` is consumed only as a count. Carrying sort in the key forked the lane
+ * identity per sort, so every re-sort of the reports grid re-downloaded the entire range.
+ * A WINDOWED browse keeps it: there the sort decides which slice the window holds (#909).
+ * The DEFAULT `id desc` sort is omitted rather than encoded, so one window has one key.
+ */
+function orderBrowseWindowSortPart(fields: OrderBrowseWindowFields): string {
+	if (fields.limit === 'all') return '';
+	if (fields.orderby === undefined && fields.order === undefined) return '';
+	if (fields.orderby === 'id' && fields.order === 'desc') return '';
+	return `${browseWindowKeyPart('orderby', fields.orderby)}${browseWindowKeyPart('order', fields.order)}`;
+}
+
+/**
+ * Assemble the key from parts already decided — the ONE place this grammar's bytes are
+ * written.
+ *
+ * `search` carries arbitrary cashier text, so it stays the LAST free-text field, delimited
+ * only by the `:limit=` suffix; every structured dimension therefore sits BETWEEN the
+ * colon-free `status` and `:search=`. See the matching note on
+ * {@link parseOrderBrowserSchedulerDescriptor}.
+ */
+function encodeOrderBrowseWindowKey(fields: OrderBrowseWindowFields, limitText: string): string {
+	return [
+		`orders:browser:status=${fields.status}`,
+		browseWindowKeyPart('customer', fields.customerId),
+		browseWindowKeyPart('cashier', fields.cashierId),
+		browseWindowKeyPart('store', fields.store),
+		browseWindowKeyPart('after', fields.afterSeconds),
+		browseWindowKeyPart('before', fields.beforeSeconds),
+		orderBrowseWindowSortPart(fields),
+		`:search=${fields.search}`,
+		`:limit=${limitText}`,
+	].join('');
+}
+
+/** Build the canonical persisted lane identity from already-normalized dimensions. */
+export function orderBrowseWindowQueryKey(fields: OrderBrowseWindowFields): string {
+	return encodeOrderBrowseWindowKey(fields, fields.limit === 'all' ? 'all' : String(fields.limit));
+}
+
+/**
+ * The persisted requirement identity for an orders browse window.
+ *
+ * The undimensioned form keeps its own dotted spelling — `orders.browser.status.<s>` — while
+ * any structured dimension switches to the whole key with `:` swapped for `.`. Both spellings
+ * are PERSISTED (`schedulerTaskStates.requirementId`), so this asymmetry is pinned, not tidied.
+ */
+export function orderBrowseWindowRequirementId(fields: OrderBrowseWindowFields): string {
+	const dimensioned =
+		fields.customerId !== undefined ||
+		fields.cashierId !== undefined ||
+		fields.store !== undefined ||
+		fields.afterSeconds !== undefined ||
+		fields.beforeSeconds !== undefined ||
+		orderBrowseWindowSortPart(fields) !== '';
+	if (dimensioned) return orderBrowseWindowQueryKey(fields).replaceAll(':', '.');
+	const searchPart = fields.search === '' ? '' : `.search.${fields.search}`;
+	const limitPart = fields.limit === 'all' ? 'all' : fields.limit;
+	return `orders.browser.status.${fields.status}${searchPart}.limit.${limitPart}`;
+}
+
 /** Build the canonical persisted lane identity for an orders browse window. */
 export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 	const status = (dims.status ?? 'all').trim();
@@ -116,25 +210,20 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		throw new TypeError("orders browse limit 'all' requires a date range bound");
 	}
 
-	const dimension = (name: string, value: number | string | undefined): string =>
-		value === undefined ? '' : `:${name}=${value}`;
 	const store = dims.store && /^(?:\d+|[a-z0-9_-]+)$/.test(dims.store) ? dims.store : undefined;
-	// A RANGED (`limit=all`) lane is sort-agnostic. It fetches the whole range to completion and
-	// always walks `date desc` on the wire — the dimension its resume cursor is expressed in
-	// (#954) — so the grid's sort cannot change which records the lane ends up holding, and its
-	// `expectedRecordIds` is consumed only as a count. Carrying sort in the key forked the lane
-	// identity per sort, so every re-sort of the reports grid re-downloaded the entire range.
-	// A WINDOWED browse keeps it: there the sort decides which slice the window holds (#909).
-	const sortPart =
-		dims.limit === 'all' ||
-		dims.orderby === undefined ||
-		(dims.orderby === 'id' && dims.order === 'desc')
-			? ''
-			: `:orderby=${dims.orderby}:order=${dims.order}`;
-	const limit =
-		dims.limit === 'all' ? 'all' : normalizeOrderBrowseWindowLimit(dims.limit as number);
 
-	return `orders:browser:status=${status}${dimension('customer', safeNonNegativeInteger(dims.customerId))}${dimension('cashier', safeNonNegativeInteger(dims.cashierId))}${dimension('store', store)}${dimension('after', afterSeconds)}${dimension('before', beforeSeconds)}${sortPart}:search=${search}:limit=${limit}`;
+	return orderBrowseWindowQueryKey({
+		status,
+		search,
+		limit: dims.limit === 'all' ? 'all' : normalizeOrderBrowseWindowLimit(dims.limit as number),
+		customerId: safeNonNegativeInteger(dims.customerId),
+		cashierId: safeNonNegativeInteger(dims.cashierId),
+		store,
+		afterSeconds,
+		beforeSeconds,
+		orderby: dims.orderby,
+		order: dims.order,
+	});
 }
 
 export function browserOrderSchedulerDescriptorLimit(limitText: string): number | null {
@@ -232,3 +321,52 @@ export function parseOrderBrowserSchedulerDescriptor(
 		},
 	};
 }
+
+/** The grammar's own field shape, recovered from a parsed descriptor. */
+export function orderBrowseWindowFields(
+	descriptor: OrderBrowserSchedulerDescriptor
+): OrderBrowseWindowFields {
+	return {
+		status: descriptor.status,
+		search: descriptor.search,
+		limit: descriptor.complete ? 'all' : descriptor.limit,
+		customerId: descriptor.customerId,
+		cashierId: descriptor.cashierId,
+		store: descriptor.store,
+		afterSeconds: descriptor.afterSeconds,
+		beforeSeconds: descriptor.beforeSeconds,
+		orderby: descriptor.orderby,
+		order: descriptor.order,
+	};
+}
+
+/**
+ * The orders lane, as a value the shared browse-window engine consumes
+ * (browse-window-grammar.ts).
+ *
+ * `viewKey` re-encodes with an empty limit, which for this grammar — where `:limit=` is the
+ * LAST field — is byte-identical to stripping the suffix.
+ *
+ * A ranged `limit=all` lane reports `limitOf === 'all'`, which takes it out of eviction
+ * entirely: it is not a scroll window, its lane is written cumulatively, and it must be
+ * neither survivor nor victim.
+ */
+export const ORDER_BROWSE_WINDOW_GRAMMAR: BrowseWindowGrammar<OrderBrowseWindowFields> = {
+	collection: 'orders',
+	queryKeyPrefix: 'orders:browser:',
+	normalizeLimit: (limit) => normalizeOrderBrowseWindowLimit(limit ?? Number.NaN),
+	encode: orderBrowseWindowQueryKey,
+	parse: (queryKey) => {
+		const decision = parseOrderBrowserSchedulerDescriptor(queryKey);
+		return decision?.descriptor ? orderBrowseWindowFields(decision.descriptor) : null;
+	},
+	limitOf: (fields) => fields.limit,
+	requirementId: orderBrowseWindowRequirementId,
+	predecessor: (fields) =>
+		fields.limit === 'all'
+			? null
+			: orderBrowserPredecessorWindow(orderBrowseWindowQueryKey(fields), fields.limit),
+	viewKey: (fields) => encodeOrderBrowseWindowKey(fields, ''),
+	schemaCeilingLabel: 'Browser order scheduler descriptor',
+	measureTaskIdAgainstCeiling: false,
+};

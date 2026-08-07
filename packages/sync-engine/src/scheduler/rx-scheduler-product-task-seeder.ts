@@ -19,36 +19,33 @@ import {
 	isBrowseWindowLimit,
 } from './browse-window-continuation';
 import {
-	parseProductBrowseWindowDescriptor,
 	PRODUCT_BROWSE_WINDOW_DEFAULT_LIMIT,
+	PRODUCT_BROWSE_WINDOW_GRAMMAR,
 	PRODUCT_BROWSE_WINDOW_ORDER,
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
-	productBrowseWindowFilterPart,
+	type ProductBrowseWindowDescriptor,
 	type ProductBrowseWindowFilters,
 	type ProductBrowseWindowOrder,
 	type ProductBrowseWindowOrderby,
-	productBrowseWindowQueryKey,
 } from './product-browse-window-descriptor';
+import { type SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
+import { type SchedulerTaskStateDatabase } from './rx-scheduler-task-state-repository';
 import {
-	seedPersistedSchedulerTasks,
-	type SeedPersistedSchedulerTasksResult,
-} from './rx-scheduler-task-seeder';
-import {
-	RxSchedulerTaskStateRepository,
-	type SchedulerTaskStateDatabase,
-} from './rx-scheduler-task-state-repository';
-import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
+	type BrowseWindowLaneDescriptor,
+	seedBrowseWindowLane,
+} from './rx-browse-window-lane-seeder';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
-import { schedulerTaskStateSchema } from './scheduler-task-state-schema';
 
-const SCHEDULER_TASK_KEY_MAX_LENGTH = schedulerTaskStateSchema.properties.queryKey.maxLength;
-const SCHEDULER_REQUIREMENT_ID_MAX_LENGTH =
-	schedulerTaskStateSchema.properties.requirementId.maxLength;
-
-/** Default lane priority for the browse-window seed; the maintenance lane overrides it. */
-const PRODUCT_BROWSE_WINDOW_SCHEDULER_PRIORITY = 500;
-/** Re-seedable window: a completed task re-runs on the next lane tick past this dedupe. */
-const PRODUCT_BROWSE_WINDOW_COMPLETED_DEDUPE_FOR_MS = 30_000;
+/**
+ * The products BROWSE lane over the shared seeder template (rxBrowseWindowLaneSeeder.ts).
+ * Low priority (below the Tier-0 reference lanes and the orders window); re-seedable rather
+ * than durable, so a completed task re-runs on the next lane tick past the dedupe.
+ */
+const PRODUCT_BROWSE_LANE: BrowseWindowLaneDescriptor<ProductBrowseWindowDescriptor> = {
+	grammar: PRODUCT_BROWSE_WINDOW_GRAMMAR,
+	defaultPriority: 500,
+	defaultCompletedDedupeForMs: 30_000,
+};
 
 const PRODUCT_TARGETED_LANE: TargetedLaneDescriptor = {
 	collection: 'products',
@@ -109,8 +106,6 @@ export async function seedProductBrowseWindowSchedulerTask(
 			`Product browse-window scheduler limit must be a positive integer within the runaway backstop (${BROWSE_WINDOW_ABSOLUTE_MAX_LIMIT})`
 		);
 	}
-	const orderby = input.orderby ?? PRODUCT_BROWSE_WINDOW_ORDERBY;
-	const order = input.order ?? PRODUCT_BROWSE_WINDOW_ORDER;
 	const filters: ProductBrowseWindowFilters = {
 		...(input.category ? { category: input.category } : {}),
 		...(input.tag ? { tag: input.tag } : {}),
@@ -119,57 +114,28 @@ export async function seedProductBrowseWindowSchedulerTask(
 		...(input.on_sale !== undefined ? { on_sale: input.on_sale } : {}),
 		...(input.stock_status ? { stock_status: input.stock_status } : {}),
 	};
-	const queryKey = productBrowseWindowQueryKey(limit, { orderby, order }, filters);
-	// Round-trip through the authoritative parser, as the orders seeder does: a key this
-	// encoder can build but that parser rejects would seed a task the fetcher then refuses.
-	if (parseProductBrowseWindowDescriptor(queryKey) === null) {
+	const window: ProductBrowseWindowDescriptor = {
+		limit,
+		orderby: input.orderby ?? PRODUCT_BROWSE_WINDOW_ORDERBY,
+		order: input.order ?? PRODUCT_BROWSE_WINDOW_ORDER,
+		...filters,
+	};
+	// An INPUT check, not a check on the encoder: a dimension the caller supplied that this
+	// grammar cannot express (an out-of-enum sort, a non-canonical id list) would otherwise
+	// seed a task the fetcher then permanently refuses.
+	const queryKey = PRODUCT_BROWSE_WINDOW_GRAMMAR.encode(window);
+	if (PRODUCT_BROWSE_WINDOW_GRAMMAR.parse(queryKey) === null) {
 		throw new Error(`Product browse-window scheduler descriptor is not supported: ${queryKey}`);
 	}
-	const filterPart = productBrowseWindowFilterPart(filters);
-	const sortSuffix =
-		queryKey === productBrowseWindowQueryKey(limit, undefined, filters)
-			? ''
-			: `.${orderby}.${order}`;
-	const requirementId = `products.browse-window.limit.${limit}${sortSuffix}${filterPart.replaceAll(':', '.')}`;
-	// Filter id lists make the key unbounded, unlike the pre-filter window. A key over the
-	// persisted schema's ceiling would fail deep inside RxDB validation; reject it here, as
-	// the orders seeder does. `require()` rejections are swallowed by declareRequirements, so
-	// an over-long filter set degrades to no remote demand rather than breaking the grid.
-	if (`${queryKey}:windowed`.length > SCHEDULER_TASK_KEY_MAX_LENGTH) {
-		throw new Error(
-			`Product browse-window scheduler queryKey exceeds schema limit: ${queryKey.length} > ${SCHEDULER_TASK_KEY_MAX_LENGTH}`
-		);
-	}
-	if (requirementId.length > SCHEDULER_REQUIREMENT_ID_MAX_LENGTH) {
-		throw new Error(
-			`Product browse-window scheduler requirementId exceeds schema limit: ${requirementId.length} > ${SCHEDULER_REQUIREMENT_ID_MAX_LENGTH}`
-		);
-	}
-	const nowMs = input.nowMs ?? Date.now();
 
-	// A `schedulerTaskStates` reconciliation refusal rebuilds the derivable ledger
-	// and the seed runs again against the fresh store (#956) — callers treat a
-	// resolved seed as a durable enqueue, so it must not resolve empty.
-	return withSchedulerSeedLedgerRecovery({
+	return seedBrowseWindowLane(PRODUCT_BROWSE_LANE, {
+		window,
+		limit,
+		mode: 'windowed',
+		priority: input.priority,
+		completedDedupeForMs: input.completedDedupeForMs,
+		nowMs: input.nowMs,
 		database: input.database,
-		run: () =>
-			seedPersistedSchedulerTasks({
-				repository: new RxSchedulerTaskStateRepository(input.database),
-				tasks: [
-					{
-						id: `${queryKey}:windowed`,
-						requirementId,
-						collection: 'products',
-						queryKey,
-						limit,
-						priority: input.priority ?? PRODUCT_BROWSE_WINDOW_SCHEDULER_PRIORITY,
-						mode: 'windowed',
-					},
-				],
-				nowMs,
-				completedDedupeForMs:
-					input.completedDedupeForMs ?? PRODUCT_BROWSE_WINDOW_COMPLETED_DEDUPE_FOR_MS,
-			}),
 	});
 }
 
