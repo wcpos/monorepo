@@ -142,6 +142,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_scheduler_drain');
 		case 'queue.write.annihilate':
 			return t('health.logs.event.queue_write_annihilate');
+		case 'queue.write.auto-reverted':
+			return t('health.logs.event.queue_write_auto_reverted');
 		case 'queue.write.born-twice-requeue':
 			return t('health.logs.event.queue_write_born_twice_requeue');
 		case 'queue.write.coalesce':

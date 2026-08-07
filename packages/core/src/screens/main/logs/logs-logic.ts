@@ -160,9 +160,9 @@ const RETRYABLE_STUCK_EVENTS = new Set([
 
 /**
  * Derived stuck-records view (spec §4): per (collection, record), the LATEST
- * decisive `sync.record` outcome wins — `failed`/`rejected` means stuck, `ok`
- * clears. `cancelled`/`unknown` rows are not evidence either way. Rows must be
- * sorted newest-first (the ledger's natural order).
+ * decisive `sync.record` outcome wins — `failed`/`rejected` means stuck,
+ * `ok`/`recovered` clears. `cancelled`/`unknown` rows are not evidence either
+ * way. Rows must be sorted newest-first (the ledger's natural order).
  */
 export function deriveStuckRecords(rows: LogRow[]): StuckRecord[] {
 	const decided = new Map<string, StuckRecord | null>();
@@ -194,7 +194,7 @@ export function deriveStuckRecords(rows: LogRow[]): StuckRecord[] {
 				retryable:
 					direction === 'push' && eventType !== null && RETRYABLE_STUCK_EVENTS.has(eventType),
 			});
-		} else if (row.outcome === 'ok') {
+		} else if (row.outcome === 'ok' || row.outcome === 'recovered') {
 			decided.set(key, null);
 		}
 		// cancelled/unknown: leave undecided so an older decisive row can rule.

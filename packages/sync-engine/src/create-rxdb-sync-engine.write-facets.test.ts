@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { createFakeWriteServer } from '@wcpos/sync-core/testing';
@@ -1029,7 +1029,7 @@ describe('write facets beyond orders', () => {
 		const subject = engine(route.fetch);
 		await subject.ready;
 		await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'born-local' }));
-		const receipt = await subject.write({
+		await subject.write({
 			collection: spec.collection,
 			operation: 'create',
 			recordId: UUID_A,
@@ -1037,9 +1037,10 @@ describe('write facets beyond orders', () => {
 		});
 		expect(await subject.sync('write-drain')).toMatchObject({ rejected: 1 });
 
-		await subject.resolveConflict(receipt.mutationId, 'discard');
-		expect(await record(subject, spec, UUID_A)).toBeNull();
-		expect(await subject.conflicts()).toEqual([]);
+		await vi.waitFor(async () => {
+			expect(await record(subject, spec, UUID_A)).toBeNull();
+			expect(await subject.conflicts()).toEqual([]);
+		});
 		await subject.dispose();
 	});
 

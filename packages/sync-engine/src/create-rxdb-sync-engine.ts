@@ -133,6 +133,13 @@ import type { EngineTimers } from './engine-timers';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
+const AUTO_REVERT_COLLECTIONS: ReadonlySet<string> = new Set([
+	'products',
+	'variations',
+	'customers',
+	'coupons',
+] satisfies SyncCollectionName[]);
+
 export type {
 	CoverageOutcome,
 	CustomerBrowseDimensions,
@@ -1301,7 +1308,32 @@ export function createRxdbSyncEngine(
 			}
 		},
 		isWritePlaneOwner: writePlaneOwner,
-		emitWriteEvent: (event) => emitEngineEvent(event),
+		emitWriteEvent: (event) => {
+			emitEngineEvent(event);
+			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
+				return;
+			}
+			void (async () => {
+				try {
+					await writePlane.resolveConflict(event.mutationId, 'discard');
+					diagnostics({
+						type: 'queue.write.auto-reverted',
+						level: 'error',
+						collection: event.collection,
+						message: event.reason ?? 'Rejected change reverted to server truth',
+						fields: {
+							collection: event.collection,
+							recordId: event.recordId,
+							mutationId: event.mutationId,
+							...(event.status !== undefined ? { status: event.status } : {}),
+							...(event.reason !== undefined ? { reason: event.reason } : {}),
+						},
+					});
+				} catch {
+					// The rejected row stays parked for Store Health when discard cannot settle it.
+				}
+			})();
+		},
 		onActivityChange: changeCollectionActivity,
 		barcodeSelectorsFor,
 		persistOrderRepull: async ({ database, wooIds, nowMs: repullNowMs }) => {

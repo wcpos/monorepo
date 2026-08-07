@@ -1167,6 +1167,7 @@
 	"health.logs.event.queue_drain_progress": "Still loading records",
 	"health.logs.event.queue_scheduler_drain": "Background sync finished a batch",
 	"health.logs.event.queue_write_annihilate": "A change cancelled itself out before it was sent",
+	"health.logs.event.queue_write_auto_reverted": "Reverted a change your store rejected",
 	"health.logs.event.queue_write_born_twice_requeue": "Queued a change again after a duplicate was created",
 	"health.logs.event.queue_write_coalesce": "Merged repeated edits into one update",
 	"health.logs.event.queue_write_conflict_transition": "Could not settle a clashing change",

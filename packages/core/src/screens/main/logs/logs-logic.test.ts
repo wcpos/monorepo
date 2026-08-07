@@ -328,6 +328,22 @@ describe('deriveStuckRecords', () => {
 		expect(deriveStuckRecords(rows)).toHaveLength(0);
 	});
 
+	it('clears a rejected record whose latest row says it recovered', () => {
+		const rows = [
+			recordRow('auto-reverted', 300, 'recovered', {
+				recordId: 812,
+				collection: 'products',
+				type: 'queue.write.auto-reverted',
+			}),
+			recordRow('rejected-before', 200, 'rejected', {
+				recordId: 812,
+				collection: 'products',
+				type: 'push.rejected',
+			}),
+		];
+		expect(deriveStuckRecords(rows)).toHaveLength(0);
+	});
+
 	it('skips cancelled/unknown rows so an older decisive row can rule', () => {
 		const rows = [
 			recordRow('aborted', 300, 'cancelled', { recordId: 9, collection: 'products' }),

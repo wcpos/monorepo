@@ -378,6 +378,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "queue.write.auto-reverted",
+		"domain": "SYNC",
+		"label": "Reverted a change your store rejected",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "queue.write.born-twice-requeue",
 		"domain": "SYNC",
 		"label": "Queued a change again after a duplicate was created",

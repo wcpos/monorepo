@@ -14,7 +14,8 @@ export type PersistLogRow = (
 	level: 'debug' | 'info' | 'warn' | 'error',
 	message: string,
 	context: Record<string, unknown>,
-	terminal?: LogTerminalFields
+	terminal?: LogTerminalFields,
+	toast?: boolean
 ) => void;
 
 /**
@@ -36,6 +37,8 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
 	visible?: boolean;
 	/** Cashier-facing severity when it intentionally differs from the engine severity. */
 	level?: 'info' | 'warn' | 'error';
+	/** Request a cashier-facing toast for this row. */
+	toast?: boolean;
 	/** Return false to route this occurrence to the check ring instead of a row
 	 *  (idle work). Omit to always persist. */
 	didWork?(fields: SyncEventFields<T>): boolean;
@@ -313,6 +316,13 @@ const CONFORMANCE_TABLE = {
 		operationType: 'sync.record',
 		outcome: 'rejected',
 		message: recordMessage('needs revision'),
+	},
+	'queue.write.auto-reverted': {
+		operationType: 'sync.record',
+		outcome: 'recovered',
+		level: 'error',
+		toast: true,
+		message: recordMessage('change reverted to server value; see Store health'),
 	},
 	'queue.write.conflict-transition': {
 		operationType: 'sync.record',
@@ -616,7 +626,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 				...(durationMs !== undefined
 					? { durationMs, startedAt: (event.at ?? nowMs()) - durationMs }
 					: {}),
-			}
+			},
+			conformance.toast
 		);
 		// Presentation stays warn, but a lane crash still promotes the preceding
 		// recorder evidence just as its original error-level row did.

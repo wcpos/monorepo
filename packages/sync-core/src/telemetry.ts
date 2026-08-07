@@ -107,6 +107,7 @@ export type SyncEventType =
 	| 'queue.drain.progress'
 	| 'queue.scheduler.drain'
 	| 'queue.write.annihilate'
+	| 'queue.write.auto-reverted'
 	| 'queue.write.born-twice-requeue'
 	| 'queue.write.coalesce'
 	| 'queue.write.conflict-transition'
@@ -221,6 +222,13 @@ export type SyncEventFieldsByType = {
 		readonly conflicts: number;
 		readonly failed: number;
 		readonly rejected: number;
+	};
+	'queue.write.auto-reverted': {
+		readonly collection: string;
+		readonly recordId: string;
+		readonly mutationId: string;
+		readonly status?: number;
+		readonly reason?: string;
 	};
 	'queue.scheduler.drain': {
 		readonly scanned?: number;

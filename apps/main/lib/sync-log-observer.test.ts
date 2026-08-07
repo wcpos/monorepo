@@ -29,6 +29,7 @@ describe('createSyncLogObserver', () => {
 		message: string;
 		context: Record<string, unknown>;
 		terminal?: LogTerminalFields;
+		toast?: boolean;
 	}[];
 	let observer: ReturnType<typeof createSyncLogObserver>;
 
@@ -37,8 +38,8 @@ describe('createSyncLogObserver', () => {
 		isVerboseDiagnosticsMock.mockReturnValue(false);
 		rows = [];
 		observer = createSyncLogObserver({
-			persist: (level, message, context, terminal) =>
-				rows.push({ level, message, context, terminal }),
+			persist: (level, message, context, terminal, toast?: boolean) =>
+				rows.push({ level, message, context, terminal, toast }),
 			nowMs: () => 2_000,
 		});
 	});
@@ -174,6 +175,39 @@ describe('createSyncLogObserver', () => {
 				reason: 'pos_data_invalid',
 			},
 			terminal: { operationType: 'sync.record', outcome: 'rejected' },
+		});
+	});
+
+	it('persists catalog auto-reverts as recovered errors and requests a toast', () => {
+		observer.observe(
+			event({
+				type: 'queue.write.auto-reverted',
+				level: 'error',
+				collection: 'products',
+				fields: {
+					recordId: 'product-9',
+					mutationId: 'mutation-9',
+					status: 403,
+					reason: 'woocommerce_rest_cannot_edit customer@example.com',
+				},
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'error',
+			message:
+				'products product-9 — change reverted to server value; see Store health (HTTP 403: woocommerce_rest_cannot_edit [redacted])',
+			context: {
+				type: 'queue.write.auto-reverted',
+				recordId: 'product-9',
+				collection: 'products',
+				direction: 'push',
+				mutationId: 'mutation-9',
+				status: 403,
+				reason: 'woocommerce_rest_cannot_edit [redacted]',
+			},
+			terminal: { operationType: 'sync.record', outcome: 'recovered' },
+			toast: true,
 		});
 	});
 
