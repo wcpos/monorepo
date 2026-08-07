@@ -189,6 +189,7 @@ describe('createSyncLogObserver', () => {
 					mutationId: 'mutation-9',
 					status: 403,
 					reason: 'woocommerce_rest_cannot_edit customer@example.com',
+					serverMessage: 'Sorry, you are not allowed to edit this resource. customer@example.com',
 				},
 			})
 		);
@@ -205,11 +206,14 @@ describe('createSyncLogObserver', () => {
 				mutationId: 'mutation-9',
 				status: 403,
 				reason: 'woocommerce_rest_cannot_edit [redacted]',
+				serverMessage: 'Sorry, you are not allowed to edit this resource. [redacted]',
 			},
 			terminal: { operationType: 'sync.record', outcome: 'recovered' },
 			toast: {
+				// The server's human-readable message wins over the machine code.
 				title: 'Change rejected by your store — reverted',
-				description: 'woocommerce_rest_cannot_edit [redacted] See Store health for details.',
+				description:
+					'Sorry, you are not allowed to edit this resource. [redacted]. See Store health for details.',
 			},
 		});
 	});

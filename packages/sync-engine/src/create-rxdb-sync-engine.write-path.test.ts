@@ -1206,6 +1206,8 @@ describe('write() + sync("write-drain") through the public handle', () => {
 						mutationId: receipt.mutationId,
 						status: 403,
 						reason: 'woocommerce_rest_cannot_edit',
+						// The WP-localized sentence the cashier sees — not the machine code.
+						serverMessage: 'Sorry, you are not allowed to edit this resource.',
 					}),
 				})
 			);

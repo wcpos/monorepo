@@ -228,7 +228,10 @@ export type SyncEventFieldsByType = {
 		readonly recordId: string;
 		readonly mutationId: string;
 		readonly status?: number;
+		/** Machine code from the error body, e.g. `woocommerce_rest_cannot_edit`. */
 		readonly reason?: string;
+		/** The server's human-readable (WP-localized) message, when it sent one. */
+		readonly serverMessage?: string;
 	};
 	'queue.scheduler.drain': {
 		readonly scanned?: number;

@@ -86,7 +86,12 @@ export type DrainResult = {
 	 * can't poison it, and surfaced here (+ a `push.rejected` event) for the host to log /
 	 * alert / re-queue. Never retried automatically.
 	 */
-	rejected: { mutation: QueuedMutation; status?: number; reason?: string }[];
+	rejected: {
+		mutation: QueuedMutation;
+		status?: number;
+		reason?: string;
+		serverMessage?: string;
+	}[];
 };
 
 /** 4xx codes that ARE worth retrying — timeout, conflict/in-progress, too-early, rate-limit. */
@@ -421,7 +426,7 @@ export async function drainMutationQueue(input: {
 			// panel, so counting an unpersisted one tells every surface the row was
 			// dead-lettered while storage still holds it as claimed/pending — the row
 			// is then invisible to recovery and to anyone reading the logs.
-			rejected.push({ mutation, status, reason });
+			rejected.push({ mutation, status, reason, serverMessage });
 			// Emitted only once the verdict is DURABLE, for the same reason. The log
 			// pipeline classifies `push.rejected` as a terminal rejection and the
 			// health banner reads that classification, so emitting it on a failed

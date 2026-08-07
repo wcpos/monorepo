@@ -366,6 +366,8 @@ export type EngineEvent =
 			mutationId: string;
 			status?: number;
 			reason?: string;
+			/** The server's human-readable message; `reason` is the machine code. */
+			serverMessage?: string;
 	  }
 	// R1 — the save-time mirror check. The server ACKED an order the POS built, but
 	// its money is not the money that was pushed: WooCommerce's calculation is the
@@ -1320,13 +1322,15 @@ export function createRxdbSyncEngine(
 						type: 'queue.write.auto-reverted',
 						level: 'error',
 						collection: event.collection,
-						message: event.reason ?? 'Rejected change reverted to server truth',
+						message:
+							event.serverMessage ?? event.reason ?? 'Rejected change reverted to server truth',
 						fields: {
 							collection: event.collection,
 							recordId: event.recordId,
 							mutationId: event.mutationId,
 							...(event.status !== undefined ? { status: event.status } : {}),
 							...(event.reason !== undefined ? { reason: event.reason } : {}),
+							...(event.serverMessage !== undefined ? { serverMessage: event.serverMessage } : {}),
 						},
 					});
 				} catch {

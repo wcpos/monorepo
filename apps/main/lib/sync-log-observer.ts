@@ -327,11 +327,14 @@ const CONFORMANCE_TABLE = {
 		outcome: 'recovered',
 		level: 'error',
 		toast(event, fields) {
-			const reason = sanitizeReason(fields.reason);
+			// The server's human-readable message ("Sorry, you are not allowed to
+			// edit this resource.", localized by WP) over the machine code.
+			const reason = sanitizeReason(fields.serverMessage) ?? sanitizeReason(fields.reason);
+			const detail = reason === undefined || reason.endsWith('.') ? reason : `${reason}.`;
 			return {
 				title: 'Change rejected by your store — reverted',
-				description: reason
-					? `${reason} See Store health for details.`
+				description: detail
+					? `${detail} See Store health for details.`
 					: 'See Store health for details.',
 			};
 		},
@@ -590,6 +593,12 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		if (fields.reason !== undefined) {
 			if (reason === undefined) delete context.reason;
 			else context.reason = reason;
+		}
+		// serverMessage is server-provided prose — same redaction contract as reason.
+		if (fields.serverMessage !== undefined) {
+			const serverMessage = sanitizeReason(fields.serverMessage);
+			if (serverMessage === undefined) delete context.serverMessage;
+			else context.serverMessage = serverMessage;
 		}
 		// The engine reports its cadence in milliseconds because it has no idea the
 		// Performance screen exists. Naming the preset here — where the presets are
