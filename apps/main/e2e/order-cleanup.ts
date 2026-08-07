@@ -81,6 +81,30 @@ export function extractOrderIdFromPushBody(body: unknown): number | null {
 	return null;
 }
 
+/**
+ * Extract the DISPLAYED order number from a push response body (same bare/enveloped
+ * shapes as the id). Sequential-order-number plugins make `number` differ from `id`,
+ * and the Orders table renders `number` — search assertions must use it. Returns
+ * null when absent so callers can fall back to the id.
+ */
+export function extractOrderNumberFromPushBody(body: unknown): string | null {
+	if (!body || typeof body !== 'object') return null;
+	const record = body as Record<string, unknown>;
+	const nested = (key: string): unknown =>
+		(record[key] as Record<string, unknown> | undefined)?.number;
+	const candidates: unknown[] = [
+		record.number,
+		nested('document'),
+		nested('record'),
+		nested('data'),
+	];
+	for (const candidate of candidates) {
+		if (typeof candidate === 'number' && Number.isFinite(candidate)) return String(candidate);
+		if (typeof candidate === 'string' && candidate.trim() !== '') return candidate.trim();
+	}
+	return null;
+}
+
 /** True when an order in this status is a lingering cart that teardown should finalize. */
 export function shouldFinalizeStatus(status: unknown): boolean {
 	return typeof status === 'string' && FINALIZE_FROM_STATUSES.has(status);

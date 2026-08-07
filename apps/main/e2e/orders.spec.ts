@@ -6,7 +6,7 @@ import {
 	authenticatedTest as test,
 	tryAddProductBySku,
 } from './fixtures';
-import { extractOrderIdFromPushBody } from './order-cleanup';
+import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
 import { stampRunLabel } from './order-lifecycle';
 import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
 
@@ -93,9 +93,16 @@ test.describe('Orders Page (Pro)', () => {
 		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
 
 		const savePending = page.waitForResponse(
-			(response) =>
-				response.request().method() === 'POST' &&
-				response.url().includes('/wp-json/wcpos/v2/push/orders'),
+			(response) => {
+				if (response.request().method() !== 'POST') return false;
+				// Pretty permalinks put the route in the pathname; plain permalinks
+				// carry it as ?rest_route= — match both, like searchAndWaitForServer.
+				const url = new URL(response.url());
+				return (
+					url.pathname.endsWith('/wp-json/wcpos/v2/push/orders') ||
+					url.searchParams.get('rest_route') === '/wcpos/v2/push/orders'
+				);
+			},
 			{ timeout: 90_000 }
 		);
 		savePending.catch(() => {});
@@ -109,7 +116,8 @@ test.describe('Orders Page (Pro)', () => {
 			return;
 		}
 
-		const orderId = extractOrderIdFromPushBody(await saveResponse.json().catch(() => null));
+		const pushBody: unknown = await saveResponse.json().catch(() => null);
+		const orderId = extractOrderIdFromPushBody(pushBody);
 		const envelope = (saveResponse.request().postDataJSON() ?? {}) as { recordId?: unknown };
 		const orderUuid = typeof envelope.recordId === 'string' ? envelope.recordId : '';
 		if (orderId === null || !orderUuid) {
@@ -119,7 +127,10 @@ test.describe('Orders Page (Pro)', () => {
 
 		const screen = await navigateToOrders(page);
 		const searchInput = screen.getByTestId('search-orders');
-		const orderNumber = String(orderId);
+		// The Orders table renders `number`, which differs from the server `id` on
+		// stores running sequential-order-number plugins — search and assert by the
+		// DISPLAYED number, falling back to the id when the push body omits it.
+		const orderNumber = extractOrderNumberFromPushBody(pushBody) ?? String(orderId);
 		await searchAndWaitForServer(page, searchInput, 'orders', orderNumber);
 
 		const createdRow = screen.getByTestId(`data-table-row-${orderUuid}`);
