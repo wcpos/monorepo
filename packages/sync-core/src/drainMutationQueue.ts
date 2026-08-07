@@ -113,6 +113,16 @@ function isNonRetryable(error: unknown): boolean {
  */
 const DEFAULT_CLAIM_LEASE_MS = 60_000;
 
+export function isNeverPushedChain(rows: readonly QueuedMutation[]): boolean {
+	return (
+		rows.length > 0 &&
+		rows[0]?.operation === 'create' &&
+		rows.every(
+			(row) => (row.status === undefined || row.status === 'pending') && (row.attempts ?? 0) === 0
+		)
+	);
+}
+
 /**
  * LEADER-SIDE DRAIN ANNIHILATION (#1059): cancel a NEVER-PUSHED create→delete
  * chain BEFORE any of it is claimed or pushed, so a follower's create-then-void
@@ -170,11 +180,10 @@ async function annihilateNeverPushedChains(input: {
 		// means the create may be in flight or the record is blocked, so bail.
 		const pendingRows = rows.filter((row) => row.status === undefined || row.status === 'pending');
 		if (
-			pendingRows.length !== rows.length ||
+			!isNeverPushedChain(rows) ||
 			pendingRows.length < 2 ||
-			pendingRows[0]?.operation !== 'create' ||
 			pendingRows[pendingRows.length - 1]?.operation !== 'delete' ||
-			pendingRows.some((row) => (row.attempts ?? 0) !== 0)
+			pendingRows.length !== rows.length
 		) {
 			continue;
 		}

@@ -1,12 +1,15 @@
-import type { StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
+import type {
+	QueuedMutation,
+	RecordMutationQueue,
+	StoreScopeManager,
+	SyncObserver,
+} from '@wcpos/sync-core';
 
 import { writeFacetFor } from '../collections/collection-descriptors';
-import { seedTargetedOrderSchedulerTask } from '../scheduler';
-import { fetchOrderServerRevision } from './write-drain-lane';
-import { queueFor, requeueRejectedMutation } from './write-intents';
+import { fetchOrderServerRevision } from './order-server-revision';
+import { requeueRejectedMutation } from './write-intents';
 
 import type { BarcodeSelectors } from '../materialization/barcode-selectors';
-import type { EngineRequirement, RequirementHandle } from '../require-plane';
 import type { RxDatabase } from 'rxdb';
 
 /**
@@ -57,51 +60,47 @@ function serverMayHoldRecord(entry: { rejectedReason?: string }): boolean {
 	return rejectionSuggestsServerRecord(entry.rejectedReason);
 }
 
-type ConflictResolutionDeps = {
-	assertNotDisposed: () => void;
-	readySettledForSync: Promise<void>;
+export type ConflictResolutionDeps = {
+	assertUsable: () => void;
+	settled: (kind: 'read' | 'write') => Promise<void>;
 	manager: StoreScopeManager;
-	databaseByScopeId: ReadonlyMap<string, RxDatabase>;
-	activeDatabase: () => RxDatabase | null;
+	databaseFor: (scopeId: string) => RxDatabase | null;
 	fetcher: (url: string, init?: RequestInit) => Promise<Response>;
-	ports: { site: { syncBaseUrl: string }; now?: () => number };
+	syncBaseUrl: string;
+	now: () => number;
 	/** Mints the fresh mutationId a rebuilt requeue must carry (#832). */
 	mintUuid: () => string;
-	requirePlane: { require: (requirement: EngineRequirement) => RequirementHandle };
 	diagnostics: SyncObserver;
-	writeDrainLane: { noteQueueDepth: (depth: number) => void };
-	scheduleStatusChange: () => void;
+	persistOrderRepull: (input: {
+		database: RxDatabase;
+		wooIds: number[];
+		nowMs?: number;
+	}) => Promise<void>;
+	repullOrdersNow: (input: { wooIds: number[]; reason: string }) => Promise<void>;
+	queueFor: (database: RxDatabase) => RecordMutationQueue;
+	resolutionInstanceIdFor: () => string;
+	serializeResolution: <T>(op: () => Promise<T>) => Promise<T>;
+	onQueueChanged: (database: RxDatabase) => Promise<void>;
 	/** The active scope's barcode carriers — a discard rebuilds the optimistic
 	 * document through the same projection an ordinary pull uses. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 };
 
-export function createConflictResolution(deps: ConflictResolutionDeps) {
+export type ConflictResolution = {
+	conflicts(): Promise<QueuedMutation[]>;
+	resolveConflict(mutationId: string, resolution: ConflictResolutionChoice): Promise<void>;
+};
+
+export function createConflictResolution(deps: ConflictResolutionDeps): ConflictResolution {
 	// prettier-ignore
-	const { assertNotDisposed, readySettledForSync, manager, databaseByScopeId, activeDatabase, fetcher, ports, mintUuid, requirePlane, diagnostics, writeDrainLane, scheduleStatusChange } = deps;
+	const { assertUsable, settled, manager, databaseFor, fetcher, syncBaseUrl, now, mintUuid, diagnostics, persistOrderRepull, repullOrdersNow, queueFor, resolutionInstanceIdFor, serializeResolution, onQueueChanged } = deps;
+	const activeDatabase = (): RxDatabase | null => {
+		const scopeId = manager.activeScope;
+		return scopeId === null ? null : databaseFor(scopeId);
+	};
 	/** The carriers of the scope this resolution is BOUND to — never a later active one. */
 	const boundBarcodeSelectors = (scopeId: string): BarcodeSelectors | undefined =>
 		deps.barcodeSelectorsFor?.(scopeId) ?? undefined;
-
-	// Resolutions run ONE AT A TIME (#832 follow-up, R7b). Two different choices
-	// racing on the same dead letter is not a hypothetical: requeue durably
-	// enqueues its replacement BEFORE it retires the dead letter, so a discard
-	// interleaving in that window destroys the resident while the replacement is
-	// already queued — the drain then pushes the create and the ack's
-	// missing-resident path REMATERIALIZES the order the cashier just confirmed
-	// destroying. Neither side can unwind the other once the drain has claimed the
-	// row, so the fix is to stop the interleave happening. Same idiom as the
-	// queue's own transition chain: serialize, and let each resolution re-read
-	// state inside its own turn (both paths already do).
-	let resolutionChain: Promise<unknown> = Promise.resolve();
-	const serialize = <T>(op: () => Promise<T>): Promise<T> => {
-		const run = resolutionChain.then(op, op);
-		resolutionChain = run.then(
-			() => undefined,
-			() => undefined
-		);
-		return run;
-	};
 
 	// The in-process `serialize` above orders THIS window's resolutions. Two
 	// Electron windows are two processes over one storage, and neither chain sees
@@ -112,9 +111,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 	// retry. `instanceId` distinguishes the two windows and is minted lazily — a
 	// read-only engine may open on a host without Web Crypto, where `mintUuid`
 	// throws, and an engine that never resolves must not pay for an id it never uses.
-	let instanceIdOnce: string | null = null;
-	const instanceIdFor = (): string => (instanceIdOnce ??= mintUuid());
-	const nowMs = (): number => (ports.now !== undefined ? ports.now() : Date.now());
+	const nowMs = now;
 	// Long enough to cover a real resolution (a discard can fetch a server document
 	// and seed a scheduler task); short enough that a window which crashes
 	// mid-resolution does not stall recovery for a whole shift.
@@ -122,8 +119,8 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 
 	return {
 		conflicts: async () => {
-			assertNotDisposed();
-			await readySettledForSync;
+			assertUsable();
+			await settled('read');
 			const database = activeDatabase();
 			if (!database) return [];
 			return (await queueFor(database).all()).filter(
@@ -143,9 +140,9 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 			// change which store a resolution applies to, so the issuing scope is pinned
 			// here and verified once the turn is granted.
 			const issuedAgainst = activeDatabase();
-			return serialize(async () => {
-				assertNotDisposed();
-				await readySettledForSync;
+			return serializeResolution(async () => {
+				assertUsable();
+				await settled('read');
 				// Scope-guarded like write(): the resolution writes into the captured
 				// scope's queue + record, and a switch/reset mid-resolution drops them.
 				let needsRepull: number | null = null;
@@ -155,7 +152,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 				let claimTaken = false;
 				try {
 					await manager.runGuarded(async (bound) => {
-						const database = databaseByScopeId.get(bound.scopeId);
+						const database = databaseFor(bound.scopeId);
 						if (!database) throw new Error('resolveConflict: scope database not open');
 						if (issuedAgainst !== null && database !== issuedAgainst) {
 							throw new Error(
@@ -179,7 +176,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 						const claim = await queue.claimForResolution({
 							mutationId,
 							expectedStatus: entry.status,
-							holder: instanceIdFor(),
+							holder: resolutionInstanceIdFor(),
 							untilIso: new Date(nowMs() + RESOLUTION_CLAIM_MS).toISOString(),
 							nowMs: nowMs(),
 						});
@@ -233,13 +230,13 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 								if (entry.collectionName === 'orders') {
 									serverBase = await fetchOrderServerRevision({
 										fetch: bound.bindFetch(fetcher as never) as never,
-										syncBaseUrl: ports.site.syncBaseUrl,
+										syncBaseUrl,
 										wooOrderId: remoteId,
 									});
 								} else {
 									const serverDocument = await facet.fetchServerDocument({
 										fetch: bound.bindFetch(fetcher as never),
-										syncBaseUrl: ports.site.syncBaseUrl,
+										syncBaseUrl,
 										remoteId,
 									});
 									const refreshedRevision = (
@@ -279,7 +276,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 								const barcodeSelectors = boundBarcodeSelectors(bound.scopeId);
 								discardServerDocument = await facet.fetchServerDocument({
 									fetch: bound.bindFetch(fetcher as never),
-									syncBaseUrl: ports.site.syncBaseUrl,
+									syncBaseUrl,
 									remoteId,
 									...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 								});
@@ -302,7 +299,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 							const heldUntil = held?.resolutionClaimUntil
 								? Date.parse(held.resolutionClaimUntil)
 								: 0;
-							if (held?.resolutionClaimBy !== instanceIdFor() || heldUntil <= nowMs()) {
+							if (held?.resolutionClaimBy !== resolutionInstanceIdFor() || heldUntil <= nowMs()) {
 								throw new Error(
 									`resolveConflict: the resolution claim on "${mutationId}" expired or was taken by another window — refresh the list and retry`
 								);
@@ -350,8 +347,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 									db: database,
 									entry,
 									mintUuid,
-									now: () =>
-										new Date(ports.now !== undefined ? ports.now() : Date.now()).toISOString(),
+									now: () => new Date(now()).toISOString(),
 									observe: diagnostics,
 								});
 							} else {
@@ -441,13 +437,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 								// silently posing as synced with the re-pull lost in memory.
 								if (entry.collectionName === 'orders' && typeof remoteId === 'number') {
 									needsRepull = remoteId;
-									await seedTargetedOrderSchedulerTask({
-										orderIds: [remoteId],
-										priority: 1_000,
-										completedDedupeForMs: 0,
-										...(ports.now !== undefined ? { nowMs: ports.now() } : {}),
-										database: database,
-									});
+									await persistOrderRepull({ database, wooIds: [remoteId], nowMs: now() });
 								}
 								if (entry.collectionName !== 'orders' && discardServerDocument) {
 									if (!facet) {
@@ -531,7 +521,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 									const claimUntil = fresh?.resolutionClaimUntil
 										? Date.parse(fresh.resolutionClaimUntil)
 										: 0;
-									if (fresh?.resolutionClaimBy !== instanceIdFor() || claimUntil <= nowMs()) {
+									if (
+										fresh?.resolutionClaimBy !== resolutionInstanceIdFor() ||
+										claimUntil <= nowMs()
+									) {
 										throw new Error(
 											`resolveConflict: the resolution claim on "${mutationId}" expired or was taken by another window mid-resolution — refresh the list and retry`
 										);
@@ -582,7 +575,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 					// hands the row straight back instead of parking it behind the deadline.
 					if (claimTaken && claimedQueue) {
 						await (claimedQueue as ReturnType<typeof queueFor>)
-							.releaseResolutionClaim(mutationId, instanceIdFor())
+							.releaseResolutionClaim(mutationId, resolutionInstanceIdFor())
 							.catch(() => undefined);
 					}
 				}
@@ -593,14 +586,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 				// creates have no Woo id and nothing server-side to restore.
 				if (needsRepull !== null) {
 					try {
-						await requirePlane.require({
-							id: `conflict-discard:${mutationId}`,
-							collection: 'orders',
-							kind: 'targeted-records',
+						await repullOrdersNow({
 							wooIds: [needsRepull],
-							forceRefresh: true,
-							priority: 1_000,
-						}).ready;
+							reason: `conflict-discard:${mutationId}`,
+						});
 					} catch (error) {
 						diagnostics({
 							type: 'queue.write.discard-repull-deferred',
@@ -611,25 +600,30 @@ export function createConflictResolution(deps: ConflictResolutionDeps) {
 						});
 					}
 				}
-				const settled = resolved as { collectionName: string; recordId: string } | null;
-				if (settled) {
+				const settledResolution = resolved as {
+					collectionName: string;
+					recordId: string;
+				} | null;
+				if (settledResolution) {
 					diagnostics({
 						type: 'queue.write.resolve',
 						level: 'info',
-						collection: settled.collectionName,
+						collection: settledResolution.collectionName,
 						// `residentRemoved` makes a destructive discard legible in the log:
 						// it is the one resolution that deletes a record outright, and "the
 						// order is gone" must never be an unexplained disappearance (R7b).
-						fields: { recordId: settled.recordId, mutationId, resolution, residentRemoved },
+						fields: {
+							recordId: settledResolution.recordId,
+							mutationId,
+							resolution,
+							residentRemoved,
+						},
 					});
 					// The resolution changed queue state outside the drain path — refresh
 					// the cached depth and tell status subscribers, or an idle engine
 					// keeps showing the pre-resolution depth.
 					const database = activeDatabase();
-					if (database) {
-						writeDrainLane.noteQueueDepth((await queueFor(database).pending()).length);
-					}
-					scheduleStatusChange();
+					if (database) await onQueueChanged(database);
 				}
 			});
 		},

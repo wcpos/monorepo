@@ -11,7 +11,7 @@ export { planReplicationActions, type ReplicationActions } from './changeSignalR
 export { type ConfigFingerprintSnapshot, type ConfigFingerprintSource } from './configChangeSignal';
 // prettier-ignore
 export { shouldApplyPulledDocument, syncCustomPullBatchIntoRepository, type CustomPullCheckpointStore, type CustomPullRepository } from './customPullAdapter';
-export { drainMutationQueue } from './drainMutationQueue';
+export { drainMutationQueue, isNeverPushedChain } from './drainMutationQueue';
 // prettier-ignore
 export {
 	createHybridChangeSignalEngine, REFERENCE_COLLECTIONS, type BarcodeConfigCollection,

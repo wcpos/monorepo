@@ -68,6 +68,7 @@ import {
 	type SyncCollectionName,
 } from '../collections/engine-collections';
 import { sanitizeOutboundOrderPayload } from '../materialization/sanitize-outbound-order-payload';
+import { coalescedPayload, decideWritePlacement } from './write-placement';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
 
@@ -174,9 +175,13 @@ export async function enqueueWriteIntent(input: {
 		const recordRows = rows.filter(
 			(item) => item.collectionName === intent.collection && item.recordId === intent.recordId
 		);
-		const pendingRows = recordRows.filter(
-			(item) => item.status === undefined || item.status === 'pending'
-		);
+		const placement = decideWritePlacement({
+			rows: recordRows,
+			operation: intent.operation,
+			isRecovery: input.provenance !== undefined,
+			canCoalesce,
+			hasBaseRevision: intent.operation !== 'delete' || intent.baseRevision !== undefined,
+		});
 		// DEAD-LETTER RECOVERY GUARD (#832), checked HERE — inside the loop, against
 		// the same `rows` read that decides coalescing — because checking it before
 		// the loop is not enough: a delete enqueued in between would become the
@@ -185,21 +190,11 @@ export async function enqueueWriteIntent(input: {
 		// cashier's deletion silently cancelled. A recovery replays an OLD intent;
 		// it must never win over a newer deletion. If a delete lands after this read
 		// the CAS below refuses and the next iteration re-reads and finds it.
-		if (input.provenance && recordRows.some((item) => item.operation === 'delete')) {
+		if (placement.kind === 'refuse-recovery-superseded-by-delete') {
 			throw new Error(
 				`requeue: ${intent.collection}/${intent.recordId} is queued for deletion — sending the refused change again would undo that; discard instead`
 			);
 		}
-		// The coalesce target (#516 rules 1–2): the LAST pending row, and only when
-		// it has NEVER been claimed/pushed (attempts > 0 ⇒ the server may already
-		// hold that exact mutation — a fresh-id replacement would replay into the
-		// born-twice/dedupe guard with this edit's payload silently ignored).
-		// Anything else — claimed, ever-pushed, terminal — makes the edit queue BEHIND.
-		const lastPending = pendingRows.at(-1);
-		const coalescable =
-			canCoalesce && lastPending !== undefined && (lastPending.attempts ?? 0) === 0
-				? lastPending
-				: undefined;
 		// A recovered UPDATE never coalesces into a live successor (#832 follow-up,
 		// R7a). Coalescing REPLACES that row, so the successor's edit stops having a
 		// queue row of its own — and if the rebuilt payload is refused again, the
@@ -219,17 +214,17 @@ export async function enqueueWriteIntent(input: {
 		// edit: exactly the entombment the outbound half of this rule prevents.
 		// Keeping recovery rows unmergeable in both directions is what makes
 		// "recovered work stays independently resolvable" actually hold.
-		const recoveryUpdate = input.provenance !== undefined && intent.operation === 'update';
-		const coalescingIntoRecovery =
-			input.provenance === undefined && coalescable?.requeuedFrom !== undefined;
-		const prior = recoveryUpdate || coalescingIntoRecovery ? undefined : coalescable;
+		const prior = placement.kind === 'coalesce' ? placement.prior : undefined;
 		// A create still ahead in the queue (pending or in flight): a delete queued
 		// behind it defers its baseRevision to the drain-time re-stamp.
-		const createAhead = recordRows.find(
-			(item) =>
-				item.operation === 'create' &&
-				(item.status === undefined || item.status === 'pending' || item.status === 'claimed')
-		);
+		const createAhead =
+			placement.kind === 'append'
+				? placement.deferBaseRevision
+				: recordRows.some(
+						(item) =>
+							item.operation === 'create' &&
+							(item.status === undefined || item.status === 'pending' || item.status === 'claimed')
+					);
 
 		// never-pushed-chain ∘ delete = ANNIHILATION (#516 rules 2–3): the server
 		// never saw the record, so nothing is sent — the WHOLE chain (create head +
@@ -240,16 +235,10 @@ export async function enqueueWriteIntent(input: {
 		// LAST: if the drain claims the create mid-annihilation the CAS refuses and
 		// the decision re-runs (the delete then queues behind the in-flight
 		// create); successors already removed are superseded by this delete either way.
-		if (
-			canCoalesce &&
-			intent.operation === 'delete' &&
-			pendingRows[0]?.operation === 'create' &&
-			pendingRows.length === recordRows.length &&
-			pendingRows.every((item) => (item.attempts ?? 0) === 0)
-		) {
+		if (placement.kind === 'annihilate') {
 			let refused = false;
 			const removed: QueuedMutation[] = [];
-			for (const row of [...pendingRows].reverse()) {
+			for (const row of [...placement.chain].reverse()) {
 				if (await queue.removePending(row.mutationId)) {
 					removed.push(row);
 					supersededIds.add(row.mutationId);
@@ -369,7 +358,7 @@ export async function enqueueWriteIntent(input: {
 		}
 
 		if (prior) {
-			const operation = prior.operation === 'create' ? ('create' as const) : mutation.operation;
+			const operation = placement.kind === 'coalesce' ? placement.operation : mutation.operation;
 			// Re-materialize the coalesced SNAPSHOT (intent payloads are partial):
 			// resident stored payload (local truth) ⊕ the prior entry's payload
 			// (covers an enqueue that never wrote locally; a delete tombstone is
@@ -377,11 +366,12 @@ export async function enqueueWriteIntent(input: {
 			// A delete replacement stays the bare `{id}` tombstone. The order
 			// display-field strip re-applies AFTER the merge: the resident layer
 			// may predate the strip and still carry object display fields.
-			const mergedPayload = {
-				...(stored?.payload ?? {}),
-				...(prior.operation === 'delete' ? {} : prior.payload),
-				...mutation.payload,
-			};
+			const mergedPayload = coalescedPayload({
+				operation,
+				residentPayload: stored?.payload,
+				prior,
+				incomingPayload: mutation.payload,
+			});
 			const payload =
 				operation === 'delete'
 					? mutation.payload
@@ -410,7 +400,7 @@ export async function enqueueWriteIntent(input: {
 				collection: mutation.collectionName,
 				fields: { recordId: mutation.recordId, removed: 1, added: 1 },
 			});
-		} else if (input.provenance) {
+		} else if (placement.kind === 'append-if-unchanged') {
 			// CONDITIONAL append for a recovery (#832), the same idiom
 			// requeueBornTwiceSnapshot uses: prove the record's row-set is unchanged
 			// INSIDE the queue's serialized turn. Without it, a delete enqueued
@@ -418,10 +408,7 @@ export async function enqueueWriteIntent(input: {
 			// intent — and a rebuilt CREATE ordered after a delete recreates a record
 			// the cashier just deleted. On mismatch, re-read and re-decide; the
 			// delete guard at the top of the loop then refuses.
-			const observedIds = recordRows
-				.map((item) => item.mutationId)
-				.sort()
-				.join('|');
+			const observedIds = placement.observedIds.join('|');
 			const queued = await queue.enqueueWhen(
 				mutation,
 				(fresh) =>
