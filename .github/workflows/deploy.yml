@@ -215,6 +215,7 @@ jobs:
         env:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
+          E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
 

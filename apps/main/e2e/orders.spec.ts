@@ -7,15 +7,11 @@ import { stampRunLabel } from './order-lifecycle';
 import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
 
 /**
- * Layer 2 status: order queries are already cashier/store-relative (#1071), but
- * the client cannot mint a disjoint scope. The checked-in wc/v3 REST index's
- * customer POST has no role field, and StoreSelect can only choose stores the
- * cashier endpoint already assigned. Full isolation therefore needs server-side
- * provisioning of e2e-cashier-1..8 as POS-capable cashiers on the target store;
- * the orchestrator can select one username/password pair by shard/run slot via
- * the existing E2E_USERNAME/E2E_PASSWORD login parameters. The slot key must
- * include the RUN id as well as the shard index because push- and PR-event runs
- * can overlap across separate concurrency groups.
+ * Layer 2 is live: pro-authenticated shards use one of 16 provisioned
+ * e2e-cashier accounts. Serialized PR runs use band A (slots 1..8); push,
+ * workflow_dispatch, and local runs use band B (slots 9..16). The normalized
+ * shard index selects within the band. Two simultaneous non-PR runs can still
+ * share band B (accepted residual); secretless runs keep the demo login.
  */
 
 /** Helper to navigate to Orders page and wait for load */
