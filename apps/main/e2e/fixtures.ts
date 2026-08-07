@@ -732,7 +732,7 @@ export async function hydrateAuthenticatedPage(
 ): Promise<void> {
 	const { waitForCatalogue = true, beforeBoot } = options;
 	const variant = getStoreVariant(testInfo);
-	const cashierAuth = getE2ECashierAuth(variant, testInfo.config.shard?.current ?? 0);
+	const cashierAuth = getE2ECashierAuth(variant, (testInfo.config.shard?.current ?? 1) - 1);
 	await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
 	if (beforeBoot) await beforeBoot(page);
 	const stateName = cashierAuthStateName(options.stateName ?? variant, cashierAuth);

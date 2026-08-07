@@ -7,11 +7,11 @@ import { stampRunLabel } from './order-lifecycle';
 import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
 
 /**
- * Layer 2 is live: pro-authenticated shards use one of the eight provisioned
- * e2e-cashier accounts. A stable hash of GITHUB_RUN_ID (or the local run id)
- * plus the shard index selects slot 1..8, so overlapping push and PR runs do
- * not automatically share a cashier-scoped order query. Secretless runs keep
- * the demo login.
+ * Layer 2 is live: pro-authenticated shards use one of 16 provisioned
+ * e2e-cashier accounts. Serialized PR runs use band A (slots 1..8); push,
+ * workflow_dispatch, and local runs use band B (slots 9..16). The normalized
+ * shard index selects within the band. Two simultaneous non-PR runs can still
+ * share band B (accepted residual); secretless runs keep the demo login.
  */
 
 /** Helper to navigate to Orders page and wait for load */

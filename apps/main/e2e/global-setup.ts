@@ -241,7 +241,9 @@ async function setupVariant(
  */
 async function globalSetup(config: FullConfig) {
 	const baseURL = process.env.BASE_URL || 'http://localhost:8081';
-	const shardIndex = config.shard?.current ?? 0;
+	// Normalize Playwright's 1-based shard number to the 0-based index used
+	// within the PR (1..8) or non-PR/local (9..16) cashier band.
+	const shardIndex = (config.shard?.current ?? 1) - 1;
 
 	// Create the state directory
 	fs.mkdirSync(AUTH_STATE_DIR, { recursive: true });

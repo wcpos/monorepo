@@ -6,25 +6,23 @@ export interface E2ECashierAuth {
 	username: string;
 }
 
-/** Stable run+shard assignment across the eight provisioned E2E cashiers. */
-export function selectCashierSlot(runId: string, shardIndex: number): number {
-	let hash = 0;
-	for (const character of `${runId}:${shardIndex}`) {
-		hash = Math.imul(hash, 31) + character.charCodeAt(0);
-	}
-	return ((hash >>> 0) % 8) + 1;
+/**
+ * PR runs use band A (1..8); the deploy workflow's e2e-shared-store queue
+ * serializes them. All other runs use band B (9..16). Accepted residual: two
+ * simultaneous non-PR runs can share band B because that queue does not cover them.
+ */
+export function selectCashierSlot(eventName: string | undefined, normalizedIndex: number): number {
+	const bandStart = eventName === 'pull_request' ? 1 : 9;
+	return bandStart + normalizedIndex;
 }
 
 export function getE2ECashierAuth(
 	variant: StoreVariant,
-	shardIndex: number
+	normalizedIndex: number
 ): E2ECashierAuth | null {
 	const password = process.env.E2E_CASHIER_PASS;
 	if (variant !== 'pro' || !password) return null;
-	const slot = selectCashierSlot(
-		process.env.GITHUB_RUN_ID ?? process.env.E2E_RUN_ID ?? 'local',
-		shardIndex
-	);
+	const slot = selectCashierSlot(process.env.GITHUB_EVENT_NAME, normalizedIndex);
 	return { password, slot, username: `e2e-cashier-${slot}` };
 }
 
