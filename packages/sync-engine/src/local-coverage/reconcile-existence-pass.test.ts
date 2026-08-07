@@ -132,6 +132,25 @@ describe('runExistenceReconcile', () => {
 		});
 	});
 
+	it('stops without counting an empty bucket when abort flips during its local read', async () => {
+		let aborted = false;
+		const fetchServerBucket = vi.fn(async () => [] as ServerDigestEntry[]);
+		const summary = await runExistenceReconcile({
+			buckets: [0],
+			bucketSize: 10,
+			readLocalBucket: async () => {
+				aborted = true;
+				return [];
+			},
+			fetchServerBucket,
+			executePrune: vi.fn(async () => undefined),
+			isAborted: () => aborted,
+		});
+
+		expect(fetchServerBucket).not.toHaveBeenCalled();
+		expect(summary).toMatchObject({ buckets: 0, emptyBuckets: 0 });
+	});
+
 	it('applies the current bucket then stops at the next boundary when aborted mid-apply', async () => {
 		let aborted = false;
 		const summary = await runExistenceReconcile({

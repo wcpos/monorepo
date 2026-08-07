@@ -47,7 +47,7 @@ export type ReconcileSummary = {
 };
 
 export async function runExistenceReconcile(input: {
-	/** The bucket indices to walk (the wiring derives these from the max wooId / bucket size). */
+	/** The occupied bucket indices to walk, derived from the local manifest. */
 	buckets: readonly number[];
 	bucketSize: number;
 	readLocalBucket: (lo: number, hi: number) => Promise<LocalManifestEntry[]>;
@@ -84,6 +84,9 @@ export async function runExistenceReconcile(input: {
 		const hi = lo + input.bucketSize;
 
 		const local = await input.readLocalBucket(lo, hi);
+		if (input.isAborted?.()) {
+			break;
+		}
 		if (local.length === 0) {
 			summary.emptyBuckets += 1;
 			continue;
