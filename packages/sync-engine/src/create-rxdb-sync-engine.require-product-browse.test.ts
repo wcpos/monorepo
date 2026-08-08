@@ -108,6 +108,47 @@ async function productIds(engine: RxdbSyncEngine): Promise<number[]> {
 }
 
 describe('require() for the products browse window', () => {
+	it('uses only the mounted POS product window on automatic cold boot', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const productRequests: URLSearchParams[] = [];
+		const engine = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			mode: 'auto',
+			captureTimers: true,
+			fetch: async (url) => {
+				const request = new URL(url);
+				if (!request.pathname.endsWith('/products')) return json([]);
+				productRequests.push(request.searchParams);
+				return json([productPayload(1, 0, '10')], 1);
+			},
+			awaitReady: false,
+		}).engine;
+
+		try {
+			await engine.ready;
+			await engine.require({
+				id: 'mounted-pos-products',
+				collection: 'products',
+				kind: 'product-browse',
+				limit: 10,
+				orderby: 'menu_order',
+				order: 'asc',
+				stock_status: 'instock',
+				priority: 700,
+			}).ready;
+
+			expect(productRequests.length).toBeGreaterThan(0);
+			expect(productRequests.every((params) => params.get('stock_status') === 'instock')).toBe(
+				true
+			);
+			expect(productRequests.some((params) => params.get('stock_status') === null)).toBe(false);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('fetches the next window when the grid scrolls past the seed', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();

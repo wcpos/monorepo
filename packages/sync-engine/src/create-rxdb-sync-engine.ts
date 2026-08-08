@@ -1552,11 +1552,17 @@ export function createRxdbSyncEngine(
 		...(ports.timers === undefined ? {} : { timers: ports.timers }),
 	});
 	cadence = cadenceController;
+	// Mounted product grids declare their exact filter/sort window at priority 700. The
+	// unfiltered seed still runs on reconnect, rebaseline, manual sync, reset refill, and
+	// the five-minute cadence to warm barcode local resolution in the background.
+	const coldStartSeedLanes = SEED_RETICK_LANES.filter(
+		(lane) => lane !== 'product-browse-window-seed'
+	);
 	if (mode === 'auto') {
 		void ready.then(
 			async () => {
 				if (disposed) return;
-				await Promise.all(SEED_RETICK_LANES.map((lane) => automaticTickGate.runLane(lane)));
+				await Promise.all(coldStartSeedLanes.map((lane) => automaticTickGate.runLane(lane)));
 				await automaticTickGate.runLane('scheduler-drain');
 				if (disposed) return;
 				cadenceController.start();
