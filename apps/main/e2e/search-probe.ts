@@ -31,6 +31,8 @@ interface CreateSearchProbeOptions {
 	workerIndex: number;
 	/** True when CI declared product-writer secrets; failures must then fail, never skip. */
 	writerConfigured?: boolean;
+	/** Extra wc/v3 fields merged over the default product probe payload (products only). */
+	productData?: Record<string, unknown>;
 }
 
 export function productWriterCredentialsDecision(
@@ -153,7 +155,11 @@ export async function productWriterAuthorization(
 				failure: failure.kind,
 				retryAvailable: attempt === 0,
 			});
-			if (action === 'retry') continue;
+			// The login POST can transiently re-render the form as HTTP 200 with
+			// valid credentials (observed on dev-next 2026-08-08; an immediate
+			// identical login succeeds). One retry absorbs that flake; a genuine
+			// credential failure still throws below, never skips.
+			if (action === 'retry' || (failure.kind === 'http' && attempt === 0)) continue;
 			const status = failure.status === null ? '' : ` (HTTP ${failure.status})`;
 			if (failure.kind === 'transport') {
 				log.warn('[search-probe] configured product-writer login transport failed');
@@ -379,6 +385,7 @@ export async function createSearchProbe(
 		collection,
 		workerIndex,
 		writerConfigured = false,
+		productData,
 	} = options;
 	const token = mintSearchProbeToken(workerIndex);
 	const data =
@@ -389,6 +396,7 @@ export async function createSearchProbe(
 					status: 'publish',
 					regular_price: '25.00',
 					manage_stock: false,
+					...productData,
 				}
 			: {
 					email: `${token}@example.invalid`,
@@ -556,6 +564,31 @@ export async function createRunPrivateProduct(
 		token,
 		variationSku: `${token}red`,
 	};
+}
+
+/** Read one product back over wc/v3 (both permalink styles); throws on any non-2xx. */
+export async function fetchProductRecord(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization | null,
+	id: number
+): Promise<Record<string, unknown>> {
+	const response = await probeRequest(
+		request,
+		'get',
+		storeUrl,
+		'products',
+		id,
+		storeRequestOptions(authorization)
+	);
+	if (!response.ok()) {
+		throw new Error(`Product read-back failed (HTTP ${response.status()})`);
+	}
+	const record = unwrapRecord(await response.json().catch(() => null));
+	if (!record) {
+		throw new Error('Product read-back returned a malformed record');
+	}
+	return record;
 }
 
 /** Force-delete a probe without ever turning teardown trouble into a test failure. */
