@@ -21,8 +21,10 @@ const mockBinding = {
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
 const mockPatch = jest.fn();
 let mockDataTableProps: Record<string, unknown> = {};
+let mockTooltipProps: { showOnNative?: boolean } = {};
 let mockSortBy = 'date_created_gmt';
 let mockSortDirection = 'desc';
+let mockReadOnly = false;
 
 jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
@@ -84,7 +86,10 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/tooltip', () => ({
-	Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	Tooltip: ({ children, ...props }: { children: React.ReactNode; showOnNative?: boolean }) => {
+		mockTooltipProps = props;
+		return <>{children}</>;
+	},
 	TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -109,7 +114,7 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('../contexts/pro-access', () => ({
-	useProAccess: () => ({ readOnly: false }),
+	useProAccess: () => ({ readOnly: mockReadOnly }),
 }));
 jest.mock('../hooks/use-user-capabilities', () => ({
 	useUserCapabilities: () => ({
@@ -147,8 +152,10 @@ describe('CouponsScreen query-state wiring', () => {
 		jest.useFakeTimers();
 		jest.clearAllMocks();
 		mockDataTableProps = {};
+		mockTooltipProps = {};
 		mockSortBy = 'date_created_gmt';
 		mockSortDirection = 'desc';
+		mockReadOnly = false;
 	});
 
 	afterEach(() => jest.useRealTimers());
@@ -171,6 +178,14 @@ describe('CouponsScreen query-state wiring', () => {
 			sync: mockBinding.sync,
 		});
 		expect(mockDataTableProps).not.toHaveProperty('query');
+	});
+
+	it('keeps the upgrade tooltip available when adding is read-only', () => {
+		mockReadOnly = true;
+
+		render(<CouponsScreen />);
+
+		expect(mockTooltipProps.showOnNative).toBe(true);
 	});
 
 	it('initializes binding sort from valid persisted coupon settings', () => {

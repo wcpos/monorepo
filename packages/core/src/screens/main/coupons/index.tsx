@@ -154,7 +154,7 @@ function CouponsScreenContent() {
 								className="flex-1"
 								testID="search-coupons"
 							/>
-							<Tooltip showOnNative={!readOnly && !caps.canCreateCoupons}>
+							<Tooltip showOnNative={readOnly || !caps.canCreateCoupons}>
 								<CapabilityTooltipTrigger>
 									<IconButton
 										testID="coupons-add-button"
