@@ -354,6 +354,13 @@ describe('createProductsSchedulerFetcher', () => {
 			queryKeys: ['products:browse-window:limit=100:category=2'],
 		},
 		{
+			name: 'fully validated brand browse',
+			queryKey: 'products:browse-window:limit=100:brand=5',
+			total: '1',
+			brands: [{ id: 5 }],
+			queryKeys: ['products:browse-window:limit=100:brand=5'],
+		},
+		{
 			name: 'ignored brand filter',
 			queryKey: 'products:browse-window:limit=100:brand=5',
 			total: '7',
@@ -394,6 +401,34 @@ describe('createProductsSchedulerFetcher', () => {
 			}
 		}
 	);
+
+	it('withholds a brand-filtered total until the advertised result set is validated', async () => {
+		const cacheQueryTotals = vi.fn(async () => undefined);
+		const products = Array.from({ length: 100 }, (_, index) => ({
+			id: index + 1,
+			brands: [{ id: 5 }],
+			meta_data: posMeta(index + 1),
+		}));
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			cacheQueryTotals,
+			fetcher: vi.fn(async () => response(products, 2, '101')),
+		});
+
+		await schedulerFetcher(
+			productTask({
+				id: 'products:browse-window:limit=100:brand=5:windowed',
+				queryKey: 'products:browse-window:limit=100:brand=5',
+				limit: 100,
+			})
+		);
+
+		expect(cacheQueryTotals).not.toHaveBeenCalled();
+	});
 
 	it('keeps browse filters on phase-1 and phase-2 requests while applying the id tiebreak', async () => {
 		const repository = {

@@ -587,7 +587,13 @@ async function tryProductBrowseWindowWalk(
 				'Store returned products outside the requested brands — brand filtering needs a WooCommerce version with core brands in the REST API; keeping the superset locally without claiming coverage',
 		});
 	}
-	if (brandsHonored && totalMatchingRecords !== null && input.cacheQueryTotals) {
+	if (
+		brandsHonored &&
+		totalMatchingRecords !== null &&
+		(descriptor.brand === undefined ||
+			(serverExhausted && covered + windowPayloads.length >= totalMatchingRecords)) &&
+		input.cacheQueryTotals
+	) {
 		await input.cacheQueryTotals({
 			queryKeys: [
 				task.queryKey,
