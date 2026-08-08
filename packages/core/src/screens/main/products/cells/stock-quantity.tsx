@@ -52,9 +52,11 @@ export function StockQuantity({
 					nativeID="manage_stock"
 					label={t('products.manage')}
 					checked={manageStock ?? false}
-					onCheckedChange={(manage_stock) =>
-						meta.onChange({ document: product, changes: { manage_stock } })
-					}
+					onCheckedChange={(manage_stock) => {
+						if (!disabled) {
+							meta.onChange({ document: product, changes: { manage_stock } });
+						}
+					}}
 					size="sm"
 					disabled={disabled}
 				/>

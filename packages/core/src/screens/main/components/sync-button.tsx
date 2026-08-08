@@ -30,7 +30,7 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 				// @ts-expect-error: ref only needs open() but TriggerRef requires full PressableRef
 				ref={triggerRef}
 			/>
-			<Tooltip>
+			<Tooltip showOnNative>
 				<TooltipTrigger asChild>
 					<IconButton
 						name="arrowRotateRight"
