@@ -317,6 +317,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
 			baseUrl: deps.syncBaseUrl,
 			ownerId: deps.ownerId(),
+			censusFreshForMs: deps.censusFreshForMs,
 			diagnostics: deps.diagnostics,
 			...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 			fetcher,

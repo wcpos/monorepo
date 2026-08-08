@@ -24,12 +24,13 @@ function productTask(overrides: Partial<FetchTask> = {}): FetchTask {
 	};
 }
 
-function response(payload: unknown[], totalPages?: number): Response {
+function response(payload: unknown[], totalPages?: number, totalRecords?: string): Response {
 	return new Response(JSON.stringify(payload), {
 		status: 200,
 		headers: {
 			'content-type': 'application/json',
 			...(totalPages === undefined ? {} : { 'x-wp-totalpages': String(totalPages) }),
+			...(totalRecords === undefined ? {} : { 'x-wp-total': totalRecords }),
 		},
 	});
 }
@@ -336,6 +337,63 @@ describe('createProductsSchedulerFetcher', () => {
 			completed: true,
 		});
 	});
+
+	it.each([
+		{
+			name: 'unfiltered browse',
+			queryKey: 'products:browse-window:limit=100',
+			total: '42',
+			brands: undefined,
+			queryKeys: ['products:browse-window:limit=100', 'census:products'],
+		},
+		{
+			name: 'filtered browse',
+			queryKey: 'products:browse-window:limit=100:category=2',
+			total: '12',
+			brands: undefined,
+			queryKeys: ['products:browse-window:limit=100:category=2'],
+		},
+		{
+			name: 'ignored brand filter',
+			queryKey: 'products:browse-window:limit=100:brand=5',
+			total: '7',
+			brands: [{ id: 9 }],
+			queryKeys: [],
+		},
+		{
+			name: 'missing total header',
+			queryKey: 'products:browse-window:limit=100',
+			total: undefined,
+			brands: undefined,
+			queryKeys: [],
+		},
+	] as const)(
+		'caches trustworthy totals for $name',
+		async ({ queryKey, total, brands, queryKeys }) => {
+			const cacheQueryTotals = vi.fn(async () => undefined);
+			const schedulerFetcher = createProductsSchedulerFetcher({
+				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+				repository: {
+					upsertMany: vi.fn(async () => undefined),
+					removeMany: vi.fn(async () => undefined),
+				},
+				cacheQueryTotals,
+				fetcher: vi.fn(async () => response([{ id: 1, brands, meta_data: posMeta(1) }], 1, total)),
+			});
+
+			await expect(
+				schedulerFetcher(productTask({ id: `${queryKey}:windowed`, queryKey, limit: 100 }))
+			).resolves.toMatchObject({ completed: true });
+			if (queryKeys.length === 0) {
+				expect(cacheQueryTotals).not.toHaveBeenCalled();
+			} else {
+				expect(cacheQueryTotals).toHaveBeenCalledWith({
+					queryKeys,
+					totalMatchingRecords: Number(total),
+				});
+			}
+		}
+	);
 
 	it('keeps browse filters on phase-1 and phase-2 requests while applying the id tiebreak', async () => {
 		const repository = {

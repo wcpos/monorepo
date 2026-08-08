@@ -1266,6 +1266,7 @@ export function createRxdbSyncEngine(
 		diagnostics,
 		onActivityChange: changeCollectionActivity,
 		pullBatchSize: () => cadence?.pullBatchSize(),
+		censusFreshForMs: intervals.censusFreshForMs,
 		customerSearchCatalogComplete: async () => {
 			const scopeId = manager.activeScope;
 			const database = scopeId === null ? null : databaseByScopeId.get(scopeId);

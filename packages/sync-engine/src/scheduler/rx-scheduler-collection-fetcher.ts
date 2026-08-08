@@ -16,10 +16,13 @@
 
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 import { chunk } from './chunk';
+import { censusQueryKey } from './census';
+import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
+import type { SyncCollectionName } from '../collections/engine-collections';
 import type { BuildCoverageDocumentsFromQueryResultInput } from './query-coverage-writes';
 
 export const DEFAULT_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
@@ -61,6 +64,7 @@ export type CollectionSchedulerInput<Doc> = {
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
 	pullBatchSize?: () => number | undefined;
+	cacheQueryTotals?: CacheQueryTotals;
 	/** LIVE read of the active scope's barcode carriers, for the collections that
 	 * materialize one. A reader, not a value: a drain spans many pages. */
 	barcodeSelectors?: BarcodeSelectorsReader;
@@ -69,7 +73,7 @@ export type CollectionSchedulerInput<Doc> = {
 /** The per-collection delta for a GREEDY (paginate-the-whole-set) collection — reference + tax. */
 export type GreedyCollectionSpec<Doc, Payload> = {
 	/** Scheduler collection name, e.g. 'taxRates' | 'categories'. */
-	collection: string;
+	collection: SyncCollectionName;
 	/** The greedy lane queryKey, e.g. 'taxRates:all' | 'categories:all'. */
 	greedyQueryKey: string;
 	/** Resource path under the sync namespace (no leading slash), e.g. 'taxes' | 'products/categories'. */
@@ -192,6 +196,13 @@ export function createGreedyCollectionFetcher<Doc, Payload>(
 			throw new Error(`Woo REST ${spec.collection} request failed: ${response.status}`);
 
 		const payloads = JSON.parse(await response.text()) as Payload[];
+		const totalMatchingRecords = queryTotalFromResponse(response);
+		if (page === 1 && totalMatchingRecords !== null && input.cacheQueryTotals) {
+			await input.cacheQueryTotals({
+				queryKeys: [censusQueryKey(spec.collection)],
+				totalMatchingRecords,
+			});
+		}
 		const documents = payloads.map(spec.documentFromPayload);
 		await input.repository.upsertMany(documents);
 

@@ -20,6 +20,7 @@ import {
 	createGreedyCollectionFetcher,
 } from './rx-scheduler-collection-fetcher';
 
+import type { SyncCollectionName } from '../collections/engine-collections';
 import type { SchedulerFetcher } from './replication-policy';
 
 export type ReferenceSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
@@ -28,7 +29,7 @@ export type ReferenceSchedulerFetcherInput = CollectionSchedulerInput<LocalRefer
 /** Identifies one reference collection: its scheduler identity + REST endpoint + doc-id prefix. */
 export type ReferenceCollectionConfig = {
 	/** Scheduler collection name, e.g. 'categories' | 'brands'. */
-	collection: string;
+	collection: SyncCollectionName;
 	/** The greedy lane queryKey, e.g. 'categories:all' | 'brands:all'. */
 	queryKey: string;
 	/** Resource path under the sync namespace (no leading slash), e.g. 'products/categories' | 'products/brands'. */

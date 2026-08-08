@@ -39,8 +39,11 @@ import {
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
 	PRODUCT_BROWSE_WINDOW_STEP,
 	type ProductBrowseWindowDescriptor,
+	productBrowseWindowFilterPart,
 	productBrowseWindowPredecessorQueryKey,
 } from './product-browse-window-descriptor';
+import { censusQueryKey } from './census';
+import { type CacheQueryTotals, queryTotalFromResponse } from './query-total-requests';
 import {
 	assertReturnedRequestedIds,
 	chunk,
@@ -82,6 +85,7 @@ export type ProductsSchedulerFetcherInput = {
 	coverageFreshForMs?: number;
 	nowMs?: () => number;
 	pullBatchSize?: () => number | undefined;
+	cacheQueryTotals?: CacheQueryTotals;
 	/**
 	 * Leg-3 manifest sink (ADR 0014): receives the `{wooId, digest}` rows extracted from each pulled
 	 * batch (from the server-attached `_rxdb_digest`). Optional — omitted by the playground/tests, wired
@@ -232,7 +236,11 @@ async function fetchProductQuery(
 	input: ProductsSchedulerFetcherInput,
 	query: URLSearchParams,
 	context?: SchedulerFetcherContext
-): Promise<{ payloads: WooProductPayload[]; totalPages: number | null }> {
+): Promise<{
+	payloads: WooProductPayload[];
+	totalPages: number | null;
+	totalMatchingRecords: number | null;
+}> {
 	const url = `${input.baseUrl}/products?${query.toString()}`;
 	const response = await httpGet(input, url, context);
 	if (!response.ok) {
@@ -241,6 +249,7 @@ async function fetchProductQuery(
 	return {
 		payloads: JSON.parse(await response.text()) as WooProductPayload[],
 		totalPages: Number(response.headers.get('X-WP-TotalPages')) || null,
+		totalMatchingRecords: queryTotalFromResponse(response),
 	};
 }
 
@@ -478,6 +487,7 @@ async function tryProductBrowseWindowWalk(
 	let payloads: WooProductPayload[] = [];
 	let pagePayloads: WooProductPayload[] = [];
 	let totalPages: number | null = null;
+	let totalMatchingRecords: number | null = null;
 	let requestCount = 0;
 	let serverExhausted = false;
 
@@ -500,6 +510,7 @@ async function tryProductBrowseWindowWalk(
 		nextPageNumber += 1;
 		pagePayloads = page.payloads;
 		totalPages = page.totalPages ?? totalPages;
+		totalMatchingRecords = page.totalMatchingRecords ?? totalMatchingRecords;
 		payloads = payloads.concat(
 			requestCount === 1 && skipInResumePage > 0
 				? pagePayloads.slice(skipInResumePage)
@@ -548,6 +559,7 @@ async function tryProductBrowseWindowWalk(
 		tiebreakPages += 1;
 		pagePayloads = nextPage.payloads;
 		totalPages = nextPage.totalPages ?? totalPages;
+		totalMatchingRecords = nextPage.totalMatchingRecords ?? totalMatchingRecords;
 		payloads = payloads.concat(pagePayloads).sort(compareMenuOrderPayloads).slice(0, limit);
 	}
 
@@ -573,6 +585,15 @@ async function tryProductBrowseWindowWalk(
 			collection: 'products',
 			message:
 				'Store returned products outside the requested brands — brand filtering needs a WooCommerce version with core brands in the REST API; keeping the superset locally without claiming coverage',
+		});
+	}
+	if (brandsHonored && totalMatchingRecords !== null && input.cacheQueryTotals) {
+		await input.cacheQueryTotals({
+			queryKeys: [
+				task.queryKey,
+				...(productBrowseWindowFilterPart(descriptor) === '' ? [censusQueryKey('products')] : []),
+			],
+			totalMatchingRecords,
 		});
 	}
 	// bulkUpsert REJECTS an input carrying duplicate primary keys (COL22), which would fail

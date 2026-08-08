@@ -368,6 +368,42 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
+	it('reuses scheduler response totals instead of probing observed census collections', async () => {
+		const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 40);
+		const engine = engineWith({
+			fetcher: vi.fn(async (url: string) => {
+				const path = new URL(url).pathname;
+				if (path.endsWith('/products')) {
+					return new Response('[]', { headers: { 'X-WP-Total': '321' } });
+				}
+				if (path.endsWith('/taxes')) {
+					return new Response('[]', { headers: { 'X-WP-Total': '5' } });
+				}
+				throw new Error(`unexpected scheduler request: ${path}`);
+			}),
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 1_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		await engine.sync('product-browse-window-seed');
+		await engine.sync('scheduler-drain');
+		await engine.sync('query-total-retry');
+
+		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey).sort();
+		expect(requested).toEqual([
+			'census:brands',
+			'census:categories',
+			'census:coupons',
+			'census:customers',
+			'census:orders',
+			'census:tags',
+		]);
+		expect(requested).not.toContain('census:products');
+		expect(requested).not.toContain('census:taxRates');
+		await engine.dispose();
+	});
+
 	it('republishes a census snapshot when its freshness deadline passes', async () => {
 		const fetchWooQueryTotal = vi.fn(async () => 25);
 		const engine = engineWith({

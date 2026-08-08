@@ -69,12 +69,15 @@ const PRODUCT_UUID_55 = '55555555-5555-4555-8555-555555555555';
 /** A scripted server for the products browse-window lane: the /products proxy returns the
  * scripted catalog page (uuid-stamped meta — the projection keys by it); everything else
  * throws (the greedy bootstrap reference lanes fail harmlessly, as in the order case). */
-function scriptedProductServer(page: Record<string, unknown>[]) {
+function scriptedProductServer(page: Record<string, unknown>[], total?: number) {
 	const state = { productPulls: 0, urls: [] as string[] };
 	const json = (body: unknown) =>
 		new Response(JSON.stringify(body), {
 			status: 200,
-			headers: { 'content-type': 'application/json' },
+			headers: {
+				'content-type': 'application/json',
+				...(total === undefined ? {} : { 'X-WP-Total': String(total) }),
+			},
 		});
 	const fetch = async (url: string): Promise<Response> => {
 		state.urls.push(url);
@@ -259,6 +262,35 @@ describe('scheduler drain through the public handle (slice 5e)', () => {
 		if (!scope) throw new Error('no active scope');
 		const product = await scope.database.collections.products.findOne(PRODUCT_UUID_55).exec();
 		expect(product?.toJSON()).toMatchObject({ wooProductId: 77, payload: { name: 'Apron' } });
+		await engine.dispose();
+	});
+
+	it('stores a response total with query and census freshness from the drain clock', async () => {
+		const nowMs = 10_000;
+		const server = scriptedProductServer([], 42);
+		const engine = engineWith(server.fetch, {
+			now: () => nowMs,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		await engine.sync('product-browse-window-seed');
+		await engine.sync('scheduler-drain');
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const cache = scope.database.collections.queryTotalCacheEntries;
+		expect(
+			(await cache.findOne('products:browse-window:limit=100').exec())?.toJSON()
+		).toMatchObject({
+			totalMatchingRecords: 42,
+			updatedAtMs: nowMs,
+			freshUntilMs: nowMs + 300_000,
+		});
+		expect((await cache.findOne('census:products').exec())?.toJSON()).toMatchObject({
+			totalMatchingRecords: 42,
+			updatedAtMs: nowMs,
+			freshUntilMs: nowMs + 60_000,
+		});
 		await engine.dispose();
 	});
 

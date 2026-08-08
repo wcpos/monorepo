@@ -39,6 +39,24 @@ export type QueryTotalCacheEntry = {
 	updatedAtMs: number;
 };
 
+export type QueryTotalObservation = {
+	queryKeys: readonly string[];
+	totalMatchingRecords: number;
+};
+
+export type CacheQueryTotals = (observation: QueryTotalObservation) => Promise<void>;
+
+export function queryTotalFromResponse(response: Pick<Response, 'headers'>): number | null {
+	try {
+		const rawTotal = response.headers.get('X-WP-Total');
+		if (rawTotal === null || rawTotal.trim() === '') return null;
+		const total = Number(rawTotal);
+		return Number.isSafeInteger(total) && total >= 0 ? total : null;
+	} catch {
+		return null;
+	}
+}
+
 export type QueryTotalRequestParams = Record<string, string | number | boolean>;
 
 export type QueryTotalWooRequest = {
