@@ -47,7 +47,7 @@ export default function ResizablePOSColumns() {
 	// This handles the case when user resizes from large to small screen
 	if (screenSize === 'sm') {
 		return (
-			<View style={{ flex: 1, paddingBottom: bottom }}>
+			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 				{/* Tab content */}
 				<View style={{ flex: 1 }}>
 					{activeTab === 'products' ? (
@@ -103,7 +103,7 @@ export default function ResizablePOSColumns() {
 	 *
 	 */
 	return (
-		<View style={{ flex: 1, paddingBottom: bottom }}>
+		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 			<PanelGroup
 				onLayout={([productsWidth, cartWidth]) => patchUI({ width: productsWidth })}
 				direction="horizontal"
