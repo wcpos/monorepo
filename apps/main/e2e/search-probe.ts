@@ -109,9 +109,10 @@ export async function productWriterAuthorization(
 	productWriterCredentialsDecision(user, pass);
 	if (!user || !pass) return null;
 
+	// The server keys auth sessions by state + redirect URI, so concurrent workers need distinct states.
+	const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe-${randomUUID()}`;
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		try {
-			const authUrl = `${storeUrl.replace(/\/+$/, '')}/wcpos-auth/?redirect_uri=https://localhost/cb&state=e2e-search-probe`;
 			const pageResponse = await request.get(authUrl);
 			if (isNetworkishStatus(pageResponse.status())) {
 				throw new WriterAuthenticationFailure('transport', pageResponse.status());
