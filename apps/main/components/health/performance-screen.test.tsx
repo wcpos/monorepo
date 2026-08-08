@@ -20,6 +20,13 @@ const mockTrendProps: { testID: string; points: { x: number; y: number }[] }[] =
 jest.mock('../../lib/metrics', () => ({
 	getMetricsBuckets: () => mockBuckets,
 }));
+// RN's Pressable is a hooks-based JS component and trips react-test-renderer's
+// duplicate-React detection under jest-expo — stub it down to a View like the
+// rest of the primitives here.
+jest.mock('react-native/Libraries/Components/Pressable/Pressable', () => {
+	const { View } = jest.requireActual('react-native');
+	return { __esModule: true, default: View };
+});
 jest.mock('./trend-line', () => ({
 	TrendLine: (props: { testID: string; points: { x: number; y: number }[] }) => {
 		mockTrendProps.push({ testID: props.testID, points: props.points });
