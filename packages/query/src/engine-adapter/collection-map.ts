@@ -45,9 +45,11 @@ export const COLLECTION_VOCABULARY = {
 		legacyName: 'variations',
 		telemetryName: 'variations',
 		labelKey: 'common.variations',
-		// Woo exposes variations only beneath a specific product, so there is no
-		// honest cheap collection-wide census request. The engine leaves it unknown.
-		censusRoute: null,
+		// Woo core exposes variations only beneath a specific product, but the
+		// WCPOS plugin's cross-parent route (the 1.9 barcode-search route) is a
+		// plain post_type=product_variation query that emits X-WP-Total, and it
+		// carries the same product-read grant as wc/v3/products above.
+		censusRoute: 'wcpos/v1/products/variations',
 		writeable: true,
 	},
 	customers: {

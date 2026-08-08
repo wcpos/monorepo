@@ -464,7 +464,7 @@ describe('buildDebugInfo', () => {
 			connectivity: 'online',
 			eventsToday: 187,
 			errorsToday: 2,
-			salesWaiting: 0,
+			changesWaiting: 0,
 			stuckRecords: [
 				{
 					key: 'products:812',
@@ -506,7 +506,7 @@ describe('buildDebugInfo', () => {
 			connectivity: 'offline',
 			eventsToday: 0,
 			errorsToday: 0,
-			salesWaiting: 0,
+			changesWaiting: 0,
 			stuckRecords: [],
 			verboseDiagnostics: true,
 			lastCheck: null,

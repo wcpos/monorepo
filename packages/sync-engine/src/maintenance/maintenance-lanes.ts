@@ -452,7 +452,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							params: {
 								page: 1,
 								per_page: 1,
-								...(collection === 'products' ? { status: 'publish' } : {}),
+								// Count what the till can sell: published products, and their
+								// published variations via the plugin's cross-parent route.
+								...(collection === 'products' || collection === 'variations'
+									? { status: 'publish' }
+									: {}),
 							},
 							totalHeader: 'X-WP-Total',
 						},

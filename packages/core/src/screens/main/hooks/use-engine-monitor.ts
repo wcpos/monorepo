@@ -9,9 +9,12 @@ import type { EngineStatus, RxdbSyncEngine, SyncCollectionName } from '@wcpos/sy
 
 export type EngineCollectionCounts = Record<string, number>;
 export type EngineMutationCounts = {
+	/**
+	 * Every queued outbound record, any collection — the "changes waiting to
+	 * send" number. A product edit stuck on this device matters as much as a
+	 * sale, so nothing gets a privileged sub-count (Paul, 2026-08-08).
+	 */
 	pending: number;
-	/** Pending mutations on the orders collection only — the "sales waiting to send" number. */
-	pendingOrders: number;
 	/** Every terminal row awaiting a decision: conflicted + needs-revision + rejected. */
 	conflicts: number;
 	/**
@@ -77,7 +80,6 @@ function subscribeToMutationCounts(
 				if (!database)
 					return of({
 						pending: 0,
-						pendingOrders: 0,
 						conflicts: 0,
 						rejected: 0,
 						unresolvedConflicts: 0,
@@ -89,9 +91,6 @@ function subscribeToMutationCounts(
 					status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] },
 				};
 				const pending$ = mutations.find({ selector: pendingSelector }).$;
-				const pendingOrders$ = mutations.find({
-					selector: { ...pendingSelector, collectionName: { $eq: 'orders' } },
-				}).$;
 				const conflicts$ = mutations.find({
 					selector: { status: { $in: ['conflicted', 'needs-revision', 'rejected'] } },
 				}).$;
@@ -99,16 +98,9 @@ function subscribeToMutationCounts(
 				const unresolvedConflicts$ = mutations.find({
 					selector: { status: { $in: ['conflicted', 'needs-revision'] } },
 				}).$;
-				return combineLatest([
-					pending$,
-					pendingOrders$,
-					conflicts$,
-					rejected$,
-					unresolvedConflicts$,
-				]).pipe(
-					map(([pending, pendingOrders, conflicts, rejected, unresolvedConflicts]) => ({
+				return combineLatest([pending$, conflicts$, rejected$, unresolvedConflicts$]).pipe(
+					map(([pending, conflicts, rejected, unresolvedConflicts]) => ({
 						pending: pending.length,
-						pendingOrders: pendingOrders.length,
 						conflicts: conflicts.length,
 						rejected: rejected.length,
 						unresolvedConflicts: unresolvedConflicts.length,
@@ -148,7 +140,6 @@ export function useMutationCounts(): EngineMutationCounts {
 	const { engine } = useQueryRuntime();
 	const [counts, setCounts] = React.useState<EngineMutationCounts>({
 		pending: 0,
-		pendingOrders: 0,
 		conflicts: 0,
 		rejected: 0,
 		unresolvedConflicts: 0,

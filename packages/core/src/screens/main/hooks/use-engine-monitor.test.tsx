@@ -42,12 +42,10 @@ function countDatabase(offset: number) {
 function mutationDatabase(
 	pending: number,
 	conflicts: number,
-	pendingOrders = pending,
 	rejected = 0,
 	unresolvedConflicts = conflicts - rejected
 ) {
 	const pending$ = new BehaviorSubject(Array.from({ length: pending }, () => ({})));
-	const pendingOrders$ = new BehaviorSubject(Array.from({ length: pendingOrders }, () => ({})));
 	const conflicts$ = new BehaviorSubject(Array.from({ length: conflicts }, () => ({})));
 	const rejected$ = new BehaviorSubject(Array.from({ length: rejected }, () => ({})));
 	const unresolvedConflicts$ = new BehaviorSubject(
@@ -62,11 +60,11 @@ function mutationDatabase(
 			if (statuses.includes('rejected')) return { $: conflicts$ };
 			if (statuses.length === 2 && statuses.includes('conflicted'))
 				return { $: unresolvedConflicts$ };
-			return { $: query.selector.collectionName ? pendingOrders$ : pending$ };
+			return { $: pending$ };
 		}
 	);
 	return {
-		pendingOrders$,
+		pending$,
 		rejected$,
 		unresolvedConflicts$,
 		find,
@@ -103,28 +101,30 @@ describe('engine monitor hooks', () => {
 		unmount();
 	});
 
-	it('counts only order mutations as sales waiting to send', () => {
-		const mutations = mutationDatabase(3, 0, 1);
+	it('counts every queued outbound record as a change waiting to send', () => {
+		// No per-collection carve-out: a stuck product edit counts exactly like a
+		// stuck sale (Paul, 2026-08-08), so the hook issues no collectionName query.
+		const mutations = mutationDatabase(3, 0);
 		mockDatabase$.next(mutations.database);
 		const { result, unmount } = renderHook(() => useMutationCounts());
 
 		expect(mutations.find).toHaveBeenCalledWith({
 			selector: {
 				status: { $in: ['pending', 'claimed', 'conflicted', 'needs-revision'] },
-				collectionName: { $eq: 'orders' },
 			},
 		});
+		for (const call of mutations.find.mock.calls) {
+			expect(call[0].selector.collectionName).toBeUndefined();
+		}
 		expect(result.current).toEqual({
 			pending: 3,
-			pendingOrders: 1,
 			conflicts: 0,
 			rejected: 0,
 			unresolvedConflicts: 0,
 		});
-		act(() => mutations.pendingOrders$.next([]));
+		act(() => mutations.pending$.next([{}]));
 		expect(result.current).toEqual({
-			pending: 3,
-			pendingOrders: 0,
+			pending: 1,
 			conflicts: 0,
 			rejected: 0,
 			unresolvedConflicts: 0,
@@ -137,14 +137,13 @@ describe('engine monitor hooks', () => {
 		// A 409 conflict and a permanently-refused write are different problems with
 		// different fixes; the Database tab shows a callout for one and an actionable
 		// list for the other, so it needs both numbers.
-		const mutations = mutationDatabase(0, 3, 0, 2);
+		const mutations = mutationDatabase(0, 3, 2);
 		mockDatabase$.next(mutations.database);
 		const { result, unmount } = renderHook(() => useMutationCounts());
 
 		expect(mutations.find).toHaveBeenCalledWith({ selector: { status: { $in: ['rejected'] } } });
 		expect(result.current).toEqual({
 			pending: 0,
-			pendingOrders: 0,
 			conflicts: 3,
 			rejected: 2,
 			unresolvedConflicts: 1,
@@ -152,7 +151,6 @@ describe('engine monitor hooks', () => {
 		act(() => mutations.rejected$.next([]));
 		expect(result.current).toEqual({
 			pending: 0,
-			pendingOrders: 0,
 			conflicts: 3,
 			rejected: 0,
 			unresolvedConflicts: 1,
@@ -162,14 +160,13 @@ describe('engine monitor hooks', () => {
 	});
 
 	it('re-runs mutation queries after a same-database reset', () => {
-		const first = mutationDatabase(3, 0, 1);
-		const reset = mutationDatabase(5, 1, 2);
+		const first = mutationDatabase(3, 0);
+		const reset = mutationDatabase(5, 1);
 		mockDatabase$.next(first.database);
 		const { result, unmount } = renderHook(() => useMutationCounts());
 
 		expect(result.current).toMatchObject({
 			pending: 3,
-			pendingOrders: 1,
 			conflicts: 0,
 			rejected: 0,
 		});
@@ -179,14 +176,12 @@ describe('engine monitor hooks', () => {
 		});
 		expect(result.current).toMatchObject({
 			pending: 5,
-			pendingOrders: 2,
 			conflicts: 1,
 			rejected: 0,
 		});
-		act(() => first.pendingOrders$.next([]));
+		act(() => first.pending$.next([]));
 		expect(result.current).toMatchObject({
 			pending: 5,
-			pendingOrders: 2,
 			conflicts: 1,
 			rejected: 0,
 		});

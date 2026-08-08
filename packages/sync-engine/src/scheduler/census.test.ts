@@ -40,10 +40,8 @@ describe('collection census', () => {
 		expect(censusCollectionFromQueryKey('census:not-a-collection')).toBeNull();
 	});
 
-	it('leaves variations unsupported when no cheap collection endpoint exists', () => {
-		expect(SUPPORTED_CENSUS_COLLECTIONS).toEqual(
-			CENSUS_COLLECTIONS.filter((collection) => collection !== 'variations')
-		);
+	it('censuses every synced collection, including variations via the plugin route', () => {
+		expect(SUPPORTED_CENSUS_COLLECTIONS).toEqual(CENSUS_COLLECTIONS);
 	});
 
 	it('projects missing, fresh, and stale cache entries without a local denominator', () => {

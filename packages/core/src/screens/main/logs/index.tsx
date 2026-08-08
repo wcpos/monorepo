@@ -185,7 +185,7 @@ function LogsScreenContent() {
 				connectivity: status.connectivity,
 				eventsToday: stats.eventsToday,
 				errorsToday: stats.errorsToday,
-				salesWaiting: mutations.pendingOrders,
+				changesWaiting: mutations.pending,
 				stuckRecords: stats.stuck,
 				verboseDiagnostics: verbose,
 				lastCheck: lane?.lastTick ?? null,
@@ -207,11 +207,11 @@ function LogsScreenContent() {
 				text1: t('health.logs.debug_copy_failed'),
 			});
 		}
-	}, [appVersion, canShare, logsCollection, mutations.pendingOrders, stats, status, t, verbose]);
+	}, [appVersion, canShare, logsCollection, mutations.pending, stats, status, t, verbose]);
 
 	return (
 		<ScrollView className="flex-1">
-			<VStack testID="screen-logs" className="max-w-4xl gap-3 p-4 md:p-6">
+			<VStack testID="screen-logs" className="mx-auto w-full max-w-4xl gap-3 p-4 md:p-6">
 				<StatusLine />
 
 				<StatHeader
@@ -255,8 +255,8 @@ function LogsScreenContent() {
 						testID="logs-stat-stuck"
 					/>
 					<Stat
-						value={mutations.pendingOrders}
-						tone={mutations.pendingOrders > 0 ? 'bad' : 'good'}
+						value={mutations.pending}
+						tone={mutations.pending > 0 ? 'bad' : 'good'}
 						label={t('health.database.waiting_to_send')}
 						testID="logs-stat-waiting"
 					/>

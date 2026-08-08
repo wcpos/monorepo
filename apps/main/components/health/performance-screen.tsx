@@ -173,7 +173,10 @@ export function PerformanceScreen() {
 
 	return (
 		<ScrollView className="flex-1">
-			<VStack testID="screen-health-performance" className="max-w-3xl gap-4 p-4 md:p-6">
+			<VStack
+				testID="screen-health-performance"
+				className="mx-auto w-full max-w-4xl gap-4 p-4 md:p-6"
+			>
 				{/* One status line */}
 				<HStack className="flex-wrap items-baseline gap-2">
 					<Text className={healthy ? 'text-success font-semibold' : 'text-warning font-semibold'}>

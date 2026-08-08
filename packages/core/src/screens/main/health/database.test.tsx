@@ -15,7 +15,6 @@ const mockTooltip = jest.fn(({ children }: TooltipProps) => <>{children}</>);
 const mockMutationCounts = {
 	conflicts: 0,
 	pending: 0,
-	pendingOrders: 0,
 	rejected: 0,
 	unresolvedConflicts: 0,
 };
@@ -129,11 +128,22 @@ jest.mock('./components', () => ({
 	StatHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('./use-collection-sizes', () => ({ useCollectionSizes: () => ({}) }));
-jest.mock('./use-other-scopes', () => ({
-	useOtherScopes: () => ({
-		storeCount: 2,
-		bytes: 41_000_000,
-		sameStoreOtherCashierBytes: 5_000_000,
+jest.mock('./use-storage-footprint', () => ({
+	useStorageFootprint: () => ({
+		breakdown: {
+			activeDataBytes: 1_000_000,
+			searchIndexBytes: 2 * 1024 * 1024,
+			bookkeepingBytes: 3 * 1024 * 1024,
+			otherCashiersBytes: 5 * 1024 * 1024,
+			otherStoresBytes: 40 * 1024 * 1024,
+			otherStoresCount: 2,
+			orphanedBytes: 0,
+			unknownBytes: 0,
+			measuredTotalBytes: 51_428_800,
+		},
+		estimateBytes: 60 * 1024 * 1024,
+		totalBytes: 60 * 1024 * 1024,
+		unattributedBytes: 9 * 1024 * 1024,
 	}),
 }));
 jest.mock('./use-relative-time', () => ({
@@ -160,6 +170,17 @@ describe('DatabaseScreen coverage', () => {
 		const { queryByText } = render(<DatabaseScreen />);
 
 		expect(queryByText(/This device also stores/)).toBeNull();
+	});
+
+	it('itemizes measured storage as aggregate buckets, hiding empty ones', () => {
+		const { getByText, queryByText } = render(<DatabaseScreen />);
+
+		expect(getByText('Search indexes')).toBeTruthy();
+		expect(getByText('≈ 2.0 MB')).toBeTruthy();
+		expect(getByText('Other stores on this device (2)')).toBeTruthy();
+		expect(getByText('≈ 40 MB')).toBeTruthy();
+		// Zero-byte buckets stay off the screen entirely.
+		expect(queryByText(/Signed-out stores/)).toBeNull();
 	});
 
 	it('renders the independently observed unresolved-conflict count', () => {

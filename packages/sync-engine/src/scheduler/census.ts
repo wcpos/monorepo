@@ -4,11 +4,14 @@ import type { QueryTotalCacheEntry } from './query-total-requests';
 
 export const CENSUS_COLLECTIONS = SYNC_COLLECTION_NAMES;
 
-/** Woo has no cheap un-nested wc/v3 endpoint for all variations. */
-export const SUPPORTED_CENSUS_COLLECTIONS = CENSUS_COLLECTIONS.filter(
-	(collection): collection is Exclude<SyncCollectionName, 'variations'> =>
-		collection !== 'variations'
-);
+/**
+ * Every sync collection has a census total. Woo core has no un-nested wc/v3
+ * variations endpoint, but the WCPOS plugin's cross-parent
+ * `wcpos/v1/products/variations` route emits X-WP-Total for a `per_page=1`
+ * probe, so variations count like everything else (collection-map owns the
+ * per-collection route).
+ */
+export const SUPPORTED_CENSUS_COLLECTIONS = CENSUS_COLLECTIONS;
 
 export type CensusTotal = {
 	total: number;
