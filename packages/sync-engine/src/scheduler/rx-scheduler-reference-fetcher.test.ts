@@ -2,8 +2,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+	BRAND_REFERENCE_CONFIG,
 	CATEGORY_REFERENCE_CONFIG,
+	COUPON_REFERENCE_CONFIG,
 	createReferenceCollectionFetcher,
+	type ReferenceCollectionConfig,
+	TAG_REFERENCE_CONFIG,
 } from './rx-scheduler-reference-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -22,10 +26,13 @@ function categoryTask(overrides: Partial<FetchTask> = {}): FetchTask {
 	};
 }
 
-function response(payloads: WooReferencePayload[]): Response {
+function response(payloads: WooReferencePayload[], total?: number): Response {
 	return new Response(JSON.stringify(payloads), {
 		status: 200,
-		headers: { 'content-type': 'application/json' },
+		headers: {
+			'content-type': 'application/json',
+			...(total === undefined ? {} : { 'X-WP-Total': String(total) }),
+		},
 	});
 }
 
@@ -39,6 +46,39 @@ const cat = (id: number): WooReferencePayload => ({
 });
 
 describe('createReferenceCollectionFetcher set-difference deletion', () => {
+	it.each([
+		[CATEGORY_REFERENCE_CONFIG, 'census:categories'],
+		[BRAND_REFERENCE_CONFIG, 'census:brands'],
+		[TAG_REFERENCE_CONFIG, 'census:tags'],
+		[COUPON_REFERENCE_CONFIG, 'census:coupons'],
+	] as const)(
+		'caches the %s response total under %s',
+		async (config: ReferenceCollectionConfig, censusKey) => {
+			const cacheQueryTotals = vi.fn(async () => undefined);
+			const schedulerFetcher = createReferenceCollectionFetcher(config, {
+				baseUrl: 'http://x/v1',
+				repository: {
+					upsertMany: vi.fn(async () => undefined),
+					pruneServerSourcedAbsent: vi.fn(async () => []),
+				},
+				cacheQueryTotals,
+				fetcher: vi.fn(async () => response([cat(1)], 12)),
+			});
+
+			await schedulerFetcher({
+				...categoryTask(),
+				id: `${config.queryKey}:greedy`,
+				collection: config.collection as FetchTask['collection'],
+				queryKey: config.queryKey,
+			});
+
+			expect(cacheQueryTotals).toHaveBeenCalledWith({
+				queryKeys: [censusKey],
+				totalMatchingRecords: 12,
+			});
+		}
+	);
+
 	it('prunes server-sourced local docs absent from the complete fetched set on the terminal page', async () => {
 		// 1 doc < perPage(2) ⇒ this single page is the complete authoritative set.
 		const fetcher = vi.fn(async () => response([cat(1)]));

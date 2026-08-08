@@ -362,17 +362,17 @@ describe('createCustomerSchedulerFetcher', () => {
 				upsertMany: vi.fn(async (_documents: LocalCustomerDocument[]) => undefined),
 			};
 			const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
-			const queryTotalRepository = { upsert: vi.fn(async () => undefined) };
+			const cacheQueryTotals = vi.fn(async () => undefined);
 			const schedulerFetcher = createCustomerSchedulerFetcher({
 				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 				repository,
 				fetcher,
 				coverageRepository,
-				queryTotalRepository,
+				cacheQueryTotals,
 				nowMs: () => 10_000,
 				...overrides,
 			});
-			return { repository, coverageRepository, queryTotalRepository, schedulerFetcher };
+			return { repository, coverageRepository, cacheQueryTotals, schedulerFetcher };
 		};
 
 		// #1028 follow-on: the five WCPOS plugin sorts (#1488/#1500) travel to the wire exactly
@@ -437,11 +437,9 @@ describe('createCustomerSchedulerFetcher', () => {
 
 			await kit.schedulerFetcher(browseTask(100));
 
-			expect(kit.queryTotalRepository.upsert).toHaveBeenCalledWith({
-				queryKey: 'customers:browse-window:limit=100',
+			expect(kit.cacheQueryTotals).toHaveBeenCalledWith({
+				queryKeys: ['customers:browse-window:limit=100', 'census:customers'],
 				totalMatchingRecords: 4_200,
-				freshUntilMs: 10_000 + 300_000,
-				updatedAtMs: 10_000,
 			});
 			// 100 of 4,200 is NOT a complete lane — recording it as one is the false-complete bug.
 			expect(kit.coverageRepository.recordQueryResult).toHaveBeenCalledWith(
@@ -508,7 +506,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			const result = await kit.schedulerFetcher(browseTask(100));
 
 			expect(result).toMatchObject({ documentCount: 7 });
-			expect(kit.queryTotalRepository.upsert).not.toHaveBeenCalled();
+			expect(kit.cacheQueryTotals).not.toHaveBeenCalled();
 		});
 
 		// Offset pagination is not stable: a customer created between page requests shifts every
@@ -549,7 +547,7 @@ describe('createCustomerSchedulerFetcher', () => {
 			const url = new URL(fetcher.mock.calls[0]![0]);
 			expect(url.searchParams.get('search')).toBe('alex');
 			expect(url.searchParams.get('role')).toBeNull();
-			expect(kit.queryTotalRepository.upsert).not.toHaveBeenCalled();
+			expect(kit.cacheQueryTotals).not.toHaveBeenCalled();
 		});
 	});
 });

@@ -19,10 +19,13 @@ function taxTask(overrides: Partial<FetchTask> = {}): FetchTask {
 	};
 }
 
-function response(payload: unknown[]): Response {
+function response(payload: unknown[], total?: number): Response {
 	return new Response(JSON.stringify(payload), {
 		status: 200,
-		headers: { 'content-type': 'application/json' },
+		headers: {
+			'content-type': 'application/json',
+			...(total === undefined ? {} : { 'X-WP-Total': String(total) }),
+		},
 	});
 }
 
@@ -32,22 +35,27 @@ describe('createTaxRateSchedulerFetcher', () => {
 			upsertMany: vi.fn(async (_documents: LocalTaxRateDocument[]) => undefined),
 		};
 		const coverageRepository = { recordQueryResult: vi.fn(async () => undefined) };
+		const cacheQueryTotals = vi.fn(async () => undefined);
 		const fetcher = vi
 			.fn()
 			.mockResolvedValueOnce(
-				response([
-					{ id: 1, country: 'US', rate: '8.5' },
-					{ id: 2, country: 'US', rate: '4.0' },
-				])
+				response(
+					[
+						{ id: 1, country: 'US', rate: '8.5' },
+						{ id: 2, country: 'US', rate: '4.0' },
+					],
+					3
+				)
 			)
-			.mockResolvedValueOnce(response([{ id: 3, country: 'ES', rate: '21.0' }]))
-			.mockResolvedValueOnce(response([{ id: 1, country: 'US', rate: '8.6' }]));
+			.mockResolvedValueOnce(response([{ id: 3, country: 'ES', rate: '21.0' }], 999))
+			.mockResolvedValueOnce(response([{ id: 1, country: 'US', rate: '8.6' }], 1));
 		const schedulerFetcher = createTaxRateSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
 			coverageRepository,
 			coverageFreshForMs: 300_000,
 			nowMs: () => 10_000,
+			cacheQueryTotals,
 			fetcher,
 		});
 
@@ -95,6 +103,10 @@ describe('createTaxRateSchedulerFetcher', () => {
 			nowMs: 10_000,
 			freshForMs: 300_000,
 		});
+		expect(cacheQueryTotals.mock.calls).toEqual([
+			[{ queryKeys: ['census:taxRates'], totalMatchingRecords: 3 }],
+			[{ queryKeys: ['census:taxRates'], totalMatchingRecords: 1 }],
+		]);
 		expect(first).toEqual({
 			taskId: 'taxRates:all:greedy',
 			documentCount: 2,

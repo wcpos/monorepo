@@ -185,6 +185,7 @@ export type RequirePlaneDeps = {
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	pullBatchSize?: () => number | undefined;
 	now?: () => number;
+	censusFreshForMs?: number;
 	customerSearchCatalogComplete?: () => Promise<boolean>;
 	/** The per-scope barcode carriers a demand pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -477,6 +478,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					fetcher: schedulerFetcher,
 					diagnostics: deps.diagnostics,
 					...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
+					...(deps.censusFreshForMs !== undefined
+						? { censusFreshForMs: deps.censusFreshForMs }
+						: {}),
+					...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
 					signal: item.abortController.signal,
 					onProgress: progressObserver(item.requirement),
 					...overrides,

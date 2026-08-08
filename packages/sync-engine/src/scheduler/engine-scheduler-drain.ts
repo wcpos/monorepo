@@ -45,6 +45,8 @@ import {
 } from '../write-path/engine-order-repository';
 import { ORDER_BROWSE_WINDOW_GRAMMAR } from './order-browser-scheduler-descriptor';
 import { PRODUCT_BROWSE_WINDOW_GRAMMAR } from './product-browse-window-descriptor';
+import { censusCollectionFromQueryKey } from './census';
+import { type CacheQueryTotals, QUERY_TOTAL_FRESH_FOR_MS } from './query-total-requests';
 
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { LocalCoverage } from '../local-coverage/local-coverage';
@@ -236,6 +238,7 @@ export type RunEngineSchedulerDrainInput = {
 	diagnostics?: SyncObserver;
 	signal?: AbortSignal;
 	nowMs?: number;
+	censusFreshForMs?: number;
 	/** Restrict an explicitly requested foreground drain to one seeded task. */
 	taskId?: string;
 	/** Override for an explicitly requested foreground drain. Background drains
@@ -286,6 +289,7 @@ function createEngineSchedulerFetcherRegistry(
 		| 'pullBatchSize'
 		| 'diagnostics'
 		| 'nowMs'
+		| 'censusFreshForMs'
 		| 'refreshBrowseWindowKey'
 		| 'barcodeSelectors'
 	>
@@ -294,6 +298,22 @@ function createEngineSchedulerFetcherRegistry(
 	const nowMs = input.nowMs ?? Date.now();
 	const getNowMs = input.nowMs === undefined ? Date.now : () => nowMs;
 	const orderRepository = new EngineOrderRepository(db);
+	const queryTotalRepository = new RxQueryTotalCacheRepository(db as never);
+	const cacheQueryTotals: CacheQueryTotals = async ({ queryKeys, totalMatchingRecords }) => {
+		const updatedAtMs = getNowMs();
+		for (const queryKey of queryKeys) {
+			const freshForMs =
+				censusCollectionFromQueryKey(queryKey) === null
+					? QUERY_TOTAL_FRESH_FOR_MS
+					: (input.censusFreshForMs ?? QUERY_TOTAL_FRESH_FOR_MS);
+			await queryTotalRepository.upsert({
+				queryKey,
+				totalMatchingRecords,
+				updatedAtMs,
+				freshUntilMs: updatedAtMs + freshForMs,
+			});
+		}
+	};
 	const coverageRepository = {
 		recordQueryResult: (value: Parameters<LocalCoverage['recordQueryResult']>[0]) =>
 			input.coverage.recordQueryResult(value),
@@ -316,6 +336,7 @@ function createEngineSchedulerFetcherRegistry(
 		coverageRepository,
 		coverageFreshForMs: ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 		nowMs: getNowMs,
+		cacheQueryTotals,
 		...(input.diagnostics !== undefined ? { diagnostics: input.diagnostics } : {}),
 		...(input.fetcher !== undefined ? { fetcher: input.fetcher } : {}),
 		...(input.pullBatchSize !== undefined ? { pullBatchSize: input.pullBatchSize } : {}),
@@ -356,9 +377,6 @@ function createEngineSchedulerFetcherRegistry(
 					collectionSchedulerRepository(db.customers) as never,
 					db.existenceManifestCustomers
 				),
-				// #951: the browse window caches the server's X-WP-Total for its sorted view so the
-				// grid footer reports the real customer count, not the resident count.
-				queryTotalRepository: new RxQueryTotalCacheRepository(db as never),
 			}),
 		},
 		{

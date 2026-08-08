@@ -18,7 +18,8 @@ import {
 	parseCustomerBrowseWindowDescriptor,
 } from './customer-browse-window-descriptor';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
-import { QUERY_TOTAL_FRESH_FOR_MS, type QueryTotalCacheEntry } from './query-total-requests';
+import { censusQueryKey } from './census';
+import { queryTotalFromResponse } from './query-total-requests';
 import {
 	type CollectionSchedulerCoverageRepository,
 	type CollectionSchedulerInput,
@@ -32,17 +33,7 @@ import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerF
 
 export type CustomerSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
 
-/**
- * Sink for the server's `X-WP-Total` on a browse window — the ONLY honest source for the
- * grid's footer count on a sorted/filtered customer view (#894/#945: a resident count read as
- * a total is the "false complete" bug). Optional so the playground/tests can omit it.
- */
-export type CustomerQueryTotalRepository = {
-	upsert(entry: QueryTotalCacheEntry): Promise<void>;
-};
-
 export type CustomerSchedulerFetcherInput = CollectionSchedulerInput<LocalCustomerDocument> & {
-	queryTotalRepository?: CustomerQueryTotalRepository;
 	diagnostics?: SyncObserver;
 };
 
@@ -156,11 +147,8 @@ async function fetchCustomerBrowseWindow(
 		// `Access-Control-Expose-Headers`) hides these, and `Number(null)` is 0 — which would
 		// cache a FRESH ZERO total and make the footer report 0 for five minutes while rows are
 		// on screen. An unknown total must stay unknown so the footer falls back to local.
-		const rawTotal = response.headers.get('X-WP-Total');
-		if (rawTotal !== null) {
-			const headerTotal = Number(rawTotal);
-			if (Number.isSafeInteger(headerTotal) && headerTotal >= 0) totalRecords = headerTotal;
-		}
+		const observedTotal = queryTotalFromResponse(response);
+		if (observedTotal !== null) totalRecords = observedTotal;
 		const rawPages = response.headers.get('X-WP-TotalPages');
 		if (rawPages !== null) {
 			const headerPages = Number(rawPages);
@@ -204,13 +192,10 @@ async function fetchCustomerBrowseWindow(
 		documents.map(customerCoverageRecordId),
 		exhausted && payloads.length <= limit
 	);
-	if (input.queryTotalRepository && totalRecords !== null) {
-		const nowMs = input.nowMs?.() ?? Date.now();
-		await input.queryTotalRepository.upsert({
-			queryKey: task.queryKey,
+	if (input.cacheQueryTotals && totalRecords !== null) {
+		await input.cacheQueryTotals({
+			queryKeys: [task.queryKey, censusQueryKey('customers')],
 			totalMatchingRecords: totalRecords,
-			freshUntilMs: nowMs + QUERY_TOTAL_FRESH_FOR_MS,
-			updatedAtMs: nowMs,
 		});
 	}
 
