@@ -40,6 +40,7 @@ function loadCreateAppEngine(
 ) {
 	jest.resetModules();
 	const appMetricsObserver = jest.fn();
+	const reportNetworkResponse = jest.fn();
 	const recordTransport = jest.fn();
 	const recordServerLoad = jest.fn();
 	const networkInfo = jest.fn();
@@ -79,6 +80,7 @@ function loadCreateAppEngine(
 	);
 
 	jest.doMock('@wcpos/sync-engine', () => ({ createRxdbSyncEngine }));
+	jest.doMock('@wcpos/hooks', () => ({ reportNetworkResponse }), { virtual: true });
 	jest.doMock('@wcpos/utils/platform', () => ({ Platform: { isWeb: platformIsWeb } }));
 	jest.doMock('./web-write-leader', () => ({ electWriteLeader }));
 	jest.doMock('@wcpos/database/plugins/wrapped-error-handler-storage', () => ({
@@ -111,6 +113,7 @@ function loadCreateAppEngine(
 		appMetricsObserver,
 		recordTransport,
 		recordServerLoad,
+		reportNetworkResponse,
 		networkInfo,
 		networkWarn,
 		networkError,
@@ -123,6 +126,29 @@ function loadCreateAppEngine(
 }
 
 describe('createAppSyncEngine scope cache', () => {
+	it('reports settled non-server-error transport responses as network pulses', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValueOnce(new Response(null, { status: 204 }))
+			.mockResolvedValueOnce(new Response(null, { status: 403 }))
+			.mockResolvedValueOnce(new Response(null, { status: 500 }))
+			.mockRejectedValueOnce(new Error('network down'));
+		const { createAppSyncEngine, createRxdbSyncEngine, reportNetworkResponse } =
+			loadCreateAppEngine();
+		createAppSyncEngine(BASE_OPTIONS);
+		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		await expect(fetcher?.('https://store.example.test/wp-json/wcpos/v2/products')).rejects.toThrow(
+			'network down'
+		);
+
+		expect(reportNetworkResponse).toHaveBeenCalledTimes(2);
+		fetch.mockRestore();
+	});
+
 	it('does not let an auth retry adopt a later scope activation', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
 		let resolveRefresh!: (token: string) => void;

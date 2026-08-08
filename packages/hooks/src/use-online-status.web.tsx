@@ -13,6 +13,7 @@
 import * as React from 'react';
 
 import { checkWebsiteReachability } from './check-website-reachability';
+import { lastNetworkResponseAt, subscribeNetworkPulse } from './network-pulse';
 
 export type OnlineStatus = 'offline' | 'online-website-unavailable' | 'online-website-available';
 
@@ -55,24 +56,27 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 		checkInProgressRef.current = true;
 
 		try {
-			// First check: Is the browser online?
-			if (typeof navigator !== 'undefined' && !navigator.onLine) {
+			const browserOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+			if (browserOffline) {
 				setStatus('offline');
-				return;
 			}
 
-			// Second check: Can we reach the website?
 			const isReachable = await checkWebsiteReachability(wpAPIURL);
 
 			if (isReachable) {
 				setStatus('online-website-available');
-			} else {
+			} else if (!browserOffline) {
 				setStatus('online-website-unavailable');
 			}
 		} finally {
 			checkInProgressRef.current = false;
 		}
 	}, [wpAPIURL]);
+
+	/**
+	 * Subscribe to successful HTTP traffic as direct evidence that the site answered.
+	 */
+	React.useEffect(() => subscribeNetworkPulse(() => setStatus('online-website-available')), []);
 
 	/**
 	 * Subscribe to browser online/offline events.
@@ -123,25 +127,30 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	}, [checkConnectivity]);
 
 	/**
-	 * Periodic reachability check (every 30 seconds when online).
-	 * This catches cases where the website becomes unavailable while we're online.
+	 * Periodic reachability check. Browser offline state must not stop recovery checks.
 	 * Legitimate useEffect for setting up an interval timer.
 	 */
 	React.useEffect(() => {
-		if (status === 'offline') {
-			// Don't poll when we know we're offline
-			return;
-		}
-
 		const intervalId = setInterval(() => {
-			// Only check if the page is visible
 			if (document.visibilityState === 'visible') {
-				void checkConnectivity();
+				const lastResponseAt = lastNetworkResponseAt();
+				// The shortcut must not outlive the connection: a pulse from just
+				// before airplane mode is still "fresh" for up to 45s, and trusting
+				// it while the browser reports offline would flip the dot back to a
+				// false available. With the browser offline, always probe — live
+				// traffic (the pulse subscription) and a succeeding probe both still
+				// recover the Chromium onLine-misreport case.
+				const browserOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+				if (!browserOffline && lastResponseAt !== null && Date.now() - lastResponseAt < 45000) {
+					setStatus('online-website-available');
+				} else {
+					void checkConnectivity();
+				}
 			}
 		}, 30000); // 30 seconds
 
 		return () => clearInterval(intervalId);
-	}, [status, checkConnectivity]);
+	}, [checkConnectivity]);
 
 	/**
 	 * Initial connectivity check on mount.

@@ -18,6 +18,7 @@
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { reportNetworkResponse } from '@wcpos/hooks';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
@@ -309,6 +310,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		isWeb && typeof navigator !== 'undefined' && navigator.locks !== undefined;
 
 	const emitTransport = (event: SyncEvent, durable = true): void => {
+		if (event.type === 'transport.request') {
+			const status = event.fields?.status;
+			if (status !== undefined && status >= 1 && status < 500) reportNetworkResponse();
+		}
 		try {
 			appMetricsObserver(event);
 		} catch (error) {
