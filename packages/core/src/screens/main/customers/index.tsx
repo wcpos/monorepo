@@ -126,7 +126,7 @@ function CustomersScreenContent() {
 							className="flex-1"
 							testID="search-customers"
 						/>
-						<Tooltip showOnNative={!readOnly && !caps.canCreateCustomers}>
+						<Tooltip showOnNative={readOnly || !caps.canCreateCustomers}>
 							<CapabilityTooltipTrigger>
 								<IconButton
 									testID="customers-add-button"

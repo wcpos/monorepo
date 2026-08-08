@@ -51,7 +51,7 @@ export function AddCartItemsMenu() {
 							<Text>{t('common.add_new_customer')}</Text>
 						</DropdownMenuItem>
 					) : (
-						<Tooltip showOnNative={isPro && !caps.canCreateCustomers}>
+						<Tooltip showOnNative>
 							<CapabilityTooltipTrigger>
 								<DropdownMenuItem testID="menu-add-customer" disabled>
 									<Icon name="userPlus" />

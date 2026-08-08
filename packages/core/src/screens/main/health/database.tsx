@@ -563,7 +563,10 @@ export function DatabaseScreen() {
 
 	return (
 		<ScrollView className="flex-1">
-			<VStack testID="screen-health-database" className="max-w-3xl gap-3 p-4 md:p-6">
+			<VStack
+				testID="screen-health-database"
+				className="mx-auto w-full max-w-3xl gap-4 px-4 py-6 md:px-10 md:py-8"
+			>
 				<Text className="text-muted-foreground text-sm">{t('health.database.subtitle')}</Text>
 
 				{/* Summary strip — shared Store health stat header */}
