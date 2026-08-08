@@ -79,7 +79,7 @@ The POS product panel defaults to **grid (tile) view**; tests cover both views a
 - [x] Variation popover opens when clicking a variable product tile (grid view)
 - [x] Add product to cart via row add-to-cart button (table view)
 
-### products-page.spec.ts — Products drawer page — 10 tests
+### products-page.spec.ts — Products drawer page — 12 tests
 
 Products Page (pro only):
 
@@ -91,6 +91,8 @@ Products Page (pro only):
 - [x] Expand variable product to show variations
 - [x] Variation actions menu with Edit/Sync/Delete
 - [x] Collapse expanded variable product
+- [x] Inline edit stock quantity: server accepts, row + REST read-back updated, stock status flips to instock (#1088)
+- [x] Inline edit stock quantity: forced 403 push rejection shows red snackbar and auto-reverts the cell (#1088, #1082)
 
 Products Page (free only):
 
@@ -365,7 +367,6 @@ Lower-priority tests that would add depth but are harder to automate reliably:
 - Session persists across page reload
 - Previously connected stores persist as site cards
 - Remove site / remove user with confirmation dialogs
-- Inline edit stock quantity on Products page (pro)
 - Inline edit price on Products page (pro)
 - Delete product with confirmation dialog (pro)
 - Re-open order from Orders page (pro)
