@@ -5,6 +5,16 @@ import {
 	isolatedProductTest as test,
 	tryAddRunPrivateSimpleProduct,
 } from './checkout-probe';
+import {
+	expectMoneyMatches,
+	expectTaxParity,
+	liveOrderTest as liveTest,
+	newRunLabel,
+	type OrderPayload,
+	PUSH_ORDERS,
+	type ServerOrder,
+	stampRunLabel,
+} from './order-lifecycle';
 
 /** Add the run-private simple product, or the shared-SKU fallback on secretless forks. */
 async function addFirstProductToCart(page: Page) {
@@ -125,6 +135,88 @@ test.describe('POS Cart', () => {
 		const buttonText = await checkoutButton.textContent();
 		expect(buttonText).toMatch(/\d/);
 	});
+});
+
+/**
+ * SAVE-TO-SERVER TOTALS PARITY — the regression that motivated the whole
+ * tax-parity oracle (woocommerce-pos#1545): a one-product cart saved to the
+ * server came back with DIFFERENT totals (server taxed from the site base
+ * instead of the POS store), and the only symptom was the "your store changed
+ * this order's totals" banner. Parity is the invariant; the banner is the
+ * cashier-facing alarm. This spec asserts both, store-agnostically: whatever
+ * this store's rates are, the server must agree with the POS about them.
+ *
+ * Writes to the shared live store → follows the labelling and cleanup
+ * contract in order-lifecycle.ts.
+ */
+liveTest.describe('POS Cart - save to server parity (live store)', () => {
+	liveTest(
+		'a plain one-product cart saves with identical totals and no divergence banner',
+		async ({ posPage: page, trackOrder }) => {
+			const label = newRunLabel();
+			await addFirstProductToCart(page);
+			await stampRunLabel(page, label);
+
+			// The cart total the cashier sees, captured before the save.
+			const checkoutButton = page.getByTestId('checkout-button');
+			const cartTotalDigits = ((await checkoutButton.textContent()) ?? '').replace(/\D/g, '');
+			expect(Number(cartTotalDigits), 'cart must show a non-zero total').toBeGreaterThan(0);
+
+			const saved = page.waitForResponse(
+				(response) => PUSH_ORDERS.test(response.url()) && response.request().method() === 'POST',
+				{ timeout: 90_000 }
+			);
+			saved.catch(() => {});
+
+			await page.getByTestId('save-to-server-button').click();
+			const response = await saved;
+			expect(response.status(), 'save to server must succeed').toBeLessThan(400);
+
+			const envelope = (response.request().postDataJSON() ?? {}) as {
+				recordId?: string;
+				payload?: OrderPayload;
+			};
+			const sent = envelope.payload ?? {};
+			const ack = (await response.json().catch(() => null)) as {
+				document?: ServerOrder;
+			} | null;
+			const doc = ack?.document;
+			expect(doc?.id, 'ack must carry the created order').toBeTruthy();
+			trackOrder({ id: Number(doc!.id), uuid: envelope.recordId, label });
+
+			// PARITY: the server recorded the numbers the POS rang up. Rate-set
+			// equality first — a tax-location mismatch swaps the rate SET even when
+			// amounts land close together.
+			if (sent.tax_lines?.length) {
+				const sentRates = [...new Set(sent.tax_lines.map((line) => Number(line.rate_id)))].sort();
+				const serverRates = [
+					...new Set((doc!.tax_lines ?? []).map((line) => Number(line.rate_id))),
+				].sort();
+				expect(serverRates, 'server tax rates must equal the rates the POS applied').toEqual(
+					sentRates
+				);
+			}
+			if (sent.total !== undefined) {
+				expectMoneyMatches(doc!.total, sent.total, 'order total parity (cart vs server)');
+			}
+			if (sent.cart_tax !== undefined) {
+				expectTaxParity(doc!.cart_tax, sent.cart_tax, 'cart_tax parity');
+			}
+
+			// The cashier-facing alarm must NOT be up: give reconciliation a beat to
+			// process the ack (the banner mounts from the ack diff), then assert the
+			// cart still shows the same total and no divergence banner appeared.
+			await expect(async () => {
+				const totalNow = ((await checkoutButton.textContent()) ?? '').replace(/\D/g, '');
+				expect(totalNow).toBe(cartTotalDigits);
+			}).toPass({ timeout: 10_000 });
+			await page.waitForTimeout(1_500);
+			await expect(
+				page.getByTestId('order-totals-changed-banner'),
+				'a plain sale must not trigger the totals-changed banner'
+			).not.toBeVisible();
+		}
+	);
 });
 
 test.describe('POS Cart - Add Items Menu', () => {

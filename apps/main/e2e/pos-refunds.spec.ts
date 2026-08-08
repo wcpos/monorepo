@@ -4,7 +4,9 @@ import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './ch
 import { becomesVisible, getStoreVariant, tryAddProductBySku } from './fixtures';
 import {
 	expectFullPrecision,
+	expectMoneyMatches,
 	expectOrderPaid,
+	expectTaxParity,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	openCheckout,
@@ -302,7 +304,7 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			await addTestProductToCart(page);
 			await stampRunLabel(page, label);
 
-			const { orderId, uuid } = await openCheckout(page, {
+			const { orderId, uuid, sent } = await openCheckout(page, {
 				onOrderCreated: (order) => trackOrder({ ...order, label }),
 			});
 
@@ -312,6 +314,16 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 			// the wrong reason.
 			const paid = await readOrder(request, testInfo, storeAuthorization(), orderId);
 			expect(paid.customer_note, 'must refund the order this test created').toBe(label);
+
+			// Totals parity on the SALE half (Money-oracle doctrine in TEST-PLAN.md):
+			// the order this test refunds must first be a correctly-recorded sale —
+			// otherwise "half of a wrong total" both computes and proves nothing.
+			if (sent.total !== undefined) {
+				expectMoneyMatches(paid.total, sent.total, 'parent order total parity (cart vs server)');
+			}
+			if (sent.cart_tax !== undefined) {
+				expectTaxParity(paid.cart_tax, sent.cart_tax, 'parent cart_tax parity');
+			}
 			const orderTotal = Number(paid.total);
 			const refundAmount = (orderTotal / 2).toFixed(2);
 			// WooCommerce will record a refund against an order that never took
@@ -381,6 +393,11 @@ liveTest.describe('POS refunds (Pro) - real refund (live store)', () => {
 				2
 			);
 			expectFullPrecision(refund.total, 'refunds[0].total');
+
+			// The parent's stored money must not have been silently rewritten by the
+			// refund: the refund lives in refunds[], the parent total stays the sale
+			// total (WooCommerce semantics — total_refunded is derived, not applied).
+			expectMoneyMatches(afterRefund.total, paid.total, 'parent total unchanged by refund');
 		}
 	);
 });

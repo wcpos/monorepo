@@ -99,7 +99,7 @@ Products Page (free only):
 - [x] Upgrade overlay shown
 - [x] View Demo button visible
 
-### pos-cart.spec.ts (authenticated, free + pro) — 13 tests
+### pos-cart.spec.ts (authenticated, free + pro) — 14 tests
 
 POS Cart:
 
@@ -111,6 +111,12 @@ POS Cart:
 - [x] Void order clears the cart
 - [x] Subtotal visible in cart totals
 - [x] Cart total shown in Checkout button
+
+POS Cart — save to server parity (live store, writes):
+
+- [x] Plain one-product cart saves with identical totals (rate-set, cart_tax, total) and no
+      divergence banner (the woocommerce-pos#1545 regression oracle; see Money-oracle
+      doctrine below)
 
 POS Cart — Add Items Menu (the cart "+" dropdown):
 
@@ -305,6 +311,50 @@ store, so they follow one contract, implemented in `e2e/order-lifecycle.ts`:
 `readOrder` probes the REST API through Playwright's `APIRequestContext`, which page route
 stubs cannot touch, and retries transient 5xx — dev-next is a real host under load from six
 shards.
+
+## Money-oracle doctrine: parity is the invariant, drift is an alarm
+
+Every spec that creates or mutates an order asserts **totals parity**: the amounts the POS
+rang up (line taxes, tax-line rate SET, cart_tax, order total) equal the amounts the server
+recorded, and the "your store changed this order's totals" banner
+(`order-totals-changed-banner`) does NOT appear on a plain sale.
+
+This section exists because its absence cost us. The server-calc-is-truth rule ("the
+server's math wins; the POS mirrors it; divergence → cashier alert") was misread as "the
+server's numbers may legitimately differ, so don't compare them." An earlier
+`pos-checkout.spec.ts` measured a real divergence (client tax 4.090909 → server 9.163636;
+total 45.00 → 50.07) and wrote it into the spec as "dev-next applies a surcharge when the
+order is paid." It was not a surcharge. It was a live bug — the v2 push create dropped
+`_pos_store` before the server's tax calculation, so multi-store orders were taxed from the
+site base (GB VAT 20% + compound 2% ≡ ×1.224 — exactly 45.00 → 50.07) — shipped invisible
+because the one oracle that would have caught it had been talked out of the spec
+(woocommerce-pos#1545).
+
+The rules:
+
+1. **Server-calc-is-truth is about AUTHORITY, not tolerance.** The server's answer is the
+   one that counts — and on a correctly configured store it MUST equal the POS's answer.
+   Both compute the same rates from the same tax location. Equality is the invariant;
+   authority only decides who wins when the invariant breaks.
+2. **Rate-SET parity, not just amount parity.** A tax-location bug swaps which rates apply;
+   compare `tax_lines[].rate_id` sets, so a near-miss on amounts cannot slip through.
+3. **Any tolerated divergence is a named, narrowly-scoped exception** in the spec, with the
+   mechanism that causes it (e.g. a specific gateway fee extension) — never a blanket "the
+   server may recalculate differently." If a parity assertion fails against a store, the
+   default reading is REGRESSION, not environment quirk; prove the mechanism before
+   loosening the oracle.
+
+   The one currently-named exception (`expectTaxParity` in `order-lifecycle.ts`):
+   server-COMPUTED tax amounts may differ from the client's by **at most one microunit**
+   (0.000001) at the 6dp storage precision — a half-way rounding tie lands on different
+   sides in PHP's float path vs the client's decimal path (observed in CI 2026-08-08:
+   4.575164 vs 4.575163; rate set and 2dp money identical). Display money (2dp) is exact;
+   two microunits fails. Eliminating the tie outright (aligning the client's 6dp storage
+   rounding with `wc_round_tax_total`'s float behaviour) is a tracked follow-up in the
+   tax-parity program — this tolerance is a measured ceiling, not a settlement.
+4. **Parity assertions are store-agnostic by construction** — they compare the two sides of
+   the same sale, never fixture values — so they belong in every order-writing spec at no
+   cost to the any-store contract.
 
 ## Cold-start profile (thin local catalogue) — #991
 

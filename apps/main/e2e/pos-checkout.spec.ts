@@ -6,6 +6,7 @@ import {
 	expectFullPrecision,
 	expectMoneyMatches,
 	expectOrderPaid,
+	expectTaxParity,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	openCheckout,
@@ -365,13 +366,18 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			// (a) AMOUNTS RUNG UP must survive the round trip exactly. `subtotal` and
 			//     `total` are what the cashier charged; if those drift, the sale is wrong.
 			//
-			// (b) TAX IS RECALCULATED SERVER-SIDE and is deliberately NOT compared to
-			//     the client's values. dev-next applies a surcharge when the order is
-			//     paid, so the server's tax legitimately differs from what the cart sent
-			//     (measured: client subtotal_tax 4.090909 -> server 9.163636). Asserting
-			//     equality there would encode "the server may not recalculate", the exact
-			//     inverse of the server-calc-is-truth rule. What IS an invariant is that
-			//     tax comes back at full stored precision — the #946 contract.
+			// (b) TAX PARITY. The server recalculates taxes (server-calc-is-truth), but
+			//     on a correctly configured store its answer MUST equal the POS's answer
+			//     — both compute the same rates from the same tax location. An earlier
+			//     revision of this spec deliberately skipped tax comparison, reading a
+			//     measured drift (client subtotal_tax 4.090909 → server 9.163636) as
+			//     "dev-next applies a surcharge when the order is paid". That drift WAS
+			//     a live bug: the v2 push create dropped `_pos_store` before the
+			//     server's tax calculation, so multi-store orders were taxed from the
+			//     SITE base address (GB VAT 20% + compound Surcharge 2% = exactly the
+			//     ×1.224 "surcharge") — woocommerce-pos#1545. Parity is the invariant;
+			//     drift is an alarm, never an environment quirk to code around. Full
+			//     stored precision remains asserted per the #946 contract.
 			for (const [index, sentItem] of sentItems.entries()) {
 				// Match on identity ONLY. There is deliberately no positional fallback:
 				// substituting `serverItems[index]` when the (product_id, variation_id)
@@ -402,6 +408,24 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 				if (match.subtotal_tax !== undefined) {
 					expectFullPrecision(match.subtotal_tax, `line_items[${index}].subtotal_tax`);
 				}
+				// Tax parity per line (see contract (b) above): what the POS computed is
+				// what the server computed. Guarded on the client having sent the field —
+				// a sparse client payload is not a parity violation. Tax fields use the
+				// one-microunit rounding-tie tolerance (see expectTaxParity).
+				if (sentItem.total_tax !== undefined) {
+					expectTaxParity(
+						match.total_tax,
+						sentItem.total_tax,
+						`line_items[${index}].total_tax parity`
+					);
+				}
+				if (sentItem.subtotal_tax !== undefined && match.subtotal_tax !== undefined) {
+					expectTaxParity(
+						match.subtotal_tax,
+						sentItem.subtotal_tax,
+						`line_items[${index}].subtotal_tax parity`
+					);
+				}
 			}
 
 			expect(server.tax_lines, 'tax_lines must be present').toBeDefined();
@@ -415,18 +439,39 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			expect(server.cart_tax, 'cart_tax must be present').toBeDefined();
 			expectFullPrecision(server.cart_tax!, 'cart_tax');
 
-			// THE MONEY THE CASHIER WAS ASKED FOR IS THE MONEY THE SERVER RECORDED.
-			//
-			// This is the assertion that matters most in a POS, and it is NOT
-			// `server.total === sent.total`: dev-next adds its surcharge when the
-			// order is PAID, so the stored total moves from 45.00 to 50.07 during
-			// checkout. Comparing against the pre-payment cart would fail on correct
-			// behaviour. Comparing against the amount rendered in the checkout modal
-			// — the number the cashier actually collected — is the real invariant,
-			// and it catches the nightmare case where the two silently diverge.
+			// RATE PARITY: the server applied the same tax rates the POS applied —
+			// not merely "some taxes at full precision". A location mismatch (the
+			// #1545 class: server taxing from site base instead of the POS store)
+			// swaps the rate SET even when amounts happen to be close, so compare
+			// rate ids, not amounts. Store-agnostic: whatever rates the POS chose
+			// for this store are the rates the server must agree on.
+			if (sent.tax_lines?.length) {
+				const sentRates = [...new Set(sent.tax_lines.map((line) => Number(line.rate_id)))].sort();
+				const serverRates = [
+					...new Set(server.tax_lines!.map((line) => Number(line.rate_id))),
+				].sort();
+				expect(serverRates, 'server tax rates must equal the rates the POS applied').toEqual(
+					sentRates
+				);
+			}
+			if (sent.cart_tax !== undefined) {
+				expectTaxParity(server.cart_tax, sent.cart_tax, 'cart_tax parity');
+			}
+
+			// THE MONEY THE CASHIER WAS ASKED FOR IS THE MONEY THE SERVER RECORDED —
+			// and both equal what the cart rang up. An earlier revision only compared
+			// server.total against the checkout modal, excusing the cart mismatch as
+			// "dev-next adds its surcharge when the order is PAID" (45.00 → 50.07).
+			// That 50.07 was the #1545 tax-location bug to the exact cent: net 40.909
+			// × 1.224 (GB VAT 20% + compound 2%). On a correctly configured store all
+			// three numbers are ONE number; any tolerated divergence must be a named,
+			// narrowly-scoped exception here, never a blanket "the server may differ".
 			expect(digitsOf(Number(server.total).toFixed(2)), 'amount charged vs amount shown').toBe(
 				amountShown
 			);
+			if (sent.total !== undefined) {
+				expectMoneyMatches(server.total, sent.total, 'order total parity (cart vs server)');
+			}
 		}
 	);
 
