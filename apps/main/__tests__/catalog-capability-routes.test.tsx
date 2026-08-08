@@ -23,14 +23,15 @@ jest.mock('expo-router', () => {
 	function Stack({ children }: { children: React.ReactNode }) {
 		return <>{children}</>;
 	}
-	Stack.Screen = ({ name }: { name: string }) => {
+	function MockStackScreen({ name }: { name: string }) {
 		mockRenderedRoutes.push(name);
 		return null;
-	};
-	Stack.Screen.displayName = 'MockStackScreen';
-	Stack.Protected = ({ guard, children }: { guard: boolean; children: React.ReactNode }) =>
-		guard ? <>{children}</> : null;
-	Stack.Protected.displayName = 'MockStackProtected';
+	}
+	function MockStackProtected({ guard, children }: { guard: boolean; children: React.ReactNode }) {
+		return guard ? <>{children}</> : null;
+	}
+	Stack.Screen = MockStackScreen;
+	Stack.Protected = MockStackProtected;
 	return { Stack };
 });
 jest.mock('../components/use-navigation-background', () => ({
