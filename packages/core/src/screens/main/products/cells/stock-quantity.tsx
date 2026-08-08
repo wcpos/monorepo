@@ -41,6 +41,7 @@ export function StockQuantity({
 			<VStack>
 				<View className="flex-row justify-center">
 					<NumberInput
+						testID="stock-quantity-input"
 						value={String(stockQuantity ?? 0)}
 						onChangeText={(stock_quantity) =>
 							meta.onChange({ document: product, changes: { stock_quantity } })
@@ -52,9 +53,11 @@ export function StockQuantity({
 					nativeID="manage_stock"
 					label={t('products.manage')}
 					checked={manageStock ?? false}
-					onCheckedChange={(manage_stock) =>
-						meta.onChange({ document: product, changes: { manage_stock } })
-					}
+					onCheckedChange={(manage_stock) => {
+						if (!disabled) {
+							meta.onChange({ document: product, changes: { manage_stock } });
+						}
+					}}
 					size="sm"
 					disabled={disabled}
 				/>

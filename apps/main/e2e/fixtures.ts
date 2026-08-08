@@ -854,6 +854,15 @@ export const authenticatedTest = base.extend<{
 		const orderCapture = captureCreatedOrderIds(page);
 		await hydrateAuthenticatedPage(page, testInfo);
 
+		// Layout-drift pin (#1106): every POS interaction scopes under screen-pos,
+		// and its absence fails as opaque 30s tile timeouts spec-by-spec. Assert it
+		// once, here, so a layout/testID rename fails instantly with a clear cause.
+		// Both POS layouts must carry it: (tabs)/_layout.tsx AND (pos)/(columns)/index.tsx.
+		await expect(
+			page.getByTestId('screen-pos').filter({ visible: true }).first(),
+			'testID="screen-pos" is missing from the rendered POS layout — see #1106'
+		).toBeVisible({ timeout: 30_000 });
+
 		try {
 			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 			await use(page);
