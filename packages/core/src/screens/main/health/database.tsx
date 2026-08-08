@@ -61,7 +61,6 @@ import {
 	censusWindowProgress,
 	type CollectionKey,
 	type CollectionRow,
-	deriveEverythingElseBytes,
 	deriveRows,
 	formatBytes,
 	isReadyToSell,
@@ -71,8 +70,8 @@ import {
 import { QueuedEmailsPanel } from './queued-emails';
 import { RejectedMutationsPanel } from './rejected-mutations';
 import { useCollectionSizes } from './use-collection-sizes';
-import { useOtherScopes } from './use-other-scopes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
+import { useStorageFootprint } from './use-storage-footprint';
 
 function exhaustiveCollectionOrder<const Order extends readonly CollectionKey[]>(
 	order: Exclude<CollectionKey, Order[number]> extends never ? Order : never
@@ -101,28 +100,6 @@ const ROW_LABEL_KEYS = Object.fromEntries(
 	Object.entries(COLLECTION_VOCABULARY).map(([name, row]) => [name, row.labelKey])
 ) as Record<CollectionKey, string>;
 
-function useStorageEstimate(): number | null {
-	const [bytes, setBytes] = React.useState<number | null>(null);
-	// Effect (last resort per project.mdc): navigator.storage.estimate() is a
-	// one-shot async platform probe with no reactive/observable seam, so a
-	// mount-time effect is the only way to pull it into React state.
-	React.useEffect(() => {
-		const nav = typeof navigator !== 'undefined' ? navigator : undefined;
-		if (!nav?.storage?.estimate) return;
-		let cancelled = false;
-		void nav.storage
-			.estimate()
-			.then((estimate) => {
-				if (!cancelled) setBytes(estimate.usage ?? null);
-			})
-			.catch(() => undefined);
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-	return bytes;
-}
-
 type RowPhase = 'idle' | 'clearing';
 
 type RowCoverage =
@@ -138,10 +115,10 @@ type RowStory = { serverText: string; coverage: RowCoverage };
 /**
  * The "on server" + "coverage" story for one row, shared by the table (md+)
  * and list (sm) layouts. Every branch states something true:
- * - variations have no server census (they download with their products)
- * - orders show the real server total plus the windowing policy
+ * - orders and variations show the real server total plus their policy
+ *   (open + recent stay local / variations download with their products)
  * - a stale/missing census reads "checking…", never "unknown"
- * - an empty fresh census reads "none on your server"
+ * - an empty fresh census reads "—" (nothing to mirror)
  */
 function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 	const t = useT();
@@ -152,12 +129,6 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 				kind: 'clearing',
 				label: t('health.database.redownloading'),
 			},
-		};
-	}
-	if (row.key === 'variations') {
-		return {
-			serverText: t('health.database.with_products'),
-			coverage: { kind: 'none', label: '—' },
 		};
 	}
 	if (!row.fresh || row.serverTotal === null) {
@@ -172,10 +143,7 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 	if (row.serverTotal === 0 && row.local === 0) {
 		return {
 			serverText: '0',
-			coverage: {
-				kind: 'empty',
-				label: t('health.database.none_on_server'),
-			},
+			coverage: { kind: 'empty', label: '—' },
 		};
 	}
 	if (row.windowed) {
@@ -186,9 +154,10 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			coverage: {
 				kind: 'windowed',
 				percent,
-				tooltip: t('health.database.window_tooltip', {
-					p: percent,
-				}),
+				tooltip:
+					row.key === 'variations'
+						? t('health.database.variations_tooltip', { p: percent })
+						: t('health.database.window_tooltip', { p: percent }),
 			},
 		};
 	}
@@ -416,11 +385,11 @@ function CollectionRowView({
 									count: row.local.toLocaleString(),
 								})
 							: isVariations
-								? `${row.local.toLocaleString()} · ${t('health.database.with_products')}`
+								? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.with_products')}`
 								: row.key === 'orders'
 									? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.window_short')}`
 									: story.coverage.kind === 'empty'
-										? t('health.database.none_on_server')
+										? '0'
 										: story.coverage.kind === 'complete'
 											? t('health.database.all_n_local', {
 													count: row.local.toLocaleString(),
@@ -481,6 +450,35 @@ function CollectionRowView({
 	);
 }
 
+/**
+ * One muted storage line under the collection table. Renders nothing at zero
+ * bytes — an empty bucket is noise, not information.
+ */
+function FootprintRow({
+	label,
+	sub,
+	bytes,
+	testID,
+}: {
+	label: string;
+	sub?: string;
+	bytes: number;
+	testID: string;
+}) {
+	const text = formatBytes(bytes);
+	if (bytes <= 0 || !text) return null;
+	return (
+		<HStack testID={testID} className="border-border items-center gap-3 border-b py-2">
+			<View className="min-w-0 flex-1">
+				<Text className="text-muted-foreground">{label}</Text>
+				{sub ? <Text className="text-muted-foreground/80 text-xs">{sub}</Text> : null}
+			</View>
+			<Text className="text-muted-foreground text-right text-sm tabular-nums">{`≈ ${text}`}</Text>
+			<View className="w-9" />
+		</HStack>
+	);
+}
+
 /** The accurate "how syncing works" schedule, straight from the engine's lanes. */
 function HowSyncingWorksDialog() {
 	const t = useT();
@@ -524,7 +522,7 @@ export function DatabaseScreen() {
 	const counts = useCollectionCounts();
 	const census = useCensusTotals();
 	const mutations = useMutationCounts();
-	const storageBytes = useStorageEstimate();
+	const footprint = useStorageFootprint();
 	const sizes = useCollectionSizes(counts, ROW_ORDER);
 	const nowMs = useNowMs(1_000);
 	const relative = useRelativeTime();
@@ -532,23 +530,18 @@ export function DatabaseScreen() {
 	const stats = useLogStats();
 	// Durable, so it survives the restart that clears `stats` (#832 follow-up).
 	const deadLetterStuck = useDeadLetterStuckRecords();
-	const otherScopes = useOtherScopes();
 
 	const rows = deriveRows(ROW_ORDER, counts, census);
 	const totalRecords = totalLocalRecords(counts);
-	const storageText = formatBytes(storageBytes);
+	const storageText = formatBytes(footprint?.totalBytes ?? null);
 	const stuck = mergeStuckRecords(deadLetterStuck, stats.stuck);
 	const stuckByRow = stuckCountsByRow(stuck);
-	const everythingElseText = formatBytes(
-		deriveEverythingElseBytes(
-			storageBytes,
-			ROW_ORDER.map((key) => sizes[key]),
-			// Everything NOT belonging to the active scope leaves the reconciliation:
-			// other stores AND this store's other cashiers — otherwise inactive
-			// cashiers' scopes masquerade as this scope's indexes/logs.
-			otherScopes ? otherScopes.bytes + otherScopes.sameStoreOtherCashierBytes : null
-		)
-	);
+	// One attention zone, one framing per record: dead letters render in the
+	// rejected panel (Send again / Discard), so the stuck banner keeps only the
+	// session-log records the panel does NOT list — the same refused sale must
+	// never appear as two differently-worded problems (Paul, 2026-08-08).
+	const deadLetterKeys = new Set(deadLetterStuck.map((row) => row.key));
+	const attentionStuck = stuck.filter((row) => !deadLetterKeys.has(row.key));
 	const readyToSell = isReadyToSell({
 		connectivity: status.connectivity,
 		gatedBy: status.gatedBy,
@@ -565,7 +558,7 @@ export function DatabaseScreen() {
 		<ScrollView className="flex-1">
 			<VStack
 				testID="screen-health-database"
-				className="mx-auto w-full max-w-3xl gap-4 px-4 py-6 md:px-10 md:py-8"
+				className="mx-auto w-full max-w-4xl gap-4 px-4 py-6 md:px-10 md:py-8"
 			>
 				<Text className="text-muted-foreground text-sm">{t('health.database.subtitle')}</Text>
 
@@ -589,19 +582,28 @@ export function DatabaseScreen() {
 							testID="db-stat-storage"
 						/>
 					) : null}
+					{/* Every queued outbound record counts the same here — a product edit
+					    stuck on this device is as lost as a sale (Paul, 2026-08-08). */}
 					<Stat
-						value={mutations.pendingOrders}
-						tone={mutations.pendingOrders > 0 ? 'bad' : 'good'}
+						value={mutations.pending}
+						tone={mutations.pending > 0 ? 'bad' : 'good'}
 						label={t('health.database.waiting_to_send')}
 						testID="db-stat-waiting"
 					/>
 				</StatHeader>
 
-				{/* Durable dead letters FIRST, then this session's log-derived stuck
-				    records (#832 follow-up). The log feed resets on restart, so a banner
-				    built from it alone hid a refused sale the moment the app was quit —
-				    while the queue row was still there. */}
-				<AttentionPanel stuck={stuck} />
+				{/* THE attention zone — every record that needs a human lives here, each
+				    with one framing. Dead letters render as the actionable rejected list
+				    (durable, so it survives the restart that clears the log feed — #832);
+				    the banner carries only session-log stuck records the list doesn't
+				    show. Gating the list on the precomputed count keeps the common
+				    (empty) case from mounting a Suspense boundary or querying the queue. */}
+				<AttentionPanel stuck={attentionStuck} />
+				{mutations.rejected > 0 ? (
+					<React.Suspense fallback={<Loader size="sm" />}>
+						<RejectedMutationsPanel />
+					</React.Suspense>
+				) : null}
 
 				{stats.clockSkew ? (
 					<Callout tone="warning" testID="db-clock-skew">
@@ -609,17 +611,12 @@ export function DatabaseScreen() {
 							{`${
 								stats.clockSkew.skewSeconds > 0
 									? t('health.database.clock_skew_ahead', {
-											defaultValue: "Your server's clock is about {amount} ahead of this device.",
 											amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
 										})
 									: t('health.database.clock_skew_behind', {
-											defaultValue: "Your server's clock is about {amount} behind this device.",
 											amount: formatSkewMagnitude(stats.clockSkew.skewSeconds),
 										})
-							} ${t('health.database.clock_skew_hint', {
-								defaultValue:
-									"Check the server's date, time and timezone settings — order times, receipts and reports may be wrong until the clocks agree.",
-							})}`}
+							} ${t('health.database.clock_skew_hint')}`}
 						</Text>
 					</Callout>
 				) : null}
@@ -661,24 +658,48 @@ export function DatabaseScreen() {
 							label={t(ROW_LABEL_KEYS[row.key])}
 						/>
 					))}
-					{everythingElseText ? (
-						<HStack
-							testID="db-row-everything-else"
-							className="border-border items-center gap-3 border-b py-2"
-						>
-							<View className="min-w-0 flex-1">
-								<Text className="text-muted-foreground">
-									{t('health.database.everything_else')}
-								</Text>
-								<Text className="text-muted-foreground/80 text-xs">
-									{t('health.database.everything_else_sub')}
-								</Text>
-							</View>
-							<Text className="text-muted-foreground text-right text-sm tabular-nums">
-								{`≈ ${everythingElseText}`}
-							</Text>
-							<View className="w-9" />
-						</HStack>
+					{/* Measured storage the collection rows don't itemize — every bucket
+					    is real bytes from the platform's storage layer, split so search
+					    indexes never masquerade as store data. Aggregates only: other
+					    stores show a count and a size, never names. */}
+					{footprint ? (
+						<>
+							<FootprintRow
+								testID="db-row-search-indexes"
+								label={t('health.database.storage_search_indexes')}
+								sub={t('health.database.storage_search_indexes_sub')}
+								bytes={footprint.breakdown.searchIndexBytes}
+							/>
+							<FootprintRow
+								testID="db-row-bookkeeping"
+								label={t('health.database.storage_bookkeeping')}
+								sub={t('health.database.storage_bookkeeping_sub')}
+								bytes={footprint.breakdown.bookkeepingBytes}
+							/>
+							<FootprintRow
+								testID="db-row-other-cashiers"
+								label={t('health.database.storage_other_cashiers')}
+								bytes={footprint.breakdown.otherCashiersBytes}
+							/>
+							<FootprintRow
+								testID="db-row-other-stores"
+								label={t('health.database.storage_other_stores', {
+									n: footprint.breakdown.otherStoresCount,
+								})}
+								bytes={footprint.breakdown.otherStoresBytes}
+							/>
+							<FootprintRow
+								testID="db-row-orphaned"
+								label={t('health.database.storage_orphaned')}
+								sub={t('health.database.storage_orphaned_sub')}
+								bytes={footprint.breakdown.orphanedBytes}
+							/>
+							<FootprintRow
+								testID="db-row-unattributed"
+								label={t('health.database.storage_unattributed')}
+								bytes={footprint.unattributedBytes}
+							/>
+						</>
 					) : null}
 				</VStack>
 
@@ -692,15 +713,6 @@ export function DatabaseScreen() {
 							})}
 						</Text>
 					</Callout>
-				) : null}
-
-				{/* Dead letters — writes the server permanently refused (#832). Rendered
-				    only when the count says there are some, so the common (empty) case
-				    never mounts a Suspense boundary or queries the queue at all. */}
-				{mutations.rejected > 0 ? (
-					<React.Suspense fallback={<Loader size="sm" />}>
-						<RejectedMutationsPanel />
-					</React.Suspense>
 				) : null}
 
 				{/* Receipt emails that have not gone out yet (#165). Unlike the dead

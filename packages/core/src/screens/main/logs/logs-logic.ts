@@ -333,7 +333,7 @@ export type DebugInfoInput = {
 	connectivity: string;
 	eventsToday: number;
 	errorsToday: number;
-	salesWaiting: number;
+	changesWaiting: number;
 	stuckRecords: StuckRecord[];
 	verboseDiagnostics: boolean;
 	lastCheck: { atMs: number; status: string } | null;
@@ -359,7 +359,7 @@ export function buildDebugInfo(input: DebugInfoInput): string {
 	);
 	lines.push(`Events today: ${input.eventsToday}`);
 	lines.push(`Errors today: ${input.errorsToday}`);
-	lines.push(`Sales waiting to send: ${input.salesWaiting}`);
+	lines.push(`Changes waiting to send: ${input.changesWaiting}`);
 	lines.push(`Verbose diagnostics: ${input.verboseDiagnostics ? 'on' : 'off'}`);
 	lines.push(`Stuck records: ${input.stuckRecords.length}`);
 	for (const stuck of input.stuckRecords.slice(0, 10)) {

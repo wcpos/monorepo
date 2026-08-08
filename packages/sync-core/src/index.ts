@@ -29,7 +29,13 @@ export {
 // prettier-ignore
 export { pushEndpointResolver, pushRecordMutation, reconcileCreateAck, WOO_REST_CANNOT_DELETE } from './recordPushAdapter';
 // prettier-ignore
-export { canonicalSiteKey, scopeDatabaseName, scopeKeyFor, type StoreScopeIdentity } from './storeScopeIdentity';
+export {
+	canonicalSiteKey,
+	scopeDatabaseName,
+	scopeKeyFor,
+	siteHashFor,
+	type StoreScopeIdentity,
+} from './storeScopeIdentity';
 // prettier-ignore
 export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeDatabase, type ScopeEvent } from './storeScopeManager';
 // prettier-ignore

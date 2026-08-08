@@ -12,6 +12,14 @@ export {
 } from './clear-local-data-flag';
 export { clearAllDB } from './clear-all-db';
 export type { ClearDBResult } from './clear-all-db';
+export { measureAppStorage } from './measure-storage';
+export type { StorageFootprint, StorageFootprintEntry } from './measure-storage';
+export {
+	SCOPE_DATABASE_NAME_ANYWHERE,
+	isLegacyAppDatabaseName,
+	isStoreDatabaseName,
+	isFastStoreDatabaseName,
+} from './database-names';
 export { purgeLegacyDatabases } from './purge-legacy-db';
 export type { PurgeLegacyDBResult } from './purge-legacy-db';
 export type { FlexSearchInstance, SearchInitializationOptions } from './types.d';

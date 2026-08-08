@@ -19,8 +19,13 @@ export type CollectionRow = {
 	windowed: boolean;
 };
 
-/** Orders are the one windowed collection — "open + recent", not a full mirror. */
-export const WINDOWED_COLLECTIONS: ReadonlySet<CollectionKey> = new Set(['orders']);
+/**
+ * Policy-windowed collections — a partial local set is the design, not a lag:
+ * orders keep "open + recent" on device, variations download with their
+ * products. Their rows show the real server total plus the policy, never a
+ * completeness percentage.
+ */
+export const WINDOWED_COLLECTIONS: ReadonlySet<CollectionKey> = new Set(['orders', 'variations']);
 
 export function deriveCollectionRow(
 	key: CollectionKey,
@@ -202,79 +207,4 @@ export function stuckCountsByRow(
 		counts[key] = (counts[key] ?? 0) + 1;
 	}
 	return counts;
-}
-
-/**
- * The "Everything else" row: storage the estimate can see but the collection
- * rows don't account for — search indexes, logs, sync bookkeeping — after
- * other stores' scopes (measured separately) are excluded. Null when there is
- * no storage estimate to reconcile against.
- */
-export function deriveEverythingElseBytes(
-	storageBytes: number | null,
-	collectionBytes: (number | null | undefined)[],
-	otherStoresBytes: number | null
-): number | null {
-	if (storageBytes === null || !Number.isFinite(storageBytes)) return null;
-	const known = collectionBytes.reduce<number>(
-		(sum, bytes) => sum + (typeof bytes === 'number' && Number.isFinite(bytes) ? bytes : 0),
-		0
-	);
-	return Math.max(0, storageBytes - known - (otherStoresBytes ?? 0));
-}
-
-/**
- * OPFS entry classification for the other-stores footnote. Mirrors the
- * storage layer's naming: one `rxdb-<opfs-safe db name>` directory per RxDB
- * database ('/' encoded as '__'), scope databases named
- * `pos_v<gen>_<site12>_s<store>_c<cashier>` (packages/database/src/database-names.ts —
- * deliberately not imported: those helpers are package-internal).
- */
-const OPFS_RXDB_PREFIX = 'rxdb-';
-const SCOPE_DB_NAME = /pos_v\d+_([a-f0-9]{12})_s([a-z0-9-]+)_c[a-z0-9-]+/;
-
-export type OtherScopesSummary = {
-	/** Distinct OTHER (site, store) pairs — the footnote's "N other stores". */
-	storeCount: number;
-	/** OPFS bytes held by those other stores' scopes. */
-	bytes: number;
-	/**
-	 * OPFS bytes of the ACTIVE store's scopes for other cashiers. Not part of
-	 * the footnote (they belong to this store), but they must be excluded from
-	 * the "Everything else" reconciliation or they'd masquerade as this
-	 * scope's indexes/logs/bookkeeping.
-	 */
-	sameStoreOtherCashierBytes: number;
-};
-
-/**
- * Classify every scope database's OPFS footprint relative to the active
- * scope: other stores (counted once per store, however many cashiers), the
- * active store's other cashiers, and the active scope itself (skipped — the
- * collection rows account for it).
- */
-export function summarizeOtherScopes(
-	entries: { name: string; bytes: number }[],
-	activeDbName: string | null
-): OtherScopesSummary {
-	const activeMatch = activeDbName?.match(SCOPE_DB_NAME) ?? null;
-	const activeStoreKey = activeMatch ? `${activeMatch[1]}_s${activeMatch[2]}` : null;
-	const stores = new Set<string>();
-	let bytes = 0;
-	let sameStoreOtherCashierBytes = 0;
-	for (const entry of entries) {
-		if (!entry.name.startsWith(OPFS_RXDB_PREFIX)) continue;
-		const dbName = entry.name.slice(OPFS_RXDB_PREFIX.length).replace(/__/g, '/');
-		const match = dbName.match(SCOPE_DB_NAME);
-		if (!match) continue;
-		if (activeDbName !== null && dbName.includes(activeDbName)) continue; // the active scope itself
-		const storeKey = `${match[1]}_s${match[2]}`;
-		if (storeKey === activeStoreKey) {
-			sameStoreOtherCashierBytes += entry.bytes;
-			continue;
-		}
-		stores.add(storeKey);
-		bytes += entry.bytes;
-	}
-	return { storeCount: stores.size, bytes, sameStoreOtherCashierBytes };
 }

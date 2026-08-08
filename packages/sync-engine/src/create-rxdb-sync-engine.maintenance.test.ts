@@ -307,7 +307,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 
 		const report = await engine.sync('query-total-retry');
 		expect(report.status).toBe('ran');
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
 		expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
 			'orders:total:test'
 		);
@@ -349,14 +349,21 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			'census:products',
 			'census:tags',
 			'census:taxRates',
+			'census:variations',
 		]);
 		expect(
 			fetchWooQueryTotal.mock.calls.find(
 				([input]) => input.request.queryKey === 'census:products'
 			)?.[0].request.params
 		).toEqual({ page: 1, per_page: 1, status: 'publish' });
+		// Variations count what the till can sell, same as products.
+		expect(
+			fetchWooQueryTotal.mock.calls.find(
+				([input]) => input.request.queryKey === 'census:variations'
+			)?.[0].request.params
+		).toEqual({ page: 1, per_page: 1, status: 'publish' });
 		await vi.waitFor(() => expect(emissions.at(-1)?.orders?.total).toBe(25));
-		expect(emissions.at(-1)?.variations).toBeNull();
+		expect(emissions.at(-1)?.variations?.total).toBe(40);
 		expect(emissions.at(-1)?.orders).toEqual({
 			total: 25,
 			updatedAtMs: 1_000_000,

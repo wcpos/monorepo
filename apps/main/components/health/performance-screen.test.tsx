@@ -163,6 +163,15 @@ describe('PerformanceScreen · server over time', () => {
 		expect(loadUnavailableShown(renderer)).toBe(false);
 	});
 
+	it('keeps the wider health layout with the shared screen spacing', () => {
+		const renderer = renderScreen([]);
+		const screen = renderer.root.findByProps({ testID: 'screen-health-performance' });
+
+		expect(screen.props.className).toBe(
+			'mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8'
+		);
+	});
+
 	it('says the server does not report load once it has been asked and stayed silent', () => {
 		// Distinct from "not enough data yet": a plain sentence, no chart frame.
 		const renderer = renderScreen([bucket(2, 10), bucket(1, 20)]);

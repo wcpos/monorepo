@@ -177,7 +177,7 @@ export function PerformanceScreen() {
 		<ScrollView className="flex-1">
 			<VStack
 				testID="screen-health-performance"
-				className="mx-auto w-full max-w-3xl gap-6 px-4 py-6 md:px-10 md:py-8"
+				className="mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8"
 			>
 				{/* One status line */}
 				<HStack className="flex-wrap items-baseline gap-2">

@@ -72,7 +72,7 @@ describe('engine adapter collection map', () => {
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.censusRoute]))).toEqual({
 			orders: 'wc/v3/orders',
 			products: 'wc/v3/products',
-			variations: null,
+			variations: 'wcpos/v1/products/variations',
 			customers: 'wcpos/v2/customers',
 			taxRates: 'wcpos/v2/taxes',
 			categories: 'wc/v3/products/categories',

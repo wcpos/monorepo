@@ -60,6 +60,15 @@ export function canonicalSiteKey(site: string): string {
 	return canonical;
 }
 
+/**
+ * The 12-hex site component of scope keys and database names — the seam for
+ * classifying on-disk scope data by site (e.g. the storage-health screen
+ * deciding whether a scope database belongs to a still-signed-in site).
+ */
+export function siteHashFor(site: string): string {
+	return siteHash(site);
+}
+
 /** FNV-1a 64-bit over the canonical site, truncated to 12 hex chars. */
 function siteHash(site: string): string {
 	const canonical = canonicalSiteKey(site);

@@ -31,14 +31,16 @@ function loadEngineFetcher() {
 	return jest.requireActual<typeof import('./engine-fetcher')>('./engine-fetcher');
 }
 
-function createFetcherHarness(input: {
-	auth?: typeof BASE_AUTH & {
-		refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
-		useJwtAsParam?: boolean;
-	};
-	clockSkew?: { generation: number; evaluated: boolean };
-	fetch?: typeof globalThis.fetch;
-} = {}) {
+function createFetcherHarness(
+	input: {
+		auth?: typeof BASE_AUTH & {
+			refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
+			useJwtAsParam?: boolean;
+		};
+		clockSkew?: { generation: number; evaluated: boolean };
+		fetch?: typeof globalThis.fetch;
+	} = {}
+) {
 	const { createEngineFetcher, fetchWooQueryTotal } = loadEngineFetcher();
 	const { createSyncLogObserver } =
 		jest.requireActual<typeof import('./sync-log-observer')>('./sync-log-observer');
@@ -53,10 +55,7 @@ function createFetcherHarness(input: {
 			networkLogger[level]?.(message, { context, terminal });
 		},
 	});
-	const emitTransport = (
-		event: Parameters<typeof appMetricsObserver>[0],
-		durable = true
-	): void => {
+	const emitTransport = (event: Parameters<typeof appMetricsObserver>[0], durable = true): void => {
 		try {
 			appMetricsObserver(event);
 		} catch (error) {
@@ -101,6 +100,7 @@ describe('createEngineFetcher', () => {
 	it.each([
 		['orders', 'wc/v3/orders'],
 		['products', 'wc/v3/products'],
+		['variations', 'wcpos/v1/products/variations'],
 		['customers', 'wcpos/v2/customers'],
 		['taxRates', 'wcpos/v2/taxes'],
 		['categories', 'wc/v3/products/categories'],
@@ -135,27 +135,6 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
-	it('reports variations census as unsupported without making a request', async () => {
-		const fetch = jest.fn();
-		const { fetchWooQueryTotal } = createFetcherHarness({ fetch });
-
-		const total = await fetchWooQueryTotal({
-			request: {
-				queryKey: 'census:variations',
-				method: 'GET',
-				endpoint: 'variations',
-				params: { page: 1, per_page: 1 },
-				totalHeader: 'X-WP-Total',
-			},
-		});
-
-		expect(total).toBeNull();
-		expect(fetch).not.toHaveBeenCalled();
-		fetch.mockReset();
-	});
-
-
 	it('reports an unknown census collection as unsupported without making a request', async () => {
 		const fetch = jest.fn().mockResolvedValue(
 			new Response(null, {
@@ -180,15 +159,12 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it.each([null, '', '3.5', '-1', 'not-a-number'])(
 		'rejects an invalid X-WP-Total value %p',
 		async (header) => {
 			const headers = new Headers();
 			if (header !== null) headers.set('X-WP-Total', header);
-			const fetch = jest
-				.fn()
-				.mockResolvedValue(new Response(null, { status: 200, headers }));
+			const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200, headers }));
 			const { fetchWooQueryTotal } = createFetcherHarness({ fetch });
 
 			await expect(
@@ -205,7 +181,6 @@ describe('createEngineFetcher', () => {
 			fetch.mockReset();
 		}
 	);
-
 
 	it('wires diagnostics and records response metrics without reading the body', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_025);
@@ -249,7 +224,6 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('logs server clock skew at most once per scope', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
 		const fetch = jest.fn().mockResolvedValue(
@@ -274,7 +248,6 @@ describe('createEngineFetcher', () => {
 		now.mockRestore();
 		fetch.mockReset();
 	});
-
 
 	it('does not let a late prior-site response suppress the new site warning', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
@@ -311,7 +284,6 @@ describe('createEngineFetcher', () => {
 		now.mockRestore();
 		fetch.mockReset();
 	});
-
 
 	it('does not let a late response from an earlier activation of the same scope suppress it', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
@@ -351,7 +323,6 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('classifies a conditional-GET 304 as a successful transport outcome', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_010);
 		const response = new Response(null, {
@@ -388,11 +359,8 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('returns the response even when a telemetry sink throws', async () => {
-		const fetch = jest
-			.fn()
-			.mockResolvedValue(new Response(null, { status: 200 }));
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch });
 		appMetricsObserver.mockImplementation(() => {
 			throw new TypeError('observer exploded');
@@ -405,15 +373,15 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('records a network error and rethrows it', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(2_000).mockReturnValueOnce(2_040);
 		const networkError = new Error(
 			'network down for https://store.example.test/wp-json/wcpos/v2/products?authorization=secret'
 		);
 		const fetch = jest.fn().mockRejectedValue(networkError);
-		const { fetcher, appMetricsObserver, recordTransport, networkWarn } =
-			createFetcherHarness({ fetch });
+		const { fetcher, appMetricsObserver, recordTransport, networkWarn } = createFetcherHarness({
+			fetch,
+		});
 
 		await expect(fetcher?.('https://store.example.test/wp-json/wcpos/v2/products')).rejects.toBe(
 			networkError
@@ -453,16 +421,16 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('does not persist expected sync aborts as errors', async () => {
 		const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
 		const fetch = jest.fn().mockRejectedValue(abort);
-		const { fetcher, appMetricsObserver, recordTransport, networkWarn } =
-			createFetcherHarness({ fetch });
+		const { fetcher, appMetricsObserver, recordTransport, networkWarn } = createFetcherHarness({
+			fetch,
+		});
 
-		await expect(
-			fetcher('https://store.example.test/wp-json/wcpos/v2/products')
-		).rejects.toBe(abort);
+		await expect(fetcher('https://store.example.test/wp-json/wcpos/v2/products')).rejects.toBe(
+			abort
+		);
 		expect(appMetricsObserver).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'transport.request',
@@ -475,11 +443,8 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('does not persist a row for a successful request, and never logs query credentials', async () => {
-		const fetch = jest
-			.fn()
-			.mockResolvedValue(new Response(null, { status: 200 }));
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 		const { fetcher, networkInfo, appMetricsObserver } = createFetcherHarness({
 			fetch,
 			auth: { ...BASE_AUTH, useJwtAsParam: true },
@@ -509,7 +474,6 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it.each(['not-json', '{"load":0.5}', '["0.5"]'])(
 		'ignores malformed server load %s',
 		async (load) => {
@@ -527,7 +491,6 @@ describe('createEngineFetcher', () => {
 			fetch.mockReset();
 		}
 	);
-
 
 	it('refreshes after a 401 and retries once with the latest access token', async () => {
 		let accessToken = 'expired-token';
@@ -588,7 +551,6 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('settles a 401 that persists after refresh as an error row (#899 exhaustion)', async () => {
 		let accessToken = 'expired-token';
 		const credentials = { getLatest: jest.fn(() => ({ access_token: accessToken })) };
@@ -628,13 +590,10 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('settles a 401 whose refresh yields no token as a warn row, not an error', async () => {
 		const credentials = { getLatest: jest.fn(() => ({ access_token: 'expired-token' })) };
 		const refreshAuth = jest.fn().mockResolvedValue(null);
-		const fetch = jest
-			.fn()
-			.mockResolvedValue(new Response(null, { status: 401 }));
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 401 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({
 			fetch,
 			auth: { credentials, refreshAuth },
@@ -660,7 +619,6 @@ describe('createEngineFetcher', () => {
 		}
 		fetch.mockReset();
 	});
-
 
 	it('keeps the completion timestamp on a 401 attempt whose event is deferred', async () => {
 		jest.useFakeTimers().setSystemTime(1_000);
@@ -698,13 +656,10 @@ describe('createEngineFetcher', () => {
 		}
 	});
 
-
 	it('classifies a 403 as error without ever refreshing (row-14 rule + #899 rubric)', async () => {
 		const credentials = { getLatest: jest.fn(() => ({ access_token: 'token' })) };
 		const refreshAuth = jest.fn();
-		const fetch = jest
-			.fn()
-			.mockResolvedValueOnce(new Response(null, { status: 403 }));
+		const fetch = jest.fn().mockResolvedValueOnce(new Response(null, { status: 403 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({
 			fetch,
 			auth: { credentials, refreshAuth },
@@ -724,12 +679,9 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('classifies the tick-probe 404 as a recovered debug row (designed fallback)', async () => {
 		const credentials = { getLatest: jest.fn(() => ({ access_token: 'token' })) };
-		const fetch = jest
-			.fn()
-			.mockResolvedValueOnce(new Response(null, { status: 404 }));
+		const fetch = jest.fn().mockResolvedValueOnce(new Response(null, { status: 404 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({
 			fetch,
 			auth: { credentials },
@@ -747,12 +699,9 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('keeps a non-tick 404 at warn', async () => {
 		const credentials = { getLatest: jest.fn(() => ({ access_token: 'token' })) };
-		const fetch = jest
-			.fn()
-			.mockResolvedValueOnce(new Response(null, { status: 404 }));
+		const fetch = jest.fn().mockResolvedValueOnce(new Response(null, { status: 404 }));
 		const { fetcher, appMetricsObserver } = createFetcherHarness({
 			fetch,
 			auth: { credentials },
@@ -769,7 +718,6 @@ describe('createEngineFetcher', () => {
 		);
 		fetch.mockReset();
 	});
-
 
 	it('retries with a peer-refreshed token instead of refreshing again on staggered 401s', async () => {
 		let accessToken = 'stale-token';
@@ -801,7 +749,6 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('returns the original 401 when refresh fails without retrying', async () => {
 		const originalUnauthorized = new Response(null, { status: 401 });
 		const refreshAuth = jest.fn().mockResolvedValue(null);
@@ -824,12 +771,9 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('does not refresh or loop when the retried request is still unauthorized', async () => {
 		const refreshAuth = jest.fn().mockResolvedValue('refreshed-token');
-		const fetch = jest
-			.fn()
-			.mockResolvedValue(new Response(null, { status: 401 }));
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 401 }));
 		const { fetcher } = createFetcherHarness({
 			fetch,
 			auth: { ...BASE_AUTH, refreshAuth },
@@ -843,12 +787,9 @@ describe('createEngineFetcher', () => {
 		fetch.mockReset();
 	});
 
-
 	it('never refreshes a request to the refresh endpoint', async () => {
 		const refreshAuth = jest.fn().mockResolvedValue('refreshed-token');
-		const fetch = jest
-			.fn()
-			.mockResolvedValue(new Response(null, { status: 401 }));
+		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 401 }));
 		const { fetcher } = createFetcherHarness({
 			fetch,
 			auth: { ...BASE_AUTH, refreshAuth },
@@ -860,6 +801,4 @@ describe('createEngineFetcher', () => {
 		expect(fetch).toHaveBeenCalledTimes(1);
 		fetch.mockReset();
 	});
-
-
 });
