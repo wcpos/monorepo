@@ -21,6 +21,7 @@ export function niceCeil(value: number): number {
  */
 export function xTickValues(points: TrendPoint[], maxTicks = 4): number[] {
 	if (points.length === 0) return [];
+	if (maxTicks === 1) return [points[0].x];
 	if (points.length <= maxTicks) return points.map((point) => point.x);
 	const step = (points.length - 1) / (maxTicks - 1);
 	const ticks = new Set<number>();

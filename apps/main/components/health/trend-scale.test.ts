@@ -39,6 +39,11 @@ describe('xTickValues', () => {
 		for (const tick of ticks) expect(tick % HOUR_MS).toBe(0);
 	});
 
+	it('returns one endpoint when maxTicks is one', () => {
+		const points = [point(1), point(2)];
+		expect(xTickValues(points, 1)).toEqual([points[0].x]);
+	});
+
 	it('returns nothing for an empty series', () => {
 		expect(xTickValues([])).toEqual([]);
 	});

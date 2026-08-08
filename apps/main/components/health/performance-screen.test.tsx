@@ -13,6 +13,7 @@ const HOUR_MS = 60 * 60 * 1000;
 const NOW = 100 * HOUR_MS;
 
 let mockBuckets: MetricsBucket[] = [];
+const mockTranslationKeys: string[] = [];
 
 type MockTrendProps = {
 	testID: string;
@@ -45,6 +46,7 @@ jest.mock('@wcpos/core/contexts/translations', () => {
 	);
 	return {
 		useT: () => (key: string, values?: Record<string, unknown>) => {
+			mockTranslationKeys.push(key);
 			const template = en[key] ?? key;
 			return values
 				? template.replace(/\{(\w+)\}/g, (match, name: string) =>
@@ -123,6 +125,7 @@ let rendered: ReactTestRenderer | null = null;
 function renderScreen(buckets: MetricsBucket[]): ReactTestRenderer {
 	mockBuckets = buckets;
 	mockTrendProps.length = 0;
+	mockTranslationKeys.length = 0;
 	act(() => {
 		rendered = create(<PerformanceScreen />);
 	});
@@ -189,6 +192,16 @@ describe('PerformanceScreen · server over time', () => {
 		const renderer = renderScreen([]);
 		const card = renderer.root.findByProps({ testID: 'preset-eco' });
 		expect(card.props.onPress).toBeUndefined();
+	});
+
+	it('routes check-frequency endpoint labels through translations', () => {
+		renderScreen([]);
+		expect(mockTranslationKeys).toEqual(
+			expect.arrayContaining([
+				'health.performance.seconds_short',
+				'health.performance.minutes_short',
+			])
+		);
 	});
 
 	it('keeps low-volume request-axis labels distinct', () => {

@@ -287,8 +287,12 @@ export function PerformanceScreen() {
 								/>
 							</View>
 							<HStack className="justify-between">
-								<Text className="text-muted-foreground text-xs">5 s</Text>
-								<Text className="text-muted-foreground text-xs">5 min</Text>
+								<Text className="text-muted-foreground text-xs">
+									{t('health.performance.seconds_short', { s: 5 })}
+								</Text>
+								<Text className="text-muted-foreground text-xs">
+									{t('health.performance.minutes_short', { m: 5 })}
+								</Text>
 							</HStack>
 						</VStack>
 
