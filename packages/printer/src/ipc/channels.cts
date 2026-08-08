@@ -66,7 +66,6 @@ export interface IpcInvokeChannels {
 	};
 	'usb-discovery': { req: Record<string, never>; res: UsbPrinterInfo[] };
 	'serial-discovery': { req: Record<string, never>; res: DiscoveredSerialPrinter[] };
-	'sqlite': { req: unknown; res: unknown };
 	'axios': { req: unknown; res: unknown };
 	'auth:prompt': { req: AuthPromptParams; res: AuthResult };
 }
@@ -94,7 +93,6 @@ export const INVOKE_CHANNELS = [
 	'printer-discovery',
 	'usb-discovery',
 	'serial-discovery',
-	'sqlite',
 	'axios',
 	'auth:prompt',
 ] as const satisfies readonly (keyof IpcInvokeChannels)[];
