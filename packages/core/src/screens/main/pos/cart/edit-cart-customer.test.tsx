@@ -17,6 +17,7 @@ const localPatch = jest.fn(() => Promise.resolve());
 const patchCustomer = jest.fn(() => Promise.resolve(null));
 const onOpenChange = jest.fn();
 const customerFindOne = jest.fn();
+let canEditCustomers = true;
 const manager = {
 	engine: {
 		active: jest.fn(() => ({
@@ -99,7 +100,10 @@ jest.mock('../../components/customer/tax-ids-form', () => {
 jest.mock('../../components/form-errors', () => ({ FormErrors: () => null }));
 jest.mock('../../components/shipping-address-form', () => {
 	const z = jest.requireActual('zod') as typeof import('zod');
-	return { ShippingAddressForm: () => null, shippingAddressSchema: z.object({}) };
+	return {
+		ShippingAddressForm: () => null,
+		shippingAddressSchema: z.object({}),
+	};
 });
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch }),
@@ -110,6 +114,9 @@ jest.mock('../../hooks/mutations/use-mutation', () => ({
 jest.mock('../../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Ada' }),
 }));
+jest.mock('../../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ caps: { canEditCustomers }, known: true }),
+}));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrder }),
 }));
@@ -117,6 +124,7 @@ jest.mock('../contexts/current-order', () => ({
 describe('EditCartCustomerForm', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		canEditCustomers = true;
 	});
 
 	it('updates the selected customer when save is clicked before the lookup resolves', async () => {
@@ -131,13 +139,27 @@ describe('EditCartCustomerForm', () => {
 		fireEvent.click(screen.getByTestId('pos_cart.save_to_order_customer'));
 
 		await waitFor(() => expect(localPatch).toHaveBeenCalled());
-		expect(customerFindOne).toHaveBeenCalledWith({ selector: { wooCustomerId: 42 } });
+		expect(customerFindOne).toHaveBeenCalledWith({
+			selector: { wooCustomerId: 42 },
+		});
 		expect(patchCustomer).not.toHaveBeenCalled();
 
 		await act(async () => resolveLookup(customer));
 
 		await waitFor(() =>
-			expect(patchCustomer).toHaveBeenCalledWith({ document: customer, data: formValues })
+			expect(patchCustomer).toHaveBeenCalledWith({
+				document: customer,
+				data: formValues,
+			})
 		);
+	});
+
+	it('keeps save-to-order available but hides save-to-customer without edit permission', () => {
+		canEditCustomers = false;
+
+		render(<EditCartCustomerForm />);
+
+		expect(screen.getByTestId('pos_cart.save_to_order')).toBeTruthy();
+		expect(screen.queryByTestId('pos_cart.save_to_order_customer')).toBeNull();
 	});
 });

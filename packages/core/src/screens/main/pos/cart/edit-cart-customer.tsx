@@ -24,6 +24,7 @@ import { ShippingAddressForm, shippingAddressSchema } from '../../components/shi
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
@@ -76,6 +77,7 @@ export function EditCartCustomerForm() {
 	const { onOpenChange } = useRootContext();
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
+	const { caps } = useUserCapabilities();
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
@@ -205,7 +207,7 @@ export function EditCartCustomerForm() {
 				<TaxIdsForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>
-					{customerID !== 0 && (
+					{customerID !== 0 && caps.canEditCustomers && (
 						// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
 						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
 							{t('pos_cart.save_to_order_customer')}

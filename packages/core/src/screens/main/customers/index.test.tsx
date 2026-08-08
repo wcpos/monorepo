@@ -20,8 +20,10 @@ const mockBinding = {
 };
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
 let mockDataTableProps: Record<string, unknown> = {};
+let mockTooltipProps: { showOnNative?: boolean } = {};
 let mockSortBy = 'last_name';
 let mockSortDirection = 'asc';
+let mockReadOnly = false;
 
 jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
@@ -79,7 +81,10 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/tooltip', () => ({
-	Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	Tooltip: ({ children, ...props }: { children: React.ReactNode; showOnNative?: boolean }) => {
+		mockTooltipProps = props;
+		return <>{children}</>;
+	},
 	TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -89,7 +94,9 @@ jest.mock('../components/data-table', () => ({
 		return <div data-testid="customers-table" />;
 	},
 }));
-jest.mock('../components/data-table/skeleton', () => ({ DataTableSkeleton: () => null }));
+jest.mock('../components/data-table/skeleton', () => ({
+	DataTableSkeleton: () => null,
+}));
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -101,7 +108,15 @@ jest.mock('../contexts/ui-settings', () => ({
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
-jest.mock('../contexts/pro-access', () => ({ useProAccess: () => ({ readOnly: false }) }));
+jest.mock('../contexts/pro-access', () => ({
+	useProAccess: () => ({ readOnly: mockReadOnly }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({
+		caps: { canCreateCustomers: true },
+		known: false,
+	}),
+}));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/address', () => ({ Address: () => null }));
@@ -121,8 +136,10 @@ describe('CustomersScreen query-state wiring', () => {
 		jest.useFakeTimers();
 		jest.clearAllMocks();
 		mockDataTableProps = {};
+		mockTooltipProps = {};
 		mockSortBy = 'last_name';
 		mockSortDirection = 'asc';
+		mockReadOnly = false;
 	});
 
 	afterEach(() => jest.useRealTimers());
@@ -148,6 +165,14 @@ describe('CustomersScreen query-state wiring', () => {
 		expect(mockDataTableProps).not.toHaveProperty('query');
 	});
 
+	it('keeps the upgrade tooltip available when adding is read-only', () => {
+		mockReadOnly = true;
+
+		render(<CustomersScreen />);
+
+		expect(mockTooltipProps.showOnNative).toBe(true);
+	});
+
 	it('initializes binding sort from valid persisted customer settings', () => {
 		mockSortBy = 'email';
 		mockSortDirection = 'desc';
@@ -163,14 +188,22 @@ describe('CustomersScreen query-state wiring', () => {
 
 		render(<CustomersScreen />);
 
-		expect(latestState().sort).toEqual({ field: 'last_name', direction: 'asc' });
-		expect(mockDataTableProps.sort).toEqual({ field: 'last_name', direction: 'asc' });
+		expect(latestState().sort).toEqual({
+			field: 'last_name',
+			direction: 'asc',
+		});
+		expect(mockDataTableProps.sort).toEqual({
+			field: 'last_name',
+			direction: 'asc',
+		});
 	});
 
 	it('commits search through the store only after the input debounce', () => {
 		render(<CustomersScreen />);
 
-		fireEvent.change(screen.getByTestId('search-customers'), { target: { value: 'ada' } });
+		fireEvent.change(screen.getByTestId('search-customers'), {
+			target: { value: 'ada' },
+		});
 		expect(latestState().search).toBe('');
 
 		act(() => jest.advanceTimersByTime(249));
@@ -195,6 +228,9 @@ describe('CustomersScreen query-state wiring', () => {
 			sort: { field: 'email', direction: 'desc' },
 			limit: 10,
 		});
-		expect(mockDataTableProps.sort).toEqual({ field: 'email', direction: 'desc' });
+		expect(mockDataTableProps.sort).toEqual({
+			field: 'email',
+			direction: 'desc',
+		});
 	});
 });

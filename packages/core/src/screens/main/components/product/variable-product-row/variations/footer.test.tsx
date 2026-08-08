@@ -33,6 +33,9 @@ jest.mock('../../../../components/sync-button', () => ({
 		return null;
 	},
 }));
+jest.mock('../../../../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({ caps: { canDeleteVariations: true }, known: false }),
+}));
 jest.mock('../../../../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../../../../jest/translate')>(
 		'../../../../../../../jest/translate'

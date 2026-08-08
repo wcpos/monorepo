@@ -10,7 +10,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
@@ -19,6 +19,7 @@ import { CustomerEmail } from './cells/email';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { useProAccess } from '../contexts/pro-access';
+import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { TextCell } from '../components/text-cell';
@@ -26,6 +27,7 @@ import { DateCell } from '../components/date';
 import { UISettingsDialog } from '../components/ui-settings';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
 	QueryStateProvider,
 	useCollectionBinding,
@@ -71,7 +73,10 @@ function getInitialCustomerSort(
 ): QueryStateOf<'customers'>['sort'] {
 	if (!isCustomerSortField(sortBy)) return DEFAULT_CUSTOMER_SORT;
 
-	return { field: sortBy, direction: sortDirection === 'desc' ? 'desc' : 'asc' };
+	return {
+		field: sortBy,
+		direction: sortDirection === 'desc' ? 'desc' : 'asc',
+	};
 }
 
 function renderCell(columnKey: string, info: Record<string, unknown>) {
@@ -101,6 +106,7 @@ function CustomersScreenContent() {
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 
 	/**
 	 *
@@ -120,17 +126,23 @@ function CustomersScreenContent() {
 							className="flex-1"
 							testID="search-customers"
 						/>
-						<Tooltip>
-							<TooltipTrigger asChild>
+						<Tooltip showOnNative={readOnly || !caps.canCreateCustomers}>
+							<CapabilityTooltipTrigger>
 								<IconButton
 									testID="customers-add-button"
 									name="userPlus"
 									onPress={() => router.push({ pathname: '/customers/add' })}
-									disabled={readOnly}
+									disabled={readOnly || !caps.canCreateCustomers}
 								/>
-							</TooltipTrigger>
+							</CapabilityTooltipTrigger>
 							<TooltipContent>
-								<Text>{readOnly ? t('common.upgrade_to_pro') : t('common.add_new_customer')}</Text>
+								<Text>
+									{readOnly
+										? t('common.upgrade_to_pro')
+										: !caps.canCreateCustomers
+											? t('capability_hints.create_customers')
+											: t('common.add_new_customer')}
+								</Text>
 							</TooltipContent>
 						</Tooltip>
 						<UISettingsDialog title={t('customers.customer_settings')}>
