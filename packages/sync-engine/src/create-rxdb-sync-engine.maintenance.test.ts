@@ -405,6 +405,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			'census:customers',
 			'census:orders',
 			'census:tags',
+			'census:variations',
 		]);
 		expect(requested).not.toContain('census:products');
 		expect(requested).not.toContain('census:taxRates');
