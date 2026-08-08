@@ -2,6 +2,8 @@ import { View } from 'react-native';
 
 import { Stack } from 'expo-router';
 
+import { useUserCapabilities } from '@wcpos/core/screens/main/hooks/use-user-capabilities';
+
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
 export const unstable_settings = {
@@ -11,6 +13,7 @@ export const unstable_settings = {
 
 export default function CustomersLayout() {
 	const screenBackgroundColor = useNavigationBackground();
+	const { caps } = useUserCapabilities();
 	return (
 		<View className="bg-background flex-1">
 			<Stack
@@ -20,22 +23,26 @@ export default function CustomersLayout() {
 				}}
 			>
 				<Stack.Screen name="index" />
-				<Stack.Screen
-					name="(modals)/edit/[customerId]"
-					options={{
-						presentation: 'containedTransparentModal',
-						animation: 'fade',
-						contentStyle: { backgroundColor: 'transparent' },
-					}}
-				/>
-				<Stack.Screen
-					name="(modals)/add"
-					options={{
-						presentation: 'containedTransparentModal',
-						animation: 'fade',
-						contentStyle: { backgroundColor: 'transparent' },
-					}}
-				/>
+				<Stack.Protected guard={caps.canEditCustomers}>
+					<Stack.Screen
+						name="(modals)/edit/[customerId]"
+						options={{
+							presentation: 'containedTransparentModal',
+							animation: 'fade',
+							contentStyle: { backgroundColor: 'transparent' },
+						}}
+					/>
+				</Stack.Protected>
+				<Stack.Protected guard={caps.canCreateCustomers}>
+					<Stack.Screen
+						name="(modals)/add"
+						options={{
+							presentation: 'containedTransparentModal',
+							animation: 'fade',
+							contentStyle: { backgroundColor: 'transparent' },
+						}}
+					/>
+				</Stack.Protected>
 			</Stack>
 		</View>
 	);

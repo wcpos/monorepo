@@ -15,8 +15,21 @@ import { MIN_TREND_POINTS, TrendFrame, type TrendPoint } from './trend-frame';
  * same frame is the loading fallback, so CanvasKit arriving only adds a line.
  */
 export const TrendLine = React.memo(
-	(props: { points: TrendPoint[]; label: string; tone: 'accent' | 'neutral'; testID: string }) => {
-		const frame = <TrendFrame points={props.points} label={props.label} testID={props.testID} />;
+	(props: {
+		points: TrendPoint[];
+		label: string;
+		tone: 'accent' | 'neutral';
+		testID: string;
+		formatValue?: (value: number) => string;
+	}) => {
+		const frame = (
+			<TrendFrame
+				points={props.points}
+				label={props.label}
+				testID={props.testID}
+				formatValue={props.formatValue}
+			/>
+		);
 
 		if (props.points.length < MIN_TREND_POINTS) return frame;
 
