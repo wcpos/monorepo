@@ -26,7 +26,7 @@ import { isolatedProductTest } from './checkout-probe';
 import { getStoreUrl, type StoreAuthorization, storeRequestOptions } from './fixtures';
 
 /** POST target the app uses to persist an order. */
-const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
+export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
 
 /** The checkout modal route, `/cart/<uuid>/checkout`. */
 const CHECKOUT_ROUTE = /\/cart\/[^/]+\/checkout$/;
@@ -57,6 +57,7 @@ export interface OrderLineItem {
 }
 
 export interface OrderTaxLine {
+	rate_id?: number | string;
 	tax_total?: string;
 	[key: string]: unknown;
 }
