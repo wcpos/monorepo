@@ -89,7 +89,9 @@ jest.mock('../components/data-table', () => ({
 		return <div data-testid="customers-table" />;
 	},
 }));
-jest.mock('../components/data-table/skeleton', () => ({ DataTableSkeleton: () => null }));
+jest.mock('../components/data-table/skeleton', () => ({
+	DataTableSkeleton: () => null,
+}));
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -101,7 +103,15 @@ jest.mock('../contexts/ui-settings', () => ({
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
-jest.mock('../contexts/pro-access', () => ({ useProAccess: () => ({ readOnly: false }) }));
+jest.mock('../contexts/pro-access', () => ({
+	useProAccess: () => ({ readOnly: false }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({
+		caps: { canCreateCustomers: true },
+		known: false,
+	}),
+}));
 jest.mock('./ui-settings-form', () => ({ UISettingsForm: () => null }));
 jest.mock('./cells/actions', () => ({ Actions: () => null }));
 jest.mock('./cells/address', () => ({ Address: () => null }));
@@ -163,14 +173,22 @@ describe('CustomersScreen query-state wiring', () => {
 
 		render(<CustomersScreen />);
 
-		expect(latestState().sort).toEqual({ field: 'last_name', direction: 'asc' });
-		expect(mockDataTableProps.sort).toEqual({ field: 'last_name', direction: 'asc' });
+		expect(latestState().sort).toEqual({
+			field: 'last_name',
+			direction: 'asc',
+		});
+		expect(mockDataTableProps.sort).toEqual({
+			field: 'last_name',
+			direction: 'asc',
+		});
 	});
 
 	it('commits search through the store only after the input debounce', () => {
 		render(<CustomersScreen />);
 
-		fireEvent.change(screen.getByTestId('search-customers'), { target: { value: 'ada' } });
+		fireEvent.change(screen.getByTestId('search-customers'), {
+			target: { value: 'ada' },
+		});
 		expect(latestState().search).toBe('');
 
 		act(() => jest.advanceTimersByTime(249));
@@ -195,6 +213,9 @@ describe('CustomersScreen query-state wiring', () => {
 			sort: { field: 'email', direction: 'desc' },
 			limit: 10,
 		});
-		expect(mockDataTableProps.sort).toEqual({ field: 'email', direction: 'desc' });
+		expect(mockDataTableProps.sort).toEqual({
+			field: 'email',
+			direction: 'desc',
+		});
 	});
 });
