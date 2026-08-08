@@ -200,6 +200,10 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 			// builds, so force one more migration pass to sanitize them.
 			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
 		},
+		5(oldDoc) {
+			// Added optional `capabilities`; absence deliberately means unknown.
+			return oldDoc;
+		},
 	},
 };
 
@@ -401,7 +405,9 @@ type OrderDocumentType = WithNestedJsonMetaData<
 	'line_items' | 'tax_lines' | 'shipping_lines' | 'fee_lines' | 'coupon_lines'
 >;
 const orderSchema: RxJsonSchema<OrderDocumentType> = ordersLiteral;
-export type OrderDocument = RxDocument<OrderDocumentType> & { readonly isNew?: boolean };
+export type OrderDocument = RxDocument<OrderDocumentType> & {
+	readonly isNew?: boolean;
+};
 export type OrderCollection = RxCollection<OrderDocumentType>;
 const orders: RxCollectionCreator<OrderDocumentType> = {
 	schema: orderSchema,

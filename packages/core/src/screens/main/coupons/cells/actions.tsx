@@ -30,8 +30,10 @@ import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
-import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
+import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -48,6 +50,7 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 	const [force, setForce] = React.useState(initialForce);
 	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 
 	const handleRefresh = React.useCallback(() => {
 		const handle = runtime.engine.require({
@@ -87,69 +90,82 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 					<IconButton name="ellipsisVertical" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					<DropdownMenuItem
-						onPress={() =>
-							router.push({
-								pathname: `/coupons/edit/${coupon.uuid}`,
-							})
-						}
-					>
-						<Icon name="penToSquare" />
-						<Text>{t('common.edit')}</Text>
-					</DropdownMenuItem>
+					<CapabilityTooltip show={!caps.canEditCoupons} hint="editCoupons">
+						<DropdownMenuItem
+							disabled={!caps.canEditCoupons}
+							onPress={() =>
+								router.push({
+									pathname: `/coupons/edit/${coupon.uuid}`,
+								})
+							}
+						>
+							<Icon name="penToSquare" />
+							<Text>{t('common.edit')}</Text>
+						</DropdownMenuItem>
+					</CapabilityTooltip>
 					{coupon.id && (
 						<DropdownMenuItem onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
-					<DropdownMenuSeparator />
-					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
-						<Icon
-							name="trash"
-							className="fill-destructive web:group-focus:fill-accent-foreground"
-						/>
-						<Text>{t('common.delete')}</Text>
-					</DropdownMenuItem>
+					{caps.canDeleteCoupons && (
+						<>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+								<Icon
+									name="trash"
+									className="fill-destructive web:group-focus:fill-accent-foreground"
+								/>
+								<Text>{t('common.delete')}</Text>
+							</DropdownMenuItem>
+						</>
+					)}
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<AlertDialog
-				open={deleteDialogOpened}
-				onOpenChange={(open) => {
-					setDeleteDialogOpened(open);
-					if (open) {
-						setForce(initialForce);
-					}
-				}}
-			>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>{t('coupons.delete', { name: coupon.code })}</AlertDialogTitle>
-						<AlertDialogDescription>
-							<VStack>
-								<Text className="text-destructive">{t('coupons.are_you_sure_you_want_to')}</Text>
-								<HStack>
-									<Checkbox aria-labelledby="confirm" onCheckedChange={setForce} checked={force} />
-									<Label
-										nativeID="confirm"
-										onPress={() => {
-											setForce(!force);
-										}}
-									>
-										{t('coupons.confirm')}
-									</Label>
-								</HStack>
-							</VStack>
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
-							{t('common.delete')}
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			{caps.canDeleteCoupons && (
+				<AlertDialog
+					open={deleteDialogOpened}
+					onOpenChange={(open) => {
+						setDeleteDialogOpened(open);
+						if (open) {
+							setForce(initialForce);
+						}
+					}}
+				>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>{t('coupons.delete', { name: coupon.code })}</AlertDialogTitle>
+							<AlertDialogDescription>
+								<VStack>
+									<Text className="text-destructive">{t('coupons.are_you_sure_you_want_to')}</Text>
+									<HStack>
+										<Checkbox
+											aria-labelledby="confirm"
+											onCheckedChange={setForce}
+											checked={force}
+										/>
+										<Label
+											nativeID="confirm"
+											onPress={() => {
+												setForce(!force);
+											}}
+										>
+											{t('coupons.confirm')}
+										</Label>
+									</HStack>
+								</VStack>
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+							<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
+								{t('common.delete')}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+			)}
 		</>
 	);
 }

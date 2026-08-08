@@ -16,7 +16,7 @@ import { useT } from '../../../contexts/translations';
 
 export interface SyncButtonProps {
 	sync: () => Promise<void>;
-	clearAndSync: () => Promise<void>;
+	clearAndSync?: () => Promise<void>;
 	active: boolean;
 }
 
@@ -36,16 +36,14 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 						name="arrowRotateRight"
 						size="sm"
 						loading={active}
-						onLongPress={() => {
-							triggerRef.current?.open?.();
-						}}
+						onLongPress={clearAndSync ? () => triggerRef.current?.open?.() : undefined}
 						onPress={() => {
 							void sync();
 						}}
 					/>
 				</TooltipTrigger>
 				<TooltipContent>
-					<Text>{t('common.press_to_sync_long_press_for')}</Text>
+					<Text>{clearAndSync ? t('common.press_to_sync_long_press_for') : t('common.sync')}</Text>
 				</TooltipContent>
 			</Tooltip>
 			<DropdownMenuContent side="top" align="end">
@@ -53,11 +51,15 @@ export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 					<Icon name="arrowRotateRight" />
 					<Text>{t('common.sync')}</Text>
 				</DropdownMenuItem>
-				<DropdownMenuSeparator />
-				<DropdownMenuItem variant="destructive" onPress={clearAndSync}>
-					<Icon name="trash" />
-					<Text>{t('common.clear_and_refresh')}</Text>
-				</DropdownMenuItem>
+				{clearAndSync && (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem variant="destructive" onPress={clearAndSync}>
+							<Icon name="trash" />
+							<Text>{t('common.clear_and_refresh')}</Text>
+						</DropdownMenuItem>
+					</>
+				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
