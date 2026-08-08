@@ -205,6 +205,15 @@ export async function tryAddRunPrivateSimpleProduct(page: Page, index = 0): Prom
 			probe.token
 		);
 		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
+		// Fail FAST and by name when the POS root testID is missing: every lookup
+		// below scopes under it, and a layout variant that drops the testID
+		// otherwise surfaces as an unrelated 3-minute tile/fill timeout (#1106 —
+		// the (columns) desktop layout shipped without it and the lane was red
+		// for a day before the real cause was found).
+		await expect(
+			posScreen.first(),
+			"POS root testID 'screen-pos' not visible — every POS layout variant must stamp it (#1106)"
+		).toBeVisible({ timeout: 5_000 });
 		const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
 		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
 		await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
@@ -244,6 +253,13 @@ export async function findVariableProduct(page: Page, search: Locator): Promise<
 			'findVariableProduct requires isolatedVariableProductTest fixture registration'
 		);
 	}
+	// Callers pass a search locator scoped under 'screen-pos'; pin the root
+	// fast so a layout variant missing the testID names itself instead of
+	// surfacing as a 3-minute fill timeout (#1106).
+	await expect(
+		page.getByTestId('screen-pos').first(),
+		"POS root testID 'screen-pos' not visible — every POS layout variant must stamp it (#1106)"
+	).toBeVisible({ timeout: 5_000 });
 	if (probe) {
 		await searchAndWaitForServer(page, search, 'products', probe.token);
 		return;
