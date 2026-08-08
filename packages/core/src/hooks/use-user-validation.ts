@@ -272,6 +272,19 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						updateData.roles = [data.role];
 					}
 
+					if (data.capabilities === undefined) {
+						updateData.capabilities = undefined;
+					} else if (Array.isArray(data.capabilities)) {
+						updateData.capabilities = [
+							...new Set(
+								data.capabilities.filter(
+									(capability: unknown): capability is string =>
+										typeof capability === 'string' && capability.length > 0
+								)
+							),
+						];
+					}
+
 					// Update user data if we have fields to update
 					if (Object.keys(updateData).length > 0) {
 						await wpUser.incrementalPatch(updateData);

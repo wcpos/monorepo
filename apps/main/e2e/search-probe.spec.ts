@@ -6,6 +6,7 @@ import {
 	findCreatedProductRecord,
 	plainPermalinkUrl,
 	productProbeFailureAction,
+	productWriterAuthorization,
 	productWriterCredentialsDecision,
 } from './search-probe';
 
@@ -36,6 +37,43 @@ test.describe('search-probe pure logic', () => {
 		expect(() => productWriterCredentialsDecision(undefined, 'secret')).toThrow(
 			'E2E_PRODUCT_WRITER_USER'
 		);
+	});
+
+	test('isolates concurrent writer login sessions with unique states', async () => {
+		const previousUser = process.env.E2E_PRODUCT_WRITER_USER;
+		const previousPass = process.env.E2E_PRODUCT_WRITER_PASS;
+		process.env.E2E_PRODUCT_WRITER_USER = 'writer';
+		process.env.E2E_PRODUCT_WRITER_PASS = 'secret';
+		const states: string[] = [];
+		const request = {
+			get: async (url: string) => {
+				states.push(new URL(url).searchParams.get('state') ?? '');
+				return {
+					ok: () => true,
+					status: () => 200,
+					text: async () =>
+						'<input name="_wpnonce" value="nonce"><input name="auth_session" value="session">',
+				};
+			},
+			post: async () => ({
+				status: () => 302,
+				headers: () => ({ location: 'https://localhost/cb?access_token=token' }),
+			}),
+		};
+
+		try {
+			await Promise.all([
+				productWriterAuthorization(request as never, 'https://example.test'),
+				productWriterAuthorization(request as never, 'https://example.test'),
+			]);
+			expect(states).toHaveLength(2);
+			expect(new Set(states).size).toBe(2);
+		} finally {
+			if (previousUser === undefined) delete process.env.E2E_PRODUCT_WRITER_USER;
+			else process.env.E2E_PRODUCT_WRITER_USER = previousUser;
+			if (previousPass === undefined) delete process.env.E2E_PRODUCT_WRITER_PASS;
+			else process.env.E2E_PRODUCT_WRITER_PASS = previousPass;
+		}
 	});
 
 	test('adopts only the exact product identified by the create token', () => {

@@ -21,8 +21,10 @@ const mockBinding = {
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
 const mockPatch = jest.fn();
 let mockDataTableProps: Record<string, unknown> = {};
+let mockTooltipProps: { showOnNative?: boolean } = {};
 let mockSortBy = 'date_created_gmt';
 let mockSortDirection = 'desc';
+let mockReadOnly = false;
 
 jest.mock('../../../query', () => {
 	const actual = jest.requireActual('../../../query');
@@ -84,7 +86,10 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/tooltip', () => ({
-	Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	Tooltip: ({ children, ...props }: { children: React.ReactNode; showOnNative?: boolean }) => {
+		mockTooltipProps = props;
+		return <>{children}</>;
+	},
 	TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -94,7 +99,9 @@ jest.mock('../components/data-table', () => ({
 		return <div data-testid="coupons-table" />;
 	},
 }));
-jest.mock('../components/data-table/skeleton', () => ({ DataTableSkeleton: () => null }));
+jest.mock('../components/data-table/skeleton', () => ({
+	DataTableSkeleton: () => null,
+}));
 jest.mock('../components/ui-settings', () => ({
 	UISettingsDialog: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -106,7 +113,15 @@ jest.mock('../contexts/ui-settings', () => ({
 jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
-jest.mock('../contexts/pro-access', () => ({ useProAccess: () => ({ readOnly: false }) }));
+jest.mock('../contexts/pro-access', () => ({
+	useProAccess: () => ({ readOnly: mockReadOnly }),
+}));
+jest.mock('../hooks/use-user-capabilities', () => ({
+	useUserCapabilities: () => ({
+		caps: { canCreateCoupons: true },
+		known: false,
+	}),
+}));
 jest.mock('../hooks/mutations/use-mutation', () => ({
 	useMutation: () => ({ patch: mockPatch }),
 }));
@@ -118,7 +133,9 @@ jest.mock('./cells/discount-type', () => ({ DiscountType: () => null }));
 jest.mock('./cells/editable-amount', () => ({ EditableAmount: () => null }));
 jest.mock('./cells/editable-code', () => ({ EditableCode: () => null }));
 jest.mock('./cells/editable-date', () => ({ EditableDate: () => null }));
-jest.mock('./cells/editable-description', () => ({ EditableDescription: () => null }));
+jest.mock('./cells/editable-description', () => ({
+	EditableDescription: () => null,
+}));
 jest.mock('./cells/status', () => ({ Status: () => null }));
 jest.mock('./cells/usage', () => ({ Usage: () => null }));
 jest.mock('../components/text-cell', () => ({ TextCell: () => null }));
@@ -135,8 +152,10 @@ describe('CouponsScreen query-state wiring', () => {
 		jest.useFakeTimers();
 		jest.clearAllMocks();
 		mockDataTableProps = {};
+		mockTooltipProps = {};
 		mockSortBy = 'date_created_gmt';
 		mockSortDirection = 'desc';
+		mockReadOnly = false;
 	});
 
 	afterEach(() => jest.useRealTimers());
@@ -161,6 +180,14 @@ describe('CouponsScreen query-state wiring', () => {
 		expect(mockDataTableProps).not.toHaveProperty('query');
 	});
 
+	it('keeps the upgrade tooltip available when adding is read-only', () => {
+		mockReadOnly = true;
+
+		render(<CouponsScreen />);
+
+		expect(mockTooltipProps.showOnNative).toBe(true);
+	});
+
 	it('initializes binding sort from valid persisted coupon settings', () => {
 		mockSortBy = 'status';
 		mockSortDirection = 'asc';
@@ -176,13 +203,18 @@ describe('CouponsScreen query-state wiring', () => {
 
 		render(<CouponsScreen />);
 
-		expect(latestState().sort).toEqual({ field: 'date_created_gmt', direction: 'desc' });
+		expect(latestState().sort).toEqual({
+			field: 'date_created_gmt',
+			direction: 'desc',
+		});
 	});
 
 	it('commits search through the store only after the input debounce', () => {
 		render(<CouponsScreen />);
 
-		fireEvent.change(screen.getByTestId('search-coupons'), { target: { value: 'summer' } });
+		fireEvent.change(screen.getByTestId('search-coupons'), {
+			target: { value: 'summer' },
+		});
 		expect(latestState().search).toBe('');
 
 		act(() => jest.advanceTimersByTime(249));
@@ -207,6 +239,9 @@ describe('CouponsScreen query-state wiring', () => {
 			sort: { field: 'code', direction: 'asc' },
 			limit: 10,
 		});
-		expect(mockDataTableProps.sort).toEqual({ field: 'code', direction: 'asc' });
+		expect(mockDataTableProps.sort).toEqual({
+			field: 'code',
+			direction: 'asc',
+		});
 	});
 });

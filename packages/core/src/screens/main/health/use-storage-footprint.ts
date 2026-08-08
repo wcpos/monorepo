@@ -36,7 +36,10 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 	// `activeScopeId` without changing the engine's identity, so the probe
 	// must key on the scope, not just the engine.
 	const { activeScopeId } = useEngineStatus();
-	const [summary, setSummary] = React.useState<StorageFootprintSummary | null>(null);
+	const [measurement, setMeasurement] = React.useState<{
+		scopeId: typeof activeScopeId;
+		summary: StorageFootprintSummary;
+	} | null>(null);
 
 	// Effect (last resort per project.mdc): storage enumeration is a one-shot
 	// async platform probe with no reactive seam.
@@ -59,7 +62,7 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 				const sites = await userDB.sites.find().exec();
 				for (const site of sites) {
 					try {
-						knownSiteHashes.add(siteHashFor(site.url));
+						knownSiteHashes.add(siteHashFor(site.wp_api_url));
 					} catch {
 						// A site row without a usable url cannot own scope data.
 					}
@@ -81,11 +84,14 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 				breakdown.measuredTotalBytes
 			);
 			if (!cancelled) {
-				setSummary({
-					breakdown,
-					estimateBytes: footprint.estimateBytes,
-					totalBytes: Math.max(footprint.estimateBytes ?? 0, breakdown.measuredTotalBytes),
-					unattributedBytes: (estimateRemainder ?? 0) + breakdown.unknownBytes,
+				setMeasurement({
+					scopeId: activeScopeId,
+					summary: {
+						breakdown,
+						estimateBytes: footprint.estimateBytes,
+						totalBytes: Math.max(footprint.estimateBytes ?? 0, breakdown.measuredTotalBytes),
+						unattributedBytes: (estimateRemainder ?? 0) + breakdown.unknownBytes,
+					},
 				});
 			}
 		})();
@@ -94,5 +100,5 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 		};
 	}, [engine, activeScopeId, userDB, storeDB, fastStoreDB]);
 
-	return summary;
+	return measurement?.scopeId === activeScopeId ? measurement.summary : null;
 }

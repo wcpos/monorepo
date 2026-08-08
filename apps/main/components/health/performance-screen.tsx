@@ -6,6 +6,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Label } from '@wcpos/components/label';
+import { cn } from '@wcpos/components/lib/utils';
 import { RadioGroup, RadioGroupItem } from '@wcpos/components/radio-group';
 import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
@@ -31,15 +32,21 @@ import {
 import { TrendLine } from './trend-line';
 import { UptimeStrip } from './uptime-strip';
 
-const HOW_WE_MEASURE_URL =
-	'https://github.com/wcpos/woo-rxdb-replication-lab/blob/main/docs/experiments/2026-06-29-pull-cost-at-scale.md';
+const DOCS_URL = 'https://docs.wcpos.com/products/sync';
+
+/** Load averages read best with a consistent decimal; counts use locale formatting. */
+const formatLoad = (value: number) =>
+	value.toLocaleString(undefined, {
+		minimumFractionDigits: 1,
+		maximumFractionDigits: value >= 10 ? 1 : 2,
+	});
+const formatCount = (value: number) => value.toLocaleString();
 
 /**
- * Store health · Performance — what the POS asks of the server, the #559
- * tuning controls, and the tested-efficiency evidence. Approved design:
- * docs/mockups/2026-07-16-health-performance-page.html (rev 2, simplified).
- * Lives in apps/main because the measured actuals (hourly metrics buckets)
- * are host-level state.
+ * Store health · Performance — what the POS asks of the server and the #559
+ * tuning controls. Layout follows the settings pages: centered max-w column
+ * with generous padding. Lives in apps/main because the measured actuals
+ * (hourly metrics buckets) are host-level state.
  */
 export function PerformanceScreen() {
 	const t = useT();
@@ -142,19 +149,14 @@ export function PerformanceScreen() {
 			? formatCadence(changeLane.nextDueAtMs - snapshot.nowMs)
 			: null;
 
-	// Both budget lines, straight off the preset table (#908) — the description can never
-	// drift from the numbers the radio actually applies.
-	const describePreset = (name: PresetName) => {
-		const { intervalSeconds, records } = presetBudget(name);
-		const every =
-			intervalSeconds >= 60
-				? t('health.performance.every_min', {
-						m: Math.round(intervalSeconds / 60),
-					})
-				: t('health.performance.every_s', { s: intervalSeconds });
-		return `${every} · ${t('health.performance.n_records_per_request', {
-			n: records,
-		})}`;
+	// Cadence straight off the preset table (#908) — the card can never drift
+	// from the interval the radio actually applies. The batch size a preset
+	// applies stays visible too: selecting a card moves the sliders below.
+	const describeCadence = (name: PresetName) => {
+		const { intervalSeconds } = presetBudget(name);
+		return intervalSeconds >= 60
+			? t('health.performance.checks_every_min', { m: Math.round(intervalSeconds / 60) })
+			: t('health.performance.checks_every_s', { s: intervalSeconds });
 	};
 
 	const applyPreset = (name: PresetName) => {
@@ -175,7 +177,7 @@ export function PerformanceScreen() {
 		<ScrollView className="flex-1">
 			<VStack
 				testID="screen-health-performance"
-				className="mx-auto w-full max-w-4xl gap-4 p-4 md:p-6"
+				className="mx-auto w-full max-w-4xl gap-6 px-4 py-6 md:px-10 md:py-8"
 			>
 				{/* One status line */}
 				<HStack className="flex-wrap items-baseline gap-2">
@@ -216,36 +218,55 @@ export function PerformanceScreen() {
 							? `${t('health.performance.sync')} · ${t('health.performance.custom')}`
 							: t('health.performance.sync')
 					}
+					sub={t('health.performance.sync_sub')}
 				>
-					<VStack className="gap-4">
+					<VStack className="gap-5">
 						<RadioGroup
 							value={preset === 'custom' ? '' : preset}
 							onValueChange={(value) => applyPreset(value as PresetName)}
 						>
-							<HStack className="flex-wrap gap-4">
+							<HStack className="flex-wrap items-stretch gap-3">
 								{(
 									[
-										['eco', t('health.performance.eco'), describePreset('eco')],
+										['eco', t('health.performance.eco'), t('health.performance.eco_hint')],
 										[
 											'balanced',
 											t('health.performance.balanced'),
-											`${describePreset('balanced')} · ${t('health.performance.default')}`,
+											t('health.performance.balanced_hint'),
 										],
-										['realtime', t('health.performance.realtime'), describePreset('realtime')],
+										[
+											'realtime',
+											t('health.performance.realtime'),
+											t('health.performance.realtime_hint'),
+										],
 									] as const
-								).map(([value, label, description]) => (
-									<HStack key={value} className="items-center gap-2">
-										<RadioGroupItem value={value} aria-labelledby={`preset-${value}`} />
-										<VStack className="gap-0">
-											<Label nativeID={`preset-${value}`}>{label}</Label>
-											<Text className="text-muted-foreground text-xs">{description}</Text>
+								).map(([value, label, hint]) => (
+									<View
+										key={value}
+										testID={`preset-${value}`}
+										className={cn(
+											'min-w-40 flex-1 rounded-lg border p-3',
+											preset === value ? 'border-primary bg-primary/5' : 'border-border'
+										)}
+									>
+										<HStack className="items-center gap-2">
+											<RadioGroupItem value={value} aria-labelledby={`preset-${value}-label`} />
+											<Label nativeID={`preset-${value}-label`} className="font-medium">
+												{label}
+											</Label>
+										</HStack>
+										<VStack className="gap-0.5 pt-1.5">
+											<Text className="text-sm">{hint}</Text>
+											<Text className="text-muted-foreground text-xs">
+												{describeCadence(value)}
+											</Text>
 										</VStack>
-									</HStack>
+									</View>
 								))}
 							</HStack>
 						</RadioGroup>
 
-						<VStack className="gap-1">
+						<VStack className="gap-1.5">
 							<HStack className="items-baseline justify-between">
 								<Text className="font-medium">{t('health.performance.check_frequency')}</Text>
 								<Text className="text-primary font-semibold">
@@ -253,7 +274,6 @@ export function PerformanceScreen() {
 										s: Math.round(checkIntervalMs / 1000),
 									})}
 								</Text>
-								<Text className="text-muted-foreground text-xs">5 s – 5 min</Text>
 							</HStack>
 							<View testID="check-interval-slider">
 								<Slider
@@ -266,15 +286,22 @@ export function PerformanceScreen() {
 									}
 								/>
 							</View>
+							<HStack className="justify-between">
+								<Text className="text-muted-foreground text-xs">
+									{t('health.performance.seconds_short', { s: 5 })}
+								</Text>
+								<Text className="text-muted-foreground text-xs">
+									{t('health.performance.minutes_short', { m: 5 })}
+								</Text>
+							</HStack>
 						</VStack>
 
-						<VStack className="gap-1">
+						<VStack className="gap-1.5">
 							<HStack className="items-baseline justify-between">
 								<Text className="font-medium">{t('health.performance.records_per_request')}</Text>
 								<Text className="text-primary font-semibold">
 									{t('health.performance.up_to_n', { n: pullBatchSize })}
 								</Text>
-								<Text className="text-muted-foreground text-xs">10 – 100</Text>
 							</HStack>
 							<View testID="pull-batch-slider">
 								<Slider
@@ -287,6 +314,10 @@ export function PerformanceScreen() {
 									}
 								/>
 							</View>
+							<HStack className="justify-between">
+								<Text className="text-muted-foreground text-xs">10</Text>
+								<Text className="text-muted-foreground text-xs">100</Text>
+							</HStack>
 						</VStack>
 
 						<HStack className="flex-wrap items-center justify-between gap-2">
@@ -315,7 +346,7 @@ export function PerformanceScreen() {
 					title={t('health.performance.server_over_time')}
 					sub={t('health.performance.server_over_time_note')}
 				>
-					<VStack className="gap-3">
+					<VStack className="gap-5">
 						{/* Three states, kept distinct. Asked and never told = a missing
 						    metric, so say so. Told once = a trend still filling in, and the
 						    frame says so. Not yet asked = we know nothing about this server
@@ -330,6 +361,7 @@ export function PerformanceScreen() {
 								label={t('health.performance.server_load')}
 								points={summary.loadPoints}
 								tone="neutral"
+								formatValue={formatLoad}
 							/>
 						)}
 						{/* Always mounted — the frame holds the page's shape from the first
@@ -339,34 +371,19 @@ export function PerformanceScreen() {
 							label={t('health.performance.pos_requests')}
 							points={summary.requestPoints}
 							tone="accent"
+							formatValue={formatCount}
 						/>
-						{hasHistory && summary.serverMinutes !== null ? (
-							<Text className="text-muted-foreground text-sm">
-								{t('health.performance.total_cost', { minutes: summary.serverMinutes })}
-							</Text>
-						) : null}
 					</VStack>
 				</Section>
 
-				{/* One evidence sentence */}
-				<Text className="text-muted-foreground text-sm">
-					{t('health.performance.evidence')}{' '}
-					<Text
-						className="text-primary text-sm"
-						role="link"
-						onPress={() => void Linking.openURL(HOW_WE_MEASURE_URL)}
-					>
-						{t('health.performance.how_we_measure')}
-					</Text>
-				</Text>
-
-				{/* Diagnostics readout (#559) */}
-				<Text className="text-muted-foreground font-mono text-xs" testID="effective-settings">
-					{t('health.performance.effective', {
-						s: Math.round(checkIntervalMs / 1000),
-						n: pullBatchSize,
-						preset: preset === 'custom' ? t('health.performance.custom') : preset,
-					})}
+				{/* One link out — everything deeper lives in the docs */}
+				<Text
+					className="text-primary text-sm"
+					role="link"
+					testID="performance-docs-link"
+					onPress={() => void Linking.openURL(DOCS_URL)}
+				>
+					{t('health.performance.docs_link')}
 				</Text>
 				<View className="h-4" />
 			</VStack>

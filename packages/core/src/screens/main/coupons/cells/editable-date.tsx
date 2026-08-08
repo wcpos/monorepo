@@ -3,7 +3,9 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { DatePickerInput } from '../../components/coupon/date-picker-input';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -20,12 +22,15 @@ export function EditableDate({ row, table }: CellContext<{ document: CouponDocum
 		onChange: (arg: { document: CouponDocument; changes: Record<string, unknown> }) => void;
 	};
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 
 	return (
-		<DatePickerInput
-			value={dateExpiresGmt}
-			onChange={(val) => meta.onChange({ document: item, changes: { date_expires_gmt: val } })}
-			disabled={readOnly}
-		/>
+		<CapabilityTooltip show={!readOnly && !caps.canEditCoupons} hint="editCoupons">
+			<DatePickerInput
+				value={dateExpiresGmt}
+				onChange={(val) => meta.onChange({ document: item, changes: { date_expires_gmt: val } })}
+				disabled={readOnly || !caps.canEditCoupons}
+			/>
+		</CapabilityTooltip>
 	);
 }

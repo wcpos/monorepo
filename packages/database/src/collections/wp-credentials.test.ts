@@ -12,7 +12,8 @@ describe('sanitizeWPCredentialsData', () => {
 			nice_name: 'admin',
 			display_name: 'admin',
 			role: 'administrator',
-			roles: ['administrator', '', 123],
+			roles: ['administrator', '', 123, 'administrator'],
+			capabilities: ['edit_products', '', 123, 'edit_products', 'publish_products'],
 			avatar_url: 'https://example.com/avatar.jpg',
 			access_token: 'access-token',
 			refresh_token: 'refresh-token',
@@ -32,6 +33,7 @@ describe('sanitizeWPCredentialsData', () => {
 			nice_name: 'admin',
 			display_name: 'admin',
 			roles: ['administrator'],
+			capabilities: ['edit_products', 'publish_products'],
 			avatar_url: 'https://example.com/avatar.jpg',
 			access_token: 'access-token',
 			refresh_token: 'refresh-token',
@@ -54,21 +56,32 @@ describe('sanitizeWPCredentialsData', () => {
 		});
 	});
 
+	it('preserves an explicitly empty capabilities array', () => {
+		expect(sanitizeWPCredentialsData({ uuid: 'cred-2', capabilities: [] })).toEqual({
+			uuid: 'cred-2',
+			capabilities: [],
+		});
+	});
+
 	it('falls back to the legacy role when roles entries are invalid', () => {
-		expect(sanitizeWPCredentialsData({ uuid: 'cred-3', role: 'editor', roles: ['', 123] })).toEqual(
-			{
+		expect(
+			sanitizeWPCredentialsData({
 				uuid: 'cred-3',
-				roles: ['editor'],
-			}
-		);
+				role: 'editor',
+				roles: ['', 123],
+			})
+		).toEqual({
+			uuid: 'cred-3',
+			roles: ['editor'],
+		});
 	});
 });
 
 describe('wp_credentials migration strategy', () => {
-	it('bumps wp_credentials schema to v4 so already-v3 legacy rows are sanitized', async () => {
+	it('bumps wp_credentials schema to v5 for the optional capabilities field', async () => {
 		const { wpCredentialsLiteral } = await import('./schemas/wp-credientials');
 
-		expect(wpCredentialsLiteral.version).toBe(4);
+		expect(wpCredentialsLiteral.version).toBe(5);
 	});
 
 	it('strips token_type while migrating legacy wp_credentials documents to schema v3', async () => {
@@ -108,5 +121,13 @@ describe('wp_credentials migration strategy', () => {
 			roles: ['administrator'],
 			access_token: 'access-token',
 		});
+	});
+
+	it('preserves existing documents unchanged when migrating to schema v5', async () => {
+		const { userCollections } = await import('./index');
+		const migrateToV5 = userCollections.wp_credentials.migrationStrategies?.[5];
+		const document = { uuid: 'cred-1', roles: ['administrator'] };
+
+		expect(migrateToV5?.(document)).toBe(document);
 	});
 });

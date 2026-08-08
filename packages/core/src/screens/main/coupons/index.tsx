@@ -10,7 +10,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 
 import { Actions } from './cells/actions';
@@ -26,6 +26,7 @@ import { FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { useProAccess } from '../contexts/pro-access';
+import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table';
 import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { TextCell } from '../components/text-cell';
@@ -34,6 +35,7 @@ import { UISettingsDialog } from '../components/ui-settings';
 import { QuerySearchInput } from '../components/query-search-input';
 import { useUISettings } from '../contexts/ui-settings';
 import { useMutation } from '../hooks/mutations/use-mutation';
+import { useUserCapabilities } from '../hooks/use-user-capabilities';
 import {
 	QueryStateProvider,
 	useCollectionBinding,
@@ -71,7 +73,10 @@ const COUPON_SORT_FIELDS = [
 	'date_created_gmt',
 	'date_modified_gmt',
 ] as const satisfies readonly SortFieldsByCollection['coupons'][];
-const DEFAULT_COUPON_SORT = { field: 'date_created_gmt', direction: 'desc' } as const;
+const DEFAULT_COUPON_SORT = {
+	field: 'date_created_gmt',
+	direction: 'desc',
+} as const;
 
 function isCouponSortField(field: unknown): field is SortFieldsByCollection['coupons'] {
 	return COUPON_SORT_FIELDS.some((sortField) => sortField === field);
@@ -113,6 +118,7 @@ function CouponsScreenContent() {
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 	const { patch } = useMutation({ collectionName: 'coupons' });
 
 	const tableConfig = React.useMemo(
@@ -148,17 +154,23 @@ function CouponsScreenContent() {
 								className="flex-1"
 								testID="search-coupons"
 							/>
-							<Tooltip>
-								<TooltipTrigger asChild>
+							<Tooltip showOnNative={readOnly || !caps.canCreateCoupons}>
+								<CapabilityTooltipTrigger>
 									<IconButton
 										testID="coupons-add-button"
 										name="plus"
 										onPress={() => router.push({ pathname: '/coupons/add' })}
-										disabled={readOnly}
+										disabled={readOnly || !caps.canCreateCoupons}
 									/>
-								</TooltipTrigger>
+								</CapabilityTooltipTrigger>
 								<TooltipContent>
-									<Text>{readOnly ? t('common.upgrade_to_pro') : t('coupons.add_coupon')}</Text>
+									<Text>
+										{readOnly
+											? t('common.upgrade_to_pro')
+											: !caps.canCreateCoupons
+												? t('capability_hints.create_coupons')
+												: t('coupons.add_coupon')}
+									</Text>
 								</TooltipContent>
 							</Tooltip>
 							<UISettingsDialog title={t('coupons.coupon_settings')}>

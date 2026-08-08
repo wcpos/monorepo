@@ -3,7 +3,9 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { EditableField } from '../../components/editable-field';
+import { CapabilityTooltip } from '../../components/capability-tooltip';
 import { useProAccess } from '../../contexts/pro-access';
+import { useUserCapabilities } from '../../hooks/use-user-capabilities';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -23,13 +25,16 @@ export function EditableDescription({
 		onChange: (arg: { document: CouponDocument; changes: Record<string, unknown> }) => void;
 	};
 	const { readOnly } = useProAccess();
+	const { caps } = useUserCapabilities();
 
 	return (
-		<EditableField
-			value={description}
-			onChangeText={(val) => meta.onChange({ document: item, changes: { description: val } })}
-			editable={!readOnly}
-			bold={false}
-		/>
+		<CapabilityTooltip show={!readOnly && !caps.canEditCoupons} hint="editCoupons">
+			<EditableField
+				value={description}
+				onChangeText={(val) => meta.onChange({ document: item, changes: { description: val } })}
+				editable={!readOnly && caps.canEditCoupons}
+				bold={false}
+			/>
+		</CapabilityTooltip>
 	);
 }

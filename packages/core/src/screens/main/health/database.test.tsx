@@ -78,7 +78,19 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	VStack: ({
+		children,
+		testID,
+		className,
+	}: {
+		children: React.ReactNode;
+		testID?: string;
+		className?: string;
+	}) => (
+		<div data-testid={testID} className={className}>
+			{children}
+		</div>
+	),
 }));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
@@ -164,6 +176,14 @@ describe('DatabaseScreen coverage', () => {
 
 		expect(mockTooltip).toHaveBeenCalled();
 		expect(mockTooltip.mock.calls.every(([props]) => props.showOnNative === true)).toBe(true);
+	});
+
+	it('keeps the wider health layout with the shared screen spacing', () => {
+		const { getByTestId } = render(<DatabaseScreen />);
+
+		expect(getByTestId('screen-health-database').className).toBe(
+			'mx-auto w-full max-w-4xl gap-4 px-4 py-6 md:px-10 md:py-8'
+		);
 	});
 
 	it('does not disclose metadata for other store scopes', () => {
