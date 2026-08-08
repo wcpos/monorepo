@@ -27,11 +27,27 @@ describe('checkWebsiteReachability', () => {
 		request.mockRejectedValue({ response: { status: 503 } });
 
 		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		expect(request).toHaveBeenCalledTimes(1);
 	});
 
-	it('returns false for a network error', async () => {
+	it('falls back to GET after a HEAD network error', async () => {
+		request.mockRejectedValueOnce(new Error('HEAD blocked')).mockResolvedValueOnce({
+			data: null,
+			status: 200,
+		});
+
+		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
+		expect(request).toHaveBeenNthCalledWith(2, {
+			url: 'https://example.com',
+			method: 'get',
+			timeout: 10000,
+		});
+	});
+
+	it('returns false when HEAD and GET both have a network error', async () => {
 		request.mockRejectedValue(new Error('Network Error'));
 
 		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(false);
+		expect(request).toHaveBeenCalledTimes(2);
 	});
 });

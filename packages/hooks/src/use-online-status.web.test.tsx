@@ -17,9 +17,9 @@ function StatusConsumer() {
 	return <span data-testid="online-status">{status}</span>;
 }
 
-function renderProvider() {
+function renderProvider(wpAPIURL = 'https://example.com') {
 	return render(
-		<OnlineStatusProvider wpAPIURL="https://example.com">
+		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<StatusConsumer />
 		</OnlineStatusProvider>
 	);
@@ -81,7 +81,7 @@ describe('OnlineStatusProvider web', () => {
 		await flushAsyncWork();
 		checkWebsiteReachabilityMock.mockClear();
 
-		act(() => reportNetworkResponse());
+		act(() => reportNetworkResponse('https://example.com'));
 		act(() => jest.advanceTimersByTime(30000));
 
 		expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
@@ -94,7 +94,7 @@ describe('OnlineStatusProvider web', () => {
 		await flushAsyncWork();
 		checkWebsiteReachabilityMock.mockClear();
 
-		act(() => reportNetworkResponse());
+		act(() => reportNetworkResponse('https://example.com'));
 		act(() => jest.advanceTimersByTime(30000));
 		expect(checkWebsiteReachabilityMock).not.toHaveBeenCalled();
 
@@ -112,7 +112,7 @@ describe('OnlineStatusProvider web', () => {
 
 		// A pulse from just before the connection dropped is still inside the
 		// 45s freshness window — it must not flip the dot back to available.
-		act(() => reportNetworkResponse());
+		act(() => reportNetworkResponse('https://example.com'));
 		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
 		act(() => window.dispatchEvent(new Event('offline')));
 		expect(screen.getByTestId('online-status').textContent).toBe('offline');
@@ -124,6 +124,60 @@ describe('OnlineStatusProvider web', () => {
 		});
 		expect(checkWebsiteReachabilityMock).toHaveBeenCalledTimes(1);
 		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+	});
+
+	it('ignores network pulses from another site', async () => {
+		checkWebsiteReachabilityMock.mockResolvedValue(false);
+		renderProvider('https://current.example.com/wp-json/');
+		await flushAsyncWork();
+		expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
+
+		act(() => reportNetworkResponse('https://other.example.com/wp-json/'));
+		expect(screen.getByTestId('online-status').textContent).toBe('online-website-unavailable');
+
+		act(() => reportNetworkResponse('CURRENT.EXAMPLE.COM/wp-json'));
+		expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+	});
+
+	it('rechecks when the browser comes online during an active probe', async () => {
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+		let resolveFirst!: (reachable: boolean) => void;
+		checkWebsiteReachabilityMock
+			.mockImplementationOnce(
+				() =>
+					new Promise<boolean>((resolve) => {
+						resolveFirst = resolve;
+					})
+			)
+			.mockResolvedValueOnce(true);
+		renderProvider();
+		await flushAsyncWork();
+
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true });
+		act(() => window.dispatchEvent(new Event('online')));
+		await act(async () => {
+			resolveFirst(false);
+			await Promise.resolve();
+		});
+
+		expect(checkWebsiteReachabilityMock).toHaveBeenCalledTimes(2);
+		expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
+	});
+
+	it('probes instead of trusting a pulse timestamp from the future', async () => {
+		checkWebsiteReachabilityMock.mockResolvedValue(true);
+		renderProvider('https://rollback.example.com/wp-json/');
+		await flushAsyncWork();
+		checkWebsiteReachabilityMock.mockClear();
+
+		act(() => reportNetworkResponse('https://rollback.example.com/wp-json/'));
+		jest.setSystemTime(new Date('2029-12-31T23:00:00Z'));
+		await act(async () => {
+			jest.advanceTimersByTime(30000);
+			await Promise.resolve();
+		});
+
+		expect(checkWebsiteReachabilityMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('marks a failed probe unavailable when navigator.onLine is true', async () => {

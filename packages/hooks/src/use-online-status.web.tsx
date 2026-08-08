@@ -43,6 +43,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 
 	// Ref to track if a check is in progress (prevent multiple simultaneous checks)
 	const checkInProgressRef = React.useRef(false);
+	const checkRequestedRef = React.useRef(false);
 
 	/**
 	 * Perform a full connectivity check
@@ -50,24 +51,28 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	const checkConnectivity = React.useCallback(async () => {
 		// Prevent multiple simultaneous checks
 		if (checkInProgressRef.current) {
+			checkRequestedRef.current = true;
 			return;
 		}
 
 		checkInProgressRef.current = true;
 
 		try {
-			const browserOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-			if (browserOffline) {
-				setStatus('offline');
-			}
+			do {
+				checkRequestedRef.current = false;
+				const browserOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+				if (browserOffline) {
+					setStatus('offline');
+				}
 
-			const isReachable = await checkWebsiteReachability(wpAPIURL);
+				const isReachable = await checkWebsiteReachability(wpAPIURL);
 
-			if (isReachable) {
-				setStatus('online-website-available');
-			} else if (!browserOffline) {
-				setStatus('online-website-unavailable');
-			}
+				if (isReachable) {
+					setStatus('online-website-available');
+				} else if (!browserOffline) {
+					setStatus('online-website-unavailable');
+				}
+			} while (checkRequestedRef.current);
 		} finally {
 			checkInProgressRef.current = false;
 		}
@@ -76,7 +81,10 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	/**
 	 * Subscribe to successful HTTP traffic as direct evidence that the site answered.
 	 */
-	React.useEffect(() => subscribeNetworkPulse(() => setStatus('online-website-available')), []);
+	React.useEffect(
+		() => subscribeNetworkPulse(wpAPIURL, () => setStatus('online-website-available')),
+		[wpAPIURL]
+	);
 
 	/**
 	 * Subscribe to browser online/offline events.
@@ -133,7 +141,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	React.useEffect(() => {
 		const intervalId = setInterval(() => {
 			if (document.visibilityState === 'visible') {
-				const lastResponseAt = lastNetworkResponseAt();
+				const lastResponseAt = lastNetworkResponseAt(wpAPIURL);
 				// The shortcut must not outlive the connection: a pulse from just
 				// before airplane mode is still "fresh" for up to 45s, and trusting
 				// it while the browser reports offline would flip the dot back to a
@@ -141,7 +149,8 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 				// traffic (the pulse subscription) and a succeeding probe both still
 				// recover the Chromium onLine-misreport case.
 				const browserOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-				if (!browserOffline && lastResponseAt !== null && Date.now() - lastResponseAt < 45000) {
+				const pulseAge = lastResponseAt === null ? null : Date.now() - lastResponseAt;
+				if (!browserOffline && pulseAge !== null && pulseAge >= 0 && pulseAge < 45000) {
 					setStatus('online-website-available');
 				} else {
 					void checkConnectivity();
@@ -150,7 +159,7 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 		}, 30000); // 30 seconds
 
 		return () => clearInterval(intervalId);
-	}, [checkConnectivity]);
+	}, [checkConnectivity, wpAPIURL]);
 
 	/**
 	 * Initial connectivity check on mount.

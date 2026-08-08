@@ -6,24 +6,23 @@ import {
 
 describe('network pulse', () => {
 	it('records the latest response time', () => {
-		const now = jest.spyOn(Date, 'now').mockReturnValue(1234);
-
-		expect(lastNetworkResponseAt()).toBeNull();
-		reportNetworkResponse();
-		expect(lastNetworkResponseAt()).toBe(1234);
-
-		now.mockRestore();
+		expect(lastNetworkResponseAt('https://one.example.test/wp-json/')).toBeNull();
+		reportNetworkResponse('https://one.example.test/wp-json/', 1234);
+		expect(lastNetworkResponseAt('https://one.example.test/wp-json/')).toBe(1234);
 	});
 
-	it('notifies subscribers until they unsubscribe', () => {
+	it('notifies only canonical-site subscribers until they unsubscribe', () => {
 		const subscriber = jest.fn();
-		const unsubscribe = subscribeNetworkPulse(subscriber);
+		const otherSubscriber = jest.fn();
+		const unsubscribe = subscribeNetworkPulse('HTTPS://ONE.EXAMPLE.TEST/wp-json/', subscriber);
+		subscribeNetworkPulse('https://other.example.test/wp-json/', otherSubscriber);
 
-		reportNetworkResponse();
+		reportNetworkResponse('one.example.test/wp-json');
 		expect(subscriber).toHaveBeenCalledTimes(1);
+		expect(otherSubscriber).not.toHaveBeenCalled();
 
 		unsubscribe();
-		reportNetworkResponse();
+		reportNetworkResponse('https://one.example.test/wp-json/');
 		expect(subscriber).toHaveBeenCalledTimes(1);
 	});
 });

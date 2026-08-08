@@ -312,7 +312,9 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const emitTransport = (event: SyncEvent, durable = true): void => {
 		if (event.type === 'transport.request') {
 			const status = event.fields?.status;
-			if (status !== undefined && status >= 1 && status < 500) reportNetworkResponse();
+			if (status !== undefined && status >= 1 && status < 500) {
+				reportNetworkResponse(site.wpJsonRoot, event.at);
+			}
 		}
 		try {
 			appMetricsObserver(event);
