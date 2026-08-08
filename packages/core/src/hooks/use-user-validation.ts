@@ -272,8 +272,15 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						updateData.roles = [data.role];
 					}
 
+					// Server omits `capabilities` on plugin versions without the capability
+					// payload (absence = unknown = fail open). Never patch the key to
+					// `undefined` — RxDB schema validation rejects undefined values (422),
+					// which failed the whole login validation and left the user stuck on
+					// "Re-authenticate" with no stores. Stale stored caps are cleared via
+					// an incrementalModify below instead, which can actually remove a key.
+					let clearCapabilities = false;
 					if (data.capabilities === undefined) {
-						updateData.capabilities = undefined;
+						clearCapabilities = true;
 					} else if (Array.isArray(data.capabilities)) {
 						updateData.capabilities = [
 							...new Set(
@@ -293,6 +300,20 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 								userId,
 								updatedFields: Object.keys(updateData),
 							},
+						});
+					}
+
+					if (
+						clearCapabilities &&
+						(wpUser.getLatest() as unknown as { capabilities?: string[] }).capabilities !==
+							undefined
+					) {
+						await wpUser.getLatest().incrementalModify((docData) => {
+							delete (docData as { capabilities?: string[] }).capabilities;
+							return docData;
+						});
+						appLogger.debug('Cleared stale capabilities (server omitted the field)', {
+							context: { userId },
 						});
 					}
 
