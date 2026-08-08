@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { Linking, ScrollView, View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
@@ -34,10 +34,13 @@ import { UptimeStrip } from './uptime-strip';
 
 const DOCS_URL = 'https://docs.wcpos.com/products/sync';
 
-/** Load averages read best with a consistent decimal; counts as plain integers. */
+/** Load averages read best with a consistent decimal; counts use locale formatting. */
 const formatLoad = (value: number) =>
-	Number.isInteger(value) ? value.toLocaleString() : value.toFixed(value >= 10 ? 1 : 2);
-const formatCount = (value: number) => Math.round(value).toLocaleString();
+	value.toLocaleString(undefined, {
+		minimumFractionDigits: 1,
+		maximumFractionDigits: value >= 10 ? 1 : 2,
+	});
+const formatCount = (value: number) => value.toLocaleString();
 
 /**
  * Store health · Performance — what the POS asks of the server and the #559
@@ -238,10 +241,9 @@ export function PerformanceScreen() {
 										],
 									] as const
 								).map(([value, label, hint]) => (
-									<Pressable
+									<View
 										key={value}
 										testID={`preset-${value}`}
-										onPress={() => applyPreset(value)}
 										className={cn(
 											'min-w-40 flex-1 rounded-lg border p-3',
 											preset === value ? 'border-primary bg-primary/5' : 'border-border'
@@ -259,7 +261,7 @@ export function PerformanceScreen() {
 												{describeCadence(value)}
 											</Text>
 										</VStack>
-									</Pressable>
+									</View>
 								))}
 							</HStack>
 						</RadioGroup>

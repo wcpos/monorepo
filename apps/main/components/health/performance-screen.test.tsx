@@ -14,22 +14,21 @@ const NOW = 100 * HOUR_MS;
 
 let mockBuckets: MetricsBucket[] = [];
 
+type MockTrendProps = {
+	testID: string;
+	points: { x: number; y: number }[];
+	formatValue?: (value: number) => string;
+};
+
 /** Records what each trend was asked to draw, without loading Skia/Victory. */
-const mockTrendProps: { testID: string; points: { x: number; y: number }[] }[] = [];
+const mockTrendProps: MockTrendProps[] = [];
 
 jest.mock('../../lib/metrics', () => ({
 	getMetricsBuckets: () => mockBuckets,
 }));
-// RN's Pressable is a hooks-based JS component and trips react-test-renderer's
-// duplicate-React detection under jest-expo — stub it down to a View like the
-// rest of the primitives here.
-jest.mock('react-native/Libraries/Components/Pressable/Pressable', () => {
-	const { View } = jest.requireActual('react-native');
-	return { __esModule: true, default: View };
-});
 jest.mock('./trend-line', () => ({
-	TrendLine: (props: { testID: string; points: { x: number; y: number }[] }) => {
-		mockTrendProps.push({ testID: props.testID, points: props.points });
+	TrendLine: (props: MockTrendProps) => {
+		mockTrendProps.push(props);
 		return null;
 	},
 }));
@@ -184,5 +183,25 @@ describe('PerformanceScreen · server over time', () => {
 			{ x: NOW - HOUR_MS, y: 20 },
 		]);
 		expect(loadUnavailableShown(renderer)).toBe(false);
+	});
+
+	it('exposes each preset card as only its labeled radio control', () => {
+		const renderer = renderScreen([]);
+		const card = renderer.root.findByProps({ testID: 'preset-eco' });
+		expect(card.props.onPress).toBeUndefined();
+	});
+
+	it('keeps low-volume request-axis labels distinct', () => {
+		renderScreen([bucket(2, 0), bucket(1, 1)]);
+		const formatValue = trend('pos-requests-trend')?.formatValue;
+		expect(formatValue).toBeDefined();
+		expect([0, 0.5, 1].map((value) => formatValue?.(value))).toEqual(['0', '0.5', '1']);
+	});
+
+	it('keeps a fractional digit on integer-valued load averages', () => {
+		renderScreen([bucket(2, 1, 1), bucket(1, 1, 14)]);
+		const formatValue = trend('server-load-trend')?.formatValue;
+		expect(formatValue).toBeDefined();
+		expect([1, 14].map((value) => formatValue?.(value))).toEqual(['1.0', '14.0']);
 	});
 });
