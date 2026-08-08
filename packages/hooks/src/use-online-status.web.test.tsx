@@ -164,6 +164,29 @@ describe('OnlineStatusProvider web', () => {
 		expect(screen.getByTestId('online-status').textContent).toBe('online-website-available');
 	});
 
+	it('stays offline when the browser disconnects during a failed probe', async () => {
+		let resolveProbe!: (reachable: boolean) => void;
+		checkWebsiteReachabilityMock.mockImplementationOnce(
+			() =>
+				new Promise<boolean>((resolve) => {
+					resolveProbe = resolve;
+				})
+		);
+		renderProvider();
+		await flushAsyncWork();
+
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+		act(() => window.dispatchEvent(new Event('offline')));
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+
+		await act(async () => {
+			resolveProbe(false);
+			await Promise.resolve();
+		});
+
+		expect(screen.getByTestId('online-status').textContent).toBe('offline');
+	});
+
 	it('probes instead of trusting a pulse timestamp from the future', async () => {
 		checkWebsiteReachabilityMock.mockResolvedValue(true);
 		renderProvider('https://rollback.example.com/wp-json/');

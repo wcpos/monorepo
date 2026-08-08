@@ -69,7 +69,9 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 
 				if (isReachable) {
 					setStatus('online-website-available');
-				} else if (!browserOffline) {
+				} else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+					setStatus('offline');
+				} else {
 					setStatus('online-website-unavailable');
 				}
 			} while (checkRequestedRef.current);

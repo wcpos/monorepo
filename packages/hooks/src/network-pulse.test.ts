@@ -25,4 +25,13 @@ describe('network pulse', () => {
 		reportNetworkResponse('https://one.example.test/wp-json/');
 		expect(subscriber).toHaveBeenCalledTimes(1);
 	});
+
+	it('canonicalizes adversarial slash runs without excessive backtracking', () => {
+		const site = `https://example.test/${'/'.repeat(50000)}x`;
+		const startedAt = performance.now();
+
+		reportNetworkResponse(site, 1234);
+
+		expect(performance.now() - startedAt).toBeLessThan(500);
+	});
 });

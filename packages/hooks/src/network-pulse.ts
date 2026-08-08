@@ -2,10 +2,13 @@ const lastResponseAtBySite = new Map<string, number>();
 const subscribersBySite = new Map<string, Set<() => void>>();
 
 function canonicalSite(site: string): string {
-	return site
-		.replace(/^https?:\/\//i, '')
-		.replace(/\/+$/, '')
-		.toLowerCase();
+	const normalized = site.toLowerCase();
+	let start = 0;
+	if (normalized.startsWith('https://')) start = 8;
+	else if (normalized.startsWith('http://')) start = 7;
+	let end = normalized.length;
+	while (end > start && normalized[end - 1] === '/') end -= 1;
+	return normalized.slice(start, end);
 }
 
 export function reportNetworkResponse(site: string, at = Date.now()): void {
