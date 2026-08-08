@@ -6,6 +6,7 @@ import {
 	expectFullPrecision,
 	expectMoneyMatches,
 	expectOrderPaid,
+	expectTaxParity,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	openCheckout,
@@ -409,16 +410,17 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 				}
 				// Tax parity per line (see contract (b) above): what the POS computed is
 				// what the server computed. Guarded on the client having sent the field —
-				// a sparse client payload is not a parity violation.
+				// a sparse client payload is not a parity violation. Tax fields use the
+				// one-microunit rounding-tie tolerance (see expectTaxParity).
 				if (sentItem.total_tax !== undefined) {
-					expectMoneyMatches(
+					expectTaxParity(
 						match.total_tax,
 						sentItem.total_tax,
 						`line_items[${index}].total_tax parity`
 					);
 				}
 				if (sentItem.subtotal_tax !== undefined && match.subtotal_tax !== undefined) {
-					expectMoneyMatches(
+					expectTaxParity(
 						match.subtotal_tax,
 						sentItem.subtotal_tax,
 						`line_items[${index}].subtotal_tax parity`
@@ -453,7 +455,7 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 				);
 			}
 			if (sent.cart_tax !== undefined) {
-				expectMoneyMatches(server.cart_tax, sent.cart_tax, 'cart_tax parity');
+				expectTaxParity(server.cart_tax, sent.cart_tax, 'cart_tax parity');
 			}
 
 			// THE MONEY THE CASHIER WAS ASKED FOR IS THE MONEY THE SERVER RECORDED —

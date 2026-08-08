@@ -343,6 +343,15 @@ The rules:
    server may recalculate differently." If a parity assertion fails against a store, the
    default reading is REGRESSION, not environment quirk; prove the mechanism before
    loosening the oracle.
+
+   The one currently-named exception (`expectTaxParity` in `order-lifecycle.ts`):
+   server-COMPUTED tax amounts may differ from the client's by **at most one microunit**
+   (0.000001) at the 6dp storage precision — a half-way rounding tie lands on different
+   sides in PHP's float path vs the client's decimal path (observed in CI 2026-08-08:
+   4.575164 vs 4.575163; rate set and 2dp money identical). Display money (2dp) is exact;
+   two microunits fails. Eliminating the tie outright (aligning the client's 6dp storage
+   rounding with `wc_round_tax_total`'s float behaviour) is a tracked follow-up in the
+   tax-parity program — this tolerance is a measured ceiling, not a settlement.
 4. **Parity assertions are store-agnostic by construction** — they compare the two sides of
    the same sale, never fixture values — so they belong in every order-writing spec at no
    cost to the any-store contract.

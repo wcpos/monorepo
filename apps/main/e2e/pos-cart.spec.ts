@@ -7,6 +7,7 @@ import {
 } from './checkout-probe';
 import {
 	expectMoneyMatches,
+	expectTaxParity,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -199,7 +200,7 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 				expectMoneyMatches(doc!.total, sent.total, 'order total parity (cart vs server)');
 			}
 			if (sent.cart_tax !== undefined) {
-				expectMoneyMatches(doc!.cart_tax, sent.cart_tax, 'cart_tax parity');
+				expectTaxParity(doc!.cart_tax, sent.cart_tax, 'cart_tax parity');
 			}
 
 			// The cashier-facing alarm must NOT be up: give reconciliation a beat to
