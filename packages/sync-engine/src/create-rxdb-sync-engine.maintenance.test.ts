@@ -503,13 +503,8 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await engine.dispose();
 	});
 
-	it('auto mode runs the seed lanes before the scheduler drain at boot', async () => {
-		const bootLanes = [
-			'reference-seed',
-			'product-browse-window-seed',
-			'order-window-seed',
-			'scheduler-drain',
-		] as const;
+	it('auto mode omits the product seed before the scheduler drain at boot', async () => {
+		const bootLanes = ['reference-seed', 'order-window-seed', 'scheduler-drain'] as const;
 		const fetcher = vi.fn(
 			async (_url: string) =>
 				new Response(JSON.stringify([]), {
@@ -559,9 +554,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 				});
 			}
 			const fetchedUrls = fetcher.mock.calls.map(([url]) => url);
-			expect(fetchedUrls).toContainEqual(
-				expect.stringContaining('/products?per_page=100&orderby=menu_order&order=asc')
-			);
+			expect(fetchedUrls.some((url) => new URL(url).pathname.endsWith('/products'))).toBe(false);
 			expect(fetchedUrls).toContainEqual(expect.stringContaining('/orders?'));
 		} finally {
 			await engine.dispose();
