@@ -298,6 +298,41 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 			{ field: 'total', expected: '36.68', got: '50.07', decimals: 2 },
 		]);
 	});
+
+	it('is SILENT on a one-microunit rounding tie at full width (PHP float vs decimal round)', () => {
+		// Live shape (dev-next 2026-08-08): a plain one-product sale where the
+		// half-way tie at the 6th decimal landed on different sides per engine.
+		// The cashier must NOT be alarmed over 0.000001.
+		expect(
+			compareOrderMoney({
+				pushed: { cart_tax: '4.575164' },
+				acked: { cart_tax: '4.575163' },
+				mode: 'exact-6dp',
+			})
+		).toBeNull();
+	});
+
+	it('flags TWO microunits at full width — the epsilon is a tie, not a tolerance band', () => {
+		const divergence = compareOrderMoney({
+			pushed: { cart_tax: '4.575164' },
+			acked: { cart_tax: '4.575162' },
+			mode: 'exact-6dp',
+		});
+		expect(divergence?.fields).toEqual([
+			{ field: 'cart_tax', expected: '4.575164', got: '4.575162', decimals: 6 },
+		]);
+	});
+
+	it('never applies the tie epsilon at display width — one unit there is a whole cent', () => {
+		const divergence = compareOrderMoney({
+			pushed: { total: '36.68' },
+			acked: { total: '36.69' },
+			mode: 'exact-6dp',
+		});
+		expect(divergence?.fields).toEqual([
+			{ field: 'total', expected: '36.68', got: '36.69', decimals: 2 },
+		]);
+	});
 });
 
 describe('preserveEquivalentLocalPrecision (the adoption half of the mirror contract)', () => {
@@ -348,8 +383,21 @@ describe('preserveEquivalentLocalPrecision (the adoption half of the mirror cont
 	});
 
 	it('adopts a six-decimal correction beyond the POS decimal width', () => {
+		// NOT a rounding tie: the POS authored 2dp, so the microunit is a genuine
+		// server correction, not two engines disagreeing about the same 6dp round.
 		const merged = preserveEquivalentLocalPrecision({ total: '36.68' }, { total: '36.680001' });
 		expect(merged.total).toBe('36.680001');
+	});
+
+	it('keeps the POS spelling on a one-microunit rounding tie between two full-width values', () => {
+		// Shares the comparator's tie equality: adopting the server's microunit
+		// would make use-order-totals recompute the POS value, see a difference,
+		// and patch it back — the write loop this function exists to prevent.
+		const merged = preserveEquivalentLocalPrecision(
+			{ cart_tax: '4.575164' },
+			{ cart_tax: '4.575163' }
+		);
+		expect(merged.cart_tax).toBe('4.575164');
 	});
 
 	it('adopts a correction that COLLIDES at the ack width — the cent floor', () => {

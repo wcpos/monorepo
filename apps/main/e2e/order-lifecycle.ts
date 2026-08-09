@@ -26,7 +26,7 @@ import { isolatedProductTest } from './checkout-probe';
 import { getStoreUrl, type StoreAuthorization, storeRequestOptions } from './fixtures';
 
 /** POST target the app uses to persist an order. */
-const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
+export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
 
 /** The checkout modal route, `/cart/<uuid>/checkout`. */
 const CHECKOUT_ROUTE = /\/cart\/[^/]+\/checkout$/;
@@ -57,6 +57,7 @@ export interface OrderLineItem {
 }
 
 export interface OrderTaxLine {
+	rate_id?: number | string;
 	tax_total?: string;
 	[key: string]: unknown;
 }
@@ -438,6 +439,36 @@ export function expectMoneyMatches(server: unknown, client: unknown, label: stri
 	expect(Number(serverValue).toFixed(dp), `${label} (compared at ${dp}dp)`).toBe(
 		Number(clientValue).toFixed(dp)
 	);
+}
+
+/**
+ * Parity for SERVER-COMPUTED tax amounts (cart_tax, line total_tax/subtotal_tax).
+ *
+ * These are the one place client/server equality is legitimately not bit-exact:
+ * both engines compute the same rate on the same base, but at the 6dp storage
+ * precision a half-way tie can land on either side of the boundary — PHP's
+ * IEEE-754 float path and the client's decimal path disagree by at most ONE
+ * microunit (observed in CI 2026-08-08: client cart_tax 4.575164 vs server
+ * 4.575163 — a .5 tie at the 6th decimal; rate set and 2dp money identical).
+ *
+ * This is the doctrine's named, quantified exception, not a reopened blanket
+ * tolerance: display money (2dp) must be EXACT, and the full-precision values
+ * may differ by at most 0.000001. Two microunits is a real drift and fails.
+ * Follow-up to eliminate the tie entirely is tracked in the tax-parity program.
+ */
+export function expectTaxParity(server: unknown, client: unknown, label: string): void {
+	const serverValue = String(server ?? '');
+	const clientValue = String(client ?? '');
+	expect(serverValue, `${label}: server returned no value`).not.toBe('');
+
+	expect(Number(serverValue).toFixed(2), `${label} (display money, 2dp, exact)`).toBe(
+		Number(clientValue).toFixed(2)
+	);
+	const microunits = Math.abs(Number(serverValue) - Number(clientValue)) * 1_000_000;
+	expect(
+		microunits,
+		`${label}: |server ${serverValue} − client ${clientValue}| must be ≤ 1 microunit (rounding-tie tolerance)`
+	).toBeLessThanOrEqual(1.000001);
 }
 
 /** Terminal states that mean the sale did NOT happen. */

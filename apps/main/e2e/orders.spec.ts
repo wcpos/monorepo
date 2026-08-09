@@ -3,7 +3,13 @@ import { expect, type Page } from '@playwright/test';
 import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import { getStoreVariant, navigateToPage, tryAddProductBySku } from './fixtures';
 import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
-import { stampRunLabel } from './order-lifecycle';
+import {
+	expectMoneyMatches,
+	expectTaxParity,
+	type OrderPayload,
+	type ServerOrder,
+	stampRunLabel,
+} from './order-lifecycle';
 import { mintSearchProbeToken, searchAndWaitForServer } from './search-probe';
 
 /**
@@ -125,10 +131,25 @@ test.describe('Orders Page (Pro)', () => {
 
 		const pushBody: unknown = await saveResponse.json().catch(() => null);
 		const orderId = extractOrderIdFromPushBody(pushBody);
-		const envelope = (saveResponse.request().postDataJSON() ?? {}) as { recordId?: unknown };
+		const envelope = (saveResponse.request().postDataJSON() ?? {}) as {
+			recordId?: unknown;
+			payload?: OrderPayload;
+		};
 		const orderUuid = typeof envelope.recordId === 'string' ? envelope.recordId : '';
 		if (orderId === null || !orderUuid) {
 			throw new Error('Order search-probe create succeeded without its server id or stable uuid');
+		}
+
+		// Totals parity on the ack we already hold (Money-oracle doctrine in
+		// TEST-PLAN.md): this spec creates a REAL order, so the amounts it rang up
+		// must be the amounts the server recorded — for free, no extra request.
+		const ackDoc = (pushBody as { document?: ServerOrder } | null)?.document;
+		const sentPayload = envelope.payload ?? {};
+		if (ackDoc && sentPayload.total !== undefined) {
+			expectMoneyMatches(ackDoc.total, sentPayload.total, 'order total parity (cart vs server)');
+		}
+		if (ackDoc && sentPayload.cart_tax !== undefined) {
+			expectTaxParity(ackDoc.cart_tax, sentPayload.cart_tax, 'cart_tax parity');
 		}
 		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
 
