@@ -91,6 +91,30 @@ export const ORDER_MONEY_PRECISION_MODE: MoneyPrecisionMode = 'exact-6dp';
 /** The ceiling `exact-6dp` compares at — 1.9's dp=6 money contract. */
 export const EXACT_COMPARISON_DECIMALS = 6;
 
+/**
+ * The rounding-tie epsilon: at FULL contract width, two values whose scaled
+ * integers differ by at most this many microunits count as the same number.
+ *
+ * Why it exists: PHP's `round()` runs on IEEE-754 floats and the POS's math on
+ * exact decimal strings, so a half-way tie at the 6th decimal can land on
+ * either side — live: client `cart_tax 4.575164` vs server `4.575163` on a
+ * plain one-product sale (dev-next, 2026-08-08; rate set and 2dp money
+ * identical). Without the epsilon that tie is a "divergence", and the cashier
+ * sees "your store changed this order's totals" over 0.000001 — a false alarm
+ * that trains them to dismiss the banner that exists for REAL recalculations.
+ *
+ * Scope: applied ONLY when the comparison runs at EXACT_COMPARISON_DECIMALS —
+ * a narrower width means at least one side rendered display money, where a
+ * one-unit gap is a whole cent and absolutely is a divergence. Two microunits
+ * fails. Shared by the comparator and the adoption half (they must agree about
+ * equality or adoption/patch loops open up — see preserveEquivalentLocalPrecision).
+ *
+ * This tolerance is the CLIENT half of the tie problem. The real fix —
+ * aligning the client's 6dp tax rounding with `wc_round_tax_total`'s float
+ * behaviour so the tie cannot happen — is tracked in the tax-parity program.
+ */
+export const ROUNDING_TIE_MICROUNITS = 1n;
+
 /** Order-level monetary fields, in the order a cashier reads them. */
 const ORDER_MONEY_FIELDS = [
 	'total',
@@ -249,6 +273,45 @@ export function roundDecimalString(value: string, decimals: number): string | nu
 const CENT_DECIMALS = 2;
 
 /**
+ * Whether two already-rounded decimal strings at `width` are within the
+ * rounding-tie epsilon. Digit-string arithmetic via BigInt — no float ever
+ * touches the values, same as the rest of this module.
+ *
+ * Gated on BOTH sides having been authored at full contract width: the tie
+ * only exists when the two engines each computed a six-decimal value of the
+ * same quantity and the half-way digit landed differently. A narrower POS
+ * value against a wider ack (`36.68` vs `36.680001`) is not a tie — it is a
+ * genuine sub-cent server correction and must be adopted/reported.
+ */
+function withinRoundingTie(
+	roundedPos: string,
+	roundedServer: string,
+	width: number,
+	posDecimals: number,
+	serverDecimals: number
+): boolean {
+	if (width !== EXACT_COMPARISON_DECIMALS) return false;
+	if (posDecimals !== EXACT_COMPARISON_DECIMALS || serverDecimals !== EXACT_COMPARISON_DECIMALS) {
+		return false;
+	}
+	const scale = (value: string): bigint | null => {
+		if (!DECIMAL_LITERAL.test(value)) return null;
+		const negative = value.startsWith('-');
+		const unsigned = negative || value.startsWith('+') ? value.slice(1) : value;
+		const dot = unsigned.indexOf('.');
+		const intPart = dot === -1 ? unsigned : unsigned.slice(0, dot);
+		const fracPart = (dot === -1 ? '' : unsigned.slice(dot + 1)).padEnd(width, '0').slice(0, width);
+		const scaled = BigInt((intPart === '' ? '0' : intPart) + fracPart);
+		return negative ? -scaled : scaled;
+	};
+	const pos = scale(roundedPos);
+	const server = scale(roundedServer);
+	if (pos === null || server === null) return false;
+	const diff = pos > server ? pos - server : server - pos;
+	return diff <= ROUNDING_TIE_MICROUNITS;
+}
+
+/**
  * THE width at which two spellings of money count as the same number.
  *
  * One function, used by BOTH halves on purpose. Detection and adoption have to
@@ -327,6 +390,17 @@ function compareSlot(
 		return { field, expected: pos, got: server, decimals: null };
 	}
 	if (roundedPos === roundedServer) return null;
+	// A one-microunit gap between two FULL-WIDTH values is a cross-engine
+	// rounding tie (PHP float round vs decimal-string round), not money the
+	// server changed — see ROUNDING_TIE_MICROUNITS. Only exact-6dp comparisons
+	// where both sides were authored at contract width qualify.
+	if (
+		mode === 'exact-6dp' &&
+		decimals !== null &&
+		withinRoundingTie(roundedPos, roundedServer, decimals, decimalsOf(pos) ?? -1, decimalsOf(server) ?? -1)
+	) {
+		return null;
+	}
 	return { field, expected: roundedPos, got: roundedServer, decimals };
 }
 
@@ -487,9 +561,22 @@ export function preserveEquivalentLocalPrecision(
 		// Same NUMBER, different spelling → keep the POS's spelling. Anything the
 		// ack actually CHANGED falls through untouched and is adopted, because
 		// the server is the source of truth — and because the comparator, which
-		// shares this equality, will have reported it.
+		// shares this equality, will have reported it. The rounding-tie epsilon
+		// is part of that shared equality: a one-microunit gap at full width is
+		// the cross-engine tie the comparator stays silent on, so adoption must
+		// keep the POS spelling too — adopting the server's microunit would make
+		// use-order-totals recompute the POS value, see a difference, and patch
+		// it back: the write loop this function exists to prevent.
 		const width = equivalenceDecimals(posDecimals, serverDecimals);
-		if (roundDecimalString(pos, width) !== roundDecimalString(server, width)) return;
+		const roundedPos = roundDecimalString(pos, width);
+		const roundedServer = roundDecimalString(server, width);
+		if (roundedPos === null || roundedServer === null) return;
+		if (
+			roundedPos !== roundedServer &&
+			!withinRoundingTie(roundedPos, roundedServer, width, posDecimals, serverDecimals)
+		) {
+			return;
+		}
 		write(pos);
 		changed = true;
 	});

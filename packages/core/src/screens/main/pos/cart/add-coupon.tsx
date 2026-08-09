@@ -66,7 +66,7 @@ export function AddCoupon() {
 		<VStack className="gap-4">
 			{error && <Text className="text-destructive">{error}</Text>}
 			<Combobox onValueChange={handleValueChange}>
-				<ComboboxTrigger>
+				<ComboboxTrigger testID="add-coupon-combobox">
 					<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
 				</ComboboxTrigger>
 				<ComboboxContent
@@ -107,6 +107,7 @@ function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 	return (
 		<>
 			<ComboboxInput
+				testID="add-coupon-search-input"
 				placeholder={t('pos_cart.search_coupons')}
 				value={binding.search}
 				onChangeText={onSearch}
@@ -130,6 +131,7 @@ function CouponList({ resource }: { resource: ReturnType<typeof useSearchSelect>
 				const hit = item as unknown as CouponHit;
 				return (
 					<ComboboxItem
+						testID={`add-coupon-option-${hit.document.id}`}
 						value={String(hit.document.id)}
 						label={hit.document.code ?? ''}
 						item={hit.document}
