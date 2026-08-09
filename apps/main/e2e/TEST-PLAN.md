@@ -352,12 +352,14 @@ The rules:
 
    Currently-named exceptions:
 
-   **woocommerce-pos#1548 (couponed acks)**: the v2 push ack for couponed orders swaps
-   per-line `taxes[]` rate attribution relative to its own `tax_lines`, and serves
-   `tax_lines[].tax_total` unrounded where the contract says display-rounded — so the
-   totals-changed banner fires on a correct couponed sale. `pos-coupon-apply.spec.ts`
-   asserts everything comparable strictly (coupon_lines, discount, total, cart_tax, rate
-   set) and parks the banner-absence + per-rate attribution assertions on that issue.
+   **woocommerce-pos#1548 (v2 acks vs the tax_lines rounding contract)**: v2-lane acks
+   serve `tax_lines[].tax_total` UNROUNDED (`dp=6` over raw stored per-rate sums) where
+   the money contract says display-rounded-then-padded — so the totals-changed banner
+   fires on ANY sale whose tax is not 2dp-clean (plain and couponed alike); couponed
+   acks additionally swap per-line `taxes[]` rate attribution relative to their own
+   `tax_lines`. Both banner-absence assertions (`pos-cart.spec.ts`,
+   `pos-coupon-apply.spec.ts`) are parked on that issue and re-arm when it closes; every
+   parity assertion (rate set, totals, cart_tax, discount) runs strictly and passes.
 
    **The microunit tie** (`expectTaxParity` in `order-lifecycle.ts`):
    server-COMPUTED tax amounts may differ from the client's by **at most one microunit**
