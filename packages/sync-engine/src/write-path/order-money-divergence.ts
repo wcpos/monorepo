@@ -397,7 +397,13 @@ function compareSlot(
 	if (
 		mode === 'exact-6dp' &&
 		decimals !== null &&
-		withinRoundingTie(roundedPos, roundedServer, decimals, decimalsOf(pos) ?? -1, decimalsOf(server) ?? -1)
+		withinRoundingTie(
+			roundedPos,
+			roundedServer,
+			decimals,
+			decimalsOf(pos) ?? -1,
+			decimalsOf(server) ?? -1
+		)
 	) {
 		return null;
 	}
