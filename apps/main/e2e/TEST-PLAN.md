@@ -192,6 +192,12 @@ via the toggle if needed):
 - [x] Add multiple variations to cart
 - [x] Adding the same variation twice increments quantity to 2
 
+### pos-coupon-apply.spec.ts — coupon application parity (pro + writer gated) — 1 test
+
+- [x] Create-and-find percent probe coupon → apply via cart UI → save → coupon_lines,
+      discount/total/cart_tax parity, rate-set equality; banner-absence parked on
+      woocommerce-pos#1548 (see Money-oracle doctrine)
+
 ### coupons.spec.ts — Coupons drawer page — 6 tests
 
 Coupons Page (pro only):
@@ -344,7 +350,16 @@ The rules:
    default reading is REGRESSION, not environment quirk; prove the mechanism before
    loosening the oracle.
 
-   The one currently-named exception (`expectTaxParity` in `order-lifecycle.ts`):
+   Currently-named exceptions:
+
+   **woocommerce-pos#1548 (couponed acks)**: the v2 push ack for couponed orders swaps
+   per-line `taxes[]` rate attribution relative to its own `tax_lines`, and serves
+   `tax_lines[].tax_total` unrounded where the contract says display-rounded — so the
+   totals-changed banner fires on a correct couponed sale. `pos-coupon-apply.spec.ts`
+   asserts everything comparable strictly (coupon_lines, discount, total, cart_tax, rate
+   set) and parks the banner-absence + per-rate attribution assertions on that issue.
+
+   **The microunit tie** (`expectTaxParity` in `order-lifecycle.ts`):
    server-COMPUTED tax amounts may differ from the client's by **at most one microunit**
    (0.000001) at the 6dp storage precision — a half-way rounding tie lands on different
    sides in PHP's float path vs the client's decimal path (observed in CI 2026-08-08:
