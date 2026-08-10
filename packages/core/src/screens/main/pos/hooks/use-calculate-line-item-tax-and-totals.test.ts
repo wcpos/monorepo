@@ -71,8 +71,9 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				taxes: [
 					{
 						id: 1,
-						subtotal: '40',
-						total: '40',
+						// 6dp contract width — see the serializer note in the hook.
+						subtotal: '40.000000',
+						total: '40.000000',
 					},
 				],
 			});
@@ -124,8 +125,8 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				taxes: [
 					{
 						id: 1,
-						subtotal: '33.33',
-						total: '33.33',
+						subtotal: '33.330000',
+						total: '33.330000',
 					},
 				],
 			});
@@ -177,8 +178,8 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				taxes: [
 					{
 						id: 1,
-						subtotal: '12.5',
-						total: '12.5',
+						subtotal: '12.500000',
+						total: '12.500000',
 					},
 				],
 			});
@@ -229,8 +230,8 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				taxes: [
 					{
 						id: 1,
-						subtotal: '20', // subtotal tax on 100
-						total: '20', // total tax on 100
+						subtotal: '20.000000', // subtotal tax on 100
+						total: '20.000000', // total tax on 100
 					},
 				],
 				subtotal_tax: '20',

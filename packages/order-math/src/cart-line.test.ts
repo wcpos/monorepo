@@ -69,8 +69,8 @@ describe('calculateCartLine — line_item', () => {
 			taxes: [
 				{
 					id: 1,
-					subtotal: '40',
-					total: '40',
+					subtotal: '40.000000',
+					total: '40.000000',
 				},
 			],
 		});
@@ -96,8 +96,8 @@ describe('calculateCartLine — line_item', () => {
 			taxes: [
 				{
 					id: 1,
-					subtotal: '33.33',
-					total: '33.33',
+					subtotal: '33.330000',
+					total: '33.330000',
 				},
 			],
 		});
@@ -123,11 +123,29 @@ describe('calculateCartLine — line_item', () => {
 			taxes: [
 				{
 					id: 1,
-					subtotal: '12.5',
-					total: '12.5',
+					subtotal: '12.500000',
+					total: '12.500000',
 				},
 			],
 		});
+	});
+
+	it('authors per-rate line taxes at the fixed six-decimal contract width', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate20],
+			allRates: [rate20],
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 18.38235, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.taxes).toEqual([{ id: 1, subtotal: '3.676470', total: '3.676470' }]);
 	});
 
 	it('should correctly calculate when prices do not include tax', () => {
@@ -149,8 +167,8 @@ describe('calculateCartLine — line_item', () => {
 			taxes: [
 				{
 					id: 1,
-					subtotal: '20', // subtotal tax on 100
-					total: '20', // total tax on 100
+					subtotal: '20.000000', // subtotal tax on 100
+					total: '20.000000', // total tax on 100
 				},
 			],
 			subtotal_tax: '20',

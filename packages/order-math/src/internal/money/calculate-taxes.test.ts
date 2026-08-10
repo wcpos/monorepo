@@ -88,10 +88,10 @@ describe('Calculate Taxes', () => {
 		 */
 		expect(inclusiveTaxes).toEqual({
 			taxes: [
-				{ id: 17, total: 7.834101 },
-				{ id: 72, total: 4.388852 },
+				{ id: 17, total: 7.83410138 },
+				{ id: 72, total: 4.38885232 },
 			],
-			total: 12.222953,
+			total: 12.2229537,
 		});
 	});
 
