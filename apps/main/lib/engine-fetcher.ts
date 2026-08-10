@@ -1,10 +1,6 @@
 import { COLLECTION_VOCABULARY } from '@wcpos/query';
 import type { SyncEvent } from '@wcpos/sync-core';
-import type {
-	EngineFetcher,
-	QueryTotalWooRequest,
-	SyncCollectionName,
-} from '@wcpos/sync-engine';
+import type { EngineFetcher, QueryTotalWooRequest, SyncCollectionName } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { evaluateClockSkew } from './clock-skew';
@@ -25,6 +21,43 @@ export type EngineFetcherAuth = {
 
 export type ClockSkewGate = { generation: number; evaluated: boolean };
 
+/**
+ * The engine's store scope, read FRESH at request time (never captured) so a
+ * store switch retargets in-flight lanes the same way a token refresh does.
+ *
+ * The sync lanes do not use the legacy REST http client, which was the only
+ * place `store_id` was ever attached — so before this the whole v2 surface
+ * carried no store context and Pro's per-store pricing had nothing to key on
+ * (pro#425). The header is the seam: no URL rewriting, every pull/push/ack
+ * request carries it.
+ */
+export type EngineFetcherScope = {
+	/** The scoped store id, sourced exactly as orders source `_pos_store`. */
+	storeId?: number | string | null;
+};
+
+/** The header carrying the till's store scope to the WCPOS v2 REST surface. */
+export const STORE_SCOPE_HEADER = 'X-WCPOS-Store';
+
+/**
+ * Narrow a scope value to a store id worth sending, or null.
+ *
+ * Store `0` is the free plugin's "no store" default — the SAME sentinel the
+ * order lane tests before stamping `_pos_store`, kept identical here on purpose.
+ * Sending a placeholder would be worse than sending nothing: the server treats
+ * an absent scope as "unknown" and refuses to overwrite a store-scoped price,
+ * whereas a bogus `0` would read as a real scope.
+ */
+function normalizeStoreScope(storeId: number | string | null | undefined): string | null {
+	if (storeId === null || storeId === undefined) return null;
+	if (typeof storeId === 'number') {
+		return Number.isFinite(storeId) && storeId > 0 ? String(storeId) : null;
+	}
+	const trimmed = storeId.trim();
+	if (trimmed === '' || trimmed === '0') return null;
+	return trimmed;
+}
+
 function isSyncCollectionName(name: string): name is SyncCollectionName {
 	return Object.prototype.hasOwnProperty.call(COLLECTION_VOCABULARY, name);
 }
@@ -33,6 +66,8 @@ export function createEngineFetcher(input: {
 	auth: EngineFetcherAuth;
 	clockSkew: ClockSkewGate;
 	emitTransport: (event: SyncEvent, durable?: boolean) => void;
+	/** Mutated in place by the scope lifecycle; read per attempt, never captured. */
+	scope?: EngineFetcherScope;
 	fetch?: typeof globalThis.fetch;
 	now?: () => number;
 }): EngineFetcher {
@@ -73,6 +108,15 @@ export function createEngineFetcher(input: {
 			// (woocommerce_pos_request()) — without this header every sync route
 			// answers rest_no_route and the engine stays degraded-empty.
 			headers.set('X-WCPOS', '1');
+			// Re-read per attempt: a store switch that lands between the absorbed 401
+			// and its retry must send the retry under the NEW scope, never the old one.
+			const storeScope = normalizeStoreScope(input.scope?.storeId);
+			if (storeScope !== null) {
+				headers.set(STORE_SCOPE_HEADER, storeScope);
+			} else {
+				// An unscoped engine must not inherit a stale header from init.
+				headers.delete(STORE_SCOPE_HEADER);
+			}
 			let finalUrl = url;
 			if (token) {
 				if (input.auth.useJwtAsParam) {

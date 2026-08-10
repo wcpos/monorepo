@@ -38,6 +38,7 @@ function createFetcherHarness(
 			useJwtAsParam?: boolean;
 		};
 		clockSkew?: { generation: number; evaluated: boolean };
+		scope?: { storeId?: number | string | null };
 		fetch?: typeof globalThis.fetch;
 	} = {}
 ) {
@@ -68,14 +69,17 @@ function createFetcherHarness(
 			console.error('Log observer threw on a transport event', error);
 		}
 	};
+	const scope = input.scope ?? {};
 	const fetcher = createEngineFetcher({
 		auth: input.auth ?? BASE_AUTH,
 		clockSkew: input.clockSkew ?? { generation: 0, evaluated: false },
+		scope,
 		emitTransport,
 		fetch: input.fetch,
 	});
 	return {
 		fetcher,
+		scope,
 		fetchWooQueryTotal: (queryInput: Parameters<typeof fetchWooQueryTotal>[0]) =>
 			fetchWooQueryTotal(queryInput, fetcher, 'https://store.example.test/wp-json/'),
 		emitTransport,
@@ -181,6 +185,108 @@ describe('createEngineFetcher', () => {
 			fetch.mockReset();
 		}
 	);
+
+	// pro#425: the sync lanes never used the legacy REST http client, so `store_id`
+	// — the only store context the server ever received — was absent from every v2
+	// request. Without it Pro cannot tell a store-scoped price edit from a global
+	// one, and a till price edit silently rewrites the web-store price.
+	describe('store scope header', () => {
+		const okResponse = () =>
+			new Response(null, { status: 200, headers: { 'content-length': '0' } });
+
+		async function requestHeaders(scope: { storeId?: number | string | null }) {
+			const fetch = jest.fn().mockResolvedValue(okResponse());
+			const { fetcher } = createFetcherHarness({ fetch, scope });
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/push/products', {
+				method: 'POST',
+			});
+			return new Headers((fetch.mock.calls[0] as [string, RequestInit])[1].headers as HeadersInit);
+		}
+
+		it('sends the scoped store on every sync request', async () => {
+			expect((await requestHeaders({ storeId: 7 })).get('X-WCPOS-Store')).toBe('7');
+		});
+
+		it('accepts a string store id without reformatting it', async () => {
+			expect((await requestHeaders({ storeId: '7' })).get('X-WCPOS-Store')).toBe('7');
+		});
+
+		// Store 0 is the free plugin's "no store" sentinel — the SAME one
+		// `use-new-order`/`utils.ts` test before stamping `_pos_store`. Sending it
+		// would read server-side as a real scope; omitting it makes the server
+		// treat the scope as unknown and refuse to overwrite a store-scoped price.
+		it.each([
+			['the single-store sentinel', 0],
+			['the single-store sentinel as a string', '0'],
+			['an absent store', undefined],
+			['a null store', null],
+			['a blank store', '   '],
+			['a non-finite store', Number.NaN],
+			['a negative store', -3],
+		])('omits the header for %s', async (_label, storeId) => {
+			expect((await requestHeaders({ storeId })).has('X-WCPOS-Store')).toBe(false);
+		});
+
+		it('re-reads the scope per attempt so a store switch retargets in-flight lanes', async () => {
+			const fetch = jest.fn().mockResolvedValue(okResponse());
+			const { fetcher, scope } = createFetcherHarness({ fetch, scope: { storeId: 7 } });
+
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/changes');
+			scope.storeId = 11;
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/changes');
+
+			const sent = fetch.mock.calls.map((call) =>
+				new Headers((call as [string, RequestInit])[1].headers as HeadersInit).get('X-WCPOS-Store')
+			);
+			expect(sent).toEqual(['7', '11']);
+		});
+
+		it('sends the refreshed scope on a 401 retry, never the scope the 401 was issued under', async () => {
+			const fetch = jest
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(null, { status: 401, headers: { 'content-length': '0' } })
+				)
+				.mockResolvedValueOnce(okResponse());
+			const scope = { storeId: 7 as number | string | null };
+			const { fetcher } = createFetcherHarness({
+				fetch,
+				scope,
+				auth: {
+					...BASE_AUTH,
+					refreshAuth: async () => {
+						// A store switch that lands mid-arc must own the retry.
+						scope.storeId = 11;
+						return 'fresh-token';
+					},
+				},
+			});
+
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/push/products', {
+				method: 'POST',
+			});
+
+			const sent = fetch.mock.calls.map((call) =>
+				new Headers((call as [string, RequestInit])[1].headers as HeadersInit).get('X-WCPOS-Store')
+			);
+			expect(sent).toEqual(['7', '11']);
+		});
+
+		it('does not leak a store header from a caller-supplied init', async () => {
+			const fetch = jest.fn().mockResolvedValue(okResponse());
+			const { fetcher } = createFetcherHarness({ fetch, scope: { storeId: 0 } });
+
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/changes', {
+				headers: { 'X-WCPOS-Store': '99' },
+			});
+
+			expect(
+				new Headers((fetch.mock.calls[0] as [string, RequestInit])[1].headers as HeadersInit).has(
+					'X-WCPOS-Store'
+				)
+			).toBe(false);
+		});
+	});
 
 	it('wires diagnostics and records response metrics without reading the body', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_025);

@@ -28,7 +28,7 @@ import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
 import { getEngineConnectivity } from './connectivity';
-import { createEngineFetcher, fetchWooQueryTotal } from './engine-fetcher';
+import { createEngineFetcher, type EngineFetcherScope, fetchWooQueryTotal } from './engine-fetcher';
 import { platformEngineFetch } from './engine-platform-fetch';
 import { appMetricsObserver } from './metrics';
 import { createSyncLogObserver } from './sync-log-observer';
@@ -94,6 +94,12 @@ type CachedEngine = {
 	databaseNames: Set<string>;
 	engine: RxdbSyncEngine;
 	fetcherOptions: MutableFetcherOptions;
+	/**
+	 * Shared with the fetcher so every sync request carries the till's store
+	 * scope (pro#425). Mutated in place — the fetcher holds this exact object
+	 * and reads it per attempt, so a scope move retargets in-flight lanes.
+	 */
+	fetcherScope: EngineFetcherScope;
 	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
 	clockSkew: { generation: number; evaluated: boolean };
 	writeLeader?: WriteLeaderState;
@@ -225,6 +231,12 @@ export async function switchAppEngineScope(session: {
 	await entry.engine.scope.switch(scope);
 
 	entry.key = targetKey;
+	// Committed HERE rather than left to the next render's cache hit (the way the
+	// auth options are). Between a settled switch and that render the engine is
+	// already pulling and pushing under the new scope; a stale store header in
+	// that window would divert a price edit into the OUTGOING store's meta
+	// (pro#425). Only reached on success, so there is nothing to revert.
+	entry.fetcherScope.storeId = storeId;
 	entry.databaseName = scopeDatabaseName(scope);
 	moveWriteLeader(entry, entry.databaseName);
 	entry.clockSkew.generation += 1;
@@ -238,6 +250,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		cachedEngine.fetcherOptions.credentials = options.credentials;
 		cachedEngine.fetcherOptions.refreshAuth = options.refreshAuth;
 		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
+		cachedEngine.fetcherScope.storeId = options.scope.storeId;
 		return cachedEngine.engine;
 	}
 	if (cachedEngine && cachedEngine.site === siteKey) {
@@ -251,6 +264,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		const previousKey = entry.key;
 		const previousDatabaseName = entry.databaseName;
 		const previousFetcherOptions: MutableFetcherOptions = { ...entry.fetcherOptions };
+		const previousStoreId = entry.fetcherScope.storeId;
 		const previousClockSkewEvaluated = entry.clockSkew.evaluated;
 		const switching = entry.engine.scope.switch(options.scope);
 		entry.key = cacheKey;
@@ -259,6 +273,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.fetcherOptions.credentials = options.credentials;
 		entry.fetcherOptions.refreshAuth = options.refreshAuth;
 		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
+		entry.fetcherScope.storeId = options.scope.storeId;
 		entry.clockSkew.generation += 1;
 		entry.clockSkew.evaluated = false;
 		void switching.then(
@@ -281,6 +296,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					entry.fetcherOptions.credentials = previousFetcherOptions.credentials;
 					entry.fetcherOptions.refreshAuth = previousFetcherOptions.refreshAuth;
 					entry.fetcherOptions.useJwtAsParam = previousFetcherOptions.useJwtAsParam;
+					entry.fetcherScope.storeId = previousStoreId;
 					entry.clockSkew.generation += 1;
 					entry.clockSkew.evaluated = previousClockSkewEvaluated;
 				}
@@ -305,6 +321,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		refreshAuth: options.refreshAuth,
 		useJwtAsParam: options.useJwtAsParam,
 	};
+	const fetcherScope: EngineFetcherScope = { storeId: options.scope.storeId };
 	const clockSkew = { generation: 0, evaluated: false };
 	const webLocksAvailable =
 		isWeb && typeof navigator !== 'undefined' && navigator.locks !== undefined;
@@ -332,6 +349,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const fetcher = createEngineFetcher({
 		auth: fetcherOptions,
 		clockSkew,
+		scope: fetcherScope,
 		emitTransport,
 		...(platformEngineFetch ? { fetch: platformEngineFetch } : {}),
 	});
@@ -431,6 +449,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		databaseNames: new Set([scopeDatabaseName(options.scope)]),
 		engine,
 		fetcherOptions,
+		fetcherScope,
 		clockSkew,
 		...(writeLeader ? { writeLeader } : {}),
 	};

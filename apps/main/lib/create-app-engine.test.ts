@@ -561,6 +561,106 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
+	// pro#425 — the store header must track the engine's scope through every
+	// transition, because a stale one diverts a price edit into the wrong store's
+	// meta (or, on a store-scoped product, into the global WooCommerce price).
+	describe('store scope header lifecycle', () => {
+		async function sentStoreHeader(
+			createRxdbSyncEngine: ReturnType<typeof loadCreateAppEngine>['createRxdbSyncEngine']
+		) {
+			const fetch = jest
+				.spyOn(globalThis, 'fetch')
+				.mockResolvedValue(new Response(null, { status: 200 }));
+			try {
+				const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
+				await fetcher!('https://store.example.test/wp-json/wcpos/v2/push/products');
+				return new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers).get('X-WCPOS-Store');
+			} finally {
+				fetch.mockRestore();
+			}
+		}
+
+		it('sends the constructed scope store', async () => {
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+			createAppSyncEngine(BASE_OPTIONS);
+
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
+		});
+
+		// The awaited store-switch flow. Committing on the next render instead would
+		// leave a window where the engine already pulls/pushes under the new scope
+		// while the header still names the outgoing store.
+		it('commits the new store as soon as the awaited switch settles', async () => {
+			const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } =
+				loadCreateAppEngine();
+			createAppSyncEngine(BASE_OPTIONS);
+
+			await switchAppEngineScope({
+				site: { wp_api_url: BASE_OPTIONS.scope.site },
+				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+				store: { id: 'store-2' },
+			});
+
+			// Asserted BEFORE any re-render: no cache hit has refreshed anything yet.
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-2');
+		});
+
+		it('keeps the old store when the awaited switch rejects', async () => {
+			const first = createEngineDouble(undefined, () => Promise.reject(new Error('refused')));
+			const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } =
+				loadCreateAppEngine(() => first);
+			createAppSyncEngine(BASE_OPTIONS);
+
+			await expect(
+				switchAppEngineScope({
+					site: { wp_api_url: BASE_OPTIONS.scope.site },
+					wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+					store: { id: 'store-2' },
+				})
+			).rejects.toThrow('refused');
+
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
+		});
+
+		it('adopts the new store on a same-site render-path switch', async () => {
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+			createAppSyncEngine(BASE_OPTIONS);
+
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+			});
+			await Promise.resolve();
+
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-2');
+		});
+
+		// Mirrors the auth-option revert: an engine that never left the old scope
+		// must not keep writing as the store it failed to become.
+		it('restores the previous store when a render-path switch rejects', async () => {
+			const first = createEngineDouble(undefined, () => Promise.reject(new Error('refused')));
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() => first);
+			createAppSyncEngine(BASE_OPTIONS);
+
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+			});
+			await Promise.resolve();
+
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
+		});
+
+		it('refreshes the store on a same-scope cache hit', async () => {
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+			createAppSyncEngine(BASE_OPTIONS);
+			// Same cache key, re-rendered — the branch that refreshes the auth options.
+			createAppSyncEngine(BASE_OPTIONS);
+
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
+		});
+	});
+
 	it('logs a rejected same-site switch and retries the failed target scope', async () => {
 		const switchError = new Error('scope switch failed');
 		const first = createEngineDouble(undefined, () => Promise.reject(switchError));
