@@ -220,16 +220,18 @@ couponTest.describe('POS Cart - coupon application parity (live store)', () => {
 				'couponed sale must keep the POS rate set'
 			);
 
-			// KNOWN DIVERGENCE — woocommerce-pos#1548 (named per the Money-oracle
-			// doctrine, not blanket-tolerated): the couponed ack (a) swaps per-line
-			// taxes[] rate attribution relative to its own tax_lines, and (b) serves
-			// tax_lines[].tax_total unrounded where the money contract says
-			// display-rounded — so the totals-changed banner currently fires on a
-			// correct couponed sale. The banner-absence assertion is parked on that
-			// issue; re-arm it (and add per-rate line-tax attribution parity, which
-			// pins finding (a)) when #1548 closes. Everything comparable above —
-			// coupon_lines, discount, total, cart_tax, rate SET — is asserted
-			// strictly and holds today.
+			// RE-ARMED (was parked on woocommerce-pos#1548): the rounding half is
+			// fixed client-side (mono#1117 — tax_lines at WC storage precision), so
+			// a correct couponed sale must keep the banner down. This assertion is
+			// ALSO the live detector for #1548's unresolved attribution-swap
+			// observation (0/13 lab reproductions, concurrency suspicion): if the
+			// swap recurs, this fires and the push-payload/push-ack attachments
+			// above carry the field-level evidence.
+			await page.waitForTimeout(1_500);
+			await expect(
+				page.getByTestId('order-totals-changed-banner'),
+				'an agreed couponed sale must not trigger the totals-changed banner'
+			).not.toBeVisible();
 		}
 	);
 });

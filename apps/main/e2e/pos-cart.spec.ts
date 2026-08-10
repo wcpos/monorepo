@@ -215,14 +215,15 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			const totalNow = ((await checkoutButton.textContent()) ?? '').trim();
 			expect(totalNow, 'cart total must be unchanged by the save round trip').toBe(cartTotalText);
 
-			// KNOWN DIVERGENCE — woocommerce-pos#1548 (named per the Money-oracle
-			// doctrine): v2 acks serve tax_lines[].tax_total UNROUNDED where the
-			// money contract says display-rounded, so the totals-changed banner
-			// fires on plain sales whose tax is not 2dp-clean (deterministic in CI,
-			// environment-lucky locally). The banner-absence assertion is parked on
-			// that issue — re-arm it here when #1548 closes:
-			//   await expect(page.getByTestId('order-totals-changed-banner')).not.toBeVisible();
-			// Every parity assertion above (rate set, total, cart_tax) passes today.
+			// RE-ARMED (was parked on woocommerce-pos#1548): the client now emits
+			// tax_lines at WooCommerce STORAGE precision (mono#1117 — raw 6dp
+			// per-rate sums under round-at-subtotal), so a plain sale's ack matches
+			// what the cart pushed and the cashier-facing alarm must stay down.
+			await page.waitForTimeout(1_500);
+			await expect(
+				page.getByTestId('order-totals-changed-banner'),
+				'a plain sale must not trigger the totals-changed banner'
+			).not.toBeVisible();
 		}
 	);
 });
