@@ -88,10 +88,10 @@ describe('Calculate Taxes', () => {
 		 */
 		expect(inclusiveTaxes).toEqual({
 			taxes: [
-				{ id: 17, total: 7.834101 },
-				{ id: 72, total: 4.388852 },
+				{ id: 17, total: 7.83410138 },
+				{ id: 72, total: 4.38885232 },
 			],
-			total: 12.222953,
+			total: 12.2229537,
 		});
 	});
 
@@ -166,6 +166,18 @@ describe('Calculate Taxes', () => {
 			});
 			// 9.9999 * 0.20 = 1.99998, rounded to 6dp = 1.99998
 			expect(result.taxes[0].total).toBe(1.99998);
+		});
+
+		it('normalizes the source amount to WooCommerce number precision', () => {
+			const result = calculateTaxes({
+				amount: 1.23456749,
+				rates: [vatRate],
+				amountIncludesTax: false,
+				dp: 2,
+			});
+
+			// WC scales to cents and normalizes 1.23456749 to 1.234567 before tax.
+			expect(result.taxes[0].total).toBe(0.2469134);
 		});
 
 		it('dp=0 compound taxes (JPY)', () => {

@@ -129,6 +129,25 @@ describe('calculateCouponDiscountTaxSplit', () => {
 			expect(parseFloat(result.discount)).toBeCloseTo(2, 6);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.2, 6);
 		});
+
+		it('uses the configured decimals for subtotal-level discount tax', () => {
+			const result = calculateCouponDiscountTaxSplit(
+				[{ product_id: 1, discount: 0.001 }],
+				[{ product_id: 1, tax_class: '' }],
+				[
+					{
+						id: 1,
+						rate: '5.0495',
+						compound: false,
+						order: 1,
+						class: 'standard',
+					},
+				],
+				{ dp: 3, taxRoundAtSubtotal: true }
+			);
+
+			expect(result.discount_tax).toBe('0.00005');
+		});
 	});
 
 	describe('mixed tax classes', () => {
