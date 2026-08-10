@@ -22,7 +22,15 @@ export interface RecalculateInput {
 	couponConfigs: Map<string, CouponDiscountConfig>;
 	pricesIncludeTax: boolean;
 	calcDiscountsSequentially: boolean;
-	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[];
+	taxRates: {
+		id: number;
+		rate: string;
+		compound: boolean;
+		order: number;
+		/** WooCommerce `tax_rate_priority` — decides compound sequencing (#1548). */
+		priority?: number;
+		class?: string;
+	}[];
 	/** Product categories by product_id for coupon restriction checks */
 	productCategories: Map<number, { id: number }[]>;
 	/** Whether to round tax at subtotal level (default false = round per-item) */
@@ -113,6 +121,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 					rate: r.rate,
 					compound: r.compound,
 					order: r.order,
+					// WC sorts compound rates by tax_rate_priority (#1548) — must survive this map.
+					priority: r.priority,
 				})),
 				amountIncludesTax: pricesIncludeTax,
 				dp,
@@ -280,6 +290,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 							rate: r.rate,
 							compound: r.compound,
 							order: r.order,
+							// WC sorts compound rates by tax_rate_priority (#1548) — must survive this map.
+							priority: r.priority,
 						})),
 						amountIncludesTax: true,
 						dp,
