@@ -106,7 +106,15 @@ export function calculateTaxes({
 	dp = 2,
 }: {
 	amount: number;
-	rates: { id: number; rate: string; compound: boolean; order: number; [key: string]: any }[];
+	rates: {
+		id: number;
+		rate: string;
+		compound: boolean;
+		order: number;
+		/** WooCommerce `tax_rate_priority`. Wins over `order` when present — see sortKey. */
+		priority?: number;
+		[key: string]: any;
+	}[];
 	amountIncludesTax: boolean;
 	dp?: number;
 }) {
@@ -115,8 +123,21 @@ export function calculateTaxes({
 	// 2. tax_rate_country: non-empty first
 	// 3. tax_rate_state: non-empty first
 	// 4. tax_rate_id (ascending) — mapped to `id`
+	// `priority` is WooCommerce's `tax_rate_priority` — THE key WC_Tax sorts by, and
+	// the one that decides which compound rate is applied outermost. It is read first
+	// because the app passes RxDB tax-rate documents straight through, and those carry
+	// BOTH `priority` and `order` (WC's `tax_rate_order`, a display-only field that is
+	// commonly 0 for every rate). Sorting by `order` therefore tied on real stores and
+	// fell through to id-ascending, inverting the compound sequence: on dev-next's GB
+	// store (VAT prio 1 + Surcharge prio 2, both compound) a discounted line came out
+	// VAT 3.750000 / Surcharge 0.367647 against WooCommerce's 3.676471 / 0.441176 —
+	// same total, wrong split, and the cashier saw a totals-changed banner on a correct
+	// sale (woocommerce-pos#1548). `order` remains the fallback for callers that map
+	// priority onto it (this module's original contract, and its existing tests).
+	const sortKey = (rate: { order: number; priority?: number }): number =>
+		typeof rate.priority === 'number' ? rate.priority : rate.order;
 	const sortedRates = [...rates].sort((a, b) => {
-		if (a.order !== b.order) return a.order - b.order;
+		if (sortKey(a) !== sortKey(b)) return sortKey(a) - sortKey(b);
 		const aCountry = (a as any).country || '';
 		const bCountry = (b as any).country || '';
 		if ((aCountry !== '') !== (bCountry !== '')) return aCountry !== '' ? -1 : 1;
