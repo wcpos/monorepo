@@ -115,8 +115,14 @@ async function setupVariant(
 	variant: StoreVariant,
 	storeUrl: string,
 	baseURL: string,
-	options: { stateName?: string; coldStart?: boolean; shardIndex?: number } = {}
-): Promise<void> {
+	options: {
+		stateName?: string;
+		coldStart?: boolean;
+		shardIndex?: number;
+		/** Open the POS against THIS store rather than whichever lists first. */
+		storeId?: string;
+	} = {}
+): Promise<string[]> {
 	const cashierAuth = getE2ECashierAuth(variant, options.shardIndex ?? 0);
 	const stateName = cashierAuthStateName(options.stateName ?? variant, cashierAuth);
 	console.log(
@@ -124,6 +130,7 @@ async function setupVariant(
 			(options.coldStart ? ' (cold start — bulk catalogue sync blocked)' : '')
 	);
 
+	let discoveredStoreIds: string[] = [];
 	const browser = await chromium.launch();
 	const context = await browser.newContext({
 		baseURL,
@@ -185,10 +192,12 @@ async function setupVariant(
 	};
 
 	try {
-		await authenticateWithStore(authPage, testInfo as any, {
+		const { storeIds } = await authenticateWithStore(authPage, testInfo as any, {
 			waitForCatalogue: !options.coldStart,
 			credentials: cashierAuth ?? undefined,
+			storeId: options.storeId,
 		});
+		discoveredStoreIds = storeIds;
 
 		console.log(`[global-setup] Auth complete for ${stateName}, exporting state...`);
 
@@ -234,6 +243,8 @@ async function setupVariant(
 		await context.close();
 		await browser.close();
 	}
+
+	return discoveredStoreIds;
 }
 
 /**
@@ -252,7 +263,46 @@ async function globalSetup(config: FullConfig) {
 	if (FREE_STORE_URL) {
 		await setupVariant('free', FREE_STORE_URL, baseURL, { shardIndex });
 	}
-	await setupVariant('pro', PRO_STORE_URL, baseURL, { shardIndex });
+	const proStoreIds = await setupVariant('pro', PRO_STORE_URL, baseURL, { shardIndex });
+
+	// One auth state PER store, so a spec can target the store its assertions
+	// need. The tax-parity specs are the reason this exists: a store's rate set
+	// decides whether a run exercises compound sequencing at all, and picking
+	// "whichever store listed first" meant those specs sampled a different store
+	// per run and could go green having tested nothing (woocommerce-pos#1548).
+	//
+	// The default state above already opened the FIRST store, so that one is
+	// copied rather than re-authenticated; only the remaining stores cost an
+	// extra OAuth.
+	if (proStoreIds.length > 1) {
+		console.log(`[global-setup] User has ${proStoreIds.length} stores: ${proStoreIds.join(', ')}`);
+		const cashierAuth = getE2ECashierAuth('pro', shardIndex);
+		const defaultState = path.join(
+			AUTH_STATE_DIR,
+			`${cashierAuthStateName('pro', cashierAuth)}.json`
+		);
+		const firstStoreState = path.join(
+			AUTH_STATE_DIR,
+			`${cashierAuthStateName(`pro-store-${proStoreIds[0]}`, cashierAuth)}.json`
+		);
+		if (fs.existsSync(defaultState)) fs.copyFileSync(defaultState, firstStoreState);
+
+		for (const storeId of proStoreIds.slice(1)) {
+			await setupVariant('pro', PRO_STORE_URL, baseURL, {
+				stateName: `pro-store-${storeId}`,
+				storeId,
+				shardIndex,
+			});
+		}
+	}
+
+	// Let specs enumerate the stores without re-authenticating. Written even for
+	// a single-store user so "the file is missing" means globalSetup did not run,
+	// never "this user has one store".
+	fs.writeFileSync(
+		path.join(AUTH_STATE_DIR, 'stores-pro.json'),
+		JSON.stringify({ storeIds: proStoreIds })
+	);
 
 	// The cold-start profile (#991) needs its own bootstrap: the same login, but
 	// captured BEFORE steady-state sync fills the catalogue. Opt-in — it costs a

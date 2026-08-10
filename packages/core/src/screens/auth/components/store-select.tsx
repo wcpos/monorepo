@@ -173,7 +173,13 @@ export function StoreSelect({
 							{stores.map((store) => (
 								<Pressable
 									key={store.localID}
-									testID={store.localID ? `store-option-${store.localID}` : undefined}
+									// Addressed by the WooCommerce store id, not `localID`. `localID` is a
+									// SHA-256 of {user, site, credentials, store}, so it gave E2E no way to
+									// ask for a PARTICULAR store — only "whichever renders first", which is
+									// how the tax specs ended up sampling a random store per run and going
+									// green without ever exercising a multi-compound-rate one
+									// (woocommerce-pos#1548).
+									testID={store.id != null ? `store-option-${store.id}` : undefined}
 									onPress={() => onStoreSelect(store.localID ?? null)}
 									className={`web:cursor-pointer web:transition-colors rounded-lg border p-3 ${
 										selectedStoreId === store.localID

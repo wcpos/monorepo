@@ -407,9 +407,20 @@ async function waitForOPFSPersistence(page: Page): Promise<void> {
 export async function authenticateWithStore(
 	page: Page,
 	testInfo: TestInfo,
-	options: { waitForCatalogue?: boolean; credentials?: { username: string; password: string } } = {}
+	options: {
+		waitForCatalogue?: boolean;
+		credentials?: { username: string; password: string };
+		/**
+		 * WooCommerce store id to open the POS against. Omit for "whichever store
+		 * the picker lists first" — fine for specs that genuinely don't care, wrong
+		 * for anything asserting tax behaviour, which depends entirely on WHICH
+		 * store's rate set is in play.
+		 */
+		storeId?: number | string;
+	} = {}
 ) {
-	const { waitForCatalogue = true } = options;
+	const { waitForCatalogue = true, storeId } = options;
+	let discoveredStoreIds: string[] = [];
 	const storeUrl = getStoreUrl(testInfo);
 	const context = page.context();
 	await stubStoreVersionForE2E(context, storeUrl, getStoreVariant(testInfo));
@@ -609,16 +620,58 @@ export async function authenticateWithStore(
 			continue;
 		}
 
+		// Record every store this user is offered, while the picker is still on
+		// screen. globalSetup uses this to capture one auth state PER store, which
+		// is what lets a spec target the store its assertions actually need
+		// instead of accepting whichever one it is handed. Empty for single-store
+		// users — the app auto-selects and never renders the picker.
+		discoveredStoreIds = await page
+			.locator('[data-testid^="store-option-"]')
+			.evaluateAll((nodes) =>
+				nodes
+					.map((node) => node.getAttribute('data-testid')?.replace('store-option-', '') ?? '')
+					.filter((id) => id !== '')
+			)
+			.catch(() => discoveredStoreIds);
+
 		const openPosEnabled = await openPosButton.isEnabled({ timeout: 2_000 }).catch(() => false);
 		if (!openPosEnabled) {
-			// Multi-store: no auto-selection — select the first store option.
-			const firstStoreOption = page
-				.locator('[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]')
-				.first();
-			const hasOption = await becomesVisible(firstStoreOption, 2_000);
+			// Multi-store: no auto-selection. Pick the REQUESTED store when the caller
+			// named one, otherwise fall back to the first option.
+			//
+			// A spec that cares which store it runs against (the tax-parity ones do —
+			// a single-rate store cannot exercise compound sequencing at all) must be
+			// able to ask for one. Before `store-option-<id>` existed the only handle
+			// was a localID hash, so "first" was the only reachable choice and tax
+			// coverage was whatever the render order happened to give (see
+			// woocommerce-pos#1548).
+			const storeOption =
+				storeId != null
+					? page.getByTestId(`store-option-${storeId}`)
+					: page
+							.locator(
+								'[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]'
+							)
+							.first();
+			const hasOption = await becomesVisible(storeOption, storeId != null ? 10_000 : 2_000);
 			if (hasOption) {
-				console.log('[auth] Selecting first store radio option...');
-				await firstStoreOption.click().catch(() => null);
+				console.log(
+					storeId != null
+						? `[auth] Selecting requested store ${storeId}...`
+						: '[auth] Selecting first store radio option...'
+				);
+				await storeOption.click().catch(() => null);
+			} else if (storeId != null) {
+				// An explicitly requested store that never appears is a broken
+				// environment, not something to silently paper over by taking a
+				// different store and reporting a pass for it.
+				throw new Error(
+					`[auth] requested store ${storeId} not offered to this user — available: ${(
+						await page
+							.locator('[data-testid^="store-option-"]')
+							.evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-testid')))
+					).join(', ')}`
+				);
 			} else {
 				console.log('[auth] open-pos-button still disabled and no store radio found, waiting...');
 				await page.waitForTimeout(2_000);
@@ -667,6 +720,8 @@ export async function authenticateWithStore(
 		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 120_000 });
 	}
 	await waitForOPFSPersistence(page);
+
+	return { storeIds: discoveredStoreIds };
 }
 
 /**
@@ -837,22 +892,53 @@ export async function hydrateAuthenticatedPage(
 	}
 }
 
+/**
+ * The stores globalSetup found for this variant, in picker order.
+ *
+ * Empty when globalSetup has not run (a single spec run locally) or the user has
+ * one store — callers must treat "no list" as "cannot parameterize", not as an
+ * assertion about the environment.
+ */
+export function listStoreIds(variant: StoreVariant = 'pro'): string[] {
+	const listPath = path.join(__dirname, '.auth-state', `stores-${variant}.json`);
+	if (!fs.existsSync(listPath)) return [];
+	try {
+		const parsed = JSON.parse(fs.readFileSync(listPath, 'utf-8')) as { storeIds?: string[] };
+		return Array.isArray(parsed.storeIds) ? parsed.storeIds : [];
+	} catch {
+		return [];
+	}
+}
+
 export const authenticatedTest = base.extend<{
 	posPage: Page;
 	storeAuthorization: () => StoreAuthorization | null;
+	/**
+	 * WooCommerce store id to open the POS against, via `test.use({ targetStoreId })`.
+	 *
+	 * Null means "whichever store globalSetup's default bootstrap opened". Set it
+	 * in any spec whose assertions depend on WHICH store is in play — tax parity
+	 * above all, since a single-rate store cannot exercise compound sequencing and
+	 * will pass the same assertions without testing them (woocommerce-pos#1548).
+	 * Requires globalSetup to have captured that store's state; see `listStoreIds`.
+	 */
+	targetStoreId: string | null;
 }>({
+	targetStoreId: [null, { option: true }],
 	storeAuthorization: async ({ page }, use) => {
 		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 		await use(captureStoreAuthorization(page));
 	},
-	posPage: async ({ page, storeAuthorization, request }, use, testInfo) => {
+	posPage: async ({ page, storeAuthorization, request, targetStoreId }, use, testInfo) => {
 		// `storeAuthorization` is a declared dependency so its request listener is
 		// attached before the app boots and sends its first authenticated request.
 		storeAuthorization();
 		// Record the server id of every order this spec pushes, so teardown can
 		// finalize the ones left as lingering pos-open carts.
 		const orderCapture = captureCreatedOrderIds(page);
-		await hydrateAuthenticatedPage(page, testInfo);
+		await hydrateAuthenticatedPage(page, testInfo, {
+			stateName: targetStoreId ? `${getStoreVariant(testInfo)}-store-${targetStoreId}` : undefined,
+		});
 
 		// Layout-drift pin (#1106): every POS interaction scopes under screen-pos,
 		// and its absence fails as opaque 30s tile timeouts spec-by-spec. Assert it
