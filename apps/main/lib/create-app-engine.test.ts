@@ -651,6 +651,80 @@ describe('createAppSyncEngine scope cache', () => {
 			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
 		});
 
+		// Codex review, PR #1122. A→B→C where B and C both reject: B's rejection
+		// is ignored (the cache already names C), then C's rejection used to
+		// restore the snapshot taken at C's start — which was B, a scope the
+		// engine never reached. The engine sits on A while the header claims B,
+		// so a price edit is written against the wrong store.
+		it('falls back to the last ACTIVATED store after chained switch failures', async () => {
+			const first = createEngineDouble(undefined, () => Promise.reject(new Error('refused')));
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() => first);
+			createAppSyncEngine(BASE_OPTIONS); // store-1 — the only scope ever activated
+
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+			});
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, storeId: 'store-3' },
+			});
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
+		});
+
+		// The same sequence, but the first switch SUCCEEDS — and settles only
+		// AFTER a second switch has superseded it as the active target. The
+		// engine really is on store-2 by then, so store-2, not store-1, is what
+		// the failed switch to store-3 must fall back to.
+		//
+		// The interleaving is the whole point: committing a success only while
+		// it is still the active target loses store-2 here, and the fallback
+		// silently rewinds two scopes past where the engine actually sits.
+		it('falls back to a superseded store that did activate', async () => {
+			// Both deferred, settled in issue order — the engine serializes its
+			// switches, so a later one cannot settle before an earlier one.
+			let releaseFirstSwitch!: () => void;
+			let rejectSecondSwitch!: (error: Error) => void;
+			let call = 0;
+			const first = createEngineDouble(undefined, () => {
+				call += 1;
+				if (call === 1) {
+					return new Promise<void>((resolve) => {
+						releaseFirstSwitch = resolve;
+					});
+				}
+				return new Promise<void>((_resolve, reject) => {
+					rejectSecondSwitch = reject;
+				});
+			});
+			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() => first);
+			createAppSyncEngine(BASE_OPTIONS);
+
+			// store-2 starts switching but does not settle yet.
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+			});
+			// store-3 supersedes it as the active target, and will reject.
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, storeId: 'store-3' },
+			});
+			// store-2 lands first: the engine IS on store-2.
+			releaseFirstSwitch();
+			await Promise.resolve();
+			await Promise.resolve();
+			// Then store-3 fails, and must rewind to store-2 — not past it.
+			rejectSecondSwitch(new Error('refused'));
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-2');
+		});
+
 		it('refreshes the store on a same-scope cache hit', async () => {
 			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
 			createAppSyncEngine(BASE_OPTIONS);

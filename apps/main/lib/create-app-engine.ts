@@ -100,9 +100,29 @@ type CachedEngine = {
 	 * and reads it per attempt, so a scope move retargets in-flight lanes.
 	 */
 	fetcherScope: EngineFetcherScope;
+	/**
+	 * The identity the engine LAST SUCCESSFULLY ACTIVATED — the only safe thing
+	 * to fall back to when a scope switch rejects.
+	 *
+	 * Reverting to a snapshot taken when the failed switch STARTED is wrong as
+	 * soon as switches chain: on A→B→C where both reject, B's rejection is
+	 * ignored (the cache already names C) and C's rejection then restores B —
+	 * a scope the engine never reached. The engine sits on A while the cache,
+	 * and the store header, claim B, so a price edit is written against the
+	 * wrong store until some later render happens to repair it.
+	 */
+	committed: CommittedScope;
 	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
 	clockSkew: { generation: number; evaluated: boolean };
 	writeLeader?: WriteLeaderState;
+};
+
+/** A scope identity the engine is known to have activated. */
+type CommittedScope = {
+	key: string;
+	databaseName: string;
+	storeId: number | string;
+	fetcherOptions: MutableFetcherOptions;
 };
 
 let cachedEngine: CachedEngine | null = null;
@@ -238,6 +258,14 @@ export async function switchAppEngineScope(session: {
 	// (pro#425). Only reached on success, so there is nothing to revert.
 	entry.fetcherScope.storeId = storeId;
 	entry.databaseName = scopeDatabaseName(scope);
+	// The engine confirmed this scope, so it becomes the fallback for any later
+	// switch that fails.
+	entry.committed = {
+		key: targetKey,
+		databaseName: entry.databaseName,
+		storeId,
+		fetcherOptions: { ...entry.fetcherOptions },
+	};
 	moveWriteLeader(entry, entry.databaseName);
 	entry.clockSkew.generation += 1;
 	entry.clockSkew.evaluated = false;
@@ -251,6 +279,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		cachedEngine.fetcherOptions.refreshAuth = options.refreshAuth;
 		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
 		cachedEngine.fetcherScope.storeId = options.scope.storeId;
+		// The engine IS on this scope, so these are committed values, not
+		// optimistic ones — a later failed switch must fall back to them.
+		cachedEngine.committed = {
+			...cachedEngine.committed,
+			storeId: options.scope.storeId,
+			fetcherOptions: { ...cachedEngine.fetcherOptions },
+		};
 		return cachedEngine.engine;
 	}
 	if (cachedEngine && cachedEngine.site === siteKey) {
@@ -261,11 +296,20 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		// must not keep authenticating as the new identity when the engine never
 		// left the old scope — if it rejects.
 		const entry = cachedEngine;
-		const previousKey = entry.key;
-		const previousDatabaseName = entry.databaseName;
-		const previousFetcherOptions: MutableFetcherOptions = { ...entry.fetcherOptions };
-		const previousStoreId = entry.fetcherScope.storeId;
 		const previousClockSkewEvaluated = entry.clockSkew.evaluated;
+		// What this switch is trying to become. Recorded as committed only once
+		// the engine confirms it, and used as the fallback by whichever LATER
+		// switch fails — see CachedEngine.committed.
+		const target: CommittedScope = {
+			key: cacheKey,
+			databaseName: scopeDatabaseName(options.scope),
+			storeId: options.scope.storeId,
+			fetcherOptions: {
+				credentials: options.credentials,
+				refreshAuth: options.refreshAuth,
+				useJwtAsParam: options.useJwtAsParam,
+			},
+		};
 		const switching = entry.engine.scope.switch(options.scope);
 		entry.key = cacheKey;
 		entry.databaseName = scopeDatabaseName(options.scope);
@@ -278,6 +322,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.clockSkew.evaluated = false;
 		void switching.then(
 			() => {
+				// Committed unconditionally: the engine reached this scope, even if a
+				// newer switch has already superseded it as the active target. That is
+				// exactly the case a chained failure needs to fall back to.
+				entry.committed = target;
 				if (cachedEngine === entry && entry.key === cacheKey) {
 					moveWriteLeader(entry, entry.databaseName);
 				}
@@ -291,12 +339,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					},
 				});
 				if (cachedEngine === entry && entry.key === cacheKey) {
-					entry.key = previousKey;
-					entry.databaseName = previousDatabaseName;
-					entry.fetcherOptions.credentials = previousFetcherOptions.credentials;
-					entry.fetcherOptions.refreshAuth = previousFetcherOptions.refreshAuth;
-					entry.fetcherOptions.useJwtAsParam = previousFetcherOptions.useJwtAsParam;
-					entry.fetcherScope.storeId = previousStoreId;
+					const committed = entry.committed;
+					entry.key = committed.key;
+					entry.databaseName = committed.databaseName;
+					entry.fetcherOptions.credentials = committed.fetcherOptions.credentials;
+					entry.fetcherOptions.refreshAuth = committed.fetcherOptions.refreshAuth;
+					entry.fetcherOptions.useJwtAsParam = committed.fetcherOptions.useJwtAsParam;
+					entry.fetcherScope.storeId = committed.storeId;
 					entry.clockSkew.generation += 1;
 					entry.clockSkew.evaluated = previousClockSkewEvaluated;
 				}
@@ -450,6 +499,12 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		engine,
 		fetcherOptions,
 		fetcherScope,
+		committed: {
+			key: cacheKey,
+			databaseName: scopeDatabaseName(options.scope),
+			storeId: options.scope.storeId,
+			fetcherOptions: { ...fetcherOptions },
+		},
 		clockSkew,
 		...(writeLeader ? { writeLeader } : {}),
 	};
