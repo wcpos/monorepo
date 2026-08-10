@@ -6,6 +6,7 @@ import {
 	expectFullPrecision,
 	expectMoneyMatches,
 	expectOrderPaid,
+	expectRateSetParity,
 	expectTaxParity,
 	liveOrderTest as liveTest,
 	newRunLabel,
@@ -419,7 +420,11 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 						`line_items[${index}].total_tax parity`
 					);
 				}
-				if (sentItem.subtotal_tax !== undefined && match.subtotal_tax !== undefined) {
+				// Guard only on the CLIENT having sent the field — if the server drops
+				// a subtotal_tax the client sent, that is a broken round trip and
+				// expectTaxParity's missing-server check must fail it, not a silent
+				// skip (#1114 review).
+				if (sentItem.subtotal_tax !== undefined) {
 					expectTaxParity(
 						match.subtotal_tax,
 						sentItem.subtotal_tax,
@@ -443,17 +448,14 @@ liveTest.describe('POS Checkout - real payment (live store)', () => {
 			// not merely "some taxes at full precision". A location mismatch (the
 			// #1545 class: server taxing from site base instead of the POS store)
 			// swaps the rate SET even when amounts happen to be close, so compare
-			// rate ids, not amounts. Store-agnostic: whatever rates the POS chose
-			// for this store are the rates the server must agree on.
-			if (sent.tax_lines?.length) {
-				const sentRates = [...new Set(sent.tax_lines.map((line) => Number(line.rate_id)))].sort();
-				const serverRates = [
-					...new Set(server.tax_lines!.map((line) => Number(line.rate_id))),
-				].sort();
-				expect(serverRates, 'server tax rates must equal the rates the POS applied').toEqual(
-					sentRates
-				);
-			}
+			// rate ids, not amounts. Unconditional over BOTH sets (#1114 review): a
+			// serialization regression dropping the client's tax_lines on this
+			// taxable sale fails as a set mismatch instead of skipping the check.
+			expectRateSetParity(
+				sent.tax_lines,
+				server.tax_lines,
+				'server tax rates must equal the rates the POS applied'
+			);
 			if (sent.cart_tax !== undefined) {
 				expectTaxParity(server.cart_tax, sent.cart_tax, 'cart_tax parity');
 			}

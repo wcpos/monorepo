@@ -28,6 +28,25 @@ import { getStoreUrl, type StoreAuthorization, storeRequestOptions } from './fix
 /** POST target the app uses to persist an order. */
 export const PUSH_ORDERS = /\/wp-json\/wcpos\/v2\/push\/orders(\?|$)/;
 
+/**
+ * Whether a response is the order-push POST, under EITHER permalink style.
+ * Pretty permalinks put the route in the pathname; plain permalinks carry it
+ * as `?rest_route=` — matching only the pretty form makes a spec time out on a
+ * plain-permalink store despite a successful save (#1114 review). Same dual
+ * form orders.spec.ts always used.
+ */
+export function isPushOrdersResponse(response: {
+	url: () => string;
+	request: () => { method: () => string };
+}): boolean {
+	if (response.request().method() !== 'POST') return false;
+	const url = new URL(response.url());
+	return (
+		PUSH_ORDERS.test(response.url()) ||
+		url.searchParams.get('rest_route') === '/wcpos/v2/push/orders'
+	);
+}
+
 /** The checkout modal route, `/cart/<uuid>/checkout`. */
 const CHECKOUT_ROUTE = /\/cart\/[^/]+\/checkout$/;
 
@@ -169,10 +188,9 @@ export async function openCheckout(
 	page: Page,
 	options: { onOrderCreated?: (order: TrackedOrder) => void } = {}
 ): Promise<{ orderId: number; uuid: string; sent: OrderPayload }> {
-	const saved = page.waitForResponse(
-		(response) => PUSH_ORDERS.test(response.url()) && response.request().method() === 'POST',
-		{ timeout: 90_000 }
-	);
+	const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+		timeout: 90_000,
+	});
 	// If the click below throws, this waiter is left pending and rejects later with
 	// nobody listening. An unhandled rejection takes down the whole worker process
 	// (#997), turning one checkout failure into a shard-wide failure. The no-op
@@ -460,6 +478,10 @@ export function expectTaxParity(server: unknown, client: unknown, label: string)
 	const serverValue = String(server ?? '');
 	const clientValue = String(client ?? '');
 	expect(serverValue, `${label}: server returned no value`).not.toBe('');
+	// Number('') is 0, so a missing client value against a server "0" would pass
+	// as parity. The caller guards on the client having SENT the field; by the
+	// time we are here, an empty client value is a broken payload, not parity.
+	expect(clientValue, `${label}: client sent no value`).not.toBe('');
 
 	expect(Number(serverValue).toFixed(2), `${label} (display money, 2dp, exact)`).toBe(
 		Number(clientValue).toFixed(2)
@@ -469,6 +491,35 @@ export function expectTaxParity(server: unknown, client: unknown, label: string)
 		microunits,
 		`${label}: |server ${serverValue} − client ${clientValue}| must be ≤ 1 microunit (rounding-tie tolerance)`
 	).toBeLessThanOrEqual(1.000001);
+}
+
+/**
+ * Rate-SET parity between the client's and the server's tax_lines.
+ *
+ * Unconditional over BOTH sides (a missing array reads as the empty set): a
+ * tax-free store legitimately compares [] === [], while a serialization
+ * regression that DROPS the client's tax_lines on a taxed sale now fails as a
+ * set mismatch instead of silently skipping the one assertion that catches
+ * tax-location bugs (#1114 review). Every rate_id must be a real id — NaN on
+ * either side is a failure, never a wildcard that collapses into set equality.
+ */
+export function expectRateSetParity(
+	sent: OrderTaxLine[] | undefined,
+	server: OrderTaxLine[] | undefined,
+	label: string
+): void {
+	const rateSet = (lines: OrderTaxLine[] | undefined, side: string): string[] => {
+		const rates = (lines ?? []).map((line) => {
+			const id = line.rate_id;
+			expect(
+				id !== undefined && id !== null && Number.isFinite(Number(id)),
+				`${label}: ${side} tax line carries an invalid rate_id (${String(id)})`
+			).toBe(true);
+			return String(Number(id));
+		});
+		return [...new Set(rates)].sort();
+	};
+	expect(rateSet(server, 'server'), label).toEqual(rateSet(sent, 'client'));
 }
 
 /** Terminal states that mean the sale did NOT happen. */

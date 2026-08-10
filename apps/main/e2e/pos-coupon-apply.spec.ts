@@ -6,11 +6,12 @@ import { addCheckoutProbeProduct } from './checkout-probe';
 import { getStoreVariant, storeRequestOptions } from './fixtures';
 import {
 	expectMoneyMatches,
+	expectRateSetParity,
 	expectTaxParity,
+	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
-	PUSH_ORDERS,
 	type ServerOrder,
 	stampRunLabel,
 } from './order-lifecycle';
@@ -160,10 +161,9 @@ couponTest.describe('POS Cart - coupon application parity (live store)', () => {
 			await expect(page.getByTestId('add-coupon-submit')).not.toBeVisible({ timeout: 30_000 });
 			await page.waitForTimeout(1_000);
 
-			const saved = page.waitForResponse(
-				(response) => PUSH_ORDERS.test(response.url()) && response.request().method() === 'POST',
-				{ timeout: 90_000 }
-			);
+			const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+				timeout: 90_000,
+			});
 			saved.catch(() => {});
 			await page.getByTestId('save-to-server-button').click();
 			const response = await saved;
@@ -214,13 +214,11 @@ couponTest.describe('POS Cart - coupon application parity (live store)', () => {
 			if (sent.cart_tax !== undefined) {
 				expectTaxParity(doc!.cart_tax, sent.cart_tax, 'couponed cart_tax parity');
 			}
-			if (sent.tax_lines?.length) {
-				const sentRates = [...new Set(sent.tax_lines.map((line) => Number(line.rate_id)))].sort();
-				const serverRates = [
-					...new Set((doc!.tax_lines ?? []).map((line) => Number(line.rate_id))),
-				].sort();
-				expect(serverRates, 'couponed sale must keep the POS rate set').toEqual(sentRates);
-			}
+			expectRateSetParity(
+				sent.tax_lines,
+				doc!.tax_lines,
+				'couponed sale must keep the POS rate set'
+			);
 
 			// KNOWN DIVERGENCE — woocommerce-pos#1548 (named per the Money-oracle
 			// doctrine, not blanket-tolerated): the couponed ack (a) swaps per-line
