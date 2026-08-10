@@ -7,11 +7,12 @@ import {
 } from './checkout-probe';
 import {
 	expectMoneyMatches,
+	expectRateSetParity,
 	expectTaxParity,
+	isPushOrdersResponse,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
-	PUSH_ORDERS,
 	type ServerOrder,
 	stampRunLabel,
 } from './order-lifecycle';
@@ -157,15 +158,19 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			await addFirstProductToCart(page);
 			await stampRunLabel(page, label);
 
-			// The cart total the cashier sees, captured before the save.
+			// The cart total the cashier sees, captured before the save. Raw trimmed
+			// text, NOT digits-only (#1114 review): stripping separators collapses
+			// decimal position ("45.00" and "450.0" both become "4500"), and since
+			// this exact string is later compared against the SAME source, the
+			// verbatim text is both safe across locales and strictly stronger.
 			const checkoutButton = page.getByTestId('checkout-button');
-			const cartTotalDigits = ((await checkoutButton.textContent()) ?? '').replace(/\D/g, '');
-			expect(Number(cartTotalDigits), 'cart must show a non-zero total').toBeGreaterThan(0);
+			const cartTotalText = ((await checkoutButton.textContent()) ?? '').trim();
+			expect(cartTotalText, 'cart must show a total').not.toBe('');
+			expect(cartTotalText, 'cart total must contain an amount').toMatch(/\d/);
 
-			const saved = page.waitForResponse(
-				(response) => PUSH_ORDERS.test(response.url()) && response.request().method() === 'POST',
-				{ timeout: 90_000 }
-			);
+			const saved = page.waitForResponse((response) => isPushOrdersResponse(response), {
+				timeout: 90_000,
+			});
 			saved.catch(() => {});
 
 			await page.getByTestId('save-to-server-button').click();
@@ -186,16 +191,14 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 
 			// PARITY: the server recorded the numbers the POS rang up. Rate-set
 			// equality first — a tax-location mismatch swaps the rate SET even when
-			// amounts land close together.
-			if (sent.tax_lines?.length) {
-				const sentRates = [...new Set(sent.tax_lines.map((line) => Number(line.rate_id)))].sort();
-				const serverRates = [
-					...new Set((doc!.tax_lines ?? []).map((line) => Number(line.rate_id))),
-				].sort();
-				expect(serverRates, 'server tax rates must equal the rates the POS applied').toEqual(
-					sentRates
-				);
-			}
+			// amounts land close together. Unconditional over both sets (#1114
+			// review): [] === [] on a tax-free store, and a dropped client
+			// tax_lines fails instead of skipping.
+			expectRateSetParity(
+				sent.tax_lines,
+				doc!.tax_lines,
+				'server tax rates must equal the rates the POS applied'
+			);
 			if (sent.total !== undefined) {
 				expectMoneyMatches(doc!.total, sent.total, 'order total parity (cart vs server)');
 			}
@@ -203,11 +206,14 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 				expectTaxParity(doc!.cart_tax, sent.cart_tax, 'cart_tax parity');
 			}
 
-			// The money the cashier sees must be stable across the save.
-			await expect(async () => {
-				const totalNow = ((await checkoutButton.textContent()) ?? '').replace(/\D/g, '');
-				expect(totalNow).toBe(cartTotalDigits);
-			}).toPass({ timeout: 10_000 });
+			// The money the cashier sees must be stable across the save. Wait for the
+			// TERMINAL write signal first (#1114 review): the save button re-enables
+			// when the round trip completes, so the reconciliation that could rewrite
+			// the rendered total has run before we compare — a bare toPass would
+			// succeed instantly on the pre-save rendering.
+			await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+			const totalNow = ((await checkoutButton.textContent()) ?? '').trim();
+			expect(totalNow, 'cart total must be unchanged by the save round trip').toBe(cartTotalText);
 
 			// KNOWN DIVERGENCE — woocommerce-pos#1548 (named per the Money-oracle
 			// doctrine): v2 acks serve tax_lines[].tax_total UNROUNDED where the
