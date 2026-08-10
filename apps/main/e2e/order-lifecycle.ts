@@ -510,12 +510,16 @@ export function expectRateSetParity(
 ): void {
 	const rateSet = (lines: OrderTaxLine[] | undefined, side: string): string[] => {
 		const rates = (lines ?? []).map((line) => {
-			const id = line.rate_id;
+			// Number('') and Number('  ') coerce to 0 — finite — so a BLANK rate_id
+			// would slip a bare isFinite guard as rate "0" and could collide with a
+			// genuine rate on the other side (#1116 review, wcpos-bot escalation).
+			// Require non-blank BEFORE numeric conversion.
+			const raw = String(line.rate_id ?? '').trim();
 			expect(
-				id !== undefined && id !== null && Number.isFinite(Number(id)),
-				`${label}: ${side} tax line carries an invalid rate_id (${String(id)})`
+				raw !== '' && Number.isFinite(Number(raw)),
+				`${label}: ${side} tax line carries an invalid rate_id (${JSON.stringify(line.rate_id)})`
 			).toBe(true);
-			return String(Number(id));
+			return String(Number(raw));
 		});
 		return [...new Set(rates)].sort();
 	};
