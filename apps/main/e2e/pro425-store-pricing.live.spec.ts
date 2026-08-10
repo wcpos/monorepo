@@ -17,8 +17,7 @@ import {
  * renders what comes back.
  *
  * Not in the CI matrix — `.live.spec.ts`, run by hand, because it needs a
- * product that is per-store-priced and a POS user with product-edit capability
- * (cashiers are catalog-read-only by design on next).
+ * product that is per-store-priced, which CI has no business assuming.
  *
  * Provision the probe with `scripts/pro425-fixture.php` (see the PR body).
  *
@@ -37,11 +36,12 @@ import {
 
 const PROBE_SLUG = process.env.PRO425_SLUG || 'pro425probe';
 
-// The shared writer identity, not a one-off: `e2e-product-writer` (shop_manager)
-// exists on every dev server under the same well-known username, with its
-// credentials already in the repo's Actions secrets. A cashier cannot be used —
-// the catalog is read-only for them by design on next, so the price cell is
-// disabled and there is nothing to render a scoped edit into.
+// Defaults to the shared `e2e-product-writer` identity, which exists on every
+// dev server under the same well-known username with credentials already in
+// Actions secrets. A CASHIER works equally well: the cashier role carries
+// edit_products on next (Activator::create_pos_roles), and this spec has been
+// run green as `demo`. Note a stale dev server may disagree — role capabilities
+// are only re-synced on a VERSION BUMP, which dev deploys never do.
 const MANAGER_USER =
 	process.env.PRO425_USER || process.env.E2E_PRODUCT_WRITER_USER || 'e2e-product-writer';
 const MANAGER_PASS = process.env.PRO425_PASS || process.env.E2E_PRODUCT_WRITER_PASS;
@@ -52,7 +52,10 @@ function normalizeMoney(text: string): string {
 }
 
 test.describe('pro#425 — store-scoped pricing in the till', () => {
-	test.skip(!MANAGER_PASS, 'no writer password set — export E2E_PRODUCT_WRITER_PASS or PRO425_PASS');
+	test.skip(
+		!MANAGER_PASS,
+		'no writer password set — export E2E_PRODUCT_WRITER_PASS or PRO425_PASS'
+	);
 
 	test('the products grid renders the STORE price, not the global one', async ({
 		page,
