@@ -3,7 +3,7 @@ import { Pressable } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
-import { distinctUntilChanged, startWith, switchMap, tap } from 'rxjs/operators';
+import { distinctUntilChanged, map, startWith, switchMap, tap } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
@@ -17,6 +17,29 @@ import { useT } from '../../../contexts/translations';
 import { useUserValidation } from '../../../hooks/use-user-validation';
 
 const storeLogger = getLogger(['wcpos', 'auth', 'stores']);
+
+/** `numeric` so "Store 2" precedes "Store 10"; `base` so case never decides order. */
+const storeCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+/**
+ * Stable, human order for the store picker.
+ *
+ * The query below has no `sort`, so RxDB falls back to the collection's default
+ * index and returns stores in `localID` order — and `localID` is a SHA-256 hash
+ * of {user, site, wpCredentials, store}. The list therefore arrived in an order
+ * that looked arbitrary AND RESHUFFLED between logins, because a fresh login
+ * mints a new wpCredentials uuid and re-hashes every localID. A cashier opening
+ * this screen expects to find their store where it was last time, so sort by the
+ * only thing they actually read — the name — and fall back to the numeric store
+ * id so blank or duplicate names still land in a fixed order.
+ */
+function sortStores(stores: StoreDocument[]): StoreDocument[] {
+	return [...stores].sort((a, b) => {
+		const byName = storeCollator.compare(a.name ?? '', b.name ?? '');
+		if (byName !== 0) return byName;
+		return (Number(a.id) || 0) - (Number(b.id) || 0);
+	});
+}
 
 interface StoreSelectProps {
 	site: import('@wcpos/database').SiteDocument;
@@ -89,6 +112,7 @@ export function StoreSelect({
 				return storesCollection.find({ selector: { localID: { $in: validIds } } })
 					.$ as import('rxjs').Observable<StoreDocument[]>;
 			}),
+			map(sortStores),
 			distinctUntilChanged(storesEqual),
 			tap((resolved: StoreDocument[]) => {
 				storeLogger.debug('[stores] StoreSelect stores resolved', {
@@ -149,7 +173,13 @@ export function StoreSelect({
 							{stores.map((store) => (
 								<Pressable
 									key={store.localID}
-									testID={store.localID ? `store-option-${store.localID}` : undefined}
+									// Addressed by the WooCommerce store id, not `localID`. `localID` is a
+									// SHA-256 of {user, site, credentials, store}, so it gave E2E no way to
+									// ask for a PARTICULAR store — only "whichever renders first", which is
+									// how the tax specs ended up sampling a random store per run and going
+									// green without ever exercising a multi-compound-rate one
+									// (woocommerce-pos#1548).
+									testID={store.id != null ? `store-option-${store.id}` : undefined}
 									onPress={() => onStoreSelect(store.localID ?? null)}
 									className={`web:cursor-pointer web:transition-colors rounded-lg border p-3 ${
 										selectedStoreId === store.localID

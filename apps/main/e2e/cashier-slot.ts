@@ -16,6 +16,22 @@ export function selectCashierSlot(eventName: string | undefined, normalizedIndex
 	return bandStart + normalizedIndex;
 }
 
+/**
+ * 0-based index of the shard this process is running.
+ *
+ * Reads `E2E_SHARD_INDEX` (1-based, set by the CI matrix) before Playwright's
+ * own `config.shard`. The gate no longer passes `--shard` — it hands each job an
+ * explicit, duration-balanced list of spec files instead (see
+ * `scripts/e2e-shard-plan.js`), which leaves `config.shard` undefined. Without
+ * this every job would normalize to index 0, collapse onto ONE cashier slot, and
+ * quietly destroy the per-shard scope isolation those slots exist to provide.
+ */
+export function currentShardIndex(config?: { shard?: { current: number } | null }): number {
+	const fromEnv = Number(process.env.E2E_SHARD_INDEX);
+	if (Number.isInteger(fromEnv) && fromEnv >= 1) return fromEnv - 1;
+	return (config?.shard?.current ?? 1) - 1;
+}
+
 export function getE2ECashierAuth(
 	variant: StoreVariant,
 	normalizedIndex: number
