@@ -73,7 +73,12 @@ function serializeLineItemTaxes<T extends LineItem>(items: T[]): T[] {
 			...item,
 			taxes: item.taxes.map((tax) => {
 				const widen = (value: unknown) => {
-					const parsed = parseFloat(String(value));
+					const parsed =
+						typeof value === 'number'
+							? value
+							: typeof value === 'string' && value.trim() !== ''
+								? Number(value)
+								: NaN;
 					return Number.isFinite(parsed) ? roundHalfUp(parsed, 6).toFixed(6) : value;
 				};
 				return {

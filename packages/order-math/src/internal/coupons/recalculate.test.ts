@@ -181,6 +181,24 @@ describe('recalculateCoupons', () => {
 				{ id: 1, subtotal: '0.005002', total: '0.005002' },
 			]);
 		});
+
+		it('does not serialize a numeric prefix from a malformed tax value', () => {
+			const lineItem = makePosLineItem(1, 1, 1);
+			lineItem.taxes = [{ id: 1, subtotal: '0.01invalid', total: '0.01' }];
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [lineItem],
+					couponLines: [],
+					couponConfigs: new Map(),
+					taxRates: [{ id: 1, rate: '1.0000', compound: false, order: 1, class: 'standard' }],
+				})
+			);
+
+			expect(result.lineItems[0].taxes).toEqual([
+				{ id: 1, subtotal: '0.01invalid', total: '0.010000' },
+			]);
+		});
 	});
 
 	// -----------------------------------------------------------------------
