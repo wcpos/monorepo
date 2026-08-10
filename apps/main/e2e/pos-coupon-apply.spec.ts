@@ -251,14 +251,22 @@ couponTest.describe('POS Cart - coupon application parity (live store)', () => {
 			const compoundCount = (doc!.tax_lines ?? []).filter(
 				(line) => (line as { compound?: unknown }).compound === true
 			).length;
-			testInfo.annotations.push({
-				type: 'tax-rates-exercised',
-				description:
-					`${appliedRates.join(', ') || 'none'} — ${compoundCount} compound. ` +
-					(compoundCount > 1
-						? 'MULTI-COMPOUND: this run exercised the #1548 compound-sequencing path.'
-						: 'Single/zero compound rate: this run did NOT exercise the #1548 compound-sequencing path.'),
-			});
+			// Two compound rates exercise the compound SEQUENCE. Whether they also
+			// exercise the #1120 sort key depends on the store's `tax_rate_order`
+			// values, which the ack does not carry: rates whose `order` already
+			// ascends with `priority` sort identically before and after that fix.
+			// dev-next has one store of each kind, so say what is provable here and
+			// leave the rest to the rate table.
+			const coverage =
+				compoundCount > 1
+					? `MULTI-COMPOUND (${compoundCount}): compound sequencing WAS exercised. Whether the #1120 priority-vs-order tie was exercised depends on this store's tax_rate_order values.`
+					: `${compoundCount} compound rate: compound sequencing was NOT exercised — this run cannot speak to woocommerce-pos#1548.`;
+			const rateSummary = `${appliedRates.join(', ') || 'none'} — ${coverage}`;
+			testInfo.annotations.push({ type: 'tax-rates-exercised', description: rateSummary });
+			// Also to stdout: the annotation only reaches the HTML/blob report, and
+			// the whole point is that someone reading a GREEN log can see which rates
+			// the pass was built on without downloading an artifact.
+			console.log(`[tax-rates-exercised] ${rateSummary}`);
 			//
 			// Wait for the TERMINAL write signal first (same reason as the plain-sale
 			// spec, #1114 review): the save button re-enables when the round trip
