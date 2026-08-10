@@ -1,0 +1,30 @@
+{
+  "_comment": "Measured wall-seconds per spec file, summed across workers. Feeds scripts/e2e-shard-plan.js, which bin-packs specs into balanced shards — Playwright's own --shard splits by TEST COUNT, which left one shard doing 473s of work while another did 64s. Regenerate with: node scripts/e2e-shard-plan.js --measure <runId>. A spec missing from this file still runs; it is assigned the median weight, so the only cost of stale data is imperfect balance, never a skipped test.",
+  "_source": "GitHub Actions run 31429108622 (6 shards, 156 tests, 1486s total)",
+  "_measured": "2026-08-10",
+  "timings": {
+    "pos-checkout.spec.ts": 211.0,
+    "pos-cart.spec.ts": 180.5,
+    "products-page.spec.ts": 151.4,
+    "pos-variations.spec.ts": 132.4,
+    "products.spec.ts": 126.9,
+    "settings.spec.ts": 94.0,
+    "customers.spec.ts": 93.1,
+    "orders.spec.ts": 75.3,
+    "pos-coupon-apply.spec.ts": 210.0,
+    "navigation.spec.ts": 68.0,
+    "pos-refunds.spec.ts": 67.9,
+    "logs.spec.ts": 51.7,
+    "reports.spec.ts": 51.7,
+    "coupons.spec.ts": 44.7,
+    "auth.spec.ts": 38.1,
+    "header.spec.ts": 29.2,
+    "order-lifecycle.unit.spec.ts": 0.2,
+    "order-cleanup.spec.ts": 0.1,
+    "search-probe.spec.ts": 0.0,
+    "cashier-slot.spec.ts": 0.0
+  },
+  "_notes": {
+    "pos-coupon-apply.spec.ts": "Measured at 70.0s for ONE store. Now runs once per store (3 on dev-next) and the non-default stores each pay a lazy OAuth, so it is weighted at 210 rather than its last measurement. Re-measure once a full run lands."
+  }
+}

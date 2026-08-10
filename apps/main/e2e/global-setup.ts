@@ -3,7 +3,7 @@ import * as path from 'path';
 
 import { chromium, type FullConfig } from '@playwright/test';
 
-import { cashierAuthStateName, getE2ECashierAuth } from './cashier-slot';
+import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import {
 	COLD_START_ENABLED,
 	COLD_START_STATE_NAME,
@@ -254,7 +254,7 @@ async function globalSetup(config: FullConfig) {
 	const baseURL = process.env.BASE_URL || 'http://localhost:8081';
 	// Normalize Playwright's 1-based shard number to the 0-based index used
 	// within the PR (1..8) or non-PR/local (9..16) cashier band.
-	const shardIndex = (config.shard?.current ?? 1) - 1;
+	const shardIndex = currentShardIndex(config);
 
 	// Create the state directory
 	fs.mkdirSync(AUTH_STATE_DIR, { recursive: true });
@@ -271,9 +271,12 @@ async function globalSetup(config: FullConfig) {
 	// "whichever store listed first" meant those specs sampled a different store
 	// per run and could go green having tested nothing (woocommerce-pos#1548).
 	//
-	// The default state above already opened the FIRST store, so that one is
-	// copied rather than re-authenticated; only the remaining stores cost an
-	// extra OAuth.
+	// The default bootstrap already opened the FIRST store, so copy that state
+	// under its per-store name — free. The OTHER stores are deliberately NOT
+	// authenticated here: globalSetup runs in EVERY shard, so an eager loop would
+	// pay (stores - 1) extra OAuths six times over for tests that live in one
+	// shard. `hydrateAuthenticatedPage` logs into a missing store on demand, so
+	// the cost lands once, in the shard that actually runs a store-targeted test.
 	if (proStoreIds.length > 1) {
 		console.log(`[global-setup] User has ${proStoreIds.length} stores: ${proStoreIds.join(', ')}`);
 		const cashierAuth = getE2ECashierAuth('pro', shardIndex);
@@ -286,14 +289,6 @@ async function globalSetup(config: FullConfig) {
 			`${cashierAuthStateName(`pro-store-${proStoreIds[0]}`, cashierAuth)}.json`
 		);
 		if (fs.existsSync(defaultState)) fs.copyFileSync(defaultState, firstStoreState);
-
-		for (const storeId of proStoreIds.slice(1)) {
-			await setupVariant('pro', PRO_STORE_URL, baseURL, {
-				stateName: `pro-store-${storeId}`,
-				storeId,
-				shardIndex,
-			});
-		}
 	}
 
 	// Let specs enumerate the stores without re-authenticating. Written even for

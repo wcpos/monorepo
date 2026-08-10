@@ -12,7 +12,7 @@ import {
 
 import { log } from '@wcpos/utils/logger';
 
-import { cashierAuthStateName, getE2ECashierAuth } from './cashier-slot';
+import { cashierAuthStateName, currentShardIndex, getE2ECashierAuth } from './cashier-slot';
 import { captureCreatedOrderIds, finalizeCreatedOrders } from './order-cleanup';
 import { restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
@@ -750,6 +750,12 @@ export interface HydrateAuthenticatedPageOptions {
 	/** Saved-state basename under e2e/.auth-state (default: the store variant). */
 	stateName?: string;
 	/**
+	 * Store to open when no saved state exists and the OAuth fallback runs.
+	 * Without it the fallback would silently authenticate into a DIFFERENT store
+	 * than the test asked for and report a pass for it.
+	 */
+	storeId?: string;
+	/**
 	 * Wait for a product marker once the app boots. The cold-start profile
 	 * turns this off — its catalogue is empty by design.
 	 */
@@ -787,7 +793,7 @@ export async function hydrateAuthenticatedPage(
 ): Promise<void> {
 	const { waitForCatalogue = true, beforeBoot } = options;
 	const variant = getStoreVariant(testInfo);
-	const cashierAuth = getE2ECashierAuth(variant, (testInfo.config.shard?.current ?? 1) - 1);
+	const cashierAuth = getE2ECashierAuth(variant, currentShardIndex(testInfo.config));
 	await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo), variant);
 	if (beforeBoot) await beforeBoot(page);
 	const stateName = cashierAuthStateName(options.stateName ?? variant, cashierAuth);
@@ -881,13 +887,18 @@ export async function hydrateAuthenticatedPage(
 			await authenticateWithStore(page, testInfo, {
 				waitForCatalogue,
 				credentials: cashierAuth ?? undefined,
+				storeId: options.storeId,
 			});
 		}
 	} else {
-		// No saved state — fall back to full OAuth (local dev without globalSetup)
+		// No saved state — full OAuth. For a store-targeted run this is the normal
+		// path, not an error: globalSetup captures ONLY the default store's state,
+		// so the extra logins are paid lazily by the one shard that actually runs a
+		// store-targeted test rather than eagerly by all six.
 		await authenticateWithStore(page, testInfo, {
 			waitForCatalogue,
 			credentials: cashierAuth ?? undefined,
+			storeId: options.storeId,
 		});
 	}
 }
@@ -938,6 +949,7 @@ export const authenticatedTest = base.extend<{
 		const orderCapture = captureCreatedOrderIds(page);
 		await hydrateAuthenticatedPage(page, testInfo, {
 			stateName: targetStoreId ? `${getStoreVariant(testInfo)}-store-${targetStoreId}` : undefined,
+			storeId: targetStoreId ?? undefined,
 		});
 
 		// Layout-drift pin (#1106): every POS interaction scopes under screen-pos,
