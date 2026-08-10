@@ -220,20 +220,56 @@ couponTest.describe('POS Cart - coupon application parity (live store)', () => {
 				'couponed sale must keep the POS rate set'
 			);
 
-			// STILL PARKED — woocommerce-pos#1548, now with a PRECISE root cause the
-			// CI gate on mono#1119 surfaced: on a store with MULTIPLE COMPOUND tax
-			// rates (dev-next's GB store: VAT 20% + Surcharge 2%, both compound),
-			// a couponed line's per-rate split diverges client vs server even though
-			// the TOTAL tax matches — client VAT 3.750000 / Surcharge 0.367647 vs
-			// server VAT 3.676471 / Surcharge 0.441176 (same 4.117647 total,
-			// redistributed). This is NOT the #1117 rounding class and NOT a
-			// concurrency swap (the earlier "0/13 lab" story was wrong — the lab
-			// used a single US rate and never exercised compound ordering): it is a
-			// deterministic client-side compound-tax computation difference in
-			// order-math on DISCOUNTED lines. Re-arm this assertion when that
-			// order-math fix lands. The push-payload/push-ack attachments above stay
-			// as the field-level detector. (The plain-sale banner in pos-cart.spec
-			// IS armed — it has no coupon, so no compound-on-discount divergence.)
+			// RE-ARMED (was parked on woocommerce-pos#1548). Both halves of that bug
+			// are now fixed in order-math: the #1117 rounding half (tax_lines emitted
+			// at WooCommerce STORAGE precision) and the compound half (mono#1120 —
+			// compound rates sequence by `tax_rate_priority`, not the display-only
+			// `order` field, which ties at 0 on a real store and inverted the
+			// sequence). On dev-next's GB store — VAT 20% priority 1 + Surcharge 2%
+			// priority 2, BOTH compound — a couponed line used to split client VAT
+			// 3.750000 / Surcharge 0.367647 against server 3.676471 / 0.441176: the
+			// same 4.117647 total, redistributed, so only this banner caught it.
+			// That redistribution is what the assertion below re-arms against, so it
+			// is only meaningful on a MULTI-COMPOUND-RATE store — a single-rate store
+			// passes it without ever exercising the compound path. The
+			// push-payload/push-ack attachments above stay as the field-level
+			// detector and record which rates a given run actually applied.
+			//
+			// So that "did this run exercise the compound path?" is answerable from
+			// the REPORT rather than by opening an attachment, annotate the rate set
+			// the sale actually applied. This is the lesson of the parked period: a
+			// lab pinned to a single US rate reported 30/30 green while the compound
+			// path was completely broken, because a pass count says nothing about
+			// which rates ran. Annotation, not assertion — the store-agnostic policy
+			// forbids requiring any particular store's rate set.
+			const appliedRates = (doc!.tax_lines ?? []).map((line) => {
+				const percent = (line as { rate_percent?: unknown }).rate_percent;
+				const compound = (line as { compound?: unknown }).compound;
+				const label = (line as { label?: unknown }).label ?? line.rate_id;
+				return `${String(label)}@${String(percent ?? '?')}%${compound === true ? ' compound' : ''}`;
+			});
+			const compoundCount = (doc!.tax_lines ?? []).filter(
+				(line) => (line as { compound?: unknown }).compound === true
+			).length;
+			testInfo.annotations.push({
+				type: 'tax-rates-exercised',
+				description:
+					`${appliedRates.join(', ') || 'none'} — ${compoundCount} compound. ` +
+					(compoundCount > 1
+						? 'MULTI-COMPOUND: this run exercised the #1548 compound-sequencing path.'
+						: 'Single/zero compound rate: this run did NOT exercise the #1548 compound-sequencing path.'),
+			});
+			//
+			// Wait for the TERMINAL write signal first (same reason as the plain-sale
+			// spec, #1114 review): the save button re-enables when the round trip
+			// completes, so the reconciliation that raises this banner has run before
+			// we assert it is down — asserting straight after the response would pass
+			// on the pre-reconciliation rendering.
+			await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+			await expect(
+				page.getByTestId('order-totals-changed-banner'),
+				'a couponed sale must not trigger the totals-changed banner'
+			).not.toBeVisible();
 		}
 	);
 });
