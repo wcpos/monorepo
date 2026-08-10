@@ -37,10 +37,19 @@
  *   (`WC_Abstract_Order::set_total` runs `wc_format_decimal($v,
  *   wc_get_price_decimals())`, so the stored value is already cents; `dp=6`
  *   only widens the string). Live: `50.070000`. Same for `total_tax`,
- *   `discount_total` / `discount_tax`, `shipping_total` and `tax_lines[]`,
- *   all of which pass through `wc_round_tax_total` / `NumberUtil::round` at
- *   display decimals first. `order-totals.ts` reproduces each of these
- *   exactly, which is why both sides agree field for field.
+ *   `discount_total` / `discount_tax` and `shipping_total`.
+ *
+ *   SETTING-DEPENDENT — `tax_lines[]` (`tax_total`, `shipping_tax_total`).
+ *   An earlier revision of this doc claimed these were display-rounded
+ *   unconditionally; that is only true when `woocommerce_tax_round_at_subtotal`
+ *   is OFF. When it is ON, WooCommerce stores the RAW per-rate aggregate
+ *   (update_taxes(): cart taxes sum `round_line_tax($tax, false)` — raw under
+ *   round-at-subtotal — and shipping taxes skip `wc_round_tax_total`), so a
+ *   dp=6 read serves e.g. `1.636364`, not `1.640000`. Believing the
+ *   unconditional claim made the client display-round its pushed tax_lines and
+ *   this comparator alarm on every taxed sale on such stores (issue #1548).
+ *   `order-totals.ts` now mirrors the storage semantics per setting, which is
+ *   why both sides agree field for field again.
  *
  * Deriving the width from the two spellings is what makes that safe without a
  * table of field names to keep in sync with WooCommerce: `36.68` vs

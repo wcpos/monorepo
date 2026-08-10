@@ -220,16 +220,20 @@ couponTest.describe('POS Cart - coupon application parity (live store)', () => {
 				'couponed sale must keep the POS rate set'
 			);
 
-			// KNOWN DIVERGENCE — woocommerce-pos#1548 (named per the Money-oracle
-			// doctrine, not blanket-tolerated): the couponed ack (a) swaps per-line
-			// taxes[] rate attribution relative to its own tax_lines, and (b) serves
-			// tax_lines[].tax_total unrounded where the money contract says
-			// display-rounded — so the totals-changed banner currently fires on a
-			// correct couponed sale. The banner-absence assertion is parked on that
-			// issue; re-arm it (and add per-rate line-tax attribution parity, which
-			// pins finding (a)) when #1548 closes. Everything comparable above —
-			// coupon_lines, discount, total, cart_tax, rate SET — is asserted
-			// strictly and holds today.
+			// STILL PARKED — woocommerce-pos#1548, now with a PRECISE root cause the
+			// CI gate on mono#1119 surfaced: on a store with MULTIPLE COMPOUND tax
+			// rates (dev-next's GB store: VAT 20% + Surcharge 2%, both compound),
+			// a couponed line's per-rate split diverges client vs server even though
+			// the TOTAL tax matches — client VAT 3.750000 / Surcharge 0.367647 vs
+			// server VAT 3.676471 / Surcharge 0.441176 (same 4.117647 total,
+			// redistributed). This is NOT the #1117 rounding class and NOT a
+			// concurrency swap (the earlier "0/13 lab" story was wrong — the lab
+			// used a single US rate and never exercised compound ordering): it is a
+			// deterministic client-side compound-tax computation difference in
+			// order-math on DISCOUNTED lines. Re-arm this assertion when that
+			// order-math fix lands. The push-payload/push-ack attachments above stay
+			// as the field-level detector. (The plain-sale banner in pos-cart.spec
+			// IS armed — it has no coupon, so no compound-on-discount divergence.)
 		}
 	);
 });
