@@ -219,7 +219,6 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			// tax_lines at WooCommerce STORAGE precision (mono#1117 — raw 6dp
 			// per-rate sums under round-at-subtotal), so a plain sale's ack matches
 			// what the cart pushed and the cashier-facing alarm must stay down.
-			await page.waitForTimeout(1_500);
 			await expect(
 				page.getByTestId('order-totals-changed-banner'),
 				'a plain sale must not trigger the totals-changed banner'
