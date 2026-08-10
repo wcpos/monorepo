@@ -627,6 +627,35 @@ describe('coupon line calculations', () => {
  * integration testing against WooCommerce servers.
  */
 describe('calculateOrderTotals — parity regressions', () => {
+	describe('tax line storage precision', () => {
+		it.each([
+			{ taxRoundAtSubtotal: true, expected: '1.636364' },
+			{ taxRoundAtSubtotal: false, expected: '1.64' },
+		])(
+			'emits $expected per-rate totals when taxRoundAtSubtotal=$taxRoundAtSubtotal',
+			({ taxRoundAtSubtotal, expected }) => {
+				const taxes = [{ id: 6, total: '0.818182' }];
+				const result = calculateOrderTotals({
+					lineItems: [
+						{ subtotal: '10', total: '10', subtotal_tax: '0', total_tax: '0', taxes },
+						{ subtotal: '10', total: '10', subtotal_tax: '0', total_tax: '0', taxes },
+					] as any,
+					shippingLines: [
+						{ total: '5', total_tax: '0', taxes },
+						{ total: '5', total_tax: '0', taxes },
+					] as any,
+					taxRates: [{ id: 6, name: 'US Tax', rate: '10', compound: false }] as any,
+					taxRoundAtSubtotal,
+					pricesIncludeTax: false,
+				});
+
+				expect(result.tax_lines).toMatchObject([
+					{ rate_id: 6, tax_total: expected, shipping_tax_total: expected },
+				]);
+			}
+		);
+	});
+
 	describe('dev-free: per-item tax rounding when taxRoundAtSubtotal=false', () => {
 		// Bug: two items with per-rate taxes 1.633 and 1.634.
 		// WC rounds each to dp before summing into tax_lines → 1.63 + 1.63 = 3.26.

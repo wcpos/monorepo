@@ -244,7 +244,7 @@ export function calculateOrderTotals(
 	// and only rounds the final aggregated total (cart_tax, total_tax).
 	// When taxRoundAtSubtotal=false, taxes were already rounded per-item.
 	//
-	// For tax_lines display we always round to dp. But for cart_tax/total_tax
+	// For tax_lines, WC stores raw 6dp sums when rounding at subtotal. For cart_tax/total_tax
 	// we sum at full precision first, then round — matching WC's update_taxes().
 	const fullPrecisionCartTax = taxLinesArray.reduce((sum, tl) => sum + tl.tax_total, 0);
 	const fullPrecisionShippingTax = taxLinesArray.reduce(
@@ -261,8 +261,12 @@ export function calculateOrderTotals(
 			}
 			return {
 				...taxLine,
-				tax_total: String(roundTaxTotal(tax_total, dp, pricesIncludeTax)),
-				shipping_tax_total: String(roundTaxTotal(shipping_tax_total, dp, pricesIncludeTax)),
+				tax_total: taxRoundAtSubtotal
+					? Number(tax_total).toFixed(6)
+					: String(roundTaxTotal(tax_total, dp, pricesIncludeTax)),
+				shipping_tax_total: taxRoundAtSubtotal
+					? Number(shipping_tax_total).toFixed(6)
+					: String(roundTaxTotal(shipping_tax_total, dp, pricesIncludeTax)),
 			};
 		})
 		.filter((line): line is NonNullable<typeof line> => line !== null);
