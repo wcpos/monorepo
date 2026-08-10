@@ -148,6 +148,25 @@ describe('calculateCartLine — line_item', () => {
 		expect(line.taxes).toEqual([{ id: 1, subtotal: '3.676470', total: '3.676470' }]);
 	});
 
+	it('rounds half-up before padding per-rate taxes', () => {
+		const rate5 = { ...rate20, rate: '5.0000' };
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate5],
+			allRates: [rate5],
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 0.10003, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.taxes).toEqual([{ id: 1, subtotal: '0.005002', total: '0.005002' }]);
+	});
+
 	it('should correctly calculate when prices do not include tax', () => {
 		const config = createCartConfig({ ...baseConfig, rates: [rate20], pricesIncludeTax: false });
 		const lineItem = {

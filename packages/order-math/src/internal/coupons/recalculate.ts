@@ -11,6 +11,7 @@ import {
 	type CouponLineItem,
 } from './helpers';
 import { calculateTaxes } from '../money/calculate-taxes';
+import { roundHalfUp } from '../money/precision';
 import { getLineItemTaxStatus, parsePosData } from '../lines/pos-data';
 
 import type { CouponLineInput as CouponLine, LineItemInput as LineItem } from '../../types';
@@ -136,8 +137,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 				const origTax = (item.taxes || []).find((t) => t.id === tax.id);
 				return {
 					...(origTax || { id: tax.id }),
-					subtotal: origTax?.subtotal ?? String(tax.total),
-					total: String(tax.total),
+					subtotal: origTax?.subtotal ?? roundHalfUp(tax.total, 6).toFixed(6),
+					total: roundHalfUp(tax.total, 6).toFixed(6),
 				};
 			});
 

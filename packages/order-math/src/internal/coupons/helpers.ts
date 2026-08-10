@@ -2,7 +2,7 @@ import isEmpty from 'lodash/isEmpty';
 import round from 'lodash/round';
 
 import { calculateTaxes } from '../money/calculate-taxes';
-import { roundTaxTotal } from '../money/precision';
+import { roundHalfUp, roundTaxTotal } from '../money/precision';
 import { getLineItemTaxStatus } from '../lines/pos-data';
 
 import type { PerItemDiscount } from './discount';
@@ -251,7 +251,7 @@ export function computeDiscountedLineItems<
 
 			const taxes = (item.taxes || []).map((tax) => ({
 				...tax,
-				total: String(round(parseFloat(tax.total || '0') * ratio, 6)),
+				total: roundHalfUp(parseFloat(tax.total || '0') * ratio, 6).toFixed(6),
 			}));
 
 			return {
@@ -302,7 +302,7 @@ export function computeDiscountedLineItems<
 
 		const taxes = (item.taxes || []).map((tax) => ({
 			...tax,
-			total: String(round(parseFloat(tax.total || '0') * ratio, 6)),
+			total: roundHalfUp(parseFloat(tax.total || '0') * ratio, 6).toFixed(6),
 		}));
 
 		return {
@@ -375,6 +375,7 @@ export function calculateCouponDiscountTaxSplit(
 					order: number;
 				}[],
 				amountIncludesTax: false,
+				dp,
 			});
 
 			// WC rounds per-item tax to dp when not rounding at subtotal level.

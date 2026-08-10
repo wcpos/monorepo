@@ -3,7 +3,12 @@ import reverse from 'lodash/reverse';
 import sumBy from 'lodash/sumBy';
 import toNumber from 'lodash/toNumber';
 
-import { getRoundingPrecision, roundHalfUp } from './precision';
+import {
+	addNumberPrecision,
+	getRoundingPrecision,
+	removeNumberPrecision,
+	roundHalfUp,
+} from './precision';
 import { sumTaxes } from './sum-taxes';
 
 /**
@@ -147,10 +152,11 @@ export function calculateTaxes({
 		return a.id - b.id;
 	});
 	const roundingPrecision = dp + getRoundingPrecision(dp);
+	const normalizedAmount = removeNumberPrecision(addNumberPrecision(amount, dp), dp);
 
 	const taxes = amountIncludesTax
-		? calcInclusiveTax({ amount, rates: sortedRates })
-		: calcExclusiveTax({ amount, rates: sortedRates });
+		? calcInclusiveTax({ amount: normalizedAmount, rates: sortedRates })
+		: calcExclusiveTax({ amount: normalizedAmount, rates: sortedRates });
 
 	/**
 	 * WooCommerce calculates in cents space, so WC_Tax::round()'s rounding precision

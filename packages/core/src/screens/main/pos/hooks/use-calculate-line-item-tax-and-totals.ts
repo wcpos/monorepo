@@ -52,8 +52,8 @@ const consolidateTaxes = (
 			// authored at 6dp, so a dropped zero turned a cross-engine tie into a
 			// cashier-facing "your store changed this order's totals" banner on a
 			// correct sale (woocommerce-pos#1548). Mirrors cart-line.ts.
-			subtotal: noSubtotal ? '' : roundedSubtotalTax.toFixed(6),
-			total: roundedTotalTax.toFixed(6),
+			subtotal: noSubtotal ? '' : roundHalfUp(roundedSubtotalTax, 6).toFixed(6),
+			total: roundHalfUp(roundedTotalTax, 6).toFixed(6),
 		};
 	});
 };

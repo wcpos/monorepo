@@ -80,6 +80,38 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 		});
 	});
 
+	it('rounds half-up before padding per-rate taxes', () => {
+		(useTaxRates as jest.Mock).mockReturnValue({
+			pricesIncludeTax: false,
+			priceNumDecimals: 2,
+			taxRoundAtSubtotal: true,
+		});
+		(useCalculateTaxesFromValue as jest.Mock).mockReturnValue({
+			calculateTaxesFromValue: jest.fn(({ amount }) =>
+				calculateTaxes({
+					amount,
+					rates: [{ id: 1, rate: '5.0000', compound: false, order: 1 }],
+					amountIncludesTax: false,
+				})
+			),
+		});
+		(useLineItemData as jest.Mock).mockReturnValue({
+			getLineItemData: jest.fn(() => ({
+				price: 0.10003,
+				regular_price: 0.10003,
+				tax_status: 'taxable',
+			})),
+		});
+
+		const { result } = renderHook(() => useCalculateLineItemTaxAndTotals());
+		const calculated = result.current.calculateLineItemTaxesAndTotals({
+			quantity: 1,
+			tax_class: 'standard',
+		});
+
+		expect(calculated.taxes).toEqual([{ id: 1, subtotal: '0.005002', total: '0.005002' }]);
+	});
+
 	it('should correctly calculate line item tax and totals when prices include tax', () => {
 		// Mocking external hook responses
 		(useTaxRates as jest.Mock).mockReturnValue({

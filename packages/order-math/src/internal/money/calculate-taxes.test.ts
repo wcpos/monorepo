@@ -168,6 +168,18 @@ describe('Calculate Taxes', () => {
 			expect(result.taxes[0].total).toBe(1.99998);
 		});
 
+		it('normalizes the source amount to WooCommerce number precision', () => {
+			const result = calculateTaxes({
+				amount: 1.23456749,
+				rates: [vatRate],
+				amountIncludesTax: false,
+				dp: 2,
+			});
+
+			// WC scales to cents and normalizes 1.23456749 to 1.234567 before tax.
+			expect(result.taxes[0].total).toBe(0.2469134);
+		});
+
 		it('dp=0 compound taxes (JPY)', () => {
 			const rates = [
 				{ ...vatRate, id: 1, rate: '5.0000', compound: false, order: 1 },

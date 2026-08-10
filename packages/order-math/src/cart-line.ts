@@ -228,8 +228,8 @@ const consolidateTaxes = (
 
 		return {
 			id,
-			subtotal: noSubtotal ? '' : roundedSubtotalTax.toFixed(6),
-			total: roundedTotalTax.toFixed(6),
+			subtotal: noSubtotal ? '' : roundHalfUp(roundedSubtotalTax, 6).toFixed(6),
+			total: roundHalfUp(roundedTotalTax, 6).toFixed(6),
 		};
 	});
 };
