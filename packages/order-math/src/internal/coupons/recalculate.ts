@@ -46,6 +46,47 @@ export interface RecalculateResult {
 }
 
 /**
+ * Round per-rate line taxes to the 6dp wire contract — ONCE, at the exit.
+ *
+ * Both halves matter and they pull against each other:
+ *
+ *  - WIDTH. These strings ship as `line_items[].taxes[]`. `String(n)` emits
+ *    whatever the float prints — "0.0050015" (7dp) or "3.67647" (5dp) — and the
+ *    divergence comparator forgives a one-microunit cross-engine tie only when
+ *    BOTH sides were authored at exactly 6dp. A stray width turns a tie into a
+ *    cashier-facing "your store changed this order's totals" banner on a
+ *    correct sale (woocommerce-pos#1548).
+ *
+ *  - PRECISION. Rounding any EARLIER — in the reset below, or per rate as the
+ *    coupon stage builds them — feeds already-rounded values into the next
+ *    computation. That double rounding is the exact 1-microunit error this
+ *    module was fixed to remove: a quantity-two compound line came out
+ *    3.676470 against WooCommerce's 3.676471.
+ *
+ * Hence full precision all the way through, one half-up cut at the boundary.
+ * Applied at BOTH exits — the no-coupon reset returns early.
+ */
+function serializeLineItemTaxes<T extends LineItem>(items: T[]): T[] {
+	return items.map((item) => {
+		if (!Array.isArray(item.taxes)) return item;
+		return {
+			...item,
+			taxes: item.taxes.map((tax) => {
+				const widen = (value: unknown) => {
+					const parsed = parseFloat(String(value));
+					return Number.isFinite(parsed) ? roundHalfUp(parsed, 6).toFixed(6) : value;
+				};
+				return {
+					...tax,
+					...(tax.subtotal === '' || tax.subtotal == null ? {} : { subtotal: widen(tax.subtotal) }),
+					...(tax.total == null ? {} : { total: widen(tax.total) }),
+				};
+			}),
+		};
+	});
+}
+
+/**
  * Determine whether a line item represents a POS-discounted (on sale) product
  * by comparing the POS price against the regular price in _woocommerce_pos_data.
  */
@@ -137,8 +178,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 				const origTax = (item.taxes || []).find((t) => t.id === tax.id);
 				return {
 					...(origTax || { id: tax.id }),
-					subtotal: origTax?.subtotal ?? roundHalfUp(tax.total, 6).toFixed(6),
-					total: roundHalfUp(tax.total, 6).toFixed(6),
+					subtotal: origTax?.subtotal ?? String(tax.total),
+					total: String(tax.total),
 				};
 			});
 
@@ -164,7 +205,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 	// If no active coupons, return reset items
 	if (activeCouponLines.length === 0) {
-		return { lineItems: resetItems, couponLines };
+		return { lineItems: serializeLineItemTaxes(resetItems), couponLines };
 	}
 
 	// Step 2: Build CouponLineItems using tax-inclusive POS price as the coupon base.
@@ -344,7 +385,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	});
 
 	return {
-		lineItems: discountedLineItems,
+		lineItems: serializeLineItemTaxes(discountedLineItems),
 		couponLines: finalCouponLines,
 	};
 }
