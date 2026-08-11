@@ -3,7 +3,9 @@
  */
 import * as React from 'react';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import { Toast } from '@wcpos/components/toast';
 
 import { AttentionPanel } from './attention-panel';
 
@@ -41,16 +43,28 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		testID,
 		onPress,
+		loading,
+		disabled,
 	}: {
 		children: React.ReactNode;
 		testID?: string;
 		onPress?: () => void;
+		loading?: boolean;
+		disabled?: boolean;
 	}) => (
-		<button data-testid={testID} onClick={onPress}>
+		<button
+			data-testid={testID}
+			onClick={onPress}
+			disabled={disabled || loading}
+			data-loading={loading ? 'true' : 'false'}
+		>
 			{children}
 		</button>
 	),
 	ButtonText: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/toast', () => ({
+	Toast: { show: jest.fn() },
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -113,5 +127,44 @@ describe('AttentionPanel', () => {
 		render(<AttentionPanel stuck={[stuck('products', false)]} />);
 
 		expect(screen.queryByTestId('db-attention-retry')).toBeNull();
+	});
+
+	it('surfaces a failed sync report from Retry as an error toast', async () => {
+		mockExec.mockResolvedValue(null);
+		// engine.sync() reports failure on the returned report, it does not throw.
+		mockSync.mockResolvedValue({ lane: 'all', status: 'error', error: 'HTTP 502' });
+
+		render(<AttentionPanel stuck={[stuck('products', true)]} />);
+		fireEvent.click(screen.getByTestId('db-attention-retry'));
+
+		await waitFor(() =>
+			expect(Toast.show).toHaveBeenCalledWith({
+				type: 'error',
+				text1: 'Couldn’t sync with the server.',
+				text2: 'HTTP 502',
+			})
+		);
+		expect(mockSync).toHaveBeenCalledTimes(1);
+	});
+
+	it('spins while the retry sync is in flight and stays quiet on success', async () => {
+		mockExec.mockResolvedValue(null);
+		let finish!: (report: unknown) => void;
+		mockSync.mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+		);
+
+		render(<AttentionPanel stuck={[stuck('products', true)]} />);
+		const retry = () => screen.getByTestId('db-attention-retry');
+		expect(retry().getAttribute('data-loading')).toBe('false');
+
+		fireEvent.click(retry());
+		await waitFor(() => expect(retry().getAttribute('data-loading')).toBe('true'));
+
+		finish({ lane: 'all', status: 'ran' });
+		await waitFor(() => expect(retry().getAttribute('data-loading')).toBe('false'));
+		expect(Toast.show).not.toHaveBeenCalled();
 	});
 });

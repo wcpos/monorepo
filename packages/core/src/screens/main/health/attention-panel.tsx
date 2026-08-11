@@ -10,6 +10,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { useT } from '../../../contexts/translations';
 import { Callout } from './components';
 import { rowKeyForTelemetryCollection } from './database-logic';
+import { useManualSync } from './use-manual-sync';
 
 import type { StuckRecord } from '../logs/logs-logic';
 
@@ -88,7 +89,7 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 	const t = useT();
 	const router = useRouter();
-	const { engine } = useQueryRuntime();
+	const { syncing, sync } = useManualSync();
 	const first = stuck[0];
 	const label = useStuckRecordLabel(first);
 
@@ -129,7 +130,8 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 							variant="ghost"
 							size="sm"
 							testID="db-attention-retry"
-							onPress={() => void engine.sync()}
+							loading={syncing}
+							onPress={() => void sync()}
 						>
 							<ButtonText className="text-sm">{t('health.database.attention_retry')}</ButtonText>
 						</Button>

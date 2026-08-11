@@ -951,6 +951,7 @@
 	"health.database.rejected.no_record": "This record is no longer on this device, so there is nothing left to send — discard is the only option.",
 	"health.database.first_check_pending": "First check pending…",
 	"health.database.check_everything": "Check everything now",
+	"health.database.sync_failed": "Couldn’t sync with the server.",
 	"health.database.clear_body_orders": "The orders held on this device will be removed. Nothing on the server changes. Orders re-download as you view them — open and recent orders return in the background.",
 	"health.database.last_check_error": "Last check didn't complete — retrying",
 	"health.database.offline_preparing": "You're offline and still setting up — this till can't sell until its catalog finishes downloading.",
