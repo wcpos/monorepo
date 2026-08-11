@@ -1,17 +1,22 @@
 /** The single source of lane identity, cadence, ordering, dispatch, and activity ownership. */
 // prettier-ignore
 export const LANE_REGISTRY = [
-	{ laneName: 'change-signal', intervalKey: 'changeSignalPollMs', defaultMs: 10_000, targetKey: 'changeSignal', owner: 'facade', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: null },
-	{ laneName: 'write-drain', intervalKey: 'writeDrainPollMs', defaultMs: 10_000, targetKey: 'writeDrain', owner: 'facade', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 1 },
-	{ laneName: 'order-window-seed', intervalKey: 'orderWindowSeedMs', defaultMs: 5 * 60_000, targetKey: 'orderWindowSeed', owner: 'maintenance', collections: ['orders'], manualSync: true, seedRetickOrder: 3, rebaselineOrder: null, timerOrder: 3 },
-	{ laneName: 'product-browse-window-seed', intervalKey: 'productBrowseWindowSeedMs', defaultMs: 5 * 60_000, targetKey: 'productBrowseWindowSeed', owner: 'maintenance', collections: ['products'], manualSync: true, seedRetickOrder: 2, rebaselineOrder: 3, timerOrder: 4 },
-	{ laneName: 'reference-seed', intervalKey: 'referenceSeedMs', defaultMs: 5 * 60_000, targetKey: 'referenceSeed', owner: 'maintenance', collections: ['categories', 'brands', 'tags', 'coupons'], manualSync: true, seedRetickOrder: 1, rebaselineOrder: null, timerOrder: 5 },
-	{ laneName: 'scheduler-drain', intervalKey: 'schedulerDrainMs', defaultMs: 30_000, targetKey: 'schedulerDrain', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: 4, timerOrder: 2 },
-	{ laneName: 'query-total-retry', intervalKey: 'queryTotalRetryScanMs', defaultMs: 30_000, targetKey: 'queryTotalRetry', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 7 },
-	{ laneName: 'customer-trickle', intervalKey: 'customerTrickleMs', defaultMs: 5 * 60_000, targetKey: 'customerTrickle', owner: 'maintenance', collections: [], manualSync: false, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 6 },
-	{ laneName: 'coverage-compaction', intervalKey: 'coverageCompactionScanMs', defaultMs: 60_000, targetKey: 'coverageCompaction', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 8 },
-	{ laneName: 'existence-prime', intervalKey: 'existencePrimeMs', defaultMs: 15 * 60_000, targetKey: 'existencePrime', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: 1, timerOrder: 9 },
-	{ laneName: 'existence-reconcile', intervalKey: 'existenceReconcileMs', defaultMs: 17 * 60_000, targetKey: 'existenceReconcile', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: 2, timerOrder: 10 },
+	// Follow-up: these demand/cashier paths do not yet have a request ceiling.
+	{ laneName: 'change-signal', intervalKey: 'changeSignalPollMs', defaultMs: 10_000, targetKey: 'changeSignal', owner: 'facade', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: null, maxRequestsPerTick: null },
+	{ laneName: 'write-drain', intervalKey: 'writeDrainPollMs', defaultMs: 10_000, targetKey: 'writeDrain', owner: 'facade', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 1, maxRequestsPerTick: null },
+	// Seed ticks only enqueue. Reconcile is 3 scan ports × 3 gap-skipping pages + 2 drill-downs; query-total is 9 census probes + 1 due request.
+	// scheduler-drain executes DEMAND tasks (require-plane + seed enqueues) — per-task budgets exist
+	// (maxRequestsPerTask) but a per-tick total would throttle cashier-driven fetches, so its bound is
+	// null like the other demand lanes until the follow-up rules on a demand-side budget (codex r3760800564).
+	{ laneName: 'order-window-seed', intervalKey: 'orderWindowSeedMs', defaultMs: 5 * 60_000, targetKey: 'orderWindowSeed', owner: 'maintenance', collections: ['orders'], manualSync: true, seedRetickOrder: 3, rebaselineOrder: null, timerOrder: 3, maxRequestsPerTick: 0 },
+	{ laneName: 'product-browse-window-seed', intervalKey: 'productBrowseWindowSeedMs', defaultMs: 5 * 60_000, targetKey: 'productBrowseWindowSeed', owner: 'maintenance', collections: ['products'], manualSync: true, seedRetickOrder: 2, rebaselineOrder: 1, timerOrder: 4, maxRequestsPerTick: 0 },
+	{ laneName: 'reference-seed', intervalKey: 'referenceSeedMs', defaultMs: 5 * 60_000, targetKey: 'referenceSeed', owner: 'maintenance', collections: ['categories', 'brands', 'tags', 'coupons'], manualSync: true, seedRetickOrder: 1, rebaselineOrder: null, timerOrder: 5, maxRequestsPerTick: 0 },
+	{ laneName: 'scheduler-drain', intervalKey: 'schedulerDrainMs', defaultMs: 30_000, targetKey: 'schedulerDrain', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: 2, timerOrder: 2, maxRequestsPerTick: null },
+	{ laneName: 'query-total-retry', intervalKey: 'queryTotalRetryScanMs', defaultMs: 30_000, targetKey: 'queryTotalRetry', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 7, maxRequestsPerTick: 10 },
+	{ laneName: 'customer-trickle', intervalKey: 'customerTrickleMs', defaultMs: 5 * 60_000, targetKey: 'customerTrickle', owner: 'maintenance', collections: [], manualSync: false, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 6, maxRequestsPerTick: 1 },
+	{ laneName: 'coverage-compaction', intervalKey: 'coverageCompactionScanMs', defaultMs: 60_000, targetKey: 'coverageCompaction', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 8, maxRequestsPerTick: 0 },
+	{ laneName: 'existence-prime', intervalKey: 'existencePrimeMs', defaultMs: 15 * 60_000, targetKey: 'existencePrime', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: 3, timerOrder: 9, maxRequestsPerTick: 5 },
+	{ laneName: 'existence-reconcile', intervalKey: 'existenceReconcileMs', defaultMs: 17 * 60_000, targetKey: 'existenceReconcile', owner: 'maintenance', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: 4, timerOrder: 10, maxRequestsPerTick: 11 },
 ] as const;
 
 export type LaneRegistryEntry = (typeof LANE_REGISTRY)[number];

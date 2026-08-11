@@ -128,8 +128,8 @@ import {
 	REBASELINE_RETICK_LANES,
 	SEED_RETICK_LANES,
 } from './maintenance/lane-registry';
+import { type EngineTimers, systemTimers } from './engine-timers';
 
-import type { EngineTimers } from './engine-timers';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
@@ -282,6 +282,7 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
  * imposes on hostTransport) and is five times the sustained-slowness threshold.
  */
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
+export const REBASELINE_AUDIT_DELAY_MS = 60_000;
 
 const DEFAULT_INTERVALS: EngineIntervals = {
 	...DEFAULT_LANE_INTERVALS,
@@ -307,7 +308,11 @@ export type ActiveScope = {
  * an opaque diagnostic string, never a contract. */
 export type EngineEvent =
 	| { type: 'scope-switched'; scopeId: string; from: string | null }
-	| { type: 'collection-reset'; scopeId: string; collection: ResettableCollectionName }
+	| {
+			type: 'collection-reset';
+			scopeId: string;
+			collection: ResettableCollectionName;
+	  }
 	| {
 			type: 'reset-needs-confirmation';
 			scopeId: string;
@@ -341,7 +346,12 @@ export type EngineEvent =
 	// row — nothing was or ever will be sent. Terminal for the receipt's
 	// mutationId; a DISTINCT event (not the ack shape) because there is no
 	// server revision to carry and no push ever happened.
-	| { type: 'write-annihilated'; collection: string; recordId: string; mutationId: string }
+	| {
+			type: 'write-annihilated';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+	  }
 	// Fresh query totals persisted by the retry lane (slice 5d) — the host
 	// hydrates its UI caches from these.
 	| QueryTotalCacheEvent
@@ -351,7 +361,12 @@ export type EngineEvent =
 	// sync() and the mode:'auto' timers). Deliberately NOT the SyncObserver diagnostics
 	// port: UI state (active$) must not become best-effort when a host omits diagnostics.
 	| { type: 'lane-start'; lane: EngineLane }
-	| { type: 'lane-finish'; lane: EngineLane; status: SyncReport['status']; detail?: string }
+	| {
+			type: 'lane-finish';
+			lane: EngineLane;
+			status: SyncReport['status'];
+			detail?: string;
+	  }
 	| {
 			type: 'write-conflict';
 			collection: string;
@@ -554,6 +569,7 @@ export function createRxdbSyncEngine(
 		}
 	};
 	const nowMs = ports.now ?? (() => Date.now());
+	const timers = ports.timers ?? systemTimers;
 	const random = ports.random ?? Math.random;
 	const readConnectivity = (): EngineConnectivity => {
 		try {
@@ -811,6 +827,10 @@ export function createRxdbSyncEngine(
 					fetcher,
 					ports,
 				}),
+				reconcileCursorStore: {
+					get: (key) => readBlob(scopeId, key),
+					set: (key, value) => writeBlob(scopeId, key, value),
+				},
 				freshForMs: ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 				retainStaleForMs: COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS,
 				diagnostics,
@@ -1026,7 +1046,11 @@ export function createRxdbSyncEngine(
 				}
 				const from = announcedScopeId;
 				announcedScopeId = event.scopeId;
-				emitEngineEvent({ type: 'scope-switched', scopeId: event.scopeId, from });
+				emitEngineEvent({
+					type: 'scope-switched',
+					scopeId: event.scopeId,
+					from,
+				});
 				emitDb(activeDatabase());
 				scheduleStatusChange();
 				return;
@@ -1095,7 +1119,12 @@ export function createRxdbSyncEngine(
 		if (!identity || !database) {
 			throw new Error(`Scope ${scopeId} is not open`);
 		}
-		return { identity, scopeId, database, barcodeSelectors: barcodeSelectorsFor(scopeId) };
+		return {
+			identity,
+			scopeId,
+			database,
+			barcodeSelectors: barcodeSelectorsFor(scopeId),
+		};
 	};
 
 	const assertNotDisposed = (): void => {
@@ -1117,6 +1146,35 @@ export function createRxdbSyncEngine(
 	// it could capture (and persist a cursor for) the outgoing scope mid-
 	// transition. sync() checks this counter and returns skipped instead.
 	let pendingLifecycleOps = 0;
+	let rebaselineGeneration = 0;
+	// True from the moment a rebaseline chain starts (seeds included) until its audit
+	// hold resolves or is cancelled — the window in which interval-dispatched audit
+	// ticks must stand down (codex-review P2: a due interval landing pre- or mid-hold
+	// would otherwise sneak audit traffic into the open path the hold protects).
+	let rebaselineHoldActive = false;
+	let pendingRebaselineDelay: {
+		handle: ReturnType<typeof setTimeout>;
+		resolve: (elapsed: boolean) => void;
+	} | null = null;
+	const cancelPendingRebaselineAudit = (): void => {
+		rebaselineGeneration += 1;
+		rebaselineHoldActive = false;
+		if (pendingRebaselineDelay === null) return;
+		timers.clearTimeout(pendingRebaselineDelay.handle);
+		pendingRebaselineDelay.resolve(false);
+		pendingRebaselineDelay = null;
+	};
+	const waitForRebaselineAuditWindow = (generation: number): Promise<boolean> => {
+		if (disposed || generation !== rebaselineGeneration) return Promise.resolve(false);
+		return new Promise<boolean>((resolve) => {
+			const handle = timers.setTimeout(() => {
+				pendingRebaselineDelay = null;
+				resolve(!disposed && generation === rebaselineGeneration);
+			}, REBASELINE_AUDIT_DELAY_MS);
+			pendingRebaselineDelay = { handle, resolve };
+			timers.unref(handle);
+		});
+	};
 	const enqueueLifecycle = <T>(task: () => Promise<T>): Promise<T> => {
 		pendingLifecycleOps += 1;
 		// gatedBy flips to 'lifecycle' NOW — subscribers see the gate while the
@@ -1149,6 +1207,7 @@ export function createRxdbSyncEngine(
 				`Cross-site scope switch rejected: engine is bound to site "${initialScope.site}" — multi-site is a new engine (ADR 0018)`
 			);
 		}
+		cancelPendingRebaselineAudit();
 		const scopeId = scopeKeyFor(identity);
 		identityByScopeId.set(scopeId, identity);
 		return enqueueLifecycle(async () => {
@@ -1218,7 +1277,11 @@ export function createRxdbSyncEngine(
 						message: `POS bootstrap seed failed: ${message}`,
 						fields: { scopeId },
 					});
-					emitEngineEvent({ type: 'bootstrap-failed', scopeId, detail: message });
+					emitEngineEvent({
+						type: 'bootstrap-failed',
+						scopeId,
+						detail: message,
+					});
 				}
 			}
 			diagnostics({
@@ -1232,7 +1295,10 @@ export function createRxdbSyncEngine(
 	};
 
 	// --- The change-signal lane (slice 3) --------------------------------------
-	const intervals: EngineIntervals = { ...DEFAULT_INTERVALS, ...ports.intervals };
+	const intervals: EngineIntervals = {
+		...DEFAULT_INTERVALS,
+		...ports.intervals,
+	};
 	const changeSignalLane = createChangeSignalLane({
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
@@ -1408,6 +1474,7 @@ export function createRxdbSyncEngine(
 			: {}),
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
+		isServerBackingOff: (atMs) => serverPressure.isBackingOff(atMs),
 	});
 
 	type LaneTarget = {
@@ -1433,19 +1500,32 @@ export function createRxdbSyncEngine(
 				// A rebaseline consumed the skipped sequence-log history; whatever
 				// those rows would have delivered that the targeted re-pull cannot
 				// (server-side CREATES, a reset collection's refill) converges through
-				// the existence/seed lanes — so in auto mode run them NOW instead of
-				// waiting out their 5–17 min cadences. Mirrors the reconnect-retick
-				// ordering: seeds land before the drain scans for runnable tasks.
+				// the existence/seed lanes. Open and drain the product window now, then
+				// hold the audit outside the cashier's opening window.
 				// Manual mode is untouched: an all-lane sync() already runs these
 				// lanes after change-signal in the same ordered pass, and a targeted
 				// manual tick stays exactly one lane (deterministic tests).
 				if (report.rebaselined === true && mode === 'auto' && !disposed) {
-					void REBASELINE_RETICK_LANES.slice(1)
-						.reduce(
-							(chain, lane) => chain.then(() => automaticTickGate.runLane(lane)),
-							automaticTickGate.runLane(REBASELINE_RETICK_LANES[0]!)
-						)
-						.catch(() => undefined);
+					cancelPendingRebaselineAudit();
+					const generation = rebaselineGeneration;
+					rebaselineHoldActive = true;
+					void (async () => {
+						for (const lane of REBASELINE_RETICK_LANES.slice(0, 2)) {
+							await automaticTickGate.runLane(lane);
+						}
+						if (!(await waitForRebaselineAuditWindow(generation))) return;
+						// Revalidate the generation AFTER the wait resolves (coderabbit r3760789110):
+						// a newer rebaseline superseding this continuation must keep ITS hold — a
+						// stale continuation clearing the flag would unguard the new chain's open
+						// window, and its audit runs would race the new chain's seeds.
+						if (generation !== rebaselineGeneration || disposed) return;
+						// Clear the stand-down BEFORE dispatching, so the chain's own audit
+						// runs are never blocked by the guard they resolve.
+						rebaselineHoldActive = false;
+						for (const lane of REBASELINE_RETICK_LANES.slice(2)) {
+							await automaticTickGate.runLane(lane);
+						}
+					})().catch(() => undefined);
 				}
 				return report;
 			});
@@ -1496,7 +1576,31 @@ export function createRxdbSyncEngine(
 		now: nowMs,
 		diagnostics,
 		onStatusChange: scheduleStatusChange,
-		tickLane: (lane) => tickLaneWithEvents(lane),
+		tickLane: (lane) => {
+			// The rebaseline hold gates ALL automatic audit dispatch, not just the
+			// rebaseline-spawned chain: a due 15/17-min interval landing inside the
+			// 60s window must not sneak audit traffic into the open path it protects
+			// (codex-review P2). The interval simply retries next cadence; the held
+			// chain itself runs only after the hold resolves, so it is never blocked
+			// by this guard. Manual sync() does not pass through this gate.
+			if (rebaselineHoldActive && (lane === 'existence-prime' || lane === 'existence-reconcile')) {
+				// Emit the lane event pair here — the stand-down bypasses tickLaneWithEvents,
+				// and a silent skip would be invisible to hosts watching lane activity.
+				emitEngineEvent({ type: 'lane-start', lane });
+				emitEngineEvent({
+					type: 'lane-finish',
+					lane,
+					status: 'skipped',
+					detail: 'rebaseline-hold',
+				});
+				return Promise.resolve<SyncReport>({
+					lane,
+					status: 'skipped',
+					reason: 'rebaseline-hold',
+				});
+			}
+			return tickLaneWithEvents(lane);
+		},
 		recordTick: (report, startedAtMs) => {
 			recordLaneTick(report, startedAtMs);
 		},
@@ -1790,6 +1894,7 @@ export function createRxdbSyncEngine(
 			// each sees the prior outcome), so dispose's turn sees every scope a
 			// pending switch opened.
 			disposed = true;
+			cancelPendingRebaselineAudit();
 			for (const collection of SYNC_COLLECTION_NAMES) collectionActivity.set(collection, 0);
 			cadenceController.stop();
 			// Synchronous, unlike the census expiry timer below: these are live RxDB query

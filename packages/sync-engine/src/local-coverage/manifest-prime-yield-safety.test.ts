@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { type ExistenceManifestPrimeDatabase, primeExistenceManifest } from './manifest';
+import {
+	type ExistenceManifestPrimeDatabase,
+	primeExistenceManifest,
+	runManifestPrimePass,
+} from './manifest';
 
 /**
  * Regression cover for the window the boot prime's chunked classification opens (#949 tranche 2).
@@ -96,7 +100,9 @@ function digestFetcher() {
 		return {
 			ok: true,
 			status: 200,
-			json: async () => ({ digests: ids.map((id) => ({ id, digest: `d-${id}` })) }),
+			json: async () => ({
+				digests: ids.map((id) => ({ id, digest: `d-${id}` })),
+			}),
 		};
 	});
 }
@@ -119,6 +125,102 @@ async function runPrime(db: ExistenceManifestPrimeDatabase) {
 }
 
 describe('primeExistenceManifest removal safety across yields (#949)', () => {
+	it('limits one prime pass to five 100-id digest chunks and resumes with the first remaining ids', async () => {
+		const existing = new Set<number>();
+		const requested: number[][] = [];
+		const input = {
+			productWooIds: Array.from({ length: 601 }, (_unused, index) => index + 1),
+			variationWooIds: [],
+			existingManifestWooIds: existing,
+			fetchDigests: async (ids: number[]) => {
+				requested.push(ids);
+				return ids.map((id) => ({ id, digest: String(id) }));
+			},
+			upsert: async (rows: { wooId: number }[]) => {
+				for (const row of rows) existing.add(row.wooId);
+			},
+		};
+
+		await expect(runManifestPrimePass(input)).resolves.toBe(500);
+		expect(requested).toHaveLength(5);
+		expect(requested.flat()).toEqual(Array.from({ length: 500 }, (_unused, index) => index + 1));
+
+		await expect(runManifestPrimePass(input)).resolves.toBe(101);
+		expect(requested.slice(5).flat()).toEqual(
+			Array.from({ length: 101 }, (_unused, index) => index + 501)
+		);
+	});
+
+	it('rotates past ids whose digest lookup returns nothing instead of starving the tail (codex P1)', async () => {
+		// 601 resident ids, and the server knows NONE of them (e.g. deleted server-side):
+		// every pass primes zero rows. Without rotation each tick would retry ids 1..500
+		// forever; the persisted last-ATTEMPTED cursor must advance the window regardless.
+		const requested: number[][] = [];
+		let cursor = -1;
+		const input = {
+			productWooIds: Array.from({ length: 601 }, (_unused, index) => index + 1),
+			variationWooIds: [],
+			existingManifestWooIds: new Set<number>(),
+			fetchDigests: async (ids: number[]) => {
+				requested.push(ids);
+				return [];
+			},
+			upsert: async () => {},
+		};
+		const rotation = () => ({
+			afterWooId: cursor,
+			commit: async (lastAttempted: number) => {
+				cursor = lastAttempted;
+			},
+		});
+
+		await expect(runManifestPrimePass({ ...input, rotation: rotation() })).resolves.toBe(0);
+		expect(requested.flat()).toEqual(Array.from({ length: 500 }, (_unused, index) => index + 1));
+		expect(cursor).toBe(500);
+
+		await expect(runManifestPrimePass({ ...input, rotation: rotation() })).resolves.toBe(0);
+		const secondPass = requested.slice(5).flat();
+		// Resumes past the cursor (501..601), then wraps to the low ids — the tail is reached
+		// and the budget circulates instead of pinning to the first five chunks.
+		expect(secondPass[0]).toBe(501);
+		expect(secondPass).toContain(601);
+		expect(secondPass).toContain(1);
+		expect(cursor).toBe(399);
+	});
+
+	it('rotates past a batch whose digest fetch THROWS instead of retrying it forever (codex round 2)', async () => {
+		let cursor = -1;
+		const attempted: number[][] = [];
+		const input = {
+			productWooIds: Array.from({ length: 200 }, (_unused, index) => index + 1),
+			variationWooIds: [],
+			existingManifestWooIds: new Set<number>(),
+			fetchDigests: async (ids: number[]) => {
+				attempted.push(ids);
+				// The first window is poisoned: it always rejects.
+				if (ids[0]! <= 100) throw new Error('boom');
+				return ids.map((id) => ({ id, digest: String(id) }));
+			},
+			upsert: async () => {},
+			rotation: {
+				get afterWooId() {
+					return cursor;
+				},
+				commit: async (lastAttempted: number) => {
+					cursor = lastAttempted;
+				},
+			},
+		};
+
+		await expect(runManifestPrimePass(input)).rejects.toThrow('boom');
+		// The poisoned batch still advanced the cursor — the next tick opens PAST it.
+		expect(cursor).toBe(100);
+		await expect(runManifestPrimePass({ ...input, chunkBudget: { remaining: 1 } })).resolves.toBe(
+			100
+		);
+		expect(attempted[1]![0]).toBe(101);
+	});
+
 	it('does NOT delete a product that gained local work after it was classified', async () => {
 		const removed: string[][] = [];
 		const db = primeDatabase({

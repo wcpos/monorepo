@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { runExistenceReconcile } from './reconcile-existence-pass';
+import {
+	findExistenceReconcileCandidates,
+	runExistenceReconcile,
+	xor64,
+} from './reconcile-existence-pass';
 
 import type { LocalManifestEntry, ServerDigestEntry } from '../reconcile-bucket-plan';
 
@@ -15,6 +19,209 @@ const S = (id: number, digest: string): ServerDigestEntry => ({
 	id,
 	digest,
 	objectType: 'product',
+});
+
+describe('xor64', () => {
+	it('folds unsigned decimal digests above Number.MAX_SAFE_INTEGER without precision loss', () => {
+		expect(xor64(['9007199254740992', '9007199254740993'])).toBe('1');
+	});
+
+	it('uses zero as the empty-fold identity', () => {
+		expect(xor64([])).toBe('0');
+	});
+});
+
+describe('findExistenceReconcileCandidates', () => {
+	it('classifies a matching aggregate and local manifest slice as clean', async () => {
+		const result = await findExistenceReconcileCandidates({
+			buckets: [0],
+			bucketSize: 1000,
+			readLocalBucket: async () => [L(1, '9007199254740992'), L(2, '9007199254740993')],
+			fetchServerScanPage: async () => ({
+				changes: [
+					{
+						bucket: 0,
+						storedCount: 2,
+						currentCount: 2,
+						storedDigest: '1',
+						currentDigest: '1',
+						match: true,
+					},
+				],
+				nextAfterId: 1000,
+				complete: true,
+			}),
+		});
+
+		expect(result).toEqual({ candidates: [], emptyBuckets: 0 });
+	});
+
+	it('treats a missing scan row as a drill-down candidate', async () => {
+		const result = await findExistenceReconcileCandidates({
+			buckets: [4],
+			bucketSize: 1000,
+			readLocalBucket: async () => [L(4001, '7')],
+			fetchServerScanPage: async () => ({
+				changes: [],
+				nextAfterId: 5000,
+				complete: true,
+			}),
+		});
+
+		expect(result).toEqual({ candidates: [4], emptyBuckets: 0 });
+	});
+
+	it('starts the scan window at the lowest occupied bucket, not id 0', async () => {
+		const requestedAfterIds: number[] = [];
+		const result = await findExistenceReconcileCandidates({
+			buckets: [800, 801],
+			bucketSize: 1000,
+			readLocalBucket: async (lo) => [L(lo + 1, '7')],
+			fetchServerScanPage: async (afterId) => {
+				requestedAfterIds.push(afterId);
+				return {
+					changes: [
+						{
+							bucket: 800,
+							storedCount: 1,
+							currentCount: 1,
+							storedDigest: '7',
+							currentDigest: '7',
+							match: true,
+						},
+						{
+							bucket: 801,
+							storedCount: 1,
+							currentCount: 1,
+							storedDigest: '7',
+							currentDigest: '7',
+							match: true,
+						},
+					],
+					nextAfterId: 849_999,
+					complete: true,
+				};
+			},
+		});
+
+		// One page, opened just below bucket 800 — a high-id manifest (the #1084 shape)
+		// must never page through the empty low windows beneath it.
+		expect(requestedAfterIds).toEqual([799_999]);
+		expect(result).toEqual({ candidates: [], emptyBuckets: 0 });
+	});
+
+	it('stops aggregate pagination at the declared scan-page ceiling', async () => {
+		const fetchServerScanPage = vi.fn(async (afterId: number) => ({
+			changes: [],
+			nextAfterId: afterId + 1_000,
+			complete: false,
+		}));
+		await findExistenceReconcileCandidates({
+			buckets: [0, 1, 2],
+			bucketSize: 1_000,
+			readLocalBucket: async (lo) => [L(lo + 1, '7')],
+			fetchServerScanPage,
+			maxScanPages: 1,
+		});
+
+		expect(fetchServerScanPage).toHaveBeenCalledTimes(1);
+	});
+
+	it('jumps the gap between sparse occupied buckets instead of crawling contiguous windows', async () => {
+		const cleanRow = (bucket: number) => ({
+			bucket,
+			storedCount: 1,
+			currentCount: 1,
+			storedDigest: '7',
+			currentDigest: '7',
+			match: true,
+		});
+		const requestedAfterIds: number[] = [];
+		const result = await findExistenceReconcileCandidates({
+			buckets: [0, 800],
+			bucketSize: 1000,
+			maxScanPages: 3,
+			readLocalBucket: async (lo) => [L(lo + 1, '7')],
+			fetchServerScanPage: async (afterId) => {
+				requestedAfterIds.push(afterId);
+				return afterId === 0
+					? { changes: [cleanRow(0)], nextAfterId: 49_999, complete: false }
+					: { changes: [cleanRow(800)], nextAfterId: 849_999, complete: true };
+			},
+		});
+
+		// Two pages: [0..50k) then a jump straight to bucket 800's window — the 750-bucket
+		// gap (shared wp_posts ids: posts/media/revisions) is never crawled.
+		expect(requestedAfterIds).toEqual([0, 799_999]);
+		expect(result).toEqual({ candidates: [], emptyBuckets: 0 });
+	});
+
+	it('defers instead of paging on when pressure arrives mid-scan (codex P2)', async () => {
+		let pressured = false;
+		const fetchServerScanPage = vi.fn(async () => {
+			pressured = true; // a sibling id-space drew a 429 while this page was in flight
+			return { changes: [], nextAfterId: 49_999, complete: false };
+		});
+		const result = await findExistenceReconcileCandidates({
+			buckets: [0, 60],
+			bucketSize: 1000,
+			maxScanPages: 3,
+			readLocalBucket: async (lo) => [L(lo + 1, '7')],
+			fetchServerScanPage,
+			shouldDefer: () => pressured,
+		});
+
+		// One page issued, then the pressure check stops the pager — and no drill
+		// candidates are minted off the partial window this tick.
+		expect(fetchServerScanPage).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({ candidates: [], emptyBuckets: 0, deferred: true });
+	});
+
+	it('throws instead of re-requesting when a window advances but never covers its target bucket', async () => {
+		const fetchServerScanPage = vi.fn(async (afterId: number) => ({
+			changes: [],
+			// Advances the checkpoint, but never past bucket 0's end (999) — a malformed
+			// server must burn the error path, not the page budget (coderabbit r3760789142).
+			nextAfterId: afterId + 100,
+			complete: false,
+		}));
+		await expect(
+			findExistenceReconcileCandidates({
+				buckets: [0, 5],
+				bucketSize: 1000,
+				maxScanPages: 3,
+				readLocalBucket: async (lo) => [L(lo + 1, '7')],
+				fetchServerScanPage,
+			})
+		).rejects.toThrow('did not cover its target bucket');
+		expect(fetchServerScanPage).toHaveBeenCalledTimes(1);
+	});
+
+	it('classifies a bucket with a malformed local digest as a drill candidate instead of throwing', async () => {
+		const result = await findExistenceReconcileCandidates({
+			buckets: [0],
+			bucketSize: 1000,
+			readLocalBucket: async () => [L(1, 'not-a-number')],
+			fetchServerScanPage: async () => ({
+				changes: [
+					{
+						bucket: 0,
+						storedCount: 1,
+						currentCount: 1,
+						storedDigest: '7',
+						currentDigest: '7',
+						match: true,
+					},
+				],
+				nextAfterId: 1000,
+				complete: true,
+			}),
+		});
+
+		// A corrupt manifest row must not fail-close the whole id-space forever — the
+		// drill re-establishes truth for its bucket (coderabbit r3760789157).
+		expect(result).toEqual({ candidates: [0], emptyBuckets: 0 });
+	});
 });
 
 describe('runExistenceReconcile', () => {
@@ -172,6 +379,25 @@ describe('runExistenceReconcile', () => {
 			changed: 0,
 			skippedDirty: 0,
 		});
+	});
+
+	it('completes the active bucket then defers before the next when server pressure begins', async () => {
+		let backingOff = false;
+		const fetchServerBucket = vi.fn(async (bucket: number) => {
+			if (bucket === 0) backingOff = true;
+			return [] as ServerDigestEntry[];
+		});
+		const summary = await runExistenceReconcile({
+			buckets: [0, 1],
+			bucketSize: 10,
+			readLocalBucket: async (lo) => [L(lo + 1, 'gone')],
+			fetchServerBucket,
+			executePrune: async () => undefined,
+			shouldDefer: () => backingOff,
+		});
+
+		expect(fetchServerBucket).toHaveBeenCalledTimes(1);
+		expect(summary).toMatchObject({ buckets: 1, pruned: 1, deferred: true });
 	});
 
 	// --- event-loop fairness (#949 tranche 2, ruling R10b) ---------------------------------------

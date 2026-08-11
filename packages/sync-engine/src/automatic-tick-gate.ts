@@ -19,6 +19,7 @@ export function createAutomaticTickGate(options: {
 }): AutomaticTickGate {
 	let lastAutomaticConnectivity: EngineConnectivity | undefined;
 	let reconnectRetick: Promise<void> | null = null;
+	const laneRuns = new Map<EngineLane, Promise<void>>();
 	const run = async (tick: () => Promise<SyncReport>, lane?: EngineLane): Promise<void> => {
 		if (options.isGated()) return;
 		const connectivityNow = options.connectivity();
@@ -59,6 +60,27 @@ export function createAutomaticTickGate(options: {
 			});
 		}
 	};
-	const runLane = (lane: EngineLane): Promise<void> => run(() => options.tickLane(lane), lane);
+	const runLane = (lane: EngineLane): Promise<void> => {
+		const active = laneRuns.get(lane);
+		if (active !== undefined) return active;
+		// Reserve the lane BEFORE the tick starts (codex r3760800569): run()'s synchronous
+		// prefix can itself re-enter runLane for this lane (a reconnect observed by a seed
+		// timer starts the retick chain synchronously). A pre-registered proxy makes the
+		// reservation visible to any such re-entry while the tick still starts synchronously.
+		let settle!: (outcome: Promise<void>) => void;
+		const proxy = new Promise<void>((resolve, reject) => {
+			settle = (outcome) => {
+				void outcome.then(resolve, reject);
+			};
+		});
+		laneRuns.set(lane, proxy);
+		settle(run(() => options.tickLane(lane), lane));
+		const started = proxy;
+		void started.then(
+			() => laneRuns.delete(lane),
+			() => laneRuns.delete(lane)
+		);
+		return started;
+	};
 	return { run, runLane };
 }

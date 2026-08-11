@@ -10,6 +10,7 @@ import {
 } from './rx-existence-manifest-repository';
 
 import type { LocalCoverageReconcilePort, ReconcileRequest } from './local-coverage';
+import type { ExistenceScanBucket, ExistenceScanPage } from './reconcile-existence-pass';
 import type { RxDatabase } from 'rxdb';
 
 /**
@@ -20,6 +21,74 @@ import type { RxDatabase } from 'rxdb';
  * spare, while keeping the yield count (and its per-hop overhead) proportionate.
  */
 const DIRTY_SCAN_CHUNK_SIZE = 1_000;
+const SCAN_BUCKETS_PER_PAGE = 50;
+const UNSIGNED_DECIMAL = /^(?:0|[1-9]\d*)$/;
+
+function parseScanPage(
+	body: unknown,
+	collection: 'products' | 'customers' | 'orders',
+	bucketSize: number,
+	afterId: number
+): ExistenceScanPage {
+	const invalid = (): never => {
+		throw new Error(`existence scan returned an unusable ${collection} envelope`);
+	};
+	if (typeof body !== 'object' || body === null) return invalid();
+	const envelope = body as Record<string, unknown>;
+	const checkpoint = envelope['checkpoint'];
+	if (
+		envelope['collection'] !== collection ||
+		typeof checkpoint !== 'object' ||
+		checkpoint === null ||
+		!Array.isArray(envelope['changes']) ||
+		typeof envelope['complete'] !== 'boolean' ||
+		typeof envelope['meta'] !== 'object' ||
+		envelope['meta'] === null
+	) {
+		return invalid();
+	}
+	const rawCheckpoint = checkpoint as Record<string, unknown>;
+	const nextAfterId = rawCheckpoint['after_id'];
+	if (
+		rawCheckpoint['bucket_size'] !== bucketSize ||
+		!Number.isSafeInteger(nextAfterId) ||
+		(nextAfterId as number) < afterId
+	) {
+		return invalid();
+	}
+	const changes: ExistenceScanBucket[] = envelope['changes'].map((value) => {
+		if (typeof value !== 'object' || value === null) return invalid();
+		const row = value as Record<string, unknown>;
+		if (
+			!Number.isSafeInteger(row['bucket']) ||
+			(row['bucket'] as number) < 0 ||
+			!Number.isSafeInteger(row['stored_count']) ||
+			(row['stored_count'] as number) < 0 ||
+			!Number.isSafeInteger(row['current_count']) ||
+			(row['current_count'] as number) < 0 ||
+			typeof row['stored_digest'] !== 'string' ||
+			!UNSIGNED_DECIMAL.test(row['stored_digest']) ||
+			typeof row['current_digest'] !== 'string' ||
+			!UNSIGNED_DECIMAL.test(row['current_digest']) ||
+			typeof row['match'] !== 'boolean'
+		) {
+			return invalid();
+		}
+		return {
+			bucket: row['bucket'] as number,
+			storedCount: row['stored_count'] as number,
+			currentCount: row['current_count'] as number,
+			storedDigest: row['stored_digest'],
+			currentDigest: row['current_digest'],
+			match: row['match'],
+		};
+	});
+	return {
+		changes,
+		nextAfterId: nextAfterId as number,
+		complete: envelope['complete'],
+	};
+}
 
 type ReconcilePortDeps = {
 	database: RxDatabase;
@@ -90,6 +159,18 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 			occupiedBucketIndexes: () => occupiedManifestBucketIndexes(manifest, 1000),
 			readManifestRange: (lo: number, hi: number) => readManifestRange(manifest, lo, hi),
 			dirtyWooIds,
+			fetchServerScanPage: async (
+				afterId: number,
+				bucketSize: number,
+				request?: ReconcileRequest
+			) => {
+				const response = await (request?.fetcher ?? fetcher)(
+					`${ports.site.syncBaseUrl}/integrity/scan?bucket_size=${bucketSize}&after_id=${afterId}&limit_buckets=${SCAN_BUCKETS_PER_PAGE}${collectionParam}`,
+					request?.signal ? { signal: request.signal } : undefined
+				);
+				if (!response.ok) throw new Error(`existence scan fetch failed: ${response.status}`);
+				return parseScanPage(await response.json(), collection, bucketSize, afterId);
+			},
 			fetchServerBucket: async (bucket: number, bucketSize: number, request?: ReconcileRequest) => {
 				const response = await (request?.fetcher ?? fetcher)(
 					`${ports.site.syncBaseUrl}/integrity/bucket?bucket=${bucket}&bucket_size=${bucketSize}${collectionParam}`,

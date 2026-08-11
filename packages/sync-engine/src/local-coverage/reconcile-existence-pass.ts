@@ -44,7 +44,133 @@ export type ReconcileSummary = {
 	missing: number;
 	changed: number;
 	skippedDirty: number;
+	/** Pressure arrived mid-walk, so remaining buckets stay for a later cadence. */
+	deferred?: true;
 };
+
+export type ExistenceScanBucket = {
+	bucket: number;
+	storedCount: number;
+	currentCount: number;
+	storedDigest: string;
+	currentDigest: string;
+	match: boolean;
+};
+
+export type ExistenceScanPage = {
+	changes: ExistenceScanBucket[];
+	nextAfterId: number;
+	complete: boolean;
+};
+
+/** Fold unsigned-64-bit decimal digests without passing through lossy JS numbers. */
+export function xor64(digests: Iterable<string>): string {
+	let folded = 0n;
+	for (const digest of digests) {
+		folded ^= BigInt(digest);
+	}
+	return BigInt.asUintN(64, folded).toString();
+}
+
+/** Fetch aggregate pages, then classify each occupied local bucket as clean or drill-down-worthy. */
+export async function findExistenceReconcileCandidates(input: {
+	buckets: readonly number[];
+	bucketSize: number;
+	readLocalBucket: (lo: number, hi: number) => Promise<LocalManifestEntry[]>;
+	fetchServerScanPage: (afterId: number, bucketSize: number) => Promise<ExistenceScanPage>;
+	isAborted?: () => boolean;
+	/** Pressure check between page fetches: a mid-scan backoff signal stops paging AND drilling. */
+	shouldDefer?: () => boolean;
+	maxScanPages?: number;
+}): Promise<{ candidates: number[]; emptyBuckets: number; deferred?: true }> {
+	if (input.buckets.length === 0) return { candidates: [], emptyBuckets: 0 };
+
+	const aggregates = new Map<number, ExistenceScanBucket>();
+	const sortedBuckets = [...input.buckets].sort((a, b) => a - b);
+	const highestBucket = sortedBuckets[sortedBuckets.length - 1]!;
+	const pastHighestId = (highestBucket + 1) * input.bucketSize;
+	// The pager visits OCCUPIED buckets only. Two facts make contiguous paging wrong here:
+	// the walk starts at the lowest occupied bucket, not id 0 (the #1084 shape — one recent
+	// high-id order must not page through empty low windows), and between pages it JUMPS the
+	// gaps between occupied buckets (wp_posts ids are shared with posts/media/revisions, so
+	// product buckets are sparse on old stores — a contiguous crawl would burn the page budget
+	// on windows this manifest holds nothing in). Skipped windows need no audit: this lane
+	// only prunes local-extra and flags changed rows in buckets the client occupies; wholly
+	// server-side buckets belong to the census/demand lanes (#1090 audit-only ruling).
+	// after_id = bucket*size - 1 makes the server's first_bucket exactly that bucket.
+	let nextUncovered = 0; // index into sortedBuckets of the first bucket no fetched window covered
+	let pages = 0;
+	while (!input.isAborted?.() && pages < (input.maxScanPages ?? Infinity)) {
+		// Pressure lands mid-scan (e.g. a concurrently scanned sibling id-space drew a 429):
+		// stop paging AND report deferred, so this space issues no drills off a partial window
+		// this tick. The pre-tick lane skip covers pressure known at tick start; this covers
+		// pressure born inside the tick (codex-review P2).
+		if (input.shouldDefer?.()) {
+			return { candidates: [], emptyBuckets: 0, deferred: true };
+		}
+		const targetBucket = sortedBuckets[nextUncovered]!;
+		const afterId = Math.max(0, targetBucket * input.bucketSize - 1);
+		const page = await input.fetchServerScanPage(afterId, input.bucketSize);
+		pages += 1;
+		for (const row of page.changes) aggregates.set(row.bucket, row);
+		if (page.complete || page.nextAfterId >= pastHighestId) break;
+		if (page.nextAfterId <= afterId) {
+			throw new Error('existence scan checkpoint did not advance');
+		}
+		// Advance past every occupied bucket the fetched window covered; the next fetch opens
+		// at the first still-uncovered occupied bucket, skipping any empty gap in between.
+		const uncoveredBefore = nextUncovered;
+		while (
+			nextUncovered < sortedBuckets.length &&
+			(sortedBuckets[nextUncovered]! + 1) * input.bucketSize - 1 <= page.nextAfterId
+		) {
+			nextUncovered += 1;
+		}
+		if (nextUncovered >= sortedBuckets.length) break;
+		// A window that advanced the checkpoint but not past its own target bucket would
+		// re-request the same after_id forever (coderabbit r3760789142) — unreachable with
+		// the server's fixed 50-bucket windows, but a malformed server must burn the error
+		// path, not the page budget.
+		if (nextUncovered === uncoveredBefore) {
+			throw new Error('existence scan window did not cover its target bucket');
+		}
+	}
+
+	const candidates: number[] = [];
+	let emptyBuckets = 0;
+	for (let index = 0; index < input.buckets.length; index += 1) {
+		if (index > 0) await yieldToEventLoop();
+		if (input.isAborted?.()) break;
+		const bucket = input.buckets[index]!;
+		const lo = bucket * input.bucketSize;
+		const local = await input.readLocalBucket(lo, lo + input.bucketSize);
+		if (input.isAborted?.()) break;
+		if (local.length === 0) {
+			emptyBuckets += 1;
+			continue;
+		}
+		const aggregate = aggregates.get(bucket);
+		// A malformed local digest (legacy/corrupt manifest row) must classify its bucket
+		// as a drill candidate, not throw and fail-close the whole id-space forever
+		// (coderabbit r3760789157) — the drill re-establishes truth for that bucket.
+		let localXor: string | null = null;
+		try {
+			localXor = xor64(local.map(({ digest }) => digest));
+		} catch {
+			localXor = null;
+		}
+		if (
+			!aggregate ||
+			!aggregate.match ||
+			aggregate.storedCount !== local.length ||
+			localXor === null ||
+			aggregate.storedDigest !== localXor
+		) {
+			candidates.push(bucket);
+		}
+	}
+	return { candidates, emptyBuckets };
+}
 
 export async function runExistenceReconcile(input: {
 	/** The occupied bucket indices to walk, derived from the local manifest. */
@@ -55,6 +181,8 @@ export async function runExistenceReconcile(input: {
 	executePrune: (actions: ReconcileAction[]) => Promise<void>;
 	/** Stops the walk between buckets on teardown/scope-switch (no partial bucket left half-applied). */
 	isAborted?: () => boolean;
+	/** Stops the walk between buckets while preserving the bucket atomic unit. */
+	shouldDefer?: () => boolean;
 }): Promise<ReconcileSummary> {
 	const summary: ReconcileSummary = {
 		buckets: 0,
@@ -78,6 +206,10 @@ export async function runExistenceReconcile(input: {
 		}
 		iteration += 1;
 		if (input.isAborted?.()) {
+			break;
+		}
+		if (input.shouldDefer?.()) {
+			summary.deferred = true;
 			break;
 		}
 		const lo = bucket * input.bucketSize;

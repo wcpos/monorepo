@@ -169,6 +169,29 @@ afterEach(() => {
 });
 
 describe('change-signal server-pressure adaptation', () => {
+	it('defers audit/trickle/query-total maintenance but not change-signal or write-drain', async () => {
+		const context = await harness({
+			queryTotal: { fetchWooQueryTotal: vi.fn(async () => 0) },
+		});
+		await context.respond(new Response(null, { status: 429 }));
+
+		for (const lane of [
+			'customer-trickle',
+			'existence-prime',
+			'existence-reconcile',
+			'query-total-retry',
+		] as const) {
+			await expect(context.engine.sync(lane)).resolves.toMatchObject({
+				lane,
+				status: 'skipped',
+				reason: 'server-pressure',
+			});
+		}
+		expect((await context.engine.sync('change-signal')).reason).not.toBe('server-pressure');
+		expect((await context.engine.sync('write-drain')).reason).not.toBe('server-pressure');
+		await context.engine.dispose();
+	});
+
 	it('honours Retry-After exactly and records the back-off', async () => {
 		const context = await harness();
 		context.diagnostics.length = 0;

@@ -49,6 +49,8 @@ export type ServerPressureObservation = {
 export type ServerPressureMonitor = {
 	/** Feed one settled (or failed) request. Returns the transition it caused, or null. */
 	observe(observation: ServerPressureObservation): ServerPressureTransition | null;
+	/** True while maintenance should yield to a raised cadence or server-named pause. */
+	isBackingOff(atMs: number): boolean;
 	multiplier(): number;
 	/** Absolute epoch-ms floor the next change-signal tick may not precede, or 0. */
 	retryAfterUntilMs(): number;
@@ -188,6 +190,7 @@ export function createServerPressureMonitor(
 	});
 
 	return {
+		isBackingOff: (atMs) => multiplier > 1 || retryAfterUntilMs > atMs,
 		multiplier: () => multiplier,
 		retryAfterUntilMs: () => retryAfterUntilMs,
 

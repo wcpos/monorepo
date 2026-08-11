@@ -40,6 +40,33 @@ describe('createAutomaticTickGate', () => {
 		expect(recordTick).toHaveBeenCalledWith(tickReport, 25);
 	});
 
+	it('coalesces concurrent automatic ticks for the same lane', async () => {
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const tickLane = vi.fn(async (lane: EngineLane) => {
+			await held;
+			return report(lane);
+		});
+		const gate = createAutomaticTickGate({
+			isGated: () => false,
+			connectivity: () => 'online',
+			now: () => 0,
+			diagnostics: vi.fn(),
+			onStatusChange: vi.fn(),
+			tickLane,
+			recordTick: vi.fn(),
+			seedRetickLanes: [],
+		});
+
+		const first = gate.runLane('existence-prime');
+		const second = gate.runLane('existence-prime');
+		expect(tickLane).toHaveBeenCalledTimes(1);
+		release();
+		await Promise.all([first, second]);
+	});
+
 	it('reports a rejected lane tick without rejecting the automatic path', async () => {
 		const diagnostics = vi.fn();
 		const now = vi.fn().mockReturnValueOnce(25).mockReturnValue(40);

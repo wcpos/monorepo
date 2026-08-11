@@ -60,6 +60,29 @@ const baseInput = {
 };
 
 describe('runQueryTotalRetryRequests', () => {
+	it('leaves runnable totals beyond the per-tick request budget unclaimed', async () => {
+		const runnable = [0, 1, 2].map((index) =>
+			state({
+				queryKey: `query-${index}`,
+				request: { ...request, queryKey: `query-${index}` },
+			})
+		);
+		const stateRepository = createStateRepository(runnable);
+		const fetchWooQueryTotal = vi.fn(async () => 1);
+
+		const result = await runQueryTotalRetryRequests({
+			...baseInput,
+			stateRepository,
+			cacheRepository: createCacheRepository(),
+			fetchWooQueryTotal,
+			maxRequests: 2,
+		});
+
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(2);
+		expect(stateRepository.claim).toHaveBeenCalledTimes(2);
+		expect(result.succeeded).toBe(2);
+	});
+
 	it('skips runnable rows that do not have persisted Woo request metadata', async () => {
 		const stateRepository = createStateRepository([state({ request: null })]);
 		const cacheRepository = createCacheRepository();
