@@ -7,9 +7,10 @@ import { useT } from '../../../contexts/translations';
 
 /**
  * Manual engine sync with cashier-visible feedback: an in-flight flag for the
- * button spinner, and an error toast when the tick fails. `engine.sync()`
- * reports failure via `status: 'error'` on the returned report instead of
- * throwing, so a bare `void engine.sync()` swallows the outcome entirely.
+ * button spinner, and a toast when the tick fails or never ran. `engine.sync()`
+ * reports failure via `status: 'error'` (and a no-op via `status: 'skipped'`)
+ * on the returned report instead of throwing, so a bare `void engine.sync()`
+ * swallows the outcome entirely.
  */
 export function useManualSync() {
 	const { engine } = useQueryRuntime();
@@ -25,6 +26,20 @@ export function useManualSync() {
 					type: 'error',
 					text1: t('health.database.sync_failed'),
 					...(report.error ? { text2: report.error } : {}),
+				});
+			} else if (report.status === 'skipped') {
+				// All-lanes skipped means nothing ran at all (offline, or a lifecycle
+				// op in flight) — ending the spinner silently would read as success.
+				const reason =
+					report.reason === 'offline'
+						? t('health.database.sync_skipped_offline')
+						: report.reason === 'lifecycle operation pending'
+							? t('health.database.sync_skipped_busy')
+							: report.reason;
+				Toast.show({
+					type: 'warning',
+					text1: t('health.database.sync_skipped'),
+					...(reason ? { text2: reason } : {}),
 				});
 			}
 		} catch (error) {
