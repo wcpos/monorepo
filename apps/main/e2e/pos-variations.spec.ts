@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { errors, expect, type Locator, type Page } from '@playwright/test';
 
 import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
 import { becomesVisible } from './fixtures';
@@ -97,10 +97,55 @@ async function openVariationPopover(page: Page): Promise<Locator> {
 
 /**
  * Select variation options until a valid combination resolves.
+ *
+ * Two ordering hazards live here, and both produced the recurring CI failure
+ * on this spec (#1114 shard 5, #1124 shard 4 — fails with retries, green on
+ * the next run):
+ *
+ * 1. MATERIALIZATION. Every option's enabled state derives from the LOCAL
+ *    variations result (`optionCounts` in the popover): until the synced
+ *    variations materialize into the local collection, every count is 0 and
+ *    every option renders DISABLED. Sampling `isDisabled()` once in a quick
+ *    pass during that window reads "nothing to click", the helper returns
+ *    having selected nothing — and the add-to-cart button can then never
+ *    appear, because it only renders when a selection narrows the result to
+ *    exactly one variation. The popover announces this transient state
+ *    (`variation-popover-syncing`), so gate on its end and on an option
+ *    actually becoming enabled, rather than trusting a point-in-time sample.
+ *
+ * 2. RESOLUTION. After a click, the matched-variation lookup needs a re-query
+ *    and re-render. The old 1-second poll walked on to the NEXT option when a
+ *    slow runner missed the window — and each extra click CHANGES the
+ *    single-select group's value, so the walk could march past the completing
+ *    combination. Give each selection a real window instead.
  */
 async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
 	const options = popoverDialog.locator('[data-testid^="variation-option-"]');
 	await expect(options.first()).toBeVisible({ timeout: 15_000 });
+
+	// Materialization gate: wait for the popover to stop syncing AND for at
+	// least one option to become enabled. Counts flow from the local result,
+	// so "all disabled" while the sync lands is a transient state, not a fact.
+	const syncing = popoverDialog.getByTestId('variation-popover-syncing');
+	await expect
+		.poll(
+			async () => {
+				if (await syncing.isVisible().catch(() => false)) return false;
+				const count = await options.count();
+				for (let i = 0; i < count; i++) {
+					if (
+						await options
+							.nth(i)
+							.isEnabled()
+							.catch(() => false)
+					)
+						return true;
+				}
+				return false;
+			},
+			{ timeout: 30_000 }
+		)
+		.toBeTruthy();
 
 	const optionCount = await options.count();
 	expect(optionCount).toBeGreaterThan(0);
@@ -108,15 +153,29 @@ async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
 	const addToCartButton = page.getByTestId('variation-popover-add-to-cart');
 	for (let i = 0; i < optionCount; i++) {
 		const option = options.nth(i);
-		const isDisabled = await option.isDisabled().catch(() => true);
-		if (isDisabled) {
+		// Re-check at click time — enabled-ness can change as selections filter
+		// the remaining combinations.
+		const isEnabled = await option.isEnabled().catch(() => false);
+		if (!isEnabled) {
 			continue;
 		}
 
-		await option.click();
+		// The enabled-check window is racy by nature: a prior selection's
+		// re-filter can disable or detach this option before the click lands, and
+		// click() would then burn its full inherited timeout and THROW — failing
+		// the test instead of moving on. Short explicit timeout; only a
+		// TimeoutError means "state moved on, try the next option".
+		try {
+			await option.click({ timeout: 1_000 });
+		} catch (error) {
+			if (error instanceof errors.TimeoutError) {
+				continue;
+			}
+			throw error;
+		}
 
 		const isReady = await expect
-			.poll(async () => addToCartButton.isVisible().catch(() => false), { timeout: 1_000 })
+			.poll(async () => addToCartButton.isVisible().catch(() => false), { timeout: 5_000 })
 			.toBeTruthy()
 			.then(() => true)
 			.catch(() => false);
