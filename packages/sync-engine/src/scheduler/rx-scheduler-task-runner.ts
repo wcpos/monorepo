@@ -203,6 +203,20 @@ function requeuedState(
 	};
 }
 
+function releasedClaimState(
+	state: PersistedSchedulerTaskState,
+	releasedAtMs: number
+): PersistedSchedulerTaskState {
+	return {
+		...state,
+		status: 'queued',
+		ownerId: null,
+		claimedUntilMs: null,
+		retryAfterMs: null,
+		updatedAtMs: releasedAtMs,
+	};
+}
+
 function failedState(
 	state: PersistedSchedulerTaskState,
 	input: PersistedSchedulerTaskRunnerInput,
@@ -363,7 +377,17 @@ export async function runPersistedSchedulerTasks(
 			if (input.withTaskActivity) await input.withTaskActivity(task, executeTask);
 			else await executeTask();
 		} catch (error) {
-			if (input.signal?.aborted) throw error;
+			if (input.signal?.aborted) {
+				try {
+					await input.repository.claim(
+						activeState,
+						releasedClaimState(activeState, currentTime(input))
+					);
+				} catch {
+					// Releasing is best-effort; the original abort must still propagate.
+				}
+				throw error;
+			}
 
 			const failedAtMs = currentTime(input);
 			const failed = await input.repository.markFailed(

@@ -984,7 +984,7 @@ describe('runPersistedSchedulerTasks', () => {
 		expect(repository.markFailed).not.toHaveBeenCalled();
 	});
 
-	it('propagates fetch aborts without marking the claimed persisted task failed', async () => {
+	it('releases the claimed persisted task before propagating a fetch abort', async () => {
 		const runnable = state();
 		const repository = createRepository([runnable]);
 		const abortController = new AbortController();
@@ -1003,12 +1003,58 @@ describe('runPersistedSchedulerTasks', () => {
 			})
 		).rejects.toThrow('request abandoned');
 
-		expect(repository.claim).toHaveBeenCalledTimes(1);
+		expect(repository.claim).toHaveBeenCalledTimes(2);
+		expect(repository.claim).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({ status: 'in-flight', ownerId: 'tab-runner', attempt: 2 }),
+			expect.objectContaining({
+				status: 'queued',
+				ownerId: null,
+				claimedUntilMs: null,
+				attempt: 2,
+				retryAfterMs: null,
+				updatedAtMs: 1_000,
+			})
+		);
 		expect(repository.markFailed).not.toHaveBeenCalled();
 		expect(repository.completeOrRequeue).not.toHaveBeenCalled();
 	});
 
-	it('does not renew an incomplete greedy task after the caller aborts during fetch work', async () => {
+	it('propagates a fetch abort when releasing the claim loses its CAS', async () => {
+		const runnable = state();
+		const repository = createRepository([runnable]);
+		let persisted = runnable;
+		vi.mocked(repository.claim).mockImplementation(async (_expected, next) => {
+			if (next.status === 'queued') return false;
+			persisted = next;
+			return true;
+		});
+		const abortController = new AbortController();
+		const abortReason = new Error('request abandoned');
+		const fetcher = vi.fn(async () => {
+			abortController.abort(abortReason);
+			throw abortReason;
+		});
+
+		await expect(
+			runPersistedSchedulerTasks({
+				...baseInput,
+				repository,
+				fetcher,
+				signal: abortController.signal,
+			})
+		).rejects.toBe(abortReason);
+
+		expect(repository.claim).toHaveBeenCalledTimes(2);
+		expect(persisted).toMatchObject({
+			status: 'in-flight',
+			ownerId: 'tab-runner',
+			claimedUntilMs: 1_300,
+		});
+		expect(repository.markFailed).not.toHaveBeenCalled();
+	});
+
+	it('releases rather than renewing an incomplete greedy task after aborting during fetch work', async () => {
 		const runnable = state({ mode: 'greedy' });
 		const repository = createRepository([runnable]);
 		const abortController = new AbortController();
@@ -1027,7 +1073,12 @@ describe('runPersistedSchedulerTasks', () => {
 		).rejects.toThrow('runner abandoned during batch');
 
 		expect(fetcher).toHaveBeenCalledTimes(1);
-		expect(repository.claim).toHaveBeenCalledTimes(1);
+		expect(repository.claim).toHaveBeenCalledTimes(2);
+		expect(repository.claim).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({ status: 'in-flight' }),
+			expect.objectContaining({ status: 'queued', ownerId: null, claimedUntilMs: null })
+		);
 		expect(repository.markFailed).not.toHaveBeenCalled();
 		expect(repository.completeOrRequeue).not.toHaveBeenCalled();
 	});

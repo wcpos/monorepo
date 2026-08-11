@@ -108,6 +108,45 @@ async function productIds(engine: RxdbSyncEngine): Promise<number[]> {
 }
 
 describe('require() for the products browse window', () => {
+	it('fetches an identical requirement immediately after releasing an in-flight fetch', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		let firstSignal: AbortSignal | null | undefined;
+		let productRequests = 0;
+		const engine = engineWith(async (url, init) => {
+			if (!new URL(url).pathname.endsWith('/products')) return json([]);
+			productRequests += 1;
+			if (productRequests > 1) return json([productPayload(1, 0, '10')], 1);
+			firstSignal = init?.signal;
+			if (!firstSignal) throw new Error('product request did not receive an abort signal');
+			return await new Promise<Response>((_resolve, reject) => {
+				firstSignal?.addEventListener('abort', () => reject(firstSignal?.reason), { once: true });
+			});
+		});
+		await engine.ready;
+
+		const first = engine.require({
+			id: 'browse-aborted',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		await vi.waitFor(() => expect(firstSignal).toBeDefined());
+		first.release();
+		const second = engine.require({
+			id: 'browse-successor',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+
+		await expect(first.ready).resolves.toMatchObject({ action: 'released' });
+		await expect(second.ready).resolves.toMatchObject({ action: 'fetched', documents: 1 });
+		expect(productRequests).toBe(2);
+
+		await engine.dispose();
+	});
+
 	it('uses only the mounted POS product window on automatic cold boot', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();
