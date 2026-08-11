@@ -55,6 +55,9 @@ function FooterContent({
 				<Text testID="data-table-count" className="text-xs">
 					{t('common.showing_of', { shown: count, total })}
 				</Text>
+				<Text testID="data-table-loaded-count" className="hidden">
+					{count}
+				</Text>
 				{totalSource === 'local' ? (
 					<Text className="text-muted-foreground ml-1 text-[10px]">
 						{t('common.showing_local_items')}

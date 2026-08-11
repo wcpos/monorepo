@@ -103,6 +103,7 @@ describe('DataTableFooter binding projections', () => {
 		renderBindingFooter('coverage');
 
 		expect(screen.getByTestId('data-table-count').textContent).toBe('common.showing_of:10/27');
+		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('10');
 		expect(screen.queryByText('common.showing_local_items')).toBeNull();
 		expect(mockUseCollectionReset).toHaveBeenCalledWith('coupons');
 	});

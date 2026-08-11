@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { createHiddenSafeMeasureElement } from './utils/create-hidden-safe-measure-element';
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
 import { useOnEndReached } from './utils/use-on-end-reached';
 
@@ -119,6 +120,7 @@ function List<T>({
 		horizontal,
 		overscan,
 		estimateSize: () => estimatedItemSize,
+		measureElement: createHiddenSafeMeasureElement(estimatedItemSize),
 		...rest,
 	});
 

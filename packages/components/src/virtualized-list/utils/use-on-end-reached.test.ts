@@ -158,6 +158,30 @@ describe('useOnEndReached', () => {
 		expect(onEndReached).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		['vertical', false, { clientHeight: 0, scrollHeight: 0 }],
+		['horizontal', true, { clientWidth: 0, scrollWidth: 0 }],
+	] as const)(
+		'should not call onEndReached from %s scrolling when hidden',
+		(_, horizontal, size) => {
+			const onEndReached = jest.fn();
+			const scrollElement = createMockScrollElement(size);
+
+			renderHook(() =>
+				useOnEndReached({
+					scrollElement,
+					horizontal,
+					onEndReached,
+					onEndReachedThreshold: 0.5,
+					data: [1],
+					totalSize: 100,
+				})
+			);
+
+			expect(onEndReached).not.toHaveBeenCalled();
+		}
+	);
+
 	it('should not trigger again without scrolling away first', () => {
 		const onEndReached = jest.fn();
 		const scrollElement = createMockScrollElement({
@@ -260,6 +284,90 @@ describe('useOnEndReached', () => {
 
 		expect(onEndReached).toHaveBeenCalled();
 	});
+
+	it.each([
+		['vertical', false, { clientHeight: 0 }],
+		['horizontal', true, { clientWidth: 0 }],
+	] as const)(
+		'should not call onEndReached for %s short content when hidden',
+		(_, horizontal, size) => {
+			const onEndReached = jest.fn();
+			const scrollElement = createMockScrollElement(size);
+
+			renderHook(() =>
+				useOnEndReached({
+					scrollElement,
+					horizontal,
+					onEndReached,
+					onEndReachedThreshold: 0.5,
+					data: [1],
+					totalSize: 0,
+				})
+			);
+
+			act(() => {
+				jest.runAllTimers();
+			});
+
+			expect(onEndReached).not.toHaveBeenCalled();
+		}
+	);
+
+	it.each([
+		['vertical', false, 'clientHeight'],
+		['horizontal', true, 'clientWidth'],
+	] as const)(
+		'should check %s short content when a hidden container becomes visible',
+		(_, horizontal, clientSize) => {
+			const resizeCallbacks: ResizeObserverCallback[] = [];
+			const originalResizeObserver = globalThis.ResizeObserver;
+			Object.defineProperty(globalThis, 'ResizeObserver', {
+				configurable: true,
+				value: class {
+					constructor(callback: ResizeObserverCallback) {
+						resizeCallbacks.push(callback);
+					}
+
+					observe = jest.fn();
+					unobserve = jest.fn();
+					disconnect = jest.fn();
+				},
+			});
+
+			try {
+				const onEndReached = jest.fn();
+				const scrollElement = createMockScrollElement({ [clientSize]: 0 });
+
+				renderHook(() =>
+					useOnEndReached({
+						scrollElement,
+						horizontal,
+						onEndReached,
+						onEndReachedThreshold: 0.5,
+						data: [1],
+						totalSize: 100,
+					})
+				);
+
+				act(() => {
+					jest.runAllTimers();
+				});
+				expect(onEndReached).not.toHaveBeenCalled();
+
+				Object.defineProperty(scrollElement, clientSize, { configurable: true, value: 500 });
+				act(() => {
+					resizeCallbacks.forEach((callback) => callback([], {} as ResizeObserver));
+				});
+
+				expect(onEndReached).toHaveBeenCalledTimes(1);
+			} finally {
+				Object.defineProperty(globalThis, 'ResizeObserver', {
+					configurable: true,
+					value: originalResizeObserver,
+				});
+			}
+		}
+	);
 
 	it('should not trigger short content check with empty data', () => {
 		const onEndReached = jest.fn();

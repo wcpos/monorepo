@@ -72,7 +72,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 
 	return (
 		<View className="flex h-full flex-col">
-			<VirtualizedList.Root style={{ flex: 1 }}>
+			<VirtualizedList.Root testID="pos-products-grid-scroller" style={{ flex: 1 }}>
 				<VirtualizedList.List
 					data={rows}
 					renderItem={({ item: row }) => (
