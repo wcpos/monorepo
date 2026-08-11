@@ -1,4 +1,5 @@
 import {
+	shouldExtendLedger,
 	buildDebugInfo,
 	chainMarkedIds,
 	deriveClockSkew,
@@ -515,5 +516,33 @@ describe('buildDebugInfo', () => {
 		expect(text).toContain('Last server check: none yet');
 		expect(text).toContain('Recent errors (0):');
 		expect(text).toContain('  none');
+	});
+});
+
+describe('shouldExtendLedger', () => {
+	const base = {
+		offsetY: 1_000,
+		contentHeight: 2_000,
+		viewportHeight: 800,
+		limit: 20,
+		total: 100,
+		lastExtendLimit: null,
+	};
+
+	it('extends near the bottom when more rows exist', () => {
+		expect(shouldExtendLedger(base)).toBe(true);
+	});
+
+	it('does nothing far from the bottom', () => {
+		expect(shouldExtendLedger({ ...base, offsetY: 0 })).toBe(false);
+	});
+
+	it('does nothing once every row is loaded', () => {
+		expect(shouldExtendLedger({ ...base, total: 20 })).toBe(false);
+	});
+
+	it('refuses a second extend until the window actually grew (#1132 phantom trigger)', () => {
+		expect(shouldExtendLedger({ ...base, lastExtendLimit: 20 })).toBe(false);
+		expect(shouldExtendLedger({ ...base, limit: 40, lastExtendLimit: 20 })).toBe(true);
 	});
 });

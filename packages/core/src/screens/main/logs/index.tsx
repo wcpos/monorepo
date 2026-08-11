@@ -1,5 +1,8 @@
 import * as React from 'react';
 import { Platform, ScrollView, Share, View } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+
+import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -21,16 +24,17 @@ import {
 	useQueryStateActions,
 } from '../../../query';
 import { QuerySearchInput } from '../components/query-search-input';
-import { Chip, Stat, StatHeader } from '../health/components';
+import { Chip, type LevelKind, Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
 import { useEngineStatus, useMutationCounts } from '../hooks/use-engine-monitor';
-import { Ledger } from './ledger';
+import { Ledger, useLevelLabel } from './ledger';
 import {
 	buildDebugInfo,
 	formatCadence,
 	type LogPreset,
 	type LogRow,
 	presetFilters,
+	shouldExtendLedger,
 } from './logs-logic';
 import { useLogStats } from './use-log-stats';
 import { useVerboseDiagnostics } from './use-verbose-diagnostics';
@@ -142,6 +146,42 @@ function LogsScreenContent() {
 		setVerbose(!verbose);
 	}, [setVerbose, verbose]);
 
+	// A1.5: the LEVEL-pill kind filter composes with the preset (it never
+	// resets it); tapping the active pill — or the clearable chip — clears it.
+	const activeKind = state.filters.kind;
+	const levelLabel = useLevelLabel();
+	const toggleKind = React.useCallback(
+		(kind: LevelKind) => {
+			if (state.filters.kind === kind) actions.clearFilter('kind');
+			else actions.setFilter('kind', kind);
+		},
+		[actions, state.filters.kind]
+	);
+
+	// A1.4: infinite scroll replaces "Show more". The guard is pure
+	// (shouldExtendLedger) and the ref carries the #1132 phantom-trigger
+	// protection: one extend per materialized window.
+	const total = useObservableState(binding.total$, 0);
+	const lastExtendLimitRef = React.useRef<number | null>(null);
+	const handleScroll = React.useCallback(
+		(event: NativeSyntheticEvent<NativeScrollEvent>) => {
+			const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+			const extend = shouldExtendLedger({
+				offsetY: contentOffset.y,
+				contentHeight: contentSize.height,
+				viewportHeight: layoutMeasurement.height,
+				limit: state.limit,
+				total,
+				lastExtendLimit: lastExtendLimitRef.current,
+			});
+			if (extend) {
+				lastExtendLimitRef.current = state.limit;
+				actions.extendLimit();
+			}
+		},
+		[actions, state.limit, total]
+	);
+
 	// Effect (last resort per project.mdc): `verbose` can flip OUTSIDE any
 	// event handler — the logger's 24 h TTL expires while the screen is mounted
 	// (surfaced by the hook's poll) — and the ledger's level filter must follow
@@ -210,7 +250,7 @@ function LogsScreenContent() {
 	}, [appVersion, canShare, logsCollection, mutations.pending, stats, status, t, verbose]);
 
 	return (
-		<ScrollView className="flex-1">
+		<ScrollView className="flex-1" onScroll={handleScroll} scrollEventThrottle={64}>
 			<VStack testID="screen-logs" className="mx-auto w-full max-w-4xl gap-3 p-4 md:p-6">
 				<StatusLine />
 
@@ -289,6 +329,11 @@ function LogsScreenContent() {
 					<Chip on={preset === 'sync'} onPress={() => applyPreset('sync')} testID="logs-chip-sync">
 						{t('health.logs.preset_sync')}
 					</Chip>
+					{activeKind ? (
+						<Chip on onPress={() => actions.clearFilter('kind')} testID="logs-chip-kind">
+							{`${levelLabel(activeKind)} ×`}
+						</Chip>
+					) : null}
 					<View className="flex-1" />
 					<Chip on={verbose} onPress={toggleVerbose} testID="logs-chip-verbose">
 						{verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
@@ -306,7 +351,8 @@ function LogsScreenContent() {
 						<Ledger
 							resource={binding.resource}
 							total$={binding.total$}
-							onShowMore={actions.extendLimit}
+							activeKind={activeKind}
+							onKindPress={toggleKind}
 						/>
 					</Suspense>
 				</ErrorBoundary>

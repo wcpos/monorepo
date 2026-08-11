@@ -984,4 +984,70 @@ describe('logs preset filters', () => {
 			$and: [{ level: { $in: ['error'] } }],
 		});
 	});
+
+	// A1.5 (map #1136): the LEVEL-pill kind filter is a STRICT display-kind
+	// match — each selector mirrors displayKind's precedence exactly.
+	describe('kind filter', () => {
+		it('intersects the kind with the active preset (compose, not replace)', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: {
+					level: ['info', 'warn', 'error'],
+					category_prefix: 'wcpos.sync',
+					kind: 'warn',
+				},
+			} satisfies QueryStateOf<'logs'>);
+
+			expect(translated.selector).toEqual({
+				$and: [
+					{ level: { $in: ['info', 'warn', 'error'] } },
+					{ category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' } },
+					{ level: 'warn' },
+				],
+			});
+		});
+
+		it('translates the action kind as actor rows below severity', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: { kind: 'action' },
+			} satisfies QueryStateOf<'logs'>);
+
+			expect(translated.selector).toEqual({
+				$and: [{ actor: { $exists: true } }, { level: { $nin: ['error', 'warn'] } }],
+			});
+		});
+
+		it('translates the sync kind as the domain minus actor and severity rows', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: { kind: 'sync' },
+			} satisfies QueryStateOf<'logs'>);
+
+			expect(translated.selector).toEqual({
+				$and: [
+					{ category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' } },
+					{ actor: { $exists: false } },
+					{ level: { $nin: ['error', 'warn'] } },
+				],
+			});
+		});
+
+		it('translates the info kind excluding actor rows and the sync domain', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: { kind: 'info' },
+			} satisfies QueryStateOf<'logs'>);
+
+			expect(translated.selector).toEqual({
+				$and: [
+					{ level: 'info' },
+					{ actor: { $exists: false } },
+					{
+						$or: [{ category: { $lt: 'wcpos.sync' } }, { category: { $gte: 'wcpos.sync/' } }],
+					},
+				],
+			});
+		});
+	});
 });

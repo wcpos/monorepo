@@ -3,6 +3,14 @@ export type CollectionKey = keyof FiltersByCollection;
 export type DateRangeFilter = { from: string; to: string };
 export type VariationMatch = { id: number; name: string; option: string };
 
+/**
+ * The Logs ledger's tappable LEVEL-pill filter (map #1136, A1.5): strict
+ * display-kind match — the list shows exactly the rows whose LEVEL pill was
+ * tapped. Kinds are derived (action = actor row, sync = category domain), so
+ * the selector semantics live in the translator, not the UI.
+ */
+export type LogKindFilter = 'error' | 'warn' | 'action' | 'sync' | 'info' | 'debug';
+
 export interface FiltersByCollection {
 	products: {
 		categories: number[];
@@ -28,7 +36,7 @@ export interface FiltersByCollection {
 	variations: { attributeMatches: VariationMatch[]; status?: string };
 	customers: Record<never, never>;
 	'tax-rates': Record<never, never>;
-	logs: { level?: string[]; category_prefix?: string; has_actor?: boolean };
+	logs: { level?: string[]; category_prefix?: string; has_actor?: boolean; kind?: LogKindFilter };
 }
 
 type DatedSort = 'date_created_gmt' | 'date_modified_gmt';

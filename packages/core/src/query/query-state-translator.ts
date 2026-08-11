@@ -19,7 +19,7 @@ import type {
 
 import { parseRemoteId } from '../utils/parse-remote-id';
 
-import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
+import type { CollectionKey, FiltersOf, LogKindFilter, QueryStateOf } from './query-state-types';
 
 type Operator = 'taxonomy-many' | 'value' | 'metadata' | 'store' | 'date-range' | 'all-match';
 
@@ -76,6 +76,45 @@ export function normalizeQuerySortField(
 	return collection === 'products' ? (sortAliasFor(collection, field) ?? field) : field;
 }
 
+const SYNC_KIND_PREFIX = 'wcpos.sync';
+
+const syncCategoryRange = { $gte: SYNC_KIND_PREFIX, $lt: `${SYNC_KIND_PREFIX}/` };
+// mingo has no range-negation, so "not the sync domain" is the complement union.
+const notSyncCategory = {
+	$or: [{ category: { $lt: SYNC_KIND_PREFIX } }, { category: { $gte: `${SYNC_KIND_PREFIX}/` } }],
+};
+
+/**
+ * Strict display-kind selectors (A1.5): each kind matches exactly the rows the
+ * LEVEL column renders with that kind, mirroring `displayKind`'s precedence —
+ * severity wins, then actor (action), then the sync domain, then debug/info.
+ * `$exists` mirrors the has_actor convention above.
+ */
+function kindConditions(kind: LogKindFilter): Record<string, unknown>[] {
+	switch (kind) {
+		case 'error':
+			return [{ level: 'error' }];
+		case 'warn':
+			return [{ level: 'warn' }];
+		case 'action':
+			return [{ actor: { $exists: true } }, { level: { $nin: ['error', 'warn'] } }];
+		case 'sync':
+			return [
+				{ category: syncCategoryRange },
+				{ actor: { $exists: false } },
+				{ level: { $nin: ['error', 'warn'] } },
+			];
+		case 'info':
+			return [{ level: 'info' }, { actor: { $exists: false } }, notSyncCategory];
+		case 'debug':
+			return [{ level: 'debug' }, { actor: { $exists: false } }, notSyncCategory];
+		default: {
+			const exhaustive: never = kind;
+			return exhaustive;
+		}
+	}
+}
+
 export function translateLogsQueryState(state: QueryStateOf<'logs'>) {
 	const filters = state.filters;
 	const conditions = (
@@ -90,6 +129,7 @@ export function translateLogsQueryState(state: QueryStateOf<'logs'>) {
 					}
 				: undefined,
 			filters.has_actor ? { actor: { $exists: true } } : undefined,
+			...(filters.kind ? kindConditions(filters.kind) : []),
 		] as (Record<string, unknown> | undefined)[]
 	).filter((condition): condition is Record<string, unknown> => condition !== undefined);
 	return {

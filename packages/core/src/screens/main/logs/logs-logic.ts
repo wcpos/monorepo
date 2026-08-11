@@ -386,3 +386,24 @@ export function buildDebugInfo(input: DebugInfoInput): string {
 	}
 	return lines.join('\n');
 }
+
+/**
+ * Infinite-scroll guard for the ledger (A1.4: "Show more" dies; the ledger
+ * extends as the cashier nears the bottom, like every other POS table).
+ * Pure on purpose. The `limit !== lastExtendLimit` clause is the #1132
+ * phantom-trigger lesson: scroll jitter refires the handler, but a second
+ * extend is only allowed after the previous one actually grew the window.
+ */
+export function shouldExtendLedger(args: {
+	offsetY: number;
+	contentHeight: number;
+	viewportHeight: number;
+	limit: number;
+	total: number;
+	lastExtendLimit: number | null;
+}): boolean {
+	const distanceFromBottom = args.contentHeight - args.viewportHeight - args.offsetY;
+	if (distanceFromBottom > 800) return false;
+	if (args.total <= args.limit) return false;
+	return args.lastExtendLimit !== args.limit;
+}
