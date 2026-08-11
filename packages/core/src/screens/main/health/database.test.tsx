@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { render } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 
 import { DatabaseScreen } from './database';
 
@@ -19,6 +19,7 @@ const mockMutationCounts = {
 	unresolvedConflicts: 0,
 };
 const mockDeadLetterStuck: StuckRecord[] = [];
+const mockSync = jest.fn();
 
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: (props: TooltipProps) => mockTooltip(props),
@@ -41,7 +42,28 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	};
 });
 jest.mock('@wcpos/components/button', () => ({
-	Button: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
+	Button: ({
+		children,
+		testID,
+		onPress,
+		loading,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		testID?: string;
+		onPress?: () => void;
+		loading?: boolean;
+		disabled?: boolean;
+	}) => (
+		<button
+			data-testid={testID}
+			onClick={onPress}
+			disabled={disabled || loading}
+			data-loading={loading ? 'true' : 'false'}
+		>
+			{children}
+		</button>
+	),
 	ButtonText: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@wcpos/components/dialog', () => {
@@ -64,7 +86,13 @@ jest.mock('@wcpos/components/dropdown-menu', () => {
 	return {
 		DropdownMenu: Component,
 		DropdownMenuContent: Component,
-		DropdownMenuItem: Component,
+		DropdownMenuItem: ({
+			children,
+			onPress,
+		}: {
+			children: React.ReactNode;
+			onPress?: () => void;
+		}) => <button onClick={onPress}>{children}</button>,
 		DropdownMenuTrigger: Component,
 	};
 });
@@ -96,7 +124,7 @@ jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	runResetRefill: jest.fn(),
 	useQueryRuntime: () => ({
-		engine: { active: jest.fn(), scope: {}, sync: jest.fn() },
+		engine: { active: jest.fn(), scope: {}, sync: mockSync },
 	}),
 }));
 jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
@@ -165,6 +193,7 @@ jest.mock('./use-relative-time', () => ({
 
 describe('DatabaseScreen coverage', () => {
 	afterEach(() => {
+		mockSync.mockReset();
 		mockMutationCounts.conflicts = 0;
 		mockMutationCounts.rejected = 0;
 		mockMutationCounts.unresolvedConflicts = 0;
@@ -231,5 +260,37 @@ describe('DatabaseScreen coverage', () => {
 		const { getAllByText } = render(<DatabaseScreen />);
 
 		expect(getAllByText('1 stuck')).toHaveLength(2);
+	});
+
+	it('shows and locks the row menu trigger while its sync is in flight', async () => {
+		let finish!: (report: { lane: 'all'; status: 'ran' }) => void;
+		mockSync.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+		);
+
+		const { getAllByRole, getAllByTestId } = render(<DatabaseScreen />);
+		const triggers = getAllByTestId('db-row-menu-products');
+
+		fireEvent.click(getAllByRole('button', { name: 'Check for changes now' })[0]!);
+
+		await waitFor(() =>
+			expect(triggers.some((trigger) => trigger.getAttribute('data-loading') === 'true')).toBe(true)
+		);
+		expect(
+			triggers
+				.find((trigger) => trigger.getAttribute('data-loading') === 'true')
+				?.hasAttribute('disabled')
+		).toBe(true);
+		expect(mockSync).toHaveBeenCalledTimes(1);
+
+		finish({ lane: 'all', status: 'ran' });
+		await waitFor(() =>
+			expect(triggers.every((trigger) => trigger.getAttribute('data-loading') === 'false')).toBe(
+				true
+			)
+		);
+		expect(triggers.every((trigger) => !trigger.hasAttribute('disabled'))).toBe(true);
 	});
 });

@@ -230,7 +230,7 @@ function CollectionRowView({
 }) {
 	const t = useT();
 	const { engine } = useQueryRuntime();
-	const { sync } = useManualSync();
+	const { syncing, sync } = useManualSync();
 	const [confirming, setConfirming] = React.useState(false);
 	const [phase, setPhase] = React.useState<RowPhase>('idle');
 	const story = useRowStory(row, phase);
@@ -295,7 +295,8 @@ function CollectionRowView({
 					variant="ghost"
 					size="sm"
 					testID={`db-row-menu-${row.key}`}
-					disabled={phase === 'clearing'}
+					disabled={phase === 'clearing' || syncing}
+					loading={syncing}
 				>
 					<Icon name="ellipsisVertical" className="text-muted-foreground" />
 				</Button>

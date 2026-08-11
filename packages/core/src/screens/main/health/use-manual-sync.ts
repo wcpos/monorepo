@@ -20,11 +20,12 @@ export function useManualSync() {
 		setSyncing(true);
 		try {
 			const report = await engine.sync();
-			if (report.status === 'error') {
+			if (report.status !== 'ran') {
+				const detail = report.error ?? report.reason;
 				Toast.show({
 					type: 'error',
 					text1: t('health.database.sync_failed'),
-					...(report.error ? { text2: report.error } : {}),
+					...(detail ? { text2: detail } : {}),
 				});
 			}
 		} catch (error) {
