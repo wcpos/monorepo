@@ -28,7 +28,7 @@ import {
  * because then there is nothing to distinguish.
  *
  * Run:
- *   E2E_PRODUCT_WRITER_PASS=… npx playwright test -c playwright.pro425.config.ts
+ *   BASE_URL=https://current-preview.example E2E_PRODUCT_WRITER_PASS=… npx playwright test -c playwright.pro425.config.ts
  *
  * PRO425_USER / PRO425_PASS override the identity when the Actions secret is
  * not to hand locally — any shop_manager with POS access will do.

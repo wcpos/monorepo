@@ -2,6 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 import type { WcposTestOptions } from './playwright.config';
 
+const baseURL = process.env.BASE_URL;
+if (!baseURL) {
+	throw new Error('BASE_URL is required and must identify the current client deployment');
+}
+
 /**
  * Standalone config for the pro#425 live proof.
  *
@@ -19,7 +24,7 @@ export default defineConfig<WcposTestOptions>({
 	timeout: 300_000,
 	reporter: [['list']],
 	use: {
-		baseURL: process.env.BASE_URL || 'https://wcpos--zcc33oemdf.expo.app',
+		baseURL,
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure',
 		video: 'off',

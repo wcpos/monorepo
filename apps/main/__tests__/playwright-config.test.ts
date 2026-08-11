@@ -1,11 +1,22 @@
+jest.mock('@playwright/test', () => ({
+	defineConfig: <T>(config: T) => config,
+	devices: { 'Desktop Chrome': {} },
+}));
+
 describe('Playwright project boundaries', () => {
 	const originalFreeStoreUrl = process.env.E2E_STORE_URL_FREE;
+	const originalBaseUrl = process.env.BASE_URL;
 
 	afterEach(() => {
 		if (originalFreeStoreUrl === undefined) {
 			delete process.env.E2E_STORE_URL_FREE;
 		} else {
 			process.env.E2E_STORE_URL_FREE = originalFreeStoreUrl;
+		}
+		if (originalBaseUrl === undefined) {
+			delete process.env.BASE_URL;
+		} else {
+			process.env.BASE_URL = originalBaseUrl;
 		}
 		jest.resetModules();
 	});
@@ -31,5 +42,22 @@ describe('Playwright project boundaries', () => {
 				)
 			).toBe(true);
 		}
+	});
+
+	it('requires the current deployment URL for the pro#425 live proof', () => {
+		delete process.env.BASE_URL;
+		jest.resetModules();
+
+		expect(() => require('../playwright.pro425.config')).toThrow(
+			'BASE_URL is required and must identify the current client deployment'
+		);
+
+		process.env.BASE_URL = 'https://current-preview.example.com';
+		jest.resetModules();
+
+		const config = require('../playwright.pro425.config').default as {
+			use?: { baseURL?: string };
+		};
+		expect(config.use?.baseURL).toBe('https://current-preview.example.com');
 	});
 });
