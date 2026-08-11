@@ -86,12 +86,15 @@ describe('createSyncLogObserver', () => {
 	});
 
 	it.each([
-		[401, 'AUTH101'],
-		[429, 'SYNC141'],
-		[204, 'SYNC321'],
-		[503, 'SYNC131'],
-	])('resolves push.error status %s to %s', (status, errorCode) => {
-		observer.observe(event({ type: 'push.error', level: 'error', fields: { status } }));
+		[{ status: 401 }, 'AUTH101'],
+		[{ status: 403 }, 'AUTH201'],
+		[{ status: 429 }, 'SYNC141'],
+		[{ status: 204, reason: 'no-document' }, 'SYNC321'],
+		[{ status: 400, reason: 'pos_data_invalid' }, 'SYNC211'],
+		[{ status: 409, reason: 'identity-ambiguous' }, 'SYNC201'],
+		[{ status: 503 }, 'SYNC131'],
+	])('resolves push.error fields %j to %s', (fields, errorCode) => {
+		observer.observe(event({ type: 'push.error', level: 'error', fields }));
 
 		expect(rows[0].context.errorCode).toBe(errorCode);
 	});

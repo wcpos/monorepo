@@ -346,6 +346,8 @@ export const CONFORMANCE_TABLE = {
 			if (status === 403) return 'AUTH201';
 			if (status === 429) return 'SYNC141';
 			if (status >= 500) return 'SYNC131';
+			if (fields.reason === 'pos_data_invalid') return 'SYNC211';
+			if (status >= 400) return 'SYNC201';
 			if (status >= 200 && status < 300) return 'SYNC321';
 			return 'SYNC121';
 		},
