@@ -190,6 +190,7 @@ export const DRILL_DOWNS_PER_TICK = 2;
  */
 export const SCAN_PAGES_PER_SPACE = 3;
 export const EXISTENCE_RECONCILE_CURSOR_KEY = 'existence-reconcile:cursor';
+export const PRIME_SPACE_CURSOR_KEY = 'existence-prime:space';
 type ReconcileCursor = { nextPort: number; afterBuckets: number[] };
 
 function decodeReconcileCursor(raw: string | null, portCount: number): ReconcileCursor {
@@ -216,30 +217,51 @@ function decodeReconcileCursor(raw: string | null, portCount: number): Reconcile
 
 function selectDrillDowns(candidates: readonly number[][], cursor: ReconcileCursor) {
 	const selected: { port: number; bucket: number }[] = [];
-	const next = {
+	const tentative = {
 		nextPort: cursor.nextPort,
 		afterBuckets: [...cursor.afterBuckets],
 	};
 	while (selected.length < DRILL_DOWNS_PER_TICK) {
 		let found = false;
 		for (let offset = 0; offset < candidates.length; offset += 1) {
-			const port = (next.nextPort + offset) % candidates.length;
-			const bucket = candidates[port]!.find((value) => value > next.afterBuckets[port]!);
+			const port = (tentative.nextPort + offset) % candidates.length;
+			const bucket = candidates[port]!.find((value) => value > tentative.afterBuckets[port]!);
 			if (bucket === undefined) continue;
 			selected.push({ port, bucket });
-			next.afterBuckets[port] = bucket;
-			next.nextPort = (port + 1) % candidates.length;
+			tentative.afterBuckets[port] = bucket;
+			tentative.nextPort = (port + 1) % candidates.length;
 			found = true;
 			break;
 		}
 		if (!found) break;
+	}
+	return selected;
+}
+
+/**
+ * Commit cursor progress for COMPLETED drill-downs only (codex-review P1): a bucket whose
+ * drill was pressure-deferred or whose port failed keeps its cursor slot, so the very next
+ * tick re-selects it instead of skipping it until the ring wraps.
+ */
+function commitDrillDowns(
+	candidates: readonly number[][],
+	cursor: ReconcileCursor,
+	completed: readonly { port: number; bucket: number }[]
+): ReconcileCursor {
+	const next = {
+		nextPort: cursor.nextPort,
+		afterBuckets: [...cursor.afterBuckets],
+	};
+	for (const { port, bucket } of completed) {
+		next.afterBuckets[port] = bucket;
+		next.nextPort = (port + 1) % candidates.length;
 	}
 	if (
 		candidates.every((values, port) => values.every((value) => value <= next.afterBuckets[port]!))
 	) {
 		next.afterBuckets.fill(-1);
 	}
-	return { selected, next };
+	return next;
 }
 
 export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalCoverage {
@@ -273,7 +295,20 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 		database,
 		create: () => new RxCoverageRepository(options.database),
 	});
-	let inMemoryReconcileCursor: string | null = null;
+	// Cursor persistence: the host's blob store when provided, else session-scoped memory.
+	// One helper pair serves the reconcile ring cursor and the prime rotation cursors.
+	const inMemoryCursors = new Map<string, string>();
+	const cursorGet = (key: string): Promise<string | null> =>
+		options.reconcileCursorStore
+			? options.reconcileCursorStore.get(key)
+			: Promise.resolve(inMemoryCursors.get(key) ?? null);
+	const cursorSet = async (key: string, value: string): Promise<void> => {
+		if (options.reconcileCursorStore) {
+			await options.reconcileCursorStore.set(key, value);
+		} else {
+			inMemoryCursors.set(key, value);
+		}
+	};
 
 	return {
 		recordQueryResult: (input) =>
@@ -338,19 +373,49 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			if (!manifest) return { products: 0, customers: 0, orders: 0 };
 			const database = options.database as LocalCoverageDatabase & ExistenceManifestPrimeDatabase;
 			const chunkBudget = { remaining: PRIME_CHUNKS_PER_TICK };
-			const products = await primeExistenceManifest(database, {
-				...manifest,
-				chunkBudget,
-			});
-			const customers = await primeExistenceManifestCustomers(database, {
-				...manifest,
-				chunkBudget,
-			});
-			const orders = await primeExistenceManifestOrders(database, {
-				...manifest,
-				chunkBudget,
-			});
-			return { products, customers, orders };
+			// Rotation (codex-review P1): both the id order WITHIN a space and the space ORDER
+			// itself rotate on persisted cursors, so ids whose /digests lookup keeps returning
+			// nothing (server-deleted residents) cannot pin the shared budget to one prefix or
+			// one space. Cursors record last-ATTEMPTED, never last-succeeded.
+			const rotationFor = async (space: 'products' | 'customers' | 'orders') => {
+				const key = `existence-prime:cursor:${space}`;
+				const raw = await cursorGet(key);
+				const parsed = Number(raw);
+				return {
+					afterWooId: Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : -1,
+					commit: (lastAttemptedWooId: number) => cursorSet(key, String(lastAttemptedWooId)),
+				};
+			};
+			const runners = {
+				products: async () =>
+					primeExistenceManifest(database, {
+						...manifest,
+						chunkBudget,
+						rotation: await rotationFor('products'),
+					}),
+				customers: async () =>
+					primeExistenceManifestCustomers(database, {
+						...manifest,
+						chunkBudget,
+						rotation: await rotationFor('customers'),
+					}),
+				orders: async () =>
+					primeExistenceManifestOrders(database, {
+						...manifest,
+						chunkBudget,
+						rotation: await rotationFor('orders'),
+					}),
+			} as const;
+			const spaces = ['products', 'customers', 'orders'] as const;
+			const startRaw = Number(await cursorGet(PRIME_SPACE_CURSOR_KEY));
+			const start = Number.isSafeInteger(startRaw) ? ((startRaw % 3) + 3) % 3 : 0;
+			const counts = { products: 0, customers: 0, orders: 0 };
+			for (let offset = 0; offset < spaces.length; offset += 1) {
+				const space = spaces[(start + offset) % spaces.length]!;
+				counts[space] = await runners[space]();
+			}
+			await cursorSet(PRIME_SPACE_CURSOR_KEY, String((start + 1) % spaces.length));
+			return counts;
 		},
 		reconcilePass: async (signal, fetcher, shouldDefer) => {
 			if (!options.reconcile) return emptyReconcileSummary();
@@ -383,21 +448,14 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			const candidates = scans.map((result) =>
 				result.status === 'fulfilled' ? result.value.candidates : []
 			);
-			const rawCursor = options.reconcileCursorStore
-				? await options.reconcileCursorStore.get(EXISTENCE_RECONCILE_CURSOR_KEY)
-				: inMemoryReconcileCursor;
-			const selection = selectDrillDowns(
-				candidates,
-				decodeReconcileCursor(rawCursor, ports.length)
+			const scanDeferred = scans.some(
+				(result) => result.status === 'fulfilled' && result.value.deferred === true
 			);
-			const encodedCursor = JSON.stringify(selection.next);
-			if (options.reconcileCursorStore) {
-				await options.reconcileCursorStore.set(EXISTENCE_RECONCILE_CURSOR_KEY, encodedCursor);
-			} else {
-				inMemoryReconcileCursor = encodedCursor;
-			}
+			const rawCursor = await cursorGet(EXISTENCE_RECONCILE_CURSOR_KEY);
+			const cursor = decodeReconcileCursor(rawCursor, ports.length);
+			const selected = selectDrillDowns(candidates, cursor);
 			const selectedByPort = ports.map((_port, index) =>
-				selection.selected.filter(({ port }) => port === index).map(({ bucket }) => bucket)
+				selected.filter(({ port }) => port === index).map(({ bucket }) => bucket)
 			);
 			const settled = await Promise.allSettled(
 				deps.map((port, index) =>
@@ -405,6 +463,25 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 						? emptyReconcileSummary()
 						: reconcileExistence({ ...port, buckets: selectedByPort[index] })
 				)
+			);
+			// Each port walks its selected buckets in selection order and stops on defer/abort/
+			// failure, so its completed count is a PREFIX of its selection. A rejected port
+			// conservatively commits nothing (one re-drill beats a skipped bucket).
+			const completedByPort = settled.map((result, index) =>
+				result.status === 'fulfilled'
+					? Math.min(
+							result.value.buckets + result.value.emptyBuckets,
+							selectedByPort[index]!.length
+						)
+					: 0
+			);
+			const perPortSeen = ports.map(() => 0);
+			const completed = selected.filter(
+				({ port }) => perPortSeen[port]!++ < completedByPort[port]!
+			);
+			await cursorSet(
+				EXISTENCE_RECONCILE_CURSOR_KEY,
+				JSON.stringify(commitDrillDowns(candidates, cursor, completed))
 			);
 			const summary = settled.reduce<ReconcileSummary>(
 				(total, result) =>
@@ -421,6 +498,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 						: total,
 				{
 					...emptyReconcileSummary(),
+					...(scanDeferred ? { deferred: true as const } : {}),
 					emptyBuckets: scans.reduce(
 						(total, result) =>
 							total + (result.status === 'fulfilled' ? result.value.emptyBuckets : 0),

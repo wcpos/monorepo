@@ -1147,12 +1147,18 @@ export function createRxdbSyncEngine(
 	// transition. sync() checks this counter and returns skipped instead.
 	let pendingLifecycleOps = 0;
 	let rebaselineGeneration = 0;
+	// True from the moment a rebaseline chain starts (seeds included) until its audit
+	// hold resolves or is cancelled — the window in which interval-dispatched audit
+	// ticks must stand down (codex-review P2: a due interval landing pre- or mid-hold
+	// would otherwise sneak audit traffic into the open path the hold protects).
+	let rebaselineHoldActive = false;
 	let pendingRebaselineDelay: {
 		handle: ReturnType<typeof setTimeout>;
 		resolve: (elapsed: boolean) => void;
 	} | null = null;
 	const cancelPendingRebaselineAudit = (): void => {
 		rebaselineGeneration += 1;
+		rebaselineHoldActive = false;
 		if (pendingRebaselineDelay === null) return;
 		timers.clearTimeout(pendingRebaselineDelay.handle);
 		pendingRebaselineDelay.resolve(false);
@@ -1502,11 +1508,15 @@ export function createRxdbSyncEngine(
 				if (report.rebaselined === true && mode === 'auto' && !disposed) {
 					cancelPendingRebaselineAudit();
 					const generation = rebaselineGeneration;
+					rebaselineHoldActive = true;
 					void (async () => {
 						for (const lane of REBASELINE_RETICK_LANES.slice(0, 2)) {
 							await automaticTickGate.runLane(lane);
 						}
 						if (!(await waitForRebaselineAuditWindow(generation))) return;
+						// Clear the stand-down BEFORE dispatching, so the chain's own audit
+						// runs are never blocked by the guard they resolve.
+						rebaselineHoldActive = false;
 						for (const lane of REBASELINE_RETICK_LANES.slice(2)) {
 							await automaticTickGate.runLane(lane);
 						}
@@ -1561,7 +1571,31 @@ export function createRxdbSyncEngine(
 		now: nowMs,
 		diagnostics,
 		onStatusChange: scheduleStatusChange,
-		tickLane: (lane) => tickLaneWithEvents(lane),
+		tickLane: (lane) => {
+			// The rebaseline hold gates ALL automatic audit dispatch, not just the
+			// rebaseline-spawned chain: a due 15/17-min interval landing inside the
+			// 60s window must not sneak audit traffic into the open path it protects
+			// (codex-review P2). The interval simply retries next cadence; the held
+			// chain itself runs only after the hold resolves, so it is never blocked
+			// by this guard. Manual sync() does not pass through this gate.
+			if (rebaselineHoldActive && (lane === 'existence-prime' || lane === 'existence-reconcile')) {
+				// Emit the lane event pair here — the stand-down bypasses tickLaneWithEvents,
+				// and a silent skip would be invisible to hosts watching lane activity.
+				emitEngineEvent({ type: 'lane-start', lane });
+				emitEngineEvent({
+					type: 'lane-finish',
+					lane,
+					status: 'skipped',
+					detail: 'rebaseline-hold',
+				});
+				return Promise.resolve<SyncReport>({
+					lane,
+					status: 'skipped',
+					reason: 'rebaseline-hold',
+				});
+			}
+			return tickLaneWithEvents(lane);
+		},
 		recordTick: (report, startedAtMs) => {
 			recordLaneTick(report, startedAtMs);
 		},

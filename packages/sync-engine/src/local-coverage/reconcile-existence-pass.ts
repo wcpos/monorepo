@@ -79,8 +79,10 @@ export async function findExistenceReconcileCandidates(input: {
 	readLocalBucket: (lo: number, hi: number) => Promise<LocalManifestEntry[]>;
 	fetchServerScanPage: (afterId: number, bucketSize: number) => Promise<ExistenceScanPage>;
 	isAborted?: () => boolean;
+	/** Pressure check between page fetches: a mid-scan backoff signal stops paging AND drilling. */
+	shouldDefer?: () => boolean;
 	maxScanPages?: number;
-}): Promise<{ candidates: number[]; emptyBuckets: number }> {
+}): Promise<{ candidates: number[]; emptyBuckets: number; deferred?: true }> {
 	if (input.buckets.length === 0) return { candidates: [], emptyBuckets: 0 };
 
 	const aggregates = new Map<number, ExistenceScanBucket>();
@@ -99,6 +101,13 @@ export async function findExistenceReconcileCandidates(input: {
 	let nextUncovered = 0; // index into sortedBuckets of the first bucket no fetched window covered
 	let pages = 0;
 	while (!input.isAborted?.() && pages < (input.maxScanPages ?? Infinity)) {
+		// Pressure lands mid-scan (e.g. a concurrently scanned sibling id-space drew a 429):
+		// stop paging AND report deferred, so this space issues no drills off a partial window
+		// this tick. The pre-tick lane skip covers pressure known at tick start; this covers
+		// pressure born inside the tick (codex-review P2).
+		if (input.shouldDefer?.()) {
+			return { candidates: [], emptyBuckets: 0, deferred: true };
+		}
 		const targetBucket = sortedBuckets[nextUncovered]!;
 		const afterId = Math.max(0, targetBucket * input.bucketSize - 1);
 		const page = await input.fetchServerScanPage(afterId, input.bucketSize);

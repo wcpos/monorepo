@@ -142,6 +142,31 @@ describe('maintenance politeness contracts', () => {
 				)
 			).toBe(false);
 
+			// A due 15-min existence-prime interval firing INSIDE the hold must stand down
+			// (codex-review P2): the interval-dispatched tick skips, issues nothing, and the
+			// audit still arrives only through the held chain.
+			const requestsBeforeInterval = harness.requests.length;
+			const primeInterval = harness.timers!.intervals.findIndex(
+				({ delayMs }) => delayMs === 15 * 60_000
+			);
+			expect(primeInterval).toBeGreaterThanOrEqual(0);
+			harness.timers!.fireInterval(primeInterval);
+			await vi.waitFor(() =>
+				expect(
+					harness.events.some(
+						(event) =>
+							event.type === 'lane-finish' &&
+							event.lane === 'existence-prime' &&
+							event.status === 'skipped'
+					)
+				).toBe(true)
+			);
+			expect(
+				harness.requests
+					.slice(requestsBeforeInterval)
+					.filter((request) => /\/integrity\/|\/digests$/.test(request.path))
+			).toEqual([]);
+
 			const delayIndex = harness.timers!.timeouts.findIndex(({ delayMs }) => delayMs === 60_000);
 			expect(delayIndex).toBeGreaterThanOrEqual(0);
 			harness.timers!.fireTimeout(delayIndex);
@@ -249,7 +274,10 @@ describe('maintenance politeness contracts', () => {
 			await expect(harness.engine.sync('existence-reconcile')).resolves.toMatchObject({
 				status: 'ran',
 			});
-			expect(bucketRequests).toEqual([0, 2]);
+			// The deferred bucket 1 is the FIRST re-selected after recovery — the cursor
+			// commits only completed drills, so the promised remainder resumes, not skips
+			// (codex-review P1).
+			expect(bucketRequests).toEqual([0, 1, 2]);
 		} finally {
 			await harness.dispose();
 		}

@@ -69,6 +69,48 @@ export type DigestFetch = (ids: number[]) => Promise<{ id: number; digest: strin
 const PRIME_SCAN_CHUNK_SIZE = 1_000;
 export const PRIME_CHUNKS_PER_TICK = 5;
 type PrimeChunkBudget = { remaining: number };
+/**
+ * Rotation for the bounded prime (codex-review P1): an id whose /digests lookup returns no
+ * digest — e.g. a resident deleted server-side — stays "missing" forever. Without rotation
+ * such ids permanently occupy the first budget chunks and starve every id (and space) behind
+ * them. The cursor records the last ATTEMPTED wooId regardless of upsert success; the next
+ * tick resumes past it, wrapping to the start, so the budget circulates the whole missing set.
+ */
+export type PrimeRotation = {
+	afterWooId: number;
+	commit: (lastAttemptedWooId: number) => Promise<void>;
+};
+
+/** Wrap-order ascending ids to start just past the rotation point. */
+function rotateMissing(missing: number[], afterWooId: number): number[] {
+	missing.sort((a, b) => a - b);
+	if (afterWooId < 0) return missing;
+	const pivot = missing.findIndex((id) => id > afterWooId);
+	if (pivot <= 0) return missing;
+	return [...missing.slice(pivot), ...missing.slice(0, pivot)];
+}
+
+async function primeChunks(input: {
+	missing: number[];
+	chunkSize: number;
+	budget: PrimeChunkBudget;
+	rotation?: PrimeRotation;
+	attempt: (batch: number[]) => Promise<number>;
+}): Promise<number> {
+	const ordered = rotateMissing(input.missing, input.rotation?.afterWooId ?? -1);
+	let primed = 0;
+	let lastAttempted: number | null = null;
+	for (const batch of chunk(ordered, input.chunkSize)) {
+		if (input.budget.remaining === 0) break;
+		input.budget.remaining -= 1;
+		primed += await input.attempt(batch);
+		lastAttempted = batch[batch.length - 1]!;
+	}
+	if (input.rotation && lastAttempted !== null) {
+		await input.rotation.commit(lastAttempted);
+	}
+	return primed;
+}
 
 /**
  * Pure core: given the local product/variation id sets, the manifest ids already present, and injected
@@ -82,6 +124,7 @@ export async function runManifestPrimePass(input: {
 	upsert: (rows: ExistenceManifestDocument[]) => Promise<void>;
 	chunkSize?: number;
 	chunkBudget?: PrimeChunkBudget;
+	rotation?: PrimeRotation;
 }): Promise<number> {
 	// wp_posts ids never collide across products/variations, so a single lane map is unambiguous; the
 	// objectType a returned id gets comes from whichever local set it belongs to.
@@ -105,26 +148,27 @@ export async function runManifestPrimePass(input: {
 		return 0;
 	}
 
-	let primed = 0;
-	const budget = input.chunkBudget ?? { remaining: PRIME_CHUNKS_PER_TICK };
-	for (const batch of chunk(missing, input.chunkSize ?? 100)) {
-		if (budget.remaining === 0) break;
-		budget.remaining -= 1;
-		const digests = await input.fetchDigests(batch);
-		const rows: ExistenceManifestDocument[] = [];
-		for (const { id, digest } of digests) {
-			const objectType = laneOf.get(id);
-			if (!objectType || typeof digest !== 'string' || digest === '') {
-				continue; // an id we didn't ask about, or a record with no stored digest yet
+	return primeChunks({
+		missing,
+		chunkSize: input.chunkSize ?? 100,
+		budget: input.chunkBudget ?? { remaining: PRIME_CHUNKS_PER_TICK },
+		rotation: input.rotation,
+		attempt: async (batch) => {
+			const digests = await input.fetchDigests(batch);
+			const rows: ExistenceManifestDocument[] = [];
+			for (const { id, digest } of digests) {
+				const objectType = laneOf.get(id);
+				if (!objectType || typeof digest !== 'string' || digest === '') {
+					continue; // an id we didn't ask about, or a record with no stored digest yet
+				}
+				rows.push(existenceManifestDocument({ wooId: id, objectType, digest }));
 			}
-			rows.push(existenceManifestDocument({ wooId: id, objectType, digest }));
-		}
-		if (rows.length > 0) {
-			await input.upsert(rows);
-			primed += rows.length;
-		}
-	}
-	return primed;
+			if (rows.length > 0) {
+				await input.upsert(rows);
+			}
+			return rows.length;
+		},
+	});
 }
 
 type PrimeFetcher = (
@@ -149,6 +193,7 @@ export async function primeExistenceManifest(
 		syncBaseUrl: string;
 		chunkSize?: number;
 		chunkBudget?: PrimeChunkBudget;
+		rotation?: PrimeRotation;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -240,6 +285,7 @@ export async function primeExistenceManifest(
 		upsert: (rows) => upsertManifestRows(db.existenceManifest, rows),
 		chunkSize: input.chunkSize,
 		chunkBudget: input.chunkBudget,
+		rotation: input.rotation,
 	});
 }
 
@@ -257,37 +303,39 @@ export async function runSingleLanePrimePass(input: {
 	upsert: (rows: ExistenceManifestDocument[]) => Promise<void>;
 	chunkSize?: number;
 	chunkBudget?: PrimeChunkBudget;
+	rotation?: PrimeRotation;
 }): Promise<number> {
 	const missing = [...new Set(input.wooIds)].filter((id) => !input.existingManifestWooIds.has(id));
 	if (missing.length === 0) {
 		return 0;
 	}
-	let primed = 0;
-	const budget = input.chunkBudget ?? { remaining: PRIME_CHUNKS_PER_TICK };
-	for (const batch of chunk(missing, input.chunkSize ?? 100)) {
-		if (budget.remaining === 0) break;
-		budget.remaining -= 1;
-		const batchSet = new Set(batch);
-		const digests = await input.fetchDigests(batch);
-		const rows: ExistenceManifestDocument[] = [];
-		for (const { id, digest } of digests) {
-			if (!batchSet.has(id) || typeof digest !== 'string' || digest === '') {
-				continue;
+	return primeChunks({
+		missing,
+		chunkSize: input.chunkSize ?? 100,
+		budget: input.chunkBudget ?? { remaining: PRIME_CHUNKS_PER_TICK },
+		rotation: input.rotation,
+		attempt: async (batch) => {
+			const batchSet = new Set(batch);
+			const digests = await input.fetchDigests(batch);
+			const rows: ExistenceManifestDocument[] = [];
+			for (const { id, digest } of digests) {
+				if (!batchSet.has(id) || typeof digest !== 'string' || digest === '') {
+					continue;
+				}
+				rows.push(
+					existenceManifestDocument({
+						wooId: id,
+						objectType: input.objectType,
+						digest,
+					})
+				);
 			}
-			rows.push(
-				existenceManifestDocument({
-					wooId: id,
-					objectType: input.objectType,
-					digest,
-				})
-			);
-		}
-		if (rows.length > 0) {
-			await input.upsert(rows);
-			primed += rows.length;
-		}
-	}
-	return primed;
+			if (rows.length > 0) {
+				await input.upsert(rows);
+			}
+			return rows.length;
+		},
+	});
 }
 
 /**
@@ -302,6 +350,7 @@ export async function primeExistenceManifestCustomers(
 		syncBaseUrl: string;
 		chunkSize?: number;
 		chunkBudget?: PrimeChunkBudget;
+		rotation?: PrimeRotation;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -350,6 +399,7 @@ export async function primeExistenceManifestCustomers(
 		upsert: (rows) => upsertManifestRows(db.existenceManifestCustomers, rows),
 		chunkSize: input.chunkSize,
 		chunkBudget: input.chunkBudget,
+		rotation: input.rotation,
 	});
 }
 
@@ -365,6 +415,7 @@ export async function primeExistenceManifestOrders(
 		syncBaseUrl: string;
 		chunkSize?: number;
 		chunkBudget?: PrimeChunkBudget;
+		rotation?: PrimeRotation;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -413,5 +464,6 @@ export async function primeExistenceManifestOrders(
 		upsert: (rows) => upsertManifestRows(db.existenceManifestOrders, rows),
 		chunkSize: input.chunkSize,
 		chunkBudget: input.chunkBudget,
+		rotation: input.rotation,
 	});
 }

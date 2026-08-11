@@ -77,7 +77,7 @@ type ReconcileExistenceDeps = {
 
 export async function scanExistenceCandidates(
 	deps: ReconcileExistenceDeps
-): Promise<{ candidates: number[]; emptyBuckets: number }> {
+): Promise<{ candidates: number[]; emptyBuckets: number; deferred?: true }> {
 	const buckets = await deps.occupiedBucketIndexes();
 	return findExistenceReconcileCandidates({
 		buckets,
@@ -85,6 +85,7 @@ export async function scanExistenceCandidates(
 		readLocalBucket: deps.readManifestRange,
 		fetchServerScanPage: deps.fetchServerScanPage,
 		isAborted: deps.isAborted,
+		shouldDefer: deps.shouldDefer,
 		maxScanPages: deps.maxScanPages,
 	});
 }

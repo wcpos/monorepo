@@ -151,6 +151,43 @@ describe('primeExistenceManifest removal safety across yields (#949)', () => {
 		);
 	});
 
+	it('rotates past ids whose digest lookup returns nothing instead of starving the tail (codex P1)', async () => {
+		// 601 resident ids, and the server knows NONE of them (e.g. deleted server-side):
+		// every pass primes zero rows. Without rotation each tick would retry ids 1..500
+		// forever; the persisted last-ATTEMPTED cursor must advance the window regardless.
+		const requested: number[][] = [];
+		let cursor = -1;
+		const input = {
+			productWooIds: Array.from({ length: 601 }, (_unused, index) => index + 1),
+			variationWooIds: [],
+			existingManifestWooIds: new Set<number>(),
+			fetchDigests: async (ids: number[]) => {
+				requested.push(ids);
+				return [];
+			},
+			upsert: async () => {},
+		};
+		const rotation = () => ({
+			afterWooId: cursor,
+			commit: async (lastAttempted: number) => {
+				cursor = lastAttempted;
+			},
+		});
+
+		await expect(runManifestPrimePass({ ...input, rotation: rotation() })).resolves.toBe(0);
+		expect(requested.flat()).toEqual(Array.from({ length: 500 }, (_unused, index) => index + 1));
+		expect(cursor).toBe(500);
+
+		await expect(runManifestPrimePass({ ...input, rotation: rotation() })).resolves.toBe(0);
+		const secondPass = requested.slice(5).flat();
+		// Resumes past the cursor (501..601), then wraps to the low ids — the tail is reached
+		// and the budget circulates instead of pinning to the first five chunks.
+		expect(secondPass[0]).toBe(501);
+		expect(secondPass).toContain(601);
+		expect(secondPass).toContain(1);
+		expect(cursor).toBe(399);
+	});
+
 	it('does NOT delete a product that gained local work after it was classified', async () => {
 		const removed: string[][] = [];
 		const db = primeDatabase({

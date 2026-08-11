@@ -155,6 +155,27 @@ describe('findExistenceReconcileCandidates', () => {
 		expect(requestedAfterIds).toEqual([0, 799_999]);
 		expect(result).toEqual({ candidates: [], emptyBuckets: 0 });
 	});
+
+	it('defers instead of paging on when pressure arrives mid-scan (codex P2)', async () => {
+		let pressured = false;
+		const fetchServerScanPage = vi.fn(async () => {
+			pressured = true; // a sibling id-space drew a 429 while this page was in flight
+			return { changes: [], nextAfterId: 49_999, complete: false };
+		});
+		const result = await findExistenceReconcileCandidates({
+			buckets: [0, 60],
+			bucketSize: 1000,
+			maxScanPages: 3,
+			readLocalBucket: async (lo) => [L(lo + 1, '7')],
+			fetchServerScanPage,
+			shouldDefer: () => pressured,
+		});
+
+		// One page issued, then the pressure check stops the pager — and no drill
+		// candidates are minted off the partial window this tick.
+		expect(fetchServerScanPage).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({ candidates: [], emptyBuckets: 0, deferred: true });
+	});
 });
 
 describe('runExistenceReconcile', () => {
