@@ -1025,6 +1025,7 @@
 	"pos_products.camera_scan_title": "Scan barcode",
 	"pos_products.camera_permission_prompt": "WCPOS needs camera access to scan barcodes.",
 	"pos_products.camera_permission_grant": "Allow camera",
+	"pos_products.camera_resize_handle": "Drag to resize the camera view",
 	"pos_products.camera_decoder_error": "Barcode decoding is failing — close the scanner and try again.",
 	"pos_products.camera_scan_close": "Close barcode scanner",
 	"pos_products.camera_scan_open": "Scan barcode with camera",
