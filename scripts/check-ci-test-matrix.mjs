@@ -58,7 +58,10 @@ export const OTHER_LANES = [
   {
     dir: "apps/main/e2e",
     workflow: "deploy.yml",
-    invocation: /\bcd\s+apps\/main\s*&&\s*npx\s+playwright\s+test\b/,
+    // Match the single-line command or its sharded multi-line form, but keep
+    // `cd apps/main` and the Playwright invocation in the same workflow step.
+    invocation:
+      /(?:^|\n)[ \t]*(?:-[ \t]*)?(?:run:[ \t]*)?cd[ \t]+apps\/main[ \t]*(?:&&[ \t]*npx[ \t]+playwright[ \t]+test\b|\r?\n(?:(?![ \t]*(?:-[ \t]*)?[A-Za-z_][\w-]*:[^\n]*(?:\n|$))[^\r\n]*(?:\r?\n|$))*?[ \t]*npx[ \t]+playwright[ \t]+test\b)/m,
     reason:
       "Playwright specs — run against a deployed preview by the e2e job in deploy.yml",
   },

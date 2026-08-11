@@ -338,6 +338,43 @@ test("the playwright lane check rejects a commented-out invocation", (t) => {
   assert.throws(() => checkCiTestMatrix(tree.root), /playwright.*NO CI lane/is);
 });
 
+test("the playwright lane check rejects non-executable or out-of-step matches", (t) => {
+  const workflows = [
+    `run: |
+  cd apps/main
+  echo "npx playwright test $SPECS"
+`,
+    `run: |
+  cd apps/main
+  npx
+  playwright test
+`,
+    `- run: cd apps/main
+- run: npx playwright test
+`,
+  ];
+
+  for (const workflow of workflows) {
+    const tree = makeTree();
+    t.after(() => rmSync(tree.root, { recursive: true, force: true }));
+    tree.write("pnpm-workspace.yaml", 'packages:\n  - "packages/*"\n');
+    tree.write("package.json", JSON.stringify({ scripts: {} }));
+    tree.pkg("packages/core", "@wcpos/core", { test: "jest" });
+    tree.write("packages/core/src/core.test.ts", "");
+    tree.write(
+      ".github/workflows/test.yml",
+      "pnpm --filter @wcpos/core exec jest --ci\n",
+    );
+    tree.write(".github/workflows/deploy.yml", workflow);
+
+    assert.throws(
+      () => checkCiTestMatrix(tree.root),
+      /playwright.*NO CI lane/is,
+      workflow,
+    );
+  }
+});
+
 test("a package mentioned nowhere is dark", () => {
   const lanes = detectLanes(
     [["test.yml", "for pkg in core; do x; done"]],
