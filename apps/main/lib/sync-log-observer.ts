@@ -187,7 +187,10 @@ export const CONFORMANCE_TABLE = {
 	'signal.tick.error': {
 		operationType: 'sync.cycle',
 		outcome: 'failed',
-		code: (_event, fields) => (num(fields.status) >= 500 ? 'SYNC131' : 'SYNC121'),
+		// No status field means the failure was local (bulkUpsert and friends), not
+		// transport — stamping an "unreachable" code there would mislead (#836).
+		code: (_event, fields) =>
+			typeof fields.status !== 'number' ? 'SYNC401' : fields.status >= 500 ? 'SYNC131' : 'SYNC121',
 	},
 	'engine.lane.tick': {
 		operationType: 'sync.lane',
@@ -210,7 +213,14 @@ export const CONFORMANCE_TABLE = {
 	'cadence.recovered': { operationType: 'sync.cadence', outcome: 'ok', code: null },
 	'engine.ready': { operationType: 'sync.startup', outcome: 'ok', code: null },
 	'engine.ready-failed': { operationType: 'sync.startup', outcome: 'failed', code: 'CLIENT101' },
-	'engine.ready-stalled': { operationType: 'sync.startup', outcome: 'unknown', code: 'CLIENT111' },
+	'engine.ready-stalled': {
+		operationType: 'sync.startup',
+		outcome: 'unknown',
+		code: 'CLIENT111',
+		// The watchdog emits at error, but the CLIENT111 ruling is warn severity —
+		// a stall that usually self-resolves must not read as a failure.
+		level: 'warn',
+	},
 	'engine.scope-switched': { operationType: 'sync.scope', outcome: 'ok', code: null },
 	'engine.collection-reset': { operationType: 'sync.reset', outcome: 'ok', code: null },
 	'engine.reset-needs-confirmation': {
@@ -326,7 +336,19 @@ export const CONFORMANCE_TABLE = {
 	'push.error': {
 		operationType: 'sync.record',
 		outcome: 'failed',
-		code: (_event, fields) => (num(fields.status) >= 500 ? 'SYNC131' : 'SYNC121'),
+		// The adapter emits push.error for auth/rate refusals and for 2xx replies
+		// whose body could not be read — those reached the store, so "unreachable"
+		// would mislead. 2xx-with-unreadable-ack is the record not confirming:
+		// SYNC_PARTIAL until #1150's generic codes offer a sharper home.
+		code: (_event, fields) => {
+			const status = typeof fields.status === 'number' ? fields.status : 0;
+			if (status === 401) return 'AUTH101';
+			if (status === 403) return 'AUTH201';
+			if (status === 429) return 'SYNC141';
+			if (status >= 500) return 'SYNC131';
+			if (status >= 200 && status < 300) return 'SYNC321';
+			return 'SYNC121';
+		},
 		message: recordMessage('push failed'),
 	},
 	'push.aborted': {

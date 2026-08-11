@@ -79,6 +79,30 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].context.errorCode).toBe(errorCode);
 	});
 
+	it('stamps a statusless signal tick failure as a crashed task, not unreachable', () => {
+		observer.observe(event({ type: 'signal.tick.error', level: 'error', fields: {} }));
+
+		expect(rows[0].context.errorCode).toBe('SYNC401');
+	});
+
+	it.each([
+		[401, 'AUTH101'],
+		[429, 'SYNC141'],
+		[204, 'SYNC321'],
+		[503, 'SYNC131'],
+	])('resolves push.error status %s to %s', (status, errorCode) => {
+		observer.observe(event({ type: 'push.error', level: 'error', fields: { status } }));
+
+		expect(rows[0].context.errorCode).toBe(errorCode);
+	});
+
+	it('renders a startup stall at warn per the CLIENT111 ruling', () => {
+		observer.observe(event({ type: 'engine.ready-stalled', level: 'error' }));
+
+		expect(rows[0].level).toBe('warn');
+		expect(rows[0].context.errorCode).toBe('CLIENT111');
+	});
+
 	it('demotes engine.guard warnings to info', () => {
 		observer.observe(event({ type: 'engine.guard', level: 'warn' }));
 
