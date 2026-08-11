@@ -188,6 +188,39 @@ describe('primeExistenceManifest removal safety across yields (#949)', () => {
 		expect(cursor).toBe(399);
 	});
 
+	it('rotates past a batch whose digest fetch THROWS instead of retrying it forever (codex round 2)', async () => {
+		let cursor = -1;
+		const attempted: number[][] = [];
+		const input = {
+			productWooIds: Array.from({ length: 200 }, (_unused, index) => index + 1),
+			variationWooIds: [],
+			existingManifestWooIds: new Set<number>(),
+			fetchDigests: async (ids: number[]) => {
+				attempted.push(ids);
+				// The first window is poisoned: it always rejects.
+				if (ids[0]! <= 100) throw new Error('boom');
+				return ids.map((id) => ({ id, digest: String(id) }));
+			},
+			upsert: async () => {},
+			rotation: {
+				get afterWooId() {
+					return cursor;
+				},
+				commit: async (lastAttempted: number) => {
+					cursor = lastAttempted;
+				},
+			},
+		};
+
+		await expect(runManifestPrimePass(input)).rejects.toThrow('boom');
+		// The poisoned batch still advanced the cursor — the next tick opens PAST it.
+		expect(cursor).toBe(100);
+		await expect(runManifestPrimePass({ ...input, chunkBudget: { remaining: 1 } })).resolves.toBe(
+			100
+		);
+		expect(attempted[1]![0]).toBe(101);
+	});
+
 	it('does NOT delete a product that gained local work after it was classified', async () => {
 		const removed: string[][] = [];
 		const db = primeDatabase({

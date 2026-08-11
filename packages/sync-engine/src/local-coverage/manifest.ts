@@ -100,14 +100,21 @@ async function primeChunks(input: {
 	const ordered = rotateMissing(input.missing, input.rotation?.afterWooId ?? -1);
 	let primed = 0;
 	let lastAttempted: number | null = null;
-	for (const batch of chunk(ordered, input.chunkSize)) {
-		if (input.budget.remaining === 0) break;
-		input.budget.remaining -= 1;
-		primed += await input.attempt(batch);
-		lastAttempted = batch[batch.length - 1]!;
-	}
-	if (input.rotation && lastAttempted !== null) {
-		await input.rotation.commit(lastAttempted);
+	try {
+		for (const batch of chunk(ordered, input.chunkSize)) {
+			if (input.budget.remaining === 0) break;
+			input.budget.remaining -= 1;
+			// Record the attempt BEFORE it can throw, and commit in the finally: a batch
+			// that persistently rejects must rotate out of the window like any other
+			// attempted batch, or it pins the cursor and starves every id behind it —
+			// the exact class the rotation exists to break (coderabbit round 2).
+			lastAttempted = batch[batch.length - 1]!;
+			primed += await input.attempt(batch);
+		}
+	} finally {
+		if (input.rotation && lastAttempted !== null) {
+			await input.rotation.commit(lastAttempted);
+		}
 	}
 	return primed;
 }
