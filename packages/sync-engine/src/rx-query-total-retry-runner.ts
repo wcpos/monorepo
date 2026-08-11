@@ -36,6 +36,7 @@ export type QueryTotalRetryRunnerInput = {
 	leaseForMs: number;
 	retryAfterMs: number;
 	freshForMs: number | ((request: QueryTotalWooRequest) => number);
+	maxRequests?: number;
 };
 
 export type QueryTotalRetryRunnerResult = {
@@ -100,6 +101,8 @@ export async function runQueryTotalRetryRequests(
 
 	for (const runnableState of runnableStates) {
 		if (input.signal?.aborted) break;
+		if (result.succeeded + result.unsupported + result.failed >= (input.maxRequests ?? Infinity))
+			break;
 		const freshCacheEntry = freshCacheByQueryKey.get(runnableState.queryKey);
 		if (freshCacheEntry) {
 			await input.stateRepository.remove(runnableState);

@@ -128,8 +128,8 @@ import {
 	REBASELINE_RETICK_LANES,
 	SEED_RETICK_LANES,
 } from './maintenance/lane-registry';
+import { type EngineTimers, systemTimers } from './engine-timers';
 
-import type { EngineTimers } from './engine-timers';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
@@ -282,6 +282,7 @@ export type EngineIntervals = Record<LaneIntervalKey, number> & {
  * imposes on hostTransport) and is five times the sustained-slowness threshold.
  */
 const ABORT_AS_TIMEOUT_AFTER_MS = 10_000;
+export const REBASELINE_AUDIT_DELAY_MS = 60_000;
 
 const DEFAULT_INTERVALS: EngineIntervals = {
 	...DEFAULT_LANE_INTERVALS,
@@ -568,6 +569,7 @@ export function createRxdbSyncEngine(
 		}
 	};
 	const nowMs = ports.now ?? (() => Date.now());
+	const timers = ports.timers ?? systemTimers;
 	const random = ports.random ?? Math.random;
 	const readConnectivity = (): EngineConnectivity => {
 		try {
@@ -1144,6 +1146,29 @@ export function createRxdbSyncEngine(
 	// it could capture (and persist a cursor for) the outgoing scope mid-
 	// transition. sync() checks this counter and returns skipped instead.
 	let pendingLifecycleOps = 0;
+	let rebaselineGeneration = 0;
+	let pendingRebaselineDelay: {
+		handle: ReturnType<typeof setTimeout>;
+		resolve: (elapsed: boolean) => void;
+	} | null = null;
+	const cancelPendingRebaselineAudit = (): void => {
+		rebaselineGeneration += 1;
+		if (pendingRebaselineDelay === null) return;
+		timers.clearTimeout(pendingRebaselineDelay.handle);
+		pendingRebaselineDelay.resolve(false);
+		pendingRebaselineDelay = null;
+	};
+	const waitForRebaselineAuditWindow = (generation: number): Promise<boolean> => {
+		if (disposed || generation !== rebaselineGeneration) return Promise.resolve(false);
+		return new Promise<boolean>((resolve) => {
+			const handle = timers.setTimeout(() => {
+				pendingRebaselineDelay = null;
+				resolve(!disposed && generation === rebaselineGeneration);
+			}, REBASELINE_AUDIT_DELAY_MS);
+			pendingRebaselineDelay = { handle, resolve };
+			timers.unref(handle);
+		});
+	};
 	const enqueueLifecycle = <T>(task: () => Promise<T>): Promise<T> => {
 		pendingLifecycleOps += 1;
 		// gatedBy flips to 'lifecycle' NOW — subscribers see the gate while the
@@ -1176,6 +1201,7 @@ export function createRxdbSyncEngine(
 				`Cross-site scope switch rejected: engine is bound to site "${initialScope.site}" — multi-site is a new engine (ADR 0018)`
 			);
 		}
+		cancelPendingRebaselineAudit();
 		const scopeId = scopeKeyFor(identity);
 		identityByScopeId.set(scopeId, identity);
 		return enqueueLifecycle(async () => {
@@ -1442,6 +1468,7 @@ export function createRxdbSyncEngine(
 			: {}),
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
+		isServerBackingOff: (atMs) => serverPressure.isBackingOff(atMs),
 	});
 
 	type LaneTarget = {
@@ -1467,19 +1494,23 @@ export function createRxdbSyncEngine(
 				// A rebaseline consumed the skipped sequence-log history; whatever
 				// those rows would have delivered that the targeted re-pull cannot
 				// (server-side CREATES, a reset collection's refill) converges through
-				// the existence/seed lanes — so in auto mode run them NOW instead of
-				// waiting out their 5–17 min cadences. Mirrors the reconnect-retick
-				// ordering: seeds land before the drain scans for runnable tasks.
+				// the existence/seed lanes. Open and drain the product window now, then
+				// hold the audit outside the cashier's opening window.
 				// Manual mode is untouched: an all-lane sync() already runs these
 				// lanes after change-signal in the same ordered pass, and a targeted
 				// manual tick stays exactly one lane (deterministic tests).
 				if (report.rebaselined === true && mode === 'auto' && !disposed) {
-					void REBASELINE_RETICK_LANES.slice(1)
-						.reduce(
-							(chain, lane) => chain.then(() => automaticTickGate.runLane(lane)),
-							automaticTickGate.runLane(REBASELINE_RETICK_LANES[0]!)
-						)
-						.catch(() => undefined);
+					cancelPendingRebaselineAudit();
+					const generation = rebaselineGeneration;
+					void (async () => {
+						for (const lane of REBASELINE_RETICK_LANES.slice(0, 2)) {
+							await automaticTickGate.runLane(lane);
+						}
+						if (!(await waitForRebaselineAuditWindow(generation))) return;
+						for (const lane of REBASELINE_RETICK_LANES.slice(2)) {
+							await automaticTickGate.runLane(lane);
+						}
+					})().catch(() => undefined);
 				}
 				return report;
 			});
@@ -1824,6 +1855,7 @@ export function createRxdbSyncEngine(
 			// each sees the prior outcome), so dispose's turn sees every scope a
 			// pending switch opened.
 			disposed = true;
+			cancelPendingRebaselineAudit();
 			for (const collection of SYNC_COLLECTION_NAMES) collectionActivity.set(collection, 0);
 			cadenceController.stop();
 			// Synchronous, unlike the census expiry timer below: these are live RxDB query

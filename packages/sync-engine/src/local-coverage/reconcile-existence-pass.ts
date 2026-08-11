@@ -44,6 +44,8 @@ export type ReconcileSummary = {
 	missing: number;
 	changed: number;
 	skippedDirty: number;
+	/** Pressure arrived mid-walk, so remaining buckets stay for a later cadence. */
+	deferred?: true;
 };
 
 export type ExistenceScanBucket = {
@@ -77,25 +79,44 @@ export async function findExistenceReconcileCandidates(input: {
 	readLocalBucket: (lo: number, hi: number) => Promise<LocalManifestEntry[]>;
 	fetchServerScanPage: (afterId: number, bucketSize: number) => Promise<ExistenceScanPage>;
 	isAborted?: () => boolean;
+	maxScanPages?: number;
 }): Promise<{ candidates: number[]; emptyBuckets: number }> {
 	if (input.buckets.length === 0) return { candidates: [], emptyBuckets: 0 };
 
 	const aggregates = new Map<number, ExistenceScanBucket>();
-	const highestBucket = Math.max(...input.buckets);
+	const sortedBuckets = [...input.buckets].sort((a, b) => a - b);
+	const highestBucket = sortedBuckets[sortedBuckets.length - 1]!;
 	const pastHighestId = (highestBucket + 1) * input.bucketSize;
-	// Start the window at the LOWEST occupied bucket, not id 0: a high-id-space manifest
-	// (the #1084 shape — one recent high-id order) must not page through empty low windows
-	// it holds nothing in. after_id = lo*size - 1 makes the server's first_bucket exactly lo.
-	const lowestBucket = Math.min(...input.buckets);
-	let afterId = Math.max(0, lowestBucket * input.bucketSize - 1);
-	while (!input.isAborted?.()) {
+	// The pager visits OCCUPIED buckets only. Two facts make contiguous paging wrong here:
+	// the walk starts at the lowest occupied bucket, not id 0 (the #1084 shape — one recent
+	// high-id order must not page through empty low windows), and between pages it JUMPS the
+	// gaps between occupied buckets (wp_posts ids are shared with posts/media/revisions, so
+	// product buckets are sparse on old stores — a contiguous crawl would burn the page budget
+	// on windows this manifest holds nothing in). Skipped windows need no audit: this lane
+	// only prunes local-extra and flags changed rows in buckets the client occupies; wholly
+	// server-side buckets belong to the census/demand lanes (#1090 audit-only ruling).
+	// after_id = bucket*size - 1 makes the server's first_bucket exactly that bucket.
+	let nextUncovered = 0; // index into sortedBuckets of the first bucket no fetched window covered
+	let pages = 0;
+	while (!input.isAborted?.() && pages < (input.maxScanPages ?? Infinity)) {
+		const targetBucket = sortedBuckets[nextUncovered]!;
+		const afterId = Math.max(0, targetBucket * input.bucketSize - 1);
 		const page = await input.fetchServerScanPage(afterId, input.bucketSize);
+		pages += 1;
 		for (const row of page.changes) aggregates.set(row.bucket, row);
 		if (page.complete || page.nextAfterId >= pastHighestId) break;
 		if (page.nextAfterId <= afterId) {
 			throw new Error('existence scan checkpoint did not advance');
 		}
-		afterId = page.nextAfterId;
+		// Advance past every occupied bucket the fetched window covered; the next fetch opens
+		// at the first still-uncovered occupied bucket, skipping any empty gap in between.
+		while (
+			nextUncovered < sortedBuckets.length &&
+			(sortedBuckets[nextUncovered]! + 1) * input.bucketSize - 1 <= page.nextAfterId
+		) {
+			nextUncovered += 1;
+		}
+		if (nextUncovered >= sortedBuckets.length) break;
 	}
 
 	const candidates: number[] = [];
@@ -133,6 +154,8 @@ export async function runExistenceReconcile(input: {
 	executePrune: (actions: ReconcileAction[]) => Promise<void>;
 	/** Stops the walk between buckets on teardown/scope-switch (no partial bucket left half-applied). */
 	isAborted?: () => boolean;
+	/** Stops the walk between buckets while preserving the bucket atomic unit. */
+	shouldDefer?: () => boolean;
 }): Promise<ReconcileSummary> {
 	const summary: ReconcileSummary = {
 		buckets: 0,
@@ -156,6 +179,10 @@ export async function runExistenceReconcile(input: {
 		}
 		iteration += 1;
 		if (input.isAborted?.()) {
+			break;
+		}
+		if (input.shouldDefer?.()) {
+			summary.deferred = true;
 			break;
 		}
 		const lo = bucket * input.bucketSize;

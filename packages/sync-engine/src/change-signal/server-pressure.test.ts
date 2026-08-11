@@ -32,6 +32,18 @@ describe('parseRetryAfterMs', () => {
 });
 
 describe('server pressure monitor', () => {
+	it('reports whether maintenance should defer for a raised cadence or active Retry-After floor', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		expect(monitor.isBackingOff(0)).toBe(false);
+
+		monitor.observe({ atMs: 1_000, status: 503, durationMs: 20, retryAfter: '5' });
+		expect(monitor.isBackingOff(5_999)).toBe(true);
+		expect(monitor.isBackingOff(6_000)).toBe(false);
+
+		monitor.observe({ atMs: 7_000, status: 429, durationMs: 20 });
+		expect(monitor.isBackingOff(100_000)).toBe(true);
+	});
+
 	it('backs off on a single 429 and honours Retry-After as a floor', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		const transition = monitor.observe({

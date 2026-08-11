@@ -19,6 +19,7 @@ export function createAutomaticTickGate(options: {
 }): AutomaticTickGate {
 	let lastAutomaticConnectivity: EngineConnectivity | undefined;
 	let reconnectRetick: Promise<void> | null = null;
+	const laneRuns = new Map<EngineLane, Promise<void>>();
 	const run = async (tick: () => Promise<SyncReport>, lane?: EngineLane): Promise<void> => {
 		if (options.isGated()) return;
 		const connectivityNow = options.connectivity();
@@ -59,6 +60,16 @@ export function createAutomaticTickGate(options: {
 			});
 		}
 	};
-	const runLane = (lane: EngineLane): Promise<void> => run(() => options.tickLane(lane), lane);
+	const runLane = (lane: EngineLane): Promise<void> => {
+		const active = laneRuns.get(lane);
+		if (active !== undefined) return active;
+		const started = run(() => options.tickLane(lane), lane);
+		laneRuns.set(lane, started);
+		void started.then(
+			() => laneRuns.delete(lane),
+			() => laneRuns.delete(lane)
+		);
+		return started;
+	};
 	return { run, runLane };
 }

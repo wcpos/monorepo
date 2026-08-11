@@ -109,6 +109,52 @@ describe('findExistenceReconcileCandidates', () => {
 		expect(requestedAfterIds).toEqual([799_999]);
 		expect(result).toEqual({ candidates: [], emptyBuckets: 0 });
 	});
+
+	it('stops aggregate pagination at the declared scan-page ceiling', async () => {
+		const fetchServerScanPage = vi.fn(async (afterId: number) => ({
+			changes: [],
+			nextAfterId: afterId + 1_000,
+			complete: false,
+		}));
+		await findExistenceReconcileCandidates({
+			buckets: [0, 1, 2],
+			bucketSize: 1_000,
+			readLocalBucket: async (lo) => [L(lo + 1, '7')],
+			fetchServerScanPage,
+			maxScanPages: 1,
+		});
+
+		expect(fetchServerScanPage).toHaveBeenCalledTimes(1);
+	});
+
+	it('jumps the gap between sparse occupied buckets instead of crawling contiguous windows', async () => {
+		const cleanRow = (bucket: number) => ({
+			bucket,
+			storedCount: 1,
+			currentCount: 1,
+			storedDigest: '7',
+			currentDigest: '7',
+			match: true,
+		});
+		const requestedAfterIds: number[] = [];
+		const result = await findExistenceReconcileCandidates({
+			buckets: [0, 800],
+			bucketSize: 1000,
+			maxScanPages: 3,
+			readLocalBucket: async (lo) => [L(lo + 1, '7')],
+			fetchServerScanPage: async (afterId) => {
+				requestedAfterIds.push(afterId);
+				return afterId === 0
+					? { changes: [cleanRow(0)], nextAfterId: 49_999, complete: false }
+					: { changes: [cleanRow(800)], nextAfterId: 849_999, complete: true };
+			},
+		});
+
+		// Two pages: [0..50k) then a jump straight to bucket 800's window — the 750-bucket
+		// gap (shared wp_posts ids: posts/media/revisions) is never crawled.
+		expect(requestedAfterIds).toEqual([0, 799_999]);
+		expect(result).toEqual({ candidates: [], emptyBuckets: 0 });
+	});
 });
 
 describe('runExistenceReconcile', () => {
@@ -266,6 +312,25 @@ describe('runExistenceReconcile', () => {
 			changed: 0,
 			skippedDirty: 0,
 		});
+	});
+
+	it('completes the active bucket then defers before the next when server pressure begins', async () => {
+		let backingOff = false;
+		const fetchServerBucket = vi.fn(async (bucket: number) => {
+			if (bucket === 0) backingOff = true;
+			return [] as ServerDigestEntry[];
+		});
+		const summary = await runExistenceReconcile({
+			buckets: [0, 1],
+			bucketSize: 10,
+			readLocalBucket: async (lo) => [L(lo + 1, 'gone')],
+			fetchServerBucket,
+			executePrune: async () => undefined,
+			shouldDefer: () => backingOff,
+		});
+
+		expect(fetchServerBucket).toHaveBeenCalledTimes(1);
+		expect(summary).toMatchObject({ buckets: 1, pruned: 1, deferred: true });
 	});
 
 	// --- event-loop fairness (#949 tranche 2, ruling R10b) ---------------------------------------

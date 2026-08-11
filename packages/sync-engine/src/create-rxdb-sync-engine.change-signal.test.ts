@@ -621,7 +621,7 @@ describe('sync("change-signal") through the public handle', () => {
 		await revived.dispose();
 	});
 
-	it('auto mode converges the existence/seed lanes immediately after a rebaseline tick', async () => {
+	it('auto mode opens the product window before deferring the audit after a rebaseline tick', async () => {
 		const server = scriptedServer();
 		const identity = freshIdentity();
 		const checkpoints = memoryStringStore();
@@ -662,20 +662,39 @@ describe('sync("change-signal") through the public handle', () => {
 			events.length = 0;
 
 			// Fire the change-signal timer: the tick rebaselines (cursor 0 →
-			// 9,000) and the follow-up chain must run the existence/seed lanes now.
+			// 9,000), opens the catalog, then holds the audit outside that window.
 			fireChangeSignalTimeout();
 			await vi.waitFor(() => {
-				for (const lane of [
-					'existence-prime',
-					'existence-reconcile',
-					'product-browse-window-seed',
-					'scheduler-drain',
-				] as const) {
+				for (const lane of ['product-browse-window-seed', 'scheduler-drain'] as const) {
 					expect(
 						events.filter((event) => event.type === 'lane-start' && event.lane === lane)
 					).toHaveLength(1);
 				}
 			});
+			expect(
+				events.filter((event) => event.type === 'lane-start' && event.lane === 'existence-prime')
+			).toHaveLength(0);
+			const auditTimerIndex = timers.timeouts.findIndex(({ delayMs }) => delayMs === 60_000);
+			expect(auditTimerIndex).toBeGreaterThanOrEqual(0);
+			timers.fireTimeout(auditTimerIndex);
+			await vi.waitFor(() =>
+				expect(
+					events.filter(
+						(event) => event.type === 'lane-finish' && event.lane === 'existence-reconcile'
+					)
+				).toHaveLength(1)
+			);
+			expect(
+				events
+					.filter((event) => event.type === 'lane-start')
+					.map((event) => (event.type === 'lane-start' ? event.lane : ''))
+			).toEqual([
+				'change-signal',
+				'product-browse-window-seed',
+				'scheduler-drain',
+				'existence-prime',
+				'existence-reconcile',
+			]);
 
 			// Negative control: a routine (non-rebaseline) tick kicks nothing.
 			events.length = 0;

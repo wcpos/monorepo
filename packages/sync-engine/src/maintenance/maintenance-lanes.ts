@@ -54,8 +54,12 @@ import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
+import {
+	laneRegistryEntry,
+	type MaintenanceLaneName,
+	type MaintenanceLaneRegistryEntry,
+} from './lane-registry';
 
-import type { MaintenanceLaneName, MaintenanceLaneRegistryEntry } from './lane-registry';
 import type {
 	BarcodeSelectors,
 	BarcodeSelectorsReader,
@@ -133,6 +137,7 @@ type MaintenanceLaneDeps = {
 	lastUserActivityMs?: () => number;
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
+	isServerBackingOff?: (atMs: number) => boolean;
 };
 
 export type MaintenanceLane = {
@@ -155,6 +160,12 @@ type MaintenanceLaneBodyReport = {
 
 export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLanes {
 	const now = deps.now ?? (() => Date.now());
+	const pressureDeferredLanes = new Set<MaintenanceLaneName>([
+		'customer-trickle',
+		'existence-prime',
+		'existence-reconcile',
+		'query-total-retry',
+	]);
 
 	/** Shared guard/report/error scaffolding — the body runs scope-bound. */
 	function lane(
@@ -174,6 +185,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				}
 				if (deps.connectivity() === 'offline') {
 					return { lane: name, status: 'skipped', reason: 'offline' };
+				}
+				if (pressureDeferredLanes.has(name) && deps.isServerBackingOff?.(now())) {
+					return { lane: name, status: 'skipped', reason: 'server-pressure' };
 				}
 				if (deps.manager.activeScope === null) {
 					return { lane: name, status: 'skipped', reason: 'no active scope' };
@@ -466,6 +480,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				const result = await runQueryTotalRetryRequests({
 					stateRepository,
 					cacheRepository,
+					// The port returns only a total/null, so response status and headers are not observable here.
 					fetchWooQueryTotal: ({ request, signal: requestSignal }) =>
 						queryTotal.fetchWooQueryTotal({
 							request,
@@ -481,6 +496,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						censusCollectionFromQueryKey(request.queryKey) === null
 							? QUERY_TOTAL_FRESH_FOR_MS
 							: deps.censusFreshForMs,
+					maxRequests: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 				});
 				if (result.cacheEntries.length > 0) {
 					deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });
@@ -566,7 +582,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		const startedAt = now();
 		const coverage = deps.coverageFor(scopeId);
 		if (!coverage) return { summary: null };
-		const result = await coverage.reconcilePass(signal, fetcher);
+		const result = await coverage.reconcilePass(signal, fetcher, () =>
+			Boolean(deps.isServerBackingOff?.(now()))
+		);
 		deps.diagnostics({
 			type: 'coverage.existence-reconcile',
 			level: 'info',
@@ -574,6 +592,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		});
 		return {
 			summary: `Existence audit: ${result.buckets} buckets (${result.emptyBuckets} empty skipped), ${result.pruned} pruned, ${result.missing} missing (not fetched), ${result.changed} changed (not fetched), ${result.skippedDirty} dirty skipped`,
+			...(result.deferred ? { status: 'skipped' as const, reason: 'server-pressure' } : {}),
 		};
 	});
 

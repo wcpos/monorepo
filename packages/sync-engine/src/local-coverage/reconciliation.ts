@@ -71,6 +71,8 @@ type ReconcileExistenceDeps = {
 	deleteProducts: (wooIds: number[]) => Promise<void>;
 	deleteVariations: (wooIds: number[]) => Promise<void>;
 	isAborted?: () => boolean;
+	shouldDefer?: () => boolean;
+	maxScanPages?: number;
 };
 
 export async function scanExistenceCandidates(
@@ -83,6 +85,7 @@ export async function scanExistenceCandidates(
 		readLocalBucket: deps.readManifestRange,
 		fetchServerScanPage: deps.fetchServerScanPage,
 		isAborted: deps.isAborted,
+		maxScanPages: deps.maxScanPages,
 	});
 }
 
@@ -127,6 +130,7 @@ export async function reconcileExistence(
 			}
 		},
 		isAborted: deps.isAborted,
+		shouldDefer: deps.shouldDefer,
 	});
 	return { ...summary, emptyBuckets: summary.emptyBuckets + scan.emptyBuckets };
 }

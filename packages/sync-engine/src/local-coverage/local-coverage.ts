@@ -166,7 +166,8 @@ export interface LocalCoverage {
 	primeManifest(manifest?: LocalCoverageManifestOptions): Promise<LocalCoveragePrimeResult>;
 	reconcilePass(
 		signal?: AbortSignal,
-		fetcher?: ReconcileRequest['fetcher']
+		fetcher?: ReconcileRequest['fetcher'],
+		shouldDefer?: () => boolean
 	): Promise<ReconcileSummary>;
 }
 
@@ -180,6 +181,14 @@ const emptyReconcileSummary = (): ReconcileSummary => ({
 });
 
 export const DRILL_DOWNS_PER_TICK = 2;
+/**
+ * Scan aggregate pages per id-space per audit tick. The pager skips gaps between occupied
+ * buckets, so 3 pages cover ~150 OCCUPIED buckets (~150k held ids) per space — beyond any
+ * design-envelope store. Occupied buckets past the budget fall through as drill candidates
+ * (bounded by DRILL_DOWNS_PER_TICK + cursor), so coverage degrades to a slow sweep, never
+ * a blind spot. Registry bound: 3 spaces x SCAN_PAGES_PER_SPACE + DRILL_DOWNS_PER_TICK.
+ */
+export const SCAN_PAGES_PER_SPACE = 3;
 export const EXISTENCE_RECONCILE_CURSOR_KEY = 'existence-reconcile:cursor';
 type ReconcileCursor = { nextPort: number; afterBuckets: number[] };
 
@@ -343,7 +352,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			});
 			return { products, customers, orders };
 		},
-		reconcilePass: async (signal, fetcher) => {
+		reconcilePass: async (signal, fetcher, shouldDefer) => {
 			if (!options.reconcile) return emptyReconcileSummary();
 			const ports = Array.isArray(options.reconcile) ? options.reconcile : [options.reconcile];
 			const request =
@@ -355,6 +364,8 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 				fetchServerBucket: (bucket: number, bucketSize: number) =>
 					port.fetchServerBucket(bucket, bucketSize, request),
 				isAborted: () => signal?.aborted === true || port.isAborted?.() === true,
+				shouldDefer,
+				maxScanPages: SCAN_PAGES_PER_SPACE,
 			}));
 			const scans = await Promise.allSettled(deps.map(scanExistenceCandidates));
 			const scanFailures = scans.flatMap((result) =>
@@ -405,6 +416,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 								missing: total.missing + result.value.missing,
 								changed: total.changed + result.value.changed,
 								skippedDirty: total.skippedDirty + result.value.skippedDirty,
+								...(total.deferred || result.value.deferred ? { deferred: true as const } : {}),
 							}
 						: total,
 				{
