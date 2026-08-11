@@ -26,6 +26,7 @@ const FLASH_DURATION_MS = 350;
 const MIN_PANEL_HEIGHT = 96;
 const MAX_PANEL_HEIGHT = 480;
 const DEFAULT_PANEL_HEIGHT = 176;
+const PANEL_HEIGHT_STEP = 16;
 
 const clampPanelHeight = (height: number) =>
 	Math.min(MAX_PANEL_HEIGHT, Math.max(MIN_PANEL_HEIGHT, Math.round(height)));
@@ -58,22 +59,36 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 	const flashTimeout = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
 	// While a resize gesture is active, dragHeight overrides the persisted
-	// height; it clears once the persisted value changes so there is no
-	// snap-back between gesture end and the ui-settings write landing. Like the
-	// reports chart, gesture callbacks touch only setState — no refs — so the
-	// react-compiler lint stays satisfied. The gesture closes over
-	// committedHeight, which is stable for the whole drag (it only changes when
-	// a finished drag's write comes back through ui-settings).
+	// height. pendingHeight becomes the next gesture's baseline immediately on
+	// finalize, before the ui-settings write echoes back. Like the reports chart,
+	// gesture callbacks use state rather than refs so react-compiler lint stays
+	// satisfied.
 	const [dragHeight, setDragHeight] = React.useState<number | null>(null);
-	const committedHeight = clampPanelHeight(savedHeight ?? DEFAULT_PANEL_HEIGHT);
+	const [pendingHeight, setPendingHeight] = React.useState<number | null>(null);
+	const committedHeight = pendingHeight ?? clampPanelHeight(savedHeight ?? DEFAULT_PANEL_HEIGHT);
 	const height = dragHeight ?? committedHeight;
 
-	// Clear the drag override when the persisted height changes — after our own
-	// write lands, or if ui-settings are reset externally while the panel is open.
+	// Clear local overrides when a persisted height arrives, either from our own
+	// write or an external ui-settings reset while the panel is open.
 	React.useEffect(() => {
-		const subscription = uiSettings.scannerHeight$.subscribe(() => setDragHeight(null));
+		const subscription = uiSettings.scannerHeight$.subscribe((persistedHeight) => {
+			if (pendingHeight === null || persistedHeight === pendingHeight) {
+				setPendingHeight(null);
+				setDragHeight(null);
+			}
+		});
 		return () => subscription.unsubscribe();
-	}, [uiSettings]);
+	}, [pendingHeight, uiSettings]);
+
+	const commitHeight = React.useCallback(
+		(nextHeight: number) => {
+			const boundedHeight = clampPanelHeight(nextHeight);
+			setPendingHeight(boundedHeight);
+			setDragHeight(boundedHeight);
+			void patchUI({ scannerHeight: boundedHeight });
+		},
+		[patchUI]
+	);
 
 	const resizeGesture = React.useMemo(
 		() =>
@@ -85,11 +100,9 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 				// onFinalize rather than onEnd so a cancelled gesture still
 				// persists (or reverts to) a height consistent with the UI.
 				.onFinalize((event) => {
-					void patchUI({
-						scannerHeight: clampPanelHeight(committedHeight + event.translationY),
-					});
+					commitHeight(committedHeight + event.translationY);
 				}),
-		[committedHeight, patchUI]
+		[commitHeight, committedHeight]
 	);
 
 	// Fresh dedup state each time the panel opens so an item scanned in a
@@ -180,9 +193,23 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 			<GestureDetector gesture={resizeGesture}>
 				<View
 					className="web:cursor-ns-resize web:hover:opacity-100 items-center justify-center py-1 opacity-40"
-					hitSlop={{ top: 8, bottom: 8 }}
+					style={{ minHeight: 44 }}
 					accessible
 					accessibilityLabel={t('pos_products.camera_resize_handle')}
+					accessibilityRole="adjustable"
+					accessibilityValue={{
+						min: MIN_PANEL_HEIGHT,
+						max: MAX_PANEL_HEIGHT,
+						now: height,
+					}}
+					accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+					onAccessibilityAction={(event) => {
+						if (event.nativeEvent.actionName === 'increment') {
+							commitHeight(committedHeight + PANEL_HEIGHT_STEP);
+						} else if (event.nativeEvent.actionName === 'decrement') {
+							commitHeight(committedHeight - PANEL_HEIGHT_STEP);
+						}
+					}}
 					testID="camera-scanner-resize-handle"
 				>
 					<Icon name="gripLines" className="-my-0.5" />

@@ -16,6 +16,16 @@ const mockOnScan = jest.fn();
 const mockReset = jest.fn();
 const cameraEvents$ = new Subject<{ source: { kind: string } }>();
 let capturedViewfinderProps: ScannerViewfinderProps | null = null;
+let mockEchoScannerHeight = true;
+
+interface ResizeHandleProps {
+	accessibilityActions?: readonly { name: string }[];
+	accessibilityRole?: string;
+	accessibilityValue?: { min?: number; max?: number; now?: number };
+	onAccessibilityAction?: (event: { nativeEvent: { actionName: string } }) => void;
+}
+
+let capturedResizeHandleProps: ResizeHandleProps | null = null;
 
 jest.mock('expo-camera', () => ({
 	useCameraPermissions: () => [{ granted: mockGranted }, mockRequestPermission],
@@ -60,7 +70,12 @@ const mockPanCallbacks: {
 	onFinalize?: (event: { translationY: number }) => void;
 } = {};
 jest.mock('react-native-gesture-handler', () => ({
-	GestureDetector: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+	GestureDetector: ({ children }: { children?: React.ReactNode }) => {
+		if (React.isValidElement<ResizeHandleProps>(children)) {
+			capturedResizeHandleProps = children.props;
+		}
+		return <>{children}</>;
+	},
 	Gesture: {
 		Pan: () => {
 			const gesture = {
@@ -83,7 +98,7 @@ jest.mock('react-native-gesture-handler', () => ({
 // observable, matching RxState behaviour.
 const scannerHeight$ = new BehaviorSubject<number>(176);
 const mockPatchUI = jest.fn((patch: { scannerHeight?: number }) => {
-	if (typeof patch.scannerHeight === 'number') {
+	if (mockEchoScannerHeight && typeof patch.scannerHeight === 'number') {
 		scannerHeight$.next(patch.scannerHeight);
 	}
 });
@@ -118,6 +133,8 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	mockGranted = true;
 	capturedViewfinderProps = null;
+	capturedResizeHandleProps = null;
+	mockEchoScannerHeight = true;
 	scannerHeight$.next(176);
 });
 
@@ -212,6 +229,68 @@ describe('CameraScannerPanel', () => {
 		expect(mockPatchUI).toHaveBeenCalledWith({ scannerHeight: 276 });
 		// The persisted write echoes back through ui-settings; height sticks.
 		expect(panel.style.height).toBe('276px');
+	});
+
+	it('bases a consecutive drag on the displayed height before persistence echoes', () => {
+		mockEchoScannerHeight = false;
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		const panel = screen.getByTestId('camera-scanner-panel');
+		act(() => {
+			mockPanCallbacks.onUpdate?.({ translationY: 100 });
+			mockPanCallbacks.onFinalize?.({ translationY: 100 });
+		});
+		expect(panel.style.height).toBe('276px');
+
+		act(() => {
+			mockPanCallbacks.onUpdate?.({ translationY: 10 });
+			mockPanCallbacks.onFinalize?.({ translationY: 10 });
+		});
+		expect(panel.style.height).toBe('286px');
+		expect(mockPatchUI).toHaveBeenLastCalledWith({ scannerHeight: 286 });
+
+		act(() => scannerHeight$.next(276));
+		expect(panel.style.height).toBe('286px');
+
+		act(() => scannerHeight$.next(286));
+		expect(panel.style.height).toBe('286px');
+	});
+
+	it('supports bounded increment and decrement accessibility actions', () => {
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		expect(capturedResizeHandleProps?.accessibilityRole).toBe('adjustable');
+		expect(capturedResizeHandleProps?.accessibilityActions).toEqual([
+			{ name: 'increment' },
+			{ name: 'decrement' },
+		]);
+		expect(capturedResizeHandleProps?.accessibilityValue).toEqual({
+			min: 96,
+			max: 480,
+			now: 176,
+		});
+
+		act(() => scannerHeight$.next(475));
+		act(() =>
+			capturedResizeHandleProps?.onAccessibilityAction?.({
+				nativeEvent: { actionName: 'increment' },
+			})
+		);
+		expect(mockPatchUI).toHaveBeenLastCalledWith({ scannerHeight: 480 });
+
+		act(() => scannerHeight$.next(100));
+		act(() =>
+			capturedResizeHandleProps?.onAccessibilityAction?.({
+				nativeEvent: { actionName: 'decrement' },
+			})
+		);
+		expect(mockPatchUI).toHaveBeenLastCalledWith({ scannerHeight: 96 });
+	});
+
+	it('renders a 44px resize touch target', () => {
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		expect(screen.getByTestId('camera-scanner-resize-handle').style.minHeight).toBe('44px');
 	});
 
 	it('clamps drag-resize to the min/max bounds', () => {
