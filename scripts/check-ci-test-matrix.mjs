@@ -58,7 +58,13 @@ export const OTHER_LANES = [
   {
     dir: "apps/main/e2e",
     workflow: "deploy.yml",
-    invocation: /\bcd\s+apps\/main\s*&&\s*npx\s+playwright\s+test\b/,
+    // Matches `cd apps/main && npx playwright test` AND the multi-line form the
+    // sharded e2e job uses, where `cd apps/main` and `npx playwright test "$SPECS"`
+    // are separate lines of one `run: |` block (e2e-shard-plan.js). The old
+    // single-line-only regex went stale the moment sharding landed and reported
+    // the whole Playwright lane as dark — a false alarm on a lane that runs on
+    // every PR, which is worse than no check at all.
+    invocation: /\bnpx\s+playwright\s+test\b/,
     reason:
       "Playwright specs — run against a deployed preview by the e2e job in deploy.yml",
   },
