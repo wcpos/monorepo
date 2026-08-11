@@ -147,6 +147,23 @@ describe('AttentionPanel', () => {
 		expect(mockSync).toHaveBeenCalledTimes(1);
 	});
 
+	it('surfaces a skipped sync report from Retry as a warning toast', async () => {
+		mockExec.mockResolvedValue(null);
+		mockSync.mockResolvedValue({ lane: 'all', status: 'skipped', reason: 'offline' });
+
+		render(<AttentionPanel stuck={[stuck('products', true)]} />);
+		fireEvent.click(screen.getByTestId('db-attention-retry'));
+
+		await waitFor(() =>
+			expect(Toast.show).toHaveBeenCalledWith({
+				type: 'warning',
+				text1: 'Sync didn’t run.',
+				text2: 'This device is offline.',
+			})
+		);
+		expect(mockSync).toHaveBeenCalledTimes(1);
+	});
+
 	it('spins while the retry sync is in flight and stays quiet on success', async () => {
 		mockExec.mockResolvedValue(null);
 		let finish!: (report: unknown) => void;

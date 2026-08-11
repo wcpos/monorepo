@@ -62,6 +62,19 @@ describe('useManualSync', () => {
 		});
 	});
 
+	it('falls back to the report reason when an error report has no error text', async () => {
+		mockSync.mockResolvedValue({ lane: 'all', status: 'error', reason: 'scope database not open' });
+
+		const { result } = renderHook(() => useManualSync());
+		await act(() => result.current.sync());
+
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'error',
+			text1: 'Couldn’t sync with the server.',
+			text2: 'scope database not open',
+		});
+	});
+
 	it('surfaces an offline skip as a warning with cashier copy', async () => {
 		mockSync.mockResolvedValue({ lane: 'all', status: 'skipped', reason: 'offline' });
 

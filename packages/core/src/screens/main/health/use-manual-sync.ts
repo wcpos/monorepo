@@ -22,10 +22,11 @@ export function useManualSync() {
 		try {
 			const report = await engine.sync();
 			if (report.status === 'error') {
+				const detail = report.error ?? report.reason;
 				Toast.show({
 					type: 'error',
 					text1: t('health.database.sync_failed'),
-					...(report.error ? { text2: report.error } : {}),
+					...(detail ? { text2: detail } : {}),
 				});
 			} else if (report.status === 'skipped') {
 				// All-lanes skipped means nothing ran at all (offline, or a lifecycle

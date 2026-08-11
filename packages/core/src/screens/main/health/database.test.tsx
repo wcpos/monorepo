@@ -19,6 +19,7 @@ const mockMutationCounts = {
 	unresolvedConflicts: 0,
 };
 const mockDeadLetterStuck: StuckRecord[] = [];
+const mockSync = jest.fn();
 
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: (props: TooltipProps) => mockTooltip(props),
@@ -125,13 +126,11 @@ jest.mock('@wcpos/components/vstack', () => ({
 		</div>
 	),
 }));
-const mockEngineSync = jest.fn();
-
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	runResetRefill: jest.fn(),
 	useQueryRuntime: () => ({
-		engine: { active: jest.fn(), scope: {}, sync: mockEngineSync },
+		engine: { active: jest.fn(), scope: {}, sync: mockSync },
 	}),
 }));
 jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
@@ -200,16 +199,16 @@ jest.mock('./use-relative-time', () => ({
 
 describe('DatabaseScreen coverage', () => {
 	afterEach(() => {
+		mockSync.mockReset();
 		mockMutationCounts.conflicts = 0;
 		mockMutationCounts.rejected = 0;
 		mockMutationCounts.unresolvedConflicts = 0;
 		mockDeadLetterStuck.length = 0;
-		mockEngineSync.mockReset();
 	});
 
 	it('spins and disables the row menu trigger while its manual sync runs', async () => {
 		let finish!: (report: unknown) => void;
-		mockEngineSync.mockReturnValue(
+		mockSync.mockReturnValue(
 			new Promise((resolve) => {
 				finish = resolve;
 			})
@@ -228,7 +227,10 @@ describe('DatabaseScreen coverage', () => {
 
 		finish({ lane: 'all', status: 'ran' });
 		await waitFor(() => expect(loadingStates()).not.toContain('true'));
-		expect(mockEngineSync).toHaveBeenCalledTimes(1);
+		expect(
+			getAllByTestId('db-row-menu-products').every((el) => !(el as HTMLButtonElement).disabled)
+		).toBe(true);
+		expect(mockSync).toHaveBeenCalledTimes(1);
 	});
 
 	it('enables press-to-show coverage tooltips on native', () => {
