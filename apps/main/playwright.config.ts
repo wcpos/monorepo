@@ -27,6 +27,7 @@ const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
 // e2e/cold-start.ts (the config must not import the test fixtures).
 const COLD_START_ENABLED = /^(1|true)$/i.test(process.env.E2E_COLD_START || '');
 const COLD_SPEC = /\.cold\.spec\.ts$/;
+const LIVE_SPEC = /\.live\.spec\.ts$/;
 
 /**
  * Playwright configuration for WCPOS E2E tests
@@ -80,7 +81,7 @@ export default defineConfig<WcposTestOptions>({
 					},
 					{
 						name: 'free-authenticated',
-						testIgnore: [/auth\.spec\.ts/, COLD_SPEC],
+						testIgnore: [/auth\.spec\.ts/, COLD_SPEC, LIVE_SPEC],
 						use: {
 							...devices['Desktop Chrome'],
 							storeVariant: 'free' as const,
@@ -101,7 +102,7 @@ export default defineConfig<WcposTestOptions>({
 		},
 		{
 			name: 'pro-authenticated',
-			testIgnore: [/auth\.spec\.ts/, COLD_SPEC],
+			testIgnore: [/auth\.spec\.ts/, COLD_SPEC, LIVE_SPEC],
 			use: {
 				...devices['Desktop Chrome'],
 				storeVariant: 'pro',
