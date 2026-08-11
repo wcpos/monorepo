@@ -3,12 +3,14 @@
 		"type": "apply.barcode-rederive",
 		"domain": "SYNC",
 		"label": "Rebuilt barcode lookups",
+		"description": "Barcode lookups were rebuilt after product changes.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "apply.delete",
 		"domain": "SYNC",
 		"label": "Removed items deleted in your store",
+		"description": "Items deleted in your store were removed on this device.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -21,18 +23,21 @@
 		"type": "apply.pull",
 		"domain": "SYNC",
 		"label": "Saved updates from your store",
+		"description": "Updates made in your store were saved to this device.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "apply.rebaseline",
 		"domain": "SYNC",
 		"label": "Refreshed local data from your store",
+		"description": "Local data was refreshed from your store to stay accurate.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "apply.refetch",
 		"domain": "SYNC",
 		"label": "Fetched records again for missing details",
+		"description": "The POS fetched some records again to fill in missing details.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -147,6 +152,7 @@
 		"type": "coverage.require.outcome",
 		"domain": "SYNC",
 		"label": "Loaded the records this screen needs",
+		"description": "The POS loaded the records this screen needed.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -201,18 +207,21 @@
 		"type": "engine.barcode-selector-hydrate-failed",
 		"domain": "SYNC",
 		"label": "Barcode settings could not be loaded",
+		"description": "Barcode settings could not load, so scans may not match products until they do.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "engine.collection-reset",
 		"domain": "SYNC",
 		"label": "Local data was reset",
+		"description": "Local data for one kind of record was cleared and refilled from your store.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "engine.connectivity-error",
 		"domain": "SYNC",
 		"label": "Lost the connection to your store",
+		"description": "The POS lost its connection to your store. It keeps retrying automatically.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -231,6 +240,7 @@
 		"type": "engine.lane.tick",
 		"domain": "SYNC",
 		"label": "Background sync task finished",
+		"description": "A scheduled background sync task ran. If it failed, the POS restarts it automatically.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -249,6 +259,7 @@
 		"type": "engine.ready",
 		"domain": "SYNC",
 		"label": "Syncing started",
+		"description": "Syncing started and the POS is watching your store for changes.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -279,18 +290,21 @@
 		"type": "engine.scope-switched",
 		"domain": "SYNC",
 		"label": "Switched to another store",
+		"description": "You switched stores, so the POS now syncs the new store.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "engine.write-leader.degraded",
 		"domain": "SYNC",
 		"label": "This browser can only sync one tab at a time",
+		"description": "Only one browser tab sends changes at a time. Every tab keeps working from the same local data.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "maintenance.lane.error",
 		"domain": "SYNC",
 		"label": "A background maintenance task failed",
+		"description": "A background tidy-up task failed. The POS retries it automatically.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -321,6 +335,7 @@
 		"type": "push.conflict",
 		"domain": "SYNC",
 		"label": "A change clashed with an edit in your store",
+		"description": "This change clashed with an edit made in your store.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -333,6 +348,7 @@
 		"type": "push.error",
 		"domain": "SYNC",
 		"label": "Could not send a change to your store",
+		"description": "A change could not be sent to your store. It stays safely queued to retry.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -351,12 +367,14 @@
 		"type": "push.outcome",
 		"domain": "SYNC",
 		"label": "Sent a change to your store",
+		"description": "A change from this device was accepted by your store.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "push.rejected",
 		"domain": "SYNC",
 		"label": "Your store rejected a change",
+		"description": "Your store refused this change. It needs attention before it can be sent.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -369,12 +387,14 @@
 		"type": "queue.scheduler.drain",
 		"domain": "SYNC",
 		"label": "Background sync finished a batch",
+		"description": "The POS worked through a batch of queued background sync jobs.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "queue.write.annihilate",
 		"domain": "SYNC",
 		"label": "A change cancelled itself out before it was sent",
+		"description": "A change was dropped because a newer edit replaced it before sending.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -393,6 +413,7 @@
 		"type": "queue.write.coalesce",
 		"domain": "SYNC",
 		"label": "Merged repeated edits into one update",
+		"description": "Several quick edits to the same record were combined into one send.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -411,12 +432,14 @@
 		"type": "queue.write.drain",
 		"domain": "SYNC",
 		"label": "Processed queued changes for your store",
+		"description": "The POS sent your queued changes to your store.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "queue.write.enqueued",
 		"domain": "SYNC",
 		"label": "Queued a change to send to your store",
+		"description": "A change you made was queued to send to your store.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -453,12 +476,14 @@
 		"type": "signal.cursor",
 		"domain": "SYNC",
 		"label": "Sync position moved unexpectedly",
+		"description": "The POS's bookmark of where it was up to in your store's changes moved unexpectedly.",
 		"introducedIn": "1.10.0"
 	},
 	{
 		"type": "signal.cycle",
 		"domain": "SYNC",
 		"label": "Checked your store for changes",
+		"description": "The POS checked your store for changes and saved anything new.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -471,6 +496,7 @@
 		"type": "signal.tick.error",
 		"domain": "SYNC",
 		"label": "Checking your store for changes failed",
+		"description": "A routine check of your store for changes did not get an answer.",
 		"introducedIn": "1.10.0"
 	},
 	{
@@ -483,6 +509,7 @@
 		"type": "transport.request",
 		"domain": "SYNC",
 		"label": "Request to your store",
+		"description": "The POS made a web request to your store.",
 		"introducedIn": "1.10.0"
 	}
 ]

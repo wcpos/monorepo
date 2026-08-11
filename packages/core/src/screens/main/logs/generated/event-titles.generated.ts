@@ -184,3 +184,68 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 		}
 	}
 }
+
+/** Plain-language detail for quiet events that have one in the registry. */
+export function translateEventDescription(
+	t: TranslateEvent,
+	type: SyncEventType
+): string | undefined {
+	switch (type) {
+		case 'apply.barcode-rederive':
+			return t('health.logs.event_description.apply_barcode_rederive');
+		case 'apply.delete':
+			return t('health.logs.event_description.apply_delete');
+		case 'apply.pull':
+			return t('health.logs.event_description.apply_pull');
+		case 'apply.rebaseline':
+			return t('health.logs.event_description.apply_rebaseline');
+		case 'apply.refetch':
+			return t('health.logs.event_description.apply_refetch');
+		case 'coverage.require.outcome':
+			return t('health.logs.event_description.coverage_require_outcome');
+		case 'engine.barcode-selector-hydrate-failed':
+			return t('health.logs.event_description.engine_barcode_selector_hydrate_failed');
+		case 'engine.collection-reset':
+			return t('health.logs.event_description.engine_collection_reset');
+		case 'engine.connectivity-error':
+			return t('health.logs.event_description.engine_connectivity_error');
+		case 'engine.lane.tick':
+			return t('health.logs.event_description.engine_lane_tick');
+		case 'engine.ready':
+			return t('health.logs.event_description.engine_ready');
+		case 'engine.scope-switched':
+			return t('health.logs.event_description.engine_scope_switched');
+		case 'engine.write-leader.degraded':
+			return t('health.logs.event_description.engine_write_leader_degraded');
+		case 'maintenance.lane.error':
+			return t('health.logs.event_description.maintenance_lane_error');
+		case 'push.conflict':
+			return t('health.logs.event_description.push_conflict');
+		case 'push.error':
+			return t('health.logs.event_description.push_error');
+		case 'push.outcome':
+			return t('health.logs.event_description.push_outcome');
+		case 'push.rejected':
+			return t('health.logs.event_description.push_rejected');
+		case 'queue.scheduler.drain':
+			return t('health.logs.event_description.queue_scheduler_drain');
+		case 'queue.write.annihilate':
+			return t('health.logs.event_description.queue_write_annihilate');
+		case 'queue.write.coalesce':
+			return t('health.logs.event_description.queue_write_coalesce');
+		case 'queue.write.drain':
+			return t('health.logs.event_description.queue_write_drain');
+		case 'queue.write.enqueued':
+			return t('health.logs.event_description.queue_write_enqueued');
+		case 'signal.cursor':
+			return t('health.logs.event_description.signal_cursor');
+		case 'signal.cycle':
+			return t('health.logs.event_description.signal_cycle');
+		case 'signal.tick.error':
+			return t('health.logs.event_description.signal_tick_error');
+		case 'transport.request':
+			return t('health.logs.event_description.transport_request');
+		default:
+			return undefined;
+	}
+}
