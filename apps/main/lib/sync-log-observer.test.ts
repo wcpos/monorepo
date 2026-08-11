@@ -4,7 +4,7 @@
 import type { SyncEvent } from '@wcpos/sync-core';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
-import { createSyncLogObserver } from './sync-log-observer';
+import { CONFORMANCE_TABLE, createSyncLogObserver } from './sync-log-observer';
 
 jest.mock('@wcpos/utils/logger', () => ({
 	isVerboseDiagnostics: jest.fn(() => false),
@@ -42,6 +42,47 @@ describe('createSyncLogObserver', () => {
 				rows.push({ level, message, context, terminal, toast }),
 			nowMs: () => 2_000,
 		});
+	});
+
+	it('requires an explicit code ruling for every conformance entry', () => {
+		for (const [, conformance] of Object.entries(CONFORMANCE_TABLE)) {
+			expect(conformance).toHaveProperty('code');
+		}
+	});
+
+	it('stamps mapped failure codes but not mapped info rows', () => {
+		observer.observe(
+			event({
+				type: 'engine.lane.tick',
+				level: 'error',
+				fields: { status: 'error' },
+			})
+		);
+		observer.observe(
+			event({
+				type: 'engine.lane.tick',
+				fields: { status: 'ran', pushed: 1 },
+			})
+		);
+
+		expect(rows[0].context.errorCode).toBe('SYNC401');
+		expect(rows[1].context.errorCode).toBeUndefined();
+	});
+
+	it.each([
+		[503, 'SYNC131'],
+		[0, 'SYNC121'],
+		[403, 'AUTH201'],
+	])('resolves transport status %s to %s', (status, errorCode) => {
+		observer.observe(event({ type: 'transport.request', level: 'warn', fields: { status } }));
+
+		expect(rows[0].context.errorCode).toBe(errorCode);
+	});
+
+	it('demotes engine.guard warnings to info', () => {
+		observer.observe(event({ type: 'engine.guard', level: 'warn' }));
+
+		expect(rows[0].level).toBe('info');
 	});
 
 	it('does not rate-limit repeated record failures', () => {

@@ -38,7 +38,13 @@ export type ErrorCode =
 	| 'CLIENT101'
 	| 'CLIENT201'
 	| 'CLIENT211'
-	| 'CLIENT999';
+	| 'CLIENT999'
+	| 'SYNC401'
+	| 'SYNC221'
+	| 'CHECKOUT401'
+	| 'PRODUCT411'
+	| 'CLIENT111'
+	| 'CLIENT121';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
@@ -633,6 +639,96 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence: 'spec §3 catch-all; Sentry audit',
 	},
+	SYNC401: {
+		code: 'SYNC401',
+		symbol: 'SYNC_TASK_CRASHED',
+		domain: 'SYNC',
+		severity: 'error',
+		safeAction: 'retry',
+		retryPolicy: 'automatic',
+		dataSafety: 'no-impact',
+		escalation: 'support-with-export',
+		summary: 'A background sync task stopped unexpectedly before finishing.',
+		docsBody:
+			'The POS restarts these tasks automatically and no order data is affected. If this code keeps appearing, export diagnostics and contact support.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1137 inventory: engine.lane.tick, maintenance.lane.error',
+	},
+	SYNC221: {
+		code: 'SYNC221',
+		symbol: 'RECORD_CONFLICT',
+		domain: 'SYNC',
+		severity: 'warn',
+		safeAction: 'verify-first',
+		retryPolicy: 'after-change',
+		dataSafety: 'order-safe',
+		escalation: 'none',
+		summary: 'A change on this device clashed with an edit made in your store.',
+		docsBody:
+			'Open the record and check which version is correct. The POS keeps both sides safe until the clash is settled — nothing is lost.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1137 inventory: push.conflict, queue.write.conflict-transition',
+	},
+	CHECKOUT401: {
+		code: 'CHECKOUT401',
+		symbol: 'TOTALS_DIVERGED',
+		domain: 'CHECKOUT',
+		severity: 'error',
+		safeAction: 'verify-first',
+		retryPolicy: 'manual',
+		dataSafety: 'money-moved',
+		escalation: 'support-with-export',
+		summary: 'Your store calculated different totals for this order than the till showed.',
+		docsBody:
+			"Check the order in your store admin before taking any further payment — the store's totals are the source of truth. If the difference is unexpected, export diagnostics and contact support.",
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1137 inventory: push.money-divergence; server-calc ruling',
+	},
+	PRODUCT411: {
+		code: 'PRODUCT411',
+		symbol: 'BARCODE_CONFIG_UNAVAILABLE',
+		domain: 'PRODUCT',
+		severity: 'warn',
+		safeAction: 'retry',
+		retryPolicy: 'automatic',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: 'Barcode scanning settings could not be loaded, so scans may not match products.',
+		docsBody:
+			'The POS keeps trying to load these settings in the background. If scanning stays unreliable, reload the app once.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1137 inventory: engine.barcode-selector-hydrate-failed',
+	},
+	CLIENT111: {
+		code: 'CLIENT111',
+		symbol: 'APP_START_SLOW',
+		domain: 'CLIENT',
+		severity: 'warn',
+		safeAction: 'continue',
+		retryPolicy: 'automatic',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: 'Syncing is taking longer than expected to start.',
+		docsBody:
+			'This usually resolves by itself within a minute. If the app stays in this state, reload it once before anything else.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1137 inventory: engine.ready-stalled',
+	},
+	CLIENT121: {
+		code: 'CLIENT121',
+		symbol: 'MULTI_TAB_LIMITED',
+		domain: 'CLIENT',
+		severity: 'warn',
+		safeAction: 'continue',
+		retryPolicy: 'never',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: 'This browser lets only one tab send changes at a time.',
+		docsBody:
+			'You can keep using every tab — they all share the same local data. One tab quietly handles the syncing for all of them.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1137 inventory: engine.write-leader.degraded',
+	},
 };
 
 export const ERROR_CODES = {
@@ -674,4 +770,10 @@ export const ERROR_CODES = {
 	OUT_OF_MEMORY: 'CLIENT201',
 	NATIVE_CRASH: 'CLIENT211',
 	UNEXPECTED_ERROR: 'CLIENT999',
+	SYNC_TASK_CRASHED: 'SYNC401',
+	RECORD_CONFLICT: 'SYNC221',
+	TOTALS_DIVERGED: 'CHECKOUT401',
+	BARCODE_CONFIG_UNAVAILABLE: 'PRODUCT411',
+	APP_START_SLOW: 'CLIENT111',
+	MULTI_TAB_LIMITED: 'CLIENT121',
 } as const satisfies Record<string, ErrorCode>;
