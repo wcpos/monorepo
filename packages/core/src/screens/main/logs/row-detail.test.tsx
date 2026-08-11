@@ -79,14 +79,13 @@ const row: LogRow = {
 	context: { type: 'apply.pull' },
 };
 
-beforeAll(() => {
+beforeEach(() => {
 	Object.defineProperty(navigator, 'clipboard', {
 		configurable: true,
 		value: { writeText: mockWriteText },
 	});
+	mockWriteText.mockClear();
 });
-
-beforeEach(() => mockWriteText.mockClear());
 
 describe('RowDetail', () => {
 	it('leads a quiet row with its translated event description', () => {
@@ -108,5 +107,13 @@ describe('RowDetail', () => {
 		expect(screen.getByText('apply.pull')).not.toBeNull();
 		fireEvent.click(screen.getByTestId('logs-copy-event-log-1'));
 		await waitFor(() => expect(mockWriteText).toHaveBeenCalledWith('apply.pull'));
+	});
+
+	it('hides the copy button when the Clipboard API is unavailable', () => {
+		Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+
+		render(<RowDetail row={row} kind="sync" title="Saved updates from your store" />);
+
+		expect(screen.queryByTestId('logs-copy-event-log-1')).toBeNull();
 	});
 });
