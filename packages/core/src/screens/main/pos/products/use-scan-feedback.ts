@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useRouter } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Toast } from '@wcpos/components/toast';
@@ -40,6 +41,7 @@ export interface ScanFeedbackHandle {
 export const useScanFeedback = () => {
 	const t = useT();
 	const { store } = useAppState();
+	const router = useRouter();
 	// Scan sounds are opt-in per station (#717). Success plays a bright blip;
 	// every non-success terminal outcome plays the distinct failure tone (plus a
 	// native error haptic). The searching-online stage stays silent.
@@ -141,6 +143,9 @@ export const useScanFeedback = () => {
 			},
 			unavailable: (code) => {
 				failure();
+				// With no standing outage banner (the cashier only hears about an
+				// offline engine when a scan actually needs it), the toast carries the
+				// link to the health screen the banner used to provide.
 				Toast.show({
 					id,
 					type: 'error',
@@ -149,6 +154,10 @@ export const useScanFeedback = () => {
 						code,
 					}),
 					duration: ALERT_DURATION,
+					action: {
+						label: t('pos_products.scan_outage_view_status'),
+						onClick: () => router.push('/health/database'),
+					},
 				});
 			},
 			// Same surface as `unavailable` (#725) with the honest cause: the sync
@@ -166,7 +175,7 @@ export const useScanFeedback = () => {
 				});
 			},
 		};
-	}, [t]);
+	}, [t, router]);
 
 	return { begin };
 };

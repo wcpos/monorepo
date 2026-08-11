@@ -119,7 +119,7 @@ jest.mock('./use-barcode', () => ({
 	useBarcode: (setSearch: (search: string) => void, clearSearch: () => void) =>
 		mockUseBarcode(setSearch, clearSearch),
 }));
-jest.mock('./engine-outage-banner', () => ({ EngineOutageBanner: () => null }));
+jest.mock('./storage-outage-banner', () => ({ StorageOutageBanner: () => null }));
 jest.mock('./camera-scan-button', () => ({ CameraScanButton: () => null }));
 jest.mock('./camera-scanner-panel', () => ({ CameraScannerPanel: () => null }));
 jest.mock('../../hooks/barcodes/camera-scan-context', () => ({
