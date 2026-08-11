@@ -11,6 +11,7 @@ interface UseOnEndReachedParams {
 	totalSize: number;
 }
 
+/** Triggers end callbacks while ignoring zero-sized, hidden scroll containers. */
 export function useOnEndReached({
 	scrollElement,
 	horizontal,
@@ -59,12 +60,16 @@ export function useOnEndReached({
 
 		// Throttle the scroll handler to limit calls to once every 100ms
 		const throttledHandleScroll = throttle(handleScroll, 100);
+		const resizeObserver =
+			typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(handleScroll);
 
 		container.addEventListener('scroll', throttledHandleScroll);
+		resizeObserver?.observe(container);
 		handleScroll(); // Call immediately for initial check
 		return () => {
 			container.removeEventListener('scroll', throttledHandleScroll);
 			throttledHandleScroll.cancel(); // Cancel any pending throttled calls
+			resizeObserver?.disconnect();
 		};
 	}, [scrollElement, horizontal, onEndReached, onEndReachedThreshold]);
 
@@ -98,6 +103,12 @@ export function useOnEndReached({
 		};
 
 		const timeoutId = setTimeout(checkContentSize, 0);
-		return () => clearTimeout(timeoutId);
+		const resizeObserver =
+			typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(checkContentSize);
+		resizeObserver?.observe(container);
+		return () => {
+			clearTimeout(timeoutId);
+			resizeObserver?.disconnect();
+		};
 	}, [scrollElement, horizontal, onEndReached, data.length, totalSize]);
 }

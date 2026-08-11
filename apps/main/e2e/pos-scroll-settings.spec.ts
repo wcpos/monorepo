@@ -15,9 +15,8 @@ import { navigateToPage, authenticatedTest as test } from './fixtures';
 test('POS products scroll position survives a Settings round-trip', async ({ posPage: page }) => {
 	// Products list scroller — grid or table mode, whichever this store shows.
 	const scroller = page
-		.locator(
-			'[data-testid="pos-products-grid-scroller"], [data-testid="data-table-scroller-products"]'
-		)
+		.getByTestId('pos-products-grid-scroller')
+		.or(page.getByTestId('data-table-scroller-products'))
 		.filter({ visible: true })
 		.first();
 
@@ -32,10 +31,14 @@ test('POS products scroll position survives a Settings round-trip', async ({ pos
 	const before = await scroller.evaluate((el) => ({
 		scrollTop: el.scrollTop,
 		scrollHeight: el.scrollHeight,
+		clientHeight: el.clientHeight,
 	}));
+	if (before.scrollHeight <= before.clientHeight) {
+		test.skip(true, 'Products do not overflow this store scope — nothing to preserve');
+		return;
+	}
 	const countBefore = await page
-		.locator('[data-testid="data-table-count"]')
-		.filter({ visible: true })
+		.getByTestId('data-table-loaded-count')
 		.first()
 		.textContent()
 		.catch(() => null);
@@ -58,8 +61,7 @@ test('POS products scroll position survives a Settings round-trip', async ({ pos
 		scrollHeight: el.scrollHeight,
 	}));
 	const countAfter = await page
-		.locator('[data-testid="data-table-count"]')
-		.filter({ visible: true })
+		.getByTestId('data-table-loaded-count')
 		.first()
 		.textContent()
 		.catch(() => null);
@@ -68,8 +70,8 @@ test('POS products scroll position survives a Settings round-trip', async ({ pos
 	// round-trip. Allow sub-row jitter but nothing resembling a jump.
 	expect(Math.abs(after.scrollTop - before.scrollTop)).toBeLessThan(50);
 
-	// The hidden pane must not have loaded another page ("Showing X of Y"
-	// stays whatever it was — relative comparison, no absolute counts).
+	// The hidden pane must not have loaded another page. Compare only the
+	// loaded count: parallel specs can legitimately change the store total.
 	if (countBefore !== null) {
 		expect(countAfter).toBe(countBefore);
 	}

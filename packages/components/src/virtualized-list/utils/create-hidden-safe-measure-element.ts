@@ -1,5 +1,6 @@
 import { measureElement as defaultMeasureElement } from '@tanstack/react-virtual';
 
+/** Preserves cached or estimated item sizes while a virtualized list is hidden. */
 export function createHiddenSafeMeasureElement(
 	estimatedItemSize: number
 ): typeof defaultMeasureElement {
