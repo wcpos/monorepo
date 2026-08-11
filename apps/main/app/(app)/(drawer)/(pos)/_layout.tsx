@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 
-import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
+import { Stack, useGlobalSearchParams, usePathname, useSegments } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -14,6 +14,7 @@ import {
 	useOpenOrdersResource,
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
+import { CustomerDisplayBroadcaster } from '@wcpos/core/screens/main/pos/customer-display';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
 
@@ -104,9 +105,14 @@ export default function POSLayout() {
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
+	const pathname = usePathname();
+	const routeSegments = pathname.split('/').filter(Boolean);
+	const isReceipt = routeSegments.includes('receipt');
+	const customerDisplayStatus = routeSegments.includes('checkout') ? 'awaiting-payment' : 'cart';
 
 	return (
 		<TaxRatesProvider>
+			{!isReceipt && <CustomerDisplayBroadcaster status={customerDisplayStatus} />}
 			<View className="bg-background flex-1">
 				<Stack
 					screenOptions={{

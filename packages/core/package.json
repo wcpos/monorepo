@@ -42,6 +42,7 @@
 		"./screens/main/pos/checkout": "./src/screens/main/pos/checkout/index.tsx",
 		"./screens/main/pos/contexts/current-order": "./src/screens/main/pos/contexts/current-order/index.tsx",
 		"./screens/main/pos/contexts/order-money-divergence": "./src/screens/main/pos/contexts/order-money-divergence/index.tsx",
+		"./screens/main/pos/customer-display": "./src/screens/main/pos/customer-display/index.ts",
 		"./screens/main/pos/products": "./src/screens/main/pos/products/index.tsx",
 		"./screens/main/products": "./src/screens/main/products/index.tsx",
 		"./screens/main/products/edit/product": "./src/screens/main/products/edit/product/index.tsx",
