@@ -4,7 +4,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 import { CameraScannerPanel } from './camera-scanner-panel';
 
@@ -49,6 +49,52 @@ jest.mock('@wcpos/components/vstack', () => ({
 		<div data-testid={testID}>{children}</div>
 	),
 }));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name?: string }) => <span data-icon-name={name} />,
+}));
+
+// Capture the pan gesture callbacks so drag gestures can be simulated
+// directly — jsdom has no real gesture pipeline.
+const mockPanCallbacks: {
+	onUpdate?: (event: { translationY: number }) => void;
+	onFinalize?: (event: { translationY: number }) => void;
+} = {};
+jest.mock('react-native-gesture-handler', () => ({
+	GestureDetector: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+	Gesture: {
+		Pan: () => {
+			const gesture = {
+				runOnJS: () => gesture,
+				onUpdate: (callback: (event: { translationY: number }) => void) => {
+					mockPanCallbacks.onUpdate = callback;
+					return gesture;
+				},
+				onFinalize: (callback: (event: { translationY: number }) => void) => {
+					mockPanCallbacks.onFinalize = callback;
+					return gesture;
+				},
+			};
+			return gesture;
+		},
+	},
+}));
+
+// Persisted scannerHeight lane: patchUI echoes the write back through the
+// observable, matching RxState behaviour.
+const scannerHeight$ = new BehaviorSubject<number>(176);
+const mockPatchUI = jest.fn((patch: { scannerHeight?: number }) => {
+	if (typeof patch.scannerHeight === 'number') {
+		scannerHeight$.next(patch.scannerHeight);
+	}
+});
+// uiSettings must be referentially stable across renders (the real RxState
+// instance is) — a fresh object each render would re-run the panel's
+// clear-override subscription and wipe in-progress drag state.
+const mockUISettings = { scannerHeight$ };
+jest.mock('../../contexts/ui-settings', () => ({
+	useUISettings: () => ({ uiSettings: mockUISettings, patchUI: mockPatchUI }),
+}));
+
 jest.mock('./scanner-viewfinder', () => ({
 	ScannerViewfinder: (props: ScannerViewfinderProps) => {
 		capturedViewfinderProps = props;
@@ -72,6 +118,7 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	mockGranted = true;
 	capturedViewfinderProps = null;
+	scannerHeight$.next(176);
 });
 
 describe('CameraScannerPanel', () => {
@@ -145,5 +192,46 @@ describe('CameraScannerPanel', () => {
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	it('applies the persisted height and persists a drag-resize', () => {
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		const panel = screen.getByTestId('camera-scanner-panel');
+		expect(panel.style.height).toBe('176px');
+		expect(screen.getByTestId('camera-scanner-resize-handle')).toBeTruthy();
+
+		act(() => {
+			mockPanCallbacks.onUpdate?.({ translationY: 100 });
+		});
+		expect(panel.style.height).toBe('276px');
+
+		act(() => {
+			mockPanCallbacks.onFinalize?.({ translationY: 100 });
+		});
+		expect(mockPatchUI).toHaveBeenCalledWith({ scannerHeight: 276 });
+		// The persisted write echoes back through ui-settings; height sticks.
+		expect(panel.style.height).toBe('276px');
+	});
+
+	it('clamps drag-resize to the min/max bounds', () => {
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		const panel = screen.getByTestId('camera-scanner-panel');
+
+		act(() => {
+			mockPanCallbacks.onUpdate?.({ translationY: -500 });
+		});
+		expect(panel.style.height).toBe('96px');
+
+		act(() => {
+			mockPanCallbacks.onUpdate?.({ translationY: 5000 });
+		});
+		expect(panel.style.height).toBe('480px');
+
+		act(() => {
+			mockPanCallbacks.onFinalize?.({ translationY: 5000 });
+		});
+		expect(mockPatchUI).toHaveBeenCalledWith({ scannerHeight: 480 });
 	});
 });
