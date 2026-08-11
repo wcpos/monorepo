@@ -7,6 +7,7 @@ import { List, Root } from './virtualized-list.web';
 type VirtualizerOptions = {
 	count: number;
 	getItemKey?: (index: number) => string | number;
+	measureElement?: (element: Element, entry: unknown, instance: unknown) => number;
 };
 
 const mockUseVirtualizer = jest.fn((options: VirtualizerOptions) => ({
@@ -83,5 +84,21 @@ describe('VirtualizedList (web)', () => {
 		options = mockUseVirtualizer.mock.calls.at(-1)?.[0];
 
 		expect(options?.getItemKey?.(0)).toBe('b');
+	});
+
+	it('wires a hidden-safe measureElement into the virtualizer', () => {
+		render(<ListFixture data={[{ id: 'a' }]} />);
+		const options = mockUseVirtualizer.mock.calls.at(-1)?.[0];
+
+		// jsdom has no layout, so every element reports offsetParent === null —
+		// exactly the hidden-subtree case where the guard must return the cached
+		// size instead of measuring a display:none row at 0px.
+		const element = document.createElement('div');
+		const instance = {
+			indexFromElement: () => 0,
+			measurementsCache: [{ size: 48 }],
+		};
+
+		expect(options?.measureElement?.(element, undefined, instance)).toBe(48);
 	});
 });

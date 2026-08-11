@@ -31,6 +31,7 @@ export function useOnEndReached({
 			const offset = horizontal ? container.scrollLeft : container.scrollTop;
 			const viewSize = horizontal ? container.clientWidth : container.clientHeight;
 			const fullSize = horizontal ? container.scrollWidth : container.scrollHeight;
+			if (viewSize <= 0) return;
 
 			const distanceFromEnd = fullSize - (offset + viewSize);
 			const thresholdDistance = viewSize * onEndReachedThreshold;
@@ -87,6 +88,7 @@ export function useOnEndReached({
 		const container = scrollElement;
 		const checkContentSize = () => {
 			const containerSize = horizontal ? container.clientWidth : container.clientHeight;
+			if (containerSize <= 0) return;
 
 			// If virtualized content is smaller than container, trigger onEndReached
 			if (totalSize <= containerSize) {

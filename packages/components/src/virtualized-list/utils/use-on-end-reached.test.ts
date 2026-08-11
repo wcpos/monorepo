@@ -158,6 +158,30 @@ describe('useOnEndReached', () => {
 		expect(onEndReached).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		['vertical', false, { clientHeight: 0, scrollHeight: 0 }],
+		['horizontal', true, { clientWidth: 0, scrollWidth: 0 }],
+	] as const)(
+		'should not call onEndReached from %s scrolling when hidden',
+		(_, horizontal, size) => {
+			const onEndReached = jest.fn();
+			const scrollElement = createMockScrollElement(size);
+
+			renderHook(() =>
+				useOnEndReached({
+					scrollElement,
+					horizontal,
+					onEndReached,
+					onEndReachedThreshold: 0.5,
+					data: [1],
+					totalSize: 100,
+				})
+			);
+
+			expect(onEndReached).not.toHaveBeenCalled();
+		}
+	);
+
 	it('should not trigger again without scrolling away first', () => {
 		const onEndReached = jest.fn();
 		const scrollElement = createMockScrollElement({
@@ -260,6 +284,34 @@ describe('useOnEndReached', () => {
 
 		expect(onEndReached).toHaveBeenCalled();
 	});
+
+	it.each([
+		['vertical', false, { clientHeight: 0 }],
+		['horizontal', true, { clientWidth: 0 }],
+	] as const)(
+		'should not call onEndReached for %s short content when hidden',
+		(_, horizontal, size) => {
+			const onEndReached = jest.fn();
+			const scrollElement = createMockScrollElement(size);
+
+			renderHook(() =>
+				useOnEndReached({
+					scrollElement,
+					horizontal,
+					onEndReached,
+					onEndReachedThreshold: 0.5,
+					data: [1],
+					totalSize: 0,
+				})
+			);
+
+			act(() => {
+				jest.runAllTimers();
+			});
+
+			expect(onEndReached).not.toHaveBeenCalled();
+		}
+	);
 
 	it('should not trigger short content check with empty data', () => {
 		const onEndReached = jest.fn();
