@@ -24,7 +24,11 @@ export function productManifestRow(document: ProductDocument): ExistenceManifest
 	if (typeof digest !== 'string' || digest === '' || document.wooProductId == null) {
 		return null;
 	}
-	return existenceManifestDocument({ wooId: document.wooProductId, objectType: 'product', digest });
+	return existenceManifestDocument({
+		wooId: document.wooProductId,
+		objectType: 'product',
+		digest,
+	});
 }
 
 /** The document with `_rxdb_digest` removed from its payload (no-op when absent). */
@@ -107,7 +111,9 @@ export function extractCustomerManifest(documents: readonly LocalCustomerDocumen
 	return { manifestRows, documents: cleaned };
 }
 
-type CustomerUpsertRepository = { upsertMany(documents: LocalCustomerDocument[]): Promise<void> };
+type CustomerUpsertRepository = {
+	upsertMany(documents: LocalCustomerDocument[]): Promise<void>;
+};
 type ManifestUpsertCollection = Parameters<typeof upsertManifestRows>[0];
 
 /**
@@ -143,7 +149,11 @@ export function orderManifestRow(document: OrderDocument): ExistenceManifestDocu
 	if (typeof digest !== 'string' || digest === '' || document.wooOrderId == null) {
 		return null;
 	}
-	return existenceManifestDocument({ wooId: document.wooOrderId, objectType: 'order', digest });
+	return existenceManifestDocument({
+		wooId: document.wooOrderId,
+		objectType: 'order',
+		digest,
+	});
 }
 
 /** The order document with `_rxdb_digest` removed from its payload (no-op when absent). */
@@ -167,7 +177,7 @@ export function extractOrderManifest<T extends OrderDocument>(
 	const manifestRows: ExistenceManifestDocument[] = [];
 	const cleaned: T[] = [];
 	for (const document of documents) {
-		const row = orderManifestRow(document);
+		const row = manifestRowOf(document) ?? orderManifestRow(document);
 		if (row) {
 			manifestRows.push(row);
 		}

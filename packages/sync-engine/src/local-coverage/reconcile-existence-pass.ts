@@ -46,6 +46,84 @@ export type ReconcileSummary = {
 	skippedDirty: number;
 };
 
+export type ExistenceScanBucket = {
+	bucket: number;
+	storedCount: number;
+	currentCount: number;
+	storedDigest: string;
+	currentDigest: string;
+	match: boolean;
+};
+
+export type ExistenceScanPage = {
+	changes: ExistenceScanBucket[];
+	nextAfterId: number;
+	complete: boolean;
+};
+
+/** Fold unsigned-64-bit decimal digests without passing through lossy JS numbers. */
+export function xor64(digests: Iterable<string>): string {
+	let folded = 0n;
+	for (const digest of digests) {
+		folded ^= BigInt(digest);
+	}
+	return BigInt.asUintN(64, folded).toString();
+}
+
+/** Fetch aggregate pages, then classify each occupied local bucket as clean or drill-down-worthy. */
+export async function findExistenceReconcileCandidates(input: {
+	buckets: readonly number[];
+	bucketSize: number;
+	readLocalBucket: (lo: number, hi: number) => Promise<LocalManifestEntry[]>;
+	fetchServerScanPage: (afterId: number, bucketSize: number) => Promise<ExistenceScanPage>;
+	isAborted?: () => boolean;
+}): Promise<{ candidates: number[]; emptyBuckets: number }> {
+	if (input.buckets.length === 0) return { candidates: [], emptyBuckets: 0 };
+
+	const aggregates = new Map<number, ExistenceScanBucket>();
+	const highestBucket = Math.max(...input.buckets);
+	const pastHighestId = (highestBucket + 1) * input.bucketSize;
+	// Start the window at the LOWEST occupied bucket, not id 0: a high-id-space manifest
+	// (the #1084 shape — one recent high-id order) must not page through empty low windows
+	// it holds nothing in. after_id = lo*size - 1 makes the server's first_bucket exactly lo.
+	const lowestBucket = Math.min(...input.buckets);
+	let afterId = Math.max(0, lowestBucket * input.bucketSize - 1);
+	while (!input.isAborted?.()) {
+		const page = await input.fetchServerScanPage(afterId, input.bucketSize);
+		for (const row of page.changes) aggregates.set(row.bucket, row);
+		if (page.complete || page.nextAfterId >= pastHighestId) break;
+		if (page.nextAfterId <= afterId) {
+			throw new Error('existence scan checkpoint did not advance');
+		}
+		afterId = page.nextAfterId;
+	}
+
+	const candidates: number[] = [];
+	let emptyBuckets = 0;
+	for (let index = 0; index < input.buckets.length; index += 1) {
+		if (index > 0) await yieldToEventLoop();
+		if (input.isAborted?.()) break;
+		const bucket = input.buckets[index]!;
+		const lo = bucket * input.bucketSize;
+		const local = await input.readLocalBucket(lo, lo + input.bucketSize);
+		if (input.isAborted?.()) break;
+		if (local.length === 0) {
+			emptyBuckets += 1;
+			continue;
+		}
+		const aggregate = aggregates.get(bucket);
+		if (
+			!aggregate ||
+			!aggregate.match ||
+			aggregate.storedCount !== local.length ||
+			aggregate.storedDigest !== xor64(local.map(({ digest }) => digest))
+		) {
+			candidates.push(bucket);
+		}
+	}
+	return { candidates, emptyBuckets };
+}
+
 export async function runExistenceReconcile(input: {
 	/** The occupied bucket indices to walk, derived from the local manifest. */
 	buckets: readonly number[];

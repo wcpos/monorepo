@@ -299,15 +299,49 @@ async function seedResidentProducts(database: RxDatabase, count: number): Promis
 	await seedResidentProductRange(database, 1, count);
 }
 
-/**
- * A fetcher whose `/integrity/bucket` responses exactly match the seeded manifest, so
- * the audit walks every bucket and diffs every row yet converges with zero prunes and
- * zero pulls. That isolates the WALK cost — the part that freezes a large store — from
- * network and materialization cost.
- */
+function scanAggregateEnvelope(url: string, serverCount: number) {
+	const parsed = new URL(url);
+	const bucketSize = Number(parsed.searchParams.get('bucket_size'));
+	const afterId = Number(parsed.searchParams.get('after_id'));
+	const limitBuckets = Number(parsed.searchParams.get('limit_buckets'));
+	const firstBucket = Math.floor(afterId / bucketSize);
+	const maxBucket = Math.floor(serverCount / bucketSize);
+	const lastBucket = Math.min(firstBucket + limitBuckets - 1, maxBucket);
+	const changes = [];
+	for (let bucket = firstBucket; bucket <= lastBucket; bucket += 1) {
+		const lo = Math.max(bucket * bucketSize, 1);
+		const hi = Math.min((bucket + 1) * bucketSize, serverCount + 1);
+		if (lo >= hi) continue;
+		let digest = 0n;
+		for (let wooId = lo; wooId < hi; wooId += 1) digest ^= BigInt(digestFor(wooId));
+		changes.push({
+			bucket,
+			stored_count: hi - lo,
+			current_count: hi - lo,
+			stored_digest: digest.toString(),
+			current_digest: digest.toString(),
+			match: true,
+		});
+	}
+	return {
+		collection: 'products',
+		checkpoint: {
+			bucket_size: bucketSize,
+			after_id: (lastBucket + 1) * bucketSize,
+		},
+		changes,
+		complete: lastBucket >= maxBucket,
+		meta: {},
+	};
+}
+
+/** Matching scan aggregates make the drift-free audit skip every expensive bucket request. */
 function convergedBucketFetcher(residentCount: number) {
 	return vi.fn(async (url: string) => {
 		const parsed = new URL(url);
+		if (parsed.pathname.endsWith('/integrity/scan')) {
+			return json(scanAggregateEnvelope(url, residentCount));
+		}
 		if (!parsed.pathname.endsWith('/integrity/bucket')) return json({ ids: [] });
 		// Only the products manifest is seeded; the customers/orders ports report empty.
 		if (parsed.searchParams.get('collection') !== null) return json({ ids: [] });
@@ -327,6 +361,9 @@ function convergedBucketFetcher(residentCount: number) {
 function mixedShapeFetcher(serverCount: number) {
 	return vi.fn(async (url: string) => {
 		const parsed = new URL(url);
+		if (parsed.pathname.endsWith('/integrity/scan')) {
+			return json(scanAggregateEnvelope(url, serverCount));
+		}
 		if (parsed.pathname.endsWith('/integrity/bucket')) {
 			if (parsed.searchParams.get('collection') !== null) return json({ ids: [] });
 			const bucket = Number(parsed.searchParams.get('bucket'));
@@ -475,10 +512,11 @@ describe('sync-engine performance contracts (#949)', () => {
 				);
 
 				expect(result.status).toBe('ran');
-				// The audit must actually have walked the whole id space: bucketSize is 1000,
-				// so a converged N-resident store is floor(N/1000)+1 bucket fetches. Without
-				// this the timing above could pass by doing nothing at all.
-				expect(fetcher.mock.calls.length).toBe(Math.floor(residents / 1000) + 1);
+				const paths = fetcher.mock.calls.map(([url]) => new URL(url).pathname);
+				expect(paths.filter((path) => path.endsWith('/integrity/bucket'))).toHaveLength(0);
+				const scanRequests = paths.filter((path) => path.endsWith('/integrity/scan')).length;
+				expect(scanRequests).toBeGreaterThan(0);
+				expect(scanRequests).toBeLessThanOrEqual(3);
 				expect(elapsed).toBeLessThan(budgetMs);
 			},
 			TEST_TIMEOUT_MS
@@ -667,7 +705,19 @@ describe('sync-engine performance contracts (#949)', () => {
 
 			const requestStart = fetcher.mock.calls.length;
 			const started = performance.now();
-			const result = await engine.sync('existence-reconcile');
+			const results = [];
+			for (let tick = 0; tick < 4; tick += 1) {
+				const tickStart = fetcher.mock.calls.length;
+				results.push(await engine.sync('existence-reconcile'));
+				const tickPaths = fetcher.mock.calls.slice(tickStart).map(([url]) => new URL(url).pathname);
+				expect(
+					tickPaths.filter((path) => path.endsWith('/integrity/bucket')).length
+				).toBeLessThanOrEqual(2);
+				expect(
+					tickPaths.filter((path) => path.endsWith('/integrity/scan')).length
+				).toBeLessThanOrEqual(3);
+				if ((await active.database.collections['products']!.count().exec()) === overlapCount) break;
+			}
 			const elapsed = performance.now() - started;
 
 			const budgetMs = budget(MIXED_RECONCILE_BUDGET_MS);
@@ -677,12 +727,9 @@ describe('sync-engine performance contracts (#949)', () => {
 				budgetMs,
 				' overlap=2500 missing=7500 pruned=2500'
 			);
-			const bucketFetches = fetcher.mock.calls.filter(([url]) =>
-				new URL(url).pathname.endsWith('/integrity/bucket')
-			).length;
 			const auditRequests = fetcher.mock.calls.slice(requestStart).map(([url]) => new URL(url));
-			expect(result.status).toBe('ran');
-			expect(bucketFetches).toBe(6);
+			expect(results.length).toBeGreaterThan(1);
+			expect(results.every((result) => result.status === 'ran')).toBe(true);
 			expect(
 				auditRequests.some(
 					({ pathname, searchParams }) =>
@@ -743,7 +790,11 @@ describe('sync-engine performance contracts (#949)', () => {
 				expect(hitCount).toBe(Math.min(10, residents));
 				expect(elapsedMs).toBeLessThan(budgetMs);
 				expect(result.status).toBe('ran');
-				expect(fetcher.mock.calls.length).toBe(Math.floor(auditSize / 1_000) + 1);
+				const paths = fetcher.mock.calls.map(([url]) => new URL(url).pathname);
+				expect(paths.filter((path) => path.endsWith('/integrity/bucket'))).toHaveLength(0);
+				expect(paths.filter((path) => path.endsWith('/integrity/scan')).length).toBeLessThanOrEqual(
+					3
+				);
 			},
 			TEST_TIMEOUT_MS
 		);

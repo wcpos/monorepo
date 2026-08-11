@@ -9,10 +9,7 @@ import {
 	withOrderColumns,
 } from '@wcpos/sync-core';
 
-import {
-	manifestRowOf,
-	materializeExistingLocalOnly,
-} from '../materialization/record-materialization';
+import { extractOrderManifest } from '../local-coverage/existence-manifest-population';
 import {
 	type ManifestCollection,
 	removeManifestByWooIds,
@@ -40,7 +37,10 @@ type OrdersCollection = {
 	count(): { exec(): Promise<number> };
 };
 
-type SyncCheckpointDoc = { checkpoint?: Partial<SyncCheckpoint> | null; epoch?: string };
+type SyncCheckpointDoc = {
+	checkpoint?: Partial<SyncCheckpoint> | null;
+	epoch?: string;
+};
 
 type SyncCheckpointsCollection = {
 	findOne(id: string): { exec(): Promise<SyncCheckpointDoc | null> };
@@ -74,11 +74,10 @@ export class EngineOrderRepository {
 			.exec();
 		// Leg-3 (ADR 0015): seed the order existence manifest (its OWN collection) from each pull's
 		// `_rxdb_digest`, and strip the digest from the stored payload so it never pollutes the order doc.
-		const materialized = applicable.map((document) =>
-			manifestRowOf(document)
-				? { storedDocument: document, manifestRow: manifestRowOf(document) }
-				: materializeExistingLocalOnly(document)
-		);
+		const extracted = extractOrderManifest(applicable);
+		const materialized = extracted.documents.map((storedDocument) => ({
+			storedDocument,
+		}));
 		for (const entry of materialized) {
 			const resident = residents.get(entry.storedDocument.id)?.toJSON() as
 				{ payload?: Record<string, unknown> } | undefined;
@@ -102,9 +101,6 @@ export class EngineOrderRepository {
 				};
 			}
 		}
-		const manifestRows = materialized.flatMap(({ manifestRow }) =>
-			manifestRow ? [manifestRow] : []
-		);
 		// Promote the filter/sort columns at the single storage boundary so the in-flight OrderDocument
 		// stays free of storage concerns and every stored order is queryable by the indexed columns.
 		assertBulkSuccess(
@@ -113,8 +109,8 @@ export class EngineOrderRepository {
 			),
 			'engine-order-repository upsert'
 		);
-		if (manifestRows.length > 0) {
-			await upsertManifestRows(this.db.existenceManifestOrders, manifestRows);
+		if (extracted.manifestRows.length > 0) {
+			await upsertManifestRows(this.db.existenceManifestOrders, extracted.manifestRows);
 		}
 	}
 
@@ -187,9 +183,10 @@ export class EngineOrderRepository {
 	 * guard protected. The delete channel needs the protected ids so it can leave their manifest
 	 * rows intact — one scan, both answers.
 	 */
-	private async orderCensus(
-		pendingMutationOrderIds?: ReadonlySet<string | number>
-	): Promise<{ unprotected: OrderDocument[]; protectedWooOrderIds: Set<number> }> {
+	private async orderCensus(pendingMutationOrderIds?: ReadonlySet<string | number>): Promise<{
+		unprotected: OrderDocument[];
+		protectedWooOrderIds: Set<number>;
+	}> {
 		const docs = (await this.db.orders.find().exec()).map(
 			(doc) => doc.toJSON() as unknown as OrderDocument
 		);

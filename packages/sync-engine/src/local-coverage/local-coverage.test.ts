@@ -60,7 +60,9 @@ function memoryCollection(key: string, options: { conflictOnce?: boolean } = {})
 
 function coverageDatabase(options: { recordConflictOnce?: boolean } = {}) {
 	return {
-		coverageRecords: memoryCollection('coverageKey', { conflictOnce: options.recordConflictOnce }),
+		coverageRecords: memoryCollection('coverageKey', {
+			conflictOnce: options.recordConflictOnce,
+		}),
 		coverageLanes: memoryCollection('laneKey'),
 	};
 }
@@ -178,7 +180,12 @@ describe('LocalCoverage interface', () => {
 		const database = coverageDatabase() as ReturnType<typeof coverageDatabase> &
 			Record<string, unknown>;
 		const manifest = memoryCollection('id');
-		manifest.documents.set('2', { id: '2', wooId: 2, objectType: 'product', digest: 'existing' });
+		manifest.documents.set('2', {
+			id: '2',
+			wooId: 2,
+			objectType: 'product',
+			digest: 'existing',
+		});
 		Object.assign(database, {
 			existenceManifest: {
 				...manifest,
@@ -207,8 +214,14 @@ describe('LocalCoverage interface', () => {
 				count: () => ({ exec: async () => 2 }),
 				find: () => ({ exec: async () => [{ wooId: 3 }, { wooId: 4 }] }),
 			},
-			customers: { count: () => ({ exec: async () => 0 }), find: () => ({ exec: async () => [] }) },
-			orders: { count: () => ({ exec: async () => 0 }), find: () => ({ exec: async () => [] }) },
+			customers: {
+				count: () => ({ exec: async () => 0 }),
+				find: () => ({ exec: async () => [] }),
+			},
+			orders: {
+				count: () => ({ exec: async () => 0 }),
+				find: () => ({ exec: async () => [] }),
+			},
 		});
 		const fetcher = vi.fn(async (url: string) => {
 			const ids = new URL(url).searchParams.get('include')?.split(',').map(Number) ?? [];
@@ -217,7 +230,10 @@ describe('LocalCoverage interface', () => {
 				status: 200,
 				json: async () => ({
 					digests: [
-						...ids.map((id) => ({ id, digest: id === 4 ? '' : `digest-${id}` })),
+						...ids.map((id) => ({
+							id,
+							digest: id === 4 ? '' : `digest-${id}`,
+						})),
 						{ id: 999, digest: 'stray' },
 					],
 				}),
@@ -226,7 +242,11 @@ describe('LocalCoverage interface', () => {
 		const coverage = createLocalCoverage({
 			database: database as never,
 			freshForMs: 1,
-			manifest: { fetcher, syncBaseUrl: 'https://example.test/sync', chunkSize: 2 },
+			manifest: {
+				fetcher,
+				syncBaseUrl: 'https://example.test/sync',
+				chunkSize: 2,
+			},
 		});
 
 		await expect(coverage.primeManifest()).resolves.toEqual({
@@ -264,11 +284,25 @@ describe('LocalCoverage interface', () => {
 				bucketSize: 100,
 				occupiedBucketIndexes: async () => [0],
 				readManifestRange: async () => [
-					{ id: '10', wooId: 10, objectType: 'product', digest: 'gone' },
-					{ id: '20', wooId: 20, objectType: 'product', digest: 'keep-dirty' },
+					{ id: '10', wooId: 10, objectType: 'product', digest: '1' },
+					{ id: '20', wooId: 20, objectType: 'product', digest: '2' },
 				],
 				dirtyWooIds: async () => new Set([20]),
-				fetchServerBucket: async () => [{ id: 30, objectType: 'product', digest: 'new' }],
+				fetchServerScanPage: async () => ({
+					changes: [
+						{
+							bucket: 0,
+							storedCount: 2,
+							currentCount: 1,
+							storedDigest: '3',
+							currentDigest: '3',
+							match: false,
+						},
+					],
+					nextAfterId: 100,
+					complete: true,
+				}),
+				fetchServerBucket: async () => [{ id: 30, objectType: 'product', digest: '3' }],
 				deleteProducts,
 				deleteVariations: vi.fn(async () => undefined),
 			},
@@ -285,6 +319,125 @@ describe('LocalCoverage interface', () => {
 		expect(deleteProducts).toHaveBeenCalledWith([10]);
 	});
 
+	it('skips a clean manifest bucket after the aggregate scan', async () => {
+		const fetchServerBucket = vi.fn(async () => []);
+		const coverage = createLocalCoverage({
+			database: coverageDatabase() as never,
+			freshForMs: 1,
+			reconcile: {
+				bucketSize: 100,
+				occupiedBucketIndexes: async () => [0],
+				readManifestRange: async () => [
+					{
+						id: '10',
+						wooId: 10,
+						objectType: 'product',
+						digest: '9007199254740992',
+					},
+				],
+				dirtyWooIds: async () => new Set<number>(),
+				fetchServerScanPage: async () => ({
+					changes: [
+						{
+							bucket: 0,
+							storedCount: 1,
+							currentCount: 1,
+							storedDigest: '9007199254740992',
+							currentDigest: '9007199254740992',
+							match: true,
+						},
+					],
+					nextAfterId: 100,
+					complete: true,
+				}),
+				fetchServerBucket,
+				deleteProducts: vi.fn(async () => undefined),
+				deleteVariations: vi.fn(async () => undefined),
+			},
+		});
+
+		await expect(coverage.reconcilePass()).resolves.toMatchObject({
+			buckets: 0,
+			pruned: 0,
+		});
+		expect(fetchServerBucket).not.toHaveBeenCalled();
+	});
+
+	it('resumes five candidates as 2/2/1 drill-downs across ticks', async () => {
+		const fetchedBuckets: number[] = [];
+		const cursorState = new Map<string, string>();
+		const buckets = [0, 1, 2, 3, 4];
+		const coverage = createLocalCoverage({
+			database: coverageDatabase() as never,
+			freshForMs: 1,
+			reconcileCursorStore: {
+				get: async (key) => cursorState.get(key) ?? null,
+				set: async (key, value) => void cursorState.set(key, value),
+			},
+			reconcile: {
+				bucketSize: 100,
+				occupiedBucketIndexes: async () => buckets,
+				readManifestRange: async (lo) => [
+					{
+						id: String(lo + 1),
+						wooId: lo + 1,
+						objectType: 'product',
+						digest: String(lo / 100 + 1),
+					},
+				],
+				dirtyWooIds: async () => new Set<number>(),
+				fetchServerScanPage: async () => ({
+					changes: buckets.map((bucket) => ({
+						bucket,
+						storedCount: 1,
+						currentCount: 0,
+						storedDigest: String(bucket + 1),
+						currentDigest: '0',
+						match: false,
+					})),
+					nextAfterId: 500,
+					complete: true,
+				}),
+				fetchServerBucket: async (bucket) => {
+					fetchedBuckets.push(bucket);
+					return [];
+				},
+				deleteProducts: vi.fn(async () => undefined),
+				deleteVariations: vi.fn(async () => undefined),
+			},
+		});
+
+		await coverage.reconcilePass();
+		expect(fetchedBuckets).toEqual([0, 1]);
+		await coverage.reconcilePass();
+		expect(fetchedBuckets).toEqual([0, 1, 2, 3]);
+		await coverage.reconcilePass();
+		expect(fetchedBuckets).toEqual([0, 1, 2, 3, 4]);
+	});
+
+	it('fails closed when a scan page fails', async () => {
+		const fetchServerBucket = vi.fn(async () => []);
+		const coverage = createLocalCoverage({
+			database: coverageDatabase() as never,
+			freshForMs: 1,
+			reconcile: {
+				bucketSize: 100,
+				occupiedBucketIndexes: async () => [0],
+				readManifestRange: async () => [{ id: '1', wooId: 1, objectType: 'product', digest: '1' }],
+				dirtyWooIds: async () => new Set<number>(),
+				fetchServerScanPage: async () => {
+					throw new Error('scan exploded');
+				},
+				fetchServerBucket,
+				deleteProducts: vi.fn(async () => undefined),
+				deleteVariations: vi.fn(async () => undefined),
+			},
+		});
+
+		await expect(coverage.reconcilePass()).rejects.toThrow(/scan exploded/);
+		expect(fetchServerBucket).not.toHaveBeenCalled();
+	});
+
 	it('waits for every id-space reconcile before reporting aggregated failures', async () => {
 		let releaseSlow!: () => void;
 		const slowGate = new Promise<void>((resolve) => {
@@ -296,6 +449,11 @@ describe('LocalCoverage interface', () => {
 			occupiedBucketIndexes,
 			readManifestRange: async () => [],
 			dirtyWooIds: async () => new Set<number>(),
+			fetchServerScanPage: async () => ({
+				changes: [],
+				nextAfterId: 0,
+				complete: true,
+			}),
 			fetchServerBucket: async () => [],
 			deleteProducts: async () => undefined,
 			deleteVariations: async () => undefined,

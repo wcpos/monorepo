@@ -13,6 +13,7 @@ import {
 	stripProductManifestDigest,
 	withCustomerManifestPopulation,
 } from './existence-manifest-population';
+import { materializeExistingLocalOnly } from '../materialization/record-materialization';
 
 function productDoc(payload: Record<string, unknown>, wooProductId = 10): ProductDocument {
 	return {
@@ -87,7 +88,12 @@ describe('extractCustomerManifest', () => {
 			customerDoc({ id: 0, _rxdb_digest: 'x' }, null), // born-local (no wooId) → no row
 		]);
 		expect(manifestRows).toEqual([
-			{ id: '30', wooId: 30, objectType: 'customer', digest: '9223372036854775810' },
+			{
+				id: '30',
+				wooId: 30,
+				objectType: 'customer',
+				digest: '9223372036854775810',
+			},
 		]);
 		expect(documents.every((d) => !('_rxdb_digest' in (d.payload as object)))).toBe(true);
 	});
@@ -117,7 +123,9 @@ describe('withCustomerManifestPopulation', () => {
 	it('does not touch the manifest when no customer carries a digest', async () => {
 		const bulkUpsert = vi.fn(async () => undefined);
 		const repo = withCustomerManifestPopulation(
-			{ upsertMany: vi.fn(async (_docs: LocalCustomerDocument[]) => undefined) },
+			{
+				upsertMany: vi.fn(async (_docs: LocalCustomerDocument[]) => undefined),
+			},
 			{ bulkUpsert, bulkRemove: vi.fn(), find: vi.fn() } as never
 		);
 		await repo.upsertMany([customerDoc({ id: 30 }, 30)]);
@@ -142,8 +150,31 @@ describe('extractOrderManifest', () => {
 			orderDoc(null, { id: 0, _rxdb_digest: 'x' }), // born-local (no wooOrderId)
 		]);
 		expect(manifestRows).toEqual([
-			{ id: '77', wooId: 77, objectType: 'order', digest: '9223372036854775810' },
+			{
+				id: '77',
+				wooId: 77,
+				objectType: 'order',
+				digest: '9223372036854775810',
+			},
 		]);
 		expect(documents.every((d) => !('_rxdb_digest' in (d.payload as object)))).toBe(true);
+	});
+
+	it('preserves a manifest row carried out-of-band by order materialization', () => {
+		const materialized = materializeExistingLocalOnly(
+			orderDoc(77, { id: 77, _rxdb_digest: '9223372036854775810' })
+		).storedDocument;
+
+		const result = extractOrderManifest([materialized]);
+
+		expect(result.manifestRows).toEqual([
+			{
+				id: '77',
+				wooId: 77,
+				objectType: 'order',
+				digest: '9223372036854775810',
+			},
+		]);
+		expect(result.documents[0]?.payload).toEqual({ id: 77 });
 	});
 });

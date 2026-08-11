@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { runExistenceReconcile } from './reconcile-existence-pass';
+import {
+	findExistenceReconcileCandidates,
+	runExistenceReconcile,
+	xor64,
+} from './reconcile-existence-pass';
 
 import type { LocalManifestEntry, ServerDigestEntry } from '../reconcile-bucket-plan';
 
@@ -15,6 +19,96 @@ const S = (id: number, digest: string): ServerDigestEntry => ({
 	id,
 	digest,
 	objectType: 'product',
+});
+
+describe('xor64', () => {
+	it('folds unsigned decimal digests above Number.MAX_SAFE_INTEGER without precision loss', () => {
+		expect(xor64(['9007199254740992', '9007199254740993'])).toBe('1');
+	});
+
+	it('uses zero as the empty-fold identity', () => {
+		expect(xor64([])).toBe('0');
+	});
+});
+
+describe('findExistenceReconcileCandidates', () => {
+	it('classifies a matching aggregate and local manifest slice as clean', async () => {
+		const result = await findExistenceReconcileCandidates({
+			buckets: [0],
+			bucketSize: 1000,
+			readLocalBucket: async () => [L(1, '9007199254740992'), L(2, '9007199254740993')],
+			fetchServerScanPage: async () => ({
+				changes: [
+					{
+						bucket: 0,
+						storedCount: 2,
+						currentCount: 2,
+						storedDigest: '1',
+						currentDigest: '1',
+						match: true,
+					},
+				],
+				nextAfterId: 1000,
+				complete: true,
+			}),
+		});
+
+		expect(result).toEqual({ candidates: [], emptyBuckets: 0 });
+	});
+
+	it('treats a missing scan row as a drill-down candidate', async () => {
+		const result = await findExistenceReconcileCandidates({
+			buckets: [4],
+			bucketSize: 1000,
+			readLocalBucket: async () => [L(4001, '7')],
+			fetchServerScanPage: async () => ({
+				changes: [],
+				nextAfterId: 5000,
+				complete: true,
+			}),
+		});
+
+		expect(result).toEqual({ candidates: [4], emptyBuckets: 0 });
+	});
+
+	it('starts the scan window at the lowest occupied bucket, not id 0', async () => {
+		const requestedAfterIds: number[] = [];
+		const result = await findExistenceReconcileCandidates({
+			buckets: [800, 801],
+			bucketSize: 1000,
+			readLocalBucket: async (lo) => [L(lo + 1, '7')],
+			fetchServerScanPage: async (afterId) => {
+				requestedAfterIds.push(afterId);
+				return {
+					changes: [
+						{
+							bucket: 800,
+							storedCount: 1,
+							currentCount: 1,
+							storedDigest: '7',
+							currentDigest: '7',
+							match: true,
+						},
+						{
+							bucket: 801,
+							storedCount: 1,
+							currentCount: 1,
+							storedDigest: '7',
+							currentDigest: '7',
+							match: true,
+						},
+					],
+					nextAfterId: 849_999,
+					complete: true,
+				};
+			},
+		});
+
+		// One page, opened just below bucket 800 — a high-id manifest (the #1084 shape)
+		// must never page through the empty low windows beneath it.
+		expect(requestedAfterIds).toEqual([799_999]);
+		expect(result).toEqual({ candidates: [], emptyBuckets: 0 });
+	});
 });
 
 describe('runExistenceReconcile', () => {

@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { type ExistenceManifestPrimeDatabase, primeExistenceManifest } from './manifest';
+import {
+	type ExistenceManifestPrimeDatabase,
+	primeExistenceManifest,
+	runManifestPrimePass,
+} from './manifest';
 
 /**
  * Regression cover for the window the boot prime's chunked classification opens (#949 tranche 2).
@@ -96,7 +100,9 @@ function digestFetcher() {
 		return {
 			ok: true,
 			status: 200,
-			json: async () => ({ digests: ids.map((id) => ({ id, digest: `d-${id}` })) }),
+			json: async () => ({
+				digests: ids.map((id) => ({ id, digest: `d-${id}` })),
+			}),
 		};
 	});
 }
@@ -119,6 +125,32 @@ async function runPrime(db: ExistenceManifestPrimeDatabase) {
 }
 
 describe('primeExistenceManifest removal safety across yields (#949)', () => {
+	it('limits one prime pass to five 100-id digest chunks and resumes with the first remaining ids', async () => {
+		const existing = new Set<number>();
+		const requested: number[][] = [];
+		const input = {
+			productWooIds: Array.from({ length: 601 }, (_unused, index) => index + 1),
+			variationWooIds: [],
+			existingManifestWooIds: existing,
+			fetchDigests: async (ids: number[]) => {
+				requested.push(ids);
+				return ids.map((id) => ({ id, digest: String(id) }));
+			},
+			upsert: async (rows: { wooId: number }[]) => {
+				for (const row of rows) existing.add(row.wooId);
+			},
+		};
+
+		await expect(runManifestPrimePass(input)).resolves.toBe(500);
+		expect(requested).toHaveLength(5);
+		expect(requested.flat()).toEqual(Array.from({ length: 500 }, (_unused, index) => index + 1));
+
+		await expect(runManifestPrimePass(input)).resolves.toBe(101);
+		expect(requested.slice(5).flat()).toEqual(
+			Array.from({ length: 101 }, (_unused, index) => index + 501)
+		);
+	});
+
 	it('does NOT delete a product that gained local work after it was classified', async () => {
 		const removed: string[][] = [];
 		const db = primeDatabase({

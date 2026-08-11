@@ -7,11 +7,12 @@ import {
 } from './persistence';
 import {
 	type ExistenceManifestPrimeDatabase,
+	PRIME_CHUNKS_PER_TICK,
 	primeExistenceManifest,
 	primeExistenceManifestCustomers,
 	primeExistenceManifestOrders,
 } from './manifest';
-import { reconcileExistence } from './reconciliation';
+import { reconcileExistence, scanExistenceCandidates } from './reconciliation';
 import {
 	type CoverageCompactionMaintenanceResult,
 	runCoverageCompactionMaintenance,
@@ -38,7 +39,7 @@ import type {
 	PersistedCoverageDocumentSet,
 	QueryCoverageResultRecord,
 } from '../scheduler';
-import type { ReconcileSummary } from './reconcile-existence-pass';
+import type { ExistenceScanPage, ReconcileSummary } from './reconcile-existence-pass';
 import type { ExistenceManifestDocument } from './existence-manifest-schema';
 import type { ServerDigestEntry } from '../reconcile-bucket-plan';
 import type { RxDatabase } from 'rxdb';
@@ -58,7 +59,11 @@ type CumulativeQueryResult = Omit<
 > &
 	MarkerPrecedenceOverride;
 
-export type LocalCoveragePrimeResult = { products: number; customers: number; orders: number };
+export type LocalCoveragePrimeResult = {
+	products: number;
+	customers: number;
+	orders: number;
+};
 export type ReconcileRequest = {
 	signal?: AbortSignal;
 	fetcher?: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
@@ -69,6 +74,11 @@ export type LocalCoverageReconcilePort = {
 	occupiedBucketIndexes: () => Promise<readonly number[]>;
 	readManifestRange: (lo: number, hi: number) => Promise<ExistenceManifestDocument[]>;
 	dirtyWooIds: () => Promise<ReadonlySet<number>>;
+	fetchServerScanPage: (
+		afterId: number,
+		bucketSize: number,
+		request?: ReconcileRequest
+	) => Promise<ExistenceScanPage>;
 	fetchServerBucket: (
 		bucket: number,
 		bucketSize: number,
@@ -95,6 +105,10 @@ type LocalCoverageBaseOptions = {
 	freshForMs: number;
 	retainStaleForMs?: number;
 	reconcile?: LocalCoverageReconcilePort | LocalCoverageReconcilePort[];
+	reconcileCursorStore?: {
+		get(key: string): Promise<string | null>;
+		set(key: string, value: string): Promise<void>;
+	};
 	diagnostics?: SyncObserver;
 };
 export type CreateLocalCoverageOptions = LocalCoverageBaseOptions &
@@ -165,6 +179,60 @@ const emptyReconcileSummary = (): ReconcileSummary => ({
 	skippedDirty: 0,
 });
 
+export const DRILL_DOWNS_PER_TICK = 2;
+export const EXISTENCE_RECONCILE_CURSOR_KEY = 'existence-reconcile:cursor';
+type ReconcileCursor = { nextPort: number; afterBuckets: number[] };
+
+function decodeReconcileCursor(raw: string | null, portCount: number): ReconcileCursor {
+	try {
+		const parsed = JSON.parse(raw ?? '') as Partial<ReconcileCursor>;
+		if (
+			!Number.isSafeInteger(parsed.nextPort) ||
+			(parsed.nextPort ?? -1) < 0 ||
+			(parsed.nextPort ?? 0) >= portCount ||
+			!Array.isArray(parsed.afterBuckets) ||
+			parsed.afterBuckets.length !== portCount ||
+			parsed.afterBuckets.some((bucket) => !Number.isSafeInteger(bucket) || bucket < -1)
+		) {
+			throw new Error('invalid cursor');
+		}
+		return { nextPort: parsed.nextPort!, afterBuckets: parsed.afterBuckets };
+	} catch {
+		return {
+			nextPort: 0,
+			afterBuckets: Array.from({ length: portCount }, () => -1),
+		};
+	}
+}
+
+function selectDrillDowns(candidates: readonly number[][], cursor: ReconcileCursor) {
+	const selected: { port: number; bucket: number }[] = [];
+	const next = {
+		nextPort: cursor.nextPort,
+		afterBuckets: [...cursor.afterBuckets],
+	};
+	while (selected.length < DRILL_DOWNS_PER_TICK) {
+		let found = false;
+		for (let offset = 0; offset < candidates.length; offset += 1) {
+			const port = (next.nextPort + offset) % candidates.length;
+			const bucket = candidates[port]!.find((value) => value > next.afterBuckets[port]!);
+			if (bucket === undefined) continue;
+			selected.push({ port, bucket });
+			next.afterBuckets[port] = bucket;
+			next.nextPort = (port + 1) % candidates.length;
+			found = true;
+			break;
+		}
+		if (!found) break;
+	}
+	if (
+		candidates.every((values, port) => values.every((value) => value <= next.afterBuckets[port]!))
+	) {
+		next.afterBuckets.fill(-1);
+	}
+	return { selected, next };
+}
+
 export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalCoverage {
 	const database = options.database as unknown as RxDatabase;
 	const now = options.now ?? Date.now;
@@ -185,13 +253,18 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			for (const name of DERIVABLE_METADATA_COLLECTIONS) {
 				await resetDerivableMetadataCollection(database, name);
 			}
-			observe({ type: 'coverage.ledger-rebuilt', level: 'warn', fields: { reason, trigger } });
+			observe({
+				type: 'coverage.ledger-rebuilt',
+				level: 'warn',
+				fields: { reason, trigger },
+			});
 		},
 	});
 	const repository = withLedgerRecovery({
 		database,
 		create: () => new RxCoverageRepository(options.database),
 	});
+	let inMemoryReconcileCursor: string | null = null;
 
 	return {
 		recordQueryResult: (input) =>
@@ -207,7 +280,11 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 				freshForMs: input.freshForMs ?? options.freshForMs,
 			}),
 		recordRecords: (input) =>
-			repository.recordRecords({ ...input, nowMs: now(), freshForMs: options.freshForMs }),
+			repository.recordRecords({
+				...input,
+				nowMs: now(),
+				freshForMs: options.freshForMs,
+			}),
 		readSnapshot: () => repository.readCoverageDocuments(),
 		readRecord: (collection, id) => repository.readLocalRecordCoverage(collection, id, now()),
 		readRecords: (collection, ids) => repository.readLocalRecordCoverages(collection, ids, now()),
@@ -250,20 +327,20 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 		primeManifest: async (manifestOverride) => {
 			const manifest = manifestOverride ?? options.manifest;
 			if (!manifest) return { products: 0, customers: 0, orders: 0 };
-			const [products, customers, orders] = await Promise.all([
-				primeExistenceManifest(
-					options.database as LocalCoverageDatabase & ExistenceManifestPrimeDatabase,
-					manifest
-				),
-				primeExistenceManifestCustomers(
-					options.database as LocalCoverageDatabase & ExistenceManifestPrimeDatabase,
-					manifest
-				),
-				primeExistenceManifestOrders(
-					options.database as LocalCoverageDatabase & ExistenceManifestPrimeDatabase,
-					manifest
-				),
-			]);
+			const database = options.database as LocalCoverageDatabase & ExistenceManifestPrimeDatabase;
+			const chunkBudget = { remaining: PRIME_CHUNKS_PER_TICK };
+			const products = await primeExistenceManifest(database, {
+				...manifest,
+				chunkBudget,
+			});
+			const customers = await primeExistenceManifestCustomers(database, {
+				...manifest,
+				chunkBudget,
+			});
+			const orders = await primeExistenceManifestOrders(database, {
+				...manifest,
+				chunkBudget,
+			});
 			return { products, customers, orders };
 		},
 		reconcilePass: async (signal, fetcher) => {
@@ -271,14 +348,51 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			const ports = Array.isArray(options.reconcile) ? options.reconcile : [options.reconcile];
 			const request =
 				signal !== undefined || fetcher !== undefined ? { signal, fetcher } : undefined;
+			const deps = ports.map((port) => ({
+				...port,
+				fetchServerScanPage: (afterId: number, bucketSize: number) =>
+					port.fetchServerScanPage(afterId, bucketSize, request),
+				fetchServerBucket: (bucket: number, bucketSize: number) =>
+					port.fetchServerBucket(bucket, bucketSize, request),
+				isAborted: () => signal?.aborted === true || port.isAborted?.() === true,
+			}));
+			const scans = await Promise.allSettled(deps.map(scanExistenceCandidates));
+			const scanFailures = scans.flatMap((result) =>
+				result.status === 'rejected' ? [result.reason] : []
+			);
+			if (scanFailures.length > 0) {
+				const details = scanFailures
+					.map((failure) => (failure instanceof Error ? failure.message : String(failure)))
+					.join('; ');
+				throw new AggregateError(
+					scanFailures,
+					`Existence scan failed in ${scanFailures.length} id space(s): ${details}`
+				);
+			}
+			const candidates = scans.map((result) =>
+				result.status === 'fulfilled' ? result.value.candidates : []
+			);
+			const rawCursor = options.reconcileCursorStore
+				? await options.reconcileCursorStore.get(EXISTENCE_RECONCILE_CURSOR_KEY)
+				: inMemoryReconcileCursor;
+			const selection = selectDrillDowns(
+				candidates,
+				decodeReconcileCursor(rawCursor, ports.length)
+			);
+			const encodedCursor = JSON.stringify(selection.next);
+			if (options.reconcileCursorStore) {
+				await options.reconcileCursorStore.set(EXISTENCE_RECONCILE_CURSOR_KEY, encodedCursor);
+			} else {
+				inMemoryReconcileCursor = encodedCursor;
+			}
+			const selectedByPort = ports.map((_port, index) =>
+				selection.selected.filter(({ port }) => port === index).map(({ bucket }) => bucket)
+			);
 			const settled = await Promise.allSettled(
-				ports.map((port) =>
-					reconcileExistence({
-						...port,
-						fetchServerBucket: (bucket, bucketSize) =>
-							port.fetchServerBucket(bucket, bucketSize, request),
-						isAborted: () => signal?.aborted === true || port.isAborted?.() === true,
-					})
+				deps.map((port, index) =>
+					selectedByPort[index]!.length === 0
+						? emptyReconcileSummary()
+						: reconcileExistence({ ...port, buckets: selectedByPort[index] })
 				)
 			);
 			const summary = settled.reduce<ReconcileSummary>(
@@ -293,7 +407,14 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 								skippedDirty: total.skippedDirty + result.value.skippedDirty,
 							}
 						: total,
-				emptyReconcileSummary()
+				{
+					...emptyReconcileSummary(),
+					emptyBuckets: scans.reduce(
+						(total, result) =>
+							total + (result.status === 'fulfilled' ? result.value.emptyBuckets : 0),
+						0
+					),
+				}
 			);
 			const failures = settled.flatMap((result) =>
 				result.status === 'rejected' ? [result.reason] : []

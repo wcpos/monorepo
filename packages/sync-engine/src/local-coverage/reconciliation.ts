@@ -1,4 +1,9 @@
-import { type ReconcileSummary, runExistenceReconcile } from './reconcile-existence-pass';
+import {
+	type ExistenceScanPage,
+	findExistenceReconcileCandidates,
+	type ReconcileSummary,
+	runExistenceReconcile,
+} from './reconcile-existence-pass';
 
 import type { ExistenceManifestDocument } from './existence-manifest-schema';
 import type { ReconcileAction, ServerDigestEntry } from '../reconcile-bucket-plan';
@@ -55,17 +60,35 @@ export async function resolveDirtyWooIds(
  * records from the pending-mutation queue, and drives the pure walk — pruning stale records (reusing the
  * lane delete handlers, which already remove the doc AND its manifest row) and reporting missing/changed.
  */
-export async function reconcileExistence(deps: {
+type ReconcileExistenceDeps = {
 	bucketSize: number;
 	occupiedBucketIndexes: () => Promise<readonly number[]>;
 	readManifestRange: (lo: number, hi: number) => Promise<ExistenceManifestDocument[]>;
 	dirtyWooIds: () => Promise<ReadonlySet<number>>;
+	fetchServerScanPage: (afterId: number, bucketSize: number) => Promise<ExistenceScanPage>;
 	fetchServerBucket: (bucket: number, bucketSize: number) => Promise<ServerDigestEntry[]>;
 	/** Removes the product docs AND their manifest rows (the tick's deleteProducts handler). */
 	deleteProducts: (wooIds: number[]) => Promise<void>;
 	deleteVariations: (wooIds: number[]) => Promise<void>;
 	isAborted?: () => boolean;
-}): Promise<ReconcileSummary> {
+};
+
+export async function scanExistenceCandidates(
+	deps: ReconcileExistenceDeps
+): Promise<{ candidates: number[]; emptyBuckets: number }> {
+	const buckets = await deps.occupiedBucketIndexes();
+	return findExistenceReconcileCandidates({
+		buckets,
+		bucketSize: deps.bucketSize,
+		readLocalBucket: deps.readManifestRange,
+		fetchServerScanPage: deps.fetchServerScanPage,
+		isAborted: deps.isAborted,
+	});
+}
+
+export async function reconcileExistence(
+	deps: ReconcileExistenceDeps & { buckets?: readonly number[] }
+): Promise<ReconcileSummary> {
 	const emptySummary: ReconcileSummary = {
 		buckets: 0,
 		emptyBuckets: 0,
@@ -74,13 +97,16 @@ export async function reconcileExistence(deps: {
 		changed: 0,
 		skippedDirty: 0,
 	};
-	const buckets = await deps.occupiedBucketIndexes();
+	const scan = deps.buckets
+		? { candidates: deps.buckets, emptyBuckets: 0 }
+		: await scanExistenceCandidates(deps);
+	const buckets = scan.candidates;
 	if (buckets.length === 0) {
-		return emptySummary;
+		return { ...emptySummary, emptyBuckets: scan.emptyBuckets };
 	}
 	const dirty = await deps.dirtyWooIds();
 
-	return runExistenceReconcile({
+	const summary = await runExistenceReconcile({
 		buckets,
 		bucketSize: deps.bucketSize,
 		readLocalBucket: async (lo, hi) =>
@@ -102,4 +128,5 @@ export async function reconcileExistence(deps: {
 		},
 		isAborted: deps.isAborted,
 	});
+	return { ...summary, emptyBuckets: summary.emptyBuckets + scan.emptyBuckets };
 }

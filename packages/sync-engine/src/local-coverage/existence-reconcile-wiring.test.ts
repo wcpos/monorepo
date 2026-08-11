@@ -67,12 +67,12 @@ describe('reconcileExistence', () => {
 		const deleteVariations = vi.fn(async () => undefined);
 
 		const local: Record<number, ExistenceManifestDocument[]> = {
-			0: [manifest(3, 'gone'), manifest(4, 'v-gone', 'variation')], // both server-absent → prune
-			1: [manifest(1200, 'old')], // digest differs → changed
+			0: [manifest(3, '1'), manifest(4, '2', 'variation')], // both server-absent → prune
+			1: [manifest(1200, '4')], // digest differs → changed
 		};
 		const serverByBucket: Record<number, ServerDigestEntry[]> = {
 			0: [],
-			1: [server(1200, 'new'), server(1300, 'fresh')], // 1300 missing locally
+			1: [server(1200, '5'), server(1300, '6')], // 1300 missing locally
 		};
 
 		const summary = await reconcileExistence({
@@ -80,6 +80,20 @@ describe('reconcileExistence', () => {
 			occupiedBucketIndexes: async () => [0, 1],
 			readManifestRange: async (lo) => local[lo / 1000] ?? [],
 			dirtyWooIds: async () => new Set<number>(),
+			fetchServerScanPage: async () => ({
+				changes: [
+					{
+						bucket: 1,
+						storedCount: 2,
+						currentCount: 2,
+						storedDigest: '3',
+						currentDigest: '3',
+						match: true,
+					},
+				],
+				nextAfterId: 2000,
+				complete: true,
+			}),
 			fetchServerBucket: async (bucket) => serverByBucket[bucket] ?? [],
 			deleteProducts,
 			deleteVariations,
@@ -108,12 +122,19 @@ describe('reconcileExistence', () => {
 			occupiedBucketIndexes: async () => [0, 10],
 			readManifestRange,
 			dirtyWooIds: async () => new Set<number>(),
+			fetchServerScanPage: async () => ({
+				changes: [],
+				nextAfterId: 11_000,
+				complete: true,
+			}),
 			fetchServerBucket: async () => [],
 			deleteProducts: vi.fn(async () => undefined),
 			deleteVariations: vi.fn(async () => undefined),
 		});
 
 		expect(readManifestRange.mock.calls).toEqual([
+			[0, 1000],
+			[10_000, 11_000],
 			[0, 1000],
 			[10_000, 11_000],
 		]);
@@ -126,6 +147,11 @@ describe('reconcileExistence', () => {
 			occupiedBucketIndexes: async () => [0],
 			readManifestRange: async () => [manifest(3, 'gone')], // server-absent, but dirty
 			dirtyWooIds: async () => new Set<number>([3]),
+			fetchServerScanPage: async () => ({
+				changes: [],
+				nextAfterId: 1000,
+				complete: true,
+			}),
 			fetchServerBucket: async () => [],
 			deleteProducts,
 			deleteVariations: vi.fn(async () => undefined),
@@ -136,16 +162,23 @@ describe('reconcileExistence', () => {
 
 	it('does nothing when there are no local ids (empty manifest)', async () => {
 		const fetchServerBucket = vi.fn(async () => [] as ServerDigestEntry[]);
+		const fetchServerScanPage = vi.fn(async () => ({
+			changes: [],
+			nextAfterId: 0,
+			complete: true,
+		}));
 		const summary = await reconcileExistence({
 			bucketSize: 1000,
 			occupiedBucketIndexes: async () => [],
 			readManifestRange: async () => [],
 			dirtyWooIds: async () => new Set<number>(),
+			fetchServerScanPage,
 			fetchServerBucket,
 			deleteProducts: vi.fn(async () => undefined),
 			deleteVariations: vi.fn(async () => undefined),
 		});
 		expect(fetchServerBucket).not.toHaveBeenCalled();
+		expect(fetchServerScanPage).not.toHaveBeenCalled();
 		expect(summary).toEqual({
 			buckets: 0,
 			emptyBuckets: 0,

@@ -307,7 +307,11 @@ export type ActiveScope = {
  * an opaque diagnostic string, never a contract. */
 export type EngineEvent =
 	| { type: 'scope-switched'; scopeId: string; from: string | null }
-	| { type: 'collection-reset'; scopeId: string; collection: ResettableCollectionName }
+	| {
+			type: 'collection-reset';
+			scopeId: string;
+			collection: ResettableCollectionName;
+	  }
 	| {
 			type: 'reset-needs-confirmation';
 			scopeId: string;
@@ -341,7 +345,12 @@ export type EngineEvent =
 	// row — nothing was or ever will be sent. Terminal for the receipt's
 	// mutationId; a DISTINCT event (not the ack shape) because there is no
 	// server revision to carry and no push ever happened.
-	| { type: 'write-annihilated'; collection: string; recordId: string; mutationId: string }
+	| {
+			type: 'write-annihilated';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+	  }
 	// Fresh query totals persisted by the retry lane (slice 5d) — the host
 	// hydrates its UI caches from these.
 	| QueryTotalCacheEvent
@@ -351,7 +360,12 @@ export type EngineEvent =
 	// sync() and the mode:'auto' timers). Deliberately NOT the SyncObserver diagnostics
 	// port: UI state (active$) must not become best-effort when a host omits diagnostics.
 	| { type: 'lane-start'; lane: EngineLane }
-	| { type: 'lane-finish'; lane: EngineLane; status: SyncReport['status']; detail?: string }
+	| {
+			type: 'lane-finish';
+			lane: EngineLane;
+			status: SyncReport['status'];
+			detail?: string;
+	  }
 	| {
 			type: 'write-conflict';
 			collection: string;
@@ -811,6 +825,10 @@ export function createRxdbSyncEngine(
 					fetcher,
 					ports,
 				}),
+				reconcileCursorStore: {
+					get: (key) => readBlob(scopeId, key),
+					set: (key, value) => writeBlob(scopeId, key, value),
+				},
 				freshForMs: ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS,
 				retainStaleForMs: COVERAGE_COMPACTION_RETAIN_STALE_FOR_MS,
 				diagnostics,
@@ -1026,7 +1044,11 @@ export function createRxdbSyncEngine(
 				}
 				const from = announcedScopeId;
 				announcedScopeId = event.scopeId;
-				emitEngineEvent({ type: 'scope-switched', scopeId: event.scopeId, from });
+				emitEngineEvent({
+					type: 'scope-switched',
+					scopeId: event.scopeId,
+					from,
+				});
 				emitDb(activeDatabase());
 				scheduleStatusChange();
 				return;
@@ -1095,7 +1117,12 @@ export function createRxdbSyncEngine(
 		if (!identity || !database) {
 			throw new Error(`Scope ${scopeId} is not open`);
 		}
-		return { identity, scopeId, database, barcodeSelectors: barcodeSelectorsFor(scopeId) };
+		return {
+			identity,
+			scopeId,
+			database,
+			barcodeSelectors: barcodeSelectorsFor(scopeId),
+		};
 	};
 
 	const assertNotDisposed = (): void => {
@@ -1218,7 +1245,11 @@ export function createRxdbSyncEngine(
 						message: `POS bootstrap seed failed: ${message}`,
 						fields: { scopeId },
 					});
-					emitEngineEvent({ type: 'bootstrap-failed', scopeId, detail: message });
+					emitEngineEvent({
+						type: 'bootstrap-failed',
+						scopeId,
+						detail: message,
+					});
 				}
 			}
 			diagnostics({
@@ -1232,7 +1263,10 @@ export function createRxdbSyncEngine(
 	};
 
 	// --- The change-signal lane (slice 3) --------------------------------------
-	const intervals: EngineIntervals = { ...DEFAULT_INTERVALS, ...ports.intervals };
+	const intervals: EngineIntervals = {
+		...DEFAULT_INTERVALS,
+		...ports.intervals,
+	};
 	const changeSignalLane = createChangeSignalLane({
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
