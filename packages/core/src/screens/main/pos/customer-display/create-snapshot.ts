@@ -1,20 +1,52 @@
 import type { CustomerDisplaySnapshotSource, CustomerDisplayStateV1 } from './types';
 
+/** Normalizes optional labels without inventing customer-visible text. */
 function text(value: unknown, fallback = ''): string {
 	return typeof value === 'string' && value.trim() !== '' ? value : fallback;
 }
 
+const DECIMAL_STRING = /^-?(?:\d+(?:\.\d*)?|\.\d+)$/;
+
+/** Expands finite JavaScript numbers into the protocol's plain-decimal format. */
+function numberToPlainDecimal(value: number): string {
+	const asString = String(value);
+	if (DECIMAL_STRING.test(asString)) return asString;
+
+	const [coefficient, exponentText] = asString.toLowerCase().split('e');
+	const exponent = Number(exponentText);
+	const negative = coefficient.startsWith('-');
+	const unsignedCoefficient = negative ? coefficient.slice(1) : coefficient;
+	const decimalIndex = unsignedCoefficient.indexOf('.');
+	const digits = unsignedCoefficient.replace('.', '');
+	const expandedDecimalIndex =
+		(decimalIndex === -1 ? unsignedCoefficient.length : decimalIndex) + exponent;
+	let expanded: string;
+
+	if (expandedDecimalIndex <= 0) {
+		expanded = `0.${'0'.repeat(-expandedDecimalIndex)}${digits}`;
+	} else if (expandedDecimalIndex >= digits.length) {
+		expanded = `${digits}${'0'.repeat(expandedDecimalIndex - digits.length)}`;
+	} else {
+		expanded = `${digits.slice(0, expandedDecimalIndex)}.${digits.slice(expandedDecimalIndex)}`;
+	}
+
+	return negative ? `-${expanded}` : expanded;
+}
+
+/** Preserves valid decimal strings and normalizes invalid money input to zero. */
 function money(value: unknown): string {
-	if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '0';
+	if (typeof value === 'number') return Number.isFinite(value) ? numberToPlainDecimal(value) : '0';
 	if (typeof value !== 'string') return '0';
 	const trimmed = value.trim();
-	return /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed) ? trimmed : '0';
+	return DECIMAL_STRING.test(trimmed) ? trimmed : '0';
 }
 
+/** Preserves signed finite quantities so displayed lines remain consistent with totals. */
 function quantity(value: unknown): number {
-	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+	return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+/** Removes credentials and request-specific URL data before an image reaches a display. */
 function imageUrl(value: unknown): string | null {
 	if (typeof value !== 'string' || value === '') return null;
 	try {
@@ -30,6 +62,7 @@ function imageUrl(value: unknown): string | null {
 	}
 }
 
+/** Creates the replay-safe state used whenever no POS cart may be displayed. */
 export function createIdleCustomerDisplayState(): CustomerDisplayStateV1 {
 	return {
 		status: 'idle',
@@ -52,6 +85,7 @@ export function createIdleCustomerDisplayState(): CustomerDisplayStateV1 {
 	};
 }
 
+/** Projects order data through the explicit customer-display V1 allowlist. */
 export function createCustomerDisplayState(
 	source: CustomerDisplaySnapshotSource
 ): CustomerDisplayStateV1 {

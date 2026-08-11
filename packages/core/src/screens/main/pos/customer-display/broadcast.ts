@@ -6,6 +6,7 @@ import { CUSTOMER_DISPLAY_PROTOCOL, CUSTOMER_DISPLAY_PROTOCOL_VERSION } from './
 import type { Observable } from 'rxjs';
 import type { CustomerDisplaySnapshotV1, CustomerDisplayStateV1 } from './types';
 
+/** Owns replay, sequencing, deduplication, and lifecycle-safe publication. */
 export class CustomerDisplayBroadcast {
 	private readonly subject = new ReplaySubject<CustomerDisplaySnapshotV1>(1);
 	private latestSignature: string | undefined;
@@ -19,6 +20,7 @@ export class CustomerDisplayBroadcast {
 		this.publish(createIdleCustomerDisplayState());
 	}
 
+	/** Publishes a new immutable snapshot when its customer-visible state changed. */
 	publish(state: CustomerDisplayStateV1, owner?: symbol): CustomerDisplaySnapshotV1 | undefined {
 		if (owner) {
 			this.activeOwner = owner;
@@ -56,6 +58,11 @@ export class CustomerDisplayBroadcast {
 		return snapshot;
 	}
 
+	/**
+	 * Clears the display. With an owner, stale clears are ignored and active clears are
+	 * deferred to let a replacing publisher take over without an idle flicker; both return
+	 * undefined. Without an owner, the idle snapshot is published and returned synchronously.
+	 */
 	clear(owner?: symbol): CustomerDisplaySnapshotV1 | undefined {
 		if (owner) {
 			if (this.activeOwner !== owner) return undefined;
@@ -76,4 +83,5 @@ export class CustomerDisplayBroadcast {
 }
 
 export const customerDisplayBroadcast = new CustomerDisplayBroadcast();
+/** Read-only stream consumed by customer-display transports. */
 export const customerDisplaySnapshots$ = customerDisplayBroadcast.snapshots$;

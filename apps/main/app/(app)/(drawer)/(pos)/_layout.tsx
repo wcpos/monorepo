@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 
-import { Stack, useGlobalSearchParams, usePathname, useSegments } from 'expo-router';
+import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -17,6 +17,7 @@ import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/conte
 import { CustomerDisplayBroadcaster } from '@wcpos/core/screens/main/pos/customer-display';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
+import { getCustomerDisplayRouteState } from '../../../../lib/customer-display-route';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -105,14 +106,14 @@ export default function POSLayout() {
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const pathname = usePathname();
-	const routeSegments = pathname.split('/').filter(Boolean);
-	const isReceipt = routeSegments.includes('receipt');
-	const customerDisplayStatus = routeSegments.includes('checkout') ? 'awaiting-payment' : 'cart';
+	const segments = useSegments();
+	const customerDisplayRoute = getCustomerDisplayRouteState(segments);
 
 	return (
 		<TaxRatesProvider>
-			{!isReceipt && <CustomerDisplayBroadcaster status={customerDisplayStatus} />}
+			{customerDisplayRoute.enabled && (
+				<CustomerDisplayBroadcaster status={customerDisplayRoute.status} />
+			)}
 			<View className="bg-background flex-1">
 				<Stack
 					screenOptions={{

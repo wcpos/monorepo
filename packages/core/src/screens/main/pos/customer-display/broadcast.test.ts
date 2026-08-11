@@ -87,8 +87,25 @@ describe('CustomerDisplayBroadcast', () => {
 		expect(Object.isFrozen(snapshot.currency)).toBe(true);
 		expect(Object.isFrozen(snapshot.totals)).toBe(true);
 		expect(() => {
-			snapshot.totals.total = '999';
+			(snapshot.totals as CustomerDisplayStateV1['totals']).total = '999';
 		}).toThrow();
+	});
+
+	it('publishes idle after the active owner clears', async () => {
+		const broadcast = new CustomerDisplayBroadcast();
+		const owner = Symbol('owner');
+		const received: CustomerDisplaySnapshotV1[] = [];
+		const subscription = broadcast.snapshots$.subscribe((snapshot) => received.push(snapshot));
+		broadcast.publish(cartState('5'), owner);
+		broadcast.clear(owner);
+		await Promise.resolve();
+
+		expect(received.map(({ status, sequence }) => ({ status, sequence }))).toEqual([
+			{ status: 'idle', sequence: 1 },
+			{ status: 'cart', sequence: 2 },
+			{ status: 'idle', sequence: 3 },
+		]);
+		subscription.unsubscribe();
 	});
 
 	it('does not let a released publisher clear a newer publisher state', async () => {

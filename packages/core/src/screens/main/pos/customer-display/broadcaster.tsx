@@ -1,8 +1,10 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useAppState } from '../../../../contexts/app-state';
+import allCurrencies from '../../../../contexts/currencies/currencies.json';
 import { calculateOrderTotals } from '../hooks/calculate-order-totals';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -12,30 +14,40 @@ import { createCustomerDisplayState } from './create-snapshot';
 import type { CustomerDisplayBroadcast } from './broadcast';
 import type { CustomerDisplayStatus } from './types';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 interface CustomerDisplayBroadcasterProps {
 	status: Exclude<CustomerDisplayStatus, 'idle'>;
 	broadcast?: CustomerDisplayBroadcast;
 }
 
+/** Publishes the selected POS order as a transport-neutral customer-display snapshot. */
 export function CustomerDisplayBroadcaster({
 	status,
 	broadcast = customerDisplayBroadcast,
 }: CustomerDisplayBroadcasterProps) {
 	const [owner] = React.useState(() => Symbol('customer-display-broadcaster'));
 	const { currentOrder } = useCurrentOrder();
-	const observedOrder = useObservableEagerState(currentOrder.$!);
-	const order = (observedOrder ?? currentOrder) as OrderDocument;
+	const orderCurrencyCode = useObservableEagerState(currentOrder.currency$!);
+	const orderCurrencySymbol = useObservableEagerState(currentOrder.currency_symbol$!);
+	const lineItemsValue = useObservableEagerState(currentOrder.line_items$!);
+	const feeLinesValue = useObservableEagerState(currentOrder.fee_lines$!);
+	const shippingLinesValue = useObservableEagerState(currentOrder.shipping_lines$!);
+	const couponLinesValue = useObservableEagerState(currentOrder.coupon_lines$!);
 	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxRates();
 	const { store } = useAppState();
-	const currencyCode = useObservableEagerState(store.currency$);
+	const storeCurrencyCode = useObservableEagerState(store.currency$) as string | undefined;
+	const normalizedOrderCurrencyCode = orderCurrencyCode?.trim();
+	const currencyCode = normalizedOrderCurrencyCode || storeCurrencyCode?.trim() || '';
+	const currencySymbol =
+		(normalizedOrderCurrencyCode && orderCurrencySymbol?.trim()
+			? decode(orderCurrencySymbol.trim())
+			: undefined) ||
+		decode(allCurrencies.find((currency) => currency.code === currencyCode)?.symbol ?? '');
 
 	const state = React.useMemo(() => {
-		const lineItems = (order.line_items ?? []).filter((item) => item.product_id !== null);
-		const feeLines = (order.fee_lines ?? []).filter((line) => line.name !== null);
-		const shippingLines = (order.shipping_lines ?? []).filter((line) => line.method_id !== null);
-		const couponLines = (order.coupon_lines ?? []).filter((line) => line.code != null);
+		const lineItems = (lineItemsValue ?? []).filter((item) => item.product_id !== null);
+		const feeLines = (feeLinesValue ?? []).filter((line) => line.name !== null);
+		const shippingLines = (shippingLinesValue ?? []).filter((line) => line.method_id !== null);
+		const couponLines = (couponLinesValue ?? []).filter((line) => line.code != null);
 		const totals = calculateOrderTotals({
 			lineItems,
 			feeLines,
@@ -49,8 +61,8 @@ export function CustomerDisplayBroadcaster({
 
 		return createCustomerDisplayState({
 			status,
-			currencyCode: order.currency ?? currencyCode,
-			currencySymbol: order.currency_symbol,
+			currencyCode,
+			currencySymbol,
 			decimalPlaces: priceNumDecimals,
 			pricesIncludeTax,
 			lineItems: lineItems.map((item) => ({
@@ -90,10 +102,14 @@ export function CustomerDisplayBroadcaster({
 		});
 	}, [
 		allRates,
+		couponLinesValue,
 		currencyCode,
-		order,
+		currencySymbol,
+		feeLinesValue,
+		lineItemsValue,
 		priceNumDecimals,
 		pricesIncludeTax,
+		shippingLinesValue,
 		status,
 		taxRoundAtSubtotal,
 	]);

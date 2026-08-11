@@ -155,4 +155,21 @@ describe('createCustomerDisplayState', () => {
 		expect(state.fees).toEqual([{ name: '', total: '0', totalTax: '0' }]);
 		expect(state.shipping).toEqual([{ name: '', total: '0', totalTax: '0' }]);
 	});
+
+	it('normalizes numeric money to plain decimals and preserves signed finite quantities', () => {
+		const state = createCustomerDisplayState({
+			status: 'cart',
+			lineItems: [
+				{ productId: 1, quantity: -2, price: 1e21, total: 1e-7 },
+				{ productId: 2, quantity: Number.NaN, price: Number.POSITIVE_INFINITY },
+			],
+		});
+
+		expect(state.items[0]).toMatchObject({
+			quantity: -2,
+			price: '1000000000000000000000',
+			total: '0.0000001',
+		});
+		expect(state.items[1]).toMatchObject({ quantity: 0, price: '0' });
+	});
 });

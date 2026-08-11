@@ -49,11 +49,18 @@ export interface CustomerDisplayStateV1 {
 	totals: CustomerDisplayTotals;
 }
 
-export interface CustomerDisplaySnapshotV1 extends CustomerDisplayStateV1 {
-	protocol: typeof CUSTOMER_DISPLAY_PROTOCOL;
-	version: typeof CUSTOMER_DISPLAY_PROTOCOL_VERSION;
-	sequence: number;
-}
+export type CustomerDisplaySnapshotV1 = Readonly<
+	Omit<CustomerDisplayStateV1, 'currency' | 'items' | 'fees' | 'shipping' | 'totals'> & {
+		currency: Readonly<CustomerDisplayCurrency>;
+		items: readonly Readonly<CustomerDisplayItem>[];
+		fees: readonly Readonly<CustomerDisplayAdjustment>[];
+		shipping: readonly Readonly<CustomerDisplayAdjustment>[];
+		totals: Readonly<CustomerDisplayTotals>;
+		protocol: typeof CUSTOMER_DISPLAY_PROTOCOL;
+		version: typeof CUSTOMER_DISPLAY_PROTOCOL_VERSION;
+		sequence: number;
+	}
+>;
 
 export interface CustomerDisplayProductSource {
 	productId?: number | null;
