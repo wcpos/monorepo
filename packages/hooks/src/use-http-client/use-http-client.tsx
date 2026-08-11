@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import set from 'lodash/set';
 
-import { getDatabaseEpoch, getLogger } from '@wcpos/utils/logger';
+import { getDatabaseEpoch, getLogger, mapExceptionToCode } from '@wcpos/utils/logger';
 
 import { http } from './http';
 import { parseWpError } from './parse-wp-error';
@@ -290,6 +290,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 				const wpError = axiosError.response?.data
 					? parseWpError(axiosError.response.data, axiosError.message)
 					: undefined;
+				const mappedException = wpError?.code ? undefined : mapExceptionToCode(error);
 				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
 					const method = (reqConfig.method ?? 'GET').toUpperCase();
 					const endpoint = reqConfig.url
@@ -298,10 +299,11 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 					httpLogger.error('HTTP request failed', {
 						saveToDb: true,
 						context: {
+							...(mappedException?.context ?? {}),
 							method,
 							endpoint,
 							status: axiosError.response?.status ?? 0,
-							...(wpError?.code && { errorCode: wpError.code }),
+							errorCode: wpError?.code ?? mappedException?.code,
 							...(wpError?.serverCode && { serverCode: wpError.serverCode }),
 							...(wpError?.triage && { triage: true }),
 						},

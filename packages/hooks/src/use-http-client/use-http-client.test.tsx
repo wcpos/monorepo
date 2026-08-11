@@ -3,9 +3,14 @@ import { renderHook } from '@testing-library/react';
 jest.mock('@wcpos/utils/logger', () => {
 	const info = jest.fn();
 	const error = jest.fn();
+	const mapExceptionToCode = jest.fn(() => ({
+		code: 'CLIENT999',
+		context: { name: 'Error', message: 'network down' },
+	}));
 	return {
 		getLogger: jest.fn(() => ({ debug: jest.fn(), info, warn: jest.fn(), error })),
 		getDatabaseEpoch: jest.fn(() => 0),
+		mapExceptionToCode,
 		__info: info,
 		__error: error,
 	};
@@ -37,6 +42,7 @@ const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
 	__info: jest.Mock;
 	__error: jest.Mock;
 	getDatabaseEpoch: jest.Mock;
+	mapExceptionToCode: jest.Mock;
 };
 
 describe('useHttpClient network audit logs', () => {
@@ -121,8 +127,14 @@ describe('useHttpClient network audit logs', () => {
 
 		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
 			saveToDb: true,
-			context: expect.objectContaining({ status: 0 }),
+			context: expect.objectContaining({
+				status: 0,
+				errorCode: 'CLIENT999',
+				name: 'Error',
+				message: 'network down',
+			}),
 		});
+		expect(loggerMock.mapExceptionToCode).toHaveBeenCalledWith(failure);
 	});
 
 	it('does not persist a recovered request as a failure', async () => {

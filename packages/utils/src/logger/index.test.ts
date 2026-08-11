@@ -626,6 +626,55 @@ describe('logger/index', () => {
 			consoleError.mockRestore();
 		});
 
+		it.each([
+			['wcpos.sync.engine', 'SYNC999'],
+			['wcpos.auth.oauth', 'AUTH999'],
+			['wcpos.pos.checkout', 'CHECKOUT999'],
+			['wcpos.pos.checkout.payment', 'PAYMENT999'],
+			['wcpos.print.native', 'PRINT999'],
+			['wcpos.products.actions.sync', 'PRODUCT999'],
+			['wcpos.license.check', 'LICENSE999'],
+			['wcpos.http.client', 'CLIENT999'],
+		])('adds the domain fallback code for %s errors', async (category, expectedCode) => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(category.split('.')).error('Unexpected failure');
+			await flushWrites();
+
+			expect(rows[0]).toMatchObject({ code: expectedCode });
+			expect(rows[0].context).toMatchObject({
+				errorCode: expectedCode,
+				codeFallback: true,
+			});
+		});
+
+		it('does not overwrite an existing error code with a fallback', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'sync', 'engine']).error('Known failure', {
+				context: { errorCode: 'SYNC101' },
+			});
+			await flushWrites();
+
+			expect(rows[0]).toMatchObject({ code: 'SYNC101' });
+			expect(rows[0].context).toMatchObject({ errorCode: 'SYNC101' });
+			expect(rows[0].context).not.toHaveProperty('codeFallback');
+		});
+
+		it('does not add fallback codes to warning rows', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'sync', 'engine']).warn('Potential problem');
+			await flushWrites();
+
+			expect(rows[0]).not.toHaveProperty('code');
+			expect(rows[0].context).not.toHaveProperty('errorCode');
+			expect(rows[0].context).not.toHaveProperty('codeFallback');
+		});
+
 		it('promotes defined record fields and lets an explicit success outcome win', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);

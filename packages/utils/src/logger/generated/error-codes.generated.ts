@@ -38,7 +38,14 @@ export type ErrorCode =
 	| 'CLIENT101'
 	| 'CLIENT201'
 	| 'CLIENT211'
-	| 'CLIENT999';
+	| 'CLIENT999'
+	| 'SYNC999'
+	| 'AUTH999'
+	| 'CHECKOUT999'
+	| 'PAYMENT999'
+	| 'PRINT999'
+	| 'PRODUCT999'
+	| 'LICENSE999';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
@@ -633,6 +640,111 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence: 'spec §3 catch-all; Sentry audit',
 	},
+	SYNC999: {
+		code: 'SYNC999',
+		symbol: 'SYNC_UNEXPECTED',
+		domain: 'SYNC',
+		severity: 'error',
+		safeAction: 'retry',
+		retryPolicy: 'automatic',
+		dataSafety: 'local-only',
+		escalation: 'support-with-export',
+		summary: 'Syncing hit an unexpected problem.',
+		docsBody:
+			'Your sales are safe on this device. Wait for the automatic retry; if this code keeps appearing, export diagnostics and contact support.',
+		introducedIn: '1.10.0',
+		evidence: 'coverage net (map #1136, A1.1): generic fallback = registry debt',
+	},
+	AUTH999: {
+		code: 'AUTH999',
+		symbol: 'AUTH_UNEXPECTED',
+		domain: 'AUTH',
+		severity: 'error',
+		safeAction: 'retry',
+		retryPolicy: 'manual',
+		dataSafety: 'no-impact',
+		escalation: 'support-with-export',
+		summary: 'Signing in or staying signed in hit an unexpected problem.',
+		docsBody:
+			'Try the action once more. If it repeats, sign out and back in, then export diagnostics and contact support.',
+		introducedIn: '1.10.0',
+		evidence: 'coverage net (map #1136, A1.1)',
+	},
+	CHECKOUT999: {
+		code: 'CHECKOUT999',
+		symbol: 'CHECKOUT_UNEXPECTED',
+		domain: 'CHECKOUT',
+		severity: 'error',
+		safeAction: 'verify-first',
+		retryPolicy: 'manual',
+		dataSafety: 'outcome-unknown',
+		escalation: 'support-with-export',
+		summary: 'Checkout hit an unexpected problem.',
+		docsBody:
+			'Check the order in your store admin before charging the customer again. Export diagnostics and contact support if the problem repeats.',
+		introducedIn: '1.10.0',
+		evidence: 'coverage net (map #1136, A1.1)',
+	},
+	PAYMENT999: {
+		code: 'PAYMENT999',
+		symbol: 'PAYMENT_UNEXPECTED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		safeAction: 'verify-first',
+		retryPolicy: 'manual',
+		dataSafety: 'outcome-unknown',
+		escalation: 'support-with-export',
+		summary: 'Payment handling hit an unexpected problem.',
+		docsBody:
+			'Confirm whether the payment went through before retrying. Export diagnostics and contact support if it is unclear.',
+		introducedIn: '1.10.0',
+		evidence: 'coverage net (map #1136, A1.1)',
+	},
+	PRINT999: {
+		code: 'PRINT999',
+		symbol: 'PRINT_UNEXPECTED',
+		domain: 'PRINT',
+		severity: 'error',
+		safeAction: 'retry',
+		retryPolicy: 'manual',
+		dataSafety: 'no-impact',
+		escalation: 'support-with-export',
+		summary: 'Printing hit an unexpected problem.',
+		docsBody:
+			'Try printing again. If it keeps failing, reprint from the order screen and contact support with diagnostics.',
+		introducedIn: '1.10.0',
+		evidence: 'coverage net (map #1136, A1.1)',
+	},
+	PRODUCT999: {
+		code: 'PRODUCT999',
+		symbol: 'PRODUCT_UNEXPECTED',
+		domain: 'PRODUCT',
+		severity: 'error',
+		safeAction: 'retry',
+		retryPolicy: 'manual',
+		dataSafety: 'no-impact',
+		escalation: 'support-with-export',
+		summary: 'Loading or updating products hit an unexpected problem.',
+		docsBody:
+			'Try again. If product data still looks wrong afterwards, export diagnostics and contact support.',
+		introducedIn: '1.10.0',
+		evidence: 'coverage net (map #1136, A1.1)',
+	},
+	LICENSE999: {
+		code: 'LICENSE999',
+		symbol: 'LICENSE_UNEXPECTED',
+		domain: 'LICENSE',
+		severity: 'error',
+		safeAction: 'continue',
+		retryPolicy: 'automatic',
+		dataSafety: 'no-impact',
+		escalation: 'support-with-export',
+		summary: 'License checking hit an unexpected problem.',
+		docsBody:
+			'The POS keeps working. If Pro features stay locked, re-enter your license key, then contact support.',
+		introducedIn: '1.10.0',
+		evidence: 'coverage net (map #1136, A1.1)',
+	},
 };
 
 export const ERROR_CODES = {
@@ -674,4 +786,11 @@ export const ERROR_CODES = {
 	OUT_OF_MEMORY: 'CLIENT201',
 	NATIVE_CRASH: 'CLIENT211',
 	UNEXPECTED_ERROR: 'CLIENT999',
+	SYNC_UNEXPECTED: 'SYNC999',
+	AUTH_UNEXPECTED: 'AUTH999',
+	CHECKOUT_UNEXPECTED: 'CHECKOUT999',
+	PAYMENT_UNEXPECTED: 'PAYMENT999',
+	PRINT_UNEXPECTED: 'PRINT999',
+	PRODUCT_UNEXPECTED: 'PRODUCT999',
+	LICENSE_UNEXPECTED: 'LICENSE999',
 } as const satisfies Record<string, ErrorCode>;

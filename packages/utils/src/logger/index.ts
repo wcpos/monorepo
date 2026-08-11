@@ -301,6 +301,22 @@ function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
 	return value.length > max ? value.slice(0, max) : value;
 }
 
+const GENERIC_ERROR_CODES = [
+	['wcpos.pos.checkout.payment', 'PAYMENT999'],
+	['wcpos.payment', 'PAYMENT999'],
+	['wcpos.pos.checkout', 'CHECKOUT999'],
+	['wcpos.checkout', 'CHECKOUT999'],
+	['wcpos.sync', 'SYNC999'],
+	['wcpos.auth', 'AUTH999'],
+	['wcpos.print', 'PRINT999'],
+	['wcpos.product', 'PRODUCT999'],
+	['wcpos.license', 'LICENSE999'],
+] as const satisfies readonly (readonly [string, ErrorCode])[];
+
+function genericErrorCode(category: string | undefined): ErrorCode {
+	return GENERIC_ERROR_CODES.find(([prefix]) => category?.startsWith(prefix))?.[1] ?? 'CLIENT999';
+}
+
 function persistLog(
 	collection: LoggerCollection,
 	level: LogLevel,
@@ -315,6 +331,14 @@ function persistLog(
 		'code',
 		typeof context.errorCode === 'string' ? context.errorCode : undefined
 	);
+	const category = clampColumn(
+		'category',
+		typeof context.category === 'string' ? context.category : undefined
+	);
+	if (level === 'error' && outcome !== 'ok' && !code) {
+		code = genericErrorCode(category);
+		persistedContext = { ...context, errorCode: code, codeFallback: true };
+	}
 	if (outcome === 'ok' && code && ERROR_CATALOGUE[code as ErrorCode]?.severity === 'error') {
 		persistedContext = { ...context };
 		delete persistedContext.errorCode;
@@ -325,10 +349,6 @@ function persistLog(
 		...persistedContext,
 		search: searchableContext(persistedContext),
 	});
-	const category = clampColumn(
-		'category',
-		typeof context.category === 'string' ? context.category : undefined
-	);
 	const identity = JSON.stringify([
 		level,
 		code ?? null,
@@ -979,4 +999,5 @@ export function getLogger(category: string[]): CategoryLogger {
 	return new CategoryLogger(category);
 }
 
+export { mapExceptionToCode } from './map-exception';
 export { log, recorderStats, snapshotRecorder };
