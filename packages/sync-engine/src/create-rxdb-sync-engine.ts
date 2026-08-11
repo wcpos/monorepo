@@ -1514,6 +1514,11 @@ export function createRxdbSyncEngine(
 							await automaticTickGate.runLane(lane);
 						}
 						if (!(await waitForRebaselineAuditWindow(generation))) return;
+						// Revalidate the generation AFTER the wait resolves (coderabbit r3760789110):
+						// a newer rebaseline superseding this continuation must keep ITS hold — a
+						// stale continuation clearing the flag would unguard the new chain's open
+						// window, and its audit runs would race the new chain's seeds.
+						if (generation !== rebaselineGeneration || disposed) return;
 						// Clear the stand-down BEFORE dispatching, so the chain's own audit
 						// runs are never blocked by the guard they resolve.
 						rebaselineHoldActive = false;

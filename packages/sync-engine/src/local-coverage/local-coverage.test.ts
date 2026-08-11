@@ -412,7 +412,10 @@ describe('LocalCoverage interface', () => {
 		await coverage.reconcilePass();
 		expect(fetchedBuckets).toEqual([0, 1, 2, 3]);
 		await coverage.reconcilePass();
-		expect(fetchedBuckets).toEqual([0, 1, 2, 3, 4]);
+		// The fixture keeps every bucket dirty, so after 4 the cursor WRAPS and spends the
+		// tick's spare budget on the still-dirty bucket 0 — per-port wrapping (codex
+		// r3760800575) trades idle budget for continued convergence, always within K=2/tick.
+		expect(fetchedBuckets).toEqual([0, 1, 2, 3, 4, 0]);
 	});
 
 	it('fails closed when a scan page fails', async () => {

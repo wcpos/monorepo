@@ -119,6 +119,7 @@ export async function findExistenceReconcileCandidates(input: {
 		}
 		// Advance past every occupied bucket the fetched window covered; the next fetch opens
 		// at the first still-uncovered occupied bucket, skipping any empty gap in between.
+		const uncoveredBefore = nextUncovered;
 		while (
 			nextUncovered < sortedBuckets.length &&
 			(sortedBuckets[nextUncovered]! + 1) * input.bucketSize - 1 <= page.nextAfterId
@@ -126,6 +127,13 @@ export async function findExistenceReconcileCandidates(input: {
 			nextUncovered += 1;
 		}
 		if (nextUncovered >= sortedBuckets.length) break;
+		// A window that advanced the checkpoint but not past its own target bucket would
+		// re-request the same after_id forever (coderabbit r3760789142) — unreachable with
+		// the server's fixed 50-bucket windows, but a malformed server must burn the error
+		// path, not the page budget.
+		if (nextUncovered === uncoveredBefore) {
+			throw new Error('existence scan window did not cover its target bucket');
+		}
 	}
 
 	const candidates: number[] = [];
@@ -142,11 +150,21 @@ export async function findExistenceReconcileCandidates(input: {
 			continue;
 		}
 		const aggregate = aggregates.get(bucket);
+		// A malformed local digest (legacy/corrupt manifest row) must classify its bucket
+		// as a drill candidate, not throw and fail-close the whole id-space forever
+		// (coderabbit r3760789157) — the drill re-establishes truth for that bucket.
+		let localXor: string | null = null;
+		try {
+			localXor = xor64(local.map(({ digest }) => digest));
+		} catch {
+			localXor = null;
+		}
 		if (
 			!aggregate ||
 			!aggregate.match ||
 			aggregate.storedCount !== local.length ||
-			aggregate.storedDigest !== xor64(local.map(({ digest }) => digest))
+			localXor === null ||
+			aggregate.storedDigest !== localXor
 		) {
 			candidates.push(bucket);
 		}

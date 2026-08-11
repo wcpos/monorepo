@@ -217,6 +217,7 @@ function decodeReconcileCursor(raw: string | null, portCount: number): Reconcile
 
 function selectDrillDowns(candidates: readonly number[][], cursor: ReconcileCursor) {
 	const selected: { port: number; bucket: number }[] = [];
+	const chosen = candidates.map(() => new Set<number>());
 	const tentative = {
 		nextPort: cursor.nextPort,
 		afterBuckets: [...cursor.afterBuckets],
@@ -225,9 +226,16 @@ function selectDrillDowns(candidates: readonly number[][], cursor: ReconcileCurs
 		let found = false;
 		for (let offset = 0; offset < candidates.length; offset += 1) {
 			const port = (tentative.nextPort + offset) % candidates.length;
-			const bucket = candidates[port]!.find((value) => value > tentative.afterBuckets[port]!);
+			// Each port wraps INDEPENDENTLY (codex r3760800575): when nothing sits above the
+			// port's cursor, restart from its lowest un-chosen candidate. A global all-ports
+			// reset would let one busy port starve another port's below-cursor bucket forever.
+			const bucket =
+				candidates[port]!.find(
+					(value) => value > tentative.afterBuckets[port]! && !chosen[port]!.has(value)
+				) ?? candidates[port]!.find((value) => !chosen[port]!.has(value));
 			if (bucket === undefined) continue;
 			selected.push({ port, bucket });
+			chosen[port]!.add(bucket);
 			tentative.afterBuckets[port] = bucket;
 			tentative.nextPort = (port + 1) % candidates.length;
 			found = true;
@@ -253,13 +261,11 @@ function commitDrillDowns(
 		afterBuckets: [...cursor.afterBuckets],
 	};
 	for (const { port, bucket } of completed) {
+		// A wrap selection legitimately moves a port's cursor DOWN — committing the lower
+		// bucket is exactly what makes the next tick continue upward from there. No global
+		// reset: per-port wrapping in selectDrillDowns subsumes it (codex r3760800575).
 		next.afterBuckets[port] = bucket;
 		next.nextPort = (port + 1) % candidates.length;
-	}
-	if (
-		candidates.every((values, port) => values.every((value) => value <= next.afterBuckets[port]!))
-	) {
-		next.afterBuckets.fill(-1);
 	}
 	return next;
 }

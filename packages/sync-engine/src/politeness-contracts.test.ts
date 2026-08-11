@@ -299,12 +299,20 @@ describe('maintenance politeness contracts', () => {
 		try {
 			await seedPopulatedStore(harness);
 			const maintenanceEntries = LANE_REGISTRY.filter((entry) => entry.owner === 'maintenance');
-			expect(maintenanceEntries.every((entry) => entry.maxRequestsPerTick !== null)).toBe(true);
+			// scheduler-drain is the demand-task executor: per-task budgets exist but a per-tick
+			// total would throttle cashier-driven fetches, so it declares null like the demand
+			// lanes (registry comment, codex r3760800564). Every other maintenance lane is bounded.
+			expect(
+				maintenanceEntries.every(
+					(entry) => entry.maxRequestsPerTick !== null || entry.laneName === 'scheduler-drain'
+				)
+			).toBe(true);
 			for (const entry of maintenanceEntries) {
+				if (entry.maxRequestsPerTick === null) continue; // scheduler-drain: demand executor
 				const before = harness.requests.length + queryTotalRequests;
 				await harness.engine.sync(entry.laneName);
 				const observed = harness.requests.length + queryTotalRequests - before;
-				expect(observed, entry.laneName).toBeLessThanOrEqual(entry.maxRequestsPerTick!);
+				expect(observed, entry.laneName).toBeLessThanOrEqual(entry.maxRequestsPerTick);
 			}
 		} finally {
 			await harness.dispose();

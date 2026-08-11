@@ -176,6 +176,52 @@ describe('findExistenceReconcileCandidates', () => {
 		expect(fetchServerScanPage).toHaveBeenCalledTimes(1);
 		expect(result).toEqual({ candidates: [], emptyBuckets: 0, deferred: true });
 	});
+
+	it('throws instead of re-requesting when a window advances but never covers its target bucket', async () => {
+		const fetchServerScanPage = vi.fn(async (afterId: number) => ({
+			changes: [],
+			// Advances the checkpoint, but never past bucket 0's end (999) — a malformed
+			// server must burn the error path, not the page budget (coderabbit r3760789142).
+			nextAfterId: afterId + 100,
+			complete: false,
+		}));
+		await expect(
+			findExistenceReconcileCandidates({
+				buckets: [0, 5],
+				bucketSize: 1000,
+				maxScanPages: 3,
+				readLocalBucket: async (lo) => [L(lo + 1, '7')],
+				fetchServerScanPage,
+			})
+		).rejects.toThrow('did not cover its target bucket');
+		expect(fetchServerScanPage).toHaveBeenCalledTimes(1);
+	});
+
+	it('classifies a bucket with a malformed local digest as a drill candidate instead of throwing', async () => {
+		const result = await findExistenceReconcileCandidates({
+			buckets: [0],
+			bucketSize: 1000,
+			readLocalBucket: async () => [L(1, 'not-a-number')],
+			fetchServerScanPage: async () => ({
+				changes: [
+					{
+						bucket: 0,
+						storedCount: 1,
+						currentCount: 1,
+						storedDigest: '7',
+						currentDigest: '7',
+						match: true,
+					},
+				],
+				nextAfterId: 1000,
+				complete: true,
+			}),
+		});
+
+		// A corrupt manifest row must not fail-close the whole id-space forever — the
+		// drill re-establishes truth for its bucket (coderabbit r3760789157).
+		expect(result).toEqual({ candidates: [0], emptyBuckets: 0 });
+	});
 });
 
 describe('runExistenceReconcile', () => {

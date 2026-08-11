@@ -234,8 +234,12 @@ describe('existence maintenance lanes through the public facade', () => {
 		expect(reconcileEvents.reduce((total, event) => total + Number(event.fields?.pruned), 0)).toBe(
 			2
 		);
+		// 3 distinct missing records, plus one recount: the second pass's spare drill budget
+		// wraps onto a still-mismatched bucket (missing is reported, never fetched, so the
+		// bucket stays a candidate) and its missing row is counted again. Telemetry sums are
+		// per-pass observations, not a distinct-record census.
 		expect(reconcileEvents.reduce((total, event) => total + Number(event.fields?.missing), 0)).toBe(
-			3
+			4
 		);
 		await e.dispose();
 	});

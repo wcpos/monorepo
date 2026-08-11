@@ -63,8 +63,19 @@ export function createAutomaticTickGate(options: {
 	const runLane = (lane: EngineLane): Promise<void> => {
 		const active = laneRuns.get(lane);
 		if (active !== undefined) return active;
-		const started = run(() => options.tickLane(lane), lane);
-		laneRuns.set(lane, started);
+		// Reserve the lane BEFORE the tick starts (codex r3760800569): run()'s synchronous
+		// prefix can itself re-enter runLane for this lane (a reconnect observed by a seed
+		// timer starts the retick chain synchronously). A pre-registered proxy makes the
+		// reservation visible to any such re-entry while the tick still starts synchronously.
+		let settle!: (outcome: Promise<void>) => void;
+		const proxy = new Promise<void>((resolve, reject) => {
+			settle = (outcome) => {
+				void outcome.then(resolve, reject);
+			};
+		});
+		laneRuns.set(lane, proxy);
+		settle(run(() => options.tickLane(lane), lane));
+		const started = proxy;
 		void started.then(
 			() => laneRuns.delete(lane),
 			() => laneRuns.delete(lane)
