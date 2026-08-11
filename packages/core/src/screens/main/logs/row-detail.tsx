@@ -79,6 +79,10 @@ function useSafeActionText(safeAction: CatalogueEntry['safeAction'] | undefined)
 function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
 	const t = useT();
 	const canShare = Platform.OS !== 'web';
+	// Same capability guard as the debug-copy action in logs/index.tsx: outside a
+	// secure context the Clipboard API is absent, and a button that only ever
+	// error-toasts is worse than no button (the text stays selectable).
+	const canCopy = !canShare && typeof navigator !== 'undefined' && !!navigator.clipboard;
 	const handleCopy = React.useCallback(async () => {
 		try {
 			if (canShare) {
@@ -100,17 +104,19 @@ function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
 			<Text selectable className="flex-1 font-mono text-xs">
 				{eventType}
 			</Text>
-			<Button
-				variant="ghost"
-				size="sm"
-				testID={`logs-copy-event-${logId}`}
-				className="h-6 px-2"
-				onPress={() => void handleCopy()}
-			>
-				<ButtonText className="text-xs">
-					{canShare ? t('health.logs.share_event_code') : t('health.logs.copy_event_code')}
-				</ButtonText>
-			</Button>
+			{canShare || canCopy ? (
+				<Button
+					variant="ghost"
+					size="sm"
+					testID={`logs-copy-event-${logId}`}
+					className="h-6 px-2"
+					onPress={() => void handleCopy()}
+				>
+					<ButtonText className="text-xs">
+						{canShare ? t('health.logs.share_event_code') : t('health.logs.copy_event_code')}
+					</ButtonText>
+				</Button>
+			) : null}
 		</HStack>
 	);
 }
