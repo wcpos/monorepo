@@ -485,10 +485,6 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			const completed = selected.filter(
 				({ port }) => perPortSeen[port]!++ < completedByPort[port]!
 			);
-			await cursorSet(
-				EXISTENCE_RECONCILE_CURSOR_KEY,
-				JSON.stringify(commitDrillDowns(candidates, cursor, completed))
-			);
 			const summary = settled.reduce<ReconcileSummary>(
 				(total, result) =>
 					result.status === 'fulfilled'
@@ -512,6 +508,26 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 					),
 				}
 			);
+			try {
+				await cursorSet(
+					EXISTENCE_RECONCILE_CURSOR_KEY,
+					JSON.stringify(commitDrillDowns(candidates, cursor, completed))
+				);
+			} catch (error) {
+				observe({
+					type: 'coverage.existence-reconcile',
+					level: 'warn',
+					message: `Existence reconcile cursor write failed: ${error instanceof Error ? error.message : String(error)}`,
+					fields: {
+						buckets: summary.buckets,
+						emptyBuckets: summary.emptyBuckets,
+						pruned: summary.pruned,
+						missing: summary.missing,
+						changed: summary.changed,
+						skippedDirty: summary.skippedDirty,
+					},
+				});
+			}
 			const failures = settled.flatMap((result) =>
 				result.status === 'rejected' ? [result.reason] : []
 			);

@@ -491,6 +491,66 @@ describe('LocalCoverage interface', () => {
 		expect(slowCompleted).toBe(true);
 	});
 
+	it('reports a cursor write failure without masking completed drills or port failures', async () => {
+		const diagnostics = vi.fn();
+		const cursorSet = vi.fn(async () => {
+			throw new Error('cursor store failed');
+		});
+		const port = (bucket: number, fetchServerBucket: () => Promise<never[]>) => ({
+			bucketSize: 100,
+			occupiedBucketIndexes: async () => [bucket],
+			readManifestRange: async () => [
+				{
+					id: String(bucket * 100 + 1),
+					wooId: bucket * 100 + 1,
+					objectType: 'product' as const,
+					digest: '1',
+				},
+			],
+			dirtyWooIds: async () => new Set<number>(),
+			fetchServerScanPage: async () => ({
+				changes: [
+					{
+						bucket,
+						storedCount: 1,
+						currentCount: 0,
+						storedDigest: '1',
+						currentDigest: '0',
+						match: false,
+					},
+				],
+				nextAfterId: (bucket + 1) * 100,
+				complete: true,
+			}),
+			fetchServerBucket,
+			deleteProducts: vi.fn(async () => undefined),
+			deleteVariations: vi.fn(async () => undefined),
+		});
+		const coverage = createLocalCoverage({
+			database: coverageDatabase() as never,
+			freshForMs: 1,
+			diagnostics,
+			reconcileCursorStore: { get: async () => null, set: cursorSet },
+			reconcile: [
+				port(0, async () => []),
+				port(1, async () => {
+					throw new Error('orders drill failed');
+				}),
+			],
+		});
+
+		await expect(coverage.reconcilePass()).rejects.toThrow(/orders drill failed/);
+		expect(cursorSet).toHaveBeenCalledOnce();
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'coverage.existence-reconcile',
+				level: 'warn',
+				message: expect.stringContaining('cursor store failed'),
+				fields: expect.objectContaining({ pruned: 1 }),
+			})
+		);
+	});
+
 	it('keeps private LocalCoverage axes behind the facade outside tests', () => {
 		const modules = (
 			import.meta as ImportMeta & {
