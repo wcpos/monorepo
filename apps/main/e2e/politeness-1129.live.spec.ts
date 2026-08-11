@@ -41,9 +41,13 @@ const REPLAY_BACKLOG = 5_000;
 const MAX_SCAN_REQUESTS = 9;
 const MAX_BUCKET_REQUESTS = 2;
 
-// The 60s audit hold starts only after the rebaseline's seed + drain lanes finish, so
-// the first audit scan is lifecycle-driven, not clock-driven — allow a slow store time.
-const FIRST_AUDIT_SCAN_TIMEOUT_MS = 240_000;
+// The change-signal lane's idle tick cadence tops out at a 300s tier, so the first
+// post-reload drain poll (the request the forced rebaseline rides on) can be ~5 minutes
+// out. Wait for that lifecycle event first, with its own budget and failure message.
+const DRAIN_POLL_TIMEOUT_MS = 330_000;
+// From the drain, the audit chain still runs seeds + the 60s hold before its first
+// scan — this window starts at the observed drain, not at render.
+const FIRST_AUDIT_SCAN_TIMEOUT_MS = 180_000;
 // The pass has settled when no new audit-shaped request lands for this long.
 const AUDIT_QUIET_MS = 25_000;
 const AUDIT_QUIET_CAP_MS = 150_000;
@@ -108,7 +112,7 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 	test('a forced populated-manifest rebaseline keeps audit traffic out of the open window and within ceilings', async ({
 		page,
 	}, testInfo) => {
-		test.setTimeout(600_000);
+		test.setTimeout(900_000);
 
 		// --- First open: authenticate; catalog-row presence is a prerequisite probe,
 		// not an assertion — a store that cannot populate a manifest has nothing to
@@ -185,13 +189,22 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 			'audit traffic before first catalog render'
 		).toEqual([]);
 
-		// --- Wait for the audit lifecycle, not the clock: the hold starts after the
-		// rebaseline's seeds + drain, so a fixed sleep races slow stores (codex review).
+		// --- Wait for the audit lifecycle, not the clock (codex review), staged on the
+		// two real events: first the drain poll the forced rebaseline rides on (idle
+		// tick cadence can hold it back ~5 minutes), then the audit chain's first scan
+		// (seeds + the 60s hold run between the two).
+		await expect
+			.poll(() => rebaseline.fired(), {
+				timeout: DRAIN_POLL_TIMEOUT_MS,
+				message:
+					'the engine never issued a sequence-log drain poll after reload — no rebaseline could be forced',
+			})
+			.toBe(true);
 		await expect
 			.poll(() => requests.some((entry) => isAuditScan(entry.path)), {
 				timeout: FIRST_AUDIT_SCAN_TIMEOUT_MS,
 				message:
-					'no existence-audit scan observed — the forced rebaseline did not exercise the audit chain',
+					'no existence-audit scan observed after the forced rebaseline — the audit chain did not run',
 			})
 			.toBe(true);
 		// Let the pass settle: quiet for AUDIT_QUIET_MS, capped so a floody regression
