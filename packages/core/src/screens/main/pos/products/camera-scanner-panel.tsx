@@ -6,6 +6,7 @@ import { useCameraPermissions } from 'expo-camera';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { VStack } from '@wcpos/components/vstack';
 
 import { ScannerViewfinder } from './scanner-viewfinder';
@@ -13,6 +14,8 @@ import { type ViewfinderStatus } from './scanner-viewfinder-types';
 import { useCameraScan } from './use-camera-scan';
 import { useT } from '../../../../contexts/translations';
 import { useCameraScanBus } from '../../hooks/barcodes/camera-scan-context';
+import { useEngineStatus } from '../../hooks/use-engine-monitor';
+import { useStorageDegraded } from '../../hooks/use-storage-health';
 
 const FLASH_DURATION_MS = 350;
 
@@ -33,6 +36,9 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 	const [permission, requestPermission] = useCameraPermissions();
 	const { onScan, reset } = useCameraScan();
 	const { events$ } = useCameraScanBus();
+	const engineStatus = useEngineStatus();
+	const { status: onlineStatus } = useOnlineStatus();
+	const storageDegraded = useStorageDegraded();
 	const [status, setStatus] = React.useState<ViewfinderStatus>('initializing');
 	const [flash, setFlash] = React.useState(false);
 	const flashTimeout = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -76,6 +82,24 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 		}
 	}, [status, t]);
 
+	/**
+	 * Quiet heads-up when scans may not fully resolve — this replaced the
+	 * red outage banner that used to sit above the product grid. Local scanning
+	 * still works through an engine outage, so the note informs rather than
+	 * alarms; the scan toast carries the actual error if a lookup fails.
+	 * Storage loss outranks the rest: with no local database nothing can be
+	 * looked up at all.
+	 */
+	const isEngineNotReady =
+		engineStatus.gatedBy === 'lifecycle' || engineStatus.gatedBy === 'bootstrap-failed';
+	const readinessMessage = storageDegraded
+		? t('pos_products.camera_scan_storage_unavailable')
+		: onlineStatus === 'offline'
+			? t('pos_products.camera_scan_offline')
+			: isEngineNotReady
+				? t('pos_products.camera_scan_engine_not_ready')
+				: null;
+
 	if (!granted) {
 		return (
 			<VStack
@@ -112,11 +136,18 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 					testID="camera-scanner-close"
 				/>
 			</View>
-			{statusMessage ? (
-				<View className="absolute inset-x-0 bottom-0 bg-black/60 p-2">
-					<Text className="text-center text-xs text-white" testID="camera-scanner-status">
-						{statusMessage}
-					</Text>
+			{statusMessage || readinessMessage ? (
+				<View className="absolute inset-x-0 bottom-0 gap-1 bg-black/60 p-2">
+					{statusMessage ? (
+						<Text className="text-center text-xs text-white" testID="camera-scanner-status">
+							{statusMessage}
+						</Text>
+					) : null}
+					{readinessMessage ? (
+						<Text className="text-center text-xs text-white/80" testID="camera-scanner-readiness">
+							{readinessMessage}
+						</Text>
+					) : null}
 				</View>
 			) : null}
 		</View>

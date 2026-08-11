@@ -68,10 +68,27 @@ jest.mock('../../../../contexts/translations', () => {
 	return { useT: () => createTestT() };
 });
 
+// Scan-readiness note (replaces the red outage banner above the grid).
+let mockEngineGatedBy: string | null = null;
+let mockOnlineStatus = 'online-website-available';
+let mockStorageDegraded = false;
+jest.mock('../../hooks/use-engine-monitor', () => ({
+	useEngineStatus: () => ({ connectivity: 'online', gatedBy: mockEngineGatedBy }),
+}));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnlineStatus }),
+}));
+jest.mock('../../hooks/use-storage-health', () => ({
+	useStorageDegraded: () => mockStorageDegraded,
+}));
+
 beforeEach(() => {
 	jest.clearAllMocks();
 	mockGranted = true;
 	capturedViewfinderProps = null;
+	mockEngineGatedBy = null;
+	mockOnlineStatus = 'online-website-available';
+	mockStorageDegraded = false;
 });
 
 describe('CameraScannerPanel', () => {
@@ -145,5 +162,60 @@ describe('CameraScannerPanel', () => {
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	// The red outage banner above the grid is gone; opening the camera while
+	// scans may not fully resolve shows a quiet note in the panel instead.
+	it('shows no readiness note while the engine is healthy', () => {
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		expect(screen.queryByTestId('camera-scanner-readiness')).toBeNull();
+	});
+
+	it.each(['lifecycle', 'bootstrap-failed'])(
+		'notes that sync is still starting while gated by %s',
+		(gatedBy) => {
+			mockEngineGatedBy = gatedBy;
+			render(<CameraScannerPanel onClose={jest.fn()} />);
+
+			expect(screen.getByTestId('camera-scanner-readiness').textContent).toContain(
+				'Sync is still starting'
+			);
+		}
+	);
+
+	it('notes local-only scanning while offline', () => {
+		mockOnlineStatus = 'offline';
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		expect(screen.getByTestId('camera-scanner-readiness').textContent).toContain(
+			'only products already on this device'
+		);
+	});
+
+	// #163: a dead storage worker blocks every lookup — that note outranks the rest.
+	it('prefers the storage outage note over an engine outage', () => {
+		mockOnlineStatus = 'offline';
+		mockStorageDegraded = true;
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		expect(screen.getByTestId('camera-scanner-readiness').textContent).toContain(
+			'Local database unavailable'
+		);
+	});
+
+	it('stacks the readiness note under a camera status message', () => {
+		mockEngineGatedBy = 'lifecycle';
+		render(<CameraScannerPanel onClose={jest.fn()} />);
+
+		act(() => {
+			capturedViewfinderProps?.onStatusChange?.('decoder-error' as ViewfinderStatus);
+		});
+		expect(screen.getByTestId('camera-scanner-status').textContent).toContain(
+			'Barcode decoding is failing'
+		);
+		expect(screen.getByTestId('camera-scanner-readiness').textContent).toContain(
+			'Sync is still starting'
+		);
 	});
 });

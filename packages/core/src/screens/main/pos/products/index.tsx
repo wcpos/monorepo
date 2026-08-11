@@ -22,7 +22,7 @@ import { ProductVariationActions } from './cells/variation-actions';
 import { ProductVariationName } from './cells/variation-name';
 import { CameraScanButton } from './camera-scan-button';
 import { CameraScannerPanel } from './camera-scanner-panel';
-import { EngineOutageBanner } from './engine-outage-banner';
+import { StorageOutageBanner } from './storage-outage-banner';
 import { ProductGrid } from './grid';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
@@ -305,7 +305,7 @@ function POSProductsContent({
 								</ErrorBoundary>
 							) : null}
 							<ErrorBoundary>
-								<EngineOutageBanner />
+								<StorageOutageBanner />
 							</ErrorBoundary>
 						</VStack>
 					</ErrorBoundary>

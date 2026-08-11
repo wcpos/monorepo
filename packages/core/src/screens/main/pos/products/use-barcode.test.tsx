@@ -109,6 +109,12 @@ jest.mock('../../../../contexts/app-state', () => ({
 	}),
 }));
 
+// useScanFeedback links the offline toast to the health screen.
+const mockRouterPush = jest.fn();
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ push: mockRouterPush }),
+}));
+
 // Scan sounds are exercised in play-scan-sound's own tests; here they are no-ops
 // so the native/web audio backends never load under jsdom.
 jest.mock('./play-scan-sound', () => ({
@@ -891,7 +897,17 @@ describe('useBarcode online escalation', () => {
 			title: 'pos_products.scan_unavailable',
 			description: 'pos_products.scan_unavailable_description:{"code":"ABC"}',
 			duration: 6000,
+			action: {
+				label: 'pos_products.scan_outage_view_status',
+				onClick: expect.any(Function),
+			},
 		});
+
+		// With no standing outage banner, the toast's action is the only route to
+		// the health screen — it must actually navigate there.
+		const [{ action }] = mockToastShow.mock.calls.at(-1) as [{ action: { onClick: () => void } }];
+		action.onClick();
+		expect(mockRouterPush).toHaveBeenCalledWith('/health/database');
 	});
 
 	// #163: the storage worker died mid-checkout and the whole scan path went
