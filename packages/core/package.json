@@ -111,11 +111,11 @@
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
-		"@testing-library/jest-dom": "^6.9.1",
+		"@testing-library/jest-dom": "^7.0.0",
 		"@testing-library/react": "^16.3.2",
 		"@types/core-js": "^2.5.8",
 		"@types/jest": "^30.0.0",
-		"@types/lodash": "^4.17.24",
+		"@types/lodash": "^4.17.25",
 		"@types/mustache": "^4.2.6",
 		"@types/react": "^19.2.17",
 		"expo-router": "~56.2.10",
@@ -127,7 +127,7 @@
 		"react-native-safe-area-context": "~5.7.0",
 		"react-native-screens": "4.25.2",
 		"react-native-svg": "15.15.4",
-		"ts-jest": "^29.4.11",
+		"ts-jest": "^29.4.12",
 		"victory-native": "^41.26.0"
 	}
 }

@@ -82,10 +82,10 @@
   },
   "devDependencies": {
     "@svgr/cli": "^8.1.0",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/lodash": "^4.17.24",
+    "@testing-library/user-event": "^14.6.3",
+    "@types/lodash": "^4.17.25",
     "expo-haptics": "~56.0.3",
     "expo-image": "~56.0.11",
     "expo-router": "~56.2.10",
