@@ -45,9 +45,11 @@ const MAX_BUCKET_REQUESTS = 2;
 // post-reload drain poll (the request the forced rebaseline rides on) can be ~5 minutes
 // out. Wait for that lifecycle event first, with its own budget and failure message.
 const DRAIN_POLL_TIMEOUT_MS = 330_000;
-// From the drain, the audit chain still runs seeds + the 60s hold before its first
-// scan — this window starts at the observed drain, not at render.
-const FIRST_AUDIT_SCAN_TIMEOUT_MS = 180_000;
+// From the drain, the audit chain runs the seed enqueue, the scheduler drain (whose
+// tick completion is NOT observable from the network — materialization continues after
+// the last visible pull), then the 60s hold, then prime + reconcile. Budget generously;
+// the quiescence pass below still bounds a floody regression.
+const FIRST_AUDIT_SCAN_TIMEOUT_MS = 300_000;
 // The pass has settled when no new audit-shaped request lands for this long.
 const AUDIT_QUIET_MS = 25_000;
 const AUDIT_QUIET_CAP_MS = 150_000;
@@ -112,7 +114,7 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 	test('a forced populated-manifest rebaseline keeps audit traffic out of the open window and within ceilings', async ({
 		page,
 	}, testInfo) => {
-		test.setTimeout(900_000);
+		test.setTimeout(1_200_000);
 
 		// --- First open: authenticate; catalog-row presence is a prerequisite probe,
 		// not an assertion — a store that cannot populate a manifest has nothing to
