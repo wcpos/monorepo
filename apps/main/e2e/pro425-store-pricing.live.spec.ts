@@ -81,8 +81,20 @@ test.describe('pro#425 — store-scoped pricing in the till', () => {
 		await expect(products.getByTestId('search-products')).toBeVisible({ timeout: 60_000 });
 		await products.getByTestId('search-products').fill(PROBE_SLUG);
 
+		// The probe is a PREREQUISITE, not a failure mode: an unprovisioned server is
+		// declared-missing environment, which the repo policy says must skip with a
+		// reason naming what is absent. Waiting out the full 60s and failing on an
+		// invisible row would report "product defect" for "you did not run the
+		// fixture" — the exact confusion this spec exists to avoid.
 		const row = products.getByTestId(`data-table-row-${PROBE_SLUG}`);
-		await expect(row).toBeVisible({ timeout: 60_000 });
+		const probeRendered = await row
+			.waitFor({ state: 'visible', timeout: 60_000 })
+			.then(() => true)
+			.catch(() => false);
+		test.skip(
+			!probeRendered,
+			`probe product "${PROBE_SLUG}" is not in this store's catalogue — provision it with e2e/scripts/pro425-fixture.php`
+		);
 
 		// FIRST: the client must have sent a store scope at all. Before this fix
 		// the v2 lane carried none, which is the root cause of pro#425.
@@ -94,11 +106,20 @@ test.describe('pro#425 — store-scoped pricing in the till', () => {
 		const storeUrl = getStoreUrl(testInfo);
 		const options = storeRequestOptions(getAuthorization());
 		const read = async (headers: Record<string, string>) => {
-			const res = await request.get(`${storeUrl}/wp-json/wcpos/v2/products`, {
-				...options,
-				headers: { ...options.headers, ...headers },
-				params: { ...options.params, search: PROBE_SLUG, per_page: '10' },
-			});
+			// Both permalink styles, per the repo's store-agnostic policy: a plain-
+			// permalink store 404s the pretty /wp-json/ path even though the API is
+			// healthy, which would read as a failure of the thing under test.
+			const get = (url: string, extraParams: Record<string, string> = {}) =>
+				request.get(url, {
+					...options,
+					headers: { ...options.headers, ...headers },
+					params: { ...options.params, ...extraParams, search: PROBE_SLUG, per_page: '10' },
+				});
+
+			let res = await get(`${storeUrl}/wp-json/wcpos/v2/products`);
+			if (res.status() === 404) {
+				res = await get(`${storeUrl}/`, { rest_route: '/wcpos/v2/products' });
+			}
 			expect(res.ok(), `catalogue read failed: ${res.status()}`).toBeTruthy();
 			const rows = (await res.json()) as { slug?: string; regular_price?: string }[];
 			return rows.find((r) => r.slug === PROBE_SLUG)?.regular_price;
@@ -123,11 +144,25 @@ test.describe('pro#425 — store-scoped pricing in the till', () => {
 		});
 
 		// THE assertion: the grid shows this store's price, and not the web store's.
-		expect(rendered, `the till should show store ${scope}'s price`).toContain(
-			normalizeMoney(scopedPrice as string)
+		//
+		// Compared as whole MONEY TOKENS, never as substrings of the row text. A
+		// substring check reports a defect on a correct render whenever one price
+		// is contained in the other — scoped `25.00` against global `5.00` is the
+		// obvious case, and `10.00` against a row rendering `110.00` the subtler
+		// one. Both numbers come from the live server, so that collision is a
+		// matter of which store you point at, not of whether the app is right.
+		const amountsInRow = (rendered.match(/\d+[.,]\d{2}/g) ?? []).map((token) =>
+			Number(normalizeMoney(token)).toFixed(2)
 		);
-		expect(rendered, 'the till must not show the global web-store price').not.toContain(
-			normalizeMoney(globalPrice as string)
-		);
+		const asAmount = (value: string) => Number(normalizeMoney(value)).toFixed(2);
+
+		expect(
+			amountsInRow,
+			`the till should show store ${scope}'s price (row rendered: ${rendered})`
+		).toContain(asAmount(scopedPrice as string));
+		expect(
+			amountsInRow,
+			`the till must not show the global web-store price (row rendered: ${rendered})`
+		).not.toContain(asAmount(globalPrice as string));
 	});
 });

@@ -68,10 +68,18 @@ if ( \count( $stores ) < 2 ) {
 	return;
 }
 
-// Price the first two stores apart; leave the rest unopted on purpose.
+// Price two stores APART — two different overrides are what distinguish "wrote
+// the right store" from "wrote the only store" — and leave every remaining store
+// unopted so the v1-parity case (known store, no override -> global price) stays
+// observable. On a server with exactly two stores there is no third to leave
+// unopted: opt in only the FIRST, so the second serves as the unopted case. The
+// spec never reads this file, so both shapes are valid; it just needs at least
+// one override that differs from the global price.
+$opt_in_count = \count( $stores ) >= 3 ? 2 : 1;
+
 $prices  = array( '20.00', '30.00' );
 $applied = array();
-foreach ( array_slice( $stores, 0, 2 ) as $i => $store ) {
+foreach ( array_slice( $stores, 0, $opt_in_count ) as $i => $store ) {
 	$price = $prices[ $i ];
 	update_post_meta( $id, "_pos_price_fields_store_{$store}", true );
 	update_post_meta( $id, "_pos_regular_price_store_{$store}", $price );
@@ -79,7 +87,7 @@ foreach ( array_slice( $stores, 0, 2 ) as $i => $store ) {
 	update_post_meta( $id, "_pos_price_store_{$store}", $price );
 	$applied[ $store ] = $price;
 }
-foreach ( array_slice( $stores, 2 ) as $store ) {
+foreach ( array_slice( $stores, $opt_in_count ) as $store ) {
 	delete_post_meta( $id, "_pos_price_fields_store_{$store}" );
 }
 
@@ -89,6 +97,6 @@ echo wp_json_encode(
 		'slug'       => $slug,
 		'global'     => wc_get_product( $id )->get_regular_price(),
 		'per_store'  => $applied,
-		'unopted'    => array_values( array_slice( $stores, 2 ) ),
+		'unopted'    => array_values( array_slice( $stores, $opt_in_count ) ),
 	)
 ) . "\n";
