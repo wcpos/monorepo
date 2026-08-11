@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { errors, expect, type Locator, type Page } from '@playwright/test';
 
 import { findVariableProduct, isolatedVariableProductTest as test } from './checkout-probe';
 import { becomesVisible } from './fixtures';
@@ -160,7 +160,19 @@ async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
 			continue;
 		}
 
-		await option.click();
+		// The enabled-check window is racy by nature: a prior selection's
+		// re-filter can disable or detach this option before the click lands, and
+		// click() would then burn its full inherited timeout and THROW — failing
+		// the test instead of moving on. Short explicit timeout; only a
+		// TimeoutError means "state moved on, try the next option".
+		try {
+			await option.click({ timeout: 1_000 });
+		} catch (error) {
+			if (error instanceof errors.TimeoutError) {
+				continue;
+			}
+			throw error;
+		}
 
 		const isReady = await expect
 			.poll(async () => addToCartButton.isVisible().catch(() => false), { timeout: 5_000 })
