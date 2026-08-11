@@ -531,9 +531,26 @@ describe('computeDiscountedLineItems', () => {
 
 		const result = computeDiscountedLineItems(lineItems, [[{ product_id: 1, discount: 50 }]]);
 
-		// 50% discount → taxes halved
-		expect(parseFloat(result[0].taxes![0].total!)).toBeCloseTo(5, 4);
-		expect(parseFloat(result[0].taxes![1].total!)).toBeCloseTo(2.5, 4);
+		// 50% discount → taxes halved and retain the six-decimal contract width.
+		expect(result[0].taxes![0].total).toBe('5.000000');
+		expect(result[0].taxes![1].total).toBe('2.500000');
+	});
+
+	it('preserves fixed-width taxes when discounts match by line index', () => {
+		const lineItems = [
+			{
+				product_id: 1,
+				total: '100',
+				total_tax: '10',
+				taxes: [{ id: 1, subtotal: '10.000000', total: '10.000000' }],
+			},
+		];
+
+		const result = computeDiscountedLineItems(lineItems, [
+			[{ product_id: 1, lineIndex: 0, discount: 50 }],
+		]);
+
+		expect(result[0].taxes![0].total).toBe('5.000000');
 	});
 });
 

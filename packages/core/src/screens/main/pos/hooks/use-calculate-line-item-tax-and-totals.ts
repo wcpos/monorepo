@@ -45,8 +45,15 @@ const consolidateTaxes = (
 
 		return {
 			id,
-			subtotal: noSubtotal ? '' : String(roundedSubtotalTax),
-			total: String(roundedTotalTax),
+			// Fixed contract width, never String(): `String(3.67647)` drops the
+			// trailing zero and emits 5 decimals, which reads as a NARROWER money
+			// value than the 6dp contract. The divergence comparator's rounding-tie
+			// epsilon only forgives a one-microunit gap when BOTH sides were
+			// authored at 6dp, so a dropped zero turned a cross-engine tie into a
+			// cashier-facing "your store changed this order's totals" banner on a
+			// correct sale (woocommerce-pos#1548). Mirrors cart-line.ts.
+			subtotal: noSubtotal ? '' : roundHalfUp(roundedSubtotalTax, 6).toFixed(6),
+			total: roundHalfUp(roundedTotalTax, 6).toFixed(6),
 		};
 	});
 };

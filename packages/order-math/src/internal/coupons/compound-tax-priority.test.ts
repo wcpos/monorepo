@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import { recalculateCoupons } from './recalculate';
+import { calculateOrderTotals } from '../order-totals';
 
 /**
  * woocommerce-pos#1548 — compound-tax sequencing on a DISCOUNTED line.
@@ -116,5 +117,50 @@ describe('#1548 compound tax sequencing on a couponed line', () => {
 		const taxes = recalculate(legacy).lineItems[0].taxes ?? [];
 		expect(Number(taxes.find((tax) => tax.id === 10)?.total)).toBeCloseTo(3.676471, 5);
 		expect(Number(taxes.find((tax) => tax.id === 7)?.total)).toBeCloseTo(0.441176, 5);
+	});
+
+	it('matches WooCommerce cents-precision tax rounding for a quantity-two line', () => {
+		const quantityTwoLine = {
+			...line,
+			quantity: 2,
+			price: 12.5,
+			meta_data: [
+				{
+					key: '_woocommerce_pos_data',
+					value: { price: '12.5', regular_price: '12.5', tax_status: 'taxable' },
+				},
+			],
+		};
+		const replay = recalculateCoupons({
+			lineItems: [quantityTwoLine as never],
+			couponLines: [{ code: 'tenpct', meta_data: [] } as never],
+			couponConfigs,
+			taxRates: [VAT, SURCHARGE],
+			productCategories: new Map(),
+			pricesIncludeTax: true,
+			calcDiscountsSequentially: false,
+			taxRoundAtSubtotal: true,
+			dp: 2,
+		});
+		const totals = calculateOrderTotals({
+			lineItems: replay.lineItems,
+			taxRates: [VAT, SURCHARGE] as never,
+			taxRoundAtSubtotal: true,
+			pricesIncludeTax: true,
+			dp: 2,
+		});
+
+		expect(replay.lineItems[0].taxes).toEqual([
+			expect.objectContaining({ id: 7, total: '0.441176' }),
+			expect.objectContaining({ id: 10, total: '3.676471' }),
+		]);
+		expect(replay.lineItems[0].total).toBe('18.382353');
+		expect(totals.tax_lines).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ rate_id: 10, tax_total: '3.676471' }),
+				expect.objectContaining({ rate_id: 7, tax_total: '0.441176' }),
+			])
+		);
+		expect(totals.cart_tax).toBe('4.117647');
 	});
 });

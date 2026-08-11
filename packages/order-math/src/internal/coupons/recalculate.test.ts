@@ -158,6 +158,47 @@ describe('recalculateCoupons', () => {
 			// With no coupons, total should reset to subtotal
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(100, 2);
 		});
+
+		it('preserves fixed-width half-up taxes during the coupon reset', () => {
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [makePosLineItem(1, 0.10003, 0.10003)],
+					couponLines: [],
+					couponConfigs: new Map(),
+					taxRates: [
+						{
+							id: 1,
+							rate: '5.0000',
+							compound: false,
+							order: 1,
+							class: 'standard',
+						},
+					],
+				})
+			);
+
+			expect(result.lineItems[0].taxes).toEqual([
+				{ id: 1, subtotal: '0.005002', total: '0.005002' },
+			]);
+		});
+
+		it('does not serialize a numeric prefix from a malformed tax value', () => {
+			const lineItem = makePosLineItem(1, 1, 1);
+			lineItem.taxes = [{ id: 1, subtotal: '0.01invalid', total: '0.01' }];
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [lineItem],
+					couponLines: [],
+					couponConfigs: new Map(),
+					taxRates: [{ id: 1, rate: '1.0000', compound: false, order: 1, class: 'standard' }],
+				})
+			);
+
+			expect(result.lineItems[0].taxes).toEqual([
+				{ id: 1, subtotal: '0.01invalid', total: '0.010000' },
+			]);
+		});
 	});
 
 	// -----------------------------------------------------------------------

@@ -71,12 +71,45 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				taxes: [
 					{
 						id: 1,
-						subtotal: '40',
-						total: '40',
+						// 6dp contract width — see the serializer note in the hook.
+						subtotal: '40.000000',
+						total: '40.000000',
 					},
 				],
 			});
 		});
+	});
+
+	it('rounds half-up before padding per-rate taxes', () => {
+		(useTaxRates as jest.Mock).mockReturnValue({
+			pricesIncludeTax: false,
+			priceNumDecimals: 2,
+			taxRoundAtSubtotal: true,
+		});
+		(useCalculateTaxesFromValue as jest.Mock).mockReturnValue({
+			calculateTaxesFromValue: jest.fn(({ amount }) =>
+				calculateTaxes({
+					amount,
+					rates: [{ id: 1, rate: '5.0000', compound: false, order: 1 }],
+					amountIncludesTax: false,
+				})
+			),
+		});
+		(useLineItemData as jest.Mock).mockReturnValue({
+			getLineItemData: jest.fn(() => ({
+				price: 0.10003,
+				regular_price: 0.10003,
+				tax_status: 'taxable',
+			})),
+		});
+
+		const { result } = renderHook(() => useCalculateLineItemTaxAndTotals());
+		const calculated = result.current.calculateLineItemTaxesAndTotals({
+			quantity: 1,
+			tax_class: 'standard',
+		});
+
+		expect(calculated.taxes).toEqual([{ id: 1, subtotal: '0.005002', total: '0.005002' }]);
 	});
 
 	it('should correctly calculate line item tax and totals when prices include tax', () => {
@@ -124,8 +157,8 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				taxes: [
 					{
 						id: 1,
-						subtotal: '33.33',
-						total: '33.33',
+						subtotal: '33.330000',
+						total: '33.330000',
 					},
 				],
 			});
@@ -177,8 +210,8 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				taxes: [
 					{
 						id: 1,
-						subtotal: '12.5',
-						total: '12.5',
+						subtotal: '12.500000',
+						total: '12.500000',
 					},
 				],
 			});
@@ -229,8 +262,8 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				taxes: [
 					{
 						id: 1,
-						subtotal: '20', // subtotal tax on 100
-						total: '20', // total tax on 100
+						subtotal: '20.000000', // subtotal tax on 100
+						total: '20.000000', // total tax on 100
 					},
 				],
 				subtotal_tax: '20',

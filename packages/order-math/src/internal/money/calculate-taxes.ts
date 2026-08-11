@@ -3,7 +3,12 @@ import reverse from 'lodash/reverse';
 import sumBy from 'lodash/sumBy';
 import toNumber from 'lodash/toNumber';
 
-import { getRoundingPrecision, roundHalfUp } from './precision';
+import {
+	addNumberPrecision,
+	getRoundingPrecision,
+	removeNumberPrecision,
+	roundHalfUp,
+} from './precision';
 import { sumTaxes } from './sum-taxes';
 
 /**
@@ -146,15 +151,16 @@ export function calculateTaxes({
 		if ((aState !== '') !== (bState !== '')) return aState !== '' ? -1 : 1;
 		return a.id - b.id;
 	});
-	const roundingPrecision = getRoundingPrecision(dp);
+	const roundingPrecision = dp + getRoundingPrecision(dp);
+	const normalizedAmount = removeNumberPrecision(addNumberPrecision(amount, dp), dp);
 
 	const taxes = amountIncludesTax
-		? calcInclusiveTax({ amount, rates: sortedRates })
-		: calcExclusiveTax({ amount, rates: sortedRates });
+		? calcInclusiveTax({ amount: normalizedAmount, rates: sortedRates })
+		: calcExclusiveTax({ amount: normalizedAmount, rates: sortedRates });
 
 	/**
-	 * WooCommerce rounds each itemized tax to the rounding precision (default 6dp).
-	 * This matches WC_Tax::round() which uses wc_get_rounding_precision().
+	 * WooCommerce calculates in cents space, so WC_Tax::round()'s rounding precision
+	 * is effectively dp + wc_get_rounding_precision() decimals in currency space.
 	 */
 	const roundedItemizedTaxes = taxes.map((tax) => ({
 		id: tax.id,
@@ -162,7 +168,7 @@ export function calculateTaxes({
 	}));
 
 	/**
-	 * Sum the rounded itemized taxes so that itemized taxes always sum to the total.
+	 * Sum before downstream code reduces emitted money strings to 6 currency decimals.
 	 */
 	const total = sumTaxes({ taxes: roundedItemizedTaxes });
 

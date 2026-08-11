@@ -157,8 +157,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shardIndex: [1, 2, 3, 4, 5, 6]
-        shardTotal: [6]
+        # 4, not 6. Each shard carries ~170s of fixed overhead (checkout,
+        # install, browsers, health check, auth bootstrap), so shards are not
+        # free: measured on run 31429108622 the six shards spent ~17 of their
+        # ~25 runner-minutes before running a test. Four duration-balanced shards
+        # finish sooner in wall-clock than six COUNT-balanced ones did, for a
+        # quarter less runner time. Change this number alone — the shard plan
+        # rebalances itself.
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -211,10 +218,27 @@ jobs:
 
       - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
         id: e2e-tests
-        run: cd apps/main && npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+        # Not `--shard`: that splits by TEST COUNT, which on run 31429108622 gave
+        # every shard exactly 26 tests and workloads of 64s .. 473s — the gate
+        # waits for the 473s one. e2e-shard-plan bin-packs whole spec files by
+        # measured duration instead. It reads the file list from disk, so a new
+        # spec always runs (at the median weight) rather than being skipped, and
+        # it fails loudly if the plan is not a clean partition.
+        run: |
+          cd apps/main
+          SPECS=$(node scripts/e2e-shard-plan.js "${{ matrix.shardIndex }}" "${{ matrix.shardTotal }}")
+          echo "Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }} running: $SPECS"
+          # QUOTED: this is one alternation regex, not a word list. Unquoted, the
+          # shell would split it and Playwright ANDs multiple filters — matching
+          # nothing, and a shard that runs zero tests still exits 0.
+          npx playwright test "$SPECS"
         env:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
+          # The shard index no longer reaches Playwright via --shard, but the
+          # cashier-slot isolation is keyed on it. Without this every shard would
+          # normalize to slot 0 and share one cashier.
+          E2E_SHARD_INDEX: ${{ matrix.shardIndex }}
           E2E_CASHIER_PASS: ${{ secrets.E2E_CASHIER_PASS }}
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
