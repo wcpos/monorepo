@@ -67,15 +67,21 @@ const isAuditBucket = (path: string) => path.includes('/integrity/bucket');
 const isSweepScan = (path: string) => path.includes('/integrity/scan') && !isAuditScan(path);
 
 /**
- * Force the engine's own rebaseline branch on the next sequence-log poll: rewrite the
- * response's `checkpoint.head` to sit `REPLAY_BACKLOG + 1` past the client's cursor.
+ * Force the engine's own rebaseline branch on the next sequence-log DRAIN poll: rewrite
+ * the response's `checkpoint.head` to sit `REPLAY_BACKLOG + 1` past the client's cursor.
  * One-shot — later polls hit the real server untouched. Never throws from the route
  * handler (#997): any surprise falls through to the unmodified live response.
+ *
+ * A cold engine first fires a head-priming probe (`fetchHeadSequence`, hardcoded
+ * `limit=1`) that also matches this URL — mutating THAT one merely moves the initial
+ * cursor and wastes the one-shot (first live run failed exactly this way), so only a
+ * real drain page (the 100-row `sequenceLogLimit`) is eligible.
  */
 async function forceRebaselineOnNextPoll(page: Page): Promise<{ fired: () => boolean }> {
 	let fired = false;
 	await page.route('**/changes/sequence-log*', async (route) => {
-		if (fired) {
+		const isHeadPriming = new URL(route.request().url()).searchParams.get('limit') === '1';
+		if (fired || isHeadPriming) {
 			await route.fallback();
 			return;
 		}
