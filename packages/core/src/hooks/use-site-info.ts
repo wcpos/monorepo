@@ -4,6 +4,7 @@ import get from 'lodash/get';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const appLogger = getLogger(['wcpos', 'app', 'site']);
 
@@ -49,6 +50,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 				if (!response || response.status < 200 || response.status >= 300) {
 					const errorMsg = `Invalid response status: ${response?.status}`;
 					appLogger.error('Failed to fetch site info: Invalid response status', {
+						code: ERROR_CODES.SYNC_UNEXPECTED,
 						context: {
 							status: response?.status,
 							statusText: response?.statusText,
@@ -89,6 +91,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				appLogger.error('Failed to fetch site info', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: {
 						error: errorMsg,
 						siteUrl,

@@ -225,8 +225,8 @@ describe('EmailForm', () => {
 		expect(mockLoggerError).toHaveBeenCalledWith(
 			'Failed to send receipt email',
 			expect.objectContaining({
+				code: 'PRINT311',
 				context: expect.objectContaining({
-					errorCode: 'PRINT311',
 					blockCode: 'preflight-offline',
 				}),
 			})

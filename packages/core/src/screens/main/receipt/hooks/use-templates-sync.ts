@@ -12,6 +12,7 @@ import * as React from 'react';
 
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
@@ -51,6 +52,7 @@ export function syncTemplates(collection: RxCollection, httpClient: any): Promis
 			}
 		} catch (error: any) {
 			templatesLogger.error('Failed to sync templates', {
+				code: ERROR_CODES.PRINT_UNEXPECTED,
 				context: { error: error?.message },
 			});
 		} finally {

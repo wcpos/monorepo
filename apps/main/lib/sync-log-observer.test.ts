@@ -3,6 +3,7 @@
 // pattern in metrics.test.ts / create-app-engine.test.ts).
 import type { SyncEvent } from '@wcpos/sync-core';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
+import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { CONFORMANCE_TABLE, createSyncLogObserver } from './sync-log-observer';
 
@@ -30,6 +31,7 @@ describe('createSyncLogObserver', () => {
 		context: Record<string, unknown>;
 		terminal?: LogTerminalFields;
 		toast?: { title: string; description?: string };
+		code?: ErrorCode;
 	}[];
 	let observer: ReturnType<typeof createSyncLogObserver>;
 
@@ -38,8 +40,8 @@ describe('createSyncLogObserver', () => {
 		isVerboseDiagnosticsMock.mockReturnValue(false);
 		rows = [];
 		observer = createSyncLogObserver({
-			persist: (level, message, context, terminal, toast) =>
-				rows.push({ level, message, context, terminal, toast }),
+			persist: (level, message, context, terminal, toast, code) =>
+				rows.push({ level, message, context, terminal, toast, code }),
 			nowMs: () => 2_000,
 		});
 	});
@@ -65,8 +67,8 @@ describe('createSyncLogObserver', () => {
 			})
 		);
 
-		expect(rows[0].context.errorCode).toBe('SYNC401');
-		expect(rows[1].context.errorCode).toBeUndefined();
+		expect(rows[0].code).toBe('SYNC401');
+		expect(rows[1].code).toBeUndefined();
 	});
 
 	it.each([
@@ -76,13 +78,13 @@ describe('createSyncLogObserver', () => {
 	])('resolves transport status %s to %s', (status, errorCode) => {
 		observer.observe(event({ type: 'transport.request', level: 'warn', fields: { status } }));
 
-		expect(rows[0].context.errorCode).toBe(errorCode);
+		expect(rows[0].code).toBe(errorCode);
 	});
 
 	it('stamps a statusless signal tick failure as a crashed task, not unreachable', () => {
 		observer.observe(event({ type: 'signal.tick.error', level: 'error', fields: {} }));
 
-		expect(rows[0].context.errorCode).toBe('SYNC401');
+		expect(rows[0].code).toBe('SYNC401');
 	});
 
 	it.each([
@@ -96,14 +98,14 @@ describe('createSyncLogObserver', () => {
 	])('resolves push.error fields %j to %s', (fields, errorCode) => {
 		observer.observe(event({ type: 'push.error', level: 'error', fields }));
 
-		expect(rows[0].context.errorCode).toBe(errorCode);
+		expect(rows[0].code).toBe(errorCode);
 	});
 
 	it('renders a startup stall at warn per the CLIENT111 ruling', () => {
 		observer.observe(event({ type: 'engine.ready-stalled', level: 'error' }));
 
 		expect(rows[0].level).toBe('warn');
-		expect(rows[0].context.errorCode).toBe('CLIENT111');
+		expect(rows[0].code).toBe('CLIENT111');
 	});
 
 	it('demotes engine.guard warnings to info', () => {

@@ -41,8 +41,8 @@ const useHttpErrorHandler = () => {
 				// SSL certificate error or invalid domain
 				httpLogger.error(extractErrorMessage(res.data, 'SSL certificate error'), {
 					showToast: true,
+					code: ERROR_CODES.TLS_UNTRUSTED,
 					context: {
-						errorCode: ERROR_CODES.TLS_UNTRUSTED,
 						endpoint,
 						wpErrorCode,
 					},
@@ -51,8 +51,8 @@ const useHttpErrorHandler = () => {
 			case 400:
 				httpLogger.error(extractErrorMessage(res.data, 'Bad request'), {
 					showToast: true,
+					code: ERROR_CODES.RECORD_INVALID_FIELD,
 					context: {
-						errorCode: ERROR_CODES.RECORD_INVALID_FIELD,
 						endpoint,
 						wpErrorCode,
 					},
@@ -61,8 +61,8 @@ const useHttpErrorHandler = () => {
 			case 401:
 				httpLogger.error(extractErrorMessage(res.data, 'Authentication failed'), {
 					showToast: true,
+					code: ERROR_CODES.SESSION_EXPIRED,
 					context: {
-						errorCode: ERROR_CODES.SESSION_EXPIRED,
 						endpoint,
 						wpErrorCode,
 					},
@@ -71,8 +71,8 @@ const useHttpErrorHandler = () => {
 			case 403:
 				httpLogger.error(extractErrorMessage(res.data, 'Access forbidden'), {
 					showToast: true,
+					code: ERROR_CODES.INSUFFICIENT_ROLE,
 					context: {
-						errorCode: ERROR_CODES.INSUFFICIENT_ROLE,
 						endpoint,
 						wpErrorCode,
 					},
@@ -81,8 +81,8 @@ const useHttpErrorHandler = () => {
 			case 404:
 				httpLogger.error(extractErrorMessage(res.data, 'Resource not found'), {
 					showToast: true,
+					code: ERROR_CODES.REST_ROUTE_MISSING,
 					context: {
-						errorCode: ERROR_CODES.REST_ROUTE_MISSING,
 						endpoint,
 						wpErrorCode,
 					},
@@ -91,8 +91,8 @@ const useHttpErrorHandler = () => {
 			case 500:
 				httpLogger.error(extractErrorMessage(res.data, 'Internal server error'), {
 					showToast: true,
+					code: ERROR_CODES.STORE_SERVER_ERROR,
 					context: {
-						errorCode: ERROR_CODES.STORE_SERVER_ERROR,
 						endpoint,
 						wpErrorCode,
 					},
@@ -103,8 +103,8 @@ const useHttpErrorHandler = () => {
 			case 504:
 				httpLogger.error(extractErrorMessage(res.data, `Server unavailable (${res.status})`), {
 					showToast: true,
+					code: ERROR_CODES.STORE_SERVER_ERROR,
 					context: {
-						errorCode: ERROR_CODES.STORE_SERVER_ERROR,
 						endpoint,
 						status: res.status,
 						wpErrorCode,
@@ -114,8 +114,8 @@ const useHttpErrorHandler = () => {
 			default:
 				httpLogger.error(extractErrorMessage(res.data, `Unexpected response (${res.status})`), {
 					showToast: true,
+					code: ERROR_CODES.STORE_SERVER_ERROR,
 					context: {
-						errorCode: ERROR_CODES.STORE_SERVER_ERROR,
 						endpoint,
 						status: res.status,
 						wpErrorCode,
@@ -141,7 +141,8 @@ const useHttpErrorHandler = () => {
 				// client never received a response, or request never left
 				httpLogger.error(`Server unavailable: ${endpoint}`, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.SYNC_UNREACHABLE, endpoint },
+					code: ERROR_CODES.SYNC_UNREACHABLE,
+					context: { endpoint },
 				});
 			} else if (isCancel(error)) {
 				// handle cancel - no logging needed for cancelled requests
@@ -151,7 +152,8 @@ const useHttpErrorHandler = () => {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				httpLogger.error(`Network error: ${errorMessage}`, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.SYNC_UNREACHABLE, endpoint },
+					code: ERROR_CODES.SYNC_UNREACHABLE,
+					context: { endpoint },
 				});
 			}
 		},

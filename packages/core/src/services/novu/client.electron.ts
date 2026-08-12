@@ -1,4 +1,5 @@
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { NOVU_CONFIG } from './config';
 
@@ -48,6 +49,7 @@ function getIpcRenderer(): NovuIpcRenderer | null {
 
 function logBridgeError(action: string, error: unknown): void {
 	novuLogger.error(`Novu: Failed to ${action}`, {
+		code: ERROR_CODES.UNEXPECTED_ERROR,
 		context: { error: error instanceof Error ? error.message : String(error) },
 	});
 }

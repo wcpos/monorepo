@@ -102,7 +102,6 @@ export function EditVariationForm({ variation }: Props) {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(t('common.saved', { name: variation.name }), {
 							showToast: true,
-							saveToDb: true,
 							context: {
 								variationId: savedDoc.id,
 								variationName: variation.name,
@@ -112,11 +111,11 @@ export function EditVariationForm({ variation }: Props) {
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('products.failed_to_save_variation'), {
+				mutationLogger.error('Failed to save product variation', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+					toast: { title: t('products.failed_to_save_variation') },
 					context: {
-						errorCode: ERROR_CODES.PRODUCT_UNEXPECTED,
 						variationId: variation.id,
 						error: errorMessage,
 					},

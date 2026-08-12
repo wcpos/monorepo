@@ -64,7 +64,6 @@ export function EditCustomerForm({ customer }: Props) {
 							}),
 							{
 								showToast: true,
-								saveToDb: true,
 								context: {
 									customerId: (savedDoc as { id?: number }).id,
 									customerName: format(savedDoc as import('@wcpos/database').CustomerDocument),
@@ -75,11 +74,11 @@ export function EditCustomerForm({ customer }: Props) {
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('common.failed_to_save_customer'), {
+				mutationLogger.error('Failed to save customer', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.failed_to_save_customer') },
 					context: {
-						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						customerId: customer.id,
 						error: errorMessage,
 					},

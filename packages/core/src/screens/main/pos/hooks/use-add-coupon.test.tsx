@@ -143,7 +143,6 @@ describe('useAddCoupon engine reads', () => {
 		expect(getLogger([]).warn).toHaveBeenCalledWith(
 			'Coupon application rejected',
 			expect.objectContaining({
-				saveToDb: true,
 				context: expect.objectContaining({
 					event: 'coupon.rejected',
 					couponCode: 'bonus',

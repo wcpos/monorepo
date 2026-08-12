@@ -6,6 +6,7 @@ import { map, startWith } from 'rxjs/operators';
 
 import type { NotificationCollection, NotificationDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useNovu } from './config';
 import { useAppState } from '../app-state';
@@ -181,7 +182,10 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 				// Then update Novu
 				await novuMarkAsRead(notificationId);
 			} catch (error) {
-				novuLogger.error('Novu: Failed to mark notification as read', { context: { error } });
+				novuLogger.error('Novu: Failed to mark notification as read', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
+					context: { error },
+				});
 			}
 		},
 		[notificationsCollection]
@@ -209,7 +213,10 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 			// Then update Novu
 			await novuMarkAllAsRead();
 		} catch (error) {
-			novuLogger.error('Novu: Failed to mark all notifications as read', { context: { error } });
+			novuLogger.error('Novu: Failed to mark all notifications as read', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { error },
+			});
 		}
 	}, [notificationsCollection, subscriberId]);
 
@@ -233,7 +240,10 @@ export function NovuNotificationsProvider({ children }: NovuNotificationsProvide
 			// Then update Novu
 			await novuMarkAllAsSeen();
 		} catch (error) {
-			novuLogger.error('Novu: Failed to mark all notifications as seen', { context: { error } });
+			novuLogger.error('Novu: Failed to mark all notifications as seen', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { error },
+			});
 		}
 	}, [notificationsCollection, subscriberId]);
 

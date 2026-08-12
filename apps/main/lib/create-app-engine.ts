@@ -188,8 +188,8 @@ function disposeCachedEngine(entry: CachedEngine): void {
 				forceFreeDatabaseRegistration(databaseName);
 			}
 			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
-					errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 					scopeKey: entry.key,
 					databaseNames: [...entry.databaseNames],
 				},
@@ -332,8 +332,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			},
 			(error) => {
 				engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: {
-						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						scopeKey: cacheKey,
 						error: error instanceof Error ? error.message : String(error),
 					},
@@ -411,8 +411,8 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	// the effect that rebinds the logger database runs, so an epoch captured
 	// here could be permanently stale.
 	const syncLogObserver = createSyncLogObserver({
-		persist: (level, message, context, terminal, toast) => {
-			engineLogger[level](message, {
+		persist: (level, message, context, terminal, toast, code) => {
+			const options = {
 				context,
 				terminal,
 				...(toast
@@ -426,7 +426,15 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 							},
 						}
 					: {}),
-			});
+			};
+			if (level === 'error') {
+				engineLogger.error(message, {
+					...options,
+					code: code ?? ERROR_CODES.SYNC_UNEXPECTED,
+				});
+			} else {
+				engineLogger[level](message, { ...options, ...(code ? { code } : {}) });
+			}
 		},
 	});
 

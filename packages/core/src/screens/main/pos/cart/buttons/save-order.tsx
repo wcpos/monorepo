@@ -49,7 +49,6 @@ export function SaveButton() {
 					const orderDoc = savedDoc as unknown as OrderDocument;
 					cartLogger.success(t('common.order_saved', { number: orderDoc.number }), {
 						showToast: true,
-						saveToDb: true,
 						context: {
 							orderId: orderDoc.id,
 							orderNumber: orderDoc.number,
@@ -59,11 +58,11 @@ export function SaveButton() {
 			});
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			cartLogger.error(t('common.failed_to_save_order'), {
+			cartLogger.error('Failed to save order', {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.SYNC_UNEXPECTED,
+				toast: { title: t('common.failed_to_save_order') },
 				context: {
-					errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 					orderId: currentOrder.id,
 					error: errorMessage,
 				},

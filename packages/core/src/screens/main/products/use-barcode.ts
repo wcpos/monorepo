@@ -31,15 +31,14 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 		if (isError) {
 			barcodeLogger.error(text1, {
 				showToast: true,
-				saveToDb: true,
 				toast: {
 					text2,
 				},
+				code:
+					results.length === 0
+						? ERROR_CODES.SEARCH_NO_RESULTS_REASON
+						: ERROR_CODES.BARCODE_AMBIGUOUS,
 				context: {
-					errorCode:
-						results.length === 0
-							? ERROR_CODES.SEARCH_NO_RESULTS_REASON
-							: ERROR_CODES.BARCODE_AMBIGUOUS,
 					barcode,
 					resultsCount: results.length,
 				},
@@ -62,7 +61,9 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 	useSubscription(
 		barcode$,
 		(rawBarcode) =>
-			void handleBarcode(rawBarcode).catch((error) => barcodeLogger.error(String(error)))
+			void handleBarcode(rawBarcode).catch((error) =>
+				barcodeLogger.error(String(error), { code: ERROR_CODES.PRODUCT_UNEXPECTED })
+			)
 	);
 
 	return { onKeyPress };

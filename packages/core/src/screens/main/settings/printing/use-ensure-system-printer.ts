@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { StoreDatabase } from '@wcpos/database';
 
 const logger = getLogger(['wcpos', 'printing', 'system-printer']);
@@ -42,6 +43,7 @@ export function useEnsureSystemPrinter(storeDB: StoreDatabase) {
 			})
 			.catch((err) => {
 				logger.error('Failed to ensure system printer', {
+					code: ERROR_CODES.PRINT_UNEXPECTED,
 					context: { error: err instanceof Error ? err.message : String(err) },
 				});
 			});

@@ -4,6 +4,7 @@ import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { RxDBBackend } from './rxdb-backend';
 import en from './locales/en/core.json';
@@ -43,7 +44,10 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 				},
 			})
 			.catch((error) =>
-				translationLogger.error('Failed to initialize translations', { context: { error } })
+				translationLogger.error('Failed to initialize translations', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
+					context: { error },
+				})
 			);
 		return instance;
 	}, [locale, translationsState]);
@@ -53,11 +57,12 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 	 */
 	React.useEffect(() => {
 		if (i18nInstance.language !== locale) {
-			void i18nInstance
-				.changeLanguage(locale)
-				.catch((error) =>
-					translationLogger.error('Failed to change language', { context: { error } })
-				);
+			void i18nInstance.changeLanguage(locale).catch((error) =>
+				translationLogger.error('Failed to change language', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
+					context: { error },
+				})
+			);
 		}
 	}, [locale, i18nInstance]);
 

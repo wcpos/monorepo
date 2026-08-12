@@ -74,9 +74,8 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 	} catch (error) {
 		dbLogger.error('Failed to clear databases', {
 			showToast: true,
-			saveToDb: true,
+			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: {
-				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				error: error instanceof Error ? error.message : String(error),
 			},
 		});

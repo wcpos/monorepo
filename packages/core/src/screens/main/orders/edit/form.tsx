@@ -162,7 +162,6 @@ export function EditOrderForm({ order }: Props) {
 						const doc = savedDoc as unknown as { id?: number; number?: string };
 						mutationLogger.success(t('common.order_saved', { number: doc.number }), {
 							showToast: true,
-							saveToDb: true,
 							context: {
 								orderId: doc.id,
 								orderNumber: doc.number,
@@ -172,11 +171,11 @@ export function EditOrderForm({ order }: Props) {
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('common.failed_to_save_order'), {
+				mutationLogger.error('Failed to save order', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.failed_to_save_order') },
 					context: {
-						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						orderId: order.id,
 						error: errorMessage,
 					},
@@ -235,8 +234,8 @@ export function EditOrderForm({ order }: Props) {
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error('Error fetching customer', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: {
-						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						customerId,
 						error: errorMessage,
 					},
@@ -260,8 +259,8 @@ export function EditOrderForm({ order }: Props) {
 		if (selectedCustomer === undefined) return;
 		if (selectedCustomer === null) {
 			mutationLogger.error('Error fetching customer', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
-					errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 					customerId: customerIdToLoad,
 					error: t('orders.customer_not_found'),
 				},

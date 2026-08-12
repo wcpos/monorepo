@@ -134,9 +134,8 @@ export const useAuthErrorHandler = (
 			.catch((authError) => {
 				authLogger.warn('promptAsync rejected - Authentication failed', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.AUTH_UNEXPECTED,
 					context: {
-						errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 						siteName: site.name,
 						error: authError instanceof Error ? authError.message : String(authError),
 					},
@@ -177,9 +176,8 @@ export const useAuthErrorHandler = (
 				if (returnedUserId && expectedUserId && String(returnedUserId) !== String(expectedUserId)) {
 					authLogger.error('Security: Logged in as different user than expected', {
 						showToast: true,
-						saveToDb: true,
+						code: ERROR_CODES.SIGNED_IN_AS_WRONG_USER,
 						context: {
-							errorCode: ERROR_CODES.SIGNED_IN_AS_WRONG_USER,
 							expectedUserId,
 							returnedUserId,
 							siteName: site.name,
@@ -208,7 +206,6 @@ export const useAuthErrorHandler = (
 
 				authLogger.success('Successfully logged in', {
 					showToast: true,
-					saveToDb: true,
 					context: {
 						siteName: site.name,
 						userId: wpCredentials.id,
@@ -217,9 +214,8 @@ export const useAuthErrorHandler = (
 			} catch (error) {
 				authLogger.error('Failed to save login credentials', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
-						errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						siteName: site.name,
 						error: error instanceof Error ? error.message : String(error),
 					},
@@ -234,9 +230,8 @@ export const useAuthErrorHandler = (
 			// authFailed stays true - user needs to try again
 			authLogger.warn('Login failed - please check your credentials', {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.CREDENTIALS_REJECTED,
 				context: {
-					errorCode: ERROR_CODES.CREDENTIALS_REJECTED,
 					siteName: site.name,
 					errorDetails: response.error,
 				},
@@ -252,7 +247,6 @@ export const useAuthErrorHandler = (
 			// User must click [Login] or interact with UI to retry
 			authLogger.info('Login cancelled', {
 				showToast: true,
-				saveToDb: true,
 				context: {
 					siteName: site.name,
 					status: response.type,
@@ -337,15 +331,14 @@ export const useAuthErrorHandler = (
 					authLogger.debug('Auth required (pre-flight blocked), showing toast');
 					authLogger.warn('Please log in to continue', {
 						showToast: true,
-						saveToDb: true,
 						toast: {
 							action: {
 								label: 'Login',
 								onClick: () => triggerAuthFlow(),
 							},
 						},
+						code: ERROR_CODES.SESSION_EXPIRED,
 						context: {
-							errorCode: ERROR_CODES.SESSION_EXPIRED,
 							siteName: site.name,
 						},
 					});

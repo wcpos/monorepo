@@ -99,8 +99,8 @@ const normalizeLineItemImage = (
 export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
 	if (!Array.isArray(metaData)) {
 		posLogger.error('metaData is not an array', {
+			code: ERROR_CODES.CHECKOUT_UNEXPECTED,
 			context: {
-				errorCode: ERROR_CODES.CHECKOUT_UNEXPECTED,
 				metaData,
 			},
 		});
@@ -132,8 +132,8 @@ export const findByProductVariationID = (
 ) => {
 	if (!Array.isArray(lineItems)) {
 		posLogger.error('lineItems is not an array', {
+			code: ERROR_CODES.CHECKOUT_UNEXPECTED,
 			context: {
-				errorCode: ERROR_CODES.CHECKOUT_UNEXPECTED,
 				lineItems,
 				productId,
 				variationId,

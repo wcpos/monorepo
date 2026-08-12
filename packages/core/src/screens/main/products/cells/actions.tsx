@@ -24,6 +24,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { CapabilityTooltip } from '../../components/capability-tooltip';
@@ -59,8 +60,8 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 			.finally(() => handle.release())
 			.catch((error) => {
 				syncLogger.error('Failed to refresh product', {
+					code: ERROR_CODES.PRODUCT_UNEXPECTED,
 					showToast: true,
-					saveToDb: true,
 					context: {
 						productId: product.id,
 						error: error instanceof Error ? error.message : String(error),

@@ -118,7 +118,6 @@ export function useRefundMutation() {
 				// so a retry POSTs a SECOND refund. Log it; the local order heals on
 				// the next sync pass.
 				refundLogger.warn('Refund succeeded but the local order refresh failed', {
-					saveToDb: true,
 					context: {
 						orderId: order.id,
 						error: error instanceof Error ? error.message : String(error),

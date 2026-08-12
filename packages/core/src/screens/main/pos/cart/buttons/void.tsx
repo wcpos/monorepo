@@ -80,9 +80,8 @@ export function VoidButton() {
 			} catch (err) {
 				cartLogger.error('Failed to restore order', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
-						errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						orderId: orderJson.uuid,
 						error: err instanceof Error ? err.message : String(err),
 					},
@@ -109,7 +108,6 @@ export function VoidButton() {
 		const showSuccess = (message: string) => {
 			cartLogger.success(message, {
 				showToast: true,
-				saveToDb: true,
 				toast: {
 					dismissable: true,
 					action: {
@@ -142,9 +140,8 @@ export function VoidButton() {
 			} catch (err) {
 				cartLogger.error('Failed to void order', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					context: {
-						errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						orderId: recordId,
 						error: err instanceof Error ? err.message : String(err),
 					},

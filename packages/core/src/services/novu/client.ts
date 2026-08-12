@@ -1,6 +1,7 @@
 import { type Notification, Novu } from '@novu/js';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { NOVU_CONFIG } from './config';
 
@@ -283,7 +284,9 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
  */
 export async function fetchNotifications(limit = 50): Promise<NovuNotification[]> {
 	if (!novuClient) {
-		novuLogger.error('Novu: Cannot fetch notifications - client not initialized');
+		novuLogger.error('Novu: Cannot fetch notifications - client not initialized', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
+		});
 		return [];
 	}
 
@@ -292,6 +295,7 @@ export async function fetchNotifications(limit = 50): Promise<NovuNotification[]
 
 		if (error) {
 			novuLogger.error('Novu: Failed to fetch notifications', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: error.message },
 			});
 			return [];
@@ -304,6 +308,7 @@ export async function fetchNotifications(limit = 50): Promise<NovuNotification[]
 		return data?.notifications || [];
 	} catch (error) {
 		novuLogger.error('Novu: Failed to fetch notifications', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: error instanceof Error ? error.message : String(error) },
 		});
 		return [];
@@ -320,6 +325,7 @@ export async function markAsRead(notificationId: string): Promise<boolean> {
 		const { error } = await novuClient.notifications.read({ notificationId });
 		if (error) {
 			novuLogger.error('Novu: Failed to mark as read', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { notificationId, error: error.message },
 			});
 			return false;
@@ -327,6 +333,7 @@ export async function markAsRead(notificationId: string): Promise<boolean> {
 		return true;
 	} catch (error) {
 		novuLogger.error('Novu: Failed to mark as read', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { notificationId, error: error instanceof Error ? error.message : String(error) },
 		});
 		return false;
@@ -343,6 +350,7 @@ export async function markAllAsRead(): Promise<boolean> {
 		const { error } = await novuClient.notifications.readAll();
 		if (error) {
 			novuLogger.error('Novu: Failed to mark all as read', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: error.message },
 			});
 			return false;
@@ -350,6 +358,7 @@ export async function markAllAsRead(): Promise<boolean> {
 		return true;
 	} catch (error) {
 		novuLogger.error('Novu: Failed to mark all as read', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: error instanceof Error ? error.message : String(error) },
 		});
 		return false;
@@ -366,6 +375,7 @@ export async function markAsSeen(notificationId: string): Promise<boolean> {
 		const { error } = await novuClient.notifications.seen({ notificationId });
 		if (error) {
 			novuLogger.error('Novu: Failed to mark as seen', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { notificationId, error: error.message },
 			});
 			return false;
@@ -373,6 +383,7 @@ export async function markAsSeen(notificationId: string): Promise<boolean> {
 		return true;
 	} catch (error) {
 		novuLogger.error('Novu: Failed to mark as seen', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { notificationId, error: error instanceof Error ? error.message : String(error) },
 		});
 		return false;
@@ -389,6 +400,7 @@ export async function markAllAsSeen(): Promise<boolean> {
 		const { error } = await novuClient.notifications.seenAll();
 		if (error) {
 			novuLogger.error('Novu: Failed to mark all as seen', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: error.message },
 			});
 			return false;
@@ -396,6 +408,7 @@ export async function markAllAsSeen(): Promise<boolean> {
 		return true;
 	} catch (error) {
 		novuLogger.error('Novu: Failed to mark all as seen', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: error instanceof Error ? error.message : String(error) },
 		});
 		return false;
@@ -412,6 +425,7 @@ export async function getUnreadCount(): Promise<number> {
 		const { data, error } = await novuClient.notifications.count({ read: false });
 		if (error) {
 			novuLogger.error('Novu: Failed to get unread count', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: error.message },
 			});
 			return 0;
@@ -419,6 +433,7 @@ export async function getUnreadCount(): Promise<number> {
 		return data?.count ?? 0;
 	} catch (error) {
 		novuLogger.error('Novu: Failed to get unread count', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: error instanceof Error ? error.message : String(error) },
 		});
 		return 0;

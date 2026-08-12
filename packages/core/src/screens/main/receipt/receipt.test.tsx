@@ -322,7 +322,6 @@ describe('Receipt PDF download action', () => {
 		expect(getLogger([]).info).toHaveBeenCalledWith(
 			'Receipt print attempted',
 			expect.objectContaining({
-				saveToDb: true,
 				context: expect.objectContaining({
 					event: 'receipt.print_attempted',
 					orderId: 'local-order-42',

@@ -65,9 +65,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 			const message = error instanceof Error ? error.message : String(error);
 			mutationLogger.error(message, {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
-					errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 					collectionName,
 					endpoint,
 					operation: 'mutation',
@@ -82,7 +81,6 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 		(document: Record<string, unknown>) => {
 			mutationLogger.success(t('common.saved_2', { id: document.id, title: collectionLabel }), {
 				showToast: true,
-				saveToDb: true,
 				context: {
 					documentId: document.id,
 					collectionName,

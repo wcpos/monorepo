@@ -7,7 +7,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, resolveScan } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
@@ -102,10 +102,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				throw error;
 			}
 			scan.storageUnavailable(barcodeStr);
-			barcodeLogger.error(t('common.barcode_scanned', { barcode: barcodeStr }), {
-				saveToDb: true,
+			barcodeLogger.error('Barcode scan failed because local storage is unavailable', {
+				code: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 				context: {
-					errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 					barcode: barcodeStr,
 					error: error instanceof Error ? error.message : String(error),
 				},
@@ -135,10 +134,9 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const showAmbiguousResults = (count: number) => {
 			scan.ambiguous(count, barcodeStr);
-			barcodeLogger.error(text1, {
-				saveToDb: true,
+			barcodeLogger.error('Barcode scan matched multiple products', {
+				code: ERROR_CODES.BARCODE_AMBIGUOUS,
 				context: {
-					errorCode: ERROR_CODES.BARCODE_AMBIGUOUS,
 					barcode: barcodeStr,
 					resultsCount: count,
 				},
@@ -148,22 +146,20 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const showNotFound = () => {
 			scan.notFound(barcodeStr);
-			barcodeLogger.error(text1, {
-				saveToDb: true,
+			barcodeLogger.error('Barcode scan did not match a product', {
+				code: ERROR_CODES.SEARCH_NO_RESULTS_REASON,
 				context: {
-					errorCode: ERROR_CODES.SEARCH_NO_RESULTS_REASON,
 					barcode: barcodeStr,
 				},
 			});
 			guardedSetSearch(barcodeStr);
 		};
 
-		const showLookupError = (errorCode: string, error?: string) => {
+		const showLookupError = (errorCode: ErrorCode, error?: string) => {
 			scan.error(barcodeStr);
-			barcodeLogger.error(text1, {
-				saveToDb: true,
+			barcodeLogger.error('Barcode lookup failed', {
+				code: errorCode,
 				context: {
-					errorCode,
 					barcode: barcodeStr,
 					...(error ? { error } : {}),
 				},
@@ -198,8 +194,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			const engineStatus = runtime.engine.status();
 			if (engineStatus.connectivity === 'offline') {
 				scan.unavailable(barcodeStr);
-				barcodeLogger.warn(text1, {
-					saveToDb: true,
+				barcodeLogger.warn('Barcode online lookup skipped because the sync engine is offline', {
 					context: {
 						barcode: barcodeStr,
 						connectivity: engineStatus.connectivity,
@@ -383,7 +378,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			: product.stock_status !== 'instock';
 		if (!showOutOfStock && outOfStock) {
 			scan.outOfStock(product.name ?? '', barcodeStr);
-			barcodeLogger.warn(text1, {
+			barcodeLogger.warn('Barcode scan matched an out-of-stock product', {
 				context: {
 					barcode: barcodeStr,
 					productId: product.id,
@@ -467,7 +462,6 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		 */
 		scan.added(product.name ?? '');
 		barcodeLogger.success(text1, {
-			saveToDb: true,
 			context: {
 				barcode: barcodeStr,
 				productId: product.id,
@@ -481,7 +475,10 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 	useSubscription(
 		scanEvents$,
-		(event) => void handleScan(event).catch((error) => barcodeLogger.error(String(error)))
+		(event) =>
+			void handleScan(event).catch((error) =>
+				barcodeLogger.error(String(error), { code: ERROR_CODES.PRODUCT_UNEXPECTED })
+			)
 	);
 
 	return { onKeyPress };

@@ -62,7 +62,6 @@ describe('useHttpClient network audit logs', () => {
 		);
 
 		expect(loggerMock.__info).toHaveBeenCalledWith('HTTP request completed', {
-			saveToDb: true,
 			context: expect.objectContaining({
 				method: 'POST',
 				endpoint: '/wc/v3/orders',
@@ -85,7 +84,6 @@ describe('useHttpClient network audit logs', () => {
 		).rejects.toBe(failure);
 
 		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
-			saveToDb: true,
 			context: expect.objectContaining({
 				method: 'GET',
 				endpoint: '/wc/v3/products',
@@ -113,7 +111,6 @@ describe('useHttpClient network audit logs', () => {
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
 		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
-			saveToDb: true,
 			context: expect.objectContaining({
 				errorCode: 'SYNC131',
 				serverCode: 'merchant_plugin_unknown_error',
@@ -130,7 +127,6 @@ describe('useHttpClient network audit logs', () => {
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
 		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
-			saveToDb: true,
 			context: expect.objectContaining({
 				status: 0,
 				errorCode: 'CLIENT999',

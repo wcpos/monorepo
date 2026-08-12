@@ -47,7 +47,6 @@ export function AddCustomerScreen() {
 				if (savedDoc) {
 					mutationLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 						showToast: true,
-						saveToDb: true,
 						context: {
 							customerId: (savedDoc as any).id,
 							customerName: format(savedDoc as any),
@@ -56,11 +55,11 @@ export function AddCustomerScreen() {
 				}
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('common.failed_to_save_customer'), {
+				mutationLogger.error('Failed to save customer', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.failed_to_save_customer') },
 					context: {
-						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						error: errorMessage,
 					},
 				});

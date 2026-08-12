@@ -52,7 +52,6 @@ export const useAddCoupon = () => {
 		async (couponCode: string) => {
 			const rejectCoupon = (reason: string) => {
 				orderLogger.warn('Coupon application rejected', {
-					saveToDb: true,
 					context: {
 						event: 'coupon.rejected',
 						couponCode: couponCode.toLowerCase().trim(),
@@ -226,7 +225,6 @@ export const useAddCoupon = () => {
 					(cl: any) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
 				);
 				orderLogger.info(t('pos_cart.coupon_applied'), {
-					saveToDb: true,
 					context: {
 						couponCode: couponData.code,
 						discountType: couponData.discount_type,
@@ -236,19 +234,18 @@ export const useAddCoupon = () => {
 
 				return { success: true };
 			} catch (error) {
-				orderLogger.error(
-					t('common.there_was_an_error', {
-						message: error instanceof Error ? error.message : String(error),
-					}),
-					{
-						showToast: true,
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.CART_UPDATE_FAILED,
-							error: error instanceof Error ? error.message : String(error),
-						},
-					}
-				);
+				orderLogger.error('Local mutation failed', {
+					showToast: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: {
+						title: t('common.there_was_an_error', {
+							message: error instanceof Error ? error.message : String(error),
+						}),
+					},
+					context: {
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
 				return {
 					success: false,
 					error: error instanceof Error ? error.message : String(error),

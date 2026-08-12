@@ -92,6 +92,7 @@ export function EmailForm({ order }: Props) {
 				return true;
 			} catch (error) {
 				queueLogger.error('Failed to queue receipt email', {
+					code: ERROR_CODES.PRINT_UNEXPECTED,
 					context: {
 						orderId: orderID,
 						email,
@@ -126,7 +127,6 @@ export function EmailForm({ order }: Props) {
 					if (data && data.success) {
 						httpLogger.success(t('receipt.email_sent'), {
 							showToast: true,
-							saveToDb: true,
 							context: {
 								orderId: orderID,
 								email,
@@ -146,15 +146,15 @@ export function EmailForm({ order }: Props) {
 					}
 					httpLogger.error('Failed to send receipt email', {
 						showToast: true,
-						saveToDb: true,
 						toast: { text2: failure.reason },
+						code: ERROR_CODES.RECEIPT_DELIVERY_FAILED,
 						context: {
-							errorCode: failure.code ?? ERROR_CODES.RECEIPT_DELIVERY_FAILED,
 							blockCode: failure.blockCode,
 							orderId: orderID,
 							email,
 							status: failure.status,
 							error: failure.reason,
+							serverCode: failure.code,
 						},
 					});
 				}

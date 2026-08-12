@@ -118,7 +118,6 @@ export const useRemoveLineItem = () => {
 					}),
 					{
 						showToast: true,
-						saveToDb: true,
 						toast: {
 							dismissable: true,
 							action: {

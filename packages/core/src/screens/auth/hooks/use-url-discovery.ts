@@ -150,7 +150,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const errorMsg = t('auth.url_is_required');
 				discoveryLogger.error(errorMsg, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.STORE_URL_INVALID },
+					code: ERROR_CODES.STORE_URL_INVALID,
 				});
 				setError(errorMsg);
 				throw new Error(errorMsg);

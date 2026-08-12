@@ -51,7 +51,6 @@ export function EditCouponForm({ coupon }: Props) {
 				}
 				mutationLogger.success(t('common.saved', { name: (savedDoc as { code?: string }).code }), {
 					showToast: true,
-					saveToDb: true,
 					context: {
 						couponId: (savedDoc as { id?: number }).id,
 						couponCode: (savedDoc as { code?: string }).code,
@@ -59,11 +58,11 @@ export function EditCouponForm({ coupon }: Props) {
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('coupons.failed_to_save_coupon'), {
+				mutationLogger.error('Failed to save coupon', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('coupons.failed_to_save_coupon') },
 					context: {
-						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						couponId: coupon.id,
 						error: errorMessage,
 					},

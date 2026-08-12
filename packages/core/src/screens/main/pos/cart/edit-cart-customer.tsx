@@ -115,11 +115,11 @@ export function EditCartCustomerForm() {
 		try {
 			const customer = await findCustomerByWooId(runtime, wooCustomerId);
 			if (!customer) {
-				cartLogger.error(t('common.no_customer_found'), {
+				cartLogger.error('Customer record was not found', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.no_customer_found') },
 					context: {
-						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						customerId: wooCustomerId,
 					},
 				});
@@ -136,7 +136,6 @@ export function EditCartCustomerForm() {
 			if (savedDoc) {
 				cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 					showToast: true,
-					saveToDb: true,
 					context: {
 						customerId: (savedDoc as any).id,
 						customerName: format(savedDoc as any),
@@ -146,11 +145,11 @@ export function EditCartCustomerForm() {
 			onOpenChange(false);
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			cartLogger.error(t('common.failed_to_save_customer'), {
+			cartLogger.error('Failed to save customer', {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+				toast: { title: t('common.failed_to_save_customer') },
 				context: {
-					errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					customerId: wooCustomerId,
 					error: errorMessage,
 				},

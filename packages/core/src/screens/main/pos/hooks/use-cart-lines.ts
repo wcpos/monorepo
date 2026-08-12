@@ -4,6 +4,7 @@ import { useObservable, useObservableEagerState, useSubscription } from 'observa
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { calculateOrderTotals } from './calculate-order-totals';
@@ -261,9 +262,9 @@ export const useCartLines = () => {
 					// Capped out. The next cart edit re-runs the replay, but the cashier must
 					// hear about it NOW: the cart is showing totals the engine knows it could
 					// not refresh (cashier-full-information ruling, 2026-08-07).
-					cartLogger.warn(t('pos_cart.coupon_refresh_timeout'), {
+					cartLogger.warn('Coupon reference refresh timed out', {
 						showToast: true,
-						saveToDb: true,
+						toast: { title: t('pos_cart.coupon_refresh_timeout') },
 						context: { generation: continuation.generation },
 					});
 					return;
@@ -281,7 +282,9 @@ export const useCartLines = () => {
 				// proved the two are equal by VALUE, and this way the continuation holds no order
 				// document alive for the length of its wait.
 				await continuation.replay(latest);
-			})().catch((error) => cartLogger.error(String(error)));
+			})().catch((error) =>
+				cartLogger.error(String(error), { code: ERROR_CODES.CHECKOUT_UNEXPECTED })
+			);
 		},
 		[
 			couponReferenceGeneration,
@@ -351,7 +354,10 @@ export const useCartLines = () => {
 
 	useSubscription(
 		cartTotal$,
-		() => void handleCartTotalChange().catch((error) => cartLogger.error(String(error)))
+		() =>
+			void handleCartTotalChange().catch((error) =>
+				cartLogger.error(String(error), { code: ERROR_CODES.CHECKOUT_UNEXPECTED })
+			)
 	);
 
 	return cartLines;

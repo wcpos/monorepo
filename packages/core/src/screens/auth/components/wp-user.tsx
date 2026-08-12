@@ -17,6 +17,7 @@ import { Loader } from '@wcpos/components/loader';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useLoginHandler } from '../hooks/use-login-handler';
 import { useT } from '../../../contexts/translations';
@@ -71,6 +72,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 		if (response.type === 'success') {
 			if (!response.params) {
 				authLogger.error('Re-authentication succeeded without credentials', {
+					code: ERROR_CODES.AUTH_UNEXPECTED,
 					showToast: true,
 					context: { siteName: site.name, response },
 				});
@@ -90,6 +92,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 				} catch (error) {
 					processedResponseRef.current = null;
 					authLogger.error('Failed to finish re-authentication', {
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 						showToast: true,
 						context: { siteName: site.name, error },
 					});
@@ -97,6 +100,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			})();
 		} else if (response.type === 'error') {
 			authLogger.error(`Re-authentication failed: ${response.error}`, {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
 				showToast: true,
 				context: { siteName: site.name, response },
 			});

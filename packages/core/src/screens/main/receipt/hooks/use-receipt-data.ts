@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
@@ -95,7 +96,7 @@ export function useReceiptData({
 
 				const error = err instanceof Error ? err : new Error(String(err));
 				logger.error('Failed to fetch receipt data', {
-					saveToDb: true,
+					code: ERROR_CODES.PRINT_UNEXPECTED,
 					context: { orderId, mode, error: error.message },
 				});
 

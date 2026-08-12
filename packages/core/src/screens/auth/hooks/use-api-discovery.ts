@@ -104,7 +104,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				if (!data || typeof data !== 'object') {
 					discoveryLogger.error(`Bad API response from ${wpApiUrl}`, {
 						showToast: true,
-						context: { errorCode: ERROR_CODES.AUTH_UNEXPECTED, wpApiUrl },
+						code: ERROR_CODES.AUTH_UNEXPECTED,
+						context: { wpApiUrl },
 					});
 					throw new ApiDiscoveryError(t('auth.bad_api_response'));
 				}
@@ -113,8 +114,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				if (!namespaces || !Array.isArray(namespaces)) {
 					discoveryLogger.error(`WordPress API not found at ${wpApiUrl}`, {
 						showToast: true,
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
-							errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 							wpApiUrl,
 						},
 					});
@@ -154,8 +155,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 								: t('auth.rest_api_restricted');
 						discoveryLogger.error(errorMsg, {
 							showToast: true,
+							code: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
 							context: {
-								errorCode: ERROR_CODES.AUTH_PLUGIN_CONFLICT,
 								wpApiUrl,
 								httpStatus: status,
 							},
@@ -164,10 +165,11 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					}
 
 					// Server responded but not with the expected WP REST API format
-					discoveryLogger.error(t('auth.bad_api_response'), {
+					discoveryLogger.error('API discovery returned an invalid response', {
 						showToast: true,
+						code: ERROR_CODES.AUTH_UNEXPECTED,
+						toast: { title: t('auth.bad_api_response') },
 						context: {
-							errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 							wpApiUrl,
 							httpStatus: status,
 						},
@@ -180,8 +182,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					`Failed to connect to ${wpApiUrl}: ${error instanceof Error ? error.message : String(error)}`,
 					{
 						showToast: true,
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
-							errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 							wpApiUrl,
 						},
 					}
@@ -205,7 +207,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			if (!namespaces.includes(wcNamespace)) {
 				discoveryLogger.error('WooCommerce API not found', {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.WOOCOMMERCE_MISSING },
+					code: ERROR_CODES.WOOCOMMERCE_MISSING,
 				});
 				throw new Error(t('auth.woocommerce_api_not_found'));
 			}
@@ -214,7 +216,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			if (!namespaces.includes(wcposNamespace)) {
 				discoveryLogger.error('WooCommerce POS plugin not found', {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.REST_ROUTE_MISSING },
+					code: ERROR_CODES.REST_ROUTE_MISSING,
 				});
 				throw new Error(t('auth.woocommerce_pos_api_not_found'));
 			}
@@ -240,7 +242,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			if (!auth || typeof auth !== 'object') {
 				discoveryLogger.error('Authentication configuration not found', {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.REST_ROUTE_MISSING },
+					code: ERROR_CODES.REST_ROUTE_MISSING,
 				});
 				throw new Error(t('auth.authentication_configuration_not_found'));
 			}
@@ -250,7 +252,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			if (!wcposAuth || !wcposAuth.endpoints || !wcposAuth.endpoints.authorization) {
 				discoveryLogger.error('WCPOS authentication endpoint not found', {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.REST_ROUTE_MISSING },
+					code: ERROR_CODES.REST_ROUTE_MISSING,
 				});
 				throw new Error(t('auth.wcpos_authentication_endpoint_not_found_please'));
 			}
@@ -259,7 +261,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			if (!loginUrl || typeof loginUrl !== 'string') {
 				discoveryLogger.error('WCPOS login URL is invalid', {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.STORE_URL_INVALID },
+					code: ERROR_CODES.STORE_URL_INVALID,
 				});
 				throw new Error(t('auth.wcpos_login_url_is_invalid_please'));
 			}
@@ -296,7 +298,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				const errorMsg = t('auth.wordpress_api_url_is_required');
 				discoveryLogger.error(errorMsg, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.STORE_URL_INVALID },
+					code: ERROR_CODES.STORE_URL_INVALID,
 				});
 				setSiteData(null);
 				setEndpoints(null);

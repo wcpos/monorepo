@@ -156,9 +156,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 				setStatus('error');
 				authTestLogger.error(`Authorization testing failed: ${errorMessage}`, {
 					showToast: true,
-					context: {
-						errorCode: ERROR_CODES.AUTH_UNEXPECTED,
-					},
+					code: ERROR_CODES.AUTH_UNEXPECTED,
 				});
 				return null;
 			}

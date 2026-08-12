@@ -53,9 +53,10 @@ describe('OnlineStatusLogger', () => {
 		rerender(<OnlineStatusLogger />);
 
 		expect(logger.error).toHaveBeenCalledTimes(1);
-		expect(logger.error).toHaveBeenCalledWith('common.device_went_offline', {
+		expect(logger.error).toHaveBeenCalledWith('Device went offline', {
+			code: 'SYNC999',
 			showToast: true,
-			saveToDb: true,
+			toast: { title: 'common.device_went_offline' },
 		});
 	});
 
@@ -68,7 +69,6 @@ describe('OnlineStatusLogger', () => {
 		expect(logger.success).toHaveBeenCalledTimes(1);
 		expect(logger.success).toHaveBeenCalledWith('common.connection_restored', {
 			showToast: true,
-			saveToDb: true,
 		});
 	});
 

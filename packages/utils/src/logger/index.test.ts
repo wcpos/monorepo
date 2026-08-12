@@ -192,7 +192,7 @@ describe('logger/index', () => {
 				try {
 					logger.info('informational');
 					logger.warn('warning');
-					logger.error('failure');
+					logger.error('failure', { code: 'CLIENT999' });
 
 					expect(consoleLog).not.toHaveBeenCalled();
 					expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining('WARN : warning'));
@@ -226,7 +226,7 @@ describe('logger/index', () => {
 
 			it('should have error method', () => {
 				expect(typeof logger.error).toBe('function');
-				expect(() => logger.error('test message')).not.toThrow();
+				expect(() => logger.error('test message', { code: 'CLIENT999' })).not.toThrow();
 			});
 
 			it('should have success method', () => {
@@ -244,7 +244,6 @@ describe('logger/index', () => {
 				expect(() =>
 					logger.info('test', {
 						showToast: false,
-						saveToDb: false,
 						context: { extra: 'data' },
 					})
 				).not.toThrow();
@@ -341,7 +340,6 @@ describe('logger/index', () => {
 			});
 
 			getLogger(['wcpos', 'pos', 'cart']).info('Cart line item updated', {
-				saveToDb: true,
 				context: {
 					event: 'cart.line-item.updated',
 					orderID: 2468,
@@ -386,7 +384,6 @@ describe('logger/index', () => {
 			});
 
 			getLogger(['wcpos', 'sync']).info('Applied sync changes', {
-				saveToDb: true,
 				context: {
 					collection: 'products',
 					type: 'apply.pull',
@@ -409,7 +406,7 @@ describe('logger/index', () => {
 			log.setLevel('info');
 
 			getLogger(['sync']).info('Persisted by default');
-			getLogger(['sync']).debug('Recorded in memory', { saveToDb: true });
+			getLogger(['sync']).debug('Recorded in memory', {});
 			await flushWrites();
 
 			expect(rows).toHaveLength(1);
@@ -448,7 +445,7 @@ describe('logger/index', () => {
 
 			getLogger(['sync']).debug('First step');
 			getLogger(['sync']).debug('Second step');
-			getLogger(['sync']).error('Sync failed');
+			getLogger(['sync']).error('Sync failed', { code: 'SYNC999' });
 			await flushWrites();
 
 			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
@@ -461,7 +458,7 @@ describe('logger/index', () => {
 			]);
 			expect(recorderStats()).toEqual({ events: 0, bytes: 0 });
 
-			getLogger(['sync']).error('A second error');
+			getLogger(['sync']).error('A second error', { code: 'SYNC999' });
 			await flushWrites();
 			expect(collection.bulkInsert).toHaveBeenCalledTimes(1);
 		});
@@ -642,7 +639,10 @@ describe('logger/index', () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);
 
-			getLogger(category.split('.')).error('Unexpected failure');
+			const runtimeLogger = getLogger(category.split('.')) as unknown as {
+				error(message: string): void;
+			};
+			runtimeLogger.error('Unexpected failure');
 			await flushWrites();
 
 			expect(rows[0]).toMatchObject({ code: expectedCode });
@@ -657,12 +657,24 @@ describe('logger/index', () => {
 			setDatabase(collection);
 
 			getLogger(['wcpos', 'sync', 'engine']).error('Known failure', {
-				context: { errorCode: 'SYNC101' },
+				code: 'SYNC101',
 			});
 			await flushWrites();
 
 			expect(rows[0]).toMatchObject({ code: 'SYNC101' });
 			expect(rows[0].context).toMatchObject({ errorCode: 'SYNC101' });
+			expect(rows[0].context).not.toHaveProperty('codeFallback');
+		});
+
+		it('persists the required top-level error code without fallback stamping', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'sync', 'engine']).error('msg', { code: 'SYNC999' });
+			await flushWrites();
+
+			expect(rows[0]).toMatchObject({ code: 'SYNC999' });
+			expect(rows[0].context).toMatchObject({ errorCode: 'SYNC999' });
 			expect(rows[0].context).not.toHaveProperty('codeFallback');
 		});
 
@@ -809,9 +821,11 @@ describe('logger/index', () => {
 			const logger = getLogger(['sync']);
 
 			logger.error('orders 4711 — rejected by server', {
+				code: 'SYNC999',
 				context: { recordId: '4711' },
 			});
 			logger.error('orders 4711 — rejected by server', {
+				code: 'SYNC999',
 				context: { recordId: '4711' },
 			});
 			await flushWrites();
@@ -827,12 +841,14 @@ describe('logger/index', () => {
 			const logger = getLogger(['payment']);
 
 			logger.error('Declined', {
-				context: { errorCode: 'PAYMENT201', recordId: 'order-1' },
+				code: 'PAYMENT201',
+				context: { recordId: 'order-1' },
 			});
 			await flushWrites();
 			jest.setSystemTime(2000);
 			logger.error('Declined', {
-				context: { errorCode: 'PAYMENT201', recordId: 'order-1' },
+				code: 'PAYMENT201',
+				context: { recordId: 'order-1' },
 			});
 			await flushWrites();
 
@@ -880,8 +896,8 @@ describe('logger/index', () => {
 			setDatabase(collection);
 			const logger = getLogger(['payment']);
 
-			logger.error('Declined', { context: { errorCode: 'PAYMENT201' } });
-			logger.error('Declined', { context: { errorCode: 'PAYMENT301' } });
+			logger.error('Declined', { code: 'PAYMENT201' });
+			logger.error('Declined', { code: 'PAYMENT301' });
 			await flushWrites();
 
 			expect(rows).toHaveLength(2);
@@ -952,14 +968,16 @@ describe('review fixes (PR #851)', () => {
 		const logger = getLogger(['sync']);
 
 		logger.error('Push failed', {
-			context: { errorCode: 'SYNC211', recordId: 'p-1' },
+			code: 'SYNC211',
+			context: { recordId: 'p-1' },
 		});
 		await flushWrites();
 		expect(rows).toHaveLength(0);
 
 		collection.insert.mockImplementation(workingInsert);
 		logger.error('Push failed', {
-			context: { errorCode: 'SYNC211', recordId: 'p-1' },
+			code: 'SYNC211',
+			context: { recordId: 'p-1' },
 		});
 		await flushWrites();
 
@@ -1022,9 +1040,7 @@ describe('flight recorder promotion backoff (#163)', () => {
 	}
 
 	async function recordSomething() {
-		getLogger(['wcpos', 'db']).debug('narration for promotion', {
-			saveToDb: true,
-		});
+		getLogger(['wcpos', 'db']).debug('narration for promotion', {});
 		await Promise.resolve();
 	}
 
@@ -1121,9 +1137,7 @@ describe('flight recorder promotion backoff — review findings (#163)', () => {
 	}
 
 	async function recordSomething() {
-		getLogger(['wcpos', 'db']).debug('narration for promotion', {
-			saveToDb: true,
-		});
+		getLogger(['wcpos', 'db']).debug('narration for promotion', {});
 		await Promise.resolve();
 	}
 

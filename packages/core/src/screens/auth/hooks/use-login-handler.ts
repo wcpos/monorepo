@@ -61,9 +61,7 @@ export const useLoginHandler = (
 				if (!params.uuid || !params.access_token || !params.refresh_token) {
 					authLogger.error('Invalid login response - missing required parameters', {
 						showToast: true,
-						context: {
-							errorCode: ERROR_CODES.AUTH_UNEXPECTED,
-						},
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 					});
 					throw new Error('Invalid login response - missing required parameters');
 				}
@@ -167,9 +165,9 @@ export const useLoginHandler = (
 				}
 
 				authLogger.error(`Failed to save WordPress credentials: ${errorMessage}`, {
+					code: errorCode,
 					showToast: true,
 					context: {
-						errorCode,
 						error: errorMessage,
 					},
 				});

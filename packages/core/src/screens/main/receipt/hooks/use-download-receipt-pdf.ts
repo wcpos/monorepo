@@ -45,7 +45,6 @@ export function useDownloadReceiptPdf() {
 				await saveOrSharePdf(data, filename);
 				httpLogger.success(t('receipt.pdf_downloaded'), {
 					showToast: true,
-					saveToDb: true,
 					context: {
 						orderId,
 						templateId: normalizedTemplateId,
@@ -54,9 +53,8 @@ export function useDownloadReceiptPdf() {
 			} catch (error) {
 				httpLogger.error('Failed to download receipt PDF', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.RECEIPT_DELIVERY_FAILED,
 					context: {
-						errorCode: ERROR_CODES.RECEIPT_DELIVERY_FAILED,
 						orderId,
 						templateId: normalizedTemplateId,
 						error: error instanceof Error ? error.message : String(error),

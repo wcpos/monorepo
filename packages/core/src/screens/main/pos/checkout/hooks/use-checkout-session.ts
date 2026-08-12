@@ -249,7 +249,6 @@ export function useCheckoutSession(order: OrderDocument) {
 					}),
 					{
 						showToast: true,
-						saveToDb: true,
 						context: {
 							orderId: order.id,
 							gatewayId: resolvedGateway.id,
@@ -273,9 +272,8 @@ export function useCheckoutSession(order: OrderDocument) {
 			setError(message);
 			checkoutLogger.error(message, {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
 				context: {
-					errorCode: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
 					orderId: order.id,
 					gatewayId: resolvedGateway?.id,
 				},

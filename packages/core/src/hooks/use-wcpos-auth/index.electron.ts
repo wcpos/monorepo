@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { buildAuthUrl, generateState, getRedirectUri } from './utils';
 
@@ -84,6 +85,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 				const returnedState = result.params.state;
 				if (returnedState !== state) {
 					oauthLogger.error('State parameter mismatch - possible CSRF attack', {
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
 							expected: state.substring(0, 8) + '...',
 							received: returnedState?.substring(0, 8) + '...',
@@ -110,6 +112,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			return authResult;
 		} catch (err) {
 			oauthLogger.error('Auth IPC failed', {
+				code: ERROR_CODES.AUTH_UNEXPECTED,
 				context: { error: err instanceof Error ? err.message : String(err) },
 			});
 

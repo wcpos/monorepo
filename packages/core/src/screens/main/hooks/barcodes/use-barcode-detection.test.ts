@@ -269,7 +269,7 @@ describe('useBarcodeDetection', () => {
 			duration: 6000,
 		});
 		expect(barcodeLogger.warn).toHaveBeenCalledWith(
-			'common.barcode_scanned',
+			'Scanned barcode was shorter than the minimum length',
 			expect.not.objectContaining({ showToast: expect.anything(), toast: expect.anything() })
 		);
 

@@ -39,9 +39,8 @@ export interface LogTerminalFields {
 
 // Custom options interface
 export interface LoggerOptions {
+	code?: ErrorCode;
 	showToast?: boolean;
-	/** @deprecated Logs at info and above now persist automatically. */
-	saveToDb?: boolean;
 	context?: any;
 	terminal?: LogTerminalFields;
 	toast?: {
@@ -69,7 +68,7 @@ export type LazyContext = Record<string, any> | (() => Record<string, any>);
 
 // Extended logger interface with custom options support
 export interface ExtendedLogger {
-	error: (message: string, options?: LoggerOptions) => void;
+	error: (message: string, options: LoggerOptions & { code: ErrorCode }) => void;
 	warn: (message: string, options?: LoggerOptions) => void;
 	info: (message: string, options?: LoggerOptions) => void;
 	debug: (message: string, options?: LoggerOptions) => void;
@@ -608,9 +607,16 @@ const mainTransport = (props: any) => {
 	}
 	message = redactSensitiveText(message);
 
-	// Redact sensitive fields from context before any output
-	if (options.context) {
-		options = { ...options, context: redactSensitiveFields(options.context) };
+	// Redact sensitive fields and merge the typed code into context before any output.
+	if (options.context || options.code) {
+		const context = options.context ? redactSensitiveFields(options.context) : {};
+		options = {
+			...options,
+			context:
+				options.code && context.errorCode === undefined
+					? { ...context, errorCode: options.code }
+					: context,
+		};
 	}
 
 	// Check if this log level should be shown (based on runtime level)
@@ -908,6 +914,10 @@ export class CategoryLogger {
 	/**
 	 * Build the final options object with category and bound context
 	 */
+	protected buildOptions(
+		options: LoggerOptions & { code: ErrorCode }
+	): LoggerOptions & { code: ErrorCode };
+	protected buildOptions(options?: LoggerOptions): LoggerOptions;
 	protected buildOptions(options?: LoggerOptions): LoggerOptions {
 		return {
 			...options,
@@ -957,7 +967,7 @@ export class CategoryLogger {
 	/**
 	 * Error level log - failures that need attention
 	 */
-	error(message: LazyMessage, options?: LoggerOptions): void {
+	error(message: LazyMessage, options: LoggerOptions & { code: ErrorCode }): void {
 		const resolvedMessage = resolveLazy(message);
 		log.error(resolvedMessage, this.buildOptions(options));
 	}

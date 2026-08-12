@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { FallbackProps } from 'react-error-boundary';
 
@@ -88,7 +89,9 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 				reloadApp();
 				return;
 			}
-			appLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear');
+			appLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+			});
 		}
 
 		try {
@@ -99,7 +102,8 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 			}
 		} catch (err) {
 			appLogger.error(
-				`Failed to clear database: ${err instanceof Error ? err.message : String(err)}`
+				`Failed to clear database: ${err instanceof Error ? err.message : String(err)}`,
+				{ code: ERROR_CODES.UNEXPECTED_ERROR }
 			);
 		}
 

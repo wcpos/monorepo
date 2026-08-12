@@ -612,8 +612,11 @@ describe('useCartLines background coupon replay (#963)', () => {
 		// Not silent anymore: the cashier is told the shown totals may be stale
 		// (cashier-full-information ruling, 2026-08-07).
 		expect(mockCartWarn).toHaveBeenCalledWith(
-			expect.stringContaining('out of date'),
-			expect.objectContaining({ showToast: true })
+			'Coupon reference refresh timed out',
+			expect.objectContaining({
+				showToast: true,
+				toast: expect.objectContaining({ title: expect.stringContaining('out of date') }),
+			})
 		);
 
 		// The next cart edit remains the ultimate self-heal.

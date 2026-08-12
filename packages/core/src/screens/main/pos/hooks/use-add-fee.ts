@@ -68,7 +68,6 @@ export const useAddFee = () => {
 
 				// Log fee added success
 				orderLogger.info(t('pos.fee_added', { feeName: data.name }), {
-					saveToDb: true,
 					context: {
 						feeName: data.name,
 						amount: data.amount,
@@ -77,11 +76,11 @@ export const useAddFee = () => {
 					},
 				});
 			} catch (error) {
-				orderLogger.error(t('pos.error_adding_fee_to_cart'), {
+				orderLogger.error('Failed to add fee to cart', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos.error_adding_fee_to_cart') },
 					context: {
-						errorCode: ERROR_CODES.CART_UPDATE_FAILED,
 						feeName: data.name,
 						error: error instanceof Error ? error.message : String(error),
 					},

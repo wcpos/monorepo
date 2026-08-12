@@ -16,7 +16,8 @@ export type PersistLogRow = (
 	message: string,
 	context: Record<string, unknown>,
 	terminal?: LogTerminalFields,
-	toast?: { title: string; description?: string }
+	toast?: { title: string; description?: string },
+	code?: ErrorCode
 ) => void;
 
 /**
@@ -690,7 +691,6 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			...(collection !== undefined ? { collection } : {}),
 		};
 		delete context.errorCode;
-		if (isFailure && code !== null) context.errorCode = code;
 		// The explicit outcome is promoted to the terminal column; a copy in context
 		// would just shadow it with a second, unfilterable source of truth.
 		if (explicitOutcome !== undefined) delete context.outcome;
@@ -763,7 +763,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 					? { durationMs, startedAt: (event.at ?? nowMs()) - durationMs }
 					: {}),
 			},
-			conformance.toast?.(event, { ...fields, ...(reason ? { reason } : {}) })
+			conformance.toast?.(event, { ...fields, ...(reason ? { reason } : {}) }),
+			isFailure && code !== null ? code : undefined
 		);
 		// Presentation stays warn, but a lane crash still promotes the preceding
 		// recorder evidence just as its original error-level row did.

@@ -39,7 +39,6 @@ log.error('Connection failed', {
 // 3. Track important error to database
 log.error('Payment declined', {
   showToast: true,
-  saveToDb: true,
   context: {
     errorCode: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
     amount: 99.99,
@@ -50,7 +49,6 @@ log.error('Payment declined', {
 // 4. Success message with audit trail
 log.success('Order saved', {
   showToast: true,
-  saveToDb: true,
   context: {
     orderId: 123,
     orderTotal: 99.99
@@ -166,10 +164,9 @@ const authLogger = getLogger(['wcpos', 'auth', 'login']);
 const loginLogger = authLogger.with({ userId: user.id });
 
 // Use the logger
-loginLogger.info('Login successful', { saveToDb: true });
+loginLogger.info('Login successful');
 loginLogger.error('Login failed', { 
   showToast: true, 
-  saveToDb: true,
   context: { errorCode: ERROR_CODES.SESSION_EXPIRED }
 });
 ```
@@ -337,7 +334,6 @@ log.success(message, options?) // Success messages
 ```typescript
 interface LoggerOptions {
   showToast?: boolean;          // Show toast notification
-  saveToDb?: boolean;           // Save to database
   context?: any;                // Additional context data
   toast?: {
     text2?: string;             // Secondary message
@@ -384,7 +380,6 @@ log.success('Settings saved', {
 ```typescript
 log.success('Item removed from cart', {
   showToast: true,
-  saveToDb: true,
   toast: {
     dismissable: true,
     action: {
@@ -674,7 +669,6 @@ log.info('User logged in', {
 ```typescript
 log.success('Customer saved', {
   showToast: true,
-  saveToDb: true,
   context: { customerId: 456 }
 });
 ```
@@ -701,7 +695,6 @@ log.warn('Product out of stock', {
 ```typescript
 log.error('Failed to save order', {
   showToast: true,
-  saveToDb: true,
   context: {
     errorCode: ERROR_CODES.TRANSACTION_FAILED,
     orderId: 123,
@@ -791,7 +784,6 @@ try {
 } catch (err) {
   log.error('Failed to fetch from server', {
     showToast: true,    // User needs to know
-    saveToDb: true,     // Support needs to track
     context: {
       errorCode: ERROR_CODES.SYNC_UNREACHABLE,
       endpoint,
@@ -810,7 +802,6 @@ try {
 } catch (err) {
   log.error('Failed to save to database', {
     showToast: true,
-    saveToDb: true,
     context: {
       errorCode: ERROR_CODES.TRANSACTION_FAILED,
       collectionName: collection.name,
@@ -829,7 +820,6 @@ const removeItem = async (itemId: string) => {
   
   log.success('Item removed from cart', {
     showToast: true,
-    saveToDb: true,
     toast: {
       dismissable: true,
       action: {

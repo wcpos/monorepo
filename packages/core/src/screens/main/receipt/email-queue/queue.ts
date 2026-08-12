@@ -1,3 +1,5 @@
+import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { classifyEmailSendError, type EmailSendFailure } from './classify';
 
 import type { Observable } from 'rxjs';
@@ -230,7 +232,7 @@ export interface DrainLogger {
 	debug: (message: string, options?: { context?: unknown }) => void;
 	info: (message: string, options?: { context?: unknown }) => void;
 	warn: (message: string, options?: { context?: unknown }) => void;
-	error: (message: string, options?: { context?: unknown }) => void;
+	error: (message: string, options: { code: ErrorCode; context?: unknown }) => void;
 }
 
 export interface DrainDeps {
@@ -481,15 +483,16 @@ async function drainRow(
 		});
 		result.failed = 1;
 		deps.logger.error('Queued receipt email failed permanently', {
+			code: 'PRINT999',
 			context: {
 				type: 'email.queue.failed',
 				localID: doc.localID,
 				orderId: doc.orderId,
 				attempts: attemptsAfter,
 				status: failure.status,
-				errorCode: failure.code,
 				blockCode: failure.blockCode,
 				error: failure.reason,
+				serverCode: failure.code,
 				exhausted,
 			},
 		});

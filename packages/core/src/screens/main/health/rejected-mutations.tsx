@@ -18,6 +18,7 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { Callout, Pill } from './components';
@@ -110,6 +111,7 @@ export function RejectedMutationsPanel() {
 			}
 			const message = error instanceof Error ? error.message : String(error);
 			logger.error('dead letter resolution failed', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
 					mutationId: row.mutationId,
 					collection: row.collectionName,

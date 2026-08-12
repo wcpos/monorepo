@@ -160,9 +160,8 @@ export async function refreshAccessToken({
 		// refresh token means the user must re-authenticate → error; a transient
 		// blip (5xx/network) will need attention only if it persists → warn.
 		tokenLogger[terminal ? 'error' : 'warn']('Unable to refresh session', {
-			saveToDb: terminal,
+			code: terminal ? ERROR_CODES.SESSION_EXPIRED : ERROR_CODES.AUTH_UNEXPECTED,
 			context: {
-				errorCode: terminal ? ERROR_CODES.SESSION_EXPIRED : ERROR_CODES.AUTH_UNEXPECTED,
 				error: error instanceof Error ? error.message : String(error),
 				terminal,
 				userId: wpUser.id,

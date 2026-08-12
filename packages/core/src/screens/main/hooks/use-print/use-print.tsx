@@ -3,6 +3,7 @@ import * as React from 'react';
 import * as Print from 'expo-print';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { UsePrintOptions } from './use-print.types';
 
@@ -37,7 +38,7 @@ export const usePrint = (options: UsePrintOptions) => {
 			// Call onAfterPrint if provided
 			onAfterPrint?.();
 		} catch (error) {
-			printLogger.error('Print error', { context: { error } });
+			printLogger.error('Print error', { code: ERROR_CODES.PRINT_UNEXPECTED, context: { error } });
 			onPrintError?.('print', error as Error);
 		} finally {
 			setIsPrinting(false);

@@ -131,7 +131,6 @@ export function EditProductForm({ product }: Props) {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(t('common.saved', { name: product.name }), {
 							showToast: true,
-							saveToDb: true,
 							context: {
 								productId: savedDoc.id,
 								productName: product.name,
@@ -141,11 +140,11 @@ export function EditProductForm({ product }: Props) {
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('products.failed_to_save_product'), {
+				mutationLogger.error('Failed to save product', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.PRODUCT_SAVE_FAILED,
+					toast: { title: t('products.failed_to_save_product') },
 					context: {
-						errorCode: ERROR_CODES.PRODUCT_SAVE_FAILED,
 						productId: product.id,
 						error: errorMessage,
 					},

@@ -298,9 +298,8 @@ export const searchPlugin: RxPlugin = {
 
 						searchLogger.error('Failed to initialize search', {
 							showToast: false,
-							saveToDb: true,
+							code: ERROR_CODES.UNEXPECTED_ERROR,
 							context: {
-								errorCode: ERROR_CODES.UNEXPECTED_ERROR,
 								collection: this.name,
 								locale,
 								error: error.message,
@@ -332,9 +331,8 @@ export const searchPlugin: RxPlugin = {
 							} catch (retryError: any) {
 								searchLogger.error('Search recovery failed', {
 									showToast: true,
-									saveToDb: true,
+									code: ERROR_CODES.UNEXPECTED_ERROR,
 									context: {
-										errorCode: ERROR_CODES.UNEXPECTED_ERROR,
 										collection: this.name,
 										locale,
 										error: retryError.message,
@@ -602,9 +600,8 @@ export const searchPlugin: RxPlugin = {
 				} catch (error: any) {
 					searchLogger.error('Failed to recreate search index', {
 						showToast: true,
-						saveToDb: true,
+						code: ERROR_CODES.UNEXPECTED_ERROR,
 						context: {
-							errorCode: ERROR_CODES.UNEXPECTED_ERROR,
 							collection: this.name,
 							locale,
 							error: error.message,

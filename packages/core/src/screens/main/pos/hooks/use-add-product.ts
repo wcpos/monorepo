@@ -92,7 +92,6 @@ export const useAddProduct = () => {
 				orderLogger.success(t('common.added_to_cart', { name: product.name }), {
 					// Scan-driven adds toast via the scan-feedback module instead.
 					showToast: !options?.silent,
-					saveToDb: true,
 					context: {
 						productId: product.id,
 						productName: product.name,
@@ -100,11 +99,11 @@ export const useAddProduct = () => {
 				});
 				return true;
 			} else {
-				orderLogger.error(t('pos.error_adding_to_cart', { name: product.name }), {
+				orderLogger.error('Failed to add product to cart', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos.error_adding_to_cart', { name: product.name }) },
 					context: {
-						errorCode: ERROR_CODES.CART_UPDATE_FAILED,
 						productId: product.id,
 						productName: product.name,
 					},
