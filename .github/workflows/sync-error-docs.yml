@@ -1,0 +1,78 @@
+name: Sync Error Docs
+
+on:
+  push:
+    branches: [next]
+    paths:
+      - 'packages/utils/src/logger/generated/error-docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: 📚 Sync Error Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out monorepo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: monorepo
+
+      - name: Require docs sync token
+        env:
+          DOCS_SYNC_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN }}
+        run: test -n "$DOCS_SYNC_TOKEN" || { echo "::error::DOCS_SYNC_TOKEN is required"; exit 1; }
+
+      - name: Check out docs
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: wcpos/docs
+          ref: main
+          path: docs
+          token: ${{ secrets.DOCS_SYNC_TOKEN }}
+
+      - name: Sync pages and sidebar
+        run: |
+          set -euo pipefail
+          source_dir="$GITHUB_WORKSPACE/monorepo/packages/utils/src/logger/generated/error-docs"
+          target_dir="$GITHUB_WORKSPACE/docs/versioned_docs/version-1.x/error-codes"
+          banner='GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo.'
+          mkdir -p "$target_dir"
+          for page in "$target_dir"/*.mdx; do
+            [ -e "$page" ] || continue
+            grep -Fq "$banner" "$page" || continue
+            [ -f "$source_dir/$(basename "$page")" ] || rm "$page"
+          done
+          cp "$source_dir"/*.mdx "$target_dir"/
+          node monorepo/scripts/splice-error-docs-sidebar.mjs docs
+
+      - name: Push rolling branch and create or update PR
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN }}
+          SOURCE_SHA: ${{ github.sha }}
+        working-directory: docs
+        run: |
+          set -euo pipefail
+          branch='registry/error-code-pages'
+          title='feat(registry): sync error-code pages'
+          body="Automated from wcpos/monorepo commit \`${SOURCE_SHA}\`."
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$branch"
+          git add versioned_docs/version-1.x/error-codes versioned_sidebars/version-1.x-sidebars.json
+
+          if git diff --staged --quiet; then
+            echo 'No docs changes to sync.'
+            exit 0
+          fi
+          git commit -m "$title"
+          git push --force origin "HEAD:$branch"
+
+          pr_number=$(gh pr list --repo wcpos/docs --head "$branch" --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$pr_number" ]; then
+            gh pr edit "$pr_number" --repo wcpos/docs --title "$title" --body "$body"
+          else
+            gh pr create --repo wcpos/docs --head "$branch" --base main --title "$title" --body "$body"
+          fi

@@ -1,0 +1,27 @@
+---
+title: "SYNC111: Local DB corrupted"
+sidebar_label: SYNC111
+description: "Local store data is damaged and needs repair before syncing can continue."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Local store data is damaged and needs repair before syncing can continue.
+
+Run the targeted repair for the affected data, and reset that local data only if the problem returns.
+
+## What to do {#what-to-do}
+
+Restart WCPOS; if this keeps happening the local data on this device needs repair. Retry after making the change above; retrying without it will fail the same way.
+
+## Your data {#your-data}
+
+Data on this device may be at risk — do not clear local data. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `SYNC111` (`LOCAL_DB_CORRUPTED`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

@@ -1,0 +1,27 @@
+---
+title: "SYNC161: Local DB unavailable"
+sidebar_label: SYNC161
+description: "The local database on this device stopped responding, so actions that need it are paused."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+The local database on this device stopped responding, so actions that need it are paused.
+
+Restart WCPOS to reconnect the local database. Unsaved changes on this device may not have been written; check recent orders after restarting. If it keeps happening, export diagnostics and contact support.
+
+## What to do {#what-to-do}
+
+Restart WCPOS; if this keeps happening the local data on this device needs repair. WCPOS does not retry this by itself — retry when you are ready.
+
+## Your data {#your-data}
+
+Data on this device may be at risk — do not clear local data. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `SYNC161` (`LOCAL_DB_UNAVAILABLE`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

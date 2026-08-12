@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -126,6 +126,15 @@ describe('error registry', () => {
 			for (const filename of ['error-codes.generated.ts', 'error-catalogue.json']) {
 				expect(readFileSync(path.join(outputDirectory, filename), 'utf8')).toBe(
 					readFileSync(path.join(generatedDirectory, filename), 'utf8')
+				);
+			}
+
+			const generatedDocs = readdirSync(path.join(outputDirectory, 'error-docs')).sort();
+			const checkedInDocs = readdirSync(path.join(generatedDirectory, 'error-docs')).sort();
+			expect(generatedDocs).toEqual(checkedInDocs);
+			for (const filename of checkedInDocs) {
+				expect(readFileSync(path.join(outputDirectory, 'error-docs', filename), 'utf8')).toBe(
+					readFileSync(path.join(generatedDirectory, 'error-docs', filename), 'utf8')
 				);
 			}
 		} finally {

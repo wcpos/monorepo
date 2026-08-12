@@ -1,0 +1,27 @@
+---
+title: "PRODUCT321: Barcode ambiguous"
+sidebar_label: PRODUCT321
+description: "More than one product matches this barcode."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+More than one product matches this barcode.
+
+WCPOS cannot pick between them safely, so nothing was added. Search for the product by name, and give each product a unique barcode in the store to fix the clash.
+
+## What to do {#what-to-do}
+
+Check the details below before trying again. Retry after making the change above; retrying without it will fail the same way.
+
+## Your data {#your-data}
+
+No order or product data is affected. If this persists, ask your store administrator.
+
+## Details {#details}
+
+- **Code:** `PRODUCT321` (`BARCODE_AMBIGUOUS`)
+- **Severity:** warn
+- **Introduced in:** WCPOS 1.10.0

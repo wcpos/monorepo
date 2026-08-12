@@ -1,0 +1,27 @@
+---
+title: "SYNC311: Schema mismatch"
+sidebar_label: SYNC311
+description: "Local data is from an incompatible version and cannot open yet."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Local data is from an incompatible version and cannot open yet.
+
+Reset only the affected local collection, then let it download again from the store.
+
+## What to do {#what-to-do}
+
+Restart WCPOS; if this keeps happening the local data on this device needs repair. Retry after making the change above; retrying without it will fail the same way.
+
+## Your data {#your-data}
+
+The change is saved on this device but has not reached your store. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `SYNC311` (`SCHEMA_MISMATCH`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

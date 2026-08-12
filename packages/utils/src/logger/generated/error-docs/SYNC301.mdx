@@ -1,0 +1,27 @@
+---
+title: "SYNC301: Sync behind head"
+sidebar_label: SYNC301
+description: "Some older store changes were skipped and must be downloaded again."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Some older store changes were skipped and must be downloaded again.
+
+Run a targeted download for the affected data and export diagnostics if the gap remains.
+
+## What to do {#what-to-do}
+
+Restart WCPOS; if this keeps happening the local data on this device needs repair. WCPOS does not retry this by itself — retry when you are ready.
+
+## Your data {#your-data}
+
+Data on this device may be at risk — do not clear local data. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `SYNC301` (`SYNC_BEHIND_HEAD`)
+- **Severity:** warn
+- **Introduced in:** WCPOS 1.10.0

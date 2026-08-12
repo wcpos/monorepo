@@ -1,0 +1,27 @@
+---
+title: "SYNC151: Store response malformed"
+sidebar_label: SYNC151
+description: "Your store sent a malformed response that WCPOS had to repair before reading."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Your store sent a malformed response that WCPOS had to repair before reading.
+
+This usually means a plugin or PHP notice is printing extra output into store responses. WCPOS recovered this one, but repairs are not guaranteed — ask the site administrator to check the site's error log.
+
+## What to do {#what-to-do}
+
+You can keep working — WCPOS handles this automatically. WCPOS retries this automatically.
+
+## Your data {#your-data}
+
+No order or product data is affected. If this persists, ask the person who manages your WordPress site.
+
+## Details {#details}
+
+- **Code:** `SYNC151` (`STORE_RESPONSE_MALFORMED`)
+- **Severity:** warn
+- **Introduced in:** WCPOS 1.10.0

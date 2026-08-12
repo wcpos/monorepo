@@ -1,0 +1,27 @@
+---
+title: "CHECKOUT401: Totals diverged"
+sidebar_label: CHECKOUT401
+description: "Your store calculated different totals for this order than the till showed."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Your store calculated different totals for this order than the till showed.
+
+Check the order in your store admin before taking any further payment — the store's totals are the source of truth. If the difference is unexpected, export diagnostics and contact support.
+
+## What to do {#what-to-do}
+
+Check the details below before trying again. WCPOS does not retry this by itself — retry when you are ready.
+
+## Your data {#your-data}
+
+Money may have moved — verify the payment before acting. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `CHECKOUT401` (`TOTALS_DIVERGED`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

@@ -1,0 +1,27 @@
+---
+title: "CHECKOUT101: Checkout failed cart safe"
+sidebar_label: CHECKOUT101
+description: "Checkout did not finish, and the cart is still safe to retry."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Checkout did not finish, and the cart is still safe to retry.
+
+Review the cart and retry checkout; the current cart contents have been preserved.
+
+## What to do {#what-to-do}
+
+Try the action again. WCPOS does not retry this by itself — retry when you are ready.
+
+## Your data {#your-data}
+
+The order itself is safe and unchanged.
+
+## Details {#details}
+
+- **Code:** `CHECKOUT101` (`CHECKOUT_FAILED_CART_SAFE`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

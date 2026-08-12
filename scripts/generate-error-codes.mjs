@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +9,36 @@ const SAFE_ACTIONS = ['retry', 'retry-after-edit', 'verify-first', 'continue', '
 const RETRY_POLICIES = ['automatic', 'manual', 'after-change', 'never'];
 const DATA_SAFETY = ['no-impact', 'local-only', 'order-safe', 'money-moved', 'outcome-unknown', 'data-at-risk'];
 const ESCALATIONS = ['none', 'store-admin', 'site-admin', 'support-with-export', 'payment-provider'];
+const TITLE_TOKENS = { DB: 'DB', TLS: 'TLS', URL: 'URL', SKU: 'SKU', WOOCOMMERCE: 'WooCommerce', WCPOS: 'WCPOS', PRO: 'Pro' };
+const SAFE_ACTION_COPY = {
+	retry: 'Try the action again.',
+	'retry-after-edit': 'Correct the highlighted details, then try again.',
+	continue: 'You can keep working — WCPOS handles this automatically.',
+	'verify-first': 'Check the details below before trying again.',
+	reconfigure: 'A settings change is needed before this will work.',
+	'repair-local': 'Restart WCPOS; if this keeps happening the local data on this device needs repair.',
+	'contact-support': 'Export diagnostics and contact support.',
+};
+const RETRY_POLICY_COPY = {
+	automatic: 'WCPOS retries this automatically.',
+	manual: 'WCPOS does not retry this by itself — retry when you are ready.',
+	'after-change': 'Retry after making the change above; retrying without it will fail the same way.',
+	never: 'Do not retry — the result will not change.',
+};
+const DATA_SAFETY_COPY = {
+	'no-impact': 'No order or product data is affected.',
+	'local-only': 'The change is saved on this device but has not reached your store.',
+	'order-safe': 'The order itself is safe and unchanged.',
+	'data-at-risk': 'Data on this device may be at risk — do not clear local data.',
+	'money-moved': 'Money may have moved — verify the payment before acting.',
+	'outcome-unknown': 'The outcome could not be confirmed — verify before retrying.',
+};
+const ESCALATION_COPY = {
+	'store-admin': 'If this persists, ask your store administrator.',
+	'site-admin': 'If this persists, ask the person who manages your WordPress site.',
+	'payment-provider': 'If this persists, contact your payment provider.',
+	'support-with-export': 'If this persists, export diagnostics and contact WCPOS support.',
+};
 const FIELDS = {
 	code: 'ErrorCode',
 	symbol: 'string',
@@ -110,6 +140,68 @@ ${symbols}
 `;
 }
 
+const yamlString = (value) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+const humanizeTitle = (symbol) => symbol.split('_').map((token, index) => {
+	if (TITLE_TOKENS[token]) return TITLE_TOKENS[token];
+	const lower = token.toLowerCase();
+	return index === 0 ? `${lower[0].toUpperCase()}${lower.slice(1)}` : lower;
+}).join(' ');
+
+function renderDocsPage(entry) {
+	const escalation = ESCALATION_COPY[entry.escalation];
+	return `---
+title: ${yamlString(`${entry.code}: ${humanizeTitle(entry.symbol)}`)}
+sidebar_label: ${entry.code}
+description: ${yamlString(entry.summary)}
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with \`pnpm generate:error-codes\`. */}
+
+## What this means {#what-this-means}
+
+${entry.summary}
+
+${entry.docsBody}
+
+## What to do {#what-to-do}
+
+${SAFE_ACTION_COPY[entry.safeAction]} ${RETRY_POLICY_COPY[entry.retryPolicy]}
+
+## Your data {#your-data}
+
+${DATA_SAFETY_COPY[entry.dataSafety]}${escalation ? ` ${escalation}` : ''}
+
+## Details {#details}
+
+- **Code:** \`${entry.code}\` (\`${entry.symbol}\`)
+- **Severity:** ${entry.severity}
+- **Introduced in:** WCPOS ${entry.introducedIn}
+`;
+}
+
+function renderSidebar(registry) {
+	const domains = new Map();
+	for (const entry of registry) {
+		if (!domains.has(entry.domain)) domains.set(entry.domain, []);
+		domains.get(entry.domain).push(`error-codes/${entry.code}`);
+	}
+	return `${JSON.stringify({
+		type: 'category',
+		label: 'Error codes (1.10+)',
+		items: [...domains].map(([label, items]) => ({ type: 'category', label, items: items.sort() })),
+	}, null, '\t')}\n`;
+}
+
+async function writeDocs(outputDirectory, registry) {
+	const docsDirectory = path.join(outputDirectory, 'error-docs');
+	await rm(docsDirectory, { recursive: true, force: true });
+	await mkdir(docsDirectory, { recursive: true });
+	await Promise.all([
+		...registry.map((entry) => writeFile(path.join(docsDirectory, `${entry.code}.mdx`), renderDocsPage(entry))),
+		writeFile(path.join(docsDirectory, 'sidebar-category.json'), renderSidebar(registry)),
+	]);
+}
+
 function parseArguments(args) {
 	const options = {
 		registry: path.join(repoRoot, 'packages/utils/src/logger/error-registry.json'),
@@ -130,6 +222,7 @@ export async function generateErrorCodes(options = parseArguments([])) {
 	await Promise.all([
 		writeFile(path.join(options.outputDirectory, 'error-codes.generated.ts'), renderTypescript(registry)),
 		writeFile(path.join(options.outputDirectory, 'error-catalogue.json'), `${JSON.stringify({ [BANNER]: true, entries: registry }, null, '\t')}\n`),
+		writeDocs(options.outputDirectory, registry),
 	]);
 }
 

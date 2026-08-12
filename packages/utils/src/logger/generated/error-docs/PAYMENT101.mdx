@@ -1,0 +1,27 @@
+---
+title: "PAYMENT101: Payment ok status check failed"
+sidebar_label: PAYMENT101
+description: "Payment succeeded, but WCPOS could not refresh its status afterward."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Payment succeeded, but WCPOS could not refresh its status afterward.
+
+The payment completed and should not be charged again; no action is required unless the displayed status stays stale.
+
+## What to do {#what-to-do}
+
+You can keep working — WCPOS handles this automatically. Do not retry — the result will not change.
+
+## Your data {#your-data}
+
+Money may have moved — verify the payment before acting.
+
+## Details {#details}
+
+- **Code:** `PAYMENT101` (`PAYMENT_OK_STATUS_CHECK_FAILED`)
+- **Severity:** info
+- **Introduced in:** WCPOS 1.10.0
