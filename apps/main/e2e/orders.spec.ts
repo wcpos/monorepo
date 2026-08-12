@@ -6,6 +6,7 @@ import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './or
 import {
 	expectMoneyMatches,
 	expectTaxParity,
+	openCheckout,
 	type OrderPayload,
 	type ServerOrder,
 	stampRunLabel,
@@ -175,10 +176,17 @@ test.describe('Orders Page (Pro)', () => {
 		await expect(screen.getByTestId('order-filter-status')).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should show order actions menu', async ({ posPage: page }) => {
-		const screen = await navigateToOrders(page);
+	test('should show order actions menu', async ({ posPage: page }, testInfo) => {
+		await addOrderProbeProduct(page);
+		await stampRunLabel(page, `E2E Probe ${mintSearchProbeToken(testInfo.workerIndex)}`);
+		const { uuid } = await openCheckout(page);
+		await page.getByTestId('cancel-checkout-button').click();
+		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 
-		const actionsButton = screen.getByTestId('order-actions-button').first();
+		const screen = await navigateToOrders(page);
+		const createdRow = screen.getByTestId(`data-table-row-${uuid}`);
+		await expect(createdRow).toBeVisible({ timeout: 30_000 });
+		const actionsButton = createdRow.getByTestId('order-actions-button');
 		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
 		await actionsButton.click();
 
