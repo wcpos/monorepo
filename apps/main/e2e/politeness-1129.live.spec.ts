@@ -82,12 +82,21 @@ const isSweepScan = (path: string) => path.includes('/integrity/scan') && !isAud
  * `limit=1`) that also matches this URL — mutating THAT one merely moves the initial
  * cursor and wastes the one-shot (first live run failed exactly this way), so only a
  * real drain page (the 100-row `sequenceLogLimit`) is eligible.
+ *
+ * The rewrite is armed only once the reload's main-frame navigation commits: the route
+ * is installed while the pre-reload app instance is still running, and one of ITS polls
+ * landing in that window would consume the one-shot before the measured instance ever
+ * boots (coderabbit review).
  */
 async function forceRebaselineOnNextPoll(page: Page): Promise<{ fired: () => boolean }> {
 	let fired = false;
+	let armed = false;
+	page.once('framenavigated', (frame) => {
+		if (frame === page.mainFrame()) armed = true;
+	});
 	await page.route('**/changes/sequence-log*', async (route) => {
 		const isHeadPriming = new URL(route.request().url()).searchParams.get('limit') === '1';
-		if (fired || isHeadPriming) {
+		if (!armed || fired || isHeadPriming) {
 			await route.fallback();
 			return;
 		}
@@ -145,6 +154,10 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		const requests: SyncRequest[] = [];
 		const byRequest = new Map<Request, SyncRequest>();
 		const startedAt = Date.now();
+		// Audit-shaped starts AND completions both count as activity: quiescence must not
+		// be declared between a scan completing and that completion scheduling the next
+		// drill-down (coderabbit review).
+		const auditActivity = { lastEventAtMs: 0 };
 		page.on('request', (request) => {
 			const url = request.url();
 			if (url.includes('/wcpos/v2/')) {
@@ -156,15 +169,22 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 				};
 				requests.push(entry);
 				byRequest.set(request, entry);
+				if (isAuditShaped(entry.path)) auditActivity.lastEventAtMs = entry.atMs;
 			}
 		});
 		page.on('response', (response) => {
 			const entry = byRequest.get(response.request());
-			if (entry) entry.status = response.status();
+			if (entry) {
+				entry.status = response.status();
+				if (isAuditShaped(entry.path)) auditActivity.lastEventAtMs = Date.now();
+			}
 		});
 		page.on('requestfailed', (request) => {
 			const entry = byRequest.get(request);
-			if (entry) entry.failed = true;
+			if (entry) {
+				entry.failed = true;
+				if (isAuditShaped(entry.path)) auditActivity.lastEventAtMs = Date.now();
+			}
 		});
 
 		// --- Measured scenario: reload with the head forced past the replay backlog =
@@ -209,16 +229,18 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 					'no existence-audit scan observed after the forced rebaseline — the audit chain did not run',
 			})
 			.toBe(true);
-		// Let the pass settle: quiet for AUDIT_QUIET_MS, capped so a floody regression
-		// still reaches the ceiling assertions instead of timing out the test.
+		// Let the pass settle: quiet for AUDIT_QUIET_MS with no audit request still in
+		// flight — a completed scan can schedule the next drill, so both starts and
+		// completions reset the quiet clock (coderabbit review). Capped so a floody
+		// regression still reaches the ceiling assertions instead of timing out the test.
 		const quietDeadline = Date.now() + AUDIT_QUIET_CAP_MS;
 		for (;;) {
-			const seen = requests.filter((entry) => isAuditShaped(entry.path)).length;
 			await page.waitForTimeout(5_000);
 			const now = Date.now();
-			const latest = requests.filter((entry) => isAuditShaped(entry.path));
-			const newestAtMs = latest.length === 0 ? 0 : latest[latest.length - 1]!.atMs;
-			if (latest.length === seen && now - newestAtMs >= AUDIT_QUIET_MS) break;
+			const inFlight = requests.some(
+				(entry) => isAuditShaped(entry.path) && entry.status === null && !entry.failed
+			);
+			if (!inFlight && now - auditActivity.lastEventAtMs >= AUDIT_QUIET_MS) break;
 			if (now >= quietDeadline) break;
 		}
 
