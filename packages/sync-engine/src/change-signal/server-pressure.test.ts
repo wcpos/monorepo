@@ -199,6 +199,24 @@ describe('server pressure monitor', () => {
 		expect(monitor.multiplier()).toBe(2);
 	});
 
+	it('treats high pressure as neutral recovery evidence before the median trips', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
+		expect(
+			monitor.observe({ atMs: 60_000, status: 200, durationMs: 50, pressure: 'high' })
+		).toBeNull();
+
+		for (let index = 0; index < 9; index += 1) {
+			expect(
+				monitor.observe({ atMs: 60_001 + index, status: 200, durationMs: 50, pressure: 'low' })
+			).toBeNull();
+		}
+		expect(monitor.multiplier()).toBe(2);
+		expect(
+			monitor.observe({ atMs: 60_010, status: 200, durationMs: 50, pressure: 'low' })
+		).toMatchObject({ direction: 'recovery', fromMultiplier: 2, toMultiplier: 1 });
+	});
+
 	it('does not read a non-429 4xx as either distress or health', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		for (let index = 0; index < 30; index += 1) {

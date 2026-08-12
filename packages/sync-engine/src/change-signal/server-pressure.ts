@@ -288,8 +288,8 @@ export function createServerPressureMonitor(
 				return stepUp(signal, atMs);
 			}
 
-			// Elevated load is neither distress nor evidence that a prior back-off can be undone.
-			if (observation.pressure === 'elevated') return null;
+			// Reported pressure is neither distress nor evidence that a prior back-off can be undone.
+			if (observation.pressure === 'elevated' || observation.pressure === 'high') return null;
 			healthyStreak += 1;
 			if (multiplier === 1 || healthyStreak < RECOVERY_HEALTHY_RESPONSES) return null;
 			// Two brakes on recovery, both anti-flap:
