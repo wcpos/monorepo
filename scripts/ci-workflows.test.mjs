@@ -20,11 +20,14 @@ function findStep(workflow, jobName, stepName) {
 	return step;
 }
 
-function runShell(script, { cwd = ROOT, env = {} } = {}) {
+function runShell(script, { cwd = ROOT, env = {}, unsetEnv = [] } = {}) {
+	const shellEnv = { ...process.env, ...env };
+	for (const name of unsetEnv) delete shellEnv[name];
+
 	return spawnSync('bash', ['-c', script], {
 		cwd,
 		encoding: 'utf8',
-		env: { ...process.env, ...env },
+		env: shellEnv,
 	});
 }
 
@@ -86,26 +89,39 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 
 test('the E2E aggregator fails when the shared-store queue never released the shards', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
+	const gateEnv = {
+		CHANGES_RESULT: 'success',
+		DEPLOY_RESULT: 'success',
+		DEPLOY_URL: 'https://example.expo.app',
+		E2E_RESULT: 'skipped',
+		EVENT_NAME: 'pull_request',
+		SKIP_E2E_INPUT: 'false',
+	};
 
 	assert.equal(gate.steps[0].env.QUEUE_RESULT, '${{ needs.queue.result }}');
 
 	// Deploy succeeded and published a URL, but the queue timed out/errored, so
 	// the shards never ran. That must read as a failure with an actionable
 	// message — not as the generic "URL published but shards skipped".
-	const queueTimeout = runShell(gate.steps[0].run, {
-		env: {
-			CHANGES_RESULT: 'success',
-			DEPLOY_RESULT: 'success',
-			DEPLOY_URL: 'https://example.expo.app',
-			QUEUE_RESULT: 'failure',
-			E2E_RESULT: 'skipped',
-			EVENT_NAME: 'pull_request',
-			SKIP_E2E_INPUT: 'false',
-		},
-	});
+	for (const queueResult of ['failure', 'cancelled']) {
+		const result = runShell(gate.steps[0].run, {
+			env: { ...gateEnv, QUEUE_RESULT: queueResult },
+		});
+		const output = result.stdout + result.stderr;
 
-	assert.notEqual(queueTimeout.status, 0, queueTimeout.stdout + queueTimeout.stderr);
-	assert.match(queueTimeout.stdout + queueTimeout.stderr, /shared-store queue did not succeed/);
+		assert.notEqual(result.status, 0, output);
+		assert.match(output, /shared-store queue did not succeed/);
+		assert.doesNotMatch(output, /unbound variable/);
+	}
+
+	const missingQueueResult = runShell(gate.steps[0].run, {
+		env: gateEnv,
+		unsetEnv: ['QUEUE_RESULT'],
+	});
+	const missingQueueOutput = missingQueueResult.stdout + missingQueueResult.stderr;
+
+	assert.notEqual(missingQueueResult.status, 0, missingQueueOutput);
+	assert.doesNotMatch(missingQueueOutput, /unbound variable/);
 });
 
 test('the shared-store queue fences queued runs from the previous workflow', () => {
@@ -174,6 +190,8 @@ test('the deploy concurrency contract isolates stale rerun attempts', () => {
 
 	// GitHub evaluates workflow concurrency and REST pagination; locally this
 	// test pins the declarative contract while hosted Actions exercises it.
+	assert.match(workflow.concurrency.group, /deploy-pr-\{0\}-\{1\}/);
+	assert.match(workflow.concurrency.group, /github\.event\.pull_request\.number/);
 	assert.match(workflow.concurrency.group, /github\.run_attempt != '1'/);
 	assert.match(workflow.concurrency.group, /github\.run_id/);
 	assert.match(
