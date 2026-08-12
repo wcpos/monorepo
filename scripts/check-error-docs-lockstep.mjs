@@ -14,15 +14,19 @@ export async function checkErrorDocsLockstep(codes, options = {}) {
 	const missing = [];
 
 	for (const code of codes) {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), timeoutMs);
 		try {
 			const response = await fetchImpl(`${docsBaseUrl}/${code}.mdx`, {
 				method: 'HEAD',
-				signal: AbortSignal.timeout(timeoutMs),
+				signal: controller.signal,
 			});
 			if (response.status === 404) missing.push(code);
 			else if (!response.ok) warn(`Warning: could not check ${code} (HTTP ${response.status})`);
 		} catch (error) {
 			warn(`Warning: could not check ${code} (${error instanceof Error ? error.message : error})`);
+		} finally {
+			clearTimeout(timeout);
 		}
 	}
 

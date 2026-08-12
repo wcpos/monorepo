@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+import { parse } from 'yaml';
 
 import { checkErrorDocsLockstep } from './check-error-docs-lockstep.mjs';
 
@@ -30,16 +33,21 @@ test('checks every registry code with a HEAD request', async () => {
 
 test('a hung request times out into a warning, not a failure', async () => {
 	const warnings = [];
+	let wasAborted = false;
 	const status = await checkErrorDocsLockstep(['SYNC101'], {
 		timeoutMs: 5,
 		fetchImpl: (url, { signal }) =>
 			new Promise((resolve, reject) => {
-				signal.addEventListener('abort', () => reject(signal.reason));
+				signal.addEventListener('abort', () => {
+					wasAborted = true;
+					reject(signal.reason);
+				}, { once: true });
 			}),
 		warn: (message) => warnings.push(message),
 	});
 
 	assert.equal(status, 0);
+	assert.equal(wasAborted, true);
 	assert.equal(warnings.length, 1);
 	assert.match(warnings[0], /SYNC101/);
 });
@@ -74,4 +82,14 @@ test('warns but exits zero for network errors other than 404', async () => {
 	assert.equal(warnings.length, 2);
 	assert.match(warnings[0], /SYNC101.*offline/);
 	assert.match(warnings[1], /AUTH101.*503/);
+});
+
+test('the lockstep workflow checkout does not persist credentials', () => {
+	const workflow = parse(readFileSync(new URL('../.github/workflows/test.yml', import.meta.url), 'utf8'));
+	const checkout = workflow.jobs['error-docs-lockstep'].steps.find(({ uses }) =>
+		uses?.startsWith('actions/checkout@')
+	);
+
+	assert.ok(checkout, 'missing error-docs-lockstep checkout step');
+	assert.equal(checkout.with?.['persist-credentials'], false);
 });
