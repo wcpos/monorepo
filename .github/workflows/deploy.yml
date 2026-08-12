@@ -241,8 +241,17 @@ jobs:
               # Their queue already passed but their shards haven't all
               # finished → they own the store (covers the gap where shards
               # exist only as queued check runs, or none are listed yet).
-              queue_passed=$(jq --arg q "$QUEUE_JOB" \
-                '[.[] | select(.name == $q and .status == "completed" and .conclusion == "success")] | length' <<< "$jobs")
+              # Zombie fence for the ownership rules below: runner-death leaves a
+              # job "in_progress" forever with no logs (observed 3× on
+              # 2026-08-12; run 31587156153's shard held the store ~50 min and
+              # stalled every waiter repo-wide). A run whose queue passed longer
+              # ago than the shard timeout (60 min) plus slack cannot still be
+              # legitimately running its shards — stop honoring its claim.
+              ownership_cutoff=$(date -u -d '90 minutes ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+                || date -u -v-90M '+%Y-%m-%dT%H:%M:%SZ')
+              queue_passed=$(jq --arg q "$QUEUE_JOB" --arg cutoff "$ownership_cutoff" \
+                '[.[] | select(.name == $q and .status == "completed" and .conclusion == "success")
+                      | select(.completed_at > $cutoff)] | length' <<< "$jobs")
               if [ "$queue_passed" != "0" ]; then
                 shards_done=$(jq --arg p "$SHARD_PREFIX" \
                   '([.[] | select(.name | startswith($p))] | length > 0) and ([.[] | select((.name | startswith($p)) and .status != "completed")] | length == 0)' <<< "$jobs")
@@ -252,9 +261,14 @@ jobs:
                 fi
               fi
 
-              # An earlier waiter goes first.
-              older=$(jq --arg q "$QUEUE_JOB" --arg mine "$my_started" --argjson me "$RUN_ID" --argjson other "$id" \
+              # An earlier waiter goes first — unless its queue job has sat
+              # "in_progress" past its own 150-minute timeout, which only a
+              # zombie can do (GitHub would have killed a live one).
+              waiter_cutoff=$(date -u -d '150 minutes ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+                || date -u -v-150M '+%Y-%m-%dT%H:%M:%SZ')
+              older=$(jq --arg q "$QUEUE_JOB" --arg mine "$my_started" --arg cutoff "$waiter_cutoff" --argjson me "$RUN_ID" --argjson other "$id" \
                 '[.[] | select(.name == $q and .status == "in_progress")
+                      | select(.started_at > $cutoff)
                       | select(.started_at < $mine or (.started_at == $mine and $other < $me))] | length' <<< "$jobs")
               if [ "$older" != "0" ]; then
                 busy="run $id entered the queue before us"
