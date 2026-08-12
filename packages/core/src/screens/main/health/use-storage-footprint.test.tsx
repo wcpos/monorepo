@@ -45,7 +45,13 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 	useEngineStatus: () => ({ activeScopeId: mockActiveScopeId }),
 }));
 
-const emptyFootprint = (): StorageFootprint => ({ entries: [], estimateBytes: null });
+const emptyFootprint = (): StorageFootprint => ({
+	entries: [],
+	estimateBytes: null,
+	estimateDetails: null,
+	imageCacheBytes: null,
+	opaqueCacheEntries: 0,
+});
 
 describe('useStorageFootprint', () => {
 	beforeEach(() => {
@@ -68,6 +74,9 @@ describe('useStorageFootprint', () => {
 				},
 			],
 			estimateBytes: null,
+			estimateDetails: null,
+			imageCacheBytes: null,
+			opaqueCacheEntries: 0,
 		});
 
 		const { result } = renderHook(() => useStorageFootprint());
@@ -76,6 +85,29 @@ describe('useStorageFootprint', () => {
 		expect(mockSiteHashFor).toHaveBeenCalledWith('https://shop.example.test/wp-json/');
 		expect(result.current?.breakdown.otherStoresBytes).toBe(25);
 		expect(result.current?.breakdown.orphanedBytes).toBe(0);
+	});
+
+	it('keeps the headline and unattributed bytes tied to measured storage', async () => {
+		mockMeasureAppStorage.mockResolvedValue({
+			entries: [
+				{ name: 'unrecognized-file', bytes: 2 * 1024 * 1024 },
+				{ name: 'rxdb-pos_v6_aaaaaaaaaaaa_s1_c1-orders-0', bytes: 16 * 1024 * 1024 },
+			],
+			estimateBytes: 2_900 * 1024 * 1024,
+			estimateDetails: { caches: 2_800 * 1024 * 1024 },
+			imageCacheBytes: 4 * 1024 * 1024,
+			opaqueCacheEntries: 1,
+		});
+
+		const { result } = renderHook(() => useStorageFootprint());
+
+		await waitFor(() => expect(result.current).not.toBeNull());
+		expect(result.current).toMatchObject({
+			totalBytes: 22 * 1024 * 1024,
+			cachedImagesBytes: 4 * 1024 * 1024,
+			browserEstimateBytes: 2_900 * 1024 * 1024,
+			unattributedBytes: 2 * 1024 * 1024,
+		});
 	});
 
 	it('hides the previous footprint while a changed scope is being measured', async () => {

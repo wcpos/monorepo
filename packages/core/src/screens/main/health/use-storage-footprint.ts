@@ -6,19 +6,13 @@ import { siteHashFor } from '@wcpos/sync-core';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useEngineStatus } from '../hooks/use-engine-monitor';
-import {
-	classifyStorageEntries,
-	type StorageBreakdown,
-	unattributedBytes,
-} from './storage-footprint-logic';
+import { classifyStorageEntries, type StorageBreakdown } from './storage-footprint-logic';
 
 export type StorageFootprintSummary = {
 	breakdown: StorageBreakdown;
-	/** Device-quota view where the platform has one (web), else null. */
-	estimateBytes: number | null;
-	/** The headline number: the estimate when present (it sees more), else the measured sum. */
+	cachedImagesBytes: number | null;
+	browserEstimateBytes: number | null;
 	totalBytes: number;
-	/** Estimate minus measured (web) plus anything measured-but-unnamed. */
 	unattributedBytes: number;
 };
 
@@ -79,18 +73,15 @@ export function useStorageFootprint(): StorageFootprintSummary | null {
 				userDbName: userDB?.name ?? null,
 				knownSiteHashes,
 			});
-			const estimateRemainder = unattributedBytes(
-				footprint.estimateBytes,
-				breakdown.measuredTotalBytes
-			);
 			if (!cancelled) {
 				setMeasurement({
 					scopeId: activeScopeId,
 					summary: {
 						breakdown,
-						estimateBytes: footprint.estimateBytes,
-						totalBytes: Math.max(footprint.estimateBytes ?? 0, breakdown.measuredTotalBytes),
-						unattributedBytes: (estimateRemainder ?? 0) + breakdown.unknownBytes,
+						cachedImagesBytes: footprint.imageCacheBytes,
+						browserEstimateBytes: footprint.estimateBytes,
+						totalBytes: breakdown.measuredTotalBytes + (footprint.imageCacheBytes ?? 0),
+						unattributedBytes: breakdown.unknownBytes,
 					},
 				});
 			}

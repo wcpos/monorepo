@@ -537,6 +537,11 @@ export function DatabaseScreen() {
 	const rows = deriveRows(ROW_ORDER, counts, census);
 	const totalRecords = totalLocalRecords(counts);
 	const storageText = formatBytes(footprint?.totalBytes ?? null);
+	const browserEstimateText = formatBytes(footprint?.browserEstimateBytes ?? null);
+	const showBrowserEstimateNote =
+		footprint?.browserEstimateBytes != null &&
+		footprint.browserEstimateBytes - footprint.totalBytes >= 10 * 1024 * 1024 &&
+		footprint.browserEstimateBytes >= footprint.totalBytes * 1.25;
 	const stuck = mergeStuckRecords(deadLetterStuck, stats.stuck);
 	const stuckByRow = stuckCountsByRow(stuck);
 	// One attention zone, one framing per record: dead letters render in the
@@ -674,6 +679,12 @@ export function DatabaseScreen() {
 								bytes={footprint.breakdown.searchIndexBytes}
 							/>
 							<FootprintRow
+								testID="db-row-cached-images"
+								label={t('health.database.storage_cached_images')}
+								sub={t('health.database.storage_cached_images_sub')}
+								bytes={footprint.cachedImagesBytes ?? 0}
+							/>
+							<FootprintRow
 								testID="db-row-bookkeeping"
 								label={t('health.database.storage_bookkeeping')}
 								sub={t('health.database.storage_bookkeeping_sub')}
@@ -702,6 +713,16 @@ export function DatabaseScreen() {
 								label={t('health.database.storage_unattributed')}
 								bytes={footprint.unattributedBytes}
 							/>
+							{showBrowserEstimateNote && browserEstimateText ? (
+								<Text
+									testID="db-note-browser-estimate"
+									className="text-muted-foreground py-2 text-xs"
+								>
+									{t('health.database.storage_browser_estimate_note', {
+										size: browserEstimateText,
+									})}
+								</Text>
+							) : null}
 						</>
 					) : null}
 				</VStack>

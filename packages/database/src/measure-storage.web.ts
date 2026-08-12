@@ -1,3 +1,5 @@
+import { measureCacheStorage } from './measure-cache-storage';
+
 import type { StorageFootprint, StorageFootprintEntry } from './measure-storage-types';
 
 export type { StorageFootprint, StorageFootprintEntry } from './measure-storage-types';
@@ -11,6 +13,7 @@ type OpfsDirectoryHandle = {
 	values(): AsyncIterable<OpfsFileHandle | OpfsDirectoryHandle>;
 	entries(): AsyncIterable<[string, OpfsFileHandle | OpfsDirectoryHandle]>;
 };
+type StorageEstimateWithDetails = StorageEstimate & { usageDetails?: Record<string, number> };
 
 async function measureDirectory(handle: OpfsDirectoryHandle): Promise<number> {
 	let bytes = 0;
@@ -27,16 +30,18 @@ async function measureDirectory(handle: OpfsDirectoryHandle): Promise<number> {
 /**
  * Web: enumerate the OPFS root's `rxdb-` collection directories (the worker
  * storage writes one per (database, collection, version)), alongside the
- * device-quota estimate — the estimate also sees IndexedDB remnants and
- * caches, which the classifier reports as the unattributed remainder.
+ * device-quota estimate retained as browser accounting context.
  */
 export async function measureAppStorage(): Promise<StorageFootprint | null> {
 	const storage = typeof navigator !== 'undefined' ? navigator.storage : undefined;
 	if (!storage) return null;
 
 	let estimateBytes: number | null = null;
+	let estimateDetails: Record<string, number> | null = null;
 	try {
-		estimateBytes = (await storage.estimate()).usage ?? null;
+		const estimate = (await storage.estimate()) as StorageEstimateWithDetails;
+		estimateBytes = estimate.usage ?? null;
+		estimateDetails = estimate.usageDetails ?? null;
 	} catch {
 		// Quota API unavailable — the entries alone still tell most of the story.
 	}
@@ -61,6 +66,13 @@ export async function measureAppStorage(): Promise<StorageFootprint | null> {
 		// still be present, so return what was measured.
 	}
 
-	if (entries.length === 0 && estimateBytes === null) return null;
-	return { entries, estimateBytes };
+	const cacheStorage = await measureCacheStorage();
+	if (entries.length === 0 && estimateBytes === null && cacheStorage === null) return null;
+	return {
+		entries,
+		estimateBytes,
+		estimateDetails,
+		imageCacheBytes: cacheStorage?.imageCacheBytes ?? null,
+		opaqueCacheEntries: cacheStorage?.opaqueCacheEntries ?? 0,
+	};
 }

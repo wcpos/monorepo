@@ -168,18 +168,3 @@ export function classifyStorageEntries(
 	breakdown.otherStoresCount = otherStoreKeys.size;
 	return breakdown;
 }
-
-/**
- * The device-quota remainder on platforms with an estimate (web): storage the
- * browser attributes to the app that no measured entry explains — IndexedDB
- * remnants, caches, quota bookkeeping. Null when there is no estimate or the
- * estimate does not exceed what was measured.
- */
-export function unattributedBytes(
-	estimateBytes: number | null,
-	measuredTotalBytes: number
-): number | null {
-	if (estimateBytes === null || !Number.isFinite(estimateBytes)) return null;
-	const remainder = estimateBytes - measuredTotalBytes;
-	return remainder > 0 ? remainder : null;
-}
