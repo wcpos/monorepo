@@ -3,9 +3,14 @@ import { renderHook } from '@testing-library/react';
 jest.mock('@wcpos/utils/logger', () => {
 	const info = jest.fn();
 	const error = jest.fn();
+	const mapExceptionToCode = jest.fn(() => ({
+		code: 'CLIENT999',
+		context: { name: 'Error', message: 'network down' },
+	}));
 	return {
 		getLogger: jest.fn(() => ({ debug: jest.fn(), info, warn: jest.fn(), error })),
 		getDatabaseEpoch: jest.fn(() => 0),
+		mapExceptionToCode,
 		__info: info,
 		__error: error,
 	};
@@ -37,6 +42,7 @@ const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
 	__info: jest.Mock;
 	__error: jest.Mock;
 	getDatabaseEpoch: jest.Mock;
+	mapExceptionToCode: jest.Mock;
 };
 
 describe('useHttpClient network audit logs', () => {
@@ -65,8 +71,10 @@ describe('useHttpClient network audit logs', () => {
 		});
 	});
 
-	it('persists transport failures without request data', async () => {
-		const failure = Object.assign(new Error('network down'), { response: { status: 503 } });
+	it('maps response-backed non-WordPress failures by HTTP status', async () => {
+		const failure = Object.assign(new Error('server unavailable'), {
+			response: { status: 503, data: '<html>Service unavailable</html>' },
+		});
 		(http.request as jest.Mock).mockRejectedValue(failure);
 		const { result } = renderHook(() => useHttpClient());
 
@@ -82,8 +90,10 @@ describe('useHttpClient network audit logs', () => {
 				method: 'GET',
 				endpoint: '/wc/v3/products',
 				status: 503,
+				errorCode: 'SYNC131',
 			}),
 		});
+		expect(loggerMock.mapExceptionToCode).not.toHaveBeenCalled();
 	});
 
 	it('persists mapped and server WordPress error codes on the HTTP failure row', async () => {
@@ -121,8 +131,15 @@ describe('useHttpClient network audit logs', () => {
 
 		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
 			saveToDb: true,
-			context: expect.objectContaining({ status: 0 }),
+			context: expect.objectContaining({
+				status: 0,
+				errorCode: 'CLIENT999',
+				codeFallback: true,
+				name: 'Error',
+				message: 'network down',
+			}),
 		});
+		expect(loggerMock.mapExceptionToCode).toHaveBeenCalledWith(failure);
 	});
 
 	it('does not persist a recovered request as a failure', async () => {
