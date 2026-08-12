@@ -186,6 +186,13 @@ exit 75
 		// its 150-minute timeout. Pinned declaratively — the mock above ignores
 		// the jq program, so it can't distinguish filtered from unfiltered.
 		assert.match(queueStep.run, /select\(\.created_at > \\"\$queued_cutoff\\"\)/);
+
+		// Same for zombie JOBS (runner death leaves them in_progress forever,
+		// observed 3× on 2026-08-12): a store claim older than the shard
+		// timeout, or a "waiter" older than the queue's own timeout, must stop
+		// blocking the line.
+		assert.match(queueStep.run, /select\(\.completed_at > \$cutoff\)/);
+		assert.match(queueStep.run, /select\(\.started_at > \$cutoff\)/);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
