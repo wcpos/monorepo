@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { Platform, Share, View } from 'react-native';
+import { Linking, Platform, Share, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
@@ -16,6 +17,7 @@ import { Toast } from '@wcpos/components/toast';
 import { Tree } from '@wcpos/components/tree';
 import { VStack } from '@wcpos/components/vstack';
 import { isSyncEventType } from '@wcpos/utils/logger/generated/event-labels.generated';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import {
 	type CatalogueEntry,
 	ERROR_CATALOGUE,
@@ -159,6 +161,15 @@ function HelpDialog({ code, entry }: { code: string; entry: CatalogueEntry }) {
 							))}
 					</VStack>
 				</DialogBody>
+				<DialogFooter>
+					<Button
+						variant="outline"
+						testID={`logs-learn-more-${code}`}
+						onPress={() => Linking.openURL(getErrorCodeDocURL(code))}
+					>
+						<ButtonText>{t('common.learn_more')}</ButtonText>
+					</Button>
+				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);
