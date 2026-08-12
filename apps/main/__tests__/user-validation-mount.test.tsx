@@ -61,8 +61,11 @@ jest.mock('@wcpos/core/screens/main/components/online-status-logger', () => ({
 jest.mock('@wcpos/core/screens/main/contexts/extra-data', () => ({
 	ExtraDataProvider: () => null,
 }));
+// Render null to cut the tree ABOVE AppStack — the useAppState mock has no
+// store/storeDB, so AppStack cannot mount. ExtraDataProvider used to be the
+// cut point here; it now lives inside AppStack (config-changed gating).
 jest.mock('@wcpos/printer', () => ({
-	RasterizeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+	RasterizeProvider: () => null,
 }));
 jest.mock('@wcpos/query', () => ({
 	QueryProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
