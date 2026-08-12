@@ -74,3 +74,8 @@ allowBuilds:
   usb: true
 patchedDependencies:
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
+  # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
+  # license-gated postinstall, so it is absent from the tarball pnpm patches.
+  # The resurrection-index-leak fix for it lives in
+  # scripts/patch-rxdb-premium-resurrection-leak.mjs (root postinstall).
+
