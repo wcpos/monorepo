@@ -199,11 +199,18 @@ jobs:
 
           while :; do
             busy=""
+            # A queued run normally starts within minutes; one stuck queued for
+            # longer is a zombie (observed 2026-08-12: run 31123458025 had sat
+            # "queued" for SIX DAYS) and counting it as a rollout-era blocker
+            # would hold the store hostage until every waiter's 150-minute
+            # timeout. Two hours is comfortably past real runner wait times.
+            queued_cutoff=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+              || date -u -v-2H '+%Y-%m-%dT%H:%M:%SZ')
             active_runs=$(
-              for status in in_progress queued; do
-                gh api "repos/$REPO/actions/workflows/deploy.yml/runs?status=$status&per_page=100" \
-                  --paginate --jq '.workflow_runs[].id' || exit 1
-              done
+              gh api "repos/$REPO/actions/workflows/deploy.yml/runs?status=in_progress&per_page=100" \
+                --paginate --jq '.workflow_runs[].id' || exit 1
+              gh api "repos/$REPO/actions/workflows/deploy.yml/runs?status=queued&per_page=100" \
+                --paginate --jq ".workflow_runs[] | select(.created_at > \"$queued_cutoff\") | .id" || exit 1
             )
             for id in $active_runs; do
               [ "$id" = "$RUN_ID" ] && continue

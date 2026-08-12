@@ -180,6 +180,12 @@ exit 75
 		assert.equal(result.status, 75, result.stdout + result.stderr);
 		assert.match(result.stdout, /run 2 uses the previous workflow and has not finished/);
 		assert.match(result.stdout, /sleep:180/);
+
+		// The queued-runs poll must fence out zombies: a run stuck "queued" for
+		// hours (observed: six days) would otherwise block every waiter until
+		// its 150-minute timeout. Pinned declaratively — the mock above ignores
+		// the jq program, so it can't distinguish filtered from unfiltered.
+		assert.match(queueStep.run, /select\(\.created_at > \\"\$queued_cutoff\\"\)/);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
