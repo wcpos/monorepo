@@ -147,6 +147,66 @@ describe('require() for the products browse window', () => {
 		await engine.dispose();
 	});
 
+	it('reports a released mid-fetch requirement as a released outcome, never an error', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		let firstSignal: AbortSignal | null | undefined;
+		let productRequests = 0;
+		const harness = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			fetch: async (url, init) => {
+				if (!new URL(url).pathname.endsWith('/products')) return json([]);
+				productRequests += 1;
+				if (productRequests > 1) return json([productPayload(1, 0, '10')], 1);
+				firstSignal = init?.signal;
+				if (!firstSignal) throw new Error('product request did not receive an abort signal');
+				return await new Promise<Response>((_resolve, reject) => {
+					firstSignal?.addEventListener('abort', () => reject(firstSignal?.reason), { once: true });
+				});
+			},
+			awaitReady: false,
+		});
+		const engine = harness.engine;
+		await engine.ready;
+
+		const first = engine.require({
+			id: 'browse-released-mid-fetch',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+		await vi.waitFor(() => expect(firstSignal).toBeDefined());
+		first.release();
+		const second = engine.require({
+			id: 'browse-released-successor',
+			collection: 'products',
+			kind: 'product-browse',
+			limit: 10,
+		});
+
+		await expect(first.ready).resolves.toMatchObject({ action: 'released' });
+		// The pump is serial, so by the time the successor resolves the released
+		// requirement's abort has already been through the pump's catch.
+		await expect(second.ready).resolves.toMatchObject({ action: 'fetched', documents: 1 });
+
+		expect(harness.diagnostics.filter((event) => event.type === 'coverage.require.error')).toEqual(
+			[]
+		);
+		expect(harness.diagnostics).toContainEqual(
+			expect.objectContaining({
+				type: 'coverage.require.outcome',
+				level: 'info',
+				fields: expect.objectContaining({
+					requirementId: 'browse-released-mid-fetch',
+					action: 'released',
+				}),
+			})
+		);
+
+		await engine.dispose();
+	});
+
 	it('uses only the mounted POS product window on automatic cold boot', async () => {
 		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 		setPremiumFlag();

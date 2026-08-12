@@ -1025,25 +1025,47 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						if (!subscriber.released) subscriber.resolve(outcome);
 					}
 				} catch (error) {
-					const message =
-						error instanceof Error && error.message.startsWith('require: ')
-							? error.message
-							: error instanceof Error
-								? error.name
-								: 'UnknownError';
-					deps.diagnostics({
-						type: 'coverage.require.error',
-						level: 'error',
-						collection: next.requirement.collection,
-						message,
-						fields: {
-							requirementId: next.requirement.id,
-							kind: next.requirement.kind,
-							durationMs: Date.now() - startedAt,
-						},
-					});
-					for (const subscriber of next.subscribers) {
-						if (!subscriber.released) subscriber.reject(error);
+					const abortedByRelease =
+						next.released && error instanceof Error && error.name === 'AbortError';
+					if (abortedByRelease) {
+						// release() aborted the in-flight fetch; the rejection is the
+						// supersede completing, not a failure. Report the same released
+						// outcome the success path produces — never an error, which the
+						// logs screen surfaces to the cashier as a failed load.
+						deps.diagnostics({
+							type: 'coverage.require.outcome',
+							level: 'info',
+							collection: next.requirement.collection,
+							fields: {
+								requirementId: next.requirement.id,
+								kind: next.requirement.kind,
+								action: 'released',
+								documents: 0,
+								requests: 0,
+								durationMs: Date.now() - startedAt,
+							},
+						});
+					} else {
+						const message =
+							error instanceof Error && error.message.startsWith('require: ')
+								? error.message
+								: error instanceof Error
+									? error.name
+									: 'UnknownError';
+						deps.diagnostics({
+							type: 'coverage.require.error',
+							level: 'error',
+							collection: next.requirement.collection,
+							message,
+							fields: {
+								requirementId: next.requirement.id,
+								kind: next.requirement.kind,
+								durationMs: Date.now() - startedAt,
+							},
+						});
+						for (const subscriber of next.subscribers) {
+							if (!subscriber.released) subscriber.reject(error);
+						}
 					}
 				} finally {
 					forgetSearch(next);
