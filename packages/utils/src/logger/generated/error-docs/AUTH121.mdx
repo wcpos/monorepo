@@ -1,0 +1,27 @@
+---
+title: "AUTH121: Signed in as wrong user"
+sidebar_label: AUTH121
+description: "The signed-in store account does not match the cashier on this till."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+The signed-in store account does not match the cashier on this till.
+
+Each cashier keeps their own till data, so working under another account can misfile orders. Sign out, then sign in with the cashier's own account.
+
+## What to do {#what-to-do}
+
+A settings change is needed before this will work. WCPOS does not retry this by itself — retry when you are ready.
+
+## Your data {#your-data}
+
+No order or product data is affected.
+
+## Details {#details}
+
+- **Code:** `AUTH121` (`SIGNED_IN_AS_WRONG_USER`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

@@ -1,0 +1,27 @@
+---
+title: "SYNC401: Sync task crashed"
+sidebar_label: SYNC401
+description: "A background sync task stopped unexpectedly before finishing."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+A background sync task stopped unexpectedly before finishing.
+
+The POS restarts these tasks automatically and no order data is affected. If this code keeps appearing, export diagnostics and contact support.
+
+## What to do {#what-to-do}
+
+Try the action again. WCPOS retries this automatically.
+
+## Your data {#your-data}
+
+No order or product data is affected. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `SYNC401` (`SYNC_TASK_CRASHED`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

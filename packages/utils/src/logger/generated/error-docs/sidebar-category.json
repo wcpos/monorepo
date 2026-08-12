@@ -1,0 +1,117 @@
+{
+	"type": "category",
+	"label": "Error codes (1.10+)",
+	"items": [
+		{
+			"type": "category",
+			"label": "SYNC",
+			"items": [
+				"error-codes/SYNC101",
+				"error-codes/SYNC111",
+				"error-codes/SYNC121",
+				"error-codes/SYNC131",
+				"error-codes/SYNC141",
+				"error-codes/SYNC151",
+				"error-codes/SYNC161",
+				"error-codes/SYNC171",
+				"error-codes/SYNC201",
+				"error-codes/SYNC211",
+				"error-codes/SYNC221",
+				"error-codes/SYNC301",
+				"error-codes/SYNC311",
+				"error-codes/SYNC321",
+				"error-codes/SYNC401",
+				"error-codes/SYNC999"
+			]
+		},
+		{
+			"type": "category",
+			"label": "AUTH",
+			"items": [
+				"error-codes/AUTH101",
+				"error-codes/AUTH111",
+				"error-codes/AUTH121",
+				"error-codes/AUTH201",
+				"error-codes/AUTH301",
+				"error-codes/AUTH311",
+				"error-codes/AUTH321",
+				"error-codes/AUTH401",
+				"error-codes/AUTH411",
+				"error-codes/AUTH999"
+			]
+		},
+		{
+			"type": "category",
+			"label": "CHECKOUT",
+			"items": [
+				"error-codes/CHECKOUT101",
+				"error-codes/CHECKOUT111",
+				"error-codes/CHECKOUT201",
+				"error-codes/CHECKOUT211",
+				"error-codes/CHECKOUT301",
+				"error-codes/CHECKOUT401",
+				"error-codes/CHECKOUT999"
+			]
+		},
+		{
+			"type": "category",
+			"label": "PAYMENT",
+			"items": [
+				"error-codes/PAYMENT101",
+				"error-codes/PAYMENT201",
+				"error-codes/PAYMENT301",
+				"error-codes/PAYMENT401",
+				"error-codes/PAYMENT999"
+			]
+		},
+		{
+			"type": "category",
+			"label": "PRINT",
+			"items": [
+				"error-codes/PRINT101",
+				"error-codes/PRINT201",
+				"error-codes/PRINT301",
+				"error-codes/PRINT311",
+				"error-codes/PRINT999"
+			]
+		},
+		{
+			"type": "category",
+			"label": "PRODUCT",
+			"items": [
+				"error-codes/PRODUCT101",
+				"error-codes/PRODUCT111",
+				"error-codes/PRODUCT201",
+				"error-codes/PRODUCT301",
+				"error-codes/PRODUCT321",
+				"error-codes/PRODUCT401",
+				"error-codes/PRODUCT411",
+				"error-codes/PRODUCT421",
+				"error-codes/PRODUCT999"
+			]
+		},
+		{
+			"type": "category",
+			"label": "LICENSE",
+			"items": [
+				"error-codes/LICENSE101",
+				"error-codes/LICENSE201",
+				"error-codes/LICENSE301",
+				"error-codes/LICENSE999"
+			]
+		},
+		{
+			"type": "category",
+			"label": "CLIENT",
+			"items": [
+				"error-codes/CLIENT101",
+				"error-codes/CLIENT111",
+				"error-codes/CLIENT121",
+				"error-codes/CLIENT131",
+				"error-codes/CLIENT201",
+				"error-codes/CLIENT211",
+				"error-codes/CLIENT999"
+			]
+		}
+	]
+}

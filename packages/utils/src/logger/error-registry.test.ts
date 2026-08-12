@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -128,8 +128,32 @@ describe('error registry', () => {
 					readFileSync(path.join(generatedDirectory, filename), 'utf8')
 				);
 			}
+
+			const generatedDocs = readdirSync(path.join(outputDirectory, 'error-docs')).sort();
+			const checkedInDocs = readdirSync(path.join(generatedDirectory, 'error-docs')).sort();
+			expect(generatedDocs).toEqual(checkedInDocs);
+			for (const filename of checkedInDocs) {
+				expect(readFileSync(path.join(outputDirectory, 'error-docs', filename), 'utf8')).toBe(
+					readFileSync(path.join(generatedDirectory, 'error-docs', filename), 'utf8')
+				);
+			}
 		} finally {
 			rmSync(outputDirectory, { recursive: true, force: true });
+		}
+	});
+
+	it('rejects control characters in registry strings — they break MDX frontmatter', () => {
+		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-newline-'));
+		const invalidRegistry = path.join(directory, 'registry.json');
+		writeFileSync(
+			invalidRegistry,
+			JSON.stringify([{ ...registry[0], summary: 'line one\nline two' }])
+		);
+
+		try {
+			expect(() => runGenerator(directory, invalidRegistry)).toThrow();
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
 		}
 	});
 

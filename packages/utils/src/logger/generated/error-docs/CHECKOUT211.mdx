@@ -1,0 +1,27 @@
+---
+title: "CHECKOUT211: Checkout empty response"
+sidebar_label: CHECKOUT211
+description: "The store returned no checkout result, so the order status is unknown."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+The store returned no checkout result, so the order status is unknown.
+
+Check whether the order was created before trying checkout again.
+
+## What to do {#what-to-do}
+
+Check the details below before trying again. Do not retry until you have confirmed what actually happened — a blind retry can create a duplicate charge or order.
+
+## Your data {#your-data}
+
+The outcome could not be confirmed — verify before retrying. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `CHECKOUT211` (`CHECKOUT_EMPTY_RESPONSE`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

@@ -1,0 +1,27 @@
+---
+title: "PAYMENT401: Terminal pairing incomplete"
+sidebar_label: PAYMENT401
+description: "The payment terminal did not finish pairing with WCPOS."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+The payment terminal did not finish pairing with WCPOS.
+
+Retry pairing after checking the terminal settings, and include the trace ID when contacting the payment provider.
+
+## What to do {#what-to-do}
+
+A settings change is needed before this will work. Retry after making the change above; retrying without it will fail the same way.
+
+## Your data {#your-data}
+
+No order or product data is affected. If this persists, contact your payment provider.
+
+## Details {#details}
+
+- **Code:** `PAYMENT401` (`TERMINAL_PAIRING_INCOMPLETE`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

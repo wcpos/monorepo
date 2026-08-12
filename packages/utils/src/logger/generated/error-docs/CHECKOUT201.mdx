@@ -1,0 +1,27 @@
+---
+title: "CHECKOUT201: Checkout outcome unknown"
+sidebar_label: CHECKOUT201
+description: "WCPOS could not confirm whether checkout completed."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+WCPOS could not confirm whether checkout completed.
+
+Do not retry blindly. Check the store for the order first, then export diagnostics if its outcome is still unclear.
+
+## What to do {#what-to-do}
+
+Check the details below before trying again. Do not retry until you have confirmed what actually happened — a blind retry can create a duplicate charge or order.
+
+## Your data {#your-data}
+
+The outcome could not be confirmed — verify before retrying. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `CHECKOUT201` (`CHECKOUT_OUTCOME_UNKNOWN`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

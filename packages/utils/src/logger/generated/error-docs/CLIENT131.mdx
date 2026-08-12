@@ -1,0 +1,27 @@
+---
+title: "CLIENT131: Request queue overflow"
+sidebar_label: CLIENT131
+description: "WCPOS queued too many requests at once and dropped some."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+WCPOS queued too many requests at once and dropped some.
+
+This is usually an app defect rather than a store problem. Restart WCPOS; if the code returns, export diagnostics and contact support.
+
+## What to do {#what-to-do}
+
+Export diagnostics and contact support. WCPOS does not retry this by itself — retry when you are ready.
+
+## Your data {#your-data}
+
+No order or product data is affected. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `CLIENT131` (`REQUEST_QUEUE_OVERFLOW`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0

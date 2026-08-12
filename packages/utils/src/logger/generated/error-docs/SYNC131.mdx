@@ -1,0 +1,27 @@
+---
+title: "SYNC131: Store server error"
+sidebar_label: SYNC131
+description: "Your store returned an error, so this action did not complete."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+Your store returned an error, so this action did not complete.
+
+The store was reached but its server failed to handle the request. This is a problem on the website rather than the POS, so retrying alone may not help: check the site's error log or ask the host to, then retry. Nothing was lost on this device.
+
+## What to do {#what-to-do}
+
+Try the action again. WCPOS does not retry this by itself — retry when you are ready.
+
+## Your data {#your-data}
+
+The change is saved on this device but has not reached your store. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `SYNC131` (`STORE_SERVER_ERROR`)
+- **Severity:** error
+- **Introduced in:** WCPOS 1.10.0
