@@ -199,8 +199,8 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
+					code: 'SYNC999',
 					context: expect.objectContaining({
-						errorCode: 'SYNC999',
 						collectionName: 'test-collection',
 						documentId: '1',
 						recoveryDocumentId,
@@ -223,7 +223,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'SYNC999' }),
+					code: 'SYNC999',
 				})
 			);
 		});
@@ -250,8 +250,8 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
+					code: 'SYNC999',
 					context: expect.objectContaining({
-						errorCode: 'SYNC999',
 						recoveryDocumentId: '409',
 						recoveryFailure: 'no-valid-document',
 					}),
@@ -465,7 +465,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
 				expect.stringContaining('Write conflict'),
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'SYNC221' }),
+					code: 'SYNC221',
 				})
 			);
 		});
@@ -483,7 +483,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
 				expect.stringContaining('Schema validation'),
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'SYNC311' }),
+					code: 'SYNC311',
 				})
 			);
 		});
@@ -501,7 +501,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
 				expect.stringContaining('Invalid key'),
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'SYNC999' }),
+					code: 'SYNC999',
 				})
 			);
 		});
@@ -526,7 +526,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
 				expect.stringContaining('Storage worker error'),
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'SYNC161' }),
+					code: 'SYNC161',
 				})
 			);
 		});
@@ -754,7 +754,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
 				'Storage remote method error in bulkWrite',
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'SYNC999' }),
+					code: 'SYNC999',
 				})
 			);
 			expect(isStorageWorkerFailure(quotaError)).toBe(false);
