@@ -2,7 +2,7 @@ import get from 'lodash/get';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { RxCollection, RxPlugin } from 'rxdb';
 import type { FlexSearchInstance, SearchInitializationOptions } from '../types.d';
@@ -300,7 +300,7 @@ export const searchPlugin: RxPlugin = {
 							showToast: false,
 							saveToDb: true,
 							context: {
-								errorCode: ERROR_CODES.INVALID_CONFIGURATION,
+								errorCode: ERROR_CODES.UNEXPECTED_ERROR,
 								collection: this.name,
 								locale,
 								error: error.message,
@@ -334,7 +334,7 @@ export const searchPlugin: RxPlugin = {
 									showToast: true,
 									saveToDb: true,
 									context: {
-										errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
+										errorCode: ERROR_CODES.UNEXPECTED_ERROR,
 										collection: this.name,
 										locale,
 										error: retryError.message,
@@ -554,7 +554,11 @@ export const searchPlugin: RxPlugin = {
 							await oldInstance.collection.destroy();
 						} catch (error: any) {
 							searchLogger.warn('Error destroying old search instance', {
-								context: { collection: this.name, locale, error: error.message },
+								context: {
+									collection: this.name,
+									locale,
+									error: error.message,
+								},
 							});
 						}
 					}
@@ -600,7 +604,7 @@ export const searchPlugin: RxPlugin = {
 						showToast: true,
 						saveToDb: true,
 						context: {
-							errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
+							errorCode: ERROR_CODES.UNEXPECTED_ERROR,
 							collection: this.name,
 							locale,
 							error: error.message,

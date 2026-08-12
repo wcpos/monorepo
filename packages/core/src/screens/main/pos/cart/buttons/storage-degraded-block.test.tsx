@@ -13,7 +13,7 @@ import {
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { PayButton } from './pay';
 import { SaveButton } from './save-order';
@@ -30,8 +30,14 @@ import { VoidButton } from './void';
 const mockPush = jest.fn();
 const mockSetParams = jest.fn();
 const mockPushDocument = jest.fn();
-const mockEngineWrite = jest.fn(async () => ({ mutationId: 'delete-1', annihilated: false }));
-const mockLogger = getLogger(['test']) as unknown as { error: jest.Mock; success: jest.Mock };
+const mockEngineWrite = jest.fn(async () => ({
+	mutationId: 'delete-1',
+	annihilated: false,
+}));
+const mockLogger = getLogger(['test']) as unknown as {
+	error: jest.Mock;
+	success: jest.Mock;
+};
 
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
@@ -52,7 +58,11 @@ jest.mock('@wcpos/components/button', () => ({
 		onPress,
 		testID,
 		disabled,
-	}: React.PropsWithChildren<{ onPress?: () => void; testID?: string; disabled?: boolean }>) => {
+	}: React.PropsWithChildren<{
+		onPress?: () => void;
+		testID?: string;
+		disabled?: boolean;
+	}>) => {
 		if (testID && onPress) mockHandlers.set(testID, onPress);
 		return (
 			<button type="button" data-testid={testID} disabled={disabled} onClick={onPress}>
@@ -64,13 +74,18 @@ jest.mock('@wcpos/components/button', () => ({
 
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({
-		engine: { write: mockEngineWrite, status: () => ({ connectivity: 'online' }) },
+		engine: {
+			write: mockEngineWrite,
+			status: () => ({ connectivity: 'online' }),
+		},
 	}),
 	awaitWriteOutcome: jest.fn(async () => undefined),
 	WriteOutcomeError: class WriteOutcomeError extends Error {},
 }));
 
-jest.mock('@wcpos/sync-core', () => ({ WOO_REST_CANNOT_DELETE: 'woocommerce_rest_cannot_delete' }));
+jest.mock('@wcpos/sync-core', () => ({
+	WOO_REST_CANNOT_DELETE: 'woocommerce_rest_cannot_delete',
+}));
 
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	findEngineResident: jest.fn(),
@@ -84,7 +99,9 @@ jest.mock('../../../contexts/use-push-document', () => ({
 }));
 
 jest.mock('../../../hooks/use-current-order-currency-format', () => ({
-	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
+	useCurrentOrderCurrencyFormat: () => ({
+		format: (value: number) => `$${value.toFixed(2)}`,
+	}),
 }));
 
 // Stable identity: `useObservableEagerState` resubscribes on a new observable,
@@ -150,7 +167,9 @@ function expectBlockedLog() {
 		'Local database unavailable — reload the app before taking or refunding payment',
 		expect.objectContaining({
 			showToast: true,
-			context: expect.objectContaining({ errorCode: ERROR_CODES.WORKER_CONNECTION_LOST }),
+			context: expect.objectContaining({
+				errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
+			}),
 		})
 	);
 }

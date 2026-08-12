@@ -31,15 +31,6 @@ jest.mock('@wcpos/utils/logger', () => ({
 	})),
 }));
 
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		WRITE_CONFLICT: 'DB02007',
-		SCHEMA_VALIDATION_FAILED: 'DB03005',
-		STORAGE_ERROR: 'DB01004',
-		WORKER_CONNECTION_LOST: 'DB01005',
-	},
-}));
-
 /**
  * The module under test calls getLogger() at load time (line 6 of the source),
  * which runs during the import above. The mock is already in place by then
@@ -120,7 +111,12 @@ describe('wrappedErrorHandlerStorage', () => {
 			const storage = createMockStorage(instance);
 			const wrapped = wrappedErrorHandlerStorage({ storage });
 
-			const params = { databaseName: 'db', collectionName: 'col', schema: {}, options: {} };
+			const params = {
+				databaseName: 'db',
+				collectionName: 'col',
+				schema: {},
+				options: {},
+			};
 			await wrapped.createStorageInstance(params as any);
 
 			expect(storage.createStorageInstance).toHaveBeenCalledWith(params);
@@ -204,7 +200,7 @@ describe('wrappedErrorHandlerStorage', () => {
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
 					context: expect.objectContaining({
-						errorCode: 'DB01004',
+						errorCode: 'SYNC999',
 						collectionName: 'test-collection',
 						documentId: '1',
 						recoveryDocumentId,
@@ -227,7 +223,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'DB01004' }),
+					context: expect.objectContaining({ errorCode: 'SYNC999' }),
 				})
 			);
 		});
@@ -255,7 +251,7 @@ describe('wrappedErrorHandlerStorage', () => {
 				'Storage remote method error in findDocumentsById',
 				expect.objectContaining({
 					context: expect.objectContaining({
-						errorCode: 'DB01004',
+						errorCode: 'SYNC999',
 						recoveryDocumentId: '409',
 						recoveryFailure: 'no-valid-document',
 					}),
@@ -298,7 +294,10 @@ describe('wrappedErrorHandlerStorage', () => {
 	describe('bulkWrite', () => {
 		const sampleWrites = [
 			{ document: { id: 'doc1', value: 'a' }, previous: undefined },
-			{ document: { id: 'doc2', value: 'b' }, previous: { id: 'doc2', value: 'old' } },
+			{
+				document: { id: 'doc2', value: 'b' },
+				previous: { id: 'doc2', value: 'old' },
+			},
 		];
 
 		it('should pass through results when the underlying call succeeds', async () => {
@@ -383,7 +382,11 @@ describe('wrappedErrorHandlerStorage', () => {
 					version: 0,
 					type: 'object',
 					properties: {},
-					primaryKey: { key: 'syncId', fields: ['endpoint', 'id'], separator: '|' },
+					primaryKey: {
+						key: 'syncId',
+						fields: ['endpoint', 'id'],
+						separator: '|',
+					},
 				},
 				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
 			});
@@ -392,7 +395,10 @@ describe('wrappedErrorHandlerStorage', () => {
 			const wrappedInstance = await wrapped.createStorageInstance({} as any);
 
 			const writes = [
-				{ document: { syncId: 'orders|42', endpoint: 'orders', id: 42 }, previous: undefined },
+				{
+					document: { syncId: 'orders|42', endpoint: 'orders', id: 42 },
+					previous: undefined,
+				},
 			];
 			const result = await wrappedInstance.bulkWrite(writes as any, 'ctx');
 
@@ -459,7 +465,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
 				expect.stringContaining('Write conflict'),
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'DB02007' }),
+					context: expect.objectContaining({ errorCode: 'SYNC221' }),
 				})
 			);
 		});
@@ -477,7 +483,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
 				expect.stringContaining('Schema validation'),
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'DB03005' }),
+					context: expect.objectContaining({ errorCode: 'SYNC311' }),
 				})
 			);
 		});
@@ -495,7 +501,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
 				expect.stringContaining('Invalid key'),
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'DB01004' }),
+					context: expect.objectContaining({ errorCode: 'SYNC999' }),
 				})
 			);
 		});
@@ -520,7 +526,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
 				expect.stringContaining('Storage worker error'),
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'DB01005' }),
+					context: expect.objectContaining({ errorCode: 'SYNC161' }),
 				})
 			);
 		});
@@ -687,7 +693,10 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(isStorageDegraded('degraded-db')).toBe(true);
 			expect(isStorageDegraded()).toBe(true);
 			expect(latest()).toEqual([
-				expect.objectContaining({ databaseName: 'degraded-db', methodName: 'bulkWrite' }),
+				expect.objectContaining({
+					databaseName: 'degraded-db',
+					methodName: 'bulkWrite',
+				}),
 			]);
 			expect(emissions[emissions.length - 1]).toHaveLength(1);
 			subscription.unsubscribe();
@@ -704,7 +713,10 @@ describe('wrappedErrorHandlerStorage', () => {
 			await expect(wrappedInstance.query({} as any)).rejects.toThrow('could not requestRemote');
 
 			expect(latest()).toEqual([
-				expect.objectContaining({ databaseName: 'degraded-read-db', methodName: 'query' }),
+				expect.objectContaining({
+					databaseName: 'degraded-read-db',
+					methodName: 'query',
+				}),
 			]);
 		});
 
@@ -742,7 +754,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
 				'Storage remote method error in bulkWrite',
 				expect.objectContaining({
-					context: expect.objectContaining({ errorCode: 'DB01004' }),
+					context: expect.objectContaining({ errorCode: 'SYNC999' }),
 				})
 			);
 			expect(isStorageWorkerFailure(quotaError)).toBe(false);
@@ -956,7 +968,9 @@ describe('wrappedErrorHandlerStorage', () => {
 		}
 
 		it('trips the latch when an RPC never comes back', async () => {
-			const wrappedInstance = await wrap('dead-worker-db', { query: pending() });
+			const wrappedInstance = await wrap('dead-worker-db', {
+				query: pending(),
+			});
 
 			const call = wrappedInstance.query({} as any);
 			const assertion = expect(call).rejects.toMatchObject({
@@ -973,7 +987,9 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 
 		it('feeds the same failure class the latch and the POS already consume', async () => {
-			const wrappedInstance = await wrap('dead-worker-class-db', { count: pending() });
+			const wrappedInstance = await wrap('dead-worker-class-db', {
+				count: pending(),
+			});
 
 			const caught = wrappedInstance.count({} as any).catch((error: unknown) => error);
 			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
@@ -1073,7 +1089,9 @@ describe('wrappedErrorHandlerStorage', () => {
 		// The watchdog cannot cancel the underlying RPC, so a write must never be
 		// told it failed while it may still commit in the worker.
 		it('never condemns a write on the clock', async () => {
-			const wrappedInstance = await wrap('slow-write-db', { bulkWrite: pending() });
+			const wrappedInstance = await wrap('slow-write-db', {
+				bulkWrite: pending(),
+			});
 
 			const write = wrappedInstance.bulkWrite([{ document: { id: '1' } }] as any, 'test');
 			let settled = false;
@@ -1090,7 +1108,9 @@ describe('wrappedErrorHandlerStorage', () => {
 		it.each(['close', 'remove', 'cleanup', 'bulkWrite'] as const)(
 			'never arms the watchdog for the unbounded %s RPC',
 			async (method) => {
-				const wrappedInstance = await wrap(`exempt-${method}-db`, { [method]: pending() });
+				const wrappedInstance = await wrap(`exempt-${method}-db`, {
+					[method]: pending(),
+				});
 
 				void (wrappedInstance as any)[method]();
 				await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 4);
@@ -1114,7 +1134,9 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 
 		it('does not mistake a forward wall-clock jump for a stalled environment', async () => {
-			const wrappedInstance = await wrap('clock-forward-db', { query: pending() });
+			const wrappedInstance = await wrap('clock-forward-db', {
+				query: pending(),
+			});
 			const call = wrappedInstance.query({} as any);
 			void call.catch(() => undefined);
 
@@ -1132,7 +1154,9 @@ describe('wrappedErrorHandlerStorage', () => {
 		it('re-arms when the environment stalls through the deadline', async () => {
 			let monotonicTime = 0;
 			jest.spyOn(performance, 'now').mockImplementation(() => monotonicTime);
-			const wrappedInstance = await wrap('stalled-environment-db', { query: pending() });
+			const wrappedInstance = await wrap('stalled-environment-db', {
+				query: pending(),
+			});
 			const call = wrappedInstance.query({} as any);
 			void call.catch(() => undefined);
 
@@ -1159,7 +1183,9 @@ describe('wrappedErrorHandlerStorage', () => {
 				createStorageInstance: jest.fn(() => new Promise(() => undefined)),
 			} as unknown as RxStorage<any, any>;
 
-			const creation = wrappedErrorHandlerStorage({ storage }).createStorageInstance({
+			const creation = wrappedErrorHandlerStorage({
+				storage,
+			}).createStorageInstance({
 				databaseName: 'never-opens-db',
 			} as any);
 			const caught = creation.catch((error: unknown) => error);
@@ -1308,7 +1334,9 @@ describe('wrappedErrorHandlerStorage', () => {
 					});
 					return wrappedErrorHandlerStorage({
 						storage: createMockStorage(instance),
-					}).createStorageInstance({ databaseName: `cleanup-${teardown}-db` } as any);
+					}).createStorageInstance({
+						databaseName: `cleanup-${teardown}-db`,
+					} as any);
 				};
 
 				const before = await build();
@@ -1378,7 +1406,9 @@ describe('wrappedErrorHandlerStorage', () => {
 				});
 				const wrappedInstance = await wrappedErrorHandlerStorage({
 					storage: createMockStorage(instance),
-				}).createStorageInstance({ databaseName: 'cleanup-unwatched-db' } as any);
+				}).createStorageInstance({
+					databaseName: 'cleanup-unwatched-db',
+				} as any);
 
 				let settled = false;
 				void wrappedInstance.cleanup(1000).then(() => {

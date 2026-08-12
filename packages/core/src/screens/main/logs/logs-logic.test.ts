@@ -56,8 +56,12 @@ describe('displayKind', () => {
 
 describe('presetFilters', () => {
 	it('excludes debug unless verbose diagnostics is on', () => {
-		expect(presetFilters('all', false)).toEqual({ level: ['info', 'warn', 'error'] });
-		expect(presetFilters('all', true)).toEqual({ level: ['debug', 'info', 'warn', 'error'] });
+		expect(presetFilters('all', false)).toEqual({
+			level: ['info', 'warn', 'error'],
+		});
+		expect(presetFilters('all', true)).toEqual({
+			level: ['debug', 'info', 'warn', 'error'],
+		});
 	});
 
 	it('narrows errors to error level only, matching the stat header count', () => {
@@ -104,8 +108,16 @@ describe('deriveClockSkew', () => {
 
 	it('returns the most recently measured skew warning', () => {
 		const rows = [
-			row({ logId: 'a', timestamp: NOW - 5_000, context: { skewSeconds: 120 } }),
-			row({ logId: 'b', timestamp: NOW - 50_000, context: { skewSeconds: -300 } }),
+			row({
+				logId: 'a',
+				timestamp: NOW - 5_000,
+				context: { skewSeconds: 120 },
+			}),
+			row({
+				logId: 'b',
+				timestamp: NOW - 50_000,
+				context: { skewSeconds: -300 },
+			}),
 		];
 		expect(deriveClockSkew(rows, NOW)).toEqual({
 			skewSeconds: 120,
@@ -126,7 +138,11 @@ describe('deriveClockSkew', () => {
 				count: 2,
 				context: { skewSeconds: 300 },
 			}),
-			row({ logId: 'b', timestamp: NOW - 2_000, context: { skewSeconds: -300 } }),
+			row({
+				logId: 'b',
+				timestamp: NOW - 2_000,
+				context: { skewSeconds: -300 },
+			}),
 		];
 		// The standalone row measured later, so its value is the one shown.
 		expect(deriveClockSkew(rows, NOW)).toEqual({
@@ -152,7 +168,11 @@ describe('deriveClockSkew', () => {
 
 	it('ignores warn rows without a numeric skewSeconds', () => {
 		const rows = [
-			row({ logId: 'a', timestamp: NOW, context: { type: 'engine.scope-switch' } }),
+			row({
+				logId: 'a',
+				timestamp: NOW,
+				context: { type: 'engine.scope-switch' },
+			}),
 			row({ logId: 'b', timestamp: NOW, context: { skewSeconds: 'oops' } }),
 			row({ logId: 'c', timestamp: NOW, context: { skewSeconds: 0 } }),
 		];
@@ -161,10 +181,20 @@ describe('deriveClockSkew', () => {
 
 	it('ages a warning out of the panel after 24 hours', () => {
 		const dayMs = 24 * 60 * 60 * 1000;
-		const stale = [row({ logId: 'a', timestamp: NOW - dayMs - 1, context: { skewSeconds: 90 } })];
+		const stale = [
+			row({
+				logId: 'a',
+				timestamp: NOW - dayMs - 1,
+				context: { skewSeconds: 90 },
+			}),
+		];
 		expect(deriveClockSkew(stale, NOW)).toBeNull();
 		const fresh = [
-			row({ logId: 'a', timestamp: NOW - dayMs + 1_000, context: { skewSeconds: 90 } }),
+			row({
+				logId: 'a',
+				timestamp: NOW - dayMs + 1_000,
+				context: { skewSeconds: 90 },
+			}),
 		];
 		expect(deriveClockSkew(fresh, NOW)).toEqual({
 			skewSeconds: 90,
@@ -176,15 +206,29 @@ describe('deriveClockSkew', () => {
 	it('drops future-dated rows left behind by a backward clock correction', () => {
 		const dayMs = 24 * 60 * 60 * 1000;
 		// Written while the device was two days fast; the clock has since been fixed.
-		const rows = [row({ logId: 'a', timestamp: NOW + 2 * dayMs, context: { skewSeconds: 300 } })];
+		const rows = [
+			row({
+				logId: 'a',
+				timestamp: NOW + 2 * dayMs,
+				context: { skewSeconds: 300 },
+			}),
+		];
 		expect(deriveClockSkew(rows, NOW)).toBeNull();
 	});
 
 	it('never lets a future-dated row mask a current warning', () => {
 		const dayMs = 24 * 60 * 60 * 1000;
 		const rows = [
-			row({ logId: 'a', timestamp: NOW + 2 * dayMs, context: { skewSeconds: 300 } }),
-			row({ logId: 'b', timestamp: NOW - 1_000, context: { skewSeconds: -120 } }),
+			row({
+				logId: 'a',
+				timestamp: NOW + 2 * dayMs,
+				context: { skewSeconds: 300 },
+			}),
+			row({
+				logId: 'b',
+				timestamp: NOW - 1_000,
+				context: { skewSeconds: -120 },
+			}),
 		];
 		expect(deriveClockSkew(rows, NOW)).toEqual({
 			skewSeconds: -120,
@@ -194,7 +238,13 @@ describe('deriveClockSkew', () => {
 	});
 
 	it('tolerates a row a few seconds ahead of now', () => {
-		const rows = [row({ logId: 'a', timestamp: NOW + 5_000, context: { skewSeconds: 300 } })];
+		const rows = [
+			row({
+				logId: 'a',
+				timestamp: NOW + 5_000,
+				context: { skewSeconds: 300 },
+			}),
+		];
 		expect(deriveClockSkew(rows, NOW)).toEqual({
 			skewSeconds: 300,
 			observedAt: NOW + 5_000,
@@ -260,7 +310,14 @@ describe('deriveStuckRecords', () => {
 		outcome: string,
 		context: Record<string, unknown>
 	): LogRow =>
-		row({ logId, timestamp, outcome, operationType: 'sync.record', context, level: 'error' });
+		row({
+			logId,
+			timestamp,
+			outcome,
+			operationType: 'sync.record',
+			context,
+			level: 'error',
+		});
 
 	// Live regression, dev-next orders 70954-70956: a completed sale the server
 	// ACCEPTED was reported as "can't upload — server totals differ from the
@@ -283,7 +340,10 @@ describe('deriveStuckRecords', () => {
 					reason: 'server totals differ from the till',
 				},
 			}),
-			recordRow('push-ok', 300, 'ok', { recordId: '6cc42964', collection: 'orders' }),
+			recordRow('push-ok', 300, 'ok', {
+				recordId: '6cc42964',
+				collection: 'orders',
+			}),
 		];
 
 		expect(deriveStuckRecords(rows)).toEqual([]);
@@ -296,7 +356,10 @@ describe('deriveStuckRecords', () => {
 				collection: 'orders',
 				reason: 'rest_invalid_param',
 			}),
-			recordRow('push-ok', 300, 'ok', { recordId: '6cc42964', collection: 'orders' }),
+			recordRow('push-ok', 300, 'ok', {
+				recordId: '6cc42964',
+				collection: 'orders',
+			}),
 		];
 
 		expect(deriveStuckRecords(rows).map((entry) => entry.recordId)).toEqual(['6cc42964']);
@@ -309,7 +372,10 @@ describe('deriveStuckRecords', () => {
 				collection: 'products',
 				reason: 'invalid tax class',
 			}),
-			recordRow('older-ok', 200, 'ok', { recordId: 812, collection: 'products' }),
+			recordRow('older-ok', 200, 'ok', {
+				recordId: 812,
+				collection: 'products',
+			}),
 			recordRow('other-ok', 250, 'ok', { recordId: 5, collection: 'orders' }),
 		];
 		const stuck = deriveStuckRecords(rows);
@@ -324,7 +390,10 @@ describe('deriveStuckRecords', () => {
 	it('clears a record whose latest decisive row is ok', () => {
 		const rows = [
 			recordRow('ok-now', 300, 'ok', { recordId: 812, collection: 'products' }),
-			recordRow('failed-before', 200, 'failed', { recordId: 812, collection: 'products' }),
+			recordRow('failed-before', 200, 'failed', {
+				recordId: 812,
+				collection: 'products',
+			}),
 		];
 		expect(deriveStuckRecords(rows)).toHaveLength(0);
 	});
@@ -384,8 +453,15 @@ describe('deriveStuckRecords', () => {
 
 	it('skips cancelled/unknown rows so an older decisive row can rule', () => {
 		const rows = [
-			recordRow('aborted', 300, 'cancelled', { recordId: 9, collection: 'products' }),
-			recordRow('rejected', 200, 'rejected', { recordId: 9, collection: 'products', reason: 'no' }),
+			recordRow('aborted', 300, 'cancelled', {
+				recordId: 9,
+				collection: 'products',
+			}),
+			recordRow('rejected', 200, 'rejected', {
+				recordId: 9,
+				collection: 'products',
+				reason: 'no',
+			}),
 		];
 		const stuck = deriveStuckRecords(rows);
 		expect(stuck).toHaveLength(1);
@@ -399,8 +475,16 @@ describe('deriveStuckRecords', () => {
 
 	it('carries repeat-collapse counts as attempts and sorts newest first', () => {
 		const rows = [
-			recordRow('a', 100, 'failed', { recordId: 1, collection: 'products', reason: 'x' }),
-			recordRow('b', 300, 'failed', { recordId: 2, collection: 'orders', reason: 'y' }),
+			recordRow('a', 100, 'failed', {
+				recordId: 1,
+				collection: 'products',
+				reason: 'x',
+			}),
+			recordRow('b', 300, 'failed', {
+				recordId: 2,
+				collection: 'orders',
+				reason: 'y',
+			}),
 		].map((r, index) => ({ ...r, count: index + 2, lastSeen: r.timestamp }));
 		const stuck = deriveStuckRecords(rows.sort((a, b) => b.timestamp - a.timestamp));
 		expect(stuck.map((s) => s.recordId)).toEqual(['2', '1']);
@@ -439,18 +523,25 @@ describe('rowDetailData', () => {
 				count: 3,
 				firstSeen: 1_000,
 				lastSeen: 2_000,
-				context: { status: 400, serverCode: 'woocommerce_rest_invalid_tax_class' },
+				context: {
+					status: 400,
+					serverCode: 'woocommerce_rest_invalid_tax_class',
+				},
 			})
 		);
 		expect(detail.operation).toBe('op_9d21 · sync.record');
 		expect(detail.request).toBe('c41a88 · 400 · 500 ms');
 		expect(detail.serverCode).toBe('woocommerce_rest_invalid_tax_class');
-		expect(detail.attempts).toEqual({ count: 3, firstSeen: 1_000, lastSeen: 2_000 });
+		expect(detail.attempts).toEqual({
+			count: 3,
+			firstSeen: 1_000,
+			lastSeen: 2_000,
+		});
 	});
 
-	it('falls back to the legacy context errorCode and omits empty sections', () => {
-		const detail = rowDetailData(row({ context: { errorCode: 'SY01001' } }));
-		expect(detail.serverCode).toBe('SY01001');
+	it('falls back to the context errorCode and omits empty sections', () => {
+		const detail = rowDetailData(row({ context: { errorCode: 'CLIENT999' } }));
+		expect(detail.serverCode).toBe('CLIENT999');
 		expect(detail.operation).toBeUndefined();
 		expect(detail.request).toBeUndefined();
 		expect(detail.attempts).toBeUndefined();

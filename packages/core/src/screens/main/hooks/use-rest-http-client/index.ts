@@ -7,7 +7,7 @@ import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -29,7 +29,7 @@ function extractValidJSON(responseString: string) {
 		httpLogger.error('Server returned invalid response - no JSON found', {
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.MALFORMED_JSON_RESPONSE,
+				errorCode: ERROR_CODES.STORE_SERVER_ERROR,
 				responsePreview: responseString.substring(0, 200),
 			},
 		});
@@ -51,7 +51,7 @@ function extractValidJSON(responseString: string) {
 	httpLogger.error('Unable to parse server response', {
 		saveToDb: true,
 		context: {
-			errorCode: ERROR_CODES.MALFORMED_JSON_RESPONSE,
+			errorCode: ERROR_CODES.STORE_SERVER_ERROR,
 			responsePreview: responseString.substring(0, 200),
 		},
 	});
@@ -213,7 +213,7 @@ export const useRestHttpClient = (endpoint = '') => {
 					httpLogger.warn('Server returned text instead of JSON - attempting recovery', {
 						saveToDb: true,
 						context: {
-							errorCode: ERROR_CODES.JSON_RECOVERY_ATTEMPTED,
+							errorCode: ERROR_CODES.STORE_RESPONSE_MALFORMED,
 							endpoint,
 							url: config.url,
 							responsePreview: response.data.substring(0, 200),

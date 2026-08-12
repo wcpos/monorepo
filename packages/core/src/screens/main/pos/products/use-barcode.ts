@@ -7,7 +7,7 @@ import { useQueryRuntime } from '@wcpos/query';
 import { type ScanEvent } from '@wcpos/scanner';
 import { type BarcodeResolveFetcher, resolveScan } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
@@ -105,7 +105,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			barcodeLogger.error(t('common.barcode_scanned', { barcode: barcodeStr }), {
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+					errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 					barcode: barcodeStr,
 					error: error instanceof Error ? error.message : String(error),
 				},
@@ -138,7 +138,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			barcodeLogger.error(text1, {
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+					errorCode: ERROR_CODES.BARCODE_AMBIGUOUS,
 					barcode: barcodeStr,
 					resultsCount: count,
 				},
@@ -151,7 +151,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			barcodeLogger.error(text1, {
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+					errorCode: ERROR_CODES.SEARCH_NO_RESULTS_REASON,
 					barcode: barcodeStr,
 				},
 			});
@@ -182,7 +182,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 				throw error;
 			}
 			showLookupError(
-				ERROR_CODES.CONNECTION_REFUSED,
+				ERROR_CODES.PRODUCT_UNEXPECTED,
 				error instanceof Error ? error.message : String(error)
 			);
 		};
@@ -234,7 +234,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 			}
 
 			if (resolution.outcome === 'error') {
-				showLookupError(ERROR_CODES.CONNECTION_REFUSED, resolution.message);
+				showLookupError(ERROR_CODES.PRODUCT_UNEXPECTED, resolution.message);
 				return;
 			}
 
@@ -325,7 +325,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 						: resolution.match;
 				if (match.type === 'variation' && !match.parent_id) {
 					showLookupError(
-						ERROR_CODES.MISSING_RESPONSE_DATA,
+						ERROR_CODES.PRODUCT_UNEXPECTED,
 						'resolve/barcode returned a variation without parent_id'
 					);
 					return;

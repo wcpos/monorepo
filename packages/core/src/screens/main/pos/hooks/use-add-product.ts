@@ -4,7 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { isRxDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -104,7 +104,7 @@ export const useAddProduct = () => {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.CART_UPDATE_FAILED,
 						productId: product.id,
 						productName: product.name,
 					},

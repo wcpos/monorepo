@@ -162,7 +162,7 @@ const networkError = () =>
 const offlineError = () =>
 	Object.assign(new Error('No internet connection'), {
 		isPreFlightBlocked: true,
-		errorCode: 'API01007',
+		blockCode: 'preflight-offline',
 	});
 
 beforeEach(() => {

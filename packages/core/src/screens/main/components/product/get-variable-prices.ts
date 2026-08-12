@@ -1,5 +1,5 @@
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'product']);
 
@@ -43,7 +43,7 @@ export function getVariablePrices(
 	if (!metaData) {
 		uiLogger.error('metaData is not defined', {
 			context: {
-				errorCode: ERROR_CODES.MISSING_REQUIRED_FIELD,
+				errorCode: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 			},
 		});
 		return null;
@@ -54,7 +54,7 @@ export function getVariablePrices(
 	if (!metaDataEntry) {
 		uiLogger.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
 			context: {
-				errorCode: ERROR_CODES.MISSING_REQUIRED_FIELD,
+				errorCode: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 			},
 		});
 		return null;
@@ -75,7 +75,7 @@ export function getVariablePrices(
 		if (!isVariablePrices(parsed)) {
 			uiLogger.error("'_woocommerce_pos_variable_prices' has invalid structure", {
 				context: {
-					errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+					errorCode: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 					value: metaDataEntry.value,
 				},
 			});
@@ -85,7 +85,7 @@ export function getVariablePrices(
 	} catch (error) {
 		uiLogger.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", {
 			context: {
-				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				errorCode: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 				value: metaDataEntry.value,
 				error: error instanceof Error ? error.message : String(error),
 			},

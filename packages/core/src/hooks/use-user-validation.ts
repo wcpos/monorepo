@@ -7,7 +7,7 @@ import { of } from 'rxjs';
 import { createTokenRefreshHandler, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../contexts/app-state';
 import { mergeStoresWithResponse } from '../utils/merge-stores';
@@ -179,7 +179,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						const errorMsg = `Invalid response status: ${response?.status}`;
 						appLogger.error('User validation failed', {
 							context: {
-								errorCode: ERROR_CODES.CONNECTION_REFUSED,
+								errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 								status: response?.status,
 								statusText: response?.statusText,
 								userId,
@@ -196,7 +196,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						const errorMsg = 'Invalid response data';
 						appLogger.error('User validation response contains no valid data', {
 							context: {
-								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+								errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 								userId,
 								siteUrl,
 								hasData: !!data,
@@ -210,7 +210,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						const errorMsg = `User ID mismatch: expected ${userId}, got ${data.id}`;
 						appLogger.error('User validation failed - ID mismatch', {
 							context: {
-								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+								errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 								expectedUserId: userId,
 								receivedUserId: data.id,
 								siteUrl,
@@ -228,7 +228,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					);
 					appLogger.error(serverMessage, {
 						context: {
-							errorCode: ERROR_CODES.CONNECTION_REFUSED,
+							errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 							error: error instanceof Error ? error.message : String(error),
 							userId,
 							siteUrl,
@@ -348,7 +348,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					const errorMsg = error instanceof Error ? error.message : String(error);
 					appLogger.error('Failed to update user in local database', {
 						context: {
-							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 							error: errorMsg,
 							userId,
 						},

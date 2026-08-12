@@ -23,7 +23,7 @@ A progressive enhancement logger for WooCommerce POS that supports console loggi
 
 ```typescript
 import { log } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 // 1. Simple console log (always works)
 log.debug('User clicked button');
@@ -32,7 +32,7 @@ log.debug('User clicked button');
 log.error('Connection failed', {
   showToast: true,
   context: {
-    errorCode: ERROR_CODES.CONNECTION_REFUSED
+    errorCode: ERROR_CODES.SYNC_UNREACHABLE
   }
 });
 
@@ -41,7 +41,7 @@ log.error('Payment declined', {
   showToast: true,
   saveToDb: true,
   context: {
-    errorCode: ERROR_CODES.PAYMENT_DECLINED,
+    errorCode: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
     amount: 99.99,
     cardType: 'visa'
   }
@@ -170,7 +170,7 @@ loginLogger.info('Login successful', { saveToDb: true });
 loginLogger.error('Login failed', { 
   showToast: true, 
   saveToDb: true,
-  context: { errorCode: ERROR_CODES.INVALID_CREDENTIALS }
+  context: { errorCode: ERROR_CODES.SESSION_EXPIRED }
 });
 ```
 
@@ -362,7 +362,7 @@ log.error('Barcode scanned: 12345', {
     text2: '3 products found locally'
   },
   context: {
-    errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+    errorCode: ERROR_CODES.RECORD_REJECTED,
     barcode: '12345'
   }
 });
@@ -407,10 +407,10 @@ When you include an error code, a "Help" button automatically appears (unless yo
 log.error('Invalid credentials', {
   showToast: true,
   context: {
-    errorCode: ERROR_CODES.INVALID_CREDENTIALS  // Adds "Help" button automatically
+    errorCode: ERROR_CODES.SESSION_EXPIRED  // Adds "Help" button automatically
   }
 });
-// User can click "Help" to open: https://docs.wcpos.com/error-codes/API02001
+// User can click "Help" to open: https://docs.wcpos.com/error-codes/AUTH101
 ```
 
 ### Controlling Error Code Display
@@ -419,7 +419,7 @@ log.error('Invalid credentials', {
 // Default: Show help link in toast
 log.error('Connection failed', {
   showToast: true,
-  context: { errorCode: ERROR_CODES.CONNECTION_REFUSED }
+  context: { errorCode: ERROR_CODES.SYNC_UNREACHABLE }
 });
 // ✓ Shows "Help" button in toast
 // ✓ Error code visible in logs
@@ -430,7 +430,7 @@ log.error('Minor validation issue', {
   toast: {
     showErrorCode: false  // Hide help link
   },
-  context: { errorCode: ERROR_CODES.CONSTRAINT_VIOLATION }
+  context: { errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED }
 });
 // ✗ No "Help" button in toast
 // ✓ Error code still visible in logs
@@ -444,7 +444,7 @@ log.success('Item removed', {
       onClick: () => restore()
     }
   },
-  context: { errorCode: ERROR_CODES.RECORD_DELETED }
+  context: { errorCode: ERROR_CODES.RECORD_REJECTED }
 });
 // ✓ Shows "Undo" button (not "Help")
 // ✓ Error code still in logs
@@ -793,7 +793,7 @@ try {
     showToast: true,    // User needs to know
     saveToDb: true,     // Support needs to track
     context: {
-      errorCode: ERROR_CODES.CONNECTION_REFUSED,
+      errorCode: ERROR_CODES.SYNC_UNREACHABLE,
       endpoint,
       error: err.message
     }

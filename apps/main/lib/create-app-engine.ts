@@ -23,7 +23,7 @@ import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync
 import { createRxdbSyncEngine } from '@wcpos/sync-engine';
 import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
 import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
@@ -189,7 +189,7 @@ function disposeCachedEngine(entry: CachedEngine): void {
 			}
 			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
 				context: {
-					errorCode: ERROR_CODES.DISPOSAL_TIMEOUT,
+					errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 					scopeKey: entry.key,
 					databaseNames: [...entry.databaseNames],
 				},
@@ -333,7 +333,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			(error) => {
 				engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
 					context: {
-						errorCode: ERROR_CODES.SCOPE_SWITCH_FAILED,
+						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						scopeKey: cacheKey,
 						error: error instanceof Error ? error.message : String(error),
 					},

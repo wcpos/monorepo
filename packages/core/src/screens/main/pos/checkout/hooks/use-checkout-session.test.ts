@@ -20,8 +20,12 @@ const mockResolveStockOwnerId = jest.fn((productId: number, variationId: number)
 	Promise.resolve(variationId || productId)
 );
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
-jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('expo-router', () => ({
+	useRouter: () => ({ replace: mockReplace }),
+}));
+jest.mock('../../../../../contexts/translations', () => ({
+	useT: () => (key: string) => key,
+}));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { require: mockEngineRequire } }),
 }));
@@ -40,13 +44,6 @@ jest.mock('../../hooks/use-cart-stock-guard', () => ({
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ success: jest.fn(), error: jest.fn() }),
 }));
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		PAYMENT_GATEWAY_ERROR: 'PAYMENT_GATEWAY_ERROR',
-		WORKER_CONNECTION_LOST: 'WORKER_CONNECTION_LOST',
-		STORAGE_ERROR: 'STORAGE_ERROR',
-	},
-}));
 
 const order = {
 	id: 42,
@@ -61,7 +58,10 @@ describe('useCheckoutSession', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		jest.useRealTimers();
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire.mockReturnValue({
+			ready: Promise.resolve(),
+			release: jest.fn(),
+		});
 	});
 
 	it('uses contract mode whenever supports_checkout is true, even for non-wcpos providers', async () => {
@@ -283,7 +283,12 @@ describe('useCheckoutSession', () => {
 
 		async function killStorageWorker(databaseName: string) {
 			const instance = {
-				schema: { version: 0, type: 'object', properties: {}, primaryKey: 'id' },
+				schema: {
+					version: 0,
+					type: 'object',
+					properties: {},
+					primaryKey: 'id',
+				},
 				findDocumentsById: jest.fn(),
 				bulkWrite: jest
 					.fn()

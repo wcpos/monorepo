@@ -4,7 +4,7 @@ import get from 'lodash/get';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { parseLinkHeader } from '../../../lib/url';
@@ -122,7 +122,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const errorMsg = t('auth.url_is_required');
 				discoveryLogger.error(errorMsg, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
+					context: { errorCode: ERROR_CODES.STORE_URL_INVALID },
 				});
 				setError(errorMsg);
 				throw new Error(errorMsg);

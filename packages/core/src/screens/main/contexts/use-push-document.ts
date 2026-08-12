@@ -12,7 +12,7 @@ import {
 	type WriteableCollection,
 } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { documentRecordId, findEngineResident } from '../hooks/mutations/use-local-mutation';
@@ -98,7 +98,7 @@ export const usePushDocument = () => {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						documentId: recordId,
 						collectionName,
 						error: message,

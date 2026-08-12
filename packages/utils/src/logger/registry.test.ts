@@ -1,27 +1,29 @@
-import { ERROR_CODES } from './error-codes';
+import { ERROR_CATALOGUE, ERROR_CODES } from './generated/error-codes.generated';
 import { CODE_REGISTRY, isRegisteredCode } from './registry';
 
 describe('logger code registry', () => {
-	it('contains every legacy error code as deprecated', () => {
-		expect(CODE_REGISTRY).toHaveLength(Object.keys(ERROR_CODES).length);
+	it('contains every generated error code', () => {
+		expect(CODE_REGISTRY).toHaveLength(Object.keys(ERROR_CATALOGUE).length);
 		expect(CODE_REGISTRY).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
-					code: ERROR_CODES.CONNECTION_TIMEOUT,
-					symbol: 'CONNECTION_TIMEOUT',
-					domain: 'client',
+					code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+					symbol: 'LOCAL_DB_WRITE_FAILED',
+					domain: 'sync',
 					severity: 'error',
-					deprecated: true,
 				}),
-				expect.objectContaining({ code: ERROR_CODES.QUERY_TIMEOUT, domain: 'db' }),
-				expect.objectContaining({ code: ERROR_CODES.PAYMENT_TIMEOUT, domain: 'payment' }),
-				expect.objectContaining({ code: ERROR_CODES.DISK_FULL, domain: 'client' }),
+				expect.objectContaining({
+					code: ERROR_CODES.CREDENTIALS_REJECTED,
+					domain: 'auth',
+					severity: 'warn',
+				}),
 			])
 		);
+		expect(CODE_REGISTRY.every((entry) => !('deprecated' in entry))).toBe(true);
 	});
 
 	it('recognizes only registered codes', () => {
-		expect(isRegisteredCode(ERROR_CODES.CONNECTION_TIMEOUT)).toBe(true);
+		expect(isRegisteredCode(ERROR_CODES.LOCAL_DB_WRITE_FAILED)).toBe(true);
 		expect(isRegisteredCode('NEW00001')).toBe(false);
 	});
 });

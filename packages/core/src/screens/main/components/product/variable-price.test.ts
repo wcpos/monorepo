@@ -92,7 +92,7 @@ describe('getVariablePrices', () => {
 		expect(getLogger([]).error).toHaveBeenCalledWith(
 			"'_woocommerce_pos_variable_prices' has invalid structure",
 			expect.objectContaining({
-				context: expect.objectContaining({ errorCode: 'DB03002' }),
+				context: expect.objectContaining({ errorCode: 'PRODUCT421' }),
 			})
 		);
 	});

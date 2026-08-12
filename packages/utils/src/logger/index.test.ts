@@ -518,7 +518,10 @@ describe('logger/index', () => {
 			await flushWrites();
 
 			expect(rows).toHaveLength(1);
-			expect(rows[0]).toMatchObject({ level: 'debug', message: 'Verbose step' });
+			expect(rows[0]).toMatchObject({
+				level: 'debug',
+				message: 'Verbose step',
+			});
 			expect(snapshotRecorder()).toEqual([
 				expect.objectContaining({ level: 'debug', message: 'Verbose step' }),
 			]);
@@ -722,8 +725,12 @@ describe('logger/index', () => {
 			setDatabase(collection);
 			const logger = getLogger(['sync']);
 
-			logger.info('Cycle complete', { terminal: { operationId: 'operation-1' } });
-			logger.info('Cycle complete', { terminal: { operationId: 'operation-2' } });
+			logger.info('Cycle complete', {
+				terminal: { operationId: 'operation-1' },
+			});
+			logger.info('Cycle complete', {
+				terminal: { operationId: 'operation-2' },
+			});
 			logger.info('Record failed');
 			logger.info('Record failed');
 			await flushWrites();
@@ -801,8 +808,12 @@ describe('logger/index', () => {
 			setDatabase(collection);
 			const logger = getLogger(['sync']);
 
-			logger.error('orders 4711 — rejected by server', { context: { recordId: '4711' } });
-			logger.error('orders 4711 — rejected by server', { context: { recordId: '4711' } });
+			logger.error('orders 4711 — rejected by server', {
+				context: { recordId: '4711' },
+			});
+			logger.error('orders 4711 — rejected by server', {
+				context: { recordId: '4711' },
+			});
 			await flushWrites();
 
 			expect(rows).toHaveLength(1);
@@ -815,10 +826,14 @@ describe('logger/index', () => {
 			setDatabase(collection);
 			const logger = getLogger(['payment']);
 
-			logger.error('Declined', { context: { errorCode: 'PY01001', recordId: 'order-1' } });
+			logger.error('Declined', {
+				context: { errorCode: 'PAYMENT201', recordId: 'order-1' },
+			});
 			await flushWrites();
 			jest.setSystemTime(2000);
-			logger.error('Declined', { context: { errorCode: 'PY01001', recordId: 'order-1' } });
+			logger.error('Declined', {
+				context: { errorCode: 'PAYMENT201', recordId: 'order-1' },
+			});
 			await flushWrites();
 
 			expect(rows).toHaveLength(1);
@@ -827,7 +842,7 @@ describe('logger/index', () => {
 				firstSeen: 1000,
 				lastSeen: 2000,
 				count: 2,
-				code: 'PY01001',
+				code: 'PAYMENT201',
 			});
 			jest.useRealTimers();
 		});
@@ -846,8 +861,18 @@ describe('logger/index', () => {
 			await flushWrites();
 
 			expect(rows).toHaveLength(2);
-			expect(rows[0].context).toMatchObject({ cursor: 5, cursorFrom: 4, head: 6, backlog: 1 });
-			expect(rows[1].context).toMatchObject({ cursor: 6, cursorFrom: 5, head: 6, backlog: 0 });
+			expect(rows[0].context).toMatchObject({
+				cursor: 5,
+				cursorFrom: 4,
+				head: 6,
+				backlog: 1,
+			});
+			expect(rows[1].context).toMatchObject({
+				cursor: 6,
+				cursorFrom: 5,
+				head: 6,
+				backlog: 0,
+			});
 		});
 
 		it('starts a new repeat run when the code changes', async () => {
@@ -855,8 +880,8 @@ describe('logger/index', () => {
 			setDatabase(collection);
 			const logger = getLogger(['payment']);
 
-			logger.error('Declined', { context: { errorCode: 'PY01001' } });
-			logger.error('Declined', { context: { errorCode: 'PY01002' } });
+			logger.error('Declined', { context: { errorCode: 'PAYMENT201' } });
+			logger.error('Declined', { context: { errorCode: 'PAYMENT301' } });
 			await flushWrites();
 
 			expect(rows).toHaveLength(2);
@@ -926,12 +951,16 @@ describe('review fixes (PR #851)', () => {
 		setDatabase(collection);
 		const logger = getLogger(['sync']);
 
-		logger.error('Push failed', { context: { errorCode: 'API03001', recordId: 'p-1' } });
+		logger.error('Push failed', {
+			context: { errorCode: 'SYNC211', recordId: 'p-1' },
+		});
 		await flushWrites();
 		expect(rows).toHaveLength(0);
 
 		collection.insert.mockImplementation(workingInsert);
-		logger.error('Push failed', { context: { errorCode: 'API03001', recordId: 'p-1' } });
+		logger.error('Push failed', {
+			context: { errorCode: 'SYNC211', recordId: 'p-1' },
+		});
 		await flushWrites();
 
 		expect(rows).toHaveLength(1);
@@ -993,7 +1022,9 @@ describe('flight recorder promotion backoff (#163)', () => {
 	}
 
 	async function recordSomething() {
-		getLogger(['wcpos', 'db']).debug('narration for promotion', { saveToDb: true });
+		getLogger(['wcpos', 'db']).debug('narration for promotion', {
+			saveToDb: true,
+		});
 		await Promise.resolve();
 	}
 
@@ -1090,7 +1121,9 @@ describe('flight recorder promotion backoff — review findings (#163)', () => {
 	}
 
 	async function recordSomething() {
-		getLogger(['wcpos', 'db']).debug('narration for promotion', { saveToDb: true });
+		getLogger(['wcpos', 'db']).debug('narration for promotion', {
+			saveToDb: true,
+		});
 		await Promise.resolve();
 	}
 

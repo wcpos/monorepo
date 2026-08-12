@@ -1,7 +1,7 @@
 import { useSubscription } from 'observable-hooks';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { useBarcodeDetection, useBarcodeSearch } from '../hooks/barcodes';
@@ -36,7 +36,10 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 					text2,
 				},
 				context: {
-					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+					errorCode:
+						results.length === 0
+							? ERROR_CODES.SEARCH_NO_RESULTS_REASON
+							: ERROR_CODES.BARCODE_AMBIGUOUS,
 					barcode,
 					resultsCount: results.length,
 				},

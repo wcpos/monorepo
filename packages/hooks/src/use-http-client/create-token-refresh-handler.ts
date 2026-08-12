@@ -71,7 +71,7 @@
  */
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { refreshAccessToken } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
@@ -180,7 +180,7 @@ export const createTokenRefreshHandler = ({
 							showToast: true,
 							saveToDb: true,
 							context: {
-								errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
+								errorCode: ERROR_CODES.SESSION_EXPIRED,
 								userId: wpUser.id,
 								siteUrl: site.url,
 								originalUrl: originalConfig.url,

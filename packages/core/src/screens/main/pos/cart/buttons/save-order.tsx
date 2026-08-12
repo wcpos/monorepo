@@ -5,7 +5,7 @@ import { isRxDocument } from 'rxdb';
 
 import { Button } from '@wcpos/components/button';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
@@ -31,7 +31,11 @@ export function SaveButton() {
 	const handleSave = React.useCallback(async () => {
 		// #163 ruling R5: an order save that cannot reach local storage leaves the
 		// cashier with a "saved" order that exists nowhere on this device.
-		if (blockIfDegraded('save-order', { orderId: currentOrder.uuid ?? currentOrder.id })) {
+		if (
+			blockIfDegraded('save-order', {
+				orderId: currentOrder.uuid ?? currentOrder.id,
+			})
+		) {
 			return;
 		}
 
@@ -59,7 +63,7 @@ export function SaveButton() {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 					orderId: currentOrder.id,
 					error: errorMessage,
 				},

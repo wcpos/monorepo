@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
@@ -81,7 +81,7 @@ export const useAddShipping = () => {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.CART_UPDATE_FAILED,
 						methodTitle: data.method_title,
 						methodId: data.method_id,
 						error: error instanceof Error ? error.message : String(error),

@@ -16,7 +16,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
@@ -94,7 +94,7 @@ export function AddNewCustomer() {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						error: errorMessage,
 					},
 				});
@@ -195,7 +195,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						error: errorMessage,
 					},
 				});

@@ -11,14 +11,6 @@ jest.mock('@wcpos/utils/logger', () => ({
 	}),
 }));
 
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		REFRESH_TOKEN_INVALID: 'REFRESH_TOKEN_INVALID',
-		TOKEN_REFRESH_FAILED: 'TOKEN_REFRESH_FAILED',
-		AUTH_REQUIRED: 'AUTH_REQUIRED',
-	},
-}));
-
 jest.mock('./request-queue', () => ({
 	pauseQueue: jest.fn(),
 	resumeQueue: jest.fn(),
@@ -157,7 +149,10 @@ describe('createTokenRefreshHandler', () => {
 		it('should use wp_api_url as fallback for constructing API URL', async () => {
 			const wpUser = makeWpUser();
 			const handler = createTokenRefreshHandler({
-				site: { wcpos_api_url: undefined, wp_api_url: 'https://example.com/wp-json/' },
+				site: {
+					wcpos_api_url: undefined,
+					wp_api_url: 'https://example.com/wp-json/',
+				},
 				wpUser,
 				getHttpClient,
 			});

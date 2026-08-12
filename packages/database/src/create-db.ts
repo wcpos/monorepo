@@ -1,7 +1,7 @@
 import { createRxDatabase } from 'rxdb';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { defaultConfig } from './adapters/default';
 import { ephemeralStorageConfig } from './adapters/ephemeral';
@@ -42,7 +42,7 @@ export const createUserDB = async () => {
 			showToast: true,
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.CONNECTION_FAILED,
+				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				databaseName: name,
 				error: error instanceof Error ? error.message : String(error),
 			},
@@ -71,7 +71,7 @@ export const createStoreDB = async (id: string) => {
 			showToast: true,
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.CONNECTION_FAILED,
+				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				databaseName: name,
 				storeId: id,
 				error: error instanceof Error ? error.message : String(error),
@@ -100,7 +100,7 @@ export const createFastStoreDB = async (id: string) => {
 			showToast: true,
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.CONNECTION_FAILED,
+				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				databaseName: name,
 				storeId: id,
 				error: error instanceof Error ? error.message : String(error),
@@ -132,7 +132,7 @@ export const createTemporaryDB = async () => {
 			showToast: true,
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.CONNECTION_FAILED,
+				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				databaseName: 'temporary',
 				error: error instanceof Error ? error.message : String(error),
 			},

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -56,7 +56,7 @@ export function useDownloadReceiptPdf() {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.CONNECTION_REFUSED,
+						errorCode: ERROR_CODES.RECEIPT_DELIVERY_FAILED,
 						orderId,
 						templateId: normalizedTemplateId,
 						error: error instanceof Error ? error.message : String(error),

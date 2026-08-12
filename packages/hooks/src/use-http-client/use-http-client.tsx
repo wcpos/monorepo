@@ -170,7 +170,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 		if (!canProceed.ok) {
 			// Create error with additional context
 			const error = new Error(canProceed.reason || 'Request blocked') as any;
-			error.errorCode = canProceed.errorCode;
+			error.blockCode = canProceed.blockCode;
 			error.isPreFlightBlocked = true;
 			error.isSleeping = canProceed.isSleeping || false;
 
@@ -178,7 +178,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			if (!canProceed.isSleeping) {
 				httpLogger.debug('Request blocked by pre-flight check', {
 					context: {
-						errorCode: canProceed.errorCode,
+						blockCode: canProceed.blockCode,
 						reason: canProceed.reason,
 						url: config.url,
 						method: config.method,
