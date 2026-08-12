@@ -5,6 +5,7 @@ import type {
 	SyncEventType,
 	SyncObserver,
 } from '@wcpos/sync-core';
+import type { ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
 import { presetFor } from '../components/health/performance-logic';
@@ -33,6 +34,7 @@ type Conformance<T extends SyncEventType = SyncEventType> = {
 	operationType: string;
 	/** Terminal outcome for this event type. */
 	outcome: NonNullable<LogTerminalFields['outcome']>;
+	code: ErrorCode | null | ((event: SyncEvent, fields: SyncEventFieldsBase) => ErrorCode | null);
 	/** False when this event is internal narration, even if its emitter raises the level. */
 	visible?: boolean;
 	/** Cashier-facing severity when it intentionally differs from the engine severity. */
@@ -163,6 +165,7 @@ function recordMessage(verb: string): NonNullable<Conformance['message']> {
 const INHERITED_DEFAULT = {
 	operationType: 'sync.other',
 	outcome: 'failed',
+	code: null,
 	didWork: () => false,
 } satisfies Conformance;
 
@@ -173,17 +176,26 @@ const INVISIBLE = { ...INHERITED_DEFAULT, visible: false } satisfies Conformance
  * to the row it writes. The `satisfies ConformanceTable` at the bottom is what
  * makes the map TOTAL: a type missing from here fails the build.
  */
-const CONFORMANCE_TABLE = {
+export const CONFORMANCE_TABLE = {
 	'signal.cycle': {
 		operationType: 'sync.cycle',
 		outcome: 'ok',
+		code: null,
 		didWork: (f) => num(f.pulls) + num(f.deletes) > 0,
 	},
-	'signal.cursor': { operationType: 'sync.cursor', outcome: 'unknown' },
-	'signal.tick.error': { operationType: 'sync.cycle', outcome: 'failed' },
+	'signal.cursor': { operationType: 'sync.cursor', outcome: 'unknown', code: 'SYNC301' },
+	'signal.tick.error': {
+		operationType: 'sync.cycle',
+		outcome: 'failed',
+		// No status field means the failure was local (bulkUpsert and friends), not
+		// transport — stamping an "unreachable" code there would mislead (#836).
+		code: (_event, fields) =>
+			typeof fields.status !== 'number' ? 'SYNC401' : fields.status >= 500 ? 'SYNC131' : 'SYNC121',
+	},
 	'engine.lane.tick': {
 		operationType: 'sync.lane',
 		outcome: 'ok',
+		code: 'SYNC401',
 		didWork: (f) =>
 			f.status === 'error' ||
 			num(f.pushed) + num(f.conflicts) + num(f.deferred) + num(f.failed) + num(f.rejected) > 0,
@@ -195,50 +207,88 @@ const CONFORMANCE_TABLE = {
 	// 'failed' on purpose: adapting to a struggling server is the app working,
 	// and the observer's derivation below still promotes an explicit
 	// `outcome: 'recovered'` when a back-off closes out (#899).
-	'cadence.start': { operationType: 'sync.cadence', outcome: 'ok' },
-	'cadence.reconfigured': { operationType: 'sync.cadence', outcome: 'ok' },
-	'cadence.backoff': { operationType: 'sync.cadence', outcome: 'ok' },
-	'cadence.recovered': { operationType: 'sync.cadence', outcome: 'ok' },
-	'engine.ready': { operationType: 'sync.startup', outcome: 'ok' },
-	'engine.ready-failed': { operationType: 'sync.startup', outcome: 'failed' },
-	'engine.ready-stalled': { operationType: 'sync.startup', outcome: 'unknown' },
-	'engine.scope-switched': { operationType: 'sync.scope', outcome: 'ok' },
-	'engine.collection-reset': { operationType: 'sync.reset', outcome: 'ok' },
-	'engine.reset-needs-confirmation': { operationType: 'sync.reset', outcome: 'cancelled' },
-	'engine.disposed': { operationType: 'sync.lifecycle', outcome: 'ok' },
-	'engine.connectivity-error': { operationType: 'sync.lifecycle', outcome: 'failed' },
-	'engine.pos-bootstrap-error': { operationType: 'sync.startup', outcome: 'failed' },
-	'engine.guard': { operationType: 'sync.scope', outcome: 'cancelled' },
-	'apply.pull': { operationType: 'sync.apply', outcome: 'ok', didWork: (f) => num(f.applied) > 0 },
+	'cadence.start': { operationType: 'sync.cadence', outcome: 'ok', code: null },
+	'cadence.reconfigured': { operationType: 'sync.cadence', outcome: 'ok', code: null },
+	'cadence.backoff': { operationType: 'sync.cadence', outcome: 'ok', code: null },
+	'cadence.recovered': { operationType: 'sync.cadence', outcome: 'ok', code: null },
+	'engine.ready': { operationType: 'sync.startup', outcome: 'ok', code: null },
+	'engine.ready-failed': { operationType: 'sync.startup', outcome: 'failed', code: 'CLIENT101' },
+	'engine.ready-stalled': {
+		operationType: 'sync.startup',
+		outcome: 'unknown',
+		code: 'CLIENT111',
+		// The watchdog emits at error, but the CLIENT111 ruling is warn severity —
+		// a stall that usually self-resolves must not read as a failure.
+		level: 'warn',
+	},
+	'engine.scope-switched': { operationType: 'sync.scope', outcome: 'ok', code: null },
+	'engine.collection-reset': { operationType: 'sync.reset', outcome: 'ok', code: null },
+	'engine.reset-needs-confirmation': {
+		operationType: 'sync.reset',
+		outcome: 'cancelled',
+		code: null,
+	},
+	'engine.disposed': { operationType: 'sync.lifecycle', outcome: 'ok', code: null },
+	'engine.connectivity-error': {
+		operationType: 'sync.lifecycle',
+		outcome: 'failed',
+		code: 'SYNC121',
+	},
+	'engine.pos-bootstrap-error': {
+		operationType: 'sync.startup',
+		outcome: 'failed',
+		code: 'CLIENT101',
+	},
+	'engine.guard': {
+		operationType: 'sync.scope',
+		outcome: 'cancelled',
+		code: null,
+		level: 'info',
+	},
+	'apply.pull': {
+		operationType: 'sync.apply',
+		outcome: 'ok',
+		code: 'SYNC321',
+		didWork: (f) => num(f.applied) > 0,
+	},
 	'apply.delete': {
 		operationType: 'sync.apply',
 		outcome: 'ok',
+		code: 'SYNC321',
 		didWork: (f) => num(f.applied) > 0,
 	},
-	'apply.rebaseline': { operationType: 'sync.apply', outcome: 'ok' },
+	'apply.rebaseline': { operationType: 'sync.apply', outcome: 'ok', code: 'SYNC321' },
 	'apply.refetch': {
 		operationType: 'sync.apply',
 		outcome: 'ok',
+		code: null,
 		didWork: (f) => num(f.refetched) > 0,
 	},
-	'apply.refresh': { operationType: 'sync.apply', outcome: 'ok' },
-	'apply.barcode-rederive': { operationType: 'sync.apply', outcome: 'ok' },
-	'targeted.pull.shortfall-prune': { operationType: 'sync.apply', outcome: 'recovered' },
+	'apply.refresh': { operationType: 'sync.apply', outcome: 'ok', code: null },
+	'apply.barcode-rederive': { operationType: 'sync.apply', outcome: 'ok', code: null },
+	'targeted.pull.shortfall-prune': {
+		operationType: 'sync.apply',
+		outcome: 'recovered',
+		code: null,
+	},
 	'apply.escalation': {
 		operationType: 'sync.record',
 		outcome: 'failed',
+		code: 'SYNC101',
 		message: recordMessage('pull escalation'),
 	},
 	'coverage.require.outcome': {
 		operationType: 'sync.coverage',
 		outcome: 'ok',
+		code: null,
 		didWork: (f) => num(f.documents) > 0 || num(f.requests) > 0,
 	},
-	'coverage.require.error': { operationType: 'sync.coverage', outcome: 'failed' },
-	'coverage.existence-prime': { operationType: 'sync.coverage', outcome: 'ok' },
+	'coverage.require.error': { operationType: 'sync.coverage', outcome: 'failed', code: 'SYNC321' },
+	'coverage.existence-prime': { operationType: 'sync.coverage', outcome: 'ok', code: null },
 	'coverage.existence-reconcile': {
 		operationType: 'sync.coverage',
 		outcome: 'ok',
+		code: null,
 		// Prune is the audit's only executed action. `missing`/`changed` are
 		// observations, and windowed stores keep `missing` > 0 by design — counting
 		// them as work would persist a steady-state row every audit cycle.
@@ -249,12 +299,22 @@ const CONFORMANCE_TABLE = {
 		// this gate an idle terminal writes a recurring 'ok' row that records no work.
 		operationType: 'sync.coverage',
 		outcome: 'ok',
+		code: null,
 		didWork: (f) => num(f.removed) > 0,
 	},
-	'coverage.ledger-rebuilt': { operationType: 'sync.coverage', outcome: 'recovered' },
+	'coverage.ledger-rebuilt': { operationType: 'sync.coverage', outcome: 'recovered', code: null },
 	'transport.request': {
 		operationType: 'sync.http',
 		outcome: 'ok',
+		code: (_event, fields) => {
+			const status = num(fields.status);
+			if (status === 401) return 'AUTH101';
+			if (status === 403) return 'AUTH201';
+			if (status === 429) return 'SYNC141';
+			if (status === 0) return 'SYNC121';
+			if (status >= 500) return 'SYNC131';
+			return 'SYNC121';
+		},
 		// Failures only. A successful data-bearing request is a unit of work, but
 		// the engine issues them continuously (a poll every few seconds, several
 		// requests each), so persisting them would evict every other row well
@@ -270,31 +330,52 @@ const CONFORMANCE_TABLE = {
 	'push.outcome': {
 		operationType: 'sync.record',
 		outcome: 'ok',
+		code: null,
 		message: recordMessage('push completed'),
 	},
 	'push.error': {
 		operationType: 'sync.record',
 		outcome: 'failed',
+		// The adapter emits push.error for auth/rate refusals and for 2xx replies
+		// whose body could not be read — those reached the store, so "unreachable"
+		// would mislead. 2xx-with-unreadable-ack is the record not confirming:
+		// SYNC_PARTIAL until #1150's generic codes offer a sharper home.
+		code: (_event, fields) => {
+			const status = typeof fields.status === 'number' ? fields.status : 0;
+			if (status === 401) return 'AUTH101';
+			if (status === 403) return 'AUTH201';
+			if (status === 429) return 'SYNC141';
+			if (status >= 500) return 'SYNC131';
+			if (fields.reason === 'pos_data_invalid') return 'SYNC211';
+			if (status >= 400) return 'SYNC201';
+			if (status >= 200 && status < 300) return 'SYNC321';
+			return 'SYNC121';
+		},
 		message: recordMessage('push failed'),
 	},
 	'push.aborted': {
 		operationType: 'sync.record',
 		outcome: 'cancelled',
+		code: null,
 		message: recordMessage('push aborted'),
 	},
 	'push.conflict': {
 		operationType: 'sync.record',
 		outcome: 'failed',
+		code: 'SYNC221',
 		message: recordMessage('push conflict'),
 	},
 	'push.in_progress': {
 		operationType: 'sync.record',
 		outcome: 'failed',
+		code: null,
+		level: 'info',
 		message: recordMessage('push already in progress'),
 	},
 	'push.rejected': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
+		code: 'SYNC201',
 		message: recordMessage('rejected by server'),
 	},
 	// R1: the write SUCCEEDED — the server accepted the order and the till
@@ -318,16 +399,19 @@ const CONFORMANCE_TABLE = {
 	'push.money-divergence': {
 		operationType: 'sync.money',
 		outcome: 'failed',
+		code: 'CHECKOUT401',
 		message: recordMessage('server totals differ from the till'),
 	},
 	'queue.write.needs-revision': {
 		operationType: 'sync.record',
 		outcome: 'rejected',
+		code: 'SYNC211',
 		message: recordMessage('needs revision'),
 	},
 	'queue.write.auto-reverted': {
 		operationType: 'sync.record',
 		outcome: 'recovered',
+		code: 'SYNC201',
 		level: 'error',
 		toast(event, fields) {
 			// The server's human-readable message ("Sorry, you are not allowed to
@@ -346,43 +430,56 @@ const CONFORMANCE_TABLE = {
 	'queue.write.conflict-transition': {
 		operationType: 'sync.record',
 		outcome: 'failed',
+		code: 'SYNC221',
 		message: recordMessage('conflict transition failed'),
 	},
 	'queue.write.reschedule-failed': {
 		operationType: 'sync.record',
 		outcome: 'failed',
+		code: 'SYNC321',
 		message: recordMessage('reschedule failed'),
 	},
 	'queue.write.resolve': {
 		operationType: 'sync.record',
 		outcome: 'ok',
+		code: null,
 		message: recordMessage('conflict resolved'),
 	},
 	'queue.write.discard-repull-deferred': {
 		operationType: 'sync.record',
 		outcome: 'unknown',
+		code: null,
+		level: 'info',
 		message: recordMessage('repull deferred'),
 	},
 	'queue.write.born-twice-requeue': {
 		operationType: 'sync.record',
 		outcome: 'unknown',
+		code: null,
+		level: 'info',
 		message: recordMessage('requeued after duplicate create'),
 	},
 	'queue.write.drain': {
 		operationType: 'sync.queue',
 		outcome: 'ok',
+		code: null,
 		didWork: (f) => num(f.pushed) + num(f.conflicts) + num(f.failed) + num(f.rejected) > 0,
 	},
 	'queue.scheduler.drain': {
 		operationType: 'sync.queue',
 		outcome: 'ok',
+		code: 'SYNC321',
 		didWork: (f) => num(f.succeeded) + num(f.failed) > 0,
 	},
-	'queue.write.enqueued': { operationType: 'sync.queue', outcome: 'ok' },
-	'queue.write.annihilate': { operationType: 'sync.queue', outcome: 'ok' },
-	'queue.write.coalesce': { operationType: 'sync.queue', outcome: 'ok' },
-	'queue.write.tick.error': { operationType: 'sync.queue', outcome: 'failed' },
-	'engine.listener-error': { operationType: 'sync.lifecycle', outcome: 'failed' },
+	'queue.write.enqueued': { operationType: 'sync.queue', outcome: 'ok', code: null },
+	'queue.write.annihilate': { operationType: 'sync.queue', outcome: 'ok', code: null },
+	'queue.write.coalesce': { operationType: 'sync.queue', outcome: 'ok', code: null },
+	'queue.write.tick.error': { operationType: 'sync.queue', outcome: 'failed', code: 'SYNC321' },
+	'engine.listener-error': {
+		operationType: 'sync.lifecycle',
+		outcome: 'failed',
+		code: 'CLIENT999',
+	},
 
 	// ————————————————————————————————————————————————————————————————————————
 	// Explicit cashier-facing decisions for the 21 events that formerly inherited
@@ -392,6 +489,7 @@ const CONFORMANCE_TABLE = {
 	'browse-window.backstop-reached': {
 		operationType: 'sync.coverage',
 		outcome: 'unknown',
+		code: null,
 		didWork: () => true,
 	},
 	// decided: invisible — a racing reset only changes internal lane bookkeeping.
@@ -412,6 +510,7 @@ const CONFORMANCE_TABLE = {
 	'customer.browse-window.sort-rejected': {
 		operationType: 'sync.coverage',
 		outcome: 'rejected',
+		code: null,
 		didWork: () => true,
 	},
 	// decided: invisible — the activity counter self-corrects without changing cashier work.
@@ -420,6 +519,7 @@ const CONFORMANCE_TABLE = {
 	'engine.barcode-selector-hydrate-failed': {
 		operationType: 'sync.startup',
 		outcome: 'failed',
+		code: 'PRODUCT411',
 		level: 'warn',
 		didWork: () => true,
 	},
@@ -429,12 +529,14 @@ const CONFORMANCE_TABLE = {
 	'engine.write-leader.degraded': {
 		operationType: 'sync.lifecycle',
 		outcome: 'unknown',
+		code: 'CLIENT121',
 		didWork: () => true,
 	},
 	// decided: visible — a crashed background lane is cashier-visible degradation until retry.
 	'maintenance.lane.error': {
 		operationType: 'sync.lane',
 		outcome: 'failed',
+		code: 'SYNC401',
 		level: 'warn',
 		didWork: () => true,
 	},
@@ -444,18 +546,21 @@ const CONFORMANCE_TABLE = {
 	'product.browse-window.approximate': {
 		operationType: 'sync.coverage',
 		outcome: 'unknown',
+		code: null,
 		didWork: () => true,
 	},
 	// decided: visible — an unsupported brand filter changes the products the cashier sees.
 	'product.browse-window.brand-filter-ignored': {
 		operationType: 'sync.coverage',
 		outcome: 'rejected',
+		code: null,
 		didWork: () => true,
 	},
 	// decided: visible — an unsaved rejection can leave a cashier's sale unrecoverable.
 	'push.dead-letter-unpersisted': {
 		operationType: 'sync.record',
 		outcome: 'failed',
+		code: 'SYNC101',
 		didWork: () => true,
 		message: recordMessage('rejected change could not be saved for recovery'),
 	},
@@ -465,6 +570,8 @@ const CONFORMANCE_TABLE = {
 	'queue.write.requeue-rebuilt': {
 		operationType: 'sync.record',
 		outcome: 'recovered',
+		code: null,
+		level: 'info',
 		didWork: () => true,
 		message: recordMessage('queued to send again'),
 	},
@@ -533,6 +640,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 		// still emit a name this table has never heard of, and a merchant's failure
 		// must never be dropped just because its label is unknown here.
 		const conformance: Conformance = mapped ?? INHERITED_DEFAULT;
+		const code =
+			typeof conformance.code === 'function' ? conformance.code(event, fields) : conformance.code;
 		// The did-work gate only ever suppresses IDLE work. A warn/error event is
 		// never idle, so it bypasses the gate entirely: several emitters raise the
 		// level on a signal their counters don't carry — `queue.scheduler.drain`
@@ -580,6 +689,8 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			type: event.type,
 			...(collection !== undefined ? { collection } : {}),
 		};
+		delete context.errorCode;
+		if (isFailure && code !== null) context.errorCode = code;
 		// The explicit outcome is promoted to the terminal column; a copy in context
 		// would just shadow it with a second, unfilterable source of truth.
 		if (explicitOutcome !== undefined) delete context.outcome;

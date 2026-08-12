@@ -4,7 +4,7 @@
 import type { SyncEvent } from '@wcpos/sync-core';
 import { isVerboseDiagnostics, type LogTerminalFields, promoteRecorder } from '@wcpos/utils/logger';
 
-import { createSyncLogObserver } from './sync-log-observer';
+import { CONFORMANCE_TABLE, createSyncLogObserver } from './sync-log-observer';
 
 jest.mock('@wcpos/utils/logger', () => ({
 	isVerboseDiagnostics: jest.fn(() => false),
@@ -42,6 +42,74 @@ describe('createSyncLogObserver', () => {
 				rows.push({ level, message, context, terminal, toast }),
 			nowMs: () => 2_000,
 		});
+	});
+
+	it('requires an explicit code ruling for every conformance entry', () => {
+		for (const [, conformance] of Object.entries(CONFORMANCE_TABLE)) {
+			expect(conformance).toHaveProperty('code');
+		}
+	});
+
+	it('stamps mapped failure codes but not mapped info rows', () => {
+		observer.observe(
+			event({
+				type: 'engine.lane.tick',
+				level: 'error',
+				fields: { status: 'error' },
+			})
+		);
+		observer.observe(
+			event({
+				type: 'engine.lane.tick',
+				fields: { status: 'ran', pushed: 1, errorCode: 'SYNC401' },
+			})
+		);
+
+		expect(rows[0].context.errorCode).toBe('SYNC401');
+		expect(rows[1].context.errorCode).toBeUndefined();
+	});
+
+	it.each([
+		[503, 'SYNC131'],
+		[0, 'SYNC121'],
+		[403, 'AUTH201'],
+	])('resolves transport status %s to %s', (status, errorCode) => {
+		observer.observe(event({ type: 'transport.request', level: 'warn', fields: { status } }));
+
+		expect(rows[0].context.errorCode).toBe(errorCode);
+	});
+
+	it('stamps a statusless signal tick failure as a crashed task, not unreachable', () => {
+		observer.observe(event({ type: 'signal.tick.error', level: 'error', fields: {} }));
+
+		expect(rows[0].context.errorCode).toBe('SYNC401');
+	});
+
+	it.each([
+		[{ status: 401 }, 'AUTH101'],
+		[{ status: 403 }, 'AUTH201'],
+		[{ status: 429 }, 'SYNC141'],
+		[{ status: 204, reason: 'no-document' }, 'SYNC321'],
+		[{ status: 400, reason: 'pos_data_invalid' }, 'SYNC211'],
+		[{ status: 409, reason: 'identity-ambiguous' }, 'SYNC201'],
+		[{ status: 503 }, 'SYNC131'],
+	])('resolves push.error fields %j to %s', (fields, errorCode) => {
+		observer.observe(event({ type: 'push.error', level: 'error', fields }));
+
+		expect(rows[0].context.errorCode).toBe(errorCode);
+	});
+
+	it('renders a startup stall at warn per the CLIENT111 ruling', () => {
+		observer.observe(event({ type: 'engine.ready-stalled', level: 'error' }));
+
+		expect(rows[0].level).toBe('warn');
+		expect(rows[0].context.errorCode).toBe('CLIENT111');
+	});
+
+	it('demotes engine.guard warnings to info', () => {
+		observer.observe(event({ type: 'engine.guard', level: 'warn' }));
+
+		expect(rows[0].level).toBe('info');
 	});
 
 	it('does not rate-limit repeated record failures', () => {
