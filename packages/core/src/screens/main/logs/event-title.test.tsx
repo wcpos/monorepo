@@ -5,7 +5,9 @@ import { renderHook } from '@testing-library/react';
 
 import { EVENT_LABELS } from '@wcpos/utils/logger/generated/event-labels.generated';
 
+import { createTestT } from '../../../../jest/translate';
 import { useEventTitle } from './event-title';
+import { translateEventDescription } from './generated/event-titles.generated';
 
 import type { LogRow } from './logs-logic';
 
@@ -86,5 +88,17 @@ describe('useEventTitle', () => {
 	it('renders empty rather than blowing up on a row with neither', () => {
 		expect(titleFor(row({}))).toBe('');
 		expect(titleFor(row({ context: { type: 42 } }))).toBe('');
+	});
+});
+
+describe('translateEventDescription', () => {
+	it('round-trips a described event through the English catalogue', () => {
+		expect(translateEventDescription(createTestT(), 'apply.pull')).toBe(
+			'Updates made in your store were saved to this device.'
+		);
+	});
+
+	it('returns undefined for an event without a description', () => {
+		expect(translateEventDescription(createTestT(), 'apply.escalation')).toBeUndefined();
 	});
 });

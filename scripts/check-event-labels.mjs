@@ -20,6 +20,7 @@ import { validateRegistry } from './generate-event-labels.mjs';
  *      enumerate, so it is rejected at source.
  *   3. Every registry entry carries a nonblank label. A `type` with no `label`
  *      is not coverage; it renders blank.
+ *   4. Descriptions are optional, but a present description must be nonblank.
  */
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

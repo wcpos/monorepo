@@ -73,6 +73,12 @@ describe('event registry', () => {
 			const generated = EVENT_LABELS[entry.type as keyof typeof EVENT_LABELS];
 			expect(generated.label).toBe(entry.label);
 			expect(generated.key).toBe(`health.logs.event.${entry.type.replace(/[.-]/g, '_')}`);
+			if ('description' in entry) {
+				expect(generated.description).toBe(entry.description);
+				expect(generated.descriptionKey).toBe(
+					`health.logs.event_description.${entry.type.replace(/[.-]/g, '_')}`
+				);
+			}
 		}
 	});
 
@@ -121,6 +127,10 @@ describe('event registry', () => {
 			const key = `health.logs.event.${entry.type.replace(/[.-]/g, '_')}`;
 			expect(source).toContain(`case '${entry.type}':`);
 			expect(source).toContain(`t('${key}');`);
+			if ('description' in entry) {
+				const descriptionKey = `health.logs.event_description.${entry.type.replace(/[.-]/g, '_')}`;
+				expect(source).toContain(`t('${descriptionKey}');`);
+			}
 		}
 		// No `defaultValue` fallbacks: English is bundled and is the fallback
 		// language, so a copy here would be a third, drift-prone one.
@@ -136,6 +146,11 @@ describe('event registry', () => {
 		);
 		for (const entry of registry) {
 			expect(locale[`health.logs.event.${entry.type.replace(/[.-]/g, '_')}`]).toBe(entry.label);
+			if ('description' in entry) {
+				expect(locale[`health.logs.event_description.${entry.type.replace(/[.-]/g, '_')}`]).toBe(
+					entry.description
+				);
+			}
 		}
 	});
 });

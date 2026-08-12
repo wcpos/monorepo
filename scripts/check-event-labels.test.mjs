@@ -220,4 +220,16 @@ describe('checkEventLabels', () => {
 			/missing required field label/
 		);
 	});
+
+	it('fails when an optional description is present but empty', async () => {
+		const registry = (await readRegistry()).map((entry) =>
+			entry.type === 'signal.cycle' ? { ...entry, description: '   ' } : entry
+		);
+		const directory = fixture({ 'registry.json': JSON.stringify(registry) });
+
+		await assert.rejects(
+			() => checkEventLabels(path.join(directory, 'registry.json')),
+			/optional field description/
+		);
+	});
 });

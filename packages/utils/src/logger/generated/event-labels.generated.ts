@@ -98,6 +98,9 @@ export interface EventLabelEntry {
 	key: string;
 	/** Source-of-truth English, mirrored as the `t()` call's defaultValue. */
 	label: string;
+	/** Optional plain-language detail shown for quiet rows. */
+	description?: string;
+	descriptionKey?: string;
 	introducedIn: string;
 }
 
@@ -107,6 +110,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.apply_barcode_rederive',
 		label: 'Rebuilt barcode lookups',
+		descriptionKey: 'health.logs.event_description.apply_barcode_rederive',
+		description: 'Barcode lookups were rebuilt after product changes.',
 		introducedIn: '1.10.0',
 	},
 	'apply.delete': {
@@ -114,6 +119,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.apply_delete',
 		label: 'Removed items deleted in your store',
+		descriptionKey: 'health.logs.event_description.apply_delete',
+		description: 'Items deleted in your store were removed on this device.',
 		introducedIn: '1.10.0',
 	},
 	'apply.escalation': {
@@ -128,6 +135,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.apply_pull',
 		label: 'Saved updates from your store',
+		descriptionKey: 'health.logs.event_description.apply_pull',
+		description: 'Updates made in your store were saved to this device.',
 		introducedIn: '1.10.0',
 	},
 	'apply.rebaseline': {
@@ -135,6 +144,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.apply_rebaseline',
 		label: 'Refreshed local data from your store',
+		descriptionKey: 'health.logs.event_description.apply_rebaseline',
+		description: 'Local data was refreshed from your store to stay accurate.',
 		introducedIn: '1.10.0',
 	},
 	'apply.refetch': {
@@ -142,6 +153,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.apply_refetch',
 		label: 'Fetched records again for missing details',
+		descriptionKey: 'health.logs.event_description.apply_refetch',
+		description: 'The POS fetched some records again to fill in missing details.',
 		introducedIn: '1.10.0',
 	},
 	'apply.refresh': {
@@ -275,6 +288,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.coverage_require_outcome',
 		label: 'Loaded the records this screen needs',
+		descriptionKey: 'health.logs.event_description.coverage_require_outcome',
+		description: 'The POS loaded the records this screen needed.',
 		introducedIn: '1.10.0',
 	},
 	'customer.browse-window.sort-rejected': {
@@ -338,6 +353,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_barcode_selector_hydrate_failed',
 		label: 'Barcode settings could not be loaded',
+		descriptionKey: 'health.logs.event_description.engine_barcode_selector_hydrate_failed',
+		description: 'Barcode settings could not load, so scans may not match products until they do.',
 		introducedIn: '1.10.0',
 	},
 	'engine.collection-reset': {
@@ -345,6 +362,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_collection_reset',
 		label: 'Local data was reset',
+		descriptionKey: 'health.logs.event_description.engine_collection_reset',
+		description: 'Local data for one kind of record was cleared and refilled from your store.',
 		introducedIn: '1.10.0',
 	},
 	'engine.connectivity-error': {
@@ -352,6 +371,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_connectivity_error',
 		label: 'Lost the connection to your store',
+		descriptionKey: 'health.logs.event_description.engine_connectivity_error',
+		description: 'The POS lost its connection to your store. It keeps retrying automatically.',
 		introducedIn: '1.10.0',
 	},
 	'engine.disposed': {
@@ -373,6 +394,9 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_lane_tick',
 		label: 'Background sync task finished',
+		descriptionKey: 'health.logs.event_description.engine_lane_tick',
+		description:
+			'A scheduled background sync task ran. If it failed, the POS restarts it automatically.',
 		introducedIn: '1.10.0',
 	},
 	'engine.listener-error': {
@@ -394,6 +418,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_ready',
 		label: 'Syncing started',
+		descriptionKey: 'health.logs.event_description.engine_ready',
+		description: 'Syncing started and the POS is watching your store for changes.',
 		introducedIn: '1.10.0',
 	},
 	'engine.ready-failed': {
@@ -429,6 +455,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_scope_switched',
 		label: 'Switched to another store',
+		descriptionKey: 'health.logs.event_description.engine_scope_switched',
+		description: 'You switched stores, so the POS now syncs the new store.',
 		introducedIn: '1.10.0',
 	},
 	'engine.write-leader.degraded': {
@@ -436,6 +464,9 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.engine_write_leader_degraded',
 		label: 'This browser can only sync one tab at a time',
+		descriptionKey: 'health.logs.event_description.engine_write_leader_degraded',
+		description:
+			'Only one browser tab sends changes at a time. Every tab keeps working from the same local data.',
 		introducedIn: '1.10.0',
 	},
 	'maintenance.lane.error': {
@@ -443,6 +474,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.maintenance_lane_error',
 		label: 'A background maintenance task failed',
+		descriptionKey: 'health.logs.event_description.maintenance_lane_error',
+		description: 'A background tidy-up task failed. The POS retries it automatically.',
 		introducedIn: '1.10.0',
 	},
 	'maintenance.lane.tick': {
@@ -478,6 +511,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.push_conflict',
 		label: 'A change clashed with an edit in your store',
+		descriptionKey: 'health.logs.event_description.push_conflict',
+		description: 'This change clashed with an edit made in your store.',
 		introducedIn: '1.10.0',
 	},
 	'push.dead-letter-unpersisted': {
@@ -492,6 +527,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.push_error',
 		label: 'Could not send a change to your store',
+		descriptionKey: 'health.logs.event_description.push_error',
+		description: 'A change could not be sent to your store. It stays safely queued to retry.',
 		introducedIn: '1.10.0',
 	},
 	'push.in_progress': {
@@ -513,6 +550,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.push_outcome',
 		label: 'Sent a change to your store',
+		descriptionKey: 'health.logs.event_description.push_outcome',
+		description: 'A change from this device was accepted by your store.',
 		introducedIn: '1.10.0',
 	},
 	'push.rejected': {
@@ -520,6 +559,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.push_rejected',
 		label: 'Your store rejected a change',
+		descriptionKey: 'health.logs.event_description.push_rejected',
+		description: 'Your store refused this change. It needs attention before it can be sent.',
 		introducedIn: '1.10.0',
 	},
 	'queue.drain.progress': {
@@ -534,6 +575,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_scheduler_drain',
 		label: 'Background sync finished a batch',
+		descriptionKey: 'health.logs.event_description.queue_scheduler_drain',
+		description: 'The POS worked through a batch of queued background sync jobs.',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.annihilate': {
@@ -541,6 +584,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_annihilate',
 		label: 'A change cancelled itself out before it was sent',
+		descriptionKey: 'health.logs.event_description.queue_write_annihilate',
+		description: 'A change was dropped because a newer edit replaced it before sending.',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.auto-reverted': {
@@ -562,6 +607,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_coalesce',
 		label: 'Merged repeated edits into one update',
+		descriptionKey: 'health.logs.event_description.queue_write_coalesce',
+		description: 'Several quick edits to the same record were combined into one send.',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.conflict-transition': {
@@ -583,6 +630,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_drain',
 		label: 'Processed queued changes for your store',
+		descriptionKey: 'health.logs.event_description.queue_write_drain',
+		description: 'The POS sent your queued changes to your store.',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.enqueued': {
@@ -590,6 +639,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.queue_write_enqueued',
 		label: 'Queued a change to send to your store',
+		descriptionKey: 'health.logs.event_description.queue_write_enqueued',
+		description: 'A change you made was queued to send to your store.',
 		introducedIn: '1.10.0',
 	},
 	'queue.write.needs-revision': {
@@ -632,6 +683,9 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.signal_cursor',
 		label: 'Sync position moved unexpectedly',
+		descriptionKey: 'health.logs.event_description.signal_cursor',
+		description:
+			"The POS's bookmark of where it was up to in your store's changes moved unexpectedly.",
 		introducedIn: '1.10.0',
 	},
 	'signal.cycle': {
@@ -639,6 +693,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.signal_cycle',
 		label: 'Checked your store for changes',
+		descriptionKey: 'health.logs.event_description.signal_cycle',
+		description: 'The POS checked your store for changes and saved anything new.',
 		introducedIn: '1.10.0',
 	},
 	'signal.log': {
@@ -653,6 +709,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.signal_tick_error',
 		label: 'Checking your store for changes failed',
+		descriptionKey: 'health.logs.event_description.signal_tick_error',
+		description: 'A routine check of your store for changes did not get an answer.',
 		introducedIn: '1.10.0',
 	},
 	'targeted.pull.shortfall-prune': {
@@ -667,6 +725,8 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.transport_request',
 		label: 'Request to your store',
+		descriptionKey: 'health.logs.event_description.transport_request',
+		description: 'The POS made a web request to your store.',
 		introducedIn: '1.10.0',
 	},
 };

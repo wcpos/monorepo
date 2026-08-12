@@ -22,6 +22,7 @@ const BANNER = '// GENERATED — do not edit by hand; run pnpm generate:event-la
 const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT'];
 const FIELDS = ['type', 'domain', 'label', 'introducedIn'];
 const KEY_PREFIX = 'health.logs.event.';
+const DESCRIPTION_KEY_PREFIX = 'health.logs.event_description.';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -30,7 +31,28 @@ export function labelKey(type) {
 	return `${KEY_PREFIX}${type.replace(/[.-]/g, '_')}`;
 }
 
-const quote = (value) => `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+export function descriptionKey(type) {
+	return `${DESCRIPTION_KEY_PREFIX}${type.replace(/[.-]/g, '_')}`;
+}
+
+// Match Prettier's quote choice so generated output is lint-clean by construction
+// (same rule as generate-error-codes.mjs): single quotes, switching to double when
+// the string contains an apostrophe.
+const quote = (value) => {
+	const escaped = value.replace(/\\/g, '\\\\');
+	return escaped.includes("'")
+		? `"${escaped.replace(/"/g, '\\"')}"`
+		: `'${escaped}'`;
+};
+
+// Prettier wraps an object-property value onto its own continuation line when the
+// property line exceeds printWidth 100 (tabs counted at tabWidth 2).
+const propertyLine = (tabs, name, quoted) => {
+	const inline = `${'\t'.repeat(tabs)}${name}: ${quoted},`;
+	const width = tabs * 2 + `${name}: ${quoted},`.length;
+	if (width <= 100) return inline;
+	return `${'\t'.repeat(tabs)}${name}:\n${'\t'.repeat(tabs + 1)}${quoted},`;
+};
 
 export function validateRegistry(registry) {
 	if (!Array.isArray(registry)) throw new Error('Registry must be a JSON array');
@@ -43,6 +65,12 @@ export function validateRegistry(registry) {
 			if (typeof entry[field] !== 'string' || !entry[field].trim()) {
 				throw new Error(`Entry ${index} is missing required field ${field}`);
 			}
+		}
+		if (
+			Object.hasOwn(entry, 'description') &&
+			(typeof entry.description !== 'string' || !entry.description.trim())
+		) {
+			throw new Error(`Entry ${entry.type ?? index} has invalid optional field description`);
 		}
 		if (!DOMAINS.includes(entry.domain)) {
 			throw new Error(`Entry ${entry.type} has unknown domain: ${entry.domain}`);
@@ -71,6 +99,12 @@ function renderCatalogue(registry) {
 				`\t\tdomain: ${quote(entry.domain)},`,
 				`\t\tkey: ${quote(labelKey(entry.type))},`,
 				`\t\tlabel: ${quote(entry.label)},`,
+				...(entry.description
+					? [
+							`\t\tdescriptionKey: ${quote(descriptionKey(entry.type))},`,
+							propertyLine(2, 'description', quote(entry.description)),
+						]
+					: []),
 				`\t\tintroducedIn: ${quote(entry.introducedIn)},`,
 				'\t},',
 			].join('\n')
@@ -96,6 +130,9 @@ export interface EventLabelEntry {
 	key: string;
 	/** Source-of-truth English, mirrored as the \`t()\` call's defaultValue. */
 	label: string;
+	/** Optional plain-language detail shown for quiet rows. */
+	description?: string;
+	descriptionKey?: string;
 	introducedIn: string;
 }
 
@@ -118,6 +155,15 @@ function renderTitles(registry) {
 			[`\t\tcase ${quote(entry.type)}:`, `\t\t\treturn t(${quote(labelKey(entry.type))});`].join(
 				'\n'
 			)
+		)
+		.join('\n');
+	const descriptions = registry
+		.filter((entry) => entry.description)
+		.map((entry) =>
+			[
+				`\t\tcase ${quote(entry.type)}:`,
+				`\t\t\treturn t(${quote(descriptionKey(entry.type))});`,
+			].join('\n')
 		)
 		.join('\n');
 	return `${BANNER}
@@ -145,6 +191,18 @@ ${cases}
 		}
 	}
 }
+
+/** Plain-language detail for quiet events that have one in the registry. */
+export function translateEventDescription(
+	t: TranslateEvent,
+	type: SyncEventType
+): string | undefined {
+	switch (type) {
+${descriptions}
+		default:
+			return undefined;
+	}
+}
 `;
 }
 
@@ -159,9 +217,16 @@ ${cases}
  */
 export function renderLocale(registry, source) {
 	const existing = Object.entries(source);
-	const anchor = existing.findIndex(([key]) => key.startsWith(KEY_PREFIX));
-	const untouched = existing.filter(([key]) => !key.startsWith(KEY_PREFIX));
-	const block = registry.map((entry) => [labelKey(entry.type), entry.label]);
+	const generatedKey = (key) =>
+		key.startsWith(KEY_PREFIX) || key.startsWith(DESCRIPTION_KEY_PREFIX);
+	const anchor = existing.findIndex(([key]) => generatedKey(key));
+	const untouched = existing.filter(([key]) => !generatedKey(key));
+	const block = [
+		...registry.map((entry) => [labelKey(entry.type), entry.label]),
+		...registry
+			.filter((entry) => entry.description)
+			.map((entry) => [descriptionKey(entry.type), entry.description]),
+	];
 	const at = anchor === -1 ? untouched.length : anchor;
 	const merged = [...untouched.slice(0, at), ...block, ...untouched.slice(at)];
 	return `${JSON.stringify(Object.fromEntries(merged), null, '\t')}\n`;

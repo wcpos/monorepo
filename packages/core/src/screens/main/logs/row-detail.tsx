@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, Share, View } from 'react-native';
 
-import { Button } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogBody,
@@ -10,9 +10,12 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@wcpos/components/dialog';
+import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { Tree } from '@wcpos/components/tree';
 import { VStack } from '@wcpos/components/vstack';
+import { isSyncEventType } from '@wcpos/utils/logger/generated/event-labels.generated';
 import {
 	type CatalogueEntry,
 	ERROR_CATALOGUE,
@@ -22,6 +25,7 @@ import {
 import { useT } from '../../../contexts/translations';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { Callout, type KVEntry, KVGrid, type LevelKind } from '../health/components';
+import { translateEventDescription } from './generated/event-titles.generated';
 import { eventTypeOf, type LogRow, rowDetailData } from './logs-logic';
 
 export function catalogueFor(code: string | undefined): CatalogueEntry | null {
@@ -70,6 +74,51 @@ function useSafeActionText(safeAction: CatalogueEntry['safeAction'] | undefined)
 		default:
 			return null;
 	}
+}
+
+function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
+	const t = useT();
+	const canShare = Platform.OS !== 'web';
+	// Same capability guard as the debug-copy action in logs/index.tsx: outside a
+	// secure context the Clipboard API is absent, and a button that only ever
+	// error-toasts is worse than no button (the text stays selectable).
+	const canCopy = !canShare && typeof navigator !== 'undefined' && !!navigator.clipboard;
+	const handleCopy = React.useCallback(async () => {
+		try {
+			if (canShare) {
+				await Share.share({ message: eventType });
+				return;
+			}
+			await navigator.clipboard.writeText(eventType);
+			Toast.show({ type: 'success', text1: t('health.logs.event_code_copied') });
+		} catch {
+			if (!canShare) {
+				Toast.show({ type: 'error', text1: t('health.logs.event_code_copy_failed') });
+			}
+		}
+	}, [canShare, eventType, t]);
+
+	return (
+		<HStack className="items-center gap-3">
+			<Text className="text-muted-foreground w-24 text-xs">{t('health.logs.kv_event_code')}</Text>
+			<Text selectable className="flex-1 font-mono text-xs">
+				{eventType}
+			</Text>
+			{canShare || canCopy ? (
+				<Button
+					variant="ghost"
+					size="sm"
+					testID={`logs-copy-event-${logId}`}
+					className="h-6 px-2"
+					onPress={() => void handleCopy()}
+				>
+					<ButtonText className="text-xs">
+						{canShare ? t('health.logs.share_event_code') : t('health.logs.copy_event_code')}
+					</ButtonText>
+				</Button>
+			) : null}
+		</HStack>
+	);
 }
 
 /**
@@ -138,14 +187,12 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 	const reason =
 		typeof context.reason === 'string' && context.reason.length > 0 ? context.reason : null;
 	const eventType = eventTypeOf(row);
+	const description =
+		!isProblem && eventType !== undefined && isSyncEventType(eventType)
+			? translateEventDescription((key) => t(key), eventType)
+			: undefined;
 
 	const entries: KVEntry[] = [];
-	if (eventType) {
-		entries.push({
-			label: t('health.logs.kv_event'),
-			value: eventType,
-		});
-	}
 	if (detail.operation) {
 		entries.push({
 			label: t('health.logs.kv_operation'),
@@ -182,10 +229,12 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 		const narration = row.message && row.message !== title ? row.message : null;
 		return (
 			<VStack testID={`logs-detail-${row.logId}`} className="gap-2 py-2 pl-4">
+				{description ? <Text className="text-sm">{description}</Text> : null}
 				{narration ? <Text className="text-muted-foreground text-xs">{narration}</Text> : null}
+				{eventType ? <EventCode eventType={eventType} logId={row.logId} /> : null}
 				{entries.length > 0 ? <KVGrid entries={entries} /> : null}
 				{hasContext ? <Tree value={context} collapsed /> : null}
-				{entries.length === 0 && !hasContext && !narration ? (
+				{entries.length === 0 && !hasContext && !narration && !description ? (
 					<Text className="text-muted-foreground text-xs">{t('health.logs.no_detail')}</Text>
 				) : null}
 			</VStack>
@@ -215,9 +264,10 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 						) : null}
 						{entry && row.code ? <HelpDialog code={row.code} entry={entry} /> : null}
 					</VStack>
-					{entries.length > 0 ? (
+					{eventType || entries.length > 0 ? (
 						<View className="md:w-72">
-							<KVGrid entries={entries} />
+							{eventType ? <EventCode eventType={eventType} logId={row.logId} /> : null}
+							{entries.length > 0 ? <KVGrid entries={entries} /> : null}
 						</View>
 					) : null}
 				</View>
