@@ -188,9 +188,28 @@ jobs:
           QUEUE_JOB='⏳ Shared-store queue'
           SHARD_PREFIX='🎭 E2E Tests ('
 
+          # A transient GitHub API failure (5xx, truncated body — observed
+          # 2026-08-12 as "unexpected end of JSON input" failing this REQUIRED
+          # gate two seconds in) must not fail the gate. Retry each read; the
+          # poll loop below additionally treats a read that stays broken as
+          # "store busy" and just waits out the next cycle, so the only hard
+          # failure left is the job-level timeout.
+          api() {
+            local attempt out
+            for attempt in 1 2 3; do
+              if out=$(gh api "$@" 2>/dev/null); then
+                printf '%s\n' "$out"
+                return 0
+              fi
+              echo "::warning::gh api $1 failed (attempt $attempt/3)" >&2
+              sleep $((attempt * 15))
+            done
+            return 1
+          }
+
           # Our queue-arrival timestamp is the FIFO ordering key.
-          my_started=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
-            --jq ".jobs[] | select(.name == \"$QUEUE_JOB\") | .started_at" | head -n 1)
+          my_started=$(api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+            --jq ".jobs[] | select(.name == \"$QUEUE_JOB\") | .started_at" | head -n 1 || true)
           if [ -z "$my_started" ]; then
             echo "::error::Could not read this run's queue job start time"
             exit 1
@@ -206,16 +225,23 @@ jobs:
             # timeout. Two hours is comfortably past real runner wait times.
             queued_cutoff=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
               || date -u -v-2H '+%Y-%m-%dT%H:%M:%SZ')
-            active_runs=$(
-              gh api "repos/$REPO/actions/workflows/deploy.yml/runs?status=in_progress&per_page=100" \
-                --paginate --jq '.workflow_runs[].id' || exit 1
-              gh api "repos/$REPO/actions/workflows/deploy.yml/runs?status=queued&per_page=100" \
-                --paginate --jq ".workflow_runs[] | select(.created_at > \"$queued_cutoff\") | .id" || exit 1
-            )
+            if ! active_runs=$(
+              api "repos/$REPO/actions/workflows/deploy.yml/runs?status=in_progress&per_page=100" \
+                --paginate --jq '.workflow_runs[].id' &&
+              api "repos/$REPO/actions/workflows/deploy.yml/runs?status=queued&per_page=100" \
+                --paginate --jq ".workflow_runs[] | select(.created_at > \"$queued_cutoff\") | .id"
+            ); then
+              echo "⏳ GitHub API unavailable while listing runs — waiting…"
+              sleep 180
+              continue
+            fi
             for id in $active_runs; do
               [ "$id" = "$RUN_ID" ] && continue
-              jobs=$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
-                --jq '[.jobs[] | {name, status, conclusion, started_at}]')
+              if ! jobs=$(api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
+                --jq '[.jobs[] | {name, status, conclusion, started_at}]'); then
+                busy="run $id could not be inspected (GitHub API error)"
+                break
+              fi
 
               # A shard actively running → the store is in use. (Only
               # in_progress counts: check runs for not-yet-eligible jobs can
