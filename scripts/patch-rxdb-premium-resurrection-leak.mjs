@@ -41,9 +41,13 @@ function shim({ state, ctx, docHandle, events, getDocumentsJson }) {
     // (apps/main/public/opfs.worker.js) can be audited for the patch.
     `globalThis.WCPOS_RESURRECTION_LEAK_PATCH=1;` +
     `var ${MARKER}=${events};` +
+    // Failures are contained PER EVENT: a read/parse failure for one event
+    // leaves only that event unbackfilled (it leaks, the pre-patch status
+    // quo) while completed backfills for the rest of the batch are kept.
     `try{var __wcposMim=${state}.firstIdx&&${state}.firstIdx.metaIdMap;` +
     `if(__wcposMim){` +
     `for(var __wcposQ=0;__wcposQ<${events}.length;__wcposQ++){` +
+    `try{` +
     `var __wcposEv=${events}[__wcposQ];` +
     `if(__wcposEv.previousDocumentData||!__wcposMim.has(__wcposEv.documentId))continue;` +
     `var __wcposOldRow=__wcposMim.get(__wcposEv.documentId);` +
@@ -51,13 +55,23 @@ function shim({ state, ctx, docHandle, events, getDocumentsJson }) {
     `if(!__wcposOldDocs||!__wcposOldDocs[0])continue;` +
     `if(${MARKER}===${events})${MARKER}=${events}.slice(0);` +
     `${MARKER}[__wcposQ]=Object.assign({},__wcposEv,{previousDocumentData:__wcposOldDocs[0]});` +
-    `}}}catch(__wcposErr){${MARKER}=${events};}`
+    `}catch(__wcposEvErr){}` +
+    `}}}catch(__wcposErr){}`
   );
 }
 
-function patchFile(path, { importBefore, importAfter, loopBefore, loopAfter }) {
+/**
+ * Validate-only phase: returns the patched content without writing, so all
+ * dists are checked before any of them is touched — a missing anchor in one
+ * dist must not leave the other half-patched (a retry would then start from
+ * an inconsistent tree).
+ */
+function preparePatch(
+  path,
+  { importBefore, importAfter, loopBefore, loopAfter },
+) {
   const source = readFileSync(path, "utf8");
-  if (source.includes(MARKER)) return "already patched";
+  if (source.includes(MARKER)) return { path, status: "already patched" };
   if (importBefore) {
     if (!source.includes(importBefore)) {
       throw new Error(`anchor missing in ${path}: import site`);
@@ -68,8 +82,14 @@ function patchFile(path, { importBefore, importAfter, loopBefore, loopAfter }) {
   }
   let next = importBefore ? source.replace(importBefore, importAfter) : source;
   next = next.replace(loopBefore, loopAfter);
-  writeFileSync(path, next);
-  return "patched";
+  return { path, next, status: "patched" };
+}
+
+/** Write phase: only reached when every dist validated. */
+function commitPatches(prepared) {
+  for (const { path, next } of prepared) {
+    if (next !== undefined) writeFileSync(path, next);
+  }
 }
 
 const packageRoot = dirname(require.resolve("rxdb-premium/package.json"));
@@ -96,7 +116,7 @@ const esmShim = shim({
   events: "u",
   getDocumentsJson: "__wcposGDJ",
 });
-const esmResult = patchFile(esm, {
+const esmPrepared = preparePatch(esm, {
   importBefore: 'import{writeDocumentRows as r}from"./documents-file.js"',
   importAfter:
     'import{writeDocumentRows as r,getDocumentsJson as __wcposGDJ}from"./documents-file.js"',
@@ -114,7 +134,7 @@ const cjsShim = shim({
   events: "g",
   getDocumentsJson: "(0,n.getDocumentsJson)",
 });
-const cjsResult = patchFile(cjs, {
+const cjsPrepared = preparePatch(cjs, {
   importBefore: 'n=require("./documents-file.js")',
   importAfter: 'n=require("./documents-file.js")',
   loopBefore:
@@ -124,6 +144,8 @@ const cjsResult = patchFile(cjs, {
     "for(var f=[],I=0;I<c.indexStates.length;I++){c.indexStates[I].appendWriteOperations(__wcposIdxEvents,p.documentPositions,f)}",
 });
 
+commitPatches([esmPrepared, cjsPrepared]);
+
 console.log(
-  `[patch-rxdb-premium-resurrection-leak] esm: ${esmResult}, cjs: ${cjsResult}`,
+  `[patch-rxdb-premium-resurrection-leak] esm: ${esmPrepared.status}, cjs: ${cjsPrepared.status}`,
 );
