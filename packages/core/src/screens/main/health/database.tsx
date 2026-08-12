@@ -36,6 +36,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 
 import { AttentionPanel } from './attention-panel';
+import { useManualSync } from './use-manual-sync';
 import { mergeStuckRecords, useDeadLetterStuckRecords } from './use-dead-letter-attention';
 import { useT } from '../../../contexts/translations';
 import { formatSkewMagnitude } from '../logs/logs-logic';
@@ -229,6 +230,7 @@ function CollectionRowView({
 }) {
 	const t = useT();
 	const { engine } = useQueryRuntime();
+	const { syncing, sync } = useManualSync();
 	const [confirming, setConfirming] = React.useState(false);
 	const [phase, setPhase] = React.useState<RowPhase>('idle');
 	const story = useRowStory(row, phase);
@@ -293,13 +295,14 @@ function CollectionRowView({
 					variant="ghost"
 					size="sm"
 					testID={`db-row-menu-${row.key}`}
-					disabled={phase === 'clearing'}
+					disabled={phase === 'clearing' || syncing}
+					loading={syncing}
 				>
 					<Icon name="ellipsisVertical" className="text-muted-foreground" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
-				<DropdownMenuItem onPress={() => void engine.sync()}>
+				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void sync()}>
 					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuItem onPress={() => setConfirming(true)}>
@@ -517,7 +520,7 @@ function HowSyncingWorksDialog() {
  */
 export function DatabaseScreen() {
 	const t = useT();
-	const { engine } = useQueryRuntime();
+	const { syncing, sync } = useManualSync();
 	const status = useEngineStatus();
 	const counts = useCollectionCounts();
 	const census = useCensusTotals();
@@ -767,7 +770,7 @@ export function DatabaseScreen() {
 					</VStack>
 					<HStack className="items-center gap-2">
 						<HowSyncingWorksDialog />
-						<Button variant="outline" size="sm" onPress={() => void engine.sync()}>
+						<Button variant="outline" size="sm" loading={syncing} onPress={() => void sync()}>
 							<ButtonText>{t('health.database.check_everything')}</ButtonText>
 						</Button>
 					</HStack>
