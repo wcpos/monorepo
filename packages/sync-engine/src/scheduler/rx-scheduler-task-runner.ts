@@ -58,7 +58,7 @@ export type PersistedSchedulerTaskOutcomeKind =
 	| 'completion-lost'
 	/** The fetch threw AND the failure write was lost to another owner. */
 	| 'failure-lost'
-	/** A greedy walk lost its lease renewal mid-flight and stopped short. */
+	/** A walk lost its lease renewal mid-flight (between pages or during one) and stopped short. */
 	| 'renewal-lost';
 
 /** One task's own verdict and its own document/request counts. */
@@ -337,13 +337,60 @@ export async function runPersistedSchedulerTasks(
 			});
 		};
 
+		// The lease outlives a page only if it is renewed DURING the page, not just between
+		// pages: on a starved server one fetch can take longer than the whole lease
+		// (observed live 2026-08-12 — 30s pages against the 30s lease), at which point a
+		// concurrent drain claims the row and both owners walk the same window against a
+		// server that is already struggling. The heartbeat keeps the claim fresh while a
+		// fetch is in flight, so a lease expiry now means its owner is actually gone.
+		let heartbeatLost = false;
+		// Strictly shorter than ANY lease (#1175 review P2): a floor above leaseForMs/3
+		// would schedule the first beat after a short lease already expired, silently
+		// re-opening the mid-fetch steal window this heartbeat exists to close.
+		const heartbeatIntervalMs = Math.max(1, Math.floor(input.leaseForMs / 3));
+		const fetchWithLeaseHeartbeat = async (): Promise<FetchTaskResult> => {
+			let stopped = false;
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			// Beats chain onto `settled` so stop() can await the one in flight — the loop
+			// below reads and CASes `activeState`, which a half-finished beat also writes.
+			let settled: Promise<void> = Promise.resolve();
+			const beat = (): void => {
+				timer = setTimeout(() => {
+					settled = settled.then(async () => {
+						if (stopped || heartbeatLost) return;
+						try {
+							const renewedAtMs = currentTime(input);
+							const renewedState = renewState(activeState, input, renewedAtMs);
+							const renewed = await input.repository.claim(activeState, renewedState);
+							if (!renewed) {
+								heartbeatLost = true;
+								return;
+							}
+							activeState = renewedState;
+						} catch {
+							// A storage hiccup skips this beat; the between-page renewal still guards.
+						}
+						if (!stopped && !heartbeatLost) beat();
+					});
+				}, heartbeatIntervalMs);
+			};
+			beat();
+			try {
+				return input.signal
+					? await input.fetcher(task, { signal: input.signal })
+					: await input.fetcher(task);
+			} finally {
+				stopped = true;
+				if (timer !== undefined) clearTimeout(timer);
+				await settled;
+			}
+		};
+
 		const executeTask = async (): Promise<void> => {
 			while (!taskCompleted) {
 				throwIfAborted(input.signal);
 				requests += 1;
-				const fetchResult = input.signal
-					? await input.fetcher(task, { signal: input.signal })
-					: await input.fetcher(task);
+				const fetchResult = await fetchWithLeaseHeartbeat();
 				recordFetchResult(result, fetchResult, taskTotals);
 				try {
 					input.onProgress?.({
@@ -355,6 +402,16 @@ export async function runPersistedSchedulerTasks(
 					// Progress observers are optional telemetry and must not poison durable task state.
 				}
 				taskCompleted = task.mode !== 'greedy' || fetchResult.completed;
+
+				if (heartbeatLost) {
+					// The claim went to another owner mid-fetch. This page's writes landed and
+					// are counted above, but completing — or walking on — would fight the new
+					// owner for the row. Stop as renewal-lost; the browse-window continuation
+					// lets the new owner serve the covered prefix instead of re-fetching it.
+					taskCompleted = false;
+					result.renewalLost += 1;
+					break;
+				}
 
 				if (!taskCompleted && requests >= maxRequests) {
 					throw new Error(`Greedy task ${task.id} exceeded maxRequests=${maxRequests}`);

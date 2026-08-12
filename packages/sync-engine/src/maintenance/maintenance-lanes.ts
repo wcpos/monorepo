@@ -153,7 +153,7 @@ export type MaintenanceLanes = {
 
 type MaintenanceLaneBodyReport = {
 	summary: string | null;
-	level?: 'info' | 'error';
+	level?: 'info' | 'warn' | 'error';
 	status?: 'skipped';
 	reason?: string;
 };
@@ -336,7 +336,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 			fetcher,
 			signal,
-			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
+			// Snapshot + live function: the heartbeat renewals inside the drain must track
+			// an injected clock, not the tick's frozen snapshot (#1175 review P2).
+			...(deps.now !== undefined ? { nowMs: deps.now(), now: deps.now } : {}),
 			...(deps.withCollectionActivity !== undefined
 				? {
 						withCollectionActivity: <T>(collection: string, work: () => Promise<T>) =>
@@ -353,15 +355,21 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.failureLost > 0 ||
 			result.renewalLost > 0;
 		if (!hasActivity) return { summary: null };
+		// Only an actual fetch failure is an ERROR — including `failureLost`, where the
+		// fetch threw and only the failure write was lost. `completionLost`/`renewalLost`
+		// mean another owner took the row mid-flight: a contention release, routine on a
+		// slow server. Logging them red put "could not load" rows in front of cashiers
+		// for drains that lost a benign race (2026-08-12 HAR), so they are warnings.
+		// `claimLost` stays INFO: the row was never claimed, so no work was attempted.
+		const drainLevel =
+			result.failed > 0 || result.failureLost > 0
+				? 'error'
+				: result.completionLost > 0 || result.renewalLost > 0
+					? 'warn'
+					: 'info';
 		deps.diagnostics({
 			type: 'queue.scheduler.drain',
-			level:
-				result.failed > 0 ||
-				result.completionLost > 0 ||
-				result.failureLost > 0 ||
-				result.renewalLost > 0
-					? 'error'
-					: 'info',
+			level: drainLevel,
 			fields: {
 				scanned: result.scanned,
 				succeeded: result.succeeded,
@@ -375,13 +383,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			},
 		});
 		return {
-			level:
-				result.failed > 0 ||
-				result.completionLost > 0 ||
-				result.failureLost > 0 ||
-				result.renewalLost > 0
-					? 'error'
-					: 'info',
+			level: drainLevel,
 			summary: `Scheduler drain: ${result.succeeded} succeeded, ${result.failed} failed, ${result.totalRequests} requests, ${result.totalDocuments} documents`,
 		};
 	});
