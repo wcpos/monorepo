@@ -5,7 +5,7 @@ import set from 'lodash/set';
 import { getDatabaseEpoch, getLogger, mapExceptionToCode } from '@wcpos/utils/logger';
 
 import { http } from './http';
-import { parseWpError } from './parse-wp-error';
+import { mapToInternalCode, parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
@@ -290,7 +290,12 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 				const wpError = axiosError.response?.data
 					? parseWpError(axiosError.response.data, axiosError.message)
 					: undefined;
-				const mappedException = wpError?.code ? undefined : mapExceptionToCode(error);
+				const mappedException = axiosError.response ? undefined : mapExceptionToCode(error);
+				const errorCode =
+					wpError?.code ??
+					(axiosError.response
+						? mapToInternalCode(null, axiosError.response.status)
+						: mappedException?.code);
 				if (!(error as any).isPreFlightBlocked && databaseEpoch === getDatabaseEpoch()) {
 					const method = (reqConfig.method ?? 'GET').toUpperCase();
 					const endpoint = reqConfig.url
@@ -303,7 +308,8 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 							method,
 							endpoint,
 							status: axiosError.response?.status ?? 0,
-							errorCode: wpError?.code ?? mappedException?.code,
+							errorCode,
+							...(mappedException?.code === 'CLIENT999' && { codeFallback: true }),
 							...(wpError?.serverCode && { serverCode: wpError.serverCode }),
 							...(wpError?.triage && { triage: true }),
 						},

@@ -71,8 +71,10 @@ describe('useHttpClient network audit logs', () => {
 		});
 	});
 
-	it('persists transport failures without request data', async () => {
-		const failure = Object.assign(new Error('network down'), { response: { status: 503 } });
+	it('maps response-backed non-WordPress failures by HTTP status', async () => {
+		const failure = Object.assign(new Error('server unavailable'), {
+			response: { status: 503, data: '<html>Service unavailable</html>' },
+		});
 		(http.request as jest.Mock).mockRejectedValue(failure);
 		const { result } = renderHook(() => useHttpClient());
 
@@ -88,8 +90,10 @@ describe('useHttpClient network audit logs', () => {
 				method: 'GET',
 				endpoint: '/wc/v3/products',
 				status: 503,
+				errorCode: 'SYNC131',
 			}),
 		});
+		expect(loggerMock.mapExceptionToCode).not.toHaveBeenCalled();
 	});
 
 	it('persists mapped and server WordPress error codes on the HTTP failure row', async () => {
@@ -130,6 +134,7 @@ describe('useHttpClient network audit logs', () => {
 			context: expect.objectContaining({
 				status: 0,
 				errorCode: 'CLIENT999',
+				codeFallback: true,
 				name: 'Error',
 				message: 'network down',
 			}),
