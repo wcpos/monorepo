@@ -129,4 +129,33 @@ describe('RowDetail', () => {
 
 		expect(screen.queryByTestId('logs-copy-event-log-1')).toBeNull();
 	});
+
+	it('warns SYNC101 users not to clear or reload without suggesting repair or retry', () => {
+		render(<RowDetail row={{ ...row, code: 'SYNC101' }} kind="error" />);
+
+		expect(
+			screen.getAllByText(
+				'Data on this device may be affected — follow the recovery guidance before clearing or reloading.'
+			)
+		).toHaveLength(2);
+		expect(
+			screen.getByText(
+				'Do not clear or reload local data. Export diagnostics and contact support before retrying or repairing anything.'
+			)
+		).not.toBeNull();
+		expect(screen.getAllByText('Contact support and include this code.')).toHaveLength(2);
+		expect(screen.queryByText('Repair from Store health → Database.')).toBeNull();
+	});
+
+	it('directs SYNC311 users to support without telling them to reset the collection', () => {
+		render(<RowDetail row={{ ...row, code: 'SYNC311' }} kind="error" />);
+
+		expect(
+			screen.getByText(
+				'Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.'
+			)
+		).not.toBeNull();
+		expect(screen.getAllByText('Contact support and include this code.')).toHaveLength(2);
+		expect(screen.queryByText('Repair from Store health → Database.')).toBeNull();
+	});
 });
