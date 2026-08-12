@@ -104,12 +104,12 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		severity: 'error',
 		safeAction: 'contact-support',
 		retryPolicy: 'manual',
-		dataSafety: 'local-only',
+		dataSafety: 'data-at-risk',
 		escalation: 'support-with-export',
 		summary:
 			'This change could not be saved to the local database and remains only on this device.',
 		docsBody:
-			'Do not clear local data. Reload once, then export diagnostics and contact support if the change still cannot be saved.',
+			'Do not clear local data. Try the change again before doing anything else — reloading can discard work that was never saved. If it still cannot be saved, export diagnostics and contact support.',
 		introducedIn: '1.10.0',
 		evidence: 'Sentry 18V/11C; monorepo#163',
 	},
@@ -226,11 +226,11 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		severity: 'error',
 		safeAction: 'repair-local',
 		retryPolicy: 'after-change',
-		dataSafety: 'local-only',
+		dataSafety: 'data-at-risk',
 		escalation: 'support-with-export',
 		summary: 'Local data is from an incompatible version and cannot open yet.',
 		docsBody:
-			'Reset only the affected local collection, then let it download again from the store.',
+			'If this device holds changes that never reached your store, export diagnostics before resetting — a reset deletes the local copy. Then reset only the affected local collection and let it download again from the store.',
 		introducedIn: '1.10.0',
 		evidence: 'plugin#413',
 	},
