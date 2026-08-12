@@ -1007,18 +1007,23 @@ describe('logs preset filters', () => {
 			});
 		});
 
-		it('translates the action kind as actor rows below severity', () => {
+		it('translates the action kind as identified-actor rows below severity', () => {
 			const translated = translateLogsQueryState({
 				...base,
 				filters: { kind: 'action' },
 			} satisfies QueryStateOf<'logs'>);
 
+			// displayKind ignores actor: null and role-only actors — the selector
+			// probes the identifying fields, not the object.
 			expect(translated.selector).toEqual({
-				$and: [{ actor: { $exists: true } }, { level: { $nin: ['error', 'warn'] } }],
+				$and: [
+					{ $or: [{ 'actor.id': { $exists: true } }, { 'actor.name': { $exists: true } }] },
+					{ level: { $nin: ['error', 'warn'] } },
+				],
 			});
 		});
 
-		it('translates the sync kind as the domain minus actor and severity rows', () => {
+		it('translates the sync kind as the domain minus acting actors and severity rows', () => {
 			const translated = translateLogsQueryState({
 				...base,
 				filters: { kind: 'sync' },
@@ -1027,24 +1032,32 @@ describe('logs preset filters', () => {
 			expect(translated.selector).toEqual({
 				$and: [
 					{ category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' } },
-					{ actor: { $exists: false } },
+					{ 'actor.id': { $exists: false } },
+					{ 'actor.name': { $exists: false } },
 					{ level: { $nin: ['error', 'warn'] } },
 				],
 			});
 		});
 
-		it('translates the info kind excluding actor rows and the sync domain', () => {
+		it('translates the info kind as the residual: absent and unknown levels, no actor, no category', () => {
 			const translated = translateLogsQueryState({
 				...base,
 				filters: { kind: 'info' },
 			} satisfies QueryStateOf<'logs'>);
 
+			// info absorbs rows with NO level and NO category — displayKind renders
+			// both as info, so the strict selector must keep them.
 			expect(translated.selector).toEqual({
 				$and: [
-					{ level: 'info' },
-					{ actor: { $exists: false } },
+					{ level: { $nin: ['error', 'warn', 'debug'] } },
+					{ 'actor.id': { $exists: false } },
+					{ 'actor.name': { $exists: false } },
 					{
-						$or: [{ category: { $lt: 'wcpos.sync' } }, { category: { $gte: 'wcpos.sync/' } }],
+						$or: [
+							{ category: { $exists: false } },
+							{ category: { $lt: 'wcpos.sync' } },
+							{ category: { $gte: 'wcpos.sync/' } },
+						],
 					},
 				],
 			});

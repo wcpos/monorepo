@@ -390,20 +390,25 @@ export function buildDebugInfo(input: DebugInfoInput): string {
 /**
  * Infinite-scroll guard for the ledger (A1.4: "Show more" dies; the ledger
  * extends as the cashier nears the bottom, like every other POS table).
- * Pure on purpose. The `limit !== lastExtendLimit` clause is the #1132
- * phantom-trigger lesson: scroll jitter refires the handler, but a second
- * extend is only allowed after the previous one actually grew the window.
+ * Pure on purpose, and keyed on the MATERIALIZED row count, not the query
+ * limit — extendLimit publishes the wider window synchronously while the old
+ * rows stay visible, so the limit moves before rows do (#1132's phantom
+ * trigger in a new costume). One extend per materialized window: a second is
+ * allowed only after the row count differs from the count we last extended at.
+ * The caller resets `lastExtendCount` when the query identity (filters/search)
+ * changes, because a reset window can legitimately re-materialize at the same
+ * count.
  */
 export function shouldExtendLedger(args: {
 	offsetY: number;
 	contentHeight: number;
 	viewportHeight: number;
-	limit: number;
+	renderedCount: number;
 	total: number;
-	lastExtendLimit: number | null;
+	lastExtendCount: number | null;
 }): boolean {
 	const distanceFromBottom = args.contentHeight - args.viewportHeight - args.offsetY;
 	if (distanceFromBottom > 800) return false;
-	if (args.total <= args.limit) return false;
-	return args.lastExtendLimit !== args.limit;
+	if (args.total <= args.renderedCount) return false;
+	return args.lastExtendCount !== args.renderedCount;
 }

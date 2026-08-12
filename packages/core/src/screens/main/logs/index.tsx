@@ -159,27 +159,76 @@ function LogsScreenContent() {
 	);
 
 	// A1.4: infinite scroll replaces "Show more". The guard is pure
-	// (shouldExtendLedger) and the ref carries the #1132 phantom-trigger
-	// protection: one extend per materialized window.
+	// (shouldExtendLedger), keyed on MATERIALIZED rows — one extend per
+	// materialized window (#1132) — and it re-arms when the query identity
+	// changes, because filters/search reset the window to page one.
 	const total = useObservableState(binding.total$, 0);
-	const lastExtendLimitRef = React.useRef<number | null>(null);
+	const renderedCountRef = React.useRef(0);
+	const lastExtendCountRef = React.useRef<number | null>(null);
+	const queryIdentityRef = React.useRef('');
+	const geometryRef = React.useRef({ offsetY: 0, contentHeight: 0, viewportHeight: 0 });
+
+	// Computed in render (pure); consumed only at event time — the compiler
+	// forbids ref access during render (#1130 lesson).
+	const queryIdentity = JSON.stringify([state.filters, state.search]);
+
+	const maybeExtend = React.useCallback(() => {
+		if (queryIdentityRef.current !== queryIdentity) {
+			queryIdentityRef.current = queryIdentity;
+			lastExtendCountRef.current = null;
+		}
+		const geometry = geometryRef.current;
+		const extend = shouldExtendLedger({
+			offsetY: geometry.offsetY,
+			contentHeight: geometry.contentHeight,
+			viewportHeight: geometry.viewportHeight,
+			renderedCount: renderedCountRef.current,
+			total,
+			lastExtendCount: lastExtendCountRef.current,
+		});
+		if (extend) {
+			lastExtendCountRef.current = renderedCountRef.current;
+			actions.extendLimit();
+		}
+	}, [actions, queryIdentity, total]);
+
 	const handleScroll = React.useCallback(
 		(event: NativeSyntheticEvent<NativeScrollEvent>) => {
 			const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-			const extend = shouldExtendLedger({
+			geometryRef.current = {
 				offsetY: contentOffset.y,
 				contentHeight: contentSize.height,
 				viewportHeight: layoutMeasurement.height,
-				limit: state.limit,
-				total,
-				lastExtendLimit: lastExtendLimitRef.current,
-			});
-			if (extend) {
-				lastExtendLimitRef.current = state.limit;
-				actions.extendLimit();
-			}
+			};
+			maybeExtend();
 		},
-		[actions, state.limit, total]
+		[maybeExtend]
+	);
+	// A short first page on a tall viewport never scrolls, so content-size and
+	// rendered-count changes must also drive the fill.
+	const handleContentSizeChange = React.useCallback(
+		(_width: number, height: number) => {
+			geometryRef.current = { ...geometryRef.current, contentHeight: height };
+			maybeExtend();
+		},
+		[maybeExtend]
+	);
+	const handleLayout = React.useCallback(
+		(event: { nativeEvent: { layout: { height: number } } }) => {
+			geometryRef.current = {
+				...geometryRef.current,
+				viewportHeight: event.nativeEvent.layout.height,
+			};
+			maybeExtend();
+		},
+		[maybeExtend]
+	);
+	const handleRenderedCount = React.useCallback(
+		(count: number) => {
+			renderedCountRef.current = count;
+			maybeExtend();
+		},
+		[maybeExtend]
 	);
 
 	// Effect (last resort per project.mdc): `verbose` can flip OUTSIDE any
@@ -250,7 +299,13 @@ function LogsScreenContent() {
 	}, [appVersion, canShare, logsCollection, mutations.pending, stats, status, t, verbose]);
 
 	return (
-		<ScrollView className="flex-1" onScroll={handleScroll} scrollEventThrottle={64}>
+		<ScrollView
+			className="flex-1"
+			onScroll={handleScroll}
+			onContentSizeChange={handleContentSizeChange}
+			onLayout={handleLayout}
+			scrollEventThrottle={64}
+		>
 			<VStack testID="screen-logs" className="mx-auto w-full max-w-4xl gap-3 p-4 md:p-6">
 				<StatusLine />
 
@@ -353,6 +408,7 @@ function LogsScreenContent() {
 							total$={binding.total$}
 							activeKind={activeKind}
 							onKindPress={toggleKind}
+							onRenderedCount={handleRenderedCount}
 						/>
 					</Suspense>
 				</ErrorBoundary>

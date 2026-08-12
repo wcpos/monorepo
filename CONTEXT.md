@@ -75,14 +75,16 @@ _Avoid_: queryKey grammar, descriptor string (in caller-facing documentation)
 ## Language — Logs
 
 **Error code**:
-A registry code (`SYNC104` style) from `error-registry.json`; exists iff the
-merchant response differs. Docs-linked, catalogue-backed, problems-only.
+A registry code (`SYNC104` style) from `error-registry.json`; a SPECIFIC code
+exists iff the merchant response differs, and generic codes are the explicit
+exception (see Generic code). Docs-linked, catalogue-backed, problems-only.
 _Avoid_: legacy `ERROR_CODES` table (deprecated, dying)
 
 **Event code**:
-The stable engine identity every log row carries (`context.type`,
-e.g. `engine.change-check-failed`). Support/AI-facing; surfaced copyable in the
-row detail; never docs-linked.
+The stable engine identity an engine-written log row carries (`context.type`,
+e.g. `engine.change-check-failed`). Non-engine rows may lack one — the UI falls
+back to the persisted message, then the raw code. Support/AI-facing; surfaced
+copyable in the row detail; never docs-linked.
 
 **Description**:
 The optional per-event one-sentence plain-language explanation in

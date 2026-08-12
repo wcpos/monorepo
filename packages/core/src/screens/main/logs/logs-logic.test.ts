@@ -524,9 +524,9 @@ describe('shouldExtendLedger', () => {
 		offsetY: 1_000,
 		contentHeight: 2_000,
 		viewportHeight: 800,
-		limit: 20,
+		renderedCount: 20,
 		total: 100,
-		lastExtendLimit: null,
+		lastExtendCount: null,
 	};
 
 	it('extends near the bottom when more rows exist', () => {
@@ -541,8 +541,21 @@ describe('shouldExtendLedger', () => {
 		expect(shouldExtendLedger({ ...base, total: 20 })).toBe(false);
 	});
 
-	it('refuses a second extend until the window actually grew (#1132 phantom trigger)', () => {
-		expect(shouldExtendLedger({ ...base, lastExtendLimit: 20 })).toBe(false);
-		expect(shouldExtendLedger({ ...base, limit: 40, lastExtendLimit: 20 })).toBe(true);
+	it('refuses a second extend until rows actually materialized (#1132 phantom trigger)', () => {
+		// The limit widened but the rows have not arrived yet: still 20 rendered.
+		expect(shouldExtendLedger({ ...base, lastExtendCount: 20 })).toBe(false);
+		// The window materialized (40 rows): the next extend is allowed.
+		expect(shouldExtendLedger({ ...base, renderedCount: 40, lastExtendCount: 20 })).toBe(true);
+	});
+
+	it('extends when content is shorter than the viewport (fill-on-tall-screens)', () => {
+		expect(
+			shouldExtendLedger({
+				...base,
+				offsetY: 0,
+				contentHeight: 600,
+				viewportHeight: 900,
+			})
+		).toBe(true);
 	});
 });

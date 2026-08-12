@@ -79,16 +79,30 @@ export function normalizeQuerySortField(
 const SYNC_KIND_PREFIX = 'wcpos.sync';
 
 const syncCategoryRange = { $gte: SYNC_KIND_PREFIX, $lt: `${SYNC_KIND_PREFIX}/` };
-// mingo has no range-negation, so "not the sync domain" is the complement union.
+// mingo has no range-negation, so "not the sync domain" is the complement union —
+// including rows that carry no category at all (the schema permits them, and
+// displayKind renders them info).
 const notSyncCategory = {
-	$or: [{ category: { $lt: SYNC_KIND_PREFIX } }, { category: { $gte: `${SYNC_KIND_PREFIX}/` } }],
+	$or: [
+		{ category: { $exists: false } },
+		{ category: { $lt: SYNC_KIND_PREFIX } },
+		{ category: { $gte: `${SYNC_KIND_PREFIX}/` } },
+	],
 };
+
+// displayKind's actor test is `actor && (actor.id !== undefined || actor.name
+// !== undefined)` — a null actor or a role-only actor is NOT an action row, so
+// the selectors probe the identifying fields, not the object.
+const hasActingActor = {
+	$or: [{ 'actor.id': { $exists: true } }, { 'actor.name': { $exists: true } }],
+};
+const noActingActor = [{ 'actor.id': { $exists: false } }, { 'actor.name': { $exists: false } }];
 
 /**
  * Strict display-kind selectors (A1.5): each kind matches exactly the rows the
  * LEVEL column renders with that kind, mirroring `displayKind`'s precedence —
- * severity wins, then actor (action), then the sync domain, then debug/info.
- * `$exists` mirrors the has_actor convention above.
+ * severity wins, then actor (action), then the sync domain, then debug; info is
+ * the residual, so it also absorbs absent or unrecognized levels.
  */
 function kindConditions(kind: LogKindFilter): Record<string, unknown>[] {
 	switch (kind) {
@@ -97,17 +111,17 @@ function kindConditions(kind: LogKindFilter): Record<string, unknown>[] {
 		case 'warn':
 			return [{ level: 'warn' }];
 		case 'action':
-			return [{ actor: { $exists: true } }, { level: { $nin: ['error', 'warn'] } }];
+			return [hasActingActor, { level: { $nin: ['error', 'warn'] } }];
 		case 'sync':
 			return [
 				{ category: syncCategoryRange },
-				{ actor: { $exists: false } },
+				...noActingActor,
 				{ level: { $nin: ['error', 'warn'] } },
 			];
 		case 'info':
-			return [{ level: 'info' }, { actor: { $exists: false } }, notSyncCategory];
+			return [{ level: { $nin: ['error', 'warn', 'debug'] } }, ...noActingActor, notSyncCategory];
 		case 'debug':
-			return [{ level: 'debug' }, { actor: { $exists: false } }, notSyncCategory];
+			return [{ level: 'debug' }, ...noActingActor, notSyncCategory];
 		default: {
 			const exhaustive: never = kind;
 			return exhaustive;

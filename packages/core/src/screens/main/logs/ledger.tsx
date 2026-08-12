@@ -130,8 +130,9 @@ function StatusCell({
 	expanded: boolean;
 	onPress: () => void;
 }) {
+	const hasCode = Boolean(row.code) && (kind === 'error' || kind === 'warn');
 	let content: React.ReactNode;
-	if (row.code && (kind === 'error' || kind === 'warn')) {
+	if (hasCode && row.code) {
 		content = <CodeChip code={row.code} onPress={onPress} testID={`logs-code-${row.logId}`} />;
 	} else if (row.outcome === 'ok' && (kind === 'info' || kind === 'action')) {
 		content = (
@@ -142,14 +143,18 @@ function StatusCell({
 	} else {
 		content = <Text className="text-muted-foreground/50 text-xs">—</Text>;
 	}
+	// box-none + passive children: only the code chip captures presses — the ok
+	// mark, dash and chevron fall through to the whole-row press target below.
 	return (
-		<HStack className="items-center justify-end gap-1.5">
-			{content}
-			<Icon
-				name={expanded ? 'chevronDown' : 'chevronRight'}
-				size="sm"
-				className="text-muted-foreground/60"
-			/>
+		<HStack pointerEvents="box-none" className="items-center justify-end gap-1.5">
+			{hasCode ? content : <View pointerEvents="none">{content}</View>}
+			<View pointerEvents="none">
+				<Icon
+					name={expanded ? 'chevronDown' : 'chevronRight'}
+					size="sm"
+					className="text-muted-foreground/60"
+				/>
+			</View>
 		</HStack>
 	);
 }
@@ -243,7 +248,7 @@ function LedgerRow({
 					<Text className="text-muted-foreground w-16 text-right font-mono text-xs tabular-nums">
 						{formatDurationMs(row.durationMs) ?? '—'}
 					</Text>
-					<View className="z-20 w-24">
+					<View pointerEvents="box-none" className="z-20 w-24">
 						<StatusCell row={row} kind={kind} expanded={expanded} onPress={onToggle} />
 					</View>
 				</HStack>
@@ -251,6 +256,7 @@ function LedgerRow({
 					testID={`logs-row-${row.logId}`}
 					accessibilityRole="button"
 					accessibilityState={{ expanded }}
+					accessibilityLabel={`${timeText} · ${levelLabel} · ${title}`}
 					onPress={onToggle}
 					className="absolute inset-0 z-10"
 				/>
@@ -273,7 +279,7 @@ function LedgerRow({
 					<Text className="text-sm">{title}</Text>
 					<Subline row={row} includeDuration />
 				</Pressable>
-				<View className="absolute top-2 right-0 z-10">
+				<View pointerEvents="box-none" className="absolute top-2 right-0 z-10">
 					<StatusCell row={row} kind={kind} expanded={expanded} onPress={onToggle} />
 				</View>
 			</View>
@@ -294,11 +300,13 @@ export function Ledger({
 	total$,
 	activeKind,
 	onKindPress,
+	onRenderedCount,
 }: {
 	resource: LedgerResource;
 	total$: Observable<number>;
 	activeKind: LevelKind | undefined;
 	onKindPress: (kind: LevelKind) => void;
+	onRenderedCount?: (count: number) => void;
 }) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
@@ -313,6 +321,13 @@ export function Ledger({
 		[result.hits]
 	);
 	const chained = React.useMemo(() => chainMarkedIds(rows), [rows]);
+
+	// Effect (last resort): the screen's infinite-scroll guard must know how many
+	// rows actually MATERIALIZED — the query limit moves before rows do, which is
+	// exactly the gap the one-extend-per-window protection exists to close.
+	React.useEffect(() => {
+		onRenderedCount?.(rows.length);
+	}, [onRenderedCount, rows.length]);
 
 	const timeTextFor = React.useCallback(
 		(timestamp: number) => {
