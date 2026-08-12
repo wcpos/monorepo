@@ -11,13 +11,8 @@ interface ExtraDataContextProps {
 
 export const ExtraDataContext = React.createContext<ExtraDataContextProps | null>(null);
 
-function isMissingOrEmpty(value: unknown): boolean {
-	return (
-		value == null ||
-		value === '' ||
-		(Array.isArray(value) && value.length === 0) ||
-		(typeof value === 'object' && Object.keys(value).length === 0)
-	);
+function isMissing(value: unknown): boolean {
+	return value == null;
 }
 
 /**
@@ -37,23 +32,32 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		// Store-scoped bridge from the sync engine's public event stream to persisted RxState.
 		let refreshGeneration = 0;
 		const fetchTaxClasses = (generation: number) =>
-			void http.get('/taxes/classes').then((response) => {
-				if (generation === refreshGeneration && response?.status === 200) {
-					extraData.set('taxClasses', () => response.data);
-				}
-			});
+			void http
+				.get('/taxes/classes')
+				.then((response) => {
+					if (generation === refreshGeneration && response?.status === 200) {
+						extraData.set('taxClasses', () => response.data);
+					}
+				})
+				.catch(() => undefined);
 		const fetchShippingMethods = (generation: number) =>
-			void http.get('/shipping_methods').then((response) => {
-				if (generation === refreshGeneration && response?.status === 200) {
-					extraData.set('shippingMethods', () => response.data);
-				}
-			});
+			void http
+				.get('/shipping_methods')
+				.then((response) => {
+					if (generation === refreshGeneration && response?.status === 200) {
+						extraData.set('shippingMethods', () => response.data);
+					}
+				})
+				.catch(() => undefined);
 		const fetchOrderStatuses = (generation: number) =>
-			void http.get('/data/order_statuses').then((response) => {
-				if (generation === refreshGeneration && response?.status === 200) {
-					extraData.set('orderStatuses', () => response.data);
-				}
-			});
+			void http
+				.get('/data/order_statuses')
+				.then((response) => {
+					if (generation === refreshGeneration && response?.status === 200) {
+						extraData.set('orderStatuses', () => response.data);
+					}
+				})
+				.catch(() => undefined);
 		const fetchAll = () => {
 			const generation = ++refreshGeneration;
 			fetchTaxClasses(generation);
@@ -62,10 +66,9 @@ export function ExtraDataProvider({ children }: { children: React.ReactNode }) {
 		};
 
 		const coldStartGeneration = ++refreshGeneration;
-		if (isMissingOrEmpty(extraData.get('taxClasses'))) fetchTaxClasses(coldStartGeneration);
-		if (isMissingOrEmpty(extraData.get('shippingMethods')))
-			fetchShippingMethods(coldStartGeneration);
-		if (isMissingOrEmpty(extraData.get('orderStatuses'))) fetchOrderStatuses(coldStartGeneration);
+		if (isMissing(extraData.get('taxClasses'))) fetchTaxClasses(coldStartGeneration);
+		if (isMissing(extraData.get('shippingMethods'))) fetchShippingMethods(coldStartGeneration);
+		if (isMissing(extraData.get('orderStatuses'))) fetchOrderStatuses(coldStartGeneration);
 
 		const unsubscribeEvents = engine.events((event) => {
 			if (event.type === 'config-changed') fetchAll();

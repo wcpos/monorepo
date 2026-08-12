@@ -93,9 +93,35 @@ describe('ExtraDataProvider API services', () => {
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
-		emit(mockEngine, { type: 'lane-finish', lane: 'change-signal', status: 'ran' });
+		emit(mockEngine, {
+			type: 'lane-finish',
+			lane: 'change-signal',
+			status: 'ran',
+		});
 
 		expect(mockGet).not.toHaveBeenCalled();
+	});
+
+	it('treats cached empty arrays as loaded on a warm start', () => {
+		mockExtraDataValues = {
+			taxClasses: [],
+			shippingMethods: [],
+			orderStatuses: [],
+		};
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+
+		expect(mockGet).not.toHaveBeenCalled();
+	});
+
+	it('consumes rejected resource requests', async () => {
+		mockGet.mockRejectedValue(new Error('network unavailable'));
+
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		expect(mockExtraDataSet).not.toHaveBeenCalled();
 	});
 
 	it('refetches all resources when the engine reports changed config', () => {
@@ -125,7 +151,10 @@ describe('ExtraDataProvider API services', () => {
 		const { rerender } = render(<ExtraDataProvider>content</ExtraDataProvider>);
 
 		mockEngine = createMockEngine();
-		mockGet = jest.fn(async (_url: string) => ({ status: 200, data: ['current-store'] }));
+		mockGet = jest.fn(async (_url: string) => ({
+			status: 200,
+			data: ['current-store'],
+		}));
 		mockHttp = { get: mockGet };
 		mockExtraDataSet = jest.fn();
 		mockExtraData = {
@@ -134,7 +163,10 @@ describe('ExtraDataProvider API services', () => {
 		};
 		rerender(<ExtraDataProvider>content</ExtraDataProvider>);
 
-		emit(previousEngine, { type: 'config-changed', collections: ['tax_rates'] });
+		emit(previousEngine, {
+			type: 'config-changed',
+			collections: ['tax_rates'],
+		});
 		expect(previousGet).not.toHaveBeenCalled();
 		expect(mockGet).not.toHaveBeenCalled();
 
@@ -147,8 +179,14 @@ describe('ExtraDataProvider API services', () => {
 	});
 
 	it('ignores responses superseded by a newer config refresh', async () => {
-		const initialTaxClasses = createDeferred<{ status: number; data: string[] }>();
-		const currentTaxClasses = createDeferred<{ status: number; data: string[] }>();
+		const initialTaxClasses = createDeferred<{
+			status: number;
+			data: string[];
+		}>();
+		const currentTaxClasses = createDeferred<{
+			status: number;
+			data: string[];
+		}>();
 		let taxClassRequest = 0;
 		mockExtraDataValues = {
 			shippingMethods: [{ id: 'flat_rate' }],
