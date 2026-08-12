@@ -418,8 +418,8 @@ jobs:
 
           # The shared-store queue timed out or errored, so the shards never
           # ran. That is a real no-answer, not a pass — re-run the workflow.
-          if [ "$QUEUE_RESULT" = "failure" ] || [ "$QUEUE_RESULT" = "cancelled" ]; then
-            echo "::error::The shared-store queue did not succeed (result: $QUEUE_RESULT), so the E2E shards never ran. Re-run this workflow once the store frees up."
+          if [ "${QUEUE_RESULT:-}" = "failure" ] || [ "${QUEUE_RESULT:-}" = "cancelled" ]; then
+            echo "::error::The shared-store queue did not succeed (result: ${QUEUE_RESULT:-}), so the E2E shards never ran. Re-run this workflow once the store frees up."
             exit 1
           fi
 

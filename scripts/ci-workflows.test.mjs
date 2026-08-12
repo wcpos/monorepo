@@ -51,7 +51,7 @@ test('the E2E aggregator runs on cancellation and fails the cancelled deploy', (
 test('the E2E aggregator fails closed when change detection fails', () => {
 	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
 
-	assert.deepEqual([...gate.needs].sort(), ['changes', 'deploy', 'e2e']);
+	assert.deepEqual([...gate.needs].sort(), ['changes', 'deploy', 'e2e', 'queue']);
 	assert.equal(gate.steps[0].env.CHANGES_RESULT, '${{ needs.changes.result }}');
 
 	const failedDetection = runShell(gate.steps[0].run, {
@@ -78,6 +78,30 @@ test('the E2E aggregator fails closed when change detection fails', () => {
 		},
 	});
 	assert.equal(legitimateSkip.status, 0, legitimateSkip.stdout + legitimateSkip.stderr);
+});
+
+test('the E2E aggregator fails when the shared-store queue never released the shards', () => {
+	const gate = readWorkflow('deploy.yml').jobs['e2e-gate'];
+
+	assert.equal(gate.steps[0].env.QUEUE_RESULT, '${{ needs.queue.result }}');
+
+	// Deploy succeeded and published a URL, but the queue timed out/errored, so
+	// the shards never ran. That must read as a failure with an actionable
+	// message — not as the generic "URL published but shards skipped".
+	const queueTimeout = runShell(gate.steps[0].run, {
+		env: {
+			CHANGES_RESULT: 'success',
+			DEPLOY_RESULT: 'success',
+			DEPLOY_URL: 'https://example.expo.app',
+			QUEUE_RESULT: 'failure',
+			E2E_RESULT: 'skipped',
+			EVENT_NAME: 'pull_request',
+			SKIP_E2E_INPUT: 'false',
+		},
+	});
+
+	assert.notEqual(queueTimeout.status, 0, queueTimeout.stdout + queueTimeout.stderr);
+	assert.match(queueTimeout.stdout + queueTimeout.stderr, /shared-store queue did not succeed/);
 });
 
 test('deploy emits the required E2E check whenever the merge gate runs', () => {
