@@ -8,23 +8,44 @@ import { act, render } from '@testing-library/react';
 import { ExtraDataProvider } from './provider';
 
 type EngineEvent = Record<string, unknown> & { type: string };
+type MockResponse = { status: number; data: unknown };
 
-const listeners = new Set<(event: EngineEvent) => void>();
-const mockGet = jest.fn(async () => ({ status: 200, data: [] }));
-const mockExtraDataSet = jest.fn();
-const mockUseRestHttpClient = jest.fn(() => ({ get: mockGet }));
+function createMockEngine() {
+	const listeners = new Set<(event: EngineEvent) => void>();
+	return {
+		listeners,
+		events: (callback: (event: EngineEvent) => void) => {
+			listeners.add(callback);
+			return () => listeners.delete(callback);
+		},
+	};
+}
+
+function createDeferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+
+let mockEngine = createMockEngine();
+let mockGet: jest.Mock<Promise<MockResponse>, [string]> = jest.fn(async (_url: string) => ({
+	status: 200,
+	data: [],
+}));
+let mockHttp = { get: mockGet };
+let mockExtraDataSet = jest.fn();
 let mockExtraDataValues: Record<string, unknown> = {};
-
-const mockEngine = {
-	events: (callback: (event: EngineEvent) => void) => {
-		listeners.add(callback);
-		return () => listeners.delete(callback);
-	},
+let mockExtraData = {
+	get: (key: string) => mockExtraDataValues[key],
+	set: mockExtraDataSet,
 };
+const mockUseRestHttpClient = jest.fn(() => mockHttp);
 
-function emit(event: EngineEvent) {
+function emit(engine: ReturnType<typeof createMockEngine>, event: EngineEvent) {
 	act(() => {
-		for (const listener of [...listeners]) listener(event);
+		for (const listener of [...engine.listeners]) listener(event);
 	});
 }
 
@@ -33,10 +54,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
-		extraData: {
-			get: (key: string) => mockExtraDataValues[key],
-			set: mockExtraDataSet,
-		},
+		extraData: mockExtraData,
 	}),
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({
@@ -45,8 +63,15 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 
 beforeEach(() => {
 	jest.clearAllMocks();
-	listeners.clear();
+	mockEngine = createMockEngine();
+	mockGet = jest.fn(async (_url: string) => ({ status: 200, data: [] }));
+	mockHttp = { get: mockGet };
+	mockExtraDataSet = jest.fn();
 	mockExtraDataValues = {};
+	mockExtraData = {
+		get: (key: string) => mockExtraDataValues[key],
+		set: mockExtraDataSet,
+	};
 });
 
 describe('ExtraDataProvider API services', () => {
@@ -68,7 +93,7 @@ describe('ExtraDataProvider API services', () => {
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
-		emit({ type: 'lane-finish', lane: 'change-signal', status: 'ran' });
+		emit(mockEngine, { type: 'lane-finish', lane: 'change-signal', status: 'ran' });
 
 		expect(mockGet).not.toHaveBeenCalled();
 	});
@@ -81,11 +106,75 @@ describe('ExtraDataProvider API services', () => {
 		};
 		render(<ExtraDataProvider>content</ExtraDataProvider>);
 
-		emit({ type: 'config-changed', collections: ['tax_rates'] });
+		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
 
 		expect(mockGet).toHaveBeenCalledWith('/taxes/classes');
 		expect(mockGet).toHaveBeenCalledWith('/shipping_methods');
 		expect(mockGet).toHaveBeenCalledWith('/data/order_statuses');
 		expect(mockGet).toHaveBeenCalledTimes(3);
+	});
+
+	it('rebinds the event bridge to current store dependencies', async () => {
+		mockExtraDataValues = {
+			taxClasses: [{ slug: 'standard' }],
+			shippingMethods: [{ id: 'flat_rate' }],
+			orderStatuses: [{ slug: 'pending' }],
+		};
+		const previousEngine = mockEngine;
+		const previousGet = mockGet;
+		const { rerender } = render(<ExtraDataProvider>content</ExtraDataProvider>);
+
+		mockEngine = createMockEngine();
+		mockGet = jest.fn(async (_url: string) => ({ status: 200, data: ['current-store'] }));
+		mockHttp = { get: mockGet };
+		mockExtraDataSet = jest.fn();
+		mockExtraData = {
+			get: (key: string) => mockExtraDataValues[key],
+			set: mockExtraDataSet,
+		};
+		rerender(<ExtraDataProvider>content</ExtraDataProvider>);
+
+		emit(previousEngine, { type: 'config-changed', collections: ['tax_rates'] });
+		expect(previousGet).not.toHaveBeenCalled();
+		expect(mockGet).not.toHaveBeenCalled();
+
+		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
+		expect(mockGet).toHaveBeenCalledTimes(3);
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(mockExtraDataSet).toHaveBeenCalledTimes(3);
+	});
+
+	it('ignores responses superseded by a newer config refresh', async () => {
+		const initialTaxClasses = createDeferred<{ status: number; data: string[] }>();
+		const currentTaxClasses = createDeferred<{ status: number; data: string[] }>();
+		let taxClassRequest = 0;
+		mockExtraDataValues = {
+			shippingMethods: [{ id: 'flat_rate' }],
+			orderStatuses: [{ slug: 'pending' }],
+		};
+		mockGet.mockImplementation((url: string) => {
+			if (url !== '/taxes/classes') return Promise.resolve({ status: 200, data: [] });
+			taxClassRequest += 1;
+			return taxClassRequest === 1 ? initialTaxClasses.promise : currentTaxClasses.promise;
+		});
+		render(<ExtraDataProvider>content</ExtraDataProvider>);
+
+		emit(mockEngine, { type: 'config-changed', collections: ['tax_rates'] });
+		await act(async () => {
+			currentTaxClasses.resolve({ status: 200, data: ['current'] });
+			await currentTaxClasses.promise;
+			await Promise.resolve();
+		});
+		await act(async () => {
+			initialTaxClasses.resolve({ status: 200, data: ['superseded'] });
+			await initialTaxClasses.promise;
+			await Promise.resolve();
+		});
+
+		const taxClassWrites = mockExtraDataSet.mock.calls.filter(([key]) => key === 'taxClasses');
+		expect(taxClassWrites).toHaveLength(1);
+		expect(taxClassWrites[0][1]()).toEqual(['current']);
 	});
 });
