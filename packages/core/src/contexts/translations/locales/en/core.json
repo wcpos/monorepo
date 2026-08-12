@@ -31,6 +31,7 @@
 	"auth.sign_in_with_wordpress": "Sign in with WordPress",
 	"auth.site_connected_successfully": "Site connected successfully!",
 	"auth.site_does_not_seem_to_be": "Site does not seem to be a WordPress site",
+	"auth.site_took_too_long_to_respond": "The site took too long to respond — check the server and try again",
 	"auth.store": "Store",
 	"auth.testing_authorization_methods": "Testing authorization methods...",
 	"auth.url_is_required": "URL is required",

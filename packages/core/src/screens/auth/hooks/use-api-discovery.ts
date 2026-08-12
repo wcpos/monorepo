@@ -92,8 +92,12 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 	const fetchApiIndex = React.useCallback(
 		async (wpApiUrl: string): Promise<WpJsonResponse> => {
 			try {
-				// Add cache-busting param
-				const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
+				// Add cache-busting param. Bounded like the url-discovery probes
+				// (monorepo#1155: an unbounded connect-flow request leaves the cashier
+				// on an infinite spinner) — but looser, because this GET returns the
+				// full API index and was observed taking ~9s on a degraded-but-alive
+				// server where the front-page probe hung outright.
+				const response = await http.get(wpApiUrl, { params: { wcpos: 1 }, timeout: 15_000 });
 				const data = get(response, 'data') as WpJsonResponse;
 
 				// Basic validation
@@ -125,6 +129,11 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				// If it's already one of our logged errors, re-throw
 				if (error instanceof ApiDiscoveryError) {
 					throw error;
+				}
+
+				const errorCode = get(error, ['code']);
+				if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') {
+					throw new ApiDiscoveryError(t('auth.site_took_too_long_to_respond'));
 				}
 
 				const errorResponse = get(error, ['response']);

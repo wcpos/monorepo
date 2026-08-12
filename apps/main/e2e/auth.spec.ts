@@ -47,7 +47,7 @@ test.describe('Connect Screen', () => {
 		await connectButton.click();
 
 		await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
-			timeout: 30_000,
+			timeout: 60_000,
 		});
 	});
 
@@ -60,7 +60,7 @@ test.describe('Connect Screen', () => {
 
 		await page.getByTestId('connect-store-button').click();
 		await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
-			timeout: 30_000,
+			timeout: 60_000,
 		});
 		await expect(page.getByTestId('add-user-button')).toBeVisible();
 	});

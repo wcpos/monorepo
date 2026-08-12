@@ -13,6 +13,31 @@ const discoveryLogger = getLogger(['wcpos', 'auth', 'discovery']);
 
 export type UrlDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
 
+/**
+ * The root probe hits the site's front page — the heaviest request a WordPress
+ * server serves. On a starved server it can hang with NO response at all
+ * (observed on dev-next 2026-08-11, monorepo#1155: the HEAD never returned
+ * while /wp-json/ still answered in seconds), and an unbounded request leaves
+ * the cashier staring at an infinite Connect spinner with no error and no
+ * fallback. Matches the 10s auth/test timeout in use-auth-testing.
+ */
+const DISCOVERY_PROBE_TIMEOUT_MS = 10_000;
+
+interface ProbeResult {
+	url: string | null;
+	timedOut: boolean;
+}
+
+/**
+ * Axios reports a request that hit `timeout` as ECONNABORTED (ETIMEDOUT from
+ * some Node adapters). Distinguished so the cashier sees "took too long", not
+ * "not a WordPress site".
+ */
+const isTimeoutError = (err: unknown): boolean => {
+	const code = get(err, ['code']);
+	return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
+};
+
 interface UseUrlDiscoveryReturn {
 	status: UrlDiscoveryStatus;
 	error: string | null;
@@ -67,19 +92,22 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	 * Try to discover wp-json URL from Link header
 	 */
 	const tryLinkHeaderDiscovery = React.useCallback(
-		async (normalizedUrl: string): Promise<string | null> => {
+		async (normalizedUrl: string): Promise<ProbeResult> => {
 			try {
-				const response = await http.head(normalizedUrl);
+				const response = await http.head(normalizedUrl, { timeout: DISCOVERY_PROBE_TIMEOUT_MS });
 
 				if (!response) {
-					return null;
+					return { url: null, timedOut: false };
 				}
 
-				return extractWpApiUrlFromLink(get(response, ['headers', 'link']));
+				return {
+					url: extractWpApiUrlFromLink(get(response, ['headers', 'link'])),
+					timedOut: false,
+				};
 			} catch (err: unknown) {
 				// Check error response headers for Link header
 				const link = get(err, ['response', 'headers', 'link']);
-				return extractWpApiUrlFromLink(link);
+				return { url: extractWpApiUrlFromLink(link), timedOut: isTimeoutError(err) };
 			}
 		},
 		[http]
@@ -90,24 +118,24 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	 * A 401/403 with a WP REST API error body proves the REST API exists
 	 */
 	const tryFallbackDiscovery = React.useCallback(
-		async (normalizedUrl: string): Promise<string | null> => {
+		async (normalizedUrl: string): Promise<ProbeResult> => {
 			const fallbackUrl = `${normalizedUrl}/wp-json/`;
 
 			try {
-				const response = await http.head(fallbackUrl);
+				const response = await http.head(fallbackUrl, { timeout: DISCOVERY_PROBE_TIMEOUT_MS });
 
 				if (response && response.status === 200) {
-					return fallbackUrl;
+					return { url: fallbackUrl, timedOut: false };
 				}
 
-				return null;
+				return { url: null, timedOut: false };
 			} catch (err: unknown) {
 				// A WP REST API error (e.g. rest_unauthorized) proves the endpoint exists
 				if (isWpRestApiError(err)) {
-					return fallbackUrl;
+					return { url: fallbackUrl, timedOut: false };
 				}
 
-				return null;
+				return { url: null, timedOut: isTimeoutError(err) };
 			}
 		},
 		[http]
@@ -136,15 +164,21 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const normalizedUrl = normalizeUrl(url);
 
 				// Step 1: Try Link header discovery
-				let discoveredUrl = await tryLinkHeaderDiscovery(normalizedUrl);
+				const linkProbe = await tryLinkHeaderDiscovery(normalizedUrl);
+				let discoveredUrl = linkProbe.url;
+				let timedOut = linkProbe.timedOut;
 
 				// Step 2: If Link header failed, try fallback
 				if (!discoveredUrl) {
-					discoveredUrl = await tryFallbackDiscovery(normalizedUrl);
+					const fallbackProbe = await tryFallbackDiscovery(normalizedUrl);
+					discoveredUrl = fallbackProbe.url;
+					timedOut = timedOut || fallbackProbe.timedOut;
 				}
 
 				if (!discoveredUrl) {
-					throw new Error(t('auth.site_does_not_seem_to_be'));
+					throw new Error(
+						timedOut ? t('auth.site_took_too_long_to_respond') : t('auth.site_does_not_seem_to_be')
+					);
 				}
 
 				setWpApiUrl(discoveredUrl);
