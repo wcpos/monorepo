@@ -40,7 +40,9 @@ function stubDatabase(): ScopeDatabase {
 
 describe('change-signal cursor observability', () => {
 	it('emits backwards when a poll reports zero behind a non-zero cursor', async () => {
-		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		const manager = new StoreScopeManager({
+			createDatabase: async () => stubDatabase(),
+		});
 		await manager.switchTo('scope-a');
 		const events: SyncEvent[] = [];
 		const outcome: HybridPollOutcome = {
@@ -65,6 +67,7 @@ describe('change-signal cursor observability', () => {
 			writeBlob: vi.fn(),
 			connectivity: () => 'online',
 			diagnostics: (event) => events.push(event),
+			emitEvent: () => undefined,
 		});
 
 		await lane.tick();
@@ -72,9 +75,85 @@ describe('change-signal cursor observability', () => {
 		expect(events.filter((event) => event.type === 'signal.cursor')).toEqual([
 			expect.objectContaining({
 				level: 'warn',
-				fields: expect.objectContaining({ reason: 'backwards', from: 5, to: 0 }),
+				fields: expect.objectContaining({
+					reason: 'backwards',
+					from: 5,
+					to: 0,
+				}),
 			}),
 		]);
+	});
+});
+
+describe('config change events', () => {
+	it('emits changed collection names only after a completed cycle carries fingerprint moves', async () => {
+		const manager = new StoreScopeManager({
+			createDatabase: async () => stubDatabase(),
+		});
+		await manager.switchTo('scope-a');
+		const emptyOutcome: HybridPollOutcome = {
+			changes: [],
+			cursor: { sequence: 1 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			baselineDigests: new Map(),
+			configChanges: [],
+		};
+		mocks.poll.mockResolvedValueOnce(emptyOutcome).mockResolvedValueOnce({
+			...emptyOutcome,
+			cursor: { sequence: 2 },
+			configChanges: [
+				{
+					collection: 'tax_rates',
+					from: 'tax-v1',
+					to: 'tax-v2',
+					source: 'config-fingerprint',
+				},
+			],
+		});
+		let finishApply!: () => void;
+		let markApplyStarted!: () => void;
+		const applyFinished = new Promise<void>((resolve) => {
+			finishApply = resolve;
+		});
+		const applyStarted = new Promise<void>((resolve) => {
+			markApplyStarted = resolve;
+		});
+		vi.mocked(applyReplicationActions).mockImplementationOnce((async () => undefined) as never);
+		vi.mocked(applyReplicationActions).mockImplementationOnce((async () => {
+			markApplyStarted();
+			await applyFinished;
+		}) as never);
+		const emitEvent = vi.fn();
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: vi.fn(),
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => JSON.stringify({ cursor: { sequence: 0 }, baselineDigests: [] }),
+			writeBlob: vi.fn(),
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent,
+		});
+
+		await lane.tick();
+		expect(emitEvent).not.toHaveBeenCalled();
+
+		const changedTick = lane.tick();
+		await applyStarted;
+		expect(emitEvent).not.toHaveBeenCalled();
+
+		finishApply();
+		await changedTick;
+		expect(emitEvent).toHaveBeenCalledWith({
+			type: 'config-changed',
+			collections: ['tax_rates'],
+		});
 	});
 });
 
@@ -109,13 +188,18 @@ describe('hydration-miss recovery accounting', () => {
 			handlers: { persistState: (state: unknown) => Promise<void> }
 		) => {
 			if (persist)
-				await handlers.persistState({ cursor: { sequence: 1 }, baselineDigests: new Map() });
+				await handlers.persistState({
+					cursor: { sequence: 1 },
+					baselineDigests: new Map(),
+				});
 		}) as never);
 		return { scopeBarcodeSelectors, writeBlob, outcome };
 	}
 
 	async function runTick(persist: boolean) {
-		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		const manager = new StoreScopeManager({
+			createDatabase: async () => stubDatabase(),
+		});
 		await manager.switchTo('scope-a');
 		const { scopeBarcodeSelectors, writeBlob } = laneWith(persist);
 		// A scope whose open-time hydration failed, with a recovery already issued.
@@ -137,6 +221,7 @@ describe('hydration-miss recovery accounting', () => {
 			writeBlob,
 			connectivity: () => 'online',
 			diagnostics: () => undefined,
+			emitEvent: () => undefined,
 			barcodeSelectorsFor: () => scopeBarcodeSelectors,
 		});
 		await lane.tick();
