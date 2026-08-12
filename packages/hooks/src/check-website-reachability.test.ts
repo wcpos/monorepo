@@ -16,8 +16,8 @@ describe('checkWebsiteReachability', () => {
 		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
 		expect(fetchMock).toHaveBeenNthCalledWith(
 			2,
-			'https://example.com',
-			expect.objectContaining({ method: 'GET', mode: 'no-cors', cache: 'no-store' })
+			'https://example.com?wcpos=1',
+			expect.objectContaining({ method: 'GET', mode: 'cors', cache: 'no-store' })
 		);
 	});
 
@@ -34,21 +34,38 @@ describe('checkWebsiteReachability', () => {
 		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://example.com',
+			'https://example.com?wcpos=1',
 			expect.objectContaining({ method: 'HEAD' })
 		);
 	});
 
-	it('treats an opaque cross-origin response as reachable', async () => {
-		fetchMock.mockResolvedValue({ type: 'opaque', status: 0 } as Response);
+	it('appends the wcpos marker after an existing query string', async () => {
+		// Plain-permalink stores probe /?rest_route=/ — the marker must not
+		// produce a second "?".
+		fetchMock.mockResolvedValue({} as Response);
 
-		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		await expect(checkWebsiteReachability('https://example.com/?rest_route=/')).resolves.toBe(true);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://example.com/?rest_route=/&wcpos=1',
+			expect.objectContaining({ method: 'HEAD' })
+		);
+	});
+
+	it('treats a rejected cross-origin probe as unreachable', async () => {
+		// Under cors mode a 5xx error page without CORS headers (proxy up,
+		// backend dead) rejects the fetch — that must read as NOT reachable.
+		// The store's wp-json root always serves CORS on a working deployment,
+		// so a rejection here is never a false alarm.
+		fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(false);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it('returns false when the status is readable and 5xx on both attempts', async () => {
-		// Same-origin probe (web bundle served from the store): a 502 error page
-		// from a live proxy in front of a dead backend must not read as online.
+		// A 502 error page WITH readable status (same-origin, or a proxy that
+		// reflects CORS headers) from a live proxy in front of a dead backend
+		// must not read as online.
 		fetchMock.mockResolvedValue({ type: 'basic', status: 502 } as Response);
 
 		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(false);
@@ -63,7 +80,7 @@ describe('checkWebsiteReachability', () => {
 		await expect(checkWebsiteReachability('https://example.com')).resolves.toBe(true);
 		expect(fetchMock).toHaveBeenNthCalledWith(
 			2,
-			'https://example.com',
+			'https://example.com?wcpos=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});

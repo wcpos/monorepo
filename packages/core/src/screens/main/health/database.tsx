@@ -791,7 +791,13 @@ export function DatabaseScreen() {
 					</VStack>
 					<HStack className="items-center gap-2">
 						<HowSyncingWorksDialog />
-						<Button variant="outline" size="sm" loading={syncing} onPress={() => void sync()}>
+						<Button
+							testID="db-check-everything"
+							variant="outline"
+							size="sm"
+							loading={syncing}
+							onPress={() => void sync()}
+						>
 							<ButtonText>{t('health.database.check_everything')}</ButtonText>
 						</Button>
 					</HStack>

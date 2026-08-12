@@ -43,7 +43,9 @@ export function Online() {
 
 	return (
 		<Tooltip>
-			<TooltipTrigger className="px-2">
+			{/* The tone class on the icon (text-success/warning/error) is the only
+			    machine-readable connection state — E2E asserts on it via this testID. */}
+			<TooltipTrigger className="px-2" testID="header-online-status">
 				<Icon name="circle" variant={state.variant} />
 			</TooltipTrigger>
 			<TooltipContent side="bottom">
