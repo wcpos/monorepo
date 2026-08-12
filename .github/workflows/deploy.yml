@@ -29,13 +29,17 @@ on:
 # PR-event runs all hit the ONE shared dev store; concurrent E2E runs contend
 # on the same pinned SKU / checkout flows and fail specs that pass solo
 # (verified 2026-08-07: 5 simultaneous runs → checkout/variations failures;
-# solo reruns green). PR runs therefore share a single serial queue and are
-# never cancelled (cancelling in a shared group would kill OTHER PRs' runs).
-# Non-PR events keep the original per-ref groups and supersede semantics, so
-# a production deploy never waits on (or cancels) PR E2E.
+# solo reruns green). Serialization used to be a single shared concurrency
+# group ('e2e-shared-store'), but GitHub keeps at most ONE pending run per
+# group: with 3+ PRs active, each new run evicted (cancelled) another PR's
+# queued run, and the evicted PR's required "🎭 E2E Tests" gate never
+# reported at all (observed 2026-08-11: a dozen cross-PR cancellations in one
+# evening). Groups are therefore per-PR — a run can only ever supersede ITS
+# OWN PR's older run — and cross-run store serialization moved to the
+# ⏳ Shared-store queue job below, which waits instead of cancelling.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && 'e2e-shared-store' || format('deploy-{0}', github.ref) }}
-  cancel-in-progress: ${{ github.event_name != 'pull_request' && github.ref != 'refs/heads/main' }}
+  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}', github.event.pull_request.number) || format('deploy-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
@@ -148,9 +152,104 @@ jobs:
             echo "is_production=true" >> $GITHUB_OUTPUT
           fi
 
+  # Serializes E2E across ALL runs of this workflow (any trigger — they all
+  # drive the same shared dev store) without ever cancelling another run: it
+  # polls the Actions API and proceeds only when (a) no other run is executing
+  # or about to execute its E2E shards and (b) no other run entered this queue
+  # earlier (FIFO by this job's started_at, run id as tie-break — both sides
+  # evaluate the same total order, so two waiters can't deadlock or both
+  # proceed). Lock-free on purpose: a branch/mutex lock leaks when its holder
+  # is cancelled, but a cancelled run's shard jobs read as completed here, so
+  # the store frees itself. A few seconds of overlap remain possible between
+  # one run's queue passing and its shards appearing — the failure mode is a
+  # rare concurrent run (today's flake), never a blocked or cancelled gate.
+  queue:
+    name: ⏳ Shared-store queue
+    needs: deploy
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    # Generous: each run ahead of us holds the store for its full E2E phase
+    # (~15–25 min), and agent-driven evenings queue several PRs deep. A
+    # timeout fails the e2e-gate with an explicit message — re-run the
+    # workflow — rather than silently passing.
+    timeout-minutes: 150
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: ⏳ Wait for the shared dev store to be free
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          QUEUE_JOB='⏳ Shared-store queue'
+          SHARD_PREFIX='🎭 E2E Tests ('
+
+          # Our queue-arrival timestamp is the FIFO ordering key.
+          my_started=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+            --jq ".jobs[] | select(.name == \"$QUEUE_JOB\") | .started_at" | head -n 1)
+          if [ -z "$my_started" ]; then
+            echo "::error::Could not read this run's queue job start time"
+            exit 1
+          fi
+          echo "Queue slot: $my_started (run $RUN_ID)"
+
+          while :; do
+            busy=""
+            for id in $(gh api "repos/$REPO/actions/workflows/deploy.yml/runs?status=in_progress&per_page=100" \
+                --jq '.workflow_runs[].id'); do
+              [ "$id" = "$RUN_ID" ] && continue
+              jobs=$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
+                --jq '[.jobs[] | {name, status, conclusion, started_at}]')
+
+              # A shard actively running → the store is in use. (Only
+              # in_progress counts: check runs for not-yet-eligible jobs can
+              # already sit "queued", and counting those would deadlock two
+              # waiters against each other.)
+              running=$(jq --arg p "$SHARD_PREFIX" \
+                '[.[] | select((.name | startswith($p)) and .status == "in_progress")] | length' <<< "$jobs")
+              if [ "$running" != "0" ]; then
+                busy="run $id is executing $running E2E shard(s)"
+                break
+              fi
+
+              # Their queue already passed but their shards haven't all
+              # finished → they own the store (covers the gap where shards
+              # exist only as queued check runs, or none are listed yet).
+              queue_passed=$(jq --arg q "$QUEUE_JOB" \
+                '[.[] | select(.name == $q and .status == "completed" and .conclusion == "success")] | length' <<< "$jobs")
+              if [ "$queue_passed" != "0" ]; then
+                shards_done=$(jq --arg p "$SHARD_PREFIX" \
+                  '([.[] | select(.name | startswith($p))] | length > 0) and ([.[] | select((.name | startswith($p)) and .status != "completed")] | length == 0)' <<< "$jobs")
+                if [ "$shards_done" != "true" ]; then
+                  busy="run $id passed the queue and its shards have not finished"
+                  break
+                fi
+              fi
+
+              # An earlier waiter goes first.
+              older=$(jq --arg q "$QUEUE_JOB" --arg mine "$my_started" --argjson me "$RUN_ID" --argjson other "$id" \
+                '[.[] | select(.name == $q and .status == "in_progress")
+                      | select(.started_at < $mine or (.started_at == $mine and $other < $me))] | length' <<< "$jobs")
+              if [ "$older" != "0" ]; then
+                busy="run $id entered the queue before us"
+                break
+              fi
+            done
+
+            if [ -z "$busy" ]; then
+              echo "✅ Store is free — releasing the E2E shards"
+              exit 0
+            fi
+            echo "⏳ $busy — waiting…"
+            sleep 20
+          done
+
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    needs: deploy
+    needs: [deploy, queue]
     if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -268,7 +367,7 @@ jobs:
   # app-affecting paths) or when a manual dispatch explicitly opted out.
   e2e-gate:
     name: 🎭 E2E Tests
-    needs: [changes, deploy, e2e]
+    needs: [changes, deploy, queue, e2e]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -277,6 +376,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           DEPLOY_URL: ${{ needs.deploy.outputs.deployment_url }}
+          QUEUE_RESULT: ${{ needs.queue.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           EVENT_NAME: ${{ github.event_name }}
           SKIP_E2E_INPUT: ${{ github.event.inputs.skip_e2e }}
@@ -314,6 +414,13 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$SKIP_E2E_INPUT" = "true" ]; then
             echo "⏭️ E2E skipped by the explicit skip_e2e workflow_dispatch input"
             exit 0
+          fi
+
+          # The shared-store queue timed out or errored, so the shards never
+          # ran. That is a real no-answer, not a pass — re-run the workflow.
+          if [ "$QUEUE_RESULT" = "failure" ] || [ "$QUEUE_RESULT" = "cancelled" ]; then
+            echo "::error::The shared-store queue did not succeed (result: $QUEUE_RESULT), so the E2E shards never ran. Re-run this workflow once the store frees up."
+            exit 1
           fi
 
           if [ "$DEPLOY_RESULT" != "success" ]; then
