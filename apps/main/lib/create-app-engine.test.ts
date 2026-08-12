@@ -266,18 +266,7 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(appMetricsObserver).toHaveBeenCalledTimes(3);
-		expect(networkError).toHaveBeenCalledTimes(2);
-		expect(networkError).toHaveBeenCalledWith('open stalled', {
-			context: expect.objectContaining({
-				type: 'engine.ready-stalled',
-				phase: 'create-database',
-				elapsedMs: 15_000,
-			}),
-			terminal: {
-				operationType: 'sync.startup',
-				outcome: 'unknown',
-			},
-		});
+		expect(networkError).toHaveBeenCalledTimes(1);
 		expect(networkError).toHaveBeenCalledWith('engine.lane.tick', {
 			context: expect.objectContaining({
 				type: 'engine.lane.tick',
@@ -289,7 +278,18 @@ describe('createAppSyncEngine scope cache', () => {
 				outcome: 'failed',
 			},
 		});
-		expect(networkWarn).toHaveBeenCalledTimes(1);
+		expect(networkWarn).toHaveBeenCalledTimes(2);
+		expect(networkWarn).toHaveBeenCalledWith('open stalled', {
+			context: expect.objectContaining({
+				type: 'engine.ready-stalled',
+				phase: 'create-database',
+				elapsedMs: 15_000,
+			}),
+			terminal: {
+				operationType: 'sync.startup',
+				outcome: 'unknown',
+			},
+		});
 		expect(networkWarn).toHaveBeenCalledWith('seed failed', {
 			context: expect.objectContaining({ type: 'engine.pos-bootstrap-error', scopeId: 'scope-1' }),
 			terminal: {

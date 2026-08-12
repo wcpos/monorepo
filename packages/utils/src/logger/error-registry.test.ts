@@ -60,6 +60,12 @@ const SEED_SYMBOLS = [
 	'OUT_OF_MEMORY',
 	'NATIVE_CRASH',
 	'UNEXPECTED_ERROR',
+	'SYNC_TASK_CRASHED',
+	'RECORD_CONFLICT',
+	'TOTALS_DIVERGED',
+	'BARCODE_CONFIG_UNAVAILABLE',
+	'APP_START_SLOW',
+	'MULTI_TAB_LIMITED',
 ].sort();
 
 const repoRoot = path.resolve(__dirname, '../../../..');
