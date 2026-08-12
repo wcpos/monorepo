@@ -193,6 +193,17 @@ exit 75
 		// blocking the line.
 		assert.match(queueStep.run, /select\(\.completed_at > \$cutoff\)/);
 		assert.match(queueStep.run, /select\(\.started_at > \$cutoff\)/);
+		// The fences only work if the fields survive the jobs projection —
+		// completed_at compared against a stripped field is silently null
+		// (Codex P1 on #1173).
+		assert.match(queueStep.run, /\{name, status, conclusion, started_at, completed_at\}/);
+		// And the RUNNING-shards branch must fence too: a zombie shard hits it
+		// before the ownership rule is ever consulted (the second #1173 P1 —
+		// the original incident shape).
+		assert.match(
+			queueStep.run,
+			/startswith\(\$p\)\) and \.status == "in_progress"\)\s*\n\s*\| select\(\.started_at > \$cutoff\)/
+		);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
