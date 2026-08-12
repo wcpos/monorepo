@@ -74,7 +74,11 @@ import {
 	CHANGE_SIGNAL_STATE_KEY,
 	createChangeSignalLane,
 } from './change-signal/change-signal-lane';
-import { createServerPressureMonitor } from './change-signal/server-pressure';
+import {
+	createServerPressureMonitor,
+	parseServerPressure,
+	type ServerPressure,
+} from './change-signal/server-pressure';
 import { hydrateBarcodeSelectors } from './change-signal/config-fingerprint-source';
 import {
 	type BarcodeSelectors,
@@ -593,7 +597,11 @@ export function createRxdbSyncEngine(
 	const rawFetcher: EngineFetcher = ports.fetcher ?? ((url, init) => globalThis.fetch(url, init));
 	const fetcher: EngineFetcher = async (url, init) => {
 		const startedAtMs = nowMs();
-		const observe = (status: number, retryAfter?: string | null): void => {
+		const observe = (
+			status: number,
+			retryAfter?: string | null,
+			pressure?: ServerPressure
+		): void => {
 			const atMs = nowMs();
 			const transition = serverPressure.observe({
 				atMs,
@@ -601,6 +609,7 @@ export function createRxdbSyncEngine(
 				durationMs: atMs - startedAtMs,
 				offline: readConnectivity() === 'offline',
 				...(retryAfter === undefined ? {} : { retryAfter }),
+				...(pressure === undefined ? {} : { pressure }),
 			});
 			if (transition !== null) cadence?.onServerPressureTransition(transition);
 		};
@@ -630,13 +639,15 @@ export function createRxdbSyncEngine(
 			throw error;
 		}
 		let retryAfter: string | null = null;
+		let pressure: ServerPressure | undefined;
 		try {
 			retryAfter = response.headers.get('retry-after');
+			pressure = parseServerPressure(response.headers.get('x-wcpos-pressure'));
 		} catch {
 			// A host fetch stub may hand back a header-less object; never let
 			// telemetry break a real response.
 		}
-		observe(response.status, retryAfter);
+		observe(response.status, retryAfter, pressure);
 		return response;
 	};
 	const hostTransport: EngineHostTransport = Object.freeze({

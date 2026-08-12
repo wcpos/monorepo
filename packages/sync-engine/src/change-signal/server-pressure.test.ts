@@ -125,6 +125,80 @@ describe('server pressure monitor', () => {
 		expect(monitor.multiplier()).toBe(1);
 	});
 
+	it('leaves missing pressure readings as a complete no-op', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		for (let index = 0; index < 10; index += 1) {
+			expect(monitor.observe({ atMs: index, status: 200, durationMs: 50 })).toBeNull();
+		}
+		expect(monitor.multiplier()).toBe(1);
+	});
+
+	it('backs off once after a sustained high pressure window', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		let transition = null;
+		for (let index = 0; index < 10; index += 1) {
+			transition = monitor.observe({
+				atMs: index,
+				status: 200,
+				durationMs: 50,
+				pressure: 'high',
+			});
+		}
+
+		expect(transition).toMatchObject({
+			direction: 'backoff',
+			signal: 'server-pressure',
+			fromMultiplier: 1,
+			toMultiplier: 2,
+		});
+		expect(monitor.multiplier()).toBe(2);
+	});
+
+	it('does not back off on a single high pressure reading', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		expect(monitor.observe({ atMs: 0, status: 200, durationMs: 50, pressure: 'high' })).toBeNull();
+		expect(monitor.multiplier()).toBe(1);
+	});
+
+	it('counts low pressure readings toward recovery like healthy responses', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
+
+		let transition = null;
+		for (let index = 0; index < 10; index += 1) {
+			transition = monitor.observe({
+				atMs: 60_000 + index,
+				status: 200,
+				durationMs: 50,
+				pressure: 'low',
+			});
+		}
+
+		expect(transition).toMatchObject({
+			direction: 'recovery',
+			signal: 'healthy',
+			fromMultiplier: 2,
+			toMultiplier: 1,
+		});
+	});
+
+	it('treats elevated pressure as neutral recovery evidence', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
+
+		for (let index = 0; index < 10; index += 1) {
+			expect(
+				monitor.observe({
+					atMs: 60_000 + index,
+					status: 200,
+					durationMs: 50,
+					pressure: 'elevated',
+				})
+			).toBeNull();
+		}
+		expect(monitor.multiplier()).toBe(2);
+	});
+
 	it('does not read a non-429 4xx as either distress or health', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		for (let index = 0; index < 30; index += 1) {
