@@ -18,6 +18,7 @@ const emptyReconcileSummary = {
 async function starvationHarness() {
 	let nowMs = 1_000;
 	let pressure = false;
+	let retryAfterActive = false;
 	const database = {
 		listCollections: () => [],
 		resetCollection: async () => undefined,
@@ -52,7 +53,8 @@ async function starvationHarness() {
 		hasPendingInteractiveWork: () => false,
 		emitEvent: () => undefined,
 		now: () => nowMs,
-		isServerBackingOff: () => pressure,
+		isServerBackingOff: () => pressure || retryAfterActive,
+		isServerRetryAfterActive: () => retryAfterActive,
 	});
 
 	return {
@@ -65,6 +67,9 @@ async function starvationHarness() {
 		},
 		setPressure: (value: boolean) => {
 			pressure = value;
+		},
+		setRetryAfterActive: (value: boolean) => {
+			retryAfterActive = value;
 		},
 	};
 }
@@ -135,5 +140,75 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 			reason: 'server-pressure',
 		});
 		expect(context.reconcilePass).toHaveBeenCalledOnce();
+	});
+
+	it('waits for an active Retry-After window before running a starvation tick', async () => {
+		const context = await starvationHarness();
+		context.setPressure(true);
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+		context.advance(30 * 60_000 + 1);
+		context.setRetryAfterActive(true);
+
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+		expect(context.primeManifest).not.toHaveBeenCalled();
+
+		context.setRetryAfterActive(false);
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
+		expect(context.primeManifest).toHaveBeenCalledOnce();
+	});
+
+	it('re-arms the ceiling when a starvation tick fails', async () => {
+		const context = await starvationHarness();
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
+		context.primeManifest.mockClear();
+		context.setPressure(true);
+		context.advance(30 * 60_000 + 1);
+		context.primeManifest.mockRejectedValueOnce(new Error('server unavailable'));
+
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'error' });
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+		expect(context.primeManifest).toHaveBeenCalledOnce();
+	});
+
+	it('reserves the starvation window before a concurrent tick can enter', async () => {
+		const context = await starvationHarness();
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
+		context.primeManifest.mockClear();
+		context.setPressure(true);
+		context.advance(30 * 60_000 + 1);
+		let releasePrime: (() => void) | undefined;
+		let markPrimeStarted: (() => void) | undefined;
+		const primeStarted = new Promise<void>((resolve) => {
+			markPrimeStarted = resolve;
+		});
+		context.primeManifest.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					markPrimeStarted!();
+					releasePrime = () => resolve({ products: 0, customers: 0, orders: 0 });
+				})
+		);
+
+		const firstTick = context.lanes.existencePrime.tick();
+		await primeStarted;
+		const concurrentReport = await context.lanes.existencePrime.tick();
+		releasePrime!();
+		const firstReport = await firstTick;
+
+		expect(concurrentReport).toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+		expect(context.primeManifest).toHaveBeenCalledOnce();
+		expect(firstReport).toMatchObject({ status: 'ran' });
 	});
 });

@@ -138,6 +138,7 @@ type MaintenanceLaneDeps = {
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
 	isServerBackingOff?: (atMs: number) => boolean;
+	isServerRetryAfterActive?: (atMs: number) => boolean;
 };
 
 export type MaintenanceLane = {
@@ -185,6 +186,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		return {
 			tick: async (callerSignal) => {
 				let starvation = false;
+				let starvationReservationAtMs: number | null = null;
 				if (callerSignal?.aborted) {
 					return { lane: name, status: 'skipped', reason: 'aborted' };
 				}
@@ -199,15 +201,22 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							lastRanAtMs.set(name, tickAtMs);
 							return { lane: name, status: 'skipped', reason: 'server-pressure' };
 						}
+						if (deps.isServerRetryAfterActive?.(tickAtMs)) {
+							return { lane: name, status: 'skipped', reason: 'server-pressure' };
+						}
 						const starvationCeilingMs = 2 * laneRegistryEntry(name).defaultMs;
 						if (tickAtMs - previousRunAtMs < starvationCeilingMs) {
 							return { lane: name, status: 'skipped', reason: 'server-pressure' };
 						}
 						starvation = true;
+						starvationReservationAtMs = tickAtMs;
 					}
 				}
 				if (deps.manager.activeScope === null) {
 					return { lane: name, status: 'skipped', reason: 'no active scope' };
+				}
+				if (starvationReservationAtMs !== null) {
+					lastRanAtMs.set(name, starvationReservationAtMs);
 				}
 				try {
 					const report = await deps.manager.runGuarded<MaintenanceLaneReport>(async (bound) => {

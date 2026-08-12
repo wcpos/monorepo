@@ -1475,6 +1475,7 @@ export function createRxdbSyncEngine(
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 		isServerBackingOff: (atMs) => serverPressure.isBackingOff(atMs),
+		isServerRetryAfterActive: (atMs) => serverPressure.retryAfterUntilMs() > atMs,
 	});
 
 	type LaneTarget = {
