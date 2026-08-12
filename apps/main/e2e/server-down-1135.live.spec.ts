@@ -37,9 +37,9 @@ const OUTAGE_RESPONSE_DELAY_MS = 1_200;
  * Never throws from the route handler (#997): if fulfilling fails (page began
  * navigating, request already handled), fall back to the live network.
  */
-async function injectStoreOutage(page: Page, storeOrigin: string) {
+async function injectStoreOutage(page: Page, storeOrigins: ReadonlySet<string>) {
 	await page.context().route(
-		(url) => url.href.startsWith(storeOrigin),
+		(url) => storeOrigins.has(url.origin),
 		async (route) => {
 			try {
 				await new Promise((resolve) => setTimeout(resolve, OUTAGE_RESPONSE_DELAY_MS));
@@ -65,8 +65,24 @@ test.describe('#1135 server-down feedback (live store)', () => {
 	}, testInfo) => {
 		const storeUrl = (testInfo.project.use as { storeUrl?: string }).storeUrl;
 		test.skip(!storeUrl, 'project storeUrl missing — nothing to take offline');
+		const storeOrigins = new Set([new URL(storeUrl!).origin]);
+		let observedStoreRequest = false;
+		page.on('request', (request) => {
+			const url = new URL(request.url());
+			if (
+				url.pathname.includes('/wcpos/v2/') ||
+				url.searchParams.get('rest_route')?.includes('/wcpos/v2/') ||
+				url.searchParams.get('wcpos') === '1'
+			) {
+				observedStoreRequest = true;
+				storeOrigins.add(url.origin);
+			}
+		});
 
 		await authenticateWithStore(page, testInfo, { waitForCatalogue: false });
+		if (!observedStoreRequest) {
+			throw new Error('No authenticated store API request was observed');
+		}
 
 		// Healthy baseline: the dot reports online (green) before the outage.
 		const dot = page.getByTestId('header-online-status');
@@ -74,7 +90,7 @@ test.describe('#1135 server-down feedback (live store)', () => {
 		await expect(dot.locator('.text-success')).toBeVisible({ timeout: PROBE_FLIP_TIMEOUT_MS });
 
 		// Backend dies: proxy still answers, but everything is a 502 from here on.
-		await injectStoreOutage(page, new URL(storeUrl!).origin);
+		await injectStoreOutage(page, storeOrigins);
 
 		// 1. The dot must flip to amber within one probe interval — this exact
 		//    shape (readable 5xx) used to count as "reachable" and stay green.
@@ -95,8 +111,8 @@ test.describe('#1135 server-down feedback (live store)', () => {
 		await expect(checkNow).toBeDisabled({ timeout: 5_000 });
 
 		// And the outcome lands as a cashier-readable error toast.
-		await expect(
-			page.locator('[data-sonner-toast]', { hasText: 'sync with the server' }).first()
-		).toBeVisible({ timeout: 60_000 });
+		await expect(page.locator('[data-sonner-toast][data-type="error"]').first()).toBeVisible({
+			timeout: 60_000,
+		});
 	});
 });

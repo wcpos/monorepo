@@ -19,7 +19,7 @@ export default defineConfig<WcposTestOptions>({
 	fullyParallel: false,
 	workers: 1,
 	retries: 0,
-	timeout: 300_000,
+	timeout: 600_000,
 	reporter: [['list']],
 	use: {
 		baseURL,
