@@ -688,8 +688,9 @@ export function createSyncLogObserver(options: { persist: PersistLogRow; nowMs?:
 			...fields,
 			type: event.type,
 			...(collection !== undefined ? { collection } : {}),
-			...(isFailure && code !== null ? { errorCode: code } : {}),
 		};
+		delete context.errorCode;
+		if (isFailure && code !== null) context.errorCode = code;
 		// The explicit outcome is promoted to the terminal column; a copy in context
 		// would just shadow it with a second, unfilterable source of truth.
 		if (explicitOutcome !== undefined) delete context.outcome;

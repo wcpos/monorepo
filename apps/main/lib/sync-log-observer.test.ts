@@ -61,7 +61,7 @@ describe('createSyncLogObserver', () => {
 		observer.observe(
 			event({
 				type: 'engine.lane.tick',
-				fields: { status: 'ran', pushed: 1 },
+				fields: { status: 'ran', pushed: 1, errorCode: 'SYNC401' },
 			})
 		);
 
