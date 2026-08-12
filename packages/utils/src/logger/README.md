@@ -30,17 +30,15 @@ log.debug('User clicked button');
 
 // 2. User-facing error with toast
 log.error('Connection failed', {
+  code: ERROR_CODES.SYNC_UNREACHABLE,
   showToast: true,
-  context: {
-    errorCode: ERROR_CODES.SYNC_UNREACHABLE
-  }
 });
 
 // 3. Track important error to database
 log.error('Payment declined', {
+  code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
   showToast: true,
   context: {
-    errorCode: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
     amount: 99.99,
     cardType: 'visa'
   }
@@ -166,8 +164,8 @@ const loginLogger = authLogger.with({ userId: user.id });
 // Use the logger
 loginLogger.info('Login successful');
 loginLogger.error('Login failed', { 
+  code: ERROR_CODES.SESSION_EXPIRED,
   showToast: true, 
-  context: { errorCode: ERROR_CODES.SESSION_EXPIRED }
 });
 ```
 
@@ -302,7 +300,7 @@ You can also call log methods directly from the console:
 ```javascript
 window.wcposLog.debug('Test debug message')
 window.wcposLog.info('Test info message')
-window.wcposLog.error('Test error message')
+window.wcposLog.error('Test error message', { code: 'CLIENT999' })
 ```
 
 ### Programmatic Usage
@@ -325,7 +323,7 @@ log.setLevel('debug');
 log.debug(message, options?)   // Hidden in production (__DEV__ only)
 log.info(message, options?)    // Visible in production
 log.warn(message, options?)    // Warnings
-log.error(message, options?)   // Errors
+log.error(message, options: LoggerOptions & { code: ErrorCode }) // Errors
 log.success(message, options?) // Success messages
 ```
 
@@ -333,6 +331,7 @@ log.success(message, options?) // Success messages
 
 ```typescript
 interface LoggerOptions {
+  code?: ErrorCode;             // Registry-typed error code (required by log.error)
   showToast?: boolean;          // Show toast notification
   context?: any;                // Additional context data
   toast?: {
@@ -353,12 +352,12 @@ interface LoggerOptions {
 
 ```typescript
 log.error('Barcode scanned: 12345', {
+  code: ERROR_CODES.RECORD_REJECTED,
   showToast: true,
   toast: {
     text2: '3 products found locally'
   },
   context: {
-    errorCode: ERROR_CODES.RECORD_REJECTED,
     barcode: '12345'
   }
 });
@@ -400,10 +399,8 @@ When you include an error code, a "Help" button automatically appears (unless yo
 
 ```typescript
 log.error('Invalid credentials', {
+  code: ERROR_CODES.SESSION_EXPIRED, // Adds "Help" button automatically
   showToast: true,
-  context: {
-    errorCode: ERROR_CODES.SESSION_EXPIRED  // Adds "Help" button automatically
-  }
 });
 // User can click "Help" to open: https://docs.wcpos.com/error-codes/AUTH101
 ```
@@ -413,33 +410,33 @@ log.error('Invalid credentials', {
 ```typescript
 // Default: Show help link in toast
 log.error('Connection failed', {
+  code: ERROR_CODES.SYNC_UNREACHABLE,
   showToast: true,
-  context: { errorCode: ERROR_CODES.SYNC_UNREACHABLE }
 });
 // ✓ Shows "Help" button in toast
 // ✓ Error code visible in logs
 
 // Hide help link from toast
 log.error('Minor validation issue', {
+  code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
   showToast: true,
   toast: {
     showErrorCode: false  // Hide help link
-  },
-  context: { errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED }
+  }
 });
 // ✗ No "Help" button in toast
 // ✓ Error code still visible in logs
 
 // Custom action takes priority
 log.success('Item removed', {
+  code: ERROR_CODES.RECORD_REJECTED,
   showToast: true,
   toast: {
     action: {
       label: 'Undo',
       onClick: () => restore()
     }
-  },
-  context: { errorCode: ERROR_CODES.RECORD_REJECTED }
+  }
 });
 // ✓ Shows "Undo" button (not "Help")
 // ✓ Error code still in logs
@@ -462,7 +459,7 @@ Error codes follow the format: `[DOMAIN][CATEGORY][SPECIFIC_CODE]`
 All error codes link to: `https://docs.wcpos.com/error-codes/{CODE}`
 
 Error codes are:
-- **Always visible in logs UI** (if present in `context.errorCode`)
+- **Always visible in logs UI** (pass them as top-level `code`; they persist as `context.errorCode`)
 - **Optionally shown in toasts** (default: true, can be disabled per-call with `toast.showErrorCode: false`)
 
 ### Cross-Platform URL Opening
@@ -694,9 +691,9 @@ log.warn('Product out of stock', {
 
 ```typescript
 log.error('Failed to save order', {
+  code: ERROR_CODES.TRANSACTION_FAILED,
   showToast: true,
   context: {
-    errorCode: ERROR_CODES.TRANSACTION_FAILED,
     orderId: 123,
     error: err.message
   }
@@ -783,9 +780,9 @@ try {
   return response.data;
 } catch (err) {
   log.error('Failed to fetch from server', {
+    code: ERROR_CODES.SYNC_UNREACHABLE,
     showToast: true,    // User needs to know
     context: {
-      errorCode: ERROR_CODES.SYNC_UNREACHABLE,
       endpoint,
       error: err.message
     }
@@ -801,9 +798,9 @@ try {
   return await collection.upsert(data);
 } catch (err) {
   log.error('Failed to save to database', {
+    code: ERROR_CODES.TRANSACTION_FAILED,
     showToast: true,
     context: {
-      errorCode: ERROR_CODES.TRANSACTION_FAILED,
       collectionName: collection.name,
       error: err.message
     }
