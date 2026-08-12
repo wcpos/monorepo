@@ -192,8 +192,8 @@ jobs:
           # 2026-08-12 as "unexpected end of JSON input" failing this REQUIRED
           # gate two seconds in) must not fail the gate. Retry each read; the
           # poll loop below additionally treats a read that stays broken as
-          # "store busy" and just waits out the next cycle, so the only hard
-          # failure left is the job-level timeout.
+          # "store busy" and just waits out the next cycle. Missing startup
+          # timestamps and the job-level timeout remain hard failures.
           api() {
             local attempt out
             for attempt in 1 2 3; do
@@ -202,7 +202,9 @@ jobs:
                 return 0
               fi
               echo "::warning::gh api $1 failed (attempt $attempt/3)" >&2
-              sleep $((attempt * 15))
+              if (( attempt < 3 )); then
+                sleep $((attempt * 15))
+              fi
             done
             return 1
           }
