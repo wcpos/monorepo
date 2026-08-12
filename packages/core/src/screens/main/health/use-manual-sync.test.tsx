@@ -62,6 +62,33 @@ describe('useManualSync', () => {
 		});
 	});
 
+	it('shares one in-flight guard across instances and refuses duplicate starts', async () => {
+		let finish!: (report: unknown) => void;
+		mockSync.mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+		);
+
+		// Two independent consumers — e.g. a row's Sync now and Check everything now.
+		const first = renderHook(() => useManualSync());
+		const second = renderHook(() => useManualSync());
+
+		act(() => {
+			void first.result.current.sync();
+		});
+		await waitFor(() => expect(first.result.current.syncing).toBe(true));
+		await waitFor(() => expect(second.result.current.syncing).toBe(true));
+
+		// A second entry point pressed mid-flight must not start another engine pass.
+		await act(() => second.result.current.sync());
+		expect(mockSync).toHaveBeenCalledTimes(1);
+
+		finish({ lane: 'all', status: 'ran' });
+		await waitFor(() => expect(first.result.current.syncing).toBe(false));
+		await waitFor(() => expect(second.result.current.syncing).toBe(false));
+	});
+
 	it('falls back to the report reason when an error report has no error text', async () => {
 		mockSync.mockResolvedValue({ lane: 'all', status: 'error', reason: 'scope database not open' });
 

@@ -1,9 +1,22 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+import { BehaviorSubject } from 'rxjs';
+
 import { Toast } from '@wcpos/components/toast';
 import { useQueryRuntime } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
+
+/**
+ * One in-flight flag shared by EVERY manual-sync control: a manual pass is a single
+ * engine-wide operation, so while one runs, all entry points (attention Retry, Check
+ * everything now, each row's Sync now) must show it and refuse a duplicate start —
+ * per-instance state only guarded re-presses of the same button (codex review).
+ * Transient by construction (true only while a sync promise is in flight), so it never
+ * carries stale state across store switches.
+ */
+const manualSyncInFlight$ = new BehaviorSubject(false);
 
 /**
  * Manual engine sync with cashier-visible feedback: an in-flight flag for the
@@ -15,10 +28,11 @@ import { useT } from '../../../contexts/translations';
 export function useManualSync() {
 	const { engine } = useQueryRuntime();
 	const t = useT();
-	const [syncing, setSyncing] = React.useState(false);
+	const syncing = useObservableState(manualSyncInFlight$, manualSyncInFlight$.getValue());
 
 	const sync = React.useCallback(async () => {
-		setSyncing(true);
+		if (manualSyncInFlight$.getValue()) return;
+		manualSyncInFlight$.next(true);
 		try {
 			const report = await engine.sync();
 			if (report.status === 'error') {
@@ -50,7 +64,7 @@ export function useManualSync() {
 				text2: error instanceof Error ? error.message : String(error),
 			});
 		} finally {
-			setSyncing(false);
+			manualSyncInFlight$.next(false);
 		}
 	}, [engine, t]);
 
