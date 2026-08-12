@@ -34,11 +34,12 @@ on:
 # group: with 3+ PRs active, each new run evicted (cancelled) another PR's
 # queued run, and the evicted PR's required "🎭 E2E Tests" gate never
 # reported at all (observed 2026-08-11: a dozen cross-PR cancellations in one
-# evening). Groups are therefore per-PR — a run can only ever supersede ITS
-# OWN PR's older run — and cross-run store serialization moved to the
-# ⏳ Shared-store queue job below, which waits instead of cancelling.
+# evening). First-attempt groups are therefore per-PR — a new push can only
+# supersede ITS OWN PR's older run. Re-run attempts use their original run id
+# so a stale re-run cannot cancel a newer SHA. Cross-run store serialization
+# moved to the ⏳ Shared-store queue job below, which waits instead.
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}', github.event.pull_request.number) || format('deploy-{0}', github.ref) }}
+  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}-{1}', github.event.pull_request.number, github.run_attempt != '1' && github.run_id || 'current') || format('deploy-{0}', github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -198,8 +199,13 @@ jobs:
 
           while :; do
             busy=""
-            for id in $(gh api "repos/$REPO/actions/workflows/deploy.yml/runs?status=in_progress&per_page=100" \
-                --jq '.workflow_runs[].id'); do
+            active_runs=$(
+              for status in in_progress queued; do
+                gh api "repos/$REPO/actions/workflows/deploy.yml/runs?status=$status&per_page=100" \
+                  --paginate --jq '.workflow_runs[].id' || exit 1
+              done
+            )
+            for id in $active_runs; do
               [ "$id" = "$RUN_ID" ] && continue
               jobs=$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
                 --jq '[.jobs[] | {name, status, conclusion, started_at}]')
@@ -212,6 +218,16 @@ jobs:
                 '[.[] | select((.name | startswith($p)) and .status == "in_progress")] | length' <<< "$jobs")
               if [ "$running" != "0" ]; then
                 busy="run $id is executing $running E2E shard(s)"
+                break
+              fi
+
+              # Runs created before this queue existed have no queue job.
+              # Hold the store until those rollout-era runs finish, including
+              # ones still queued in the former shared concurrency group.
+              queue_seen=$(jq --arg q "$QUEUE_JOB" \
+                '[.[] | select(.name == $q)] | length' <<< "$jobs")
+              if [ "$queue_seen" = "0" ]; then
+                busy="run $id uses the previous workflow and has not finished"
                 break
               fi
 
@@ -244,7 +260,9 @@ jobs:
               exit 0
             fi
             echo "⏳ $busy — waiting…"
-            sleep 20
+            # Keep several simultaneous waiters below GITHUB_TOKEN's shared
+            # 1,000-requests-per-hour repository limit.
+            sleep 180
           done
 
   e2e:
