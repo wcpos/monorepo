@@ -238,6 +238,14 @@ export type RunEngineSchedulerDrainInput = {
 	diagnostics?: SyncObserver;
 	signal?: AbortSignal;
 	nowMs?: number;
+	/**
+	 * LIVE clock for mid-drain reads. `nowMs` alone freezes the drain's clock at its
+	 * snapshot, which silently neuters the in-fetch lease heartbeat under an injected
+	 * clock — every renewal rewrites the original `claimedUntilMs` (#1175 review P2).
+	 * Callers with a `now` port pass BOTH: the snapshot for the tick's fixed decisions,
+	 * this for renewals that must track the (injected or real) clock as it advances.
+	 */
+	now?: () => number;
 	censusFreshForMs?: number;
 	/** Restrict an explicitly requested foreground drain to one seeded task. */
 	taskId?: string;
@@ -289,6 +297,7 @@ function createEngineSchedulerFetcherRegistry(
 		| 'pullBatchSize'
 		| 'diagnostics'
 		| 'nowMs'
+		| 'now'
 		| 'censusFreshForMs'
 		| 'refreshBrowseWindowKey'
 		| 'barcodeSelectors'
@@ -296,7 +305,7 @@ function createEngineSchedulerFetcherRegistry(
 ) {
 	const db = input.db;
 	const nowMs = input.nowMs ?? Date.now();
-	const getNowMs = input.nowMs === undefined ? Date.now : () => nowMs;
+	const getNowMs = input.now ?? (input.nowMs === undefined ? Date.now : () => nowMs);
 	const orderRepository = new EngineOrderRepository(db);
 	const queryTotalRepository = new RxQueryTotalCacheRepository(db as never);
 	const cacheQueryTotals: CacheQueryTotals = async ({ queryKeys, totalMatchingRecords }) => {
@@ -438,7 +447,7 @@ export async function runEngineSchedulerDrain(
 ): Promise<PersistedSchedulerTaskRunnerResult> {
 	const db = input.db;
 	const nowMs = input.nowMs ?? Date.now();
-	const getNowMs = input.nowMs === undefined ? Date.now : () => nowMs;
+	const getNowMs = input.now ?? (input.nowMs === undefined ? Date.now : () => nowMs);
 
 	// A `schedulerTaskStates` reconciliation refusal caught mid-tick rebuilds the
 	// derivable ledger (#956). The rebuild drops the store this tick claims rows in,

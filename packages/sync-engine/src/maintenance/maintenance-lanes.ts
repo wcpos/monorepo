@@ -336,7 +336,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			...(deps.pullBatchSize !== undefined ? { pullBatchSize: deps.pullBatchSize } : {}),
 			fetcher,
 			signal,
-			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
+			// Snapshot + live function: the heartbeat renewals inside the drain must track
+			// an injected clock, not the tick's frozen snapshot (#1175 review P2).
+			...(deps.now !== undefined ? { nowMs: deps.now(), now: deps.now } : {}),
 			...(deps.withCollectionActivity !== undefined
 				? {
 						withCollectionActivity: <T>(collection: string, work: () => Promise<T>) =>

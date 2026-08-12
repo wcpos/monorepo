@@ -1206,6 +1206,57 @@ describe('lease heartbeat during a slow fetch', () => {
 		}
 	});
 
+	it('beats inside a sub-second lease too — the interval is derived, never floored past it', async () => {
+		// #1175 review P2: a 1s floor on the interval scheduled the FIRST beat after a
+		// short lease had already expired, re-opening the steal window for exactly the
+		// lease sizes the tests run at.
+		vi.useFakeTimers();
+		try {
+			const row = queuedRow();
+			const repository = casRepository([row]);
+			const fetcher = vi.fn(
+				(task: { id: string }) =>
+					new Promise<{
+						taskId: string;
+						documentCount: number;
+						requestCount: number;
+						completed: boolean;
+					}>((resolve) =>
+						setTimeout(
+							() =>
+								resolve({ taskId: task.id, documentCount: 1, requestCount: 1, completed: true }),
+							500
+						)
+					)
+			);
+			const run = runPersistedSchedulerTasks({
+				...runnerInput('tab-a'),
+				leaseForMs: 300,
+				repository,
+				fetcher,
+			});
+			// 400ms in: the 300ms lease has lapsed by wall clock; only sub-lease beats
+			// (100ms cadence) can have kept the row claimed.
+			await vi.advanceTimersByTimeAsync(400);
+			const rival = await runPersistedSchedulerTasks({
+				...runnerInput('tab-b'),
+				leaseForMs: 300,
+				repository,
+				fetcher: vi.fn(async (task: { id: string }) => ({
+					taskId: task.id,
+					documentCount: 0,
+					requestCount: 1,
+					completed: true,
+				})),
+			});
+			expect(rival.scanned).toBe(0);
+			await vi.advanceTimersByTimeAsync(200);
+			await expect(run).resolves.toMatchObject({ succeeded: 1, renewalLost: 0 });
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('stops as renewal-lost — never contesting completion — when the claim is taken mid-fetch', async () => {
 		vi.useFakeTimers();
 		try {

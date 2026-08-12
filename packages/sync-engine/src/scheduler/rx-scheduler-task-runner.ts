@@ -344,7 +344,10 @@ export async function runPersistedSchedulerTasks(
 		// server that is already struggling. The heartbeat keeps the claim fresh while a
 		// fetch is in flight, so a lease expiry now means its owner is actually gone.
 		let heartbeatLost = false;
-		const heartbeatIntervalMs = Math.max(1_000, Math.floor(input.leaseForMs / 3));
+		// Strictly shorter than ANY lease (#1175 review P2): a floor above leaseForMs/3
+		// would schedule the first beat after a short lease already expired, silently
+		// re-opening the mid-fetch steal window this heartbeat exists to close.
+		const heartbeatIntervalMs = Math.max(1, Math.floor(input.leaseForMs / 3));
 		const fetchWithLeaseHeartbeat = async (): Promise<FetchTaskResult> => {
 			let stopped = false;
 			let timer: ReturnType<typeof setTimeout> | undefined;

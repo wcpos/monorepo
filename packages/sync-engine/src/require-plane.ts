@@ -481,7 +481,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					...(deps.censusFreshForMs !== undefined
 						? { censusFreshForMs: deps.censusFreshForMs }
 						: {}),
-					...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
+					// Snapshot for the tick's fixed decisions; the live function so in-fetch
+					// lease heartbeats track an injected clock instead of rewriting the
+					// snapshot's claimedUntilMs forever (#1175 review P2).
+					...(deps.now !== undefined ? { nowMs: deps.now(), now: deps.now } : {}),
 					signal: item.abortController.signal,
 					onProgress: progressObserver(item.requirement),
 					...overrides,
