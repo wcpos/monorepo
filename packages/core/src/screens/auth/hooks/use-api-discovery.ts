@@ -131,6 +131,11 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					throw error;
 				}
 
+				const errorCode = get(error, ['code']);
+				if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') {
+					throw new ApiDiscoveryError(t('auth.site_took_too_long_to_respond'));
+				}
+
 				const errorResponse = get(error, ['response']);
 				if (errorResponse) {
 					const status = get(errorResponse, 'status');
