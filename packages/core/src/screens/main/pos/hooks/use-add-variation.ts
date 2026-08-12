@@ -81,7 +81,6 @@ export const useAddVariation = () => {
 				cartLogger.success(t('common.added_to_cart', { name: parent.name }), {
 					// Scan-driven adds toast via the scan-feedback module instead.
 					showToast: !options?.silent,
-					saveToDb: true,
 					context: {
 						variationId: variation.id,
 						productId: parent.id,
@@ -91,11 +90,11 @@ export const useAddVariation = () => {
 				});
 				return true;
 			} else {
-				cartLogger.error(t('pos.error_adding_to_cart', { name: parent.name }), {
+				cartLogger.error('Failed to add product to cart', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos.error_adding_to_cart', { name: parent.name }) },
 					context: {
-						errorCode: ERROR_CODES.CART_UPDATE_FAILED,
 						variationId: variation.id,
 						productId: parent.id,
 						productName: parent.name,

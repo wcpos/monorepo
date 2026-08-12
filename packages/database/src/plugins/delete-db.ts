@@ -50,9 +50,8 @@ const deleteDBPlugin: RxPlugin = {
 					const DBDeleteRequest = window.indexedDB.deleteDatabase(databaseName);
 					DBDeleteRequest.onerror = (event) => {
 						dbLogger.error('Error deleting database', {
-							saveToDb: true,
+							code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 							context: {
-								errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 								databaseName,
 							},
 						});

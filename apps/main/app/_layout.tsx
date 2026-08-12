@@ -14,6 +14,7 @@ import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY } from '@wcpos/database';
 import { getLogger, setToast } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { RootError } from '../components/root-error';
 import '../global.css';
@@ -137,6 +138,7 @@ function useClearLocalDataOnStartup() {
 				}
 			} catch (error) {
 				appLogger.error('Failed to clear local data before hydration', {
+					code: ERROR_CODES.UNEXPECTED_ERROR,
 					context: {
 						error: error instanceof Error ? error.message : String(error),
 					},

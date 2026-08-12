@@ -7,6 +7,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -74,6 +75,7 @@ export function QueuedEmailsPanel() {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			logger.error('Receipt email retry failed', {
+				code: ERROR_CODES.PRINT_UNEXPECTED,
 				context: { localID: row.localID, orderId: row.orderId, error: message },
 			});
 			Toast.show({
@@ -104,6 +106,7 @@ export function QueuedEmailsPanel() {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			logger.error('Receipt email removal failed', {
+				code: ERROR_CODES.PRINT_UNEXPECTED,
 				context: { localID: row.localID, orderId: row.orderId, error: message },
 			});
 			Toast.show({

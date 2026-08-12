@@ -121,7 +121,6 @@ export const useUpdateLineItem = () => {
 				});
 				if (result && lineItemToUpdate) {
 					cartLogger.info('Cart line item updated', {
-						saveToDb: true,
 						context: {
 							event: 'cart.line-item.updated',
 							orderId: order.uuid ?? order.id,

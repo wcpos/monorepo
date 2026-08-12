@@ -5,6 +5,7 @@ import { from } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useUILabel } from './use-ui-label';
 import {
@@ -93,6 +94,7 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 						return state as UISettingState<T>;
 					} catch (error) {
 						uiLogger.error(`Failed to merge initial values for ${id}`, {
+							code: ERROR_CODES.UNEXPECTED_ERROR,
 							context: { error: String(error) },
 						});
 						throw error;

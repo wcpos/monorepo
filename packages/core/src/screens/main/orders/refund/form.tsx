@@ -368,7 +368,6 @@ export function RefundOrderForm({ order }: Props) {
 
 			refundLogger.success(t('orders.refund_processed', { amount: freshRefundTotal }), {
 				showToast: true,
-				saveToDb: true,
 				context: {
 					orderId: order.id,
 					amount: freshRefundTotal,
@@ -385,9 +384,8 @@ export function RefundOrderForm({ order }: Props) {
 			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
 			refundLogger.error(serverMessage, {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				context: {
-					errorCode: ERROR_CODES.PAYMENT_UNEXPECTED,
 					orderId: order.id,
 					error: err instanceof Error ? err.message : String(err),
 				},

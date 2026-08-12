@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 
 import { Text } from '@wcpos/components/text';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { reloadApp } from '../../../../utils/reload-app';
@@ -33,10 +34,11 @@ export function StorageOutageBanner() {
 	 */
 	const handleReload = React.useCallback(() => {
 		if (reloadApp()) return;
-		bannerLogger.error(t('pos_products.scan_storage_outage_restart_manually'), {
+		bannerLogger.error('App reload is required after local storage failure', {
+			toast: { title: t('pos_products.scan_storage_outage_restart_manually') },
+			// Same outage use-barcode reports — keep the code (and its docs page) consistent.
+			code: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 			showToast: true,
-			// The local database is what's broken — don't try to persist this.
-			saveToDb: false,
 		});
 	}, [t]);
 

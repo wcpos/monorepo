@@ -22,7 +22,6 @@ describe('logs schema', () => {
 			timestamp: 500,
 			level: 'warn',
 			outcome: 'failed',
-			context: {},
 		};
 		expect(migrate?.({ ...row }, {} as never)).toEqual(row);
 	});
@@ -55,7 +54,7 @@ describe('logs schema', () => {
 			},
 		},
 		{
-			old: { timestamp: 200, level: 'audit', context: {} },
+			old: { timestamp: 200, level: 'audit' },
 			expected: {
 				level: 'info',
 				category: 'db.audit',
@@ -65,7 +64,7 @@ describe('logs schema', () => {
 			},
 		},
 		{
-			old: { timestamp: 300, level: 'verbose', context: {} },
+			old: { timestamp: 300, level: 'verbose' },
 			expected: {
 				level: 'info',
 				count: 1,
@@ -74,7 +73,7 @@ describe('logs schema', () => {
 			},
 		},
 		{
-			old: { timestamp: 400, level: null, context: {} },
+			old: { timestamp: 400, level: null },
 			expected: {
 				level: 'info',
 				count: 1,
@@ -91,7 +90,7 @@ describe('logs schema', () => {
 	it('stamps sizeBytes on migrated rows so retention cannot undercount them (PR #851 review)', () => {
 		const migrate = storeCollections.logs.migrationStrategies?.[2];
 		const migrated = migrate?.(
-			{ timestamp: 100, level: 'info', message: 'x'.repeat(2048), context: {} },
+			{ timestamp: 100, level: 'info', message: 'x'.repeat(2048) },
 			{} as never
 		);
 		expect(typeof migrated.sizeBytes).toBe('number');

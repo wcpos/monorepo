@@ -55,7 +55,6 @@ export function AddNoteButton() {
 		});
 		if (!result) return;
 		cartLogger.info('Order note updated', {
-			saveToDb: true,
 			context: { event: 'cart.order-note.updated', orderId: currentOrder.uuid ?? currentOrder.id },
 		});
 		setOpen(false);

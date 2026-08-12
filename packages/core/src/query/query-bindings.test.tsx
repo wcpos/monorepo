@@ -1097,7 +1097,6 @@ describe('query bindings', () => {
 				code: 'A',
 				level: 'error',
 				message: 'one',
-				context: {},
 			},
 			{
 				logId: '2',
@@ -1105,7 +1104,6 @@ describe('query bindings', () => {
 				code: 'B',
 				level: 'error',
 				message: 'two',
-				context: {},
 			},
 			{
 				logId: '3',
@@ -1113,7 +1111,6 @@ describe('query bindings', () => {
 				code: 'C',
 				level: 'info',
 				message: 'three',
-				context: {},
 			},
 		]);
 		const state: QueryStateOf<'logs'> = {
@@ -1160,7 +1157,6 @@ describe('query bindings', () => {
 				code: 'A',
 				level: 'error',
 				message: 'one',
-				context: {},
 			},
 			{
 				logId: '2',
@@ -1168,7 +1164,6 @@ describe('query bindings', () => {
 				code: 'B',
 				level: 'error',
 				message: 'two',
-				context: {},
 			},
 		]);
 		const state: QueryStateOf<'logs'> = {

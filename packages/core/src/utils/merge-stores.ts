@@ -4,6 +4,7 @@ import isEqual from 'lodash/isEqual';
 import type { StoreDocument, UserDatabase, WPCredentialsDocument } from '@wcpos/database';
 import { AUTO_SYNCED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 const appLogger = getLogger(['wcpos', 'app', 'stores']);
 
@@ -300,8 +301,8 @@ export async function mergeStoresWithResponse({
 						.join(' | ')}`;
 					appLogger.error(toastMessage, {
 						showToast: true,
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
-							errorCode: 'STORE_VALIDATION_FAILED',
 							failures: summaries,
 							// Include the raw first error for deep debugging
 							rawFirstError: JSON.stringify(failures[0] ?? null, (_k, v) =>
@@ -355,6 +356,7 @@ export async function mergeStoresWithResponse({
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
 		appLogger.error('Failed to merge stores with response', {
+			code: ERROR_CODES.AUTH_UNEXPECTED,
 			context: {
 				error: errorMsg,
 				wpUserUuid: wpUser.uuid,

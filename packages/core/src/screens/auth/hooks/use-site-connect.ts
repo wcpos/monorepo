@@ -188,9 +188,9 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 
 				const errMessage = err instanceof Error ? err.message : String(err);
 				siteLogger.error(`Failed to save site data: ${errMessage}`, {
+					code: errorCode,
 					showToast: true,
 					context: {
-						errorCode,
 						error: errMessage,
 					},
 				});
@@ -210,7 +210,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				const errorMsg = t('auth.url_is_required');
 				siteLogger.error(errorMsg, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.STORE_URL_INVALID },
+					code: ERROR_CODES.STORE_URL_INVALID,
 				});
 				setError(errorMsg);
 				return null;

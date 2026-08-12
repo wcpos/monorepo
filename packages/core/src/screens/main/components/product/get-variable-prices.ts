@@ -42,9 +42,7 @@ export function getVariablePrices(
 ): VariablePrices | null {
 	if (!metaData) {
 		uiLogger.error('metaData is not defined', {
-			context: {
-				errorCode: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
-			},
+			code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 		});
 		return null;
 	}
@@ -53,9 +51,7 @@ export function getVariablePrices(
 
 	if (!metaDataEntry) {
 		uiLogger.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
-			context: {
-				errorCode: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
-			},
+			code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 		});
 		return null;
 	}
@@ -74,8 +70,8 @@ export function getVariablePrices(
 		}
 		if (!isVariablePrices(parsed)) {
 			uiLogger.error("'_woocommerce_pos_variable_prices' has invalid structure", {
+				code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 				context: {
-					errorCode: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 					value: metaDataEntry.value,
 				},
 			});
@@ -84,8 +80,8 @@ export function getVariablePrices(
 		return parsed;
 	} catch (error) {
 		uiLogger.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", {
+			code: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 			context: {
-				errorCode: ERROR_CODES.VARIABLE_PRICE_META_INVALID,
 				value: metaDataEntry.value,
 				error: error instanceof Error ? error.message : String(error),
 			},

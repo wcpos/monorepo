@@ -270,9 +270,8 @@ function latchDegradedStorage(
 		at: Date.now(),
 	});
 	storageLogger.error(`Storage degraded for database "${databaseName}" in ${methodName}`, {
-		saveToDb: true,
+		code: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 		context: {
-			errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 			databaseName,
 			method: methodName,
 		},
@@ -374,9 +373,8 @@ function handleStorageError(
 	// CONFLICT errors (409) -- typically harmless, retried on next sync cycle
 	if (candidate.includes('CONFLICT') || candidate.includes('409')) {
 		storageLogger.warn(`Write conflict in ${methodName}`, {
-			saveToDb: true,
+			code: ERROR_CODES.RECORD_CONFLICT,
 			context: {
-				errorCode: ERROR_CODES.RECORD_CONFLICT,
 				method: methodName,
 			},
 		});
@@ -390,9 +388,8 @@ function handleStorageError(
 		candidate.includes('schema mismatch')
 	) {
 		storageLogger.warn(`Schema validation failed in ${methodName}`, {
-			saveToDb: true,
+			code: ERROR_CODES.SCHEMA_MISMATCH,
 			context: {
-				errorCode: ERROR_CODES.SCHEMA_MISMATCH,
 				method: methodName,
 			},
 		});
@@ -402,9 +399,8 @@ function handleStorageError(
 	// IndexedDB key errors (null ID)
 	if (candidate.includes('No key or key range specified') || candidate.includes('No valid key')) {
 		storageLogger.warn(`Invalid key in ${methodName}`, {
-			saveToDb: true,
+			code: ERROR_CODES.SYNC_UNEXPECTED,
 			context: {
-				errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 				method: methodName,
 			},
 		});
@@ -422,9 +418,8 @@ function handleStorageError(
 	) {
 		storageLogger.error(`Corrupted JSON in storage for ${methodName}: ${message}`, {
 			showToast: true,
-			saveToDb: true,
+			code: ERROR_CODES.LOCAL_DB_CORRUPTED,
 			context: {
-				errorCode: ERROR_CODES.LOCAL_DB_CORRUPTED,
 				method: methodName,
 			},
 		});
@@ -438,9 +433,8 @@ function handleStorageError(
 		storageLogger.error(
 			`${workerFailure ? 'Storage worker error' : 'Storage remote method error'} in ${methodName}`,
 			{
-				saveToDb: true,
+				code: workerFailure ? ERROR_CODES.LOCAL_DB_UNAVAILABLE : ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
-					errorCode: workerFailure ? ERROR_CODES.LOCAL_DB_UNAVAILABLE : ERROR_CODES.SYNC_UNEXPECTED,
 					method: methodName,
 					...context,
 					recoveryDocumentId: targetedRecovery?.[1],
@@ -456,9 +450,8 @@ function handleStorageError(
 	// with the least to go on, so the caller's context (which collection, which
 	// database) is carried here rather than dropped.
 	storageLogger.error(`Storage error in ${methodName}: ${message}`, {
-		saveToDb: true,
+		code: ERROR_CODES.SYNC_UNEXPECTED,
 		context: {
-			errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 			method: methodName,
 			...context,
 		},
@@ -639,9 +632,8 @@ export function markStorageTerminallyFailed(databaseName: string, reason: string
 	}
 	if (marked) {
 		storageLogger.error(`Storage terminally failed for database "${databaseName}": ${reason}`, {
-			saveToDb: true,
+			code: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 			context: {
-				errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 				databaseName,
 				reason,
 			},

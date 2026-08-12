@@ -164,11 +164,12 @@ async function degradeStorage(databaseName: string) {
 
 function expectBlockedLog() {
 	expect(mockLogger.error).toHaveBeenCalledWith(
-		'Local database unavailable — reload the app before taking or refunding payment',
+		'Cart action blocked because local storage is unavailable',
 		expect.objectContaining({
+			code: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 			showToast: true,
-			context: expect.objectContaining({
-				errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
+			toast: expect.objectContaining({
+				title: 'Local database unavailable — reload the app before taking or refunding payment',
 			}),
 		})
 	);

@@ -1021,8 +1021,8 @@ describe('useBarcode online escalation', () => {
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
+				code: 'SYNC161',
 				context: expect.objectContaining({
-					errorCode: 'SYNC161',
 					barcode: 'ABC',
 				}),
 			})
@@ -1051,7 +1051,7 @@ describe('useBarcode online escalation', () => {
 		expect(mockBarcodeLogger.error).not.toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
-				context: expect.objectContaining({ errorCode: 'PRODUCT999' }),
+				code: 'PRODUCT999',
 			})
 		);
 	});
@@ -1084,7 +1084,8 @@ describe('useBarcode online escalation', () => {
 		// everything else keeps falling through to the last-resort logger.
 		expect(mockToastShow).not.toHaveBeenCalled();
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
-			expect.stringContaining('something else entirely')
+			expect.stringContaining('something else entirely'),
+			expect.objectContaining({ code: 'PRODUCT999' })
 		);
 	});
 

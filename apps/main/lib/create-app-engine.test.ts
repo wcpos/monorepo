@@ -282,6 +282,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(appMetricsObserver).toHaveBeenCalledTimes(3);
 		expect(networkError).toHaveBeenCalledTimes(1);
 		expect(networkError).toHaveBeenCalledWith('engine.lane.tick', {
+			code: 'SYNC401',
 			context: expect.objectContaining({
 				type: 'engine.lane.tick',
 				lane: 'change-signal',
@@ -294,6 +295,7 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 		expect(networkWarn).toHaveBeenCalledTimes(2);
 		expect(networkWarn).toHaveBeenCalledWith('open stalled', {
+			code: 'CLIENT111',
 			context: expect.objectContaining({
 				type: 'engine.ready-stalled',
 				phase: 'create-database',
@@ -305,6 +307,7 @@ describe('createAppSyncEngine scope cache', () => {
 			},
 		});
 		expect(networkWarn).toHaveBeenCalledWith('seed failed', {
+			code: 'CLIENT101',
 			context: expect.objectContaining({
 				type: 'engine.pos-bootstrap-error',
 				scopeId: 'scope-1',
@@ -329,6 +332,7 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(networkError).toHaveBeenCalledWith('HTTP 500', {
+			code: 'SYNC121',
 			context: expect.objectContaining({
 				type: 'push.error',
 				direction: 'push',
@@ -363,6 +367,7 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 		expect(networkError).toHaveBeenCalledTimes(1);
 		expect(networkError).toHaveBeenCalledWith('live failure', {
+			code: 'CLIENT101',
 			context: expect.objectContaining({ type: 'engine.ready-failed' }),
 			terminal: {
 				operationType: 'sync.startup',
@@ -791,8 +796,8 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(networkError).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
+				code: 'SYNC999',
 				context: expect.objectContaining({
-					errorCode: 'SYNC999',
 					scopeKey: expect.any(String),
 				}),
 			})

@@ -72,7 +72,6 @@ export const useRemoveCoupon = () => {
 
 			orderLogger.info(t('pos_cart.coupon_removed'), {
 				showToast: true,
-				saveToDb: true,
 				context: { couponCode },
 			});
 		},

@@ -58,7 +58,7 @@ describe('useHttpErrorHandler', () => {
 				'SSL certificate error',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'AUTH401' }),
+					code: 'AUTH401',
 				})
 			);
 		});
@@ -70,7 +70,7 @@ describe('useHttpErrorHandler', () => {
 				'Bad request',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'SYNC211' }),
+					code: 'SYNC211',
 				})
 			);
 		});
@@ -82,7 +82,7 @@ describe('useHttpErrorHandler', () => {
 				'Authentication failed',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'AUTH101' }),
+					code: 'AUTH101',
 				})
 			);
 		});
@@ -94,7 +94,7 @@ describe('useHttpErrorHandler', () => {
 				'Access forbidden',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'AUTH201' }),
+					code: 'AUTH201',
 				})
 			);
 		});
@@ -106,7 +106,7 @@ describe('useHttpErrorHandler', () => {
 				'Resource not found',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'AUTH311' }),
+					code: 'AUTH311',
 				})
 			);
 		});
@@ -118,7 +118,7 @@ describe('useHttpErrorHandler', () => {
 				'Internal server error',
 				expect.objectContaining({
 					showToast: true,
-					context: expect.objectContaining({ errorCode: 'SYNC131' }),
+					code: 'SYNC131',
 				})
 			);
 		});
@@ -130,8 +130,8 @@ describe('useHttpErrorHandler', () => {
 				`Server unavailable (${status})`,
 				expect.objectContaining({
 					showToast: true,
+					code: 'SYNC131',
 					context: expect.objectContaining({
-						errorCode: 'SYNC131',
 						status,
 					}),
 				})
@@ -145,8 +145,8 @@ describe('useHttpErrorHandler', () => {
 				'Unexpected response (418)',
 				expect.objectContaining({
 					showToast: true,
+					code: 'SYNC131',
 					context: expect.objectContaining({
-						errorCode: 'SYNC131',
 						status: 418,
 					}),
 				})
@@ -193,7 +193,7 @@ describe('useHttpErrorHandler', () => {
 			expect.stringContaining('Network error'),
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({ errorCode: 'SYNC121' }),
+				code: 'SYNC121',
 			})
 		);
 	});
@@ -205,7 +205,7 @@ describe('useHttpErrorHandler', () => {
 			'Server unavailable: /test-endpoint',
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({ errorCode: 'SYNC121' }),
+				code: 'SYNC121',
 			})
 		);
 	});
@@ -226,7 +226,7 @@ describe('useHttpErrorHandler', () => {
 			'Network error: DNS lookup failed',
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({ errorCode: 'SYNC121' }),
+				code: 'SYNC121',
 			})
 		);
 	});
@@ -238,7 +238,7 @@ describe('useHttpErrorHandler', () => {
 			'Network error: some string error',
 			expect.objectContaining({
 				showToast: true,
-				context: expect.objectContaining({ errorCode: 'SYNC121' }),
+				code: 'SYNC121',
 			})
 		);
 	});

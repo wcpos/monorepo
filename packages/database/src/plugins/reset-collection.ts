@@ -21,6 +21,7 @@ const runResetHook =
 	(hook: (collection: RxCollection) => Promise<void>) => (collection: RxCollection) =>
 		hook(collection).catch((error) =>
 			resetLogger.error('Unhandled collection reset hook failure', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
 				context: { error },
 			})
 		);
@@ -203,9 +204,8 @@ export const resetCollectionPlugin: RxPlugin = {
 						if (!schema) {
 							resetLogger.error('No schema found for sync collection', {
 								showToast: false,
-								saveToDb: true,
+								code: ERROR_CODES.SCHEMA_MISMATCH,
 								context: {
-									errorCode: ERROR_CODES.SCHEMA_MISMATCH,
 									collection: collectionName,
 								},
 							});
@@ -225,9 +225,8 @@ export const resetCollectionPlugin: RxPlugin = {
 						if (!schema) {
 							resetLogger.error('No schema found for store collection', {
 								showToast: false,
-								saveToDb: true,
+								code: ERROR_CODES.SCHEMA_MISMATCH,
 								context: {
-									errorCode: ERROR_CODES.SCHEMA_MISMATCH,
 									collection: collectionName,
 								},
 							});
@@ -246,9 +245,8 @@ export const resetCollectionPlugin: RxPlugin = {
 				} catch (error: any) {
 					resetLogger.error('Failed to re-add collection', {
 						showToast: true,
-						saveToDb: true,
+						code: ERROR_CODES.SCHEMA_MISMATCH,
 						context: {
-							errorCode: ERROR_CODES.SCHEMA_MISMATCH,
 							collection: collectionName,
 							database: database.name,
 							error: error.message,

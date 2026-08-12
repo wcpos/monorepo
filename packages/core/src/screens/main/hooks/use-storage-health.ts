@@ -83,11 +83,11 @@ export function useStorageMoneyPathGuard() {
 			// Live read, not the render snapshot: the latch can fire mid-handler.
 			if (!isStorageDegraded()) return false;
 
-			storageBlockLogger.error(t('pos_cart.storage_unavailable_action_blocked'), {
+			storageBlockLogger.error('Cart action blocked because local storage is unavailable', {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
+				toast: { title: t('pos_cart.storage_unavailable_action_blocked') },
 				context: {
-					errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 					surface,
 					...context,
 				},

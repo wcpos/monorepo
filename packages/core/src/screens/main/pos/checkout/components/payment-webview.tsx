@@ -137,7 +137,6 @@ export function PaymentWebview({
 						}),
 						{
 							showToast: true,
-							saveToDb: true,
 							context: {
 								total: payload.total,
 								paymentMethod: payload.payment_method,
@@ -162,9 +161,8 @@ export function PaymentWebview({
 					const errorMessage = err instanceof Error ? err.message : 'Payment processing error';
 					orderLogger.error(errorMessage, {
 						showToast: true,
-						saveToDb: true,
+						code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
 						context: {
-							errorCode: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
 							error: err instanceof Error ? err.message : String(err),
 						},
 					});
@@ -263,7 +261,6 @@ export function PaymentWebview({
 						}),
 						{
 							showToast: true,
-							saveToDb: true,
 							context: {
 								total: serverOrder.total,
 								paymentMethod: serverOrder.payment_method,
@@ -338,7 +335,6 @@ export function PaymentWebview({
 			const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)
 				?.nativeEvent;
 			orderLogger.warn('Payment form failed to load in the checkout frame', {
-				saveToDb: true,
 				context: {
 					description: nativeEvent?.description,
 					code: nativeEvent?.code,
@@ -396,9 +392,8 @@ export function PaymentWebview({
 							}
 							orderLogger.error((payload?.message as string) || 'Payment error', {
 								showToast: true,
-								saveToDb: true,
+								code: ERROR_CODES.PAYMENT_UNEXPECTED,
 								context: {
-									errorCode: ERROR_CODES.PAYMENT_UNEXPECTED,
 									payloadData: payload?.data,
 								},
 							});

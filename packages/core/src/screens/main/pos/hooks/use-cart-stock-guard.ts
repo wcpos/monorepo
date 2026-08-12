@@ -103,8 +103,9 @@ export const useCartStockGuard = () => {
 				: await readStockDocument('products', productId);
 			if (!product) {
 				const name = suppliedName ?? '';
-				cartLogger.warn(t('pos_products.out_of_stock', { name }), {
+				cartLogger.warn('Product is out of stock', {
 					showToast: true,
+					toast: { title: t('pos_products.out_of_stock', { name }) },
 					context: { productId, variationId, reason: 'missing_stock_record' },
 				});
 				return { allowed: false, warning: null, available: null, name };
@@ -116,8 +117,9 @@ export const useCartStockGuard = () => {
 				: undefined;
 			const name = suppliedName ?? product.name ?? '';
 			if (variationId && !variation) {
-				cartLogger.warn(t('pos_products.out_of_stock', { name }), {
+				cartLogger.warn('Product is out of stock', {
 					showToast: true,
+					toast: { title: t('pos_products.out_of_stock', { name }) },
 					context: { productId, variationId, reason: 'missing_stock_record' },
 				});
 				return { allowed: false, warning: null, available: null, name };
@@ -138,12 +140,17 @@ export const useCartStockGuard = () => {
 			});
 
 			if (!result.allowed) {
-				const message =
+				const toastTitle =
 					result.available === null
 						? t('pos_products.out_of_stock', { name })
 						: t('pos_cart.only_n_available', { quantity: result.available, name });
+				const message =
+					result.available === null
+						? 'Stock check failed because availability is unknown'
+						: 'Stock check found insufficient inventory';
 				cartLogger.warn(message, {
 					showToast: true,
+					toast: { title: toastTitle },
 					context: { productId, variationId, available: result.available },
 				});
 			}
@@ -165,7 +172,8 @@ export const useCartStockGuard = () => {
 
 	const showBackorderWarning = React.useCallback(
 		(name: string) => {
-			cartLogger.warn(t('pos_cart.will_be_backordered', { name }), {
+			cartLogger.warn('Product will be backordered', {
+				toast: { title: t('pos_cart.will_be_backordered', { name }) },
 				showToast: true,
 			});
 		},

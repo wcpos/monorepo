@@ -94,11 +94,11 @@ export const usePushDocument = () => {
 				return wrapEngineDocument(collectionName as LegacyCollectionName, currentResident as never);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				syncLogger.error(t('common.failed_to_send_to_server'), {
+				syncLogger.error('Failed to send document to server', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					toast: { title: t('common.failed_to_send_to_server') },
 					context: {
-						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						documentId: recordId,
 						collectionName,
 						error: message,

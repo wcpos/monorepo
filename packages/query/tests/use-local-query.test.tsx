@@ -58,9 +58,9 @@ describe('useLocalQuery', () => {
 
 	it('binds filtered local logs with an unwindowed total and search', async () => {
 		await localDB.collections.logs.bulkInsert([
-			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one', context: {} },
-			{ logId: '2', timestamp: 2, code: 'B', level: 'error', message: 'two', context: {} },
-			{ logId: '3', timestamp: 3, code: 'C', level: 'info', message: 'three', context: {} },
+			{ logId: '1', timestamp: 1, code: 'A', level: 'error', message: 'one' },
+			{ logId: '2', timestamp: 2, code: 'B', level: 'error', message: 'two' },
+			{ logId: '3', timestamp: 3, code: 'C', level: 'info', message: 'three' },
 		]);
 		const engine = createFakeEngine(engineDB);
 		const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -110,8 +110,8 @@ describe('useLocalQuery', () => {
 
 	it('rebinds locale-sensitive search and releases the previous search subscription', async () => {
 		await localDB.collections.logs.bulkInsert([
-			{ logId: 'en', timestamp: 1, code: 'EN', level: 'info', message: 'English', context: {} },
-			{ logId: 'fr', timestamp: 2, code: 'FR', level: 'info', message: 'French', context: {} },
+			{ logId: 'en', timestamp: 1, code: 'EN', level: 'info', message: 'English' },
+			{ logId: 'fr', timestamp: 2, code: 'FR', level: 'info', message: 'French' },
 		]);
 		const logs = localDB.collections.logs as RxCollection;
 		const released: string[] = [];

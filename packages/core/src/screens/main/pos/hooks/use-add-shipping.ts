@@ -68,7 +68,6 @@ export const useAddShipping = () => {
 
 				// Log shipping added success
 				orderLogger.info(t('pos.shipping_added', { methodTitle: data.method_title }), {
-					saveToDb: true,
 					context: {
 						methodTitle: data.method_title,
 						methodId: data.method_id,
@@ -77,11 +76,11 @@ export const useAddShipping = () => {
 					},
 				});
 			} catch (error) {
-				orderLogger.error(t('pos.error_adding_shipping_to_cart'), {
+				orderLogger.error('Failed to add shipping to cart', {
 					showToast: true,
-					saveToDb: true,
+					code: ERROR_CODES.CART_UPDATE_FAILED,
+					toast: { title: t('pos.error_adding_shipping_to_cart') },
 					context: {
-						errorCode: ERROR_CODES.CART_UPDATE_FAILED,
 						methodTitle: data.method_title,
 						methodId: data.method_id,
 						error: error instanceof Error ? error.message : String(error),

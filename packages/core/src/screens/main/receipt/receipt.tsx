@@ -216,7 +216,6 @@ function ReceiptDocument({ order }: { order: import('@wcpos/database').OrderDocu
 		templateId: templateInfo?.id,
 		onBeforePrint: () =>
 			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
-				saveToDb: true,
 				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
 			}),
 	});

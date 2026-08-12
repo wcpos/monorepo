@@ -29,7 +29,7 @@ export interface ParsedWpError {
 	/** User-friendly error message */
 	message: string;
 	/** Internal error code (APIxxxxx format) for docs/help link */
-	code: string | null;
+	code: ErrorCode | null;
 	/** Original server error code (for debugging) */
 	serverCode: string | null;
 	/** HTTP status from server response */
@@ -105,7 +105,7 @@ const SERVER_CODE_TO_INTERNAL: Record<string, ErrorCode> = {
 export const mapToInternalCode = (
 	serverCode: string | null | undefined,
 	httpStatus?: number | null
-): string | null => {
+): ErrorCode | null => {
 	// Try direct mapping first
 	if (serverCode && SERVER_CODE_TO_INTERNAL[serverCode]) {
 		return SERVER_CODE_TO_INTERNAL[serverCode];

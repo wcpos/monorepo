@@ -16,6 +16,7 @@ import {
 } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 
 import { SettingsDangerZone } from './components/settings-danger-zone';
@@ -164,6 +165,7 @@ export function GeneralSettings() {
 			}
 		} catch (error) {
 			uiLogger.error('Failed to restore server settings', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: {
 					error: error instanceof Error ? error.message : String(error),
 				},

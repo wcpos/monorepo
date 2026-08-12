@@ -31,6 +31,7 @@ import { Toast } from '@wcpos/components/toast';
 import { clearAllDB, scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { Platform } from '@wcpos/utils/platform';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
@@ -121,7 +122,9 @@ export function UserMenu() {
 				window.location.reload();
 				return;
 			}
-			uiLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear');
+			uiLogger.error('Failed to schedule the pre-hydration reset; falling back to direct clear', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+			});
 		}
 
 		// Clear databases to ensure clean start
@@ -129,7 +132,10 @@ export function UserMenu() {
 			const result = await clearAllDB();
 			uiLogger.info(result.message);
 		} catch (err) {
-			uiLogger.error('Failed to clear database:', { context: { error: err } });
+			uiLogger.error('Failed to clear database:', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { error: err },
+			});
 		}
 
 		// Reload the app to reinitialize everything
@@ -156,7 +162,10 @@ export function UserMenu() {
 				title: t('common.store_switch_failed'),
 				description: error instanceof Error ? error.message : String(error),
 			});
-			uiLogger.error('Store switch failed', { context: { error } });
+			uiLogger.error('Store switch failed', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { error },
+			});
 		} finally {
 			setIsSwitching(false);
 		}

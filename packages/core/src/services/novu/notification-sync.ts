@@ -1,5 +1,6 @@
 import type { NotificationCollection } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { getNotificationBehavior } from './notification-behaviors';
@@ -17,7 +18,10 @@ function handleActionUrl(url: string): void {
 	// External URLs (http://, https://)
 	if (url.startsWith('http://') || url.startsWith('https://')) {
 		openExternalURL(url).catch((error) => {
-			novuLogger.error('Novu: Failed to open external URL', { context: { url, error } });
+			novuLogger.error('Novu: Failed to open external URL', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { url, error },
+			});
 		});
 		return;
 	}
@@ -55,9 +59,8 @@ function processNotificationBehavior(
 
 	if (behavior.showToast) {
 		const level = behavior.level || 'info';
-		novuLogger[level](title, {
+		const options = {
 			showToast: true,
-			saveToDb: behavior.saveToDb,
 			// Use body as context object so it's useful when saved to DB
 			context: behavior.saveToDb && body ? { body } : undefined,
 			toast: {
@@ -75,11 +78,15 @@ function processNotificationBehavior(
 						}
 					: undefined,
 			},
-		});
+		};
+		if (level === 'error') {
+			novuLogger.error(title, { ...options, code: ERROR_CODES.UNEXPECTED_ERROR });
+		} else {
+			novuLogger[level](title, options);
+		}
 	} else if (behavior.saveToDb) {
 		// Save to logs DB without showing toast
 		novuLogger.info(title, {
-			saveToDb: true,
 			context: body ? { body } : undefined,
 		});
 	}
@@ -103,6 +110,7 @@ export async function syncNotificationToRxDB(
 	const notificationId = notification.id;
 	if (!notificationId) {
 		novuLogger.error('Novu: Notification missing ID', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { keys: Object.keys(notification) },
 		});
 		return;
@@ -154,6 +162,7 @@ export async function syncNotificationToRxDB(
 		novuLogger.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
 	} catch (error) {
 		novuLogger.error('Novu: Failed to sync notification to RxDB', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { notificationId, error },
 		});
 	}

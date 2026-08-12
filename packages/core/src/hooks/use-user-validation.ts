@@ -178,8 +178,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					if (!response || response.status < 200 || response.status >= 300) {
 						const errorMsg = `Invalid response status: ${response?.status}`;
 						appLogger.error('User validation failed', {
+							code: ERROR_CODES.AUTH_UNEXPECTED,
 							context: {
-								errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 								status: response?.status,
 								statusText: response?.statusText,
 								userId,
@@ -195,8 +195,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					if (!data || typeof data !== 'object') {
 						const errorMsg = 'Invalid response data';
 						appLogger.error('User validation response contains no valid data', {
+							code: ERROR_CODES.AUTH_UNEXPECTED,
 							context: {
-								errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 								userId,
 								siteUrl,
 								hasData: !!data,
@@ -209,8 +209,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					if (data.id !== undefined && data.id !== userId) {
 						const errorMsg = `User ID mismatch: expected ${userId}, got ${data.id}`;
 						appLogger.error('User validation failed - ID mismatch', {
+							code: ERROR_CODES.AUTH_UNEXPECTED,
 							context: {
-								errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 								expectedUserId: userId,
 								receivedUserId: data.id,
 								siteUrl,
@@ -227,8 +227,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						'Failed to fetch user data from server'
 					);
 					appLogger.error(serverMessage, {
+						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
-							errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 							error: error instanceof Error ? error.message : String(error),
 							userId,
 							siteUrl,
@@ -347,8 +347,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				} catch (error) {
 					const errorMsg = error instanceof Error ? error.message : String(error);
 					appLogger.error('Failed to update user in local database', {
+						code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						context: {
-							errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 							error: errorMsg,
 							userId,
 						},
@@ -374,6 +374,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : String(error);
 				appLogger.error('[stores] validation FAILED', {
+					code: ERROR_CODES.AUTH_UNEXPECTED,
 					context: {
 						error: errorMsg,
 						userId,

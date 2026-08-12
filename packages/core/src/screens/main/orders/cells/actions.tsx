@@ -26,6 +26,7 @@ import { Text } from '@wcpos/components/text';
 import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -88,8 +89,8 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 			.finally(() => handle.release())
 			.catch((error) => {
 				syncLogger.error('Failed to refresh order', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
 					showToast: true,
-					saveToDb: true,
 					context: {
 						orderId: orderHasID,
 						error: error instanceof Error ? error.message : String(error),
@@ -150,9 +151,10 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 		if (!receipt.annihilated) {
 			void awaitWriteOutcome(runtime.engine, receipt.mutationId).catch((error) => {
 				if (error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE) {
-					syncLogger.error(t('orders.delete_not_permitted'), {
+					syncLogger.error('Server refused to delete order', {
+						code: ERROR_CODES.SYNC_UNEXPECTED,
 						showToast: true,
-						saveToDb: true,
+						toast: { title: t('orders.delete_not_permitted') },
 						context: { orderId: order.uuid },
 					});
 				}

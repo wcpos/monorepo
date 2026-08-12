@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { OnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { useT } from '../../../contexts/translations';
@@ -21,16 +22,23 @@ export function OnlineStatusLogger() {
 			return;
 		}
 		if (prevStatus === status) return;
-		const logConfig = { showToast: true, saveToDb: true };
 		switch (status) {
 			case 'offline':
-				logger.error(t('common.device_went_offline'), logConfig);
+				logger.error('Device went offline', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					showToast: true,
+					toast: { title: t('common.device_went_offline') },
+				});
 				break;
 			case 'online-website-unavailable':
-				logger.error(t('common.website_is_unreachable'), logConfig);
+				logger.error('Website is unreachable', {
+					code: ERROR_CODES.SYNC_UNEXPECTED,
+					showToast: true,
+					toast: { title: t('common.website_is_unreachable') },
+				});
 				break;
 			case 'online-website-available':
-				logger.success(t('common.connection_restored'), logConfig);
+				logger.success(t('common.connection_restored'), { showToast: true });
 				break;
 		}
 		prevStatusRef.current = status;

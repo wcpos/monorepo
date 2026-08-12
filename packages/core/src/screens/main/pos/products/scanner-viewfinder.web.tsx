@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { type BarcodeFormat } from 'barcode-detector/pure';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { createBarcodeDetector } from './camera-decoder.web';
 import { startDecodeLoop } from './decode-loop';
@@ -91,6 +92,7 @@ export function ScannerViewfinder({ onScan, onStatusChange }: ScannerViewfinderP
 				detector = createBarcodeDetector(WEB_FORMATS);
 			} catch (error) {
 				logger.error('Barcode decoder failed to initialize', {
+					code: ERROR_CODES.PRODUCT_UNEXPECTED,
 					context: { error: String(error) },
 				});
 				setStatus('decoder-error');
@@ -101,7 +103,10 @@ export function ScannerViewfinder({ onScan, onStatusChange }: ScannerViewfinderP
 				stream = await navigator.mediaDevices.getUserMedia(VIDEO_CONSTRAINTS);
 			} catch (error) {
 				const name = error instanceof DOMException ? error.name : 'UnknownError';
-				logger.error('Camera stream unavailable', { context: { error: String(error), name } });
+				logger.error('Camera stream unavailable', {
+					code: ERROR_CODES.PRODUCT_UNEXPECTED,
+					context: { error: String(error), name },
+				});
 				setStatus(name === 'NotAllowedError' ? 'camera-denied' : 'camera-unavailable');
 				return;
 			}
@@ -159,6 +164,7 @@ export function ScannerViewfinder({ onScan, onStatusChange }: ScannerViewfinderP
 				onError: (error, stats) => {
 					if (stats.total <= LOGGED_ERRORS_HEAD || stats.total % LOGGED_ERRORS_EVERY === 0) {
 						logger.error('Barcode decode failed', {
+							code: ERROR_CODES.PRODUCT_UNEXPECTED,
 							context: { error: String(error), ...stats },
 						});
 					}

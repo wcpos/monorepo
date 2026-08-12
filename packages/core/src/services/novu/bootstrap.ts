@@ -2,6 +2,7 @@ import { BehaviorSubject } from 'rxjs';
 
 import type { NotificationCollection } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	disconnectNovuClient,
@@ -179,6 +180,7 @@ async function performMetadataSync(gen: number): Promise<void> {
 		if (syncedMetadataKey === key) syncedMetadataKey = null;
 	} catch (error) {
 		novuLogger.error('Novu: Error syncing subscriber metadata', {
+			code: ERROR_CODES.UNEXPECTED_ERROR,
 			context: { error: error instanceof Error ? error.message : String(error) },
 		});
 		if (syncedMetadataKey === key) syncedMetadataKey = null;
@@ -247,7 +249,10 @@ async function fetchAndSyncNotifications(
 			source === 'initial'
 				? 'Novu: Failed to load initial notifications'
 				: 'Novu: Failed to refresh notifications',
-			{ context: { error: error instanceof Error ? error.message : String(error) } }
+			{
+				code: ERROR_CODES.UNEXPECTED_ERROR,
+				context: { error: error instanceof Error ? error.message : String(error) },
+			}
 		);
 	}
 }
@@ -352,6 +357,7 @@ export function startNovuBootstrap({
 		} catch (error) {
 			if (gen !== generation) return;
 			novuLogger.error('Novu: Socket readiness check failed', {
+				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: { error: error instanceof Error ? error.message : String(error) },
 			});
 		}

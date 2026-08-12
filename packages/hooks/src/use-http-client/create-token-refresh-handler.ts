@@ -178,9 +178,8 @@ export const createTokenRefreshHandler = ({
 						'Request still unauthorized after token refresh - please log in again',
 						{
 							showToast: true,
-							saveToDb: true,
+							code: ERROR_CODES.SESSION_EXPIRED,
 							context: {
-								errorCode: ERROR_CODES.SESSION_EXPIRED,
 								userId: wpUser.id,
 								siteUrl: site.url,
 								originalUrl: originalConfig.url,

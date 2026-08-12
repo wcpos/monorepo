@@ -298,7 +298,6 @@ describe('useUpdateLineItem', () => {
 		expect(getLogger([]).info).toHaveBeenCalledWith(
 			'Cart line item updated',
 			expect.objectContaining({
-				saveToDb: true,
 				context: expect.objectContaining({
 					event: 'cart.line-item.updated',
 					productName: 'Item 1',

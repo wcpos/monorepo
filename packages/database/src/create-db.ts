@@ -40,9 +40,8 @@ export const createUserDB = async () => {
 	} catch (error) {
 		dbLogger.error('Failed to create user database', {
 			showToast: true,
-			saveToDb: true,
+			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: {
-				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				databaseName: name,
 				error: error instanceof Error ? error.message : String(error),
 			},
@@ -69,9 +68,8 @@ export const createStoreDB = async (id: string) => {
 	} catch (error) {
 		dbLogger.error('Failed to create store database', {
 			showToast: true,
-			saveToDb: true,
+			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: {
-				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				databaseName: name,
 				storeId: id,
 				error: error instanceof Error ? error.message : String(error),
@@ -98,9 +96,8 @@ export const createFastStoreDB = async (id: string) => {
 	} catch (error) {
 		dbLogger.error('Failed to create fast store database', {
 			showToast: true,
-			saveToDb: true,
+			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: {
-				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				databaseName: name,
 				storeId: id,
 				error: error instanceof Error ? error.message : String(error),
@@ -130,9 +127,8 @@ export const createTemporaryDB = async () => {
 	} catch (error) {
 		dbLogger.error('Failed to create temporary database', {
 			showToast: true,
-			saveToDb: true,
+			code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 			context: {
-				errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 				databaseName: 'temporary',
 				error: error instanceof Error ? error.message : String(error),
 			},

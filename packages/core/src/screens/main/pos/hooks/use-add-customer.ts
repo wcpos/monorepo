@@ -80,7 +80,6 @@ export const useAddCustomer = () => {
 
 			// Log customer assignment
 			orderLogger.success(t('pos.customer_assigned', { customerName }), {
-				saveToDb: true,
 				context: {
 					customerId: data.id,
 					customerEmail: (data as Record<string, unknown>).email,

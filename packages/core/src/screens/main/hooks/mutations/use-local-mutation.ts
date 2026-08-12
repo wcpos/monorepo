@@ -20,7 +20,7 @@ import {
 } from '@wcpos/query';
 import { deriveBarcodeFromPayload, mapBarcodeEditToPayload } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
@@ -408,16 +408,16 @@ export const useLocalMutation = () => {
 			} catch (error) {
 				const err = error as Record<string, unknown>;
 				let message = error instanceof Error ? error.message : String(error);
-				let errorCode: string = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
+				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 				if (err.rxdb) {
 					message = 'rxdb ' + String(err.code);
 					errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 				}
-				mutationLogger.error(t('common.there_was_an_error', { message }), {
+				mutationLogger.error('Local mutation failed', {
+					code: errorCode,
 					showToast: true,
-					saveToDb: true,
+					toast: { title: t('common.there_was_an_error', { message }) },
 					context: {
-						errorCode,
 						documentId: document.id,
 						collectionName: document.collection?.name,
 						error: message,

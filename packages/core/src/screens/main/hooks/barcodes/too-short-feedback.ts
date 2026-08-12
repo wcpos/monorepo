@@ -17,7 +17,7 @@ export function showTooShortFeedback(t: Translate, barcode: string, minLength: n
 		description: t('common.barcode_must_be_at_least_characters', { minLength }),
 		duration: 6000,
 	});
-	barcodeLogger.warn(t('common.barcode_scanned', { barcode }), {
+	barcodeLogger.warn('Scanned barcode was shorter than the minimum length', {
 		context: {
 			barcode,
 			minLength,

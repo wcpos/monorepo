@@ -61,7 +61,6 @@ export function PayButton() {
 
 					// Log checkout started
 					orderLogger.info(t('pos_cart.checkout_started'), {
-						saveToDb: true,
 						context: {
 							total,
 							lineItemCount: currentOrder.line_items?.length ?? 0,
@@ -75,11 +74,11 @@ export function PayButton() {
 			});
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			orderLogger.error(t('pos_cart.checkout_failed'), {
+			orderLogger.error('Checkout failed', {
 				showToast: true,
-				saveToDb: true,
+				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+				toast: { title: t('pos_cart.checkout_failed') },
 				context: {
-					errorCode: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 					error: errorMessage,
 				},
 			});

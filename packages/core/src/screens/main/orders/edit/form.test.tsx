@@ -259,6 +259,7 @@ describe('EditOrderForm customer lookup', () => {
 		act(() => selectedCustomer$.next({ current: null }));
 
 		expect(testLogger.error).toHaveBeenCalledWith('Error fetching customer', {
+			code: 'SYNC999',
 			context: expect.objectContaining({ customerId: 3, error: 'orders.customer_not_found' }),
 		});
 		expect(setValue).not.toHaveBeenCalledWith('billing', expect.anything(), expect.anything());

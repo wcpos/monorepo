@@ -20,9 +20,8 @@ const globalQueue = new Bottleneck({
 globalQueue.on('error', (error) => {
 	httpLogger.error('Too many requests queued - please wait', {
 		showToast: true,
-		saveToDb: true,
+		code: ERROR_CODES.REQUEST_QUEUE_OVERFLOW,
 		context: {
-			errorCode: ERROR_CODES.REQUEST_QUEUE_OVERFLOW,
 			error: error instanceof Error ? error.message : String(error),
 		},
 	});

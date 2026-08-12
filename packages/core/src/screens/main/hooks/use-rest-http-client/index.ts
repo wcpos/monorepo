@@ -27,9 +27,8 @@ function extractValidJSON(responseString: string) {
 
 	if (indexOfJsonStart === -1) {
 		httpLogger.error('Server returned invalid response - no JSON found', {
-			saveToDb: true,
+			code: ERROR_CODES.STORE_SERVER_ERROR,
 			context: {
-				errorCode: ERROR_CODES.STORE_SERVER_ERROR,
 				responsePreview: responseString.substring(0, 200),
 			},
 		});
@@ -49,9 +48,8 @@ function extractValidJSON(responseString: string) {
 	}
 
 	httpLogger.error('Unable to parse server response', {
-		saveToDb: true,
+		code: ERROR_CODES.STORE_SERVER_ERROR,
 		context: {
-			errorCode: ERROR_CODES.STORE_SERVER_ERROR,
 			responsePreview: responseString.substring(0, 200),
 		},
 	});
@@ -211,9 +209,8 @@ export const useRestHttpClient = (endpoint = '') => {
 				 */
 				if (typeof response?.data === 'string') {
 					httpLogger.warn('Server returned text instead of JSON - attempting recovery', {
-						saveToDb: true,
+						code: ERROR_CODES.STORE_RESPONSE_MALFORMED,
 						context: {
-							errorCode: ERROR_CODES.STORE_RESPONSE_MALFORMED,
 							endpoint,
 							url: config.url,
 							responsePreview: response.data.substring(0, 200),

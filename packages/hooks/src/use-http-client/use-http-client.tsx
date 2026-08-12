@@ -93,6 +93,7 @@ const processErrorHandlers = async (
 			}
 		} catch (handlerError) {
 			httpLogger.error(`Error handler ${handler.name} threw an error`, {
+				code: 'CLIENT999',
 				context: {
 					error: handlerError instanceof Error ? handlerError.message : String(handlerError),
 					originalStatus: error.response?.status,
@@ -232,7 +233,6 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 		const response = await scheduleRequest(() => http.request(processedConfig));
 		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
 			httpLogger.info('HTTP request completed', {
-				saveToDb: true,
 				context: { method, endpoint, status: response.status },
 			});
 		}
@@ -302,13 +302,12 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 						? new URL(reqConfig.url, 'http://localhost').pathname
 						: 'unknown';
 					httpLogger.error('HTTP request failed', {
-						saveToDb: true,
+						code: errorCode ?? 'CLIENT999',
 						context: {
 							...(mappedException?.context ?? {}),
 							method,
 							endpoint,
 							status: axiosError.response?.status ?? 0,
-							errorCode,
 							...(mappedException?.code === 'CLIENT999' && { codeFallback: true }),
 							...(wpError?.serverCode && { serverCode: wpError.serverCode }),
 							...(wpError?.triage && { triage: true }),
