@@ -1,5 +1,4 @@
 import {
-	shouldExtendLedger,
 	buildDebugInfo,
 	chainMarkedIds,
 	deriveClockSkew,
@@ -12,6 +11,7 @@ import {
 	type LogRow,
 	presetFilters,
 	rowDetailData,
+	shouldExtendLedger,
 	startOfLocalDay,
 } from './logs-logic';
 
