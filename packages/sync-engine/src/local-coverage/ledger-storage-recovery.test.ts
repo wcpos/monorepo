@@ -37,6 +37,33 @@ const refusalError = (reason: string) =>
 		`SyntaxError: Unexpected token 'r', "records" is not valid JSON; index reconciliation refused: ${reason}`
 	);
 
+/**
+ * The same refusal after crossing the storage worker boundary: rx-storage-remote
+ * rethrows worker errors as `could not requestRemote: ` + a JSON blob whose
+ * `error.message` carries the refusal, immediately followed by `","stack":...`.
+ * Live shape from dev-next 2026-08-12 (the every-open ledger wipe): the reason
+ * extracted from this form must classify identically to the bare form.
+ */
+const workerWrappedRefusalError = (reason: string) =>
+	new Error(
+		'could not requestRemote: ' +
+			JSON.stringify(
+				{
+					methodName: 'query',
+					params: [{ query: { selector: {}, skip: 0 } }],
+					error: {
+						name: 'SyntaxError',
+						message: `Expected ',' or ']' after array element in JSON at position 20 (line 1 column 21); index reconciliation refused: ${reason}`,
+						rxdb: true,
+						stack:
+							"SyntaxError: Expected ',' or ']' after array element in JSON at position 20 \n at JSON.parse (<anonymous>) \n at Ye (https://dev-next.wcpos.com/wp-content/opfs.worker.js:1:2345)",
+					},
+				},
+				null,
+				4
+			)
+	);
+
 describe('isReconciliationRefusalError', () => {
 	it.each(CORRUPTION_REFUSALS)('classifies the corruption refusal %s', (reason) => {
 		expect(isReconciliationRefusalError(refusalError(reason))).toBe(true);
@@ -55,6 +82,17 @@ describe('isReconciliationRefusalError', () => {
 	])('does not classify unrelated errors', (error) => {
 		expect(isReconciliationRefusalError(error)).toBe(false);
 	});
+
+	it.each(CORRUPTION_REFUSALS)('classifies the worker-wrapped corruption refusal %s', (reason) => {
+		expect(isReconciliationRefusalError(workerWrappedRefusalError(reason))).toBe(true);
+	});
+
+	it.each(['no-divergence', 'multi-instance'])(
+		'does not classify the worker-wrapped non-corruption refusal %s',
+		(reason) => {
+			expect(isReconciliationRefusalError(workerWrappedRefusalError(reason))).toBe(false);
+		}
+	);
 });
 
 const LEDGER_COLLECTIONS = ['coverageRecords', 'coverageLanes', 'schedulerTaskStates'] as const;
