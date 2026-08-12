@@ -4,7 +4,6 @@ import { Pressable, View } from 'react-native';
 import { isToday } from 'date-fns';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import { cn } from '@wcpos/components/lib/utils';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
@@ -38,7 +37,7 @@ import type { Observable } from 'rxjs';
 
 type LedgerResource = ObservableResource<QueryResult<RxCollection>>;
 
-function useLevelLabel(): (kind: LevelKind) => string {
+export function useLevelLabel(): (kind: LevelKind) => string {
 	const t = useT();
 	return React.useCallback(
 		(kind: LevelKind) => {
@@ -61,7 +60,12 @@ function useLevelLabel(): (kind: LevelKind) => string {
 	);
 }
 
-function Subline({ row }: { row: LogRow }) {
+/**
+ * No actor part on purpose (A1.4): the log DB is per-(site, store, cashier),
+ * so the ledger is always the viewing cashier's own — a name here is noise.
+ * Attribution stays in the data for export and support.
+ */
+function Subline({ row, includeDuration }: { row: LogRow; includeDuration: boolean }) {
 	const context = row.context ?? {};
 	const parts: React.ReactNode[] = [];
 	const category = displayCategory(row.category);
@@ -82,21 +86,15 @@ function Subline({ row }: { row: LogRow }) {
 		);
 	}
 
-	const duration = formatDurationMs(row.durationMs);
-	if (duration) {
-		parts.push(
-			<Text key="dur" className="text-muted-foreground/80 font-mono text-xs">
-				{duration}
-			</Text>
-		);
-	}
-
-	if (row.actor?.name) {
-		parts.push(
-			<Text key="actor" className="text-action text-xs font-medium">
-				{row.actor.name}
-			</Text>
-		);
+	if (includeDuration) {
+		const duration = formatDurationMs(row.durationMs);
+		if (duration) {
+			parts.push(
+				<Text key="dur" className="text-muted-foreground/80 font-mono text-xs">
+					{duration}
+				</Text>
+			);
+		}
 	}
 
 	if ((row.count ?? 1) > 1) {
@@ -116,14 +114,83 @@ function Subline({ row }: { row: LogRow }) {
 	);
 }
 
-function CodeCell({ row, kind, onPress }: { row: LogRow; kind: LevelKind; onPress: () => void }) {
-	if (row.code && (kind === 'error' || kind === 'warn')) {
-		return <CodeChip code={row.code} onPress={onPress} testID={`logs-code-${row.logId}`} />;
+/**
+ * STATUS cell (A1.4, layout B2): the row's outcome at a glance — code chip on
+ * problems, ✓ ok on successful outcomes, an em-dash otherwise. The chevron is
+ * the expand hint; the press target is the whole row.
+ */
+function StatusCell({
+	row,
+	kind,
+	expanded,
+	onPress,
+}: {
+	row: LogRow;
+	kind: LevelKind;
+	expanded: boolean;
+	onPress: () => void;
+}) {
+	const hasCode = Boolean(row.code) && (kind === 'error' || kind === 'warn');
+	let content: React.ReactNode;
+	if (hasCode && row.code) {
+		content = <CodeChip code={row.code} onPress={onPress} testID={`logs-code-${row.logId}`} />;
+	} else if (row.outcome === 'ok' && (kind === 'info' || kind === 'action')) {
+		content = (
+			<Text testID={`logs-ok-${row.logId}`} className="text-success text-xs font-semibold">
+				✓ ok
+			</Text>
+		);
+	} else {
+		content = <Text className="text-muted-foreground/50 text-xs">—</Text>;
 	}
-	if (row.outcome === 'ok' && (kind === 'info' || kind === 'action')) {
-		return <Text className="text-success text-right text-xs font-semibold">✓ ok</Text>;
-	}
-	return null;
+	// box-none + passive children: only the code chip captures presses — the ok
+	// mark, dash and chevron fall through to the whole-row press target below.
+	return (
+		<HStack pointerEvents="box-none" className="items-center justify-end gap-1.5">
+			{hasCode ? content : <View pointerEvents="none">{content}</View>}
+			<View pointerEvents="none">
+				<Icon
+					name={expanded ? 'chevronDown' : 'chevronRight'}
+					size="sm"
+					className="text-muted-foreground/60"
+				/>
+			</View>
+		</HStack>
+	);
+}
+
+/**
+ * Tappable LEVEL pill (A1.5): tap filters the ledger to exactly this display
+ * kind, composing with the active preset; tapping the active pill clears it.
+ */
+function LevelPill({
+	row,
+	kind,
+	label,
+	active,
+	onPress,
+}: {
+	row: LogRow;
+	kind: LevelKind;
+	label: string;
+	active: boolean;
+	onPress: () => void;
+}) {
+	return (
+		<Pressable
+			testID={`logs-pill-${row.logId}`}
+			accessibilityRole="button"
+			accessibilityState={{ selected: active }}
+			onPress={onPress}
+			className={cn(
+				'-mx-1.5 self-start rounded-full px-1.5 py-0.5',
+				'web:hover:bg-muted/60',
+				active && 'bg-muted'
+			)}
+		>
+			<LevelIndicator kind={kind} label={label} />
+		</Pressable>
+	);
 }
 
 function LedgerRow({
@@ -134,6 +201,8 @@ function LedgerRow({
 	timeText,
 	levelLabel,
 	title,
+	kindActive,
+	onKindPress,
 }: {
 	row: LogRow;
 	chained: boolean;
@@ -142,6 +211,8 @@ function LedgerRow({
 	timeText: string;
 	levelLabel: string;
 	title: string;
+	kindActive: boolean;
+	onKindPress: (kind: LevelKind) => void;
 }) {
 	const kind = displayKind(row);
 
@@ -152,37 +223,47 @@ function LedgerRow({
 				chained ? 'border-l-info/30' : 'border-l-transparent'
 			)}
 		>
-			{/* md+ — table row */}
-			<HStack testID={`logs-row-${row.logId}`} className="hidden items-baseline gap-3 py-2 md:flex">
-				<Text className="text-muted-foreground w-20 font-mono text-xs tabular-nums">
-					{timeText}
-				</Text>
-				<View className="w-16">
-					<LevelIndicator kind={kind} label={levelLabel} />
-				</View>
-				<View className="min-w-0 flex-1">
-					<Text>{title}</Text>
-					<Subline row={row} />
-				</View>
-				<View className="w-24 items-end">
-					<CodeCell row={row} kind={kind} onPress={onToggle} />
-				</View>
+			{/* md+ — table row. The whole row is the press target: a full-bleed
+			    pressable overlay sits ABOVE the static cells, and the interactive
+			    children (level pill, code chip) float above the overlay — nested
+			    <button> is invalid DOM on web, so siblings-by-z-order it is. */}
+			<View className="web:hover:bg-muted/20 relative hidden md:flex">
+				<HStack className="items-baseline gap-3 py-2">
+					<Text className="text-muted-foreground w-20 font-mono text-xs tabular-nums">
+						{timeText}
+					</Text>
+					<View className="z-20 w-16">
+						<LevelPill
+							row={row}
+							kind={kind}
+							label={levelLabel}
+							active={kindActive}
+							onPress={() => onKindPress(kind)}
+						/>
+					</View>
+					<View className="min-w-0 flex-1">
+						<Text>{title}</Text>
+						<Subline row={row} includeDuration={false} />
+					</View>
+					<Text className="text-muted-foreground w-16 text-right font-mono text-xs tabular-nums">
+						{formatDurationMs(row.durationMs) ?? '—'}
+					</Text>
+					<View pointerEvents="box-none" className="z-20 w-24">
+						<StatusCell row={row} kind={kind} expanded={expanded} onPress={onToggle} />
+					</View>
+				</HStack>
 				<Pressable
-					testID={`logs-expand-${row.logId}`}
+					testID={`logs-row-${row.logId}`}
 					accessibilityRole="button"
+					accessibilityState={{ expanded }}
+					accessibilityLabel={`${timeText} · ${levelLabel} · ${title}`}
 					onPress={onToggle}
-					className="w-6 items-center py-0.5"
-				>
-					<Icon
-						name={expanded ? 'chevronDown' : 'chevronRight'}
-						size="sm"
-						className="text-muted-foreground/60"
-					/>
-				</Pressable>
-			</HStack>
+					className="absolute inset-0 z-10"
+				/>
+			</View>
 
-			{/* below md — two-line pressable row; the code badge overlays the first
-			    line as a sibling button, since a nested <button> is invalid DOM on web */}
+			{/* below md — two-line pressable row; the status badge overlays the first
+			    line as a sibling, and the duration stays in the subline (B2 mobile). */}
 			<View className="relative md:hidden">
 				<Pressable
 					testID={`logs-row-sm-${row.logId}`}
@@ -196,10 +277,10 @@ function LedgerRow({
 						<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
 					</HStack>
 					<Text className="text-sm">{title}</Text>
-					<Subline row={row} />
+					<Subline row={row} includeDuration />
 				</Pressable>
-				<View className="absolute top-2 right-0">
-					<CodeCell row={row} kind={kind} onPress={onToggle} />
+				<View pointerEvents="box-none" className="absolute top-2 right-0 z-10">
+					<StatusCell row={row} kind={kind} expanded={expanded} onPress={onToggle} />
 				</View>
 			</View>
 
@@ -209,17 +290,23 @@ function LedgerRow({
 }
 
 /**
- * The flat ledger (TIME / LEVEL / EVENT / CODE): hairline rows, chain
- * edge-marks for adjacent rows in one operation, inline expandable detail.
+ * The flat ledger (TIME / LEVEL / EVENT / TOOK / STATUS — layout B2, map
+ * #1136): hairline rows, chain edge-marks, whole-row expand, tappable level
+ * pills, inline detail. Pagination is infinite scroll driven by the screen's
+ * ScrollView (no "Show more" button); the footer keeps the honest count.
  */
 export function Ledger({
 	resource,
 	total$,
-	onShowMore,
+	activeKind,
+	onKindPress,
+	onRenderedCount,
 }: {
 	resource: LedgerResource;
 	total$: Observable<number>;
-	onShowMore: () => void;
+	activeKind: LevelKind | undefined;
+	onKindPress: (kind: LevelKind) => void;
+	onRenderedCount?: (count: number) => void;
 }) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
@@ -234,6 +321,13 @@ export function Ledger({
 		[result.hits]
 	);
 	const chained = React.useMemo(() => chainMarkedIds(rows), [rows]);
+
+	// Effect (last resort): the screen's infinite-scroll guard must know how many
+	// rows actually MATERIALIZED — the query limit moves before rows do, which is
+	// exactly the gap the one-extend-per-window protection exists to close.
+	React.useEffect(() => {
+		onRenderedCount?.(rows.length);
+	}, [onRenderedCount, rows.length]);
 
 	const timeTextFor = React.useCallback(
 		(timestamp: number) => {
@@ -259,10 +353,12 @@ export function Ledger({
 				<HairlineHeaderCell testID="logs-heading-event" className="flex-1">
 					{t('health.logs.col_event')}
 				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-code" className="w-24 text-right">
-					{t('health.logs.col_code')}
+				<HairlineHeaderCell testID="logs-heading-took" className="w-16 text-right">
+					{t('health.logs.col_took')}
 				</HairlineHeaderCell>
-				<View className="w-6" />
+				<HairlineHeaderCell testID="logs-heading-status" className="w-24 text-right">
+					{t('health.logs.col_status')}
+				</HairlineHeaderCell>
 			</HairlineHeaderRow>
 
 			{rows.length === 0 ? (
@@ -280,6 +376,8 @@ export function Ledger({
 						timeText={timeTextFor(row.timestamp)}
 						levelLabel={levelLabel(displayKind(row))}
 						title={eventTitle(row)}
+						kindActive={activeKind !== undefined && displayKind(row) === activeKind}
+						onKindPress={onKindPress}
 					/>
 				))
 			)}
@@ -288,11 +386,6 @@ export function Ledger({
 				<Text className="text-muted-foreground text-xs">
 					{t('common.showing_of', { shown: rows.length, total })}
 				</Text>
-				{rows.length < total ? (
-					<Button variant="ghost" size="sm" testID="logs-show-more" onPress={onShowMore}>
-						<ButtonText>{t('health.logs.show_more')}</ButtonText>
-					</Button>
-				) : null}
 			</HStack>
 		</VStack>
 	);

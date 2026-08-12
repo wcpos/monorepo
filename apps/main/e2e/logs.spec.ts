@@ -29,7 +29,8 @@ test.describe('Store health · Logs', () => {
 		await expect(screen.getByTestId('logs-heading-time')).toBeVisible();
 		await expect(screen.getByTestId('logs-heading-level')).toBeVisible();
 		await expect(screen.getByTestId('logs-heading-event')).toBeVisible();
-		await expect(screen.getByTestId('logs-heading-code')).toBeVisible();
+		await expect(screen.getByTestId('logs-heading-took')).toBeVisible();
+		await expect(screen.getByTestId('logs-heading-status')).toBeVisible();
 
 		// The engine writes startup/cycle rows on boot, so an authenticated
 		// session always has ledger entries.
@@ -42,7 +43,9 @@ test.describe('Store health · Logs', () => {
 	test('expands a ledger row to its inline detail', async ({ posPage: page }) => {
 		const screen = await openLogs(page);
 
-		const expander = screen.locator('[data-testid^="logs-expand-"]').first();
+		// Layout B2 (#1154): the whole row is the press target — the md+ overlay
+		// carries the row testID; the separate expand caret no longer exists.
+		const expander = screen.locator('[data-testid^="logs-row-"]:visible').first();
 		await expect(expander).toBeVisible({ timeout: 30_000 });
 		await expander.click();
 		await expect(screen.locator('[data-testid^="logs-detail-"]').first()).toBeVisible();

@@ -19,7 +19,7 @@ import type {
 
 import { parseRemoteId } from '../utils/parse-remote-id';
 
-import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
+import type { CollectionKey, FiltersOf, LogKindFilter, QueryStateOf } from './query-state-types';
 
 type Operator = 'taxonomy-many' | 'value' | 'metadata' | 'store' | 'date-range' | 'all-match';
 
@@ -76,6 +76,59 @@ export function normalizeQuerySortField(
 	return collection === 'products' ? (sortAliasFor(collection, field) ?? field) : field;
 }
 
+const SYNC_KIND_PREFIX = 'wcpos.sync';
+
+const syncCategoryRange = { $gte: SYNC_KIND_PREFIX, $lt: `${SYNC_KIND_PREFIX}/` };
+// mingo has no range-negation, so "not the sync domain" is the complement union —
+// including rows that carry no category at all (the schema permits them, and
+// displayKind renders them info).
+const notSyncCategory = {
+	$or: [
+		{ category: { $exists: false } },
+		{ category: { $lt: SYNC_KIND_PREFIX } },
+		{ category: { $gte: `${SYNC_KIND_PREFIX}/` } },
+	],
+};
+
+// displayKind's actor test is `actor && (actor.id !== undefined || actor.name
+// !== undefined)` — a null actor or a role-only actor is NOT an action row, so
+// the selectors probe the identifying fields, not the object.
+const hasActingActor = {
+	$or: [{ 'actor.id': { $exists: true } }, { 'actor.name': { $exists: true } }],
+};
+const noActingActor = [{ 'actor.id': { $exists: false } }, { 'actor.name': { $exists: false } }];
+
+/**
+ * Strict display-kind selectors (A1.5): each kind matches exactly the rows the
+ * LEVEL column renders with that kind, mirroring `displayKind`'s precedence —
+ * severity wins, then actor (action), then the sync domain, then debug; info is
+ * the residual, so it also absorbs absent or unrecognized levels.
+ */
+function kindConditions(kind: LogKindFilter): Record<string, unknown>[] {
+	switch (kind) {
+		case 'error':
+			return [{ level: 'error' }];
+		case 'warn':
+			return [{ level: 'warn' }];
+		case 'action':
+			return [hasActingActor, { level: { $nin: ['error', 'warn'] } }];
+		case 'sync':
+			return [
+				{ category: syncCategoryRange },
+				...noActingActor,
+				{ level: { $nin: ['error', 'warn'] } },
+			];
+		case 'info':
+			return [{ level: { $nin: ['error', 'warn', 'debug'] } }, ...noActingActor, notSyncCategory];
+		case 'debug':
+			return [{ level: 'debug' }, ...noActingActor, notSyncCategory];
+		default: {
+			const exhaustive: never = kind;
+			return exhaustive;
+		}
+	}
+}
+
 export function translateLogsQueryState(state: QueryStateOf<'logs'>) {
 	const filters = state.filters;
 	const conditions = (
@@ -90,6 +143,7 @@ export function translateLogsQueryState(state: QueryStateOf<'logs'>) {
 					}
 				: undefined,
 			filters.has_actor ? { actor: { $exists: true } } : undefined,
+			...(filters.kind ? kindConditions(filters.kind) : []),
 		] as (Record<string, unknown> | undefined)[]
 	).filter((condition): condition is Record<string, unknown> => condition !== undefined);
 	return {

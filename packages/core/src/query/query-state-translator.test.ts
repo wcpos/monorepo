@@ -984,4 +984,83 @@ describe('logs preset filters', () => {
 			$and: [{ level: { $in: ['error'] } }],
 		});
 	});
+
+	// A1.5 (map #1136): the LEVEL-pill kind filter is a STRICT display-kind
+	// match — each selector mirrors displayKind's precedence exactly.
+	describe('kind filter', () => {
+		it('intersects the kind with the active preset (compose, not replace)', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: {
+					level: ['info', 'warn', 'error'],
+					category_prefix: 'wcpos.sync',
+					kind: 'warn',
+				},
+			} satisfies QueryStateOf<'logs'>);
+
+			expect(translated.selector).toEqual({
+				$and: [
+					{ level: { $in: ['info', 'warn', 'error'] } },
+					{ category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' } },
+					{ level: 'warn' },
+				],
+			});
+		});
+
+		it('translates the action kind as identified-actor rows below severity', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: { kind: 'action' },
+			} satisfies QueryStateOf<'logs'>);
+
+			// displayKind ignores actor: null and role-only actors — the selector
+			// probes the identifying fields, not the object.
+			expect(translated.selector).toEqual({
+				$and: [
+					{ $or: [{ 'actor.id': { $exists: true } }, { 'actor.name': { $exists: true } }] },
+					{ level: { $nin: ['error', 'warn'] } },
+				],
+			});
+		});
+
+		it('translates the sync kind as the domain minus acting actors and severity rows', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: { kind: 'sync' },
+			} satisfies QueryStateOf<'logs'>);
+
+			expect(translated.selector).toEqual({
+				$and: [
+					{ category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' } },
+					{ 'actor.id': { $exists: false } },
+					{ 'actor.name': { $exists: false } },
+					{ level: { $nin: ['error', 'warn'] } },
+				],
+			});
+		});
+
+		it('translates the info kind as the residual: absent and unknown levels, no actor, no category', () => {
+			const translated = translateLogsQueryState({
+				...base,
+				filters: { kind: 'info' },
+			} satisfies QueryStateOf<'logs'>);
+
+			// info absorbs rows with NO level and NO category — displayKind renders
+			// both as info, so the strict selector must keep them.
+			expect(translated.selector).toEqual({
+				$and: [
+					{ level: { $nin: ['error', 'warn', 'debug'] } },
+					{ 'actor.id': { $exists: false } },
+					{ 'actor.name': { $exists: false } },
+					{
+						$or: [
+							{ category: { $exists: false } },
+							{ category: { $lt: 'wcpos.sync' } },
+							{ category: { $gte: 'wcpos.sync/' } },
+						],
+					},
+				],
+			});
+		});
+	});
 });

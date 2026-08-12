@@ -1,5 +1,8 @@
 import * as React from 'react';
 import { Platform, ScrollView, Share, View } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+
+import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -21,16 +24,17 @@ import {
 	useQueryStateActions,
 } from '../../../query';
 import { QuerySearchInput } from '../components/query-search-input';
-import { Chip, Stat, StatHeader } from '../health/components';
+import { Chip, type LevelKind, Stat, StatHeader } from '../health/components';
 import { useNowMs, useRelativeTime } from '../health/use-relative-time';
 import { useEngineStatus, useMutationCounts } from '../hooks/use-engine-monitor';
-import { Ledger } from './ledger';
+import { Ledger, useLevelLabel } from './ledger';
 import {
 	buildDebugInfo,
 	formatCadence,
 	type LogPreset,
 	type LogRow,
 	presetFilters,
+	shouldExtendLedger,
 } from './logs-logic';
 import { useLogStats } from './use-log-stats';
 import { useVerboseDiagnostics } from './use-verbose-diagnostics';
@@ -142,6 +146,91 @@ function LogsScreenContent() {
 		setVerbose(!verbose);
 	}, [setVerbose, verbose]);
 
+	// A1.5: the LEVEL-pill kind filter composes with the preset (it never
+	// resets it); tapping the active pill — or the clearable chip — clears it.
+	const activeKind = state.filters.kind;
+	const levelLabel = useLevelLabel();
+	const toggleKind = React.useCallback(
+		(kind: LevelKind) => {
+			if (state.filters.kind === kind) actions.clearFilter('kind');
+			else actions.setFilter('kind', kind);
+		},
+		[actions, state.filters.kind]
+	);
+
+	// A1.4: infinite scroll replaces "Show more". The guard is pure
+	// (shouldExtendLedger), keyed on MATERIALIZED rows — one extend per
+	// materialized window (#1132) — and it re-arms when the query identity
+	// changes, because filters/search reset the window to page one.
+	const total = useObservableState(binding.total$, 0);
+	const renderedCountRef = React.useRef(0);
+	const lastExtendCountRef = React.useRef<number | null>(null);
+	const queryIdentityRef = React.useRef('');
+	const geometryRef = React.useRef({ offsetY: 0, contentHeight: 0, viewportHeight: 0 });
+
+	// Computed in render (pure); consumed only at event time — the compiler
+	// forbids ref access during render (#1130 lesson).
+	const queryIdentity = JSON.stringify([state.filters, state.search]);
+
+	const maybeExtend = React.useCallback(() => {
+		if (queryIdentityRef.current !== queryIdentity) {
+			queryIdentityRef.current = queryIdentity;
+			lastExtendCountRef.current = null;
+		}
+		const geometry = geometryRef.current;
+		const extend = shouldExtendLedger({
+			offsetY: geometry.offsetY,
+			contentHeight: geometry.contentHeight,
+			viewportHeight: geometry.viewportHeight,
+			renderedCount: renderedCountRef.current,
+			total,
+			lastExtendCount: lastExtendCountRef.current,
+		});
+		if (extend) {
+			lastExtendCountRef.current = renderedCountRef.current;
+			actions.extendLimit();
+		}
+	}, [actions, queryIdentity, total]);
+
+	const handleScroll = React.useCallback(
+		(event: NativeSyntheticEvent<NativeScrollEvent>) => {
+			const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+			geometryRef.current = {
+				offsetY: contentOffset.y,
+				contentHeight: contentSize.height,
+				viewportHeight: layoutMeasurement.height,
+			};
+			maybeExtend();
+		},
+		[maybeExtend]
+	);
+	// A short first page on a tall viewport never scrolls, so content-size and
+	// rendered-count changes must also drive the fill.
+	const handleContentSizeChange = React.useCallback(
+		(_width: number, height: number) => {
+			geometryRef.current = { ...geometryRef.current, contentHeight: height };
+			maybeExtend();
+		},
+		[maybeExtend]
+	);
+	const handleLayout = React.useCallback(
+		(event: { nativeEvent: { layout: { height: number } } }) => {
+			geometryRef.current = {
+				...geometryRef.current,
+				viewportHeight: event.nativeEvent.layout.height,
+			};
+			maybeExtend();
+		},
+		[maybeExtend]
+	);
+	const handleRenderedCount = React.useCallback(
+		(count: number) => {
+			renderedCountRef.current = count;
+			maybeExtend();
+		},
+		[maybeExtend]
+	);
+
 	// Effect (last resort per project.mdc): `verbose` can flip OUTSIDE any
 	// event handler — the logger's 24 h TTL expires while the screen is mounted
 	// (surfaced by the hook's poll) — and the ledger's level filter must follow
@@ -210,7 +299,13 @@ function LogsScreenContent() {
 	}, [appVersion, canShare, logsCollection, mutations.pending, stats, status, t, verbose]);
 
 	return (
-		<ScrollView className="flex-1">
+		<ScrollView
+			className="flex-1"
+			onScroll={handleScroll}
+			onContentSizeChange={handleContentSizeChange}
+			onLayout={handleLayout}
+			scrollEventThrottle={64}
+		>
 			<VStack testID="screen-logs" className="mx-auto w-full max-w-4xl gap-3 p-4 md:p-6">
 				<StatusLine />
 
@@ -289,6 +384,11 @@ function LogsScreenContent() {
 					<Chip on={preset === 'sync'} onPress={() => applyPreset('sync')} testID="logs-chip-sync">
 						{t('health.logs.preset_sync')}
 					</Chip>
+					{activeKind ? (
+						<Chip on onPress={() => actions.clearFilter('kind')} testID="logs-chip-kind">
+							{`${levelLabel(activeKind)} ×`}
+						</Chip>
+					) : null}
 					<View className="flex-1" />
 					<Chip on={verbose} onPress={toggleVerbose} testID="logs-chip-verbose">
 						{verbose ? t('health.logs.verbose_on') : t('health.logs.verbose_off')}
@@ -306,7 +406,9 @@ function LogsScreenContent() {
 						<Ledger
 							resource={binding.resource}
 							total$={binding.total$}
-							onShowMore={actions.extendLimit}
+							activeKind={activeKind}
+							onKindPress={toggleKind}
+							onRenderedCount={handleRenderedCount}
 						/>
 					</Suspense>
 				</ErrorBoundary>

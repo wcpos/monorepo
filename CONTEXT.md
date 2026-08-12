@@ -71,3 +71,38 @@ The extractor's verdict that a selector was fully expressed as wire dimensions, 
 is the precondition for trusting coverage totals.
 
 _Avoid_: queryKey grammar, descriptor string (in caller-facing documentation)
+
+## Language — Logs
+
+**Error code**:
+A registry code (`SYNC104` style) from `error-registry.json`; a SPECIFIC code
+exists iff the merchant response differs, and generic codes are the explicit
+exception (see Generic code). Docs-linked, catalogue-backed, problems-only.
+_Avoid_: legacy `ERROR_CODES` table (deprecated, dying)
+
+**Event code**:
+The stable engine identity an engine-written log row carries (`context.type`,
+e.g. `engine.change-check-failed`). Non-engine rows may lack one — the UI falls
+back to the persisted message, then the raw code. Support/AI-facing; surfaced
+copyable in the row detail; never docs-linked.
+
+**Description**:
+The optional per-event one-sentence plain-language explanation in
+`event-registry.json`, rendered only in a quiet row's expanded detail;
+translated like event titles. In-app only.
+
+**Generic code**:
+A per-domain `…999` error code with honestly-unspecific catalogue copy, stamped
+by boundaries when no specific merchant response differs.
+
+**Registry debt**:
+Every generic-code emission (`codeFallback: true`); a standing signal to mint a
+specific code, never a resting state.
+
+**Demotion clause**:
+A warn/error row that needs no merchant response is mis-leveled — the remedy is
+demoting the level, not minting a code.
+
+**Kind filter**:
+The Logs ledger's tappable LEVEL-pill filter: a strict display-kind match that
+intersects the active preset chip; single-select, tap-again clears.

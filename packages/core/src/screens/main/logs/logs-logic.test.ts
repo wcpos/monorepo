@@ -11,6 +11,7 @@ import {
 	type LogRow,
 	presetFilters,
 	rowDetailData,
+	shouldExtendLedger,
 	startOfLocalDay,
 } from './logs-logic';
 
@@ -515,5 +516,46 @@ describe('buildDebugInfo', () => {
 		expect(text).toContain('Last server check: none yet');
 		expect(text).toContain('Recent errors (0):');
 		expect(text).toContain('  none');
+	});
+});
+
+describe('shouldExtendLedger', () => {
+	const base = {
+		offsetY: 1_000,
+		contentHeight: 2_000,
+		viewportHeight: 800,
+		renderedCount: 20,
+		total: 100,
+		lastExtendCount: null,
+	};
+
+	it('extends near the bottom when more rows exist', () => {
+		expect(shouldExtendLedger(base)).toBe(true);
+	});
+
+	it('does nothing far from the bottom', () => {
+		expect(shouldExtendLedger({ ...base, offsetY: 0 })).toBe(false);
+	});
+
+	it('does nothing once every row is loaded', () => {
+		expect(shouldExtendLedger({ ...base, total: 20 })).toBe(false);
+	});
+
+	it('refuses a second extend until rows actually materialized (#1132 phantom trigger)', () => {
+		// The limit widened but the rows have not arrived yet: still 20 rendered.
+		expect(shouldExtendLedger({ ...base, lastExtendCount: 20 })).toBe(false);
+		// The window materialized (40 rows): the next extend is allowed.
+		expect(shouldExtendLedger({ ...base, renderedCount: 40, lastExtendCount: 20 })).toBe(true);
+	});
+
+	it('extends when content is shorter than the viewport (fill-on-tall-screens)', () => {
+		expect(
+			shouldExtendLedger({
+				...base,
+				offsetY: 0,
+				contentHeight: 600,
+				viewportHeight: 900,
+			})
+		).toBe(true);
 	});
 });
