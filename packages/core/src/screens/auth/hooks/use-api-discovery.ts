@@ -92,8 +92,12 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 	const fetchApiIndex = React.useCallback(
 		async (wpApiUrl: string): Promise<WpJsonResponse> => {
 			try {
-				// Add cache-busting param
-				const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
+				// Add cache-busting param. Bounded like the url-discovery probes
+				// (monorepo#1155: an unbounded connect-flow request leaves the cashier
+				// on an infinite spinner) — but looser, because this GET returns the
+				// full API index and was observed taking ~9s on a degraded-but-alive
+				// server where the front-page probe hung outright.
+				const response = await http.get(wpApiUrl, { params: { wcpos: 1 }, timeout: 15_000 });
 				const data = get(response, 'data') as WpJsonResponse;
 
 				// Basic validation
