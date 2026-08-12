@@ -112,11 +112,11 @@ const cjsShim = shim({
   ctx: "e",
   docHandle: "u",
   events: "g",
-  getDocumentsJson: "(0,_documentsFile.getDocumentsJson)",
+  getDocumentsJson: "(0,n.getDocumentsJson)",
 });
 const cjsResult = patchFile(cjs, {
-  importBefore: null,
-  importAfter: null,
+  importBefore: 'n=require("./documents-file.js")',
+  importAfter: 'n=require("./documents-file.js")',
   loopBefore:
     "for(var f=[],I=0;I<c.indexStates.length;I++){c.indexStates[I].appendWriteOperations(g,p.documentPositions,f)}",
   loopAfter:

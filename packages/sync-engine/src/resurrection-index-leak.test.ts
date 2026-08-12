@@ -1,13 +1,17 @@
 // @vitest-environment node
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { addRxPlugin, createRxDatabase, type RxDatabase } from 'rxdb';
 import { RxDBCleanupPlugin } from 'rxdb/plugins/cleanup';
-import { getRxStorageFilesystemNode } from 'rxdb-premium/plugins/storage-filesystem-node';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
+
+const require = createRequire(import.meta.url);
+const { getRxStorageFilesystemNode } =
+	require('rxdb-premium/plugins/storage-filesystem-node') as typeof import('rxdb-premium/plugins/storage-filesystem-node');
 
 setPremiumFlag();
 addRxPlugin(RxDBCleanupPlugin);
