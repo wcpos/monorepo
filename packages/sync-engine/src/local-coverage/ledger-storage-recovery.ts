@@ -101,7 +101,16 @@ function reconciliationRefusalReason(error: unknown): string | undefined {
 	const message = errorMessage(error);
 	const markerIndex = message?.indexOf(RECONCILIATION_REFUSAL_MARKER) ?? -1;
 	if (!message || markerIndex < 0) return undefined;
-	return message.slice(markerIndex + RECONCILIATION_REFUSAL_MARKER.length).trim();
+	const raw = message.slice(markerIndex + RECONCILIATION_REFUSAL_MARKER.length).trim();
+	// On web the refusal crosses the storage worker boundary JSON-serialized:
+	// rx-storage-remote rethrows worker errors as
+	//   could not requestRemote: {..."message":"...; index reconciliation refused: X","stack":"..."}
+	// so everything after the refusal token — the closing quote of the JSON
+	// string and the rest of the blob — is serialization, not reason. Cut at the
+	// first (possibly escape-prefixed) double quote; a bare refusal has none.
+	const quoteIndex = raw.indexOf('"');
+	const head = quoteIndex < 0 ? raw : raw.slice(0, quoteIndex);
+	return head.replace(/[\\\s]+$/u, '').trim();
 }
 
 /** The refusal reason when the error is a CORRUPTION refusal, otherwise undefined. */
