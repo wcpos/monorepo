@@ -74,6 +74,7 @@ export type ChangeSignalLaneDeps = {
 	writeBlob: (scopeId: string, key: string, value: string) => Promise<void>;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
+	emitEvent: (event: { type: 'config-changed'; collections: string[] }) => void;
 	withCollectionActivity?: <T>(
 		collection: SyncCollectionName,
 		work: () => Promise<T>
@@ -179,7 +180,11 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			return { lane: 'change-signal', status: 'skipped', reason: 'offline' };
 		}
 		if (deps.manager.activeScope === null) {
-			return { lane: 'change-signal', status: 'skipped', reason: 'no active scope' };
+			return {
+				lane: 'change-signal',
+				status: 'skipped',
+				reason: 'no active scope',
+			};
 		}
 		const cycleStartedAtMs = Date.now();
 		let cycleSummary: { pulls: number; deletes: number } | null = null;
@@ -190,6 +195,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			head?: number;
 			rebaselined: boolean;
 		} | null = null;
+		let configChangedCollections: string[] = [];
 		try {
 			return await deps.manager.runGuarded(async (bound) => {
 				const scopeId = bound.scopeId;
@@ -218,7 +224,10 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 									scopeSignal?.addEventListener('abort', abort, { once: true });
 								}
 								try {
-									return await deps.fetcher(url, { ...init, signal: combined.signal });
+									return await deps.fetcher(url, {
+										...init,
+										signal: combined.signal,
+									});
 								} finally {
 									signal.removeEventListener('abort', abort);
 									scopeSignal?.removeEventListener('abort', abort);
@@ -226,10 +235,15 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							};
 				activeFetch = bound.bindFetch(tickFetcher);
 				const engine = await engineFor(scopeId);
-				let report: ChangeSignalReport = { lane: 'change-signal', status: 'ran' };
+				let report: ChangeSignalReport = {
+					lane: 'change-signal',
+					status: 'ran',
+				};
 				let rebaselined = false;
 				const wrote = await bound.guardWrite(async () => {
 					const outcome = await engine.poll();
+					configChangedCollections =
+						outcome.configChanges?.map((change) => change.collection) ?? [];
 					const actions = planReplicationActions(outcome);
 					rebaselined = actions.rebaselineCollections.length > 0;
 					cycleSummary = {
@@ -270,7 +284,11 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 								deps.barcodeSelectorsFor?.(scopeId)?.noteRecoveryPersisted();
 							},
 							log: (line) =>
-								deps.diagnostics({ type: 'signal.log', level: 'debug', message: line }),
+								deps.diagnostics({
+									type: 'signal.log',
+									level: 'debug',
+									message: line,
+								}),
 							observe: deps.diagnostics,
 							...(deps.withCollectionActivity !== undefined
 								? { withCollectionActivity: deps.withCollectionActivity }
@@ -289,6 +307,12 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				} else if (rebaselined) {
 					report = { ...report, rebaselined: true };
 				}
+				if (wrote !== 'dropped' && configChangedCollections.length > 0) {
+					deps.emitEvent({
+						type: 'config-changed',
+						collections: configChangedCollections,
+					});
+				}
 				if (wrote !== 'dropped' && cycleSummary !== null && cursorSummary !== null) {
 					deps.diagnostics({
 						type: 'signal.cycle',
@@ -303,7 +327,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							...(cursorSummary.from !== undefined ? { cursorFrom: cursorSummary.from } : {}),
 							...(cursorSummary.head !== undefined ? { head: cursorSummary.head } : {}),
 							...(cursorSummary.head !== undefined && cursorSummary.to !== undefined
-								? { backlog: Math.max(0, cursorSummary.head - cursorSummary.to) }
+								? {
+										backlog: Math.max(0, cursorSummary.head - cursorSummary.to),
+									}
 								: {}),
 						},
 					});

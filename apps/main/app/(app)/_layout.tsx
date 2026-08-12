@@ -123,34 +123,35 @@ function AppStack() {
 
 	return (
 		<QueryProvider localDB={storeDB} engine={engine} locale={locale}>
-			<SyncConfigBridge />
-			{/* Receipt emails queued while offline drain from here (#165) — above the
+			<ExtraDataProvider>
+				<SyncConfigBridge />
+				{/* Receipt emails queued while offline drain from here (#165) — above the
 			    screens, because the promise made at the Send button has to be kept
 			    whether or not the receipt modal is still open. */}
-			<ReceiptEmailQueueBridge />
-			<UISettingsProvider>
-				<CompatGate>
-					<DeviceScanProvider>
-						<View
-							className="bg-background flex-1"
-							onStartShouldSetResponderCapture={captureUserActivity}
-						>
-							<Stack
-								screenOptions={{
-									headerShown: false,
-									contentStyle: { backgroundColor: screenBackgroundColor },
-								}}
+				<ReceiptEmailQueueBridge />
+				<UISettingsProvider>
+					<CompatGate>
+						<DeviceScanProvider>
+							<View
+								className="bg-background flex-1"
+								onStartShouldSetResponderCapture={captureUserActivity}
 							>
-								<Stack.Screen name="(drawer)" />
-								<Stack.Screen
-									name="(modals)/tax-rates"
-									options={{
-										presentation: 'containedTransparentModal',
-										animation: 'fade',
-										contentStyle: { backgroundColor: 'transparent' },
+								<Stack
+									screenOptions={{
+										headerShown: false,
+										contentStyle: { backgroundColor: screenBackgroundColor },
 									}}
-								/>
-								{/* <Stack.Screen
+								>
+									<Stack.Screen name="(drawer)" />
+									<Stack.Screen
+										name="(modals)/tax-rates"
+										options={{
+											presentation: 'containedTransparentModal',
+											animation: 'fade',
+											contentStyle: { backgroundColor: 'transparent' },
+										}}
+									/>
+									{/* <Stack.Screen
 							name="(modals)/login"
 							options={{
 								presentation: 'containedTransparentModal',
@@ -158,17 +159,18 @@ function AppStack() {
 								contentStyle: { backgroundColor: 'transparent' },
 							}}
 						/> */}
-							</Stack>
-							{/**
-							 * We need to have a PortalHost inside the UISettingsProvider
-							 */}
-							<ErrorBoundary>
-								<PortalHost />
-							</ErrorBoundary>
-						</View>
-					</DeviceScanProvider>
-				</CompatGate>
-			</UISettingsProvider>
+								</Stack>
+								{/**
+								 * We need to have a PortalHost inside the UISettingsProvider
+								 */}
+								<ErrorBoundary>
+									<PortalHost />
+								</ErrorBoundary>
+							</View>
+						</DeviceScanProvider>
+					</CompatGate>
+				</UISettingsProvider>
+			</ExtraDataProvider>
 		</QueryProvider>
 	);
 }
@@ -293,11 +295,9 @@ export default function AppLayout() {
 			<EngineConnectivityBridge />
 			<MetricsPersistenceBridge />
 			<SyncStatusPersistenceBridge />
-			<ExtraDataProvider>
-				<RasterizeProvider>
-					<AppStack />
-				</RasterizeProvider>
-			</ExtraDataProvider>
+			<RasterizeProvider>
+				<AppStack />
+			</RasterizeProvider>
 		</OnlineStatusProvider>
 	);
 }

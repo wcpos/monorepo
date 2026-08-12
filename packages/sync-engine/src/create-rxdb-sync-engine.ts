@@ -355,6 +355,7 @@ export type EngineEvent =
 	// Fresh query totals persisted by the retry lane (slice 5d) — the host
 	// hydrates its UI caches from these.
 	| QueryTotalCacheEvent
+	| { type: 'config-changed'; collections: string[] }
 	// Lane lifecycle (ADR 0027 §4) — the PUBLIC host/UI activity contract. `lane-start`
 	// fires as a lane's work BEGINS (before any network); `lane-finish` is the completion
 	// signal carrying the tick outcome. Emitted as a pair around every lane run (manual
@@ -1314,6 +1315,7 @@ export function createRxdbSyncEngine(
 			}
 		},
 		diagnostics,
+		emitEvent: emitEngineEvent,
 		withCollectionActivity,
 		pullBatchSize: () => cadence?.pullBatchSize(),
 		barcodeSelectorsFor: (scopeId) => barcodeSelectorsOf(scopeId),
