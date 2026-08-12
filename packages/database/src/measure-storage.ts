@@ -51,7 +51,13 @@ export async function measureAppStorage(): Promise<StorageFootprint | null> {
 				// Legacy remnant unreadable — omit rather than fail the measurement.
 			}
 		}
-		return { entries, estimateBytes: null };
+		return {
+			entries,
+			estimateBytes: null,
+			estimateDetails: null,
+			imageCacheBytes: null,
+			opaqueCacheEntries: 0,
+		};
 	} catch {
 		return null;
 	}

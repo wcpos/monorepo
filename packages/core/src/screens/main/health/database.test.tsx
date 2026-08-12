@@ -20,6 +20,24 @@ const mockMutationCounts = {
 };
 const mockDeadLetterStuck: StuckRecord[] = [];
 const mockSync = jest.fn();
+const defaultStorageFootprint = {
+	breakdown: {
+		activeDataBytes: 1_000_000,
+		searchIndexBytes: 2 * 1024 * 1024,
+		bookkeepingBytes: 3 * 1024 * 1024,
+		otherCashiersBytes: 5 * 1024 * 1024,
+		otherStoresBytes: 40 * 1024 * 1024,
+		otherStoresCount: 2,
+		orphanedBytes: 0,
+		unknownBytes: 0,
+		measuredTotalBytes: 51_428_800,
+	},
+	cachedImagesBytes: 4 * 1024 * 1024,
+	browserEstimateBytes: (60 * 1024 * 1024) as number | null,
+	totalBytes: 55_622_816,
+	unattributedBytes: 0,
+};
+let mockStorageFootprint = { ...defaultStorageFootprint };
 
 jest.mock('@wcpos/components/tooltip', () => ({
 	Tooltip: (props: TooltipProps) => mockTooltip(props),
@@ -103,12 +121,16 @@ jest.mock('@wcpos/components/dropdown-menu', () => {
 	};
 });
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	HStack: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
 jest.mock('@wcpos/components/vstack', () => ({
@@ -175,22 +197,7 @@ jest.mock('./components', () => ({
 }));
 jest.mock('./use-collection-sizes', () => ({ useCollectionSizes: () => ({}) }));
 jest.mock('./use-storage-footprint', () => ({
-	useStorageFootprint: () => ({
-		breakdown: {
-			activeDataBytes: 1_000_000,
-			searchIndexBytes: 2 * 1024 * 1024,
-			bookkeepingBytes: 3 * 1024 * 1024,
-			otherCashiersBytes: 5 * 1024 * 1024,
-			otherStoresBytes: 40 * 1024 * 1024,
-			otherStoresCount: 2,
-			orphanedBytes: 0,
-			unknownBytes: 0,
-			measuredTotalBytes: 51_428_800,
-		},
-		estimateBytes: 60 * 1024 * 1024,
-		totalBytes: 60 * 1024 * 1024,
-		unattributedBytes: 9 * 1024 * 1024,
-	}),
+	useStorageFootprint: () => mockStorageFootprint,
 }));
 jest.mock('./use-relative-time', () => ({
 	useNowMs: () => 500,
@@ -204,6 +211,7 @@ describe('DatabaseScreen coverage', () => {
 		mockMutationCounts.rejected = 0;
 		mockMutationCounts.unresolvedConflicts = 0;
 		mockDeadLetterStuck.length = 0;
+		mockStorageFootprint = { ...defaultStorageFootprint };
 	});
 
 	it('spins and disables the row menu trigger while its manual sync runs', async () => {
@@ -255,14 +263,44 @@ describe('DatabaseScreen coverage', () => {
 	});
 
 	it('itemizes measured storage as aggregate buckets, hiding empty ones', () => {
-		const { getByText, queryByText } = render(<DatabaseScreen />);
+		const { getByTestId, getByText, queryByText } = render(<DatabaseScreen />);
 
 		expect(getByText('Search indexes')).toBeTruthy();
 		expect(getByText('≈ 2.0 MB')).toBeTruthy();
 		expect(getByText('Other stores on this device (2)')).toBeTruthy();
 		expect(getByText('≈ 40 MB')).toBeTruthy();
+		expect(getByTestId('db-row-cached-images').textContent).toContain('≈ 4.0 MB');
 		// Zero-byte buckets stay off the screen entirely.
 		expect(queryByText(/Signed-out stores/)).toBeNull();
+	});
+
+	it.each([
+		['absolute threshold only', 100 * 1024 * 1024, 120 * 1024 * 1024],
+		['percentage threshold only', 20 * 1024 * 1024, 25 * 1024 * 1024],
+		['no browser estimate', 20 * 1024 * 1024, null],
+	] as const)(
+		'hides the browser estimate note for %s',
+		(_case, totalBytes, browserEstimateBytes) => {
+			mockStorageFootprint = { ...defaultStorageFootprint, totalBytes, browserEstimateBytes };
+
+			const { queryByTestId } = render(<DatabaseScreen />);
+
+			expect(queryByTestId('db-note-browser-estimate')).toBeNull();
+		}
+	);
+
+	it('shows the browser estimate note only after both thresholds', () => {
+		mockStorageFootprint = {
+			...defaultStorageFootprint,
+			totalBytes: 20 * 1024 * 1024,
+			browserEstimateBytes: 30 * 1024 * 1024,
+		};
+
+		const { getByTestId } = render(<DatabaseScreen />);
+
+		expect(getByTestId('db-note-browser-estimate').textContent).toBe(
+			'Your browser reserves 30 MB for this app. That figure includes privacy padding and internal bookkeeping — the sizes above are what is actually stored.'
+		);
 	});
 
 	it('renders the independently observed unresolved-conflict count', () => {

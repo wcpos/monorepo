@@ -20,4 +20,10 @@ export type StorageFootprint = {
 	 * Null on platforms whose storage lives outside the renderer's estimate.
 	 */
 	estimateBytes: number | null;
+	/** Chrome's non-standard `usageDetails` per-system split of the estimate; null elsewhere. */
+	estimateDetails: Record<string, number> | null;
+	/** Measured bytes of the app's image caches; null when the platform cannot measure them. */
+	imageCacheBytes: number | null;
+	/** Cache entries whose size the browser hides (cross-origin opaque responses). */
+	opaqueCacheEntries: number;
 };

@@ -2,7 +2,6 @@ import {
 	classifyStorageEntries,
 	collectionFromEntryName,
 	type StorageContext,
-	unattributedBytes,
 } from './storage-footprint-logic';
 
 const ACTIVE_SCOPE = 'pos_v2_abcdefabcdef_s578_c12';
@@ -135,13 +134,5 @@ describe('classifyStorageEntries', () => {
 		// No active scope key — the entry is still a known site's scope, so it
 		// counts as another store rather than vanishing.
 		expect(breakdown.otherStoresBytes).toBe(100);
-	});
-});
-
-describe('unattributedBytes', () => {
-	it('reports only a positive estimate remainder', () => {
-		expect(unattributedBytes(1_000, 400)).toBe(600);
-		expect(unattributedBytes(400, 1_000)).toBeNull();
-		expect(unattributedBytes(null, 400)).toBeNull();
 	});
 });
