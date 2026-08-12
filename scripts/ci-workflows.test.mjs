@@ -198,6 +198,50 @@ exit 75
 	}
 });
 
+test('the shared-store queue skips backoff after the final API attempt', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const queueStep = findStep(workflow, 'queue', '⏳ Wait for the shared dev store to be free');
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-shared-store-retry-'));
+	const binDir = path.join(workspace, 'bin');
+	const sleepLog = path.join(workspace, 'sleep.log');
+	const ghCallLog = path.join(workspace, 'gh.log');
+	mkdirSync(binDir);
+
+	writeFileSync(
+		path.join(binDir, 'gh'),
+		'#!/usr/bin/env bash\nprintf \'%s\\n\' "$1" >> "$GH_CALL_LOG"\nexit 1\n',
+		{ mode: 0o755 }
+	);
+	writeFileSync(
+		path.join(binDir, 'sleep'),
+		`#!/usr/bin/env bash
+printf '%s\\n' "$1" >> "$SLEEP_LOG"
+`,
+		{ mode: 0o755 }
+	);
+
+	try {
+		const result = runShell(queueStep.run, {
+			cwd: workspace,
+			env: {
+				GH_TOKEN: 'test-token',
+				PATH: `${binDir}:${process.env.PATH}`,
+				REPO: 'wcpos/monorepo',
+				RUN_ID: '1',
+				GH_CALL_LOG: ghCallLog,
+				SLEEP_LOG: sleepLog,
+			},
+		});
+
+		assert.notEqual(result.status, 0, result.stdout + result.stderr);
+		assert.match(result.stdout + result.stderr, /Could not read this run's queue job start time/);
+		assert.deepEqual(readFileSync(ghCallLog, 'utf8').trim().split('\n'), ['api', 'api', 'api']);
+		assert.deepEqual(readFileSync(sleepLog, 'utf8').trim().split('\n'), ['15', '30']);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('the deploy concurrency contract isolates stale rerun attempts', () => {
 	const workflow = readWorkflow('deploy.yml');
 
