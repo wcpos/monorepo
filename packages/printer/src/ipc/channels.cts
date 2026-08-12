@@ -68,6 +68,12 @@ export interface IpcInvokeChannels {
 	'serial-discovery': { req: Record<string, never>; res: DiscoveredSerialPrinter[] };
 	'axios': { req: unknown; res: unknown };
 	'auth:prompt': { req: AuthPromptParams; res: AuthResult };
+	'storage:measure': {
+		req: undefined;
+		res: {
+			entries: { name: string; bytes: number; root: 'fsdbs' | 'legacy-sqlite' | 'image-cache' }[];
+		};
+	};
 }
 
 export interface IpcSendChannels {
@@ -95,6 +101,7 @@ export const INVOKE_CHANNELS = [
 	'serial-discovery',
 	'axios',
 	'auth:prompt',
+	'storage:measure',
 ] as const satisfies readonly (keyof IpcInvokeChannels)[];
 
 export const SEND_CHANNELS = [
