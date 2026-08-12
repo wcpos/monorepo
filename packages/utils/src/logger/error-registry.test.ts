@@ -142,6 +142,21 @@ describe('error registry', () => {
 		}
 	});
 
+	it('rejects control characters in registry strings — they break MDX frontmatter', () => {
+		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-newline-'));
+		const invalidRegistry = path.join(directory, 'registry.json');
+		writeFileSync(
+			invalidRegistry,
+			JSON.stringify([{ ...registry[0], summary: 'line one\nline two' }])
+		);
+
+		try {
+			expect(() => runGenerator(directory, invalidRegistry)).toThrow();
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
 	it('exits non-zero when registry validation fails', () => {
 		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-invalid-'));
 		const invalidRegistry = path.join(directory, 'registry.json');

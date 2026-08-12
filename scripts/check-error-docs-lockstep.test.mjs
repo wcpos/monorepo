@@ -15,16 +15,33 @@ test('checks every registry code with a HEAD request', async () => {
 	});
 
 	assert.equal(status, 0);
-	assert.deepEqual(requests, [
+	assert.deepEqual(
+		requests.map(([url]) => url),
 		[
 			'https://raw.githubusercontent.com/wcpos/docs/main/versioned_docs/version-1.x/error-codes/SYNC101.mdx',
-			{ method: 'HEAD' },
-		],
-		[
 			'https://raw.githubusercontent.com/wcpos/docs/main/versioned_docs/version-1.x/error-codes/AUTH101.mdx',
-			{ method: 'HEAD' },
-		],
-	]);
+		]
+	);
+	for (const [, options] of requests) {
+		assert.equal(options.method, 'HEAD');
+		assert.ok(options.signal instanceof AbortSignal, 'every request carries an abort deadline');
+	}
+});
+
+test('a hung request times out into a warning, not a failure', async () => {
+	const warnings = [];
+	const status = await checkErrorDocsLockstep(['SYNC101'], {
+		timeoutMs: 5,
+		fetchImpl: (url, { signal }) =>
+			new Promise((resolve, reject) => {
+				signal.addEventListener('abort', () => reject(signal.reason));
+			}),
+		warn: (message) => warnings.push(message),
+	});
+
+	assert.equal(status, 0);
+	assert.equal(warnings.length, 1);
+	assert.match(warnings[0], /SYNC101/);
 });
 
 test('reports every missing page and exits one', async () => {

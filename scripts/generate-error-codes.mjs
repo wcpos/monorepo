@@ -25,6 +25,20 @@ const RETRY_POLICY_COPY = {
 	'after-change': 'Retry after making the change above; retrying without it will fail the same way.',
 	never: 'Do not retry — the result will not change.',
 };
+// A blanket "the result will not change" is dangerously wrong when the outcome
+// is unknown or money may have moved — there a blind retry can duplicate a
+// charge or an order, and the right instruction is verify-first.
+const RETRY_NEVER_VERIFY_COPY =
+	'Do not retry until you have confirmed what actually happened — a blind retry can create a duplicate charge or order.';
+function retryPolicySentence(entry) {
+	if (
+		entry.retryPolicy === 'never' &&
+		(entry.dataSafety === 'outcome-unknown' || entry.dataSafety === 'money-moved')
+	) {
+		return RETRY_NEVER_VERIFY_COPY;
+	}
+	return RETRY_POLICY_COPY[entry.retryPolicy];
+}
 const DATA_SAFETY_COPY = {
 	'no-impact': 'No order or product data is affected.',
 	'local-only': 'The change is saved on this device but has not reached your store.',
@@ -81,6 +95,11 @@ function validateRegistry(registry) {
 		}
 		if (!new RegExp(`^${entry.domain}\\d{3}$`).test(entry.code)) {
 			throw new Error(`Code ${entry.code} does not match domain ${entry.domain}`);
+		}
+		for (const [field, value] of Object.entries(entry)) {
+			if (typeof value === 'string' && /[\r\n\t]/.test(value)) {
+				throw new Error(`Entry ${entry.code ?? index} field ${field} contains control characters`);
+			}
 		}
 		if (codes.has(entry.code)) throw new Error(`Duplicate code: ${entry.code}`);
 		if (symbols.has(entry.symbol)) throw new Error(`Duplicate symbol: ${entry.symbol}`);
@@ -165,7 +184,7 @@ ${entry.docsBody}
 
 ## What to do {#what-to-do}
 
-${SAFE_ACTION_COPY[entry.safeAction]} ${RETRY_POLICY_COPY[entry.retryPolicy]}
+${SAFE_ACTION_COPY[entry.safeAction]} ${retryPolicySentence(entry)}
 
 ## Your data {#your-data}
 
