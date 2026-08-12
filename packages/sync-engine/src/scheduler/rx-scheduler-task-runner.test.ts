@@ -1083,3 +1083,182 @@ describe('runPersistedSchedulerTasks', () => {
 		expect(repository.completeOrRequeue).not.toHaveBeenCalled();
 	});
 });
+
+describe('lease heartbeat during a slow fetch', () => {
+	// The livelock this pins (2026-08-12 HAR, dev-next): one page fetch on a starved server
+	// took as long as the whole 30s lease. Between-page renewal never got a turn, a rival
+	// drain claimed the row mid-fetch, both owners walked the same window concurrently, and
+	// the loser's completion CAS failed — so the task never retired and the walks repeated,
+	// keeping the server pinned. The heartbeat renews DURING the fetch, so a lease expiry
+	// once again means its owner is actually gone.
+
+	/** A CAS repository over a real row map, so rival runners contend like RxDB revisions. */
+	function casRepository(initial: PersistedSchedulerTaskState[]) {
+		const rows = new Map(initial.map((row) => [row.taskId, row]));
+		const matches = (expected: PersistedSchedulerTaskState): boolean => {
+			const current = rows.get(expected.taskId);
+			return current !== undefined && JSON.stringify(current) === JSON.stringify(expected);
+		};
+		return {
+			rows,
+			readRunnable: vi.fn(async (nowMs: number) =>
+				[...rows.values()].filter(
+					(row) =>
+						row.status === 'queued' ||
+						(row.status === 'failed' && (row.retryAfterMs ?? 0) <= nowMs) ||
+						(row.status === 'in-flight' && (row.claimedUntilMs ?? 0) <= nowMs)
+				)
+			),
+			claim: vi.fn(
+				async (expected: PersistedSchedulerTaskState, next: PersistedSchedulerTaskState) => {
+					if (!matches(expected)) return false;
+					rows.set(next.taskId, next);
+					return true;
+				}
+			),
+			completeOrRequeue: vi.fn(
+				async (expected: PersistedSchedulerTaskState, completed: PersistedSchedulerTaskState) => {
+					if (!matches(expected)) return 'claim-lost' as const;
+					rows.set(completed.taskId, completed);
+					return 'completed' as const;
+				}
+			),
+			markFailed: vi.fn(
+				async (expected: PersistedSchedulerTaskState, failed: PersistedSchedulerTaskState) => {
+					if (!matches(expected)) return false;
+					rows.set(failed.taskId, failed);
+					return true;
+				}
+			),
+		};
+	}
+
+	function runnerInput(ownerId: string) {
+		return {
+			ownerId,
+			nowMs: Date.now(),
+			getNowMs: () => Date.now(),
+			leaseForMs: 30_000,
+			retryAfterMs: 5_000,
+		};
+	}
+
+	function queuedRow(overrides: Partial<PersistedSchedulerTaskState> = {}) {
+		return state({
+			taskId: 'products:browse:windowed',
+			collection: 'products',
+			queryKey: 'products:browse',
+			status: 'queued',
+			ownerId: null,
+			claimedUntilMs: null,
+			retryAfterMs: null,
+			attempt: 0,
+			...overrides,
+		});
+	}
+
+	it('keeps the claim fresh while one fetch outlives the lease, so a rival drain cannot steal it', async () => {
+		vi.useFakeTimers();
+		try {
+			const row = queuedRow();
+			const repository = casRepository([row]);
+			const fetcher = vi.fn(
+				(task: { id: string }) =>
+					new Promise<{
+						taskId: string;
+						documentCount: number;
+						requestCount: number;
+						completed: boolean;
+					}>((resolve) =>
+						setTimeout(
+							() =>
+								resolve({ taskId: task.id, documentCount: 25, requestCount: 1, completed: true }),
+							45_000
+						)
+					)
+			);
+			const run = runPersistedSchedulerTasks({ ...runnerInput('tab-a'), repository, fetcher });
+
+			// 35s in: the initial 30s lease has lapsed by wall clock; only in-fetch
+			// heartbeats can have kept the row claimed.
+			await vi.advanceTimersByTimeAsync(35_000);
+			const rivalFetcher = vi.fn(async (task: { id: string }) => ({
+				taskId: task.id,
+				documentCount: 0,
+				requestCount: 1,
+				completed: true,
+			}));
+			const rival = await runPersistedSchedulerTasks({
+				...runnerInput('tab-b'),
+				repository,
+				fetcher: rivalFetcher,
+			});
+			expect(rival.scanned).toBe(0);
+			expect(rivalFetcher).not.toHaveBeenCalled();
+
+			await vi.advanceTimersByTimeAsync(10_000);
+			const result = await run;
+			expect(result).toMatchObject({ succeeded: 1, completionLost: 0, renewalLost: 0 });
+			expect(repository.rows.get(row.taskId)).toMatchObject({ status: 'completed', ownerId: null });
+			expect(fetcher).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('stops as renewal-lost — never contesting completion — when the claim is taken mid-fetch', async () => {
+		vi.useFakeTimers();
+		try {
+			const row = queuedRow({ mode: 'greedy' });
+			const repository = casRepository([row]);
+			let resolveFetch:
+				| ((result: {
+						taskId: string;
+						documentCount: number;
+						requestCount: number;
+						completed: boolean;
+				  }) => void)
+				| undefined;
+			const fetcher = vi.fn(
+				() =>
+					new Promise<{
+						taskId: string;
+						documentCount: number;
+						requestCount: number;
+						completed: boolean;
+					}>((resolve) => {
+						resolveFetch = resolve;
+					})
+			);
+			const run = runPersistedSchedulerTasks({ ...runnerInput('tab-a'), repository, fetcher });
+			await vi.advanceTimersByTimeAsync(5_000);
+			expect(resolveFetch).toBeDefined();
+
+			// A rival's claim CAS won during a beat gap (its clock saw the lease lapse).
+			const stolen = {
+				...repository.rows.get(row.taskId)!,
+				ownerId: 'tab-b',
+				claimedUntilMs: Date.now() + 30_000,
+				updatedAtMs: Date.now(),
+			};
+			repository.rows.set(row.taskId, stolen);
+
+			// The next heartbeat discovers the loss …
+			await vi.advanceTimersByTimeAsync(10_000);
+			// … and the fetch that eventually lands must not walk on or contest completion.
+			resolveFetch!({ taskId: row.taskId, documentCount: 25, requestCount: 1, completed: true });
+			const result = await run;
+
+			expect(result).toMatchObject({ renewalLost: 1, completionLost: 0, succeeded: 0, failed: 0 });
+			expect(result.tasks).toEqual([
+				expect.objectContaining({ kind: 'renewal-lost', documents: 25, requests: 1 }),
+			]);
+			expect(repository.completeOrRequeue).not.toHaveBeenCalled();
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			// The thief's row is exactly as it left it — the loser wrote nothing after losing.
+			expect(repository.rows.get(row.taskId)).toEqual(stolen);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});

@@ -153,7 +153,7 @@ export type MaintenanceLanes = {
 
 type MaintenanceLaneBodyReport = {
 	summary: string | null;
-	level?: 'info' | 'error';
+	level?: 'info' | 'warn' | 'error';
 	status?: 'skipped';
 	reason?: string;
 };
@@ -353,15 +353,19 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.failureLost > 0 ||
 			result.renewalLost > 0;
 		if (!hasActivity) return { summary: null };
+		// Only an actual fetch failure is an ERROR. The *-lost kinds mean another owner
+		// took the row mid-flight — a contention release, routine on a slow server, and
+		// logging them red put "could not load" rows in front of cashiers for drains
+		// that lost a benign race (2026-08-12 HAR). They stay visible as warnings.
+		const drainLevel =
+			result.failed > 0 || result.failureLost > 0
+				? 'error'
+				: result.completionLost > 0 || result.renewalLost > 0
+					? 'warn'
+					: 'info';
 		deps.diagnostics({
 			type: 'queue.scheduler.drain',
-			level:
-				result.failed > 0 ||
-				result.completionLost > 0 ||
-				result.failureLost > 0 ||
-				result.renewalLost > 0
-					? 'error'
-					: 'info',
+			level: drainLevel,
 			fields: {
 				scanned: result.scanned,
 				succeeded: result.succeeded,
@@ -375,13 +379,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			},
 		});
 		return {
-			level:
-				result.failed > 0 ||
-				result.completionLost > 0 ||
-				result.failureLost > 0 ||
-				result.renewalLost > 0
-					? 'error'
-					: 'info',
+			level: drainLevel,
 			summary: `Scheduler drain: ${result.succeeded} succeeded, ${result.failed} failed, ${result.totalRequests} requests, ${result.totalDocuments} documents`,
 		};
 	});
