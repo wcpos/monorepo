@@ -131,6 +131,7 @@ describe('RowDetail', () => {
 			)
 		).not.toBeNull();
 		expect(screen.getAllByText('Contact support and include this code.')).toHaveLength(2);
+		expect(screen.queryByText('Repair from Store health → Database.')).toBeNull();
 	});
 
 	it('directs SYNC311 users to support without telling them to reset the collection', () => {
