@@ -13,9 +13,12 @@ import type { LogRow } from './logs-logic';
 const mockT = createTestT();
 const mockWriteText = jest.fn().mockResolvedValue(undefined);
 
+const mockOpenURL = jest.fn().mockResolvedValue(undefined);
+
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
 	Share: { share: jest.fn() },
+	Linking: { openURL: (url: string) => mockOpenURL(url) },
 	View: ({ children, testID }: React.PropsWithChildren<{ testID?: string }>) => (
 		<div data-testid={testID}>{children}</div>
 	),
@@ -36,6 +39,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -88,6 +92,15 @@ beforeEach(() => {
 });
 
 describe('RowDetail', () => {
+	it('links a coded error row to its docs page', () => {
+		const codedRow: LogRow = { ...row, code: 'SYNC101', level: 'error' };
+		render(<RowDetail row={codedRow} kind="error" title="Local save failed" />);
+
+		fireEvent.click(screen.getByTestId('logs-learn-more-SYNC101'));
+
+		expect(mockOpenURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/SYNC101');
+	});
+
 	it('leads a quiet row with its translated event description', () => {
 		render(<RowDetail row={row} kind="sync" title="Saved updates from your store" />);
 
