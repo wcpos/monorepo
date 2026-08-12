@@ -20,13 +20,24 @@ interface Props {
 }
 
 export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
+	const [useLegacyReachabilityURL, setUseLegacyReachabilityURL] = React.useState(false);
+
 	const config = React.useMemo(
 		() => ({
-			reachabilityUrl: wpAPIURL,
-			reachabilityTest: async (response: Response) => response.status === 200,
+			reachabilityUrl: useLegacyReachabilityURL
+				? wpAPIURL
+				: `${wpAPIURL.replace(/\/$/, '')}/wcpos/v2/ping`,
+			reachabilityTest: async (response: Response) => {
+				if (!useLegacyReachabilityURL && response.status === 404) {
+					setUseLegacyReachabilityURL(true);
+					return true;
+				}
+
+				return response.status === 200;
+			},
 			reachabilityRequestTimeout: 60 * 1000, // 60s
 		}),
-		[wpAPIURL]
+		[useLegacyReachabilityURL, wpAPIURL]
 	);
 
 	const { netInfo } = useNetInfoInstance(false, config);
