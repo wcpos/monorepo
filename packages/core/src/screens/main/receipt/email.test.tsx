@@ -222,6 +222,14 @@ describe('EmailForm', () => {
 		render(<EmailForm order={order} />);
 		await send();
 
-		expect(mockLoggerError).toHaveBeenCalled();
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'Failed to send receipt email',
+			expect.objectContaining({
+				context: expect.objectContaining({
+					errorCode: 'PRINT311',
+					blockCode: 'preflight-offline',
+				}),
+			})
+		);
 	});
 });

@@ -23,7 +23,7 @@ Always use namespace imports for React hooks: `React.useState`, `React.useRef`, 
 ### Logging
 - No `console.log`; use `import { log } from '@wcpos/utils/logger'`.
 - Methods: `log.debug()`, `log.info()`, `log.warn()`, `log.error()`, `log.success()`.
-- Error codes: `import { ERROR_CODES } from '@wcpos/utils/logger/error-codes'`.
+- Error codes: `import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated'`.
 
 ### TypeScript
 - No `any`. Use strict types and generics.

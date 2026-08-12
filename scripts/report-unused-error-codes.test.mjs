@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { scanErrorCodeUsage } from './report-unused-error-codes.mjs';
 
-test('counts code literals and generated symbols while excluding non-source files', async () => {
+test('counts runtime code literals and generated symbols while excluding generated sources', async () => {
 	const root = await mkdtemp(path.join(tmpdir(), 'unused-error-codes-'));
 
 	try {
@@ -14,7 +14,7 @@ test('counts code literals and generated symbols while excluding non-source file
 			mkdir(path.join(root, 'packages/example/src/__tests__'), {
 				recursive: true,
 			}),
-			mkdir(path.join(root, 'packages/utils/src/logger'), { recursive: true }),
+			mkdir(path.join(root, 'packages/utils/src/logger/generated'), { recursive: true }),
 			mkdir(path.join(root, 'apps/main/e2e'), { recursive: true }),
 		]);
 		await Promise.all([
@@ -35,8 +35,12 @@ test('counts code literals and generated symbols while excluding non-source file
 				'const ignored = ERROR_CODES.AUTH_FAILED;\n'
 			),
 			writeFile(
-				path.join(root, 'packages/utils/src/logger/internal.ts'),
-				"const ignored = 'AUTH101';\n"
+				path.join(root, 'packages/utils/src/logger/index.ts'),
+				"const runtimeFallback = 'AUTH101';\n"
+			),
+			writeFile(
+				path.join(root, 'packages/utils/src/logger/generated/error-codes.generated.ts'),
+				"const catalogueEntry = 'AUTH101';\n"
 			),
 			writeFile(
 				path.join(root, 'apps/main/e2e/flow.ts'),
@@ -53,7 +57,7 @@ test('counts code literals and generated symbols while excluding non-source file
 			root
 		);
 
-		assert.deepEqual(Object.fromEntries(counts), { SYNC101: 3, AUTH101: 0 });
+		assert.deepEqual(Object.fromEntries(counts), { SYNC101: 3, AUTH101: 1 });
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

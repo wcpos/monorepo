@@ -11,7 +11,12 @@ describe('classifyEmailSendError', () => {
 				blockCode: 'preflight-offline',
 			})
 		);
-		expect(failure).toMatchObject({ kind: 'connectivity', code: 'preflight-offline' });
+		expect(failure).toMatchObject({
+			kind: 'connectivity',
+			blockCode: 'preflight-offline',
+			attempted: false,
+		});
+		expect(failure.code).toBeUndefined();
 	});
 
 	it('queues when requests are paused for recovery', () => {

@@ -150,6 +150,7 @@ export function EmailForm({ order }: Props) {
 						toast: { text2: failure.reason },
 						context: {
 							errorCode: failure.code ?? ERROR_CODES.RECEIPT_DELIVERY_FAILED,
+							blockCode: failure.blockCode,
 							orderId: orderID,
 							email,
 							status: failure.status,

@@ -488,6 +488,7 @@ async function drainRow(
 				attempts: attemptsAfter,
 				status: failure.status,
 				errorCode: failure.code,
+				blockCode: failure.blockCode,
 				error: failure.reason,
 				exhausted,
 			},
@@ -511,6 +512,7 @@ async function drainRow(
 			orderId: doc.orderId,
 			attempts: attemptsAfter,
 			backoffMs: backoffMs(Math.max(1, attemptsAfter)),
+			blockCode: failure.blockCode,
 			error: failure.reason,
 		},
 	});

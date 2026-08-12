@@ -17,8 +17,10 @@ export interface EmailSendFailure {
 	kind: EmailSendFailureKind;
 	/** Merchant-facing sentence: the server's own words where it gave any. */
 	reason: string;
-	/** Machine code, when the error carries one (`preflight-offline`, `rest_invalid_param`, …). */
+	/** Server or transport code, when the error carries one (`rest_invalid_param`, `ERR_NETWORK`, …). */
 	code?: string;
+	/** Preflight control code, kept separate from registry-backed logger error codes. */
+	blockCode?: string;
 	/** HTTP status, when a response actually arrived. */
 	status?: number;
 	/**
@@ -129,7 +131,7 @@ export function classifyEmailSendError(error: unknown): EmailSendFailure {
 			reason,
 			// The request state manager rejected this before it reached the network.
 			attempted: false,
-			...(blockCode ? { code: blockCode } : {}),
+			...(blockCode ? { blockCode } : {}),
 		};
 	}
 

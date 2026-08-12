@@ -9,7 +9,7 @@ const TEST_FILE = /\.test\.[jt]sx?$/;
 
 async function listSourceFiles(directory, root) {
 	const relative = path.relative(root, directory);
-	if (relative === path.join('packages', 'utils', 'src', 'logger')) return [];
+	if (relative === path.join('packages', 'utils', 'src', 'logger', 'generated')) return [];
 
 	const entries = await readdir(directory, { withFileTypes: true });
 	const files = await Promise.all(
