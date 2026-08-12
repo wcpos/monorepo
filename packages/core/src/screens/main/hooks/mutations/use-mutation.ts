@@ -18,7 +18,7 @@ import {
 	type WriteableCollection,
 } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { findEngineResident, insertEngineResident, useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
@@ -67,7 +67,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 					collectionName,
 					endpoint,
 					operation: 'mutation',

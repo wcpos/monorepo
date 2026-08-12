@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { buildEnrichedProductCategories } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
@@ -244,7 +244,7 @@ export const useAddCoupon = () => {
 						showToast: true,
 						saveToDb: true,
 						context: {
-							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							errorCode: ERROR_CODES.CART_UPDATE_FAILED,
 							error: error instanceof Error ? error.message : String(error),
 						},
 					}

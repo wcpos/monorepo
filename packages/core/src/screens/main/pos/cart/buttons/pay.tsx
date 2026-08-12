@@ -6,7 +6,7 @@ import { isRxDocument } from 'rxdb';
 
 import { Button } from '@wcpos/components/button';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
@@ -79,7 +79,7 @@ export function PayButton() {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					errorCode: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 					error: errorMessage,
 				},
 			});

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -165,24 +165,24 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				return siteDoc.getLatest();
 			} catch (err: unknown) {
 				// Determine error type and code
-				let errorCode: ErrorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
+				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED; // Default for DB operations
 
 				if (err instanceof Error && err.name === 'ValidationError') {
-					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+					errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 				} else if (err instanceof Error && err.name === 'RxError') {
 					// Check for specific RxDB error codes
 					switch ((err as Error & { code?: string }).code) {
 						case 'RX1':
-							errorCode = ERROR_CODES.DUPLICATE_RECORD;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						case 'RX2':
-							errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						case 'RX3':
-							errorCode = ERROR_CODES.INVALID_DATA_TYPE;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 							break;
 						default:
-							errorCode = ERROR_CODES.TRANSACTION_FAILED;
+							errorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED;
 					}
 				}
 
@@ -210,7 +210,7 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				const errorMsg = t('auth.url_is_required');
 				siteLogger.error(errorMsg, {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
+					context: { errorCode: ERROR_CODES.STORE_URL_INVALID },
 				});
 				setError(errorMsg);
 				return null;

@@ -31,7 +31,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	calculateLineItemRefund,
@@ -387,7 +387,7 @@ export function RefundOrderForm({ order }: Props) {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					errorCode: ERROR_CODES.PAYMENT_UNEXPECTED,
 					orderId: order.id,
 					error: err instanceof Error ? err.message : String(err),
 				},

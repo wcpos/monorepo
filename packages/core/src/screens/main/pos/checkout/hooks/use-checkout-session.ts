@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import {
@@ -275,7 +275,7 @@ export function useCheckoutSession(order: OrderDocument) {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
+					errorCode: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
 					orderId: order.id,
 					gatewayId: resolvedGateway?.id,
 				},

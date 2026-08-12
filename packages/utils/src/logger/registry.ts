@@ -1,4 +1,4 @@
-import { ERROR_CODES } from './error-codes';
+import { ERROR_CATALOGUE } from './generated/error-codes.generated';
 
 export const LOG_DOMAINS = [
 	'sync',
@@ -21,22 +21,14 @@ export type CodeRegistryEntry = {
 	symbol: string;
 	domain: LogDomain;
 	severity: 'debug' | 'info' | 'warn' | 'error';
-	deprecated?: boolean;
 };
 
-function legacyDomain(code: string): LogDomain {
-	if (code.startsWith('DB')) return 'db';
-	if (code.startsWith('PY')) return 'payment';
-	return 'client';
-}
-
-export const CODE_REGISTRY: CodeRegistryEntry[] = Object.entries(ERROR_CODES).map(
-	([symbol, code]) => ({
+export const CODE_REGISTRY: CodeRegistryEntry[] = Object.values(ERROR_CATALOGUE).map(
+	({ code, symbol, domain, severity }) => ({
 		code,
 		symbol,
-		domain: legacyDomain(code),
-		severity: 'error',
-		deprecated: true,
+		domain: domain.toLowerCase() as LogDomain,
+		severity,
 	})
 );
 

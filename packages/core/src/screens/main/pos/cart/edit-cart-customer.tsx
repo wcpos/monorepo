@@ -14,7 +14,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRxDocument, useQueryRuntime, wrapEngineDocument } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
@@ -119,7 +119,7 @@ export function EditCartCustomerForm() {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						customerId: wooCustomerId,
 					},
 				});
@@ -150,7 +150,7 @@ export function EditCartCustomerForm() {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 					customerId: wooCustomerId,
 					error: errorMessage,
 				},

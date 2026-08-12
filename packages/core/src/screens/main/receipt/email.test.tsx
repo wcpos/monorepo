@@ -216,12 +216,20 @@ describe('EmailForm', () => {
 		mockPost.mockRejectedValue(
 			Object.assign(new Error('No internet connection'), {
 				isPreFlightBlocked: true,
-				errorCode: 'API01007',
+				blockCode: 'preflight-offline',
 			})
 		);
 		render(<EmailForm order={order} />);
 		await send();
 
-		expect(mockLoggerError).toHaveBeenCalled();
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'Failed to send receipt email',
+			expect.objectContaining({
+				context: expect.objectContaining({
+					errorCode: 'PRINT311',
+					blockCode: 'preflight-offline',
+				}),
+			})
+		);
 	});
 });

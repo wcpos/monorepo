@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 
@@ -157,7 +157,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 				authTestLogger.error(`Authorization testing failed: ${errorMessage}`, {
 					showToast: true,
 					context: {
-						errorCode: ERROR_CODES.INVALID_CONFIGURATION,
+						errorCode: ERROR_CODES.AUTH_UNEXPECTED,
 					},
 				});
 				return null;

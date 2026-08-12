@@ -51,7 +51,19 @@ export type ErrorCode =
 	| 'CHECKOUT401'
 	| 'PRODUCT411'
 	| 'CLIENT111'
-	| 'CLIENT121';
+	| 'CLIENT121'
+	| 'AUTH111'
+	| 'AUTH121'
+	| 'AUTH321'
+	| 'AUTH411'
+	| 'SYNC151'
+	| 'SYNC161'
+	| 'SYNC171'
+	| 'CHECKOUT111'
+	| 'PRODUCT321'
+	| 'PRODUCT421'
+	| 'PRINT311'
+	| 'CLIENT131';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
@@ -841,6 +853,188 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence: 'monorepo#1137 inventory: engine.write-leader.degraded',
 	},
+	AUTH111: {
+		code: 'AUTH111',
+		symbol: 'CREDENTIALS_REJECTED',
+		domain: 'AUTH',
+		severity: 'warn',
+		safeAction: 'retry-after-edit',
+		retryPolicy: 'manual',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: 'The store did not accept the sign-in credentials.',
+		docsBody:
+			'Re-enter the username and password, or reset the password in WordPress if it keeps failing. No order data is affected.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	AUTH121: {
+		code: 'AUTH121',
+		symbol: 'SIGNED_IN_AS_WRONG_USER',
+		domain: 'AUTH',
+		severity: 'error',
+		safeAction: 'reconfigure',
+		retryPolicy: 'manual',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: 'The signed-in store account does not match the cashier on this till.',
+		docsBody:
+			"Each cashier keeps their own till data, so working under another account can misfile orders. Sign out, then sign in with the cashier's own account.",
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	AUTH321: {
+		code: 'AUTH321',
+		symbol: 'WOOCOMMERCE_MISSING',
+		domain: 'AUTH',
+		severity: 'error',
+		safeAction: 'reconfigure',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'site-admin',
+		summary: 'WooCommerce is not active on this site, so WCPOS cannot connect.',
+		docsBody:
+			'WCPOS requires the WooCommerce plugin. Ask the site administrator to install or reactivate WooCommerce, then connect again.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	AUTH411: {
+		code: 'AUTH411',
+		symbol: 'STORE_URL_INVALID',
+		domain: 'AUTH',
+		severity: 'error',
+		safeAction: 'retry-after-edit',
+		retryPolicy: 'manual',
+		dataSafety: 'no-impact',
+		escalation: 'none',
+		summary: 'The store address is missing or not a valid URL.',
+		docsBody:
+			"Check the address for typos and include the full https:// URL of the store's WordPress site, then try again.",
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	SYNC151: {
+		code: 'SYNC151',
+		symbol: 'STORE_RESPONSE_MALFORMED',
+		domain: 'SYNC',
+		severity: 'warn',
+		safeAction: 'continue',
+		retryPolicy: 'automatic',
+		dataSafety: 'no-impact',
+		escalation: 'site-admin',
+		summary: 'Your store sent a malformed response that WCPOS had to repair before reading.',
+		docsBody:
+			"This usually means a plugin or PHP notice is printing extra output into store responses. WCPOS recovered this one, but repairs are not guaranteed — ask the site administrator to check the site's error log.",
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	SYNC161: {
+		code: 'SYNC161',
+		symbol: 'LOCAL_DB_UNAVAILABLE',
+		domain: 'SYNC',
+		severity: 'error',
+		safeAction: 'repair-local',
+		retryPolicy: 'manual',
+		dataSafety: 'data-at-risk',
+		escalation: 'support-with-export',
+		summary:
+			'The local database on this device stopped responding, so actions that need it are paused.',
+		docsBody:
+			'Restart WCPOS to reconnect the local database. Unsaved changes on this device may not have been written; check recent orders after restarting. If it keeps happening, export diagnostics and contact support.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	SYNC171: {
+		code: 'SYNC171',
+		symbol: 'LOCAL_DB_SETUP_FAILED',
+		domain: 'SYNC',
+		severity: 'error',
+		safeAction: 'repair-local',
+		retryPolicy: 'manual',
+		dataSafety: 'local-only',
+		escalation: 'support-with-export',
+		summary: 'A local database on this device could not be created or removed.',
+		docsBody:
+			'Restart WCPOS and try again. If it keeps failing, the device may be low on storage or the browser profile may be restricting storage; free up space, then contact support if it persists.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	CHECKOUT111: {
+		code: 'CHECKOUT111',
+		symbol: 'CART_UPDATE_FAILED',
+		domain: 'CHECKOUT',
+		severity: 'error',
+		safeAction: 'retry',
+		retryPolicy: 'manual',
+		dataSafety: 'order-safe',
+		escalation: 'support-with-export',
+		summary: 'This change could not be applied to the cart, which is unchanged.',
+		docsBody:
+			'The item, fee, shipping line, or coupon was not added and nothing was removed. Try the action again; if it keeps failing, export diagnostics and contact support.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	PRODUCT321: {
+		code: 'PRODUCT321',
+		symbol: 'BARCODE_AMBIGUOUS',
+		domain: 'PRODUCT',
+		severity: 'warn',
+		safeAction: 'verify-first',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'store-admin',
+		summary: 'More than one product matches this barcode.',
+		docsBody:
+			'WCPOS cannot pick between them safely, so nothing was added. Search for the product by name, and give each product a unique barcode in the store to fix the clash.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	PRODUCT421: {
+		code: 'PRODUCT421',
+		symbol: 'VARIABLE_PRICE_META_INVALID',
+		domain: 'PRODUCT',
+		severity: 'warn',
+		safeAction: 'verify-first',
+		retryPolicy: 'after-change',
+		dataSafety: 'no-impact',
+		escalation: 'store-admin',
+		summary:
+			"This product's variation price data could not be read, so displayed prices may be wrong or missing.",
+		docsBody:
+			'Re-save the product in WooCommerce to rebuild its price data, or contact support if many products show this.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	PRINT311: {
+		code: 'PRINT311',
+		symbol: 'RECEIPT_DELIVERY_FAILED',
+		domain: 'PRINT',
+		severity: 'error',
+		safeAction: 'retry',
+		retryPolicy: 'manual',
+		dataSafety: 'order-safe',
+		escalation: 'none',
+		summary: 'This receipt could not be emailed or downloaded.',
+		docsBody:
+			"The sale itself is unaffected. Check the email address and the device's connection, then try again from the order's receipt screen.",
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
+	CLIENT131: {
+		code: 'CLIENT131',
+		symbol: 'REQUEST_QUEUE_OVERFLOW',
+		domain: 'CLIENT',
+		severity: 'error',
+		safeAction: 'contact-support',
+		retryPolicy: 'manual',
+		dataSafety: 'no-impact',
+		escalation: 'support-with-export',
+		summary: 'WCPOS queued too many requests at once and dropped some.',
+		docsBody:
+			'This is usually an app defect rather than a store problem. Restart WCPOS; if the code returns, export diagnostics and contact support.',
+		introducedIn: '1.10.0',
+		evidence: 'monorepo#1151 legacy-table migration',
+	},
 };
 
 export const ERROR_CODES = {
@@ -895,4 +1089,16 @@ export const ERROR_CODES = {
 	BARCODE_CONFIG_UNAVAILABLE: 'PRODUCT411',
 	APP_START_SLOW: 'CLIENT111',
 	MULTI_TAB_LIMITED: 'CLIENT121',
+	CREDENTIALS_REJECTED: 'AUTH111',
+	SIGNED_IN_AS_WRONG_USER: 'AUTH121',
+	WOOCOMMERCE_MISSING: 'AUTH321',
+	STORE_URL_INVALID: 'AUTH411',
+	STORE_RESPONSE_MALFORMED: 'SYNC151',
+	LOCAL_DB_UNAVAILABLE: 'SYNC161',
+	LOCAL_DB_SETUP_FAILED: 'SYNC171',
+	CART_UPDATE_FAILED: 'CHECKOUT111',
+	BARCODE_AMBIGUOUS: 'PRODUCT321',
+	VARIABLE_PRICE_META_INVALID: 'PRODUCT421',
+	RECEIPT_DELIVERY_FAILED: 'PRINT311',
+	REQUEST_QUEUE_OVERFLOW: 'CLIENT131',
 } as const satisfies Record<string, ErrorCode>;

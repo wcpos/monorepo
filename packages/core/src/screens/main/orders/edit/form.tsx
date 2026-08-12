@@ -22,7 +22,7 @@ import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
@@ -176,7 +176,7 @@ export function EditOrderForm({ order }: Props) {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						orderId: order.id,
 						error: errorMessage,
 					},
@@ -221,7 +221,9 @@ export function EditOrderForm({ order }: Props) {
 				};
 
 				form.setValue('billing', billing, { shouldValidate: true });
-				form.setValue('shipping', customerData.shipping, { shouldValidate: true });
+				form.setValue('shipping', customerData.shipping, {
+					shouldValidate: true,
+				});
 				// Snapshot the customer's tax IDs onto the order at attach time
 				// (mirrors `transformCustomerJSONToOrderJSON`). Empty array
 				// when the customer has none — overrides the prior snapshot.
@@ -234,7 +236,7 @@ export function EditOrderForm({ order }: Props) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error('Error fetching customer', {
 					context: {
-						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+						errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 						customerId,
 						error: errorMessage,
 					},
@@ -259,7 +261,7 @@ export function EditOrderForm({ order }: Props) {
 		if (selectedCustomer === null) {
 			mutationLogger.error('Error fetching customer', {
 				context: {
-					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+					errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 					customerId: customerIdToLoad,
 					error: t('orders.customer_not_found'),
 				},

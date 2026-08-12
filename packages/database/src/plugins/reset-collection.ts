@@ -1,7 +1,7 @@
 import { Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	StoreCollections,
@@ -20,7 +20,9 @@ const resetLogger = getLogger(['wcpos', 'db', 'reset']);
 const runResetHook =
 	(hook: (collection: RxCollection) => Promise<void>) => (collection: RxCollection) =>
 		hook(collection).catch((error) =>
-			resetLogger.error('Unhandled collection reset hook failure', { context: { error } })
+			resetLogger.error('Unhandled collection reset hook failure', {
+				context: { error },
+			})
 		);
 
 // Track removal counts for debugging
@@ -135,7 +137,11 @@ export const resetCollectionPlugin: RxPlugin = {
 				const reAddKey = `${database.name}:${collectionName}`;
 				if (pendingReAdditions.has(reAddKey)) {
 					resetLogger.debug('Skipping re-addition - already in progress', {
-						context: { collection: collectionName, database: database.name, reAddKey },
+						context: {
+							collection: collectionName,
+							database: database.name,
+							reAddKey,
+						},
 					});
 					return;
 				}
@@ -199,14 +205,16 @@ export const resetCollectionPlugin: RxPlugin = {
 								showToast: false,
 								saveToDb: true,
 								context: {
-									errorCode: ERROR_CODES.INVALID_CONFIGURATION,
+									errorCode: ERROR_CODES.SCHEMA_MISMATCH,
 									collection: collectionName,
 								},
 							});
 							return;
 						}
 
-						const cols = await database.addCollections({ [collectionName]: schema });
+						const cols = await database.addCollections({
+							[collectionName]: schema,
+						});
 
 						syncReset.next(cols[collectionName]);
 						resetLogger.debug('Sync collection re-added and emitted reset$', {
@@ -219,14 +227,16 @@ export const resetCollectionPlugin: RxPlugin = {
 								showToast: false,
 								saveToDb: true,
 								context: {
-									errorCode: ERROR_CODES.INVALID_CONFIGURATION,
+									errorCode: ERROR_CODES.SCHEMA_MISMATCH,
 									collection: collectionName,
 								},
 							});
 							return;
 						}
 
-						const cols = await database.addCollections({ [collectionName]: schema });
+						const cols = await database.addCollections({
+							[collectionName]: schema,
+						});
 
 						storeReset.next(cols[collectionName]);
 						resetLogger.debug('Store collection re-added and emitted reset$', {
@@ -238,7 +248,7 @@ export const resetCollectionPlugin: RxPlugin = {
 						showToast: true,
 						saveToDb: true,
 						context: {
-							errorCode: ERROR_CODES.DB_UPSERT_FAILED,
+							errorCode: ERROR_CODES.SCHEMA_MISMATCH,
 							collection: collectionName,
 							database: database.name,
 							error: error.message,

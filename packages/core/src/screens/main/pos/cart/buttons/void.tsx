@@ -6,7 +6,7 @@ import { Button } from '@wcpos/components/button';
 import { awaitWriteOutcome, useQueryRuntime, WriteOutcomeError } from '@wcpos/query';
 import { WOO_REST_CANNOT_DELETE } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import { requestServerDelete } from '../../../hooks/mutations/request-server-delete';
@@ -82,7 +82,7 @@ export function VoidButton() {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						orderId: orderJson.uuid,
 						error: err instanceof Error ? err.message : String(err),
 					},
@@ -144,7 +144,7 @@ export function VoidButton() {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
 						orderId: recordId,
 						error: err instanceof Error ? err.message : String(err),
 					},

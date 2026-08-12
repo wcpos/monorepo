@@ -13,7 +13,7 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
@@ -149,7 +149,8 @@ export function EmailForm({ order }: Props) {
 						saveToDb: true,
 						toast: { text2: failure.reason },
 						context: {
-							errorCode: failure.code ?? ERROR_CODES.CONNECTION_REFUSED,
+							errorCode: failure.code ?? ERROR_CODES.RECEIPT_DELIVERY_FAILED,
+							blockCode: failure.blockCode,
 							orderId: orderID,
 							email,
 							status: failure.status,

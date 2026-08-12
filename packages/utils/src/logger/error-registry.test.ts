@@ -27,16 +27,21 @@ const SEED_SYMBOLS = [
 	'AUTH_PLUGIN_CONFLICT',
 	'AUTH_UNEXPECTED',
 	'AUTOPRINT_DID_NOT_START',
+	'BARCODE_AMBIGUOUS',
 	'BARCODE_CONFIG_UNAVAILABLE',
+	'CART_UPDATE_FAILED',
 	'CHECKOUT_EMPTY_RESPONSE',
 	'CHECKOUT_FAILED_CART_SAFE',
 	'CHECKOUT_OUTCOME_UNKNOWN',
 	'CHECKOUT_UNEXPECTED',
+	'CREDENTIALS_REJECTED',
 	'GATEWAY_UNAVAILABLE',
 	'INSUFFICIENT_ROLE',
 	'LICENSE_NOT_ACTIVE_HERE',
 	'LICENSE_UNEXPECTED',
 	'LOCAL_DB_CORRUPTED',
+	'LOCAL_DB_SETUP_FAILED',
+	'LOCAL_DB_UNAVAILABLE',
 	'LOCAL_DB_WRITE_FAILED',
 	'MULTI_TAB_LIMITED',
 	'NATIVE_CRASH',
@@ -50,17 +55,22 @@ const SEED_SYMBOLS = [
 	'PRODUCT_IMAGE_UNAVAILABLE',
 	'PRODUCT_SAVE_FAILED',
 	'PRODUCT_UNEXPECTED',
+	'RECEIPT_DELIVERY_FAILED',
 	'RECORD_CONFLICT',
 	'RECORD_INVALID_FIELD',
 	'RECORD_REJECTED',
+	'REQUEST_QUEUE_OVERFLOW',
 	'REST_ROUTE_MISSING',
 	'SCHEMA_MISMATCH',
 	'SEARCH_NO_RESULTS_REASON',
 	'SESSION_EXPIRED',
+	'SIGNED_IN_AS_WRONG_USER',
 	'SKU_DUPLICATE',
 	'STOCK_STALE',
 	'STORE_RATE_LIMITED',
+	'STORE_RESPONSE_MALFORMED',
 	'STORE_SERVER_ERROR',
+	'STORE_URL_INVALID',
 	'SYNC_BEHIND_HEAD',
 	'SYNC_PARTIAL',
 	'SYNC_TASK_CRASHED',
@@ -71,16 +81,17 @@ const SEED_SYMBOLS = [
 	'TOTALS_DIVERGED',
 	'UNEXPECTED_ERROR',
 	'UPDATER_NOT_AUTHORIZED',
+	'VARIABLE_PRICE_META_INVALID',
 	'VARIATION_ADD_FAILED',
 	'VERSION_SKEW_PRO_DISABLED',
-].sort();
+	'WOOCOMMERCE_MISSING',
+];
 
-const repoRoot = path.resolve(__dirname, '../../../..');
-const generator = path.join(repoRoot, 'scripts/generate-error-codes.mjs');
+const generatorScript = path.resolve(__dirname, '../../../../scripts/generate-error-codes.mjs');
 const generatedDirectory = path.join(__dirname, 'generated');
 
-function runGenerator(outputDirectory: string, registryPath?: string): void {
-	const args = [generator, '--output-dir', outputDirectory];
+function runGenerator(outputDirectory: string, registryPath?: string) {
+	const args = [generatorScript, '--output-dir', outputDirectory];
 	if (registryPath) args.push('--registry', registryPath);
 	execFileSync(process.execPath, args);
 }

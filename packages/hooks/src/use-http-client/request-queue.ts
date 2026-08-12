@@ -1,7 +1,7 @@
 import Bottleneck from 'bottleneck';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { requestStateManager } from './request-state-manager';
 
@@ -22,7 +22,7 @@ globalQueue.on('error', (error) => {
 		showToast: true,
 		saveToDb: true,
 		context: {
-			errorCode: ERROR_CODES.REQUEST_QUEUE_FULL,
+			errorCode: ERROR_CODES.REQUEST_QUEUE_OVERFLOW,
 			error: error instanceof Error ? error.message : String(error),
 		},
 	});

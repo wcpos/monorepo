@@ -9,7 +9,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -164,7 +164,7 @@ export function PaymentWebview({
 						showToast: true,
 						saveToDb: true,
 						context: {
-							errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
+							errorCode: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
 							error: err instanceof Error ? err.message : String(err),
 						},
 					});
@@ -398,7 +398,7 @@ export function PaymentWebview({
 								showToast: true,
 								saveToDb: true,
 								context: {
-									errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
+									errorCode: ERROR_CODES.PAYMENT_UNEXPECTED,
 									payloadData: payload?.data,
 								},
 							});

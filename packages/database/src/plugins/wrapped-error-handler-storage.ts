@@ -1,7 +1,7 @@
 import { BehaviorSubject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { Observable } from 'rxjs';
 import type { RxStorage, RxStorageInstance, RxStorageInstanceCreationParams } from 'rxdb';
@@ -272,7 +272,7 @@ function latchDegradedStorage(
 	storageLogger.error(`Storage degraded for database "${databaseName}" in ${methodName}`, {
 		saveToDb: true,
 		context: {
-			errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+			errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 			databaseName,
 			method: methodName,
 		},
@@ -376,7 +376,7 @@ function handleStorageError(
 		storageLogger.warn(`Write conflict in ${methodName}`, {
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.WRITE_CONFLICT,
+				errorCode: ERROR_CODES.RECORD_CONFLICT,
 				method: methodName,
 			},
 		});
@@ -392,7 +392,7 @@ function handleStorageError(
 		storageLogger.warn(`Schema validation failed in ${methodName}`, {
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.SCHEMA_VALIDATION_FAILED,
+				errorCode: ERROR_CODES.SCHEMA_MISMATCH,
 				method: methodName,
 			},
 		});
@@ -404,7 +404,7 @@ function handleStorageError(
 		storageLogger.warn(`Invalid key in ${methodName}`, {
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.STORAGE_ERROR,
+				errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 				method: methodName,
 			},
 		});
@@ -424,7 +424,7 @@ function handleStorageError(
 			showToast: true,
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.STORAGE_ERROR,
+				errorCode: ERROR_CODES.LOCAL_DB_CORRUPTED,
 				method: methodName,
 			},
 		});
@@ -440,7 +440,7 @@ function handleStorageError(
 			{
 				saveToDb: true,
 				context: {
-					errorCode: workerFailure ? ERROR_CODES.WORKER_CONNECTION_LOST : ERROR_CODES.STORAGE_ERROR,
+					errorCode: workerFailure ? ERROR_CODES.LOCAL_DB_UNAVAILABLE : ERROR_CODES.SYNC_UNEXPECTED,
 					method: methodName,
 					...context,
 					recoveryDocumentId: targetedRecovery?.[1],
@@ -458,7 +458,7 @@ function handleStorageError(
 	storageLogger.error(`Storage error in ${methodName}: ${message}`, {
 		saveToDb: true,
 		context: {
-			errorCode: ERROR_CODES.STORAGE_ERROR,
+			errorCode: ERROR_CODES.SYNC_UNEXPECTED,
 			method: methodName,
 			...context,
 		},
@@ -641,7 +641,7 @@ export function markStorageTerminallyFailed(databaseName: string, reason: string
 		storageLogger.error(`Storage terminally failed for database "${databaseName}": ${reason}`, {
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.STORAGE_ERROR,
+				errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 				databaseName,
 				reason,
 			},

@@ -8,18 +8,23 @@ describe('classifyEmailSendError', () => {
 		const failure = classifyEmailSendError(
 			Object.assign(new Error('No internet connection'), {
 				isPreFlightBlocked: true,
-				errorCode: 'API01007',
+				blockCode: 'preflight-offline',
 			})
 		);
-		expect(failure).toMatchObject({ kind: 'connectivity', code: 'API01007' });
+		expect(failure).toMatchObject({
+			kind: 'connectivity',
+			blockCode: 'preflight-offline',
+			attempted: false,
+		});
+		expect(failure.code).toBeUndefined();
 	});
 
-	it('queues when the website is unreachable', () => {
+	it('queues when requests are paused for recovery', () => {
 		expect(
 			classifyEmailSendError(
-				Object.assign(new Error('Site unavailable'), {
+				Object.assign(new Error('System is recovering - please wait'), {
 					isPreFlightBlocked: true,
-					errorCode: 'API01008',
+					blockCode: 'preflight-recovering',
 				})
 			).kind
 		).toBe('connectivity');
@@ -71,7 +76,7 @@ describe('classifyEmailSendError', () => {
 			classifyEmailSendError(
 				Object.assign(new Error('Please log in to continue'), {
 					isPreFlightBlocked: true,
-					errorCode: 'API02010',
+					blockCode: 'preflight-auth-required',
 				})
 			).kind
 		).toBe('permanent');
@@ -92,7 +97,7 @@ describe('classifyEmailSendError', () => {
 			classifyEmailSendError(
 				Object.assign(new Error('App is in background'), {
 					isPreFlightBlocked: true,
-					errorCode: 'SY02002',
+					blockCode: 'preflight-asleep',
 				})
 			)
 		).toMatchObject({ kind: 'connectivity', attempted: false });

@@ -7,7 +7,7 @@ import {
 	isStorageDegraded,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
 
@@ -87,7 +87,7 @@ export function useStorageMoneyPathGuard() {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+					errorCode: ERROR_CODES.LOCAL_DB_UNAVAILABLE,
 					surface,
 					...context,
 				},

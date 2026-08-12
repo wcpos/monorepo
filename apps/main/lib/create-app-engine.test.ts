@@ -49,7 +49,10 @@ function loadCreateAppEngine(
 	const markStorageTerminallyFailed = jest.fn((_databaseName: string, _reason: string) => true);
 	const forceFreeDatabaseRegistration = jest.fn((_databaseName: string) => true);
 	const getDatabaseEpoch = jest.fn(() => 0);
-	const writeLeaders: { isLeader: jest.Mock<boolean>; dispose: jest.Mock<void> }[] = [];
+	const writeLeaders: {
+		isLeader: jest.Mock<boolean>;
+		dispose: jest.Mock<void>;
+	}[] = [];
 	const electWriteLeader = jest.fn(() => {
 		const leader = { isLeader: jest.fn(() => true), dispose: jest.fn() };
 		writeLeaders.push(leader);
@@ -80,8 +83,12 @@ function loadCreateAppEngine(
 	);
 
 	jest.doMock('@wcpos/sync-engine', () => ({ createRxdbSyncEngine }));
-	jest.doMock('@wcpos/hooks', () => ({ reportNetworkResponse }), { virtual: true });
-	jest.doMock('@wcpos/utils/platform', () => ({ Platform: { isWeb: platformIsWeb } }));
+	jest.doMock('@wcpos/hooks', () => ({ reportNetworkResponse }), {
+		virtual: true,
+	});
+	jest.doMock('@wcpos/utils/platform', () => ({
+		Platform: { isWeb: platformIsWeb },
+	}));
 	jest.doMock('./web-write-leader', () => ({ electWriteLeader }));
 	jest.doMock('@wcpos/database/plugins/wrapped-error-handler-storage', () => ({
 		markStorageTerminallyFailed,
@@ -93,7 +100,11 @@ function loadCreateAppEngine(
 		defaultConfig: { storage: { name: 'test-storage' } },
 	}));
 	jest.doMock('@wcpos/utils/logger', () => ({
-		getLogger: jest.fn(() => ({ info: networkInfo, warn: networkWarn, error: networkError })),
+		getLogger: jest.fn(() => ({
+			info: networkInfo,
+			warn: networkWarn,
+			error: networkError,
+		})),
 		getDatabaseEpoch,
 	}));
 	jest.doMock('./metrics', () => ({
@@ -175,7 +186,10 @@ describe('createAppSyncEngine scope cache', () => {
 			});
 		const { createAppSyncEngine, createRxdbSyncEngine, reportNetworkResponse } =
 			loadCreateAppEngine();
-		createAppSyncEngine({ ...BASE_OPTIONS, refreshAuth: async () => 'refreshed-token' });
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			refreshAuth: async () => 'refreshed-token',
+		});
 		const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 
 		await expect(fetcher?.('https://store.example.test/wp-json/wcpos/v2/products')).rejects.toThrow(
@@ -291,7 +305,10 @@ describe('createAppSyncEngine scope cache', () => {
 			},
 		});
 		expect(networkWarn).toHaveBeenCalledWith('seed failed', {
-			context: expect.objectContaining({ type: 'engine.pos-bootstrap-error', scopeId: 'scope-1' }),
+			context: expect.objectContaining({
+				type: 'engine.pos-bootstrap-error',
+				scopeId: 'scope-1',
+			}),
 			terminal: {
 				operationType: 'sync.startup',
 				outcome: 'failed',
@@ -312,7 +329,10 @@ describe('createAppSyncEngine scope cache', () => {
 		});
 
 		expect(networkError).toHaveBeenCalledWith('HTTP 500', {
-			context: expect.objectContaining({ type: 'push.error', direction: 'push' }),
+			context: expect.objectContaining({
+				type: 'push.error',
+				direction: 'push',
+			}),
 			terminal: { operationType: 'sync.record', outcome: 'failed' },
 		});
 	});
@@ -328,11 +348,19 @@ describe('createAppSyncEngine scope cache', () => {
 
 		// The outgoing engine's initial-open chain settles late: metrics still
 		// tally it, but nothing lands in the incoming store's health log.
-		outgoingDiagnostics?.({ type: 'engine.ready-failed', level: 'error', message: 'late failure' });
+		outgoingDiagnostics?.({
+			type: 'engine.ready-failed',
+			level: 'error',
+			message: 'late failure',
+		});
 		expect(appMetricsObserver).toHaveBeenCalledTimes(1);
 		expect(networkError).not.toHaveBeenCalled();
 
-		incomingDiagnostics?.({ type: 'engine.ready-failed', level: 'error', message: 'live failure' });
+		incomingDiagnostics?.({
+			type: 'engine.ready-failed',
+			level: 'error',
+			message: 'live failure',
+		});
 		expect(networkError).toHaveBeenCalledTimes(1);
 		expect(networkError).toHaveBeenCalledWith('live failure', {
 			context: expect.objectContaining({ type: 'engine.ready-failed' }),
@@ -366,8 +394,14 @@ describe('createAppSyncEngine scope cache', () => {
 		const first = createAppSyncEngine(BASE_OPTIONS);
 		const changedScope = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
 
-		const second = createAppSyncEngine({ ...BASE_OPTIONS, scope: changedScope });
-		const cached = createAppSyncEngine({ ...BASE_OPTIONS, scope: changedScope });
+		const second = createAppSyncEngine({
+			...BASE_OPTIONS,
+			scope: changedScope,
+		});
+		const cached = createAppSyncEngine({
+			...BASE_OPTIONS,
+			scope: changedScope,
+		});
 
 		expect(second).toBe(first);
 		expect(cached).toBe(first);
@@ -445,7 +479,9 @@ describe('createAppSyncEngine scope cache', () => {
 			wpCredentials: { id: 'cashier-1' },
 			store: { id: 'store-2' },
 		});
-		await switchAppEngineScope({ site: { wp_api_url: BASE_OPTIONS.scope.site } });
+		await switchAppEngineScope({
+			site: { wp_api_url: BASE_OPTIONS.scope.site },
+		});
 
 		expect(first.scope.switch).not.toHaveBeenCalled();
 	});
@@ -756,7 +792,7 @@ describe('createAppSyncEngine scope cache', () => {
 			expect.any(String),
 			expect.objectContaining({
 				context: expect.objectContaining({
-					errorCode: 'DB01007',
+					errorCode: 'SYNC999',
 					scopeKey: expect.any(String),
 				}),
 			})
@@ -778,9 +814,15 @@ describe('createAppSyncEngine scope cache', () => {
 			const otherSiteEngine = createAppSyncEngine(OTHER_SITE_OPTIONS);
 			const targetScope = { ...OTHER_SITE_OPTIONS.scope, storeId: 'store-2' };
 
-			const switched = createAppSyncEngine({ ...OTHER_SITE_OPTIONS, scope: targetScope });
+			const switched = createAppSyncEngine({
+				...OTHER_SITE_OPTIONS,
+				scope: targetScope,
+			});
 			await second.scope.switch.mock.results[0]?.value;
-			const cached = createAppSyncEngine({ ...OTHER_SITE_OPTIONS, scope: targetScope });
+			const cached = createAppSyncEngine({
+				...OTHER_SITE_OPTIONS,
+				scope: targetScope,
+			});
 
 			expect(switched).toBe(otherSiteEngine);
 			expect(cached).toBe(otherSiteEngine);
@@ -1062,7 +1104,10 @@ describe('createAppSyncEngine scope cache', () => {
 		];
 		electArgs[1].onUnavailable();
 		expect(appMetricsObserver).toHaveBeenCalledWith(
-			expect.objectContaining({ type: 'engine.write-leader.degraded', level: 'warn' })
+			expect.objectContaining({
+				type: 'engine.write-leader.degraded',
+				level: 'warn',
+			})
 		);
 	});
 });

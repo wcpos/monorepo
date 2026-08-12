@@ -54,13 +54,6 @@ jest.mock('@wcpos/utils/logger', () => ({
 	})),
 }));
 
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		INVALID_CONFIGURATION: 'INVALID_CONFIGURATION',
-		SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-	},
-}));
-
 describe('search plugin', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();

@@ -64,9 +64,23 @@
  */
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 const httpLogger = getLogger(['wcpos', 'http', 'state']);
+
+/**
+ * Machine-readable discriminators for pre-flight blocks. These are control-flow
+ * values consumed by `auth-error-handler` (auth case) and the receipt email
+ * queue's retry classifier — they are NOT registry error codes and must never
+ * be persisted as a log row's `errorCode`.
+ */
+export const PREFLIGHT_BLOCK = {
+	ASLEEP: 'preflight-asleep',
+	OFFLINE: 'preflight-offline',
+	AUTH_REQUIRED: 'preflight-auth-required',
+	RECOVERING: 'preflight-recovering',
+} as const;
+
+export type PreflightBlockCode = (typeof PREFLIGHT_BLOCK)[keyof typeof PREFLIGHT_BLOCK];
 
 /**
  * Result of pre-flight check
@@ -76,8 +90,8 @@ interface CanProceedResult {
 	ok: boolean;
 	/** Human-readable reason if blocked */
 	reason?: string;
-	/** Machine-readable error code if blocked */
-	errorCode?: string;
+	/** Machine-readable block discriminator if blocked */
+	blockCode?: PreflightBlockCode;
 }
 
 /**
@@ -216,7 +230,7 @@ class RequestStateManager {
 			return {
 				ok: false,
 				reason: 'App is in background',
-				errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
+				blockCode: PREFLIGHT_BLOCK.ASLEEP,
 				// Special flag so callers can handle this silently
 				isSleeping: true,
 			} as CanProceedResult & { isSleeping: boolean };
@@ -226,7 +240,7 @@ class RequestStateManager {
 			return {
 				ok: false,
 				reason: 'No internet connection',
-				errorCode: ERROR_CODES.DEVICE_OFFLINE,
+				blockCode: PREFLIGHT_BLOCK.OFFLINE,
 			};
 		}
 
@@ -234,7 +248,7 @@ class RequestStateManager {
 			return {
 				ok: false,
 				reason: 'Please log in to continue',
-				errorCode: ERROR_CODES.AUTH_REQUIRED,
+				blockCode: PREFLIGHT_BLOCK.AUTH_REQUIRED,
 			};
 		}
 
@@ -243,7 +257,7 @@ class RequestStateManager {
 			return {
 				ok: false,
 				reason: 'System is recovering - please wait',
-				errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
+				blockCode: PREFLIGHT_BLOCK.RECOVERING,
 			};
 		}
 

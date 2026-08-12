@@ -1,4 +1,4 @@
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { PREFLIGHT_BLOCK } from '@wcpos/hooks/use-http-client';
 
 /**
  * Why a receipt email send failed, in the only two flavours the queue cares
@@ -17,8 +17,10 @@ export interface EmailSendFailure {
 	kind: EmailSendFailureKind;
 	/** Merchant-facing sentence: the server's own words where it gave any. */
 	reason: string;
-	/** Machine code, when the error carries one (`API01007`, `rest_invalid_param`, …). */
+	/** Server or transport code, when the error carries one (`rest_invalid_param`, `ERR_NETWORK`, …). */
 	code?: string;
+	/** Preflight control code, kept separate from registry-backed logger error codes. */
+	blockCode?: string;
 	/** HTTP status, when a response actually arrived. */
 	status?: number;
 	/**
@@ -44,15 +46,13 @@ const RETRYABLE_STATUSES = new Set([408, 423, 425, 429]);
 
 /**
  * Pre-flight blocks (`request-state-manager`) that mean the transport is down.
- * `AUTH_REQUIRED` is deliberately NOT here: it needs a human to log in, and a
- * silent queue would swallow that.
+ * The auth-required block is deliberately NOT here: it needs a human to log
+ * in, and a silent queue would swallow that.
  */
-const RETRYABLE_PREFLIGHT_CODES = new Set<string>([
-	ERROR_CODES.DEVICE_OFFLINE,
-	ERROR_CODES.SERVICE_UNAVAILABLE,
-	ERROR_CODES.WEBSITE_UNAVAILABLE,
-	ERROR_CODES.CONNECTION_TIMEOUT,
-	ERROR_CODES.NETWORK_UNREACHABLE,
+const RETRYABLE_PREFLIGHT_BLOCKS = new Set<string>([
+	PREFLIGHT_BLOCK.OFFLINE,
+	PREFLIGHT_BLOCK.ASLEEP,
+	PREFLIGHT_BLOCK.RECOVERING,
 ]);
 
 /** Transport-level codes axios attaches when no response ever arrived. */
@@ -76,7 +76,7 @@ type LooseError = {
 	name?: unknown;
 	message?: unknown;
 	code?: unknown;
-	errorCode?: unknown;
+	blockCode?: unknown;
 	isAxiosError?: unknown;
 	isPreFlightBlocked?: unknown;
 	wpMessage?: unknown;
@@ -125,13 +125,13 @@ export function classifyEmailSendError(error: unknown): EmailSendFailure {
 	}
 
 	if (loose.isPreFlightBlocked === true) {
-		const errorCode = asString(loose.errorCode);
+		const blockCode = asString(loose.blockCode);
 		return {
-			kind: errorCode && RETRYABLE_PREFLIGHT_CODES.has(errorCode) ? 'connectivity' : 'permanent',
+			kind: blockCode && RETRYABLE_PREFLIGHT_BLOCKS.has(blockCode) ? 'connectivity' : 'permanent',
 			reason,
 			// The request state manager rejected this before it reached the network.
 			attempted: false,
-			...(errorCode ? { code: errorCode } : {}),
+			...(blockCode ? { blockCode } : {}),
 		};
 	}
 

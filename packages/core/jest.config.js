@@ -22,8 +22,6 @@ module.exports = {
 	setupFilesAfterEnv: ['<rootDir>/jest/setup.js'],
 	moduleNameMapper: {
 		// Mock logger modules (must come before generic @wcpos/utils matcher)
-		'^@wcpos/utils/logger/error-codes$':
-			'<rootDir>/jest/__mocks__/@wcpos/utils/logger/error-codes.js',
 		'^@wcpos/utils/logger$': '<rootDir>/jest/__mocks__/@wcpos/utils/logger.js',
 		// Other mocks
 		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',

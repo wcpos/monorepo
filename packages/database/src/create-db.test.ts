@@ -42,12 +42,6 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => mockLogger,
 }));
 
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		CONNECTION_FAILED: 'CONNECTION_FAILED',
-	},
-}));
-
 describe('create-db', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();

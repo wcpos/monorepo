@@ -1,7 +1,7 @@
 import toNumber from 'lodash/toNumber';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	calculateDefaultAmount,
 	extractFeeLineData,
@@ -100,7 +100,7 @@ export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
 	if (!Array.isArray(metaData)) {
 		posLogger.error('metaData is not an array', {
 			context: {
-				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				errorCode: ERROR_CODES.CHECKOUT_UNEXPECTED,
 				metaData,
 			},
 		});
@@ -133,7 +133,7 @@ export const findByProductVariationID = (
 	if (!Array.isArray(lineItems)) {
 		posLogger.error('lineItems is not an array', {
 			context: {
-				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				errorCode: ERROR_CODES.CHECKOUT_UNEXPECTED,
 				lineItems,
 				productId,
 				variationId,

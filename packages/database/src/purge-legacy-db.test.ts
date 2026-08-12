@@ -51,12 +51,6 @@ jest.mock('@wcpos/utils/logger', () => ({
 	}),
 }));
 
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		TRANSACTION_FAILED: 'TRANSACTION_FAILED',
-	},
-}));
-
 describe('purgeLegacyDatabases native', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();

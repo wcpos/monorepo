@@ -82,7 +82,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			void (async () => {
 				try {
 					await handleLoginSuccess({ params });
-					// Re-auth can be reached after a pre-flight AUTH_REQUIRED block;
+					// Re-auth can be reached after a pre-flight auth-required block;
 					// clear the flag so subsequent requests aren't rejected despite
 					// the newly-saved tokens (mirrors auth-error-handler.ts:203).
 					requestStateManager.setRefreshedToken(params.access_token);

@@ -1,5 +1,5 @@
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 type RxPlugin = import('rxdb').RxPlugin;
 
@@ -52,7 +52,7 @@ const deleteDBPlugin: RxPlugin = {
 						dbLogger.error('Error deleting database', {
 							saveToDb: true,
 							context: {
-								errorCode: ERROR_CODES.TRANSACTION_FAILED,
+								errorCode: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
 								databaseName,
 							},
 						});

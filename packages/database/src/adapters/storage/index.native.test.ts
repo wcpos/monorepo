@@ -1,5 +1,7 @@
 const mockDeleteDirectory = jest.fn();
-const mockGetRxStorageExpoAsync = jest.fn(() => ({ name: 'expo-filesystem-storage' }));
+const mockGetRxStorageExpoAsync = jest.fn(() => ({
+	name: 'expo-filesystem-storage',
+}));
 const mockWithTargetedOpfsRecovery = jest.fn((storage: unknown) => ({
 	name: 'targeted-recovery-storage',
 	storage,
@@ -56,12 +58,6 @@ jest.mock('../../plugins/opfs-targeted-recovery.mjs', () => ({
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => mockLogger,
-}));
-
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		TRANSACTION_FAILED: 'TRANSACTION_FAILED',
-	},
 }));
 
 describe('native storage', () => {

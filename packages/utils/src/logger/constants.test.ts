@@ -9,14 +9,16 @@ describe('logger/constants', () => {
 
 	describe('getErrorCodeDocURL', () => {
 		it('should return the correct URL for an error code', () => {
-			const url = getErrorCodeDocURL('API01001');
-			expect(url).toBe('https://docs.wcpos.com/error-codes/API01001');
+			const url = getErrorCodeDocURL('SYNC101');
+			expect(url).toBe('https://docs.wcpos.com/error-codes/SYNC101');
 		});
 
 		it('should handle different error code formats', () => {
-			expect(getErrorCodeDocURL('DB01001')).toBe('https://docs.wcpos.com/error-codes/DB01001');
-			expect(getErrorCodeDocURL('PY01001')).toBe('https://docs.wcpos.com/error-codes/PY01001');
-			expect(getErrorCodeDocURL('SY01001')).toBe('https://docs.wcpos.com/error-codes/SY01001');
+			expect(getErrorCodeDocURL('SYNC101')).toBe('https://docs.wcpos.com/error-codes/SYNC101');
+			expect(getErrorCodeDocURL('PAYMENT201')).toBe(
+				'https://docs.wcpos.com/error-codes/PAYMENT201'
+			);
+			expect(getErrorCodeDocURL('CLIENT999')).toBe('https://docs.wcpos.com/error-codes/CLIENT999');
 		});
 
 		it('should handle empty string', () => {

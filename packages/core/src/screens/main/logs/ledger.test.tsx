@@ -12,7 +12,7 @@ const row = {
 	timestamp: 1_000,
 	level: 'error',
 	message: 'Database error',
-	code: 'DB01003',
+	code: 'SYNC101',
 };
 const quietRow = {
 	logId: 'log-2',
@@ -28,7 +28,11 @@ jest.mock('react-native', () => ({
 		className,
 		testID,
 		onPress,
-	}: React.PropsWithChildren<{ className?: string; testID?: string; onPress?: () => void }>) => (
+	}: React.PropsWithChildren<{
+		className?: string;
+		testID?: string;
+		onPress?: () => void;
+	}>) => (
 		<button className={className} data-testid={testID} onClick={onPress}>
 			{children}
 		</button>
@@ -84,7 +88,9 @@ jest.mock('../../../contexts/translations', () => ({
 jest.mock('../../../hooks/use-local-date', () => ({
 	useLocalDate: () => ({ formatDate: () => '10:00' }),
 }));
-jest.mock('./event-title', () => ({ useEventTitle: () => () => 'Database error' }));
+jest.mock('./event-title', () => ({
+	useEventTitle: () => () => 'Database error',
+}));
 jest.mock('./row-detail', () => ({
 	RowDetail: () => <div data-testid="logs-row-detail" />,
 }));

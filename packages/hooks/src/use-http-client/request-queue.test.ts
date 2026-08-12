@@ -18,12 +18,6 @@ jest.mock('@wcpos/utils/logger', () => {
 	};
 });
 
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		REQUEST_QUEUE_FULL: 'REQUEST_QUEUE_FULL',
-	},
-}));
-
 jest.mock('./request-state-manager', () => ({
 	requestStateManager: {
 		onWake: jest.fn(),

@@ -18,7 +18,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
 import { CurrencyInput } from '../../../components/currency-input';
@@ -116,7 +116,7 @@ export function EditVariationForm({ variation }: Props) {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.PRODUCT_UNEXPECTED,
 						variationId: variation.id,
 						error: errorMessage,
 					},

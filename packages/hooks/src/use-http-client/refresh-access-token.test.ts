@@ -1,5 +1,3 @@
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
-
 import { refreshAccessToken } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
 
@@ -84,7 +82,10 @@ describe('refreshAccessToken', () => {
 		await expect(refreshAccessToken(config)).resolves.toBeNull();
 
 		expect(requestStateManager.checkCanProceed()).toEqual(
-			expect.objectContaining({ ok: false, errorCode: ERROR_CODES.AUTH_REQUIRED })
+			expect.objectContaining({
+				ok: false,
+				reason: 'Please log in to continue',
+			})
 		);
 	});
 
@@ -147,7 +148,9 @@ describe('refreshAccessToken', () => {
 			data: { access_token: 'new-token', expires_at: 9999 },
 			status: 200,
 		});
-		const { config } = makeConfig(post, { wp_api_url: 'https://example.test/wp-json/' });
+		const { config } = makeConfig(post, {
+			wp_api_url: 'https://example.test/wp-json/',
+		});
 
 		await expect(refreshAccessToken(config)).resolves.toBe('new-token');
 		expect(post).toHaveBeenCalledWith(
@@ -239,8 +242,14 @@ describe('refreshAccessToken', () => {
 			const post = jest.fn(() => response.promise);
 			const { config } = makeConfig(post);
 
-			const first = refreshAccessToken({ ...config, operationId: 'auth-arc-driver' });
-			const second = refreshAccessToken({ ...config, operationId: 'auth-arc-peer' });
+			const first = refreshAccessToken({
+				...config,
+				operationId: 'auth-arc-driver',
+			});
+			const second = refreshAccessToken({
+				...config,
+				operationId: 'auth-arc-peer',
+			});
 			response.resolve({
 				data: { access_token: 'shared-token', expires_at: 9999 },
 				status: 200,

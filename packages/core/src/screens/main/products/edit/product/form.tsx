@@ -20,7 +20,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 
 import { useT } from '../../../../../contexts/translations';
@@ -145,7 +145,7 @@ export function EditProductForm({ product }: Props) {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						errorCode: ERROR_CODES.PRODUCT_SAVE_FAILED,
 						productId: product.id,
 						error: errorMessage,
 					},

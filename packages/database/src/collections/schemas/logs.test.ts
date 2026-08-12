@@ -18,7 +18,12 @@ describe('logs schema', () => {
 	it('migrates v2 rows to v3 unchanged (enum widening only)', () => {
 		const migrate = storeCollections.logs.migrationStrategies?.[3];
 		expect(migrate).toBeDefined();
-		const row = { timestamp: 500, level: 'warn', outcome: 'failed', context: {} };
+		const row = {
+			timestamp: 500,
+			level: 'warn',
+			outcome: 'failed',
+			context: {},
+		};
 		expect(migrate?.({ ...row }, {} as never)).toEqual(row);
 	});
 
@@ -38,12 +43,12 @@ describe('logs schema', () => {
 			old: {
 				timestamp: 100,
 				level: 'success',
-				context: { errorCode: 'API01001' },
+				context: { errorCode: 'SYNC121' },
 			},
 			expected: {
 				level: 'info',
 				outcome: 'ok',
-				code: 'API01001',
+				code: 'SYNC121',
 				count: 1,
 				firstSeen: 100,
 				lastSeen: 100,

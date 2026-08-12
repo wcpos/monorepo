@@ -1,5 +1,5 @@
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { pauseQueue, resumeQueue } from './request-queue';
 import { requestStateManager } from './request-state-manager';
@@ -90,7 +90,10 @@ export async function refreshAccessToken({
 	if (!refreshToken) {
 		// No refresh token to spend — refreshing is impossible, so this is terminal.
 		tokenLogger.debug('Skipping token refresh - no refresh token', {
-			context: { hasWcposApiUrl: !!site.wcpos_api_url, hasWpApiUrl: !!site.wp_api_url },
+			context: {
+				hasWcposApiUrl: !!site.wcpos_api_url,
+				hasWpApiUrl: !!site.wp_api_url,
+			},
 		});
 		requestStateManager.setAuthFailed(true);
 		return null;
@@ -100,7 +103,10 @@ export async function refreshAccessToken({
 		// The site can be transiently un-hydrated (e.g. after a web wake, before
 		// wcpos_api_url / wp_api_url resolve). Treat as retryable — do NOT latch authFailed.
 		tokenLogger.debug('Skipping token refresh - API URL unavailable', {
-			context: { hasWcposApiUrl: !!site.wcpos_api_url, hasWpApiUrl: !!site.wp_api_url },
+			context: {
+				hasWcposApiUrl: !!site.wcpos_api_url,
+				hasWpApiUrl: !!site.wp_api_url,
+			},
 		});
 		return null;
 	}
@@ -156,7 +162,7 @@ export async function refreshAccessToken({
 		tokenLogger[terminal ? 'error' : 'warn']('Unable to refresh session', {
 			saveToDb: terminal,
 			context: {
-				errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
+				errorCode: terminal ? ERROR_CODES.SESSION_EXPIRED : ERROR_CODES.AUTH_UNEXPECTED,
 				error: error instanceof Error ? error.message : String(error),
 				terminal,
 				userId: wpUser.id,
@@ -193,7 +199,10 @@ function isTerminalRefreshFailure(error: unknown): boolean {
  */
 function refreshFailureStatus(error: unknown): number | undefined {
 	if (error && typeof error === 'object') {
-		const shaped = error as { status?: unknown; response?: { status?: unknown } };
+		const shaped = error as {
+			status?: unknown;
+			response?: { status?: unknown };
+		};
 		if (typeof shaped.status === 'number') return shaped.status;
 		if (typeof shaped.response?.status === 'number') return shaped.response.status;
 	}
