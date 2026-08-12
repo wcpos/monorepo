@@ -240,17 +240,29 @@ jobs:
             for id in $active_runs; do
               [ "$id" = "$RUN_ID" ] && continue
               if ! jobs=$(api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
-                --jq '[.jobs[] | {name, status, conclusion, started_at}]'); then
+                --jq '[.jobs[] | {name, status, conclusion, started_at, completed_at}]'); then
                 busy="run $id could not be inspected (GitHub API error)"
                 break
               fi
 
+              # Zombie fence, applied to every ownership rule below: runner
+              # death leaves a job "in_progress" forever with no logs (observed
+              # 3× on 2026-08-12; run 31587156153's shard held the store ~50
+              # min and stalled every waiter repo-wide). Anything claiming the
+              # store longer than the 60-minute shard timeout plus slack can
+              # only be a zombie — GitHub would have killed a live job.
+              ownership_cutoff=$(date -u -d '90 minutes ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+                || date -u -v-90M '+%Y-%m-%dT%H:%M:%SZ')
+
               # A shard actively running → the store is in use. (Only
               # in_progress counts: check runs for not-yet-eligible jobs can
               # already sit "queued", and counting those would deadlock two
-              # waiters against each other.)
-              running=$(jq --arg p "$SHARD_PREFIX" \
-                '[.[] | select((.name | startswith($p)) and .status == "in_progress")] | length' <<< "$jobs")
+              # waiters against each other. The started_at fence keeps a
+              # zombie shard — the exact incident above — from blocking here
+              # before the ownership rule's fence is ever consulted.)
+              running=$(jq --arg p "$SHARD_PREFIX" --arg cutoff "$ownership_cutoff" \
+                '[.[] | select((.name | startswith($p)) and .status == "in_progress")
+                      | select(.started_at > $cutoff)] | length' <<< "$jobs")
               if [ "$running" != "0" ]; then
                 busy="run $id is executing $running E2E shard(s)"
                 break
@@ -268,15 +280,9 @@ jobs:
 
               # Their queue already passed but their shards haven't all
               # finished → they own the store (covers the gap where shards
-              # exist only as queued check runs, or none are listed yet).
-              # Zombie fence for the ownership rules below: runner-death leaves a
-              # job "in_progress" forever with no logs (observed 3× on
-              # 2026-08-12; run 31587156153's shard held the store ~50 min and
-              # stalled every waiter repo-wide). A run whose queue passed longer
-              # ago than the shard timeout (60 min) plus slack cannot still be
-              # legitimately running its shards — stop honoring its claim.
-              ownership_cutoff=$(date -u -d '90 minutes ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
-                || date -u -v-90M '+%Y-%m-%dT%H:%M:%SZ')
+              # exist only as queued check runs, or none are listed yet). The
+              # completed_at fence expires claims a zombie can't release —
+              # completed_at is in the projection above precisely for this.
               queue_passed=$(jq --arg q "$QUEUE_JOB" --arg cutoff "$ownership_cutoff" \
                 '[.[] | select(.name == $q and .status == "completed" and .conclusion == "success")
                       | select(.completed_at > $cutoff)] | length' <<< "$jobs")
