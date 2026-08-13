@@ -31,6 +31,14 @@ import type { Page, Request } from '@playwright/test';
  *
  * Run:
  *   BASE_URL=<client deployment> npx playwright test -c playwright.politeness1129.config.ts
+ *
+ * PRESSURED RUNS SKIP (mono#1159 ruling, 2026-08-12): while the engine's server-pressure
+ * monitor is armed, the existence-audit lanes stand down and their starvation tick is
+ * ~2x the lane interval away — far outside this spec's window. When the run records
+ * pressure evidence (failure burst, 429, slow median), the audit-shape assertions skip
+ * with that reason; the open-window zero-traffic invariant is still asserted first.
+ * Verified live 2026-08-13: a load-17 dev-next session correctly produced zero audit
+ * traffic while the browse walk ran exactly once (the #1175 heartbeat proof).
  */
 
 // maxReplayBacklog in packages/sync-core/src/hybridChangeSignal.ts — the forced head
@@ -59,7 +67,34 @@ type SyncRequest = {
 	atMs: number;
 	status: number | null;
 	failed: boolean;
+	durationMs: number | null;
 };
+
+/**
+ * Client-visible evidence that the engine's server-pressure monitor was (plausibly)
+ * armed during the observation window, mirroring the monitor's own arming signals
+ * (server-pressure.ts): a failure/5xx burst, any 429, or a sustained slow median.
+ * Under armed pressure the audit lanes DEFER by ruling (mono#1159, 2026-08-12) and
+ * their starvation tick is ~2x the lane interval out — far past this spec's budget —
+ * so zero audit traffic is the CORRECT outcome, not a broken chain.
+ */
+function pressureEvidence(entries: readonly SyncRequest[]): string | null {
+	const failures = entries.filter(
+		(entry) => entry.failed || (entry.status !== null && entry.status >= 500)
+	).length;
+	const rateLimited = entries.some((entry) => entry.status === 429);
+	const durations = entries
+		.map((entry) => entry.durationMs)
+		.filter((duration): duration is number => duration !== null)
+		.sort((a, b) => a - b);
+	const median = durations.length >= 10 ? durations[Math.floor(durations.length / 2)]! : null;
+	const slow = median !== null && median > 2_000;
+	if (!rateLimited && failures < 3 && !slow) return null;
+	return (
+		`failures/5xx=${failures}, 429=${rateLimited}, ` +
+		`median=${median === null ? 'n/a' : `${Math.round(median)}ms`} over ${durations.length} requests`
+	);
+}
 
 /** Anything audit-shaped, sweep or existence audit alike — the open window allows NONE. */
 const isAuditShaped = (path: string) => /\/integrity\/|\/digests(\?|$)/.test(path);
@@ -166,6 +201,7 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 					atMs: Date.now(),
 					status: null,
 					failed: false,
+					durationMs: null,
 				};
 				requests.push(entry);
 				byRequest.set(request, entry);
@@ -176,6 +212,7 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 			const entry = byRequest.get(response.request());
 			if (entry) {
 				entry.status = response.status();
+				entry.durationMs = Date.now() - entry.atMs;
 				if (isAuditShaped(entry.path)) auditActivity.lastEventAtMs = Date.now();
 			}
 		});
@@ -222,13 +259,30 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 					'the engine never issued a sequence-log drain poll after reload — no rebaseline could be forced',
 			})
 			.toBe(true);
-		await expect
-			.poll(() => requests.some((entry) => isAuditScan(entry.path)), {
-				timeout: FIRST_AUDIT_SCAN_TIMEOUT_MS,
-				message:
-					'no existence-audit scan observed after the forced rebaseline — the audit chain did not run',
-			})
-			.toBe(true);
+		// The audit chain's first scan — OR a legitimate pressure deferral. Since the
+		// mono#1159 ruling (2026-08-12), audit lanes stand down while the server-pressure
+		// monitor is armed and their starvation tick sits ~2x the lane interval out, so on
+		// a struggling server this window correctly closes with zero audit traffic. That
+		// is a skip (environment condition), never a pass — and without pressure evidence
+		// a silent chain is still a failure.
+		const auditDeadline = Date.now() + FIRST_AUDIT_SCAN_TIMEOUT_MS;
+		while (!requests.some((entry) => isAuditScan(entry.path)) && Date.now() < auditDeadline) {
+			await page.waitForTimeout(5_000);
+		}
+		if (!requests.some((entry) => isAuditScan(entry.path))) {
+			const evidence = pressureEvidence(requests);
+			expect(
+				evidence,
+				'no existence-audit scan observed after the forced rebaseline, and no server-pressure ' +
+					'evidence excuses the silence — the audit chain did not run'
+			).not.toBeNull();
+			test.skip(
+				true,
+				`audit deferred under armed server pressure (${evidence}) — the starvation ceiling ` +
+					'schedules the reduced tick ~30min out (mono#1159 ruling); rerun on a healthy window ' +
+					'for the audit-shape proof'
+			);
+		}
 		// Let the pass settle: quiet for AUDIT_QUIET_MS with no audit request still in
 		// flight — a completed scan can schedule the next drill, so both starts and
 		// completions reset the quiet clock (coderabbit review). Capped so a floody
