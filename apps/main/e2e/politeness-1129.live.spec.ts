@@ -366,11 +366,16 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		// two real events: first the drain poll the forced rebaseline rides on (idle
 		// tick cadence can hold it back ~5 minutes), then the audit chain's first scan
 		// (seeds + the 60s hold run between the two).
+		// Either flag satisfies stage one (codex review on the 404 guard): on a
+		// legacy server the tick 404s permanently, the engine flips to the
+		// always-drain path, and the drain rewrite fires without any tick
+		// mutation — waiting on tickFired alone would time out despite a
+		// healthy force.
 		await expect
-			.poll(() => rebaseline.tickFired(), {
+			.poll(() => rebaseline.tickFired() || rebaseline.fired(), {
 				timeout: DRAIN_POLL_TIMEOUT_MS,
 				message:
-					'the engine never issued a /changes/tick poll after reload — no drain could be provoked (tick cadence or endpoint drift?)',
+					'neither a mutated /changes/tick nor a sequence-log drain was observed after reload — no rebaseline could be provoked (tick cadence or endpoint drift?)',
 			})
 			.toBe(true);
 		await expect
