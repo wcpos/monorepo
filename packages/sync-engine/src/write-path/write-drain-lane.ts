@@ -46,6 +46,7 @@ import {
 	type MoneyDivergenceField,
 	type MoneyPrecisionMode,
 } from './order-money-divergence';
+import { rejectionSuggestsServerRecord } from './conflict-resolution';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import { fetchOrderServerRevision } from './order-server-revision';
@@ -173,6 +174,15 @@ export type WriteOutcomeEvent =
 			reason?: string;
 			/** The server's human-readable message; `reason` is the machine code. */
 			serverMessage?: string;
+			/**
+			 * True when the rejected mutation is a CREATE with no local or queued
+			 * remote id and the rejection does not imply a matching server record.
+			 * The #1082 auto-revert must never `discard` these — discard DESTROYS
+			 * a born-local resident (#832 R7b, designed for the cashier-confirmed
+			 * Store health dialog) and there is no server truth to revert to.
+			 * They dead-letter for Store health instead, like orders.
+			 */
+			bornLocalCreate?: boolean;
 	  }
 	/**
 	 * R1: the server ACKED an order the POS built, but the money it returned is not
@@ -566,6 +576,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							const doc = (await database.collections[dead.collectionName]
 								?.findOne(dead.recordId)
 								.exec()) as {
+								toJSON(): Record<string, unknown>;
 								incrementalModify(
 									fn: (data: Record<string, unknown>) => Record<string, unknown>
 								): Promise<unknown>;
@@ -581,6 +592,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										local: { ...local, pendingMutationIds, dirty: pendingMutationIds.length > 0 },
 									};
 								});
+							// Use the same server-existence evidence as conflict resolution: a
+							// CREATE is born-local only when neither the resident nor queued payload
+							// has a remote id and the rejection does not indicate a server match.
+							const rejectedFacet = writeFacetFor(dead.collectionName);
+							const rejectedRemoteId =
+								doc !== null && rejectedFacet !== null
+									? doc.toJSON()[rejectedFacet.remoteIdField]
+									: undefined;
+							const rejectedPayloadId = dead.payload.id;
 							deps.emitWriteEvent({
 								type: 'write-rejected',
 								collection: dead.collectionName,
@@ -589,6 +609,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								status,
 								reason,
 								serverMessage,
+								bornLocalCreate:
+									dead.operation === 'create' &&
+									doc !== null &&
+									typeof rejectedRemoteId !== 'number' &&
+									typeof rejectedPayloadId !== 'number' &&
+									!rejectionSuggestsServerRecord(reason),
 							});
 						}
 						deps.setQueueDepth(stillPending.size);
