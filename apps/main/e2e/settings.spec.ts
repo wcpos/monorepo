@@ -77,10 +77,14 @@ test.describe('Language Settings', () => {
 		{
 			optionTestID: 'language-option-de_DE',
 			cdnCode: '/translations/js/de_DE/',
+			// `settings.store_name` in the published de_DE bundle — the label the
+			// General settings form must re-render into (#40).
+			storeNameLabel: 'Geschäftsname',
 		},
 		{
 			optionTestID: 'language-option-fr_FR',
 			cdnCode: '/translations/js/fr_FR/',
+			storeNameLabel: 'Nom du magasin',
 		},
 	];
 
@@ -157,6 +161,24 @@ test.describe('Language Settings', () => {
 
 		const { response } = await switchToDifferentLanguage(page);
 		expect(response.ok()).toBeTruthy();
+	});
+
+	/**
+	 * #40: the CDN fetch firing is not the same thing as the form re-rendering.
+	 * The settings labels used to stay in English while the POS table behind them
+	 * translated. Selector is a testID; the language is asserted on the rendered
+	 * text of that element, which is what the cashier actually sees.
+	 */
+	test('should re-render the settings form labels in the new language', async ({
+		posPage: page,
+	}) => {
+		await openSettings(page);
+
+		const { target } = await switchToDifferentLanguage(page);
+
+		await expect(page.getByTestId('screen-settings-general')).toContainText(target.storeNameLabel, {
+			timeout: 15_000,
+		});
 	});
 
 	test('should persist language after closing and reopening settings', async ({
