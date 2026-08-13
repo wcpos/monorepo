@@ -659,6 +659,23 @@ describe('runPersistedSchedulerTasks', () => {
 		expect(result.failed).toBe(1);
 	});
 
+	it('marks a primary-collection reconciliation refusal failed with retry backoff', async () => {
+		const runnable = state();
+		const repository = createRepository([runnable]);
+		const fetcher = vi.fn(async () => {
+			throw new SyntaxError('index reconciliation refused: unsorted-primary');
+		});
+
+		const result = await runPersistedSchedulerTasks({
+			...baseInput,
+			repository,
+			fetcher,
+		});
+
+		expect(repository.markFailed).toHaveBeenCalledOnce();
+		expect(result.failed).toBe(1);
+	});
+
 	it('does not report failed state persistence when the guarded failure update loses to a newer owner', async () => {
 		const runnable = state({
 			status: 'in-flight',

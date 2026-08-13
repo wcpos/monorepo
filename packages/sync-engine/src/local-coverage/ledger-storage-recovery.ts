@@ -1,5 +1,6 @@
 const RECONCILIATION_REFUSAL_MARKER = 'index reconciliation refused:';
 const NON_CORRUPTION_REFUSALS = new Set(['no-divergence', 'multi-instance']);
+const ledgerReconciliationRefusals = new WeakSet<object>();
 
 /**
  * Which repository family caught the refusal that started a rebuild. The ledger is
@@ -121,6 +122,18 @@ function corruptionRefusalReason(error: unknown): string | undefined {
 
 export function isReconciliationRefusalError(error: unknown): boolean {
 	return corruptionRefusalReason(error) !== undefined;
+}
+
+/** Preserve that a refusal came from a derivable ledger repository. */
+export function markLedgerReconciliationRefusalError(error: unknown): unknown {
+	if (typeof error === 'object' && error !== null && isReconciliationRefusalError(error)) {
+		ledgerReconciliationRefusals.add(error);
+	}
+	return error;
+}
+
+export function isLedgerReconciliationRefusalError(error: unknown): boolean {
+	return typeof error === 'object' && error !== null && ledgerReconciliationRefusals.has(error);
 }
 
 /**

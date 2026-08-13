@@ -9,6 +9,7 @@ import {
 	runPersistedSchedulerTasks,
 } from './rx-scheduler-task-runner';
 import {
+	markLedgerReconciliationRefusalError,
 	withLedgerRecovery,
 	withSchedulerDrainLedgerRecovery,
 } from '../local-coverage/ledger-storage-recovery';
@@ -304,17 +305,29 @@ function createEngineSchedulerFetcherRegistry(
 		| 'censusFreshForMs'
 		| 'refreshBrowseWindowKey'
 		| 'barcodeSelectors'
-	>
+	>,
+	/**
+	 * How a query-total cache refusal recovers. A DRAIN tick holds claims on
+	 * `schedulerTaskStates` rows, and the rebuild drops that store too — so the
+	 * refusal must PROPAGATE to `withSchedulerDrainLedgerRecovery`, which aborts
+	 * the tick cleanly instead of continuing with claims on dropped rows (#956).
+	 * A single in-memory task holds no claims, so retrying against the rebuilt
+	 * store is safe and keeps the demand fetch alive.
+	 */
+	queryTotalRecovery: 'retry-after-rebuild' | 'propagate-refusal'
 ) {
 	const db = input.db;
 	const nowMs = input.nowMs ?? Date.now();
 	const getNowMs = input.now ?? (input.nowMs === undefined ? Date.now : () => nowMs);
 	const orderRepository = new EngineOrderRepository(db);
-	const queryTotalRepository = withLedgerRecovery({
-		database: db,
-		trigger: 'query-total',
-		create: () => new RxQueryTotalCacheRepository(db as never),
-	});
+	const queryTotalRepository =
+		queryTotalRecovery === 'retry-after-rebuild'
+			? withLedgerRecovery({
+					database: db,
+					trigger: 'query-total',
+					create: () => new RxQueryTotalCacheRepository(db as never),
+				})
+			: new RxQueryTotalCacheRepository(db as never);
 	const cacheQueryTotals: CacheQueryTotals = async ({ queryKeys, totalMatchingRecords }) => {
 		const updatedAtMs = getNowMs();
 		for (const queryKey of queryKeys) {
@@ -322,12 +335,16 @@ function createEngineSchedulerFetcherRegistry(
 				censusCollectionFromQueryKey(queryKey) === null
 					? QUERY_TOTAL_FRESH_FOR_MS
 					: (input.censusFreshForMs ?? QUERY_TOTAL_FRESH_FOR_MS);
-			await queryTotalRepository.upsert({
-				queryKey,
-				totalMatchingRecords,
-				updatedAtMs,
-				freshUntilMs: updatedAtMs + freshForMs,
-			});
+			try {
+				await queryTotalRepository.upsert({
+					queryKey,
+					totalMatchingRecords,
+					updatedAtMs,
+					freshUntilMs: updatedAtMs + freshForMs,
+				});
+			} catch (error) {
+				throw markLedgerReconciliationRefusalError(error);
+			}
 		}
 	};
 	const coverageRepository = {
@@ -435,7 +452,7 @@ function createEngineSchedulerFetcherRegistry(
 export async function runEngineSchedulerTask(
 	input: RunEngineSchedulerTaskInput
 ): Promise<FetchTaskResult> {
-	const registry = createEngineSchedulerFetcherRegistry(input);
+	const registry = createEngineSchedulerFetcherRegistry(input, 'retry-after-rebuild');
 	const result = await registry.fetcher(
 		input.task,
 		input.signal === undefined ? undefined : { signal: input.signal }
@@ -466,7 +483,7 @@ export async function runEngineSchedulerDrain(
 		aborted: ledgerRebuiltSchedulerTaskRunnerResult,
 		run: () => {
 			const schedulerRepository = new RxSchedulerTaskStateRepository(db);
-			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input);
+			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input, 'propagate-refusal');
 			const supportedRepository = fetcherRegistry.supportedRepository(schedulerRepository);
 			const taskId = input.taskId;
 			const repository =

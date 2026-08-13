@@ -8,14 +8,28 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import type { SyncEvent } from '@wcpos/sync-core';
 
 import { engineCollectionCreators } from '../collections/engine-collections';
+import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
-import { runEngineSchedulerDrain } from '../scheduler/engine-scheduler-drain';
+import {
+	runEngineSchedulerDrain,
+	runEngineSchedulerTask,
+} from '../scheduler/engine-scheduler-drain';
+import {
+	PRODUCT_BROWSE_WINDOW_GRAMMAR,
+	PRODUCT_BROWSE_WINDOW_LIMIT,
+	PRODUCT_BROWSE_WINDOW_ORDER,
+	PRODUCT_BROWSE_WINDOW_ORDERBY,
+	type ProductBrowseWindowDescriptor,
+} from '../scheduler/product-browse-window-descriptor';
 import { posBootstrapTasks, seedPosBootstrapLanes } from '../scheduler/rx-pos-bootstrap-seeder';
 import { emptyPersistedSchedulerTaskRunnerResult } from '../scheduler/rx-scheduler-task-runner';
 import { RxSchedulerTaskStateRepository } from '../scheduler/rx-scheduler-task-state-repository';
+import { schedulerTaskStateKey } from '../scheduler/scheduler-task-state-schema';
 import { createLocalCoverage } from './local-coverage';
 import { RxCoverageRepository } from './persistence';
 import { isReconciliationRefusalError, withLedgerRecovery } from './ledger-storage-recovery';
+
+import type { FetchTask } from '../scheduler/replication-policy';
 
 // The full engine recipe is past the open-core collection cap; the drain tick test
 // opens all of it (ADR 0018 — premium stays host-side, and this harness is the host).
@@ -146,6 +160,51 @@ function schedulerTaskStateDocument(status: 'queued' | 'completed'): Record<stri
 		schemaVersion: 4,
 	};
 }
+
+function productBrowseWindowTask(): FetchTask {
+	const descriptor: ProductBrowseWindowDescriptor = {
+		limit: PRODUCT_BROWSE_WINDOW_LIMIT,
+		orderby: PRODUCT_BROWSE_WINDOW_ORDERBY,
+		order: PRODUCT_BROWSE_WINDOW_ORDER,
+	};
+	const queryKey = PRODUCT_BROWSE_WINDOW_GRAMMAR.encode(descriptor);
+	return {
+		id: `${queryKey}:windowed`,
+		requirementId: PRODUCT_BROWSE_WINDOW_GRAMMAR.requirementId(descriptor),
+		collection: 'products',
+		queryKey,
+		limit: descriptor.limit,
+		priority: 500,
+		mode: 'windowed',
+	};
+}
+
+function queuedSchedulerTaskDocument(task: FetchTask): Record<string, unknown> {
+	return {
+		stateKey: schedulerTaskStateKey(task.id),
+		taskId: task.id,
+		requirementId: task.requirementId,
+		collectionName: task.collection,
+		queryKey: task.queryKey,
+		limit: task.limit,
+		priority: task.priority,
+		mode: task.mode,
+		status: 'queued',
+		ownerId: null,
+		claimedUntilMs: null,
+		attempt: 0,
+		retryAfterMs: null,
+		updatedAtMs: 1,
+		schemaVersion: 4,
+	};
+}
+
+const emptyProductResponse = () =>
+	Promise.resolve(
+		new Response('[]', {
+			headers: { 'X-WP-Total': '321', 'Content-Type': 'application/json' },
+		})
+	);
 
 async function seedQueryTotalStores(db: RxDatabase): Promise<void> {
 	await db.collections.queryTotalRequestStates.insert({
@@ -470,6 +529,106 @@ describe('coverage ledger recovery', () => {
 			level: 'warn',
 			fields: { reason: 'unsorted-primary', trigger: 'scheduler' },
 		});
+	});
+
+	it('reaches the query-total cache from an unfiltered publish product drain', async () => {
+		const db = await openEngineDatabase();
+		const coverage = createLocalCoverage({
+			database: db as never,
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		const task = productBrowseWindowTask();
+		await db.collections.schedulerTaskStates.insert(queuedSchedulerTaskDocument(task));
+		const upsert = vi.spyOn(RxQueryTotalCacheRepository.prototype, 'upsert');
+
+		await runEngineSchedulerDrain({
+			db: db as never,
+			coverage,
+			baseUrl: 'https://ledger.example.test',
+			ownerId: 'tab-1',
+			fetcher: emptyProductResponse,
+			nowMs: 1_000,
+		});
+
+		expect(upsert).toHaveBeenCalled();
+	});
+
+	it('aborts instead of retrying a query-total cache refusal during a drain', async () => {
+		const db = await openEngineDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		const task = productBrowseWindowTask();
+		await db.collections.schedulerTaskStates.insert(queuedSchedulerTaskDocument(task));
+		const upsert = vi
+			.spyOn(RxQueryTotalCacheRepository.prototype, 'upsert')
+			.mockRejectedValueOnce(refusalError('unsorted-primary'));
+
+		await expect(
+			runEngineSchedulerDrain({
+				db: db as never,
+				coverage,
+				baseUrl: 'https://ledger.example.test',
+				ownerId: 'tab-1',
+				fetcher: emptyProductResponse,
+				nowMs: 1_000,
+			})
+		).resolves.toEqual({ ...emptyPersistedSchedulerTaskRunnerResult(), ledgerRebuilt: true });
+		expect(upsert).toHaveBeenCalledTimes(1);
+		// The refusal escapes the task runner and is caught by the DRAIN family's
+		// recovery (withSchedulerDrainLedgerRecovery), so provenance reads 'scheduler'.
+		expect(events).toContainEqual({
+			type: 'coverage.ledger-rebuilt',
+			level: 'warn',
+			fields: { reason: 'unsorted-primary', trigger: 'scheduler' },
+		});
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+		await expect(db.collections.schedulerTaskStates.count().exec()).resolves.toBe(0);
+	});
+
+	it('retries a query-total cache refusal for an in-memory task', async () => {
+		const db = await openEngineDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		const task = productBrowseWindowTask();
+		const upsert = vi
+			.spyOn(RxQueryTotalCacheRepository.prototype, 'upsert')
+			.mockRejectedValueOnce(refusalError('unsorted-primary'));
+
+		await expect(
+			runEngineSchedulerTask({
+				db: db as never,
+				coverage,
+				baseUrl: 'https://ledger.example.test',
+				fetcher: emptyProductResponse,
+				nowMs: 1_000,
+				task,
+			})
+		).resolves.toEqual({
+			taskId: task.id,
+			documentCount: 0,
+			requestCount: 1,
+			completed: true,
+		});
+		// The unfiltered publish window also caches census:products; only this key retries.
+		expect(upsert.mock.calls.filter(([entry]) => entry.queryKey === task.queryKey)).toHaveLength(2);
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toEqual([
+			{
+				type: 'coverage.ledger-rebuilt',
+				level: 'warn',
+				fields: { reason: 'unsorted-primary', trigger: 'query-total' },
+			},
+		]);
 	});
 
 	it('shares ONE rebuild between a racing coverage caller and a scheduler caller', async () => {

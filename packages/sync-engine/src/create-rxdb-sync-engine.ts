@@ -567,7 +567,19 @@ export function createRxdbSyncEngine(
 	const mode = ports.mode ?? 'auto';
 	const connectivity = ports.connectivity ?? (() => 'online' as const);
 	const writePlaneOwner = ports.writePlaneOwner ?? (() => true);
+	// A ledger rebuild replaces the derivable collections, and live coverage
+	// subscriptions hold handles to the dropped ones (coverage-changes.ts opens
+	// findOne().$ streams per target). Re-resolving through the hub swaps in the
+	// fresh collections; late-bound because the hub is created further down.
+	let onLedgerRebuilt: (() => void) | undefined;
 	const diagnostics: SyncObserver = (event) => {
+		if (event.type === 'coverage.ledger-rebuilt') {
+			try {
+				onLedgerRebuilt?.();
+			} catch {
+				// Re-resolution is best-effort; the rebuild itself already succeeded.
+			}
+		}
 		try {
 			ports.diagnostics?.(event);
 		} catch {
@@ -1013,6 +1025,11 @@ export function createRxdbSyncEngine(
 		now: nowMs,
 		diagnostics,
 	});
+	// #1187 review: the ledger rebuild drops coverageLanes/queryTotalCacheEntries,
+	// and every live hub subscription is a findOne().$ stream on the OLD
+	// collection objects. Republish re-resolves each target against the rebuilt
+	// collections instead of leaving verdicts frozen on dead streams.
+	onLedgerRebuilt = () => coverageChangeHub.republish();
 
 	const emitDb = (db: RxDatabase | null): void => {
 		for (const cb of [...dbSubscribers]) {
