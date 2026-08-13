@@ -288,10 +288,8 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			/* telemetry never breaks coverage */
 		}
 	};
-	// The ledger is one unit of three collections, but two repository families read
-	// it. Coverage owns the drop/recreate recipe and the observer, so it registers
-	// them for the database; the scheduler seed/drain sites trigger the same rebuild
-	// through the registry (#956).
+	// All five stores are derivable and rebuild as one unit: a refusal in any family
+	// intentionally drops the query-total bookkeeping along with coverage/scheduler state.
 	registerLedgerRecovery({
 		database,
 		rebuild: async (reason, trigger) => {
@@ -307,6 +305,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 	});
 	const repository = withLedgerRecovery({
 		database,
+		trigger: 'coverage',
 		create: () => new RxCoverageRepository(options.database),
 	});
 	// Cursor persistence: the host's blob store when provided, else session-scoped memory.

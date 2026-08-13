@@ -3,12 +3,11 @@ const NON_CORRUPTION_REFUSALS = new Set(['no-divergence', 'multi-instance']);
 
 /**
  * Which repository family caught the refusal that started a rebuild. The ledger is
- * ONE unit of three collections (DERIVABLE_METADATA_COLLECTIONS) but two repository
- * families read it: `RxCoverageRepository` (coverageRecords/coverageLanes) and
- * `RxSchedulerTaskStateRepository` (schedulerTaskStates). Either can catch the
+ * ONE unit of five derivable collections (DERIVABLE_METADATA_COLLECTIONS). Coverage,
+ * scheduler, and query-total repositories can each catch the
  * refusal first — the trigger rides the diagnostics event so the log says which.
  */
-export type LedgerRebuildTrigger = 'coverage' | 'scheduler';
+export type LedgerRebuildTrigger = 'coverage' | 'scheduler' | 'query-total';
 
 /**
  * Any database object. Kept as bare `object` because the callers hold different
@@ -38,7 +37,7 @@ type LedgerRecoveryEntry = {
  * Per-database ledger recovery, keyed by database name.
  *
  * `createLocalCoverage` registers the rebuild closure (it owns the drop/recreate
- * recipe and the diagnostics observer); BOTH repository families then trigger
+ * recipe and the diagnostics observer); all repository families then trigger
  * through the same entry, so one guard, one in-flight rebuild and one
  * `coverage.ledger-rebuilt` emission cover the whole ledger (#956).
  *
@@ -126,7 +125,7 @@ export function isReconciliationRefusalError(error: unknown): boolean {
 
 /**
  * Register the ledger rebuild for one database. Called by `createLocalCoverage`,
- * which owns the drop/recreate recipe for all three derivable collections and the
+ * which owns the drop/recreate recipe for all five derivable collections and the
  * diagnostics observer that reports it.
  */
 export function registerLedgerRecovery(input: {
@@ -223,6 +222,7 @@ async function awaitLedgerRebuild(input: {
  */
 export function withLedgerRecovery<T extends object>(input: {
 	database: LedgerRecoveryDatabase;
+	trigger: LedgerRebuildTrigger;
 	/** Builds a repository over the CURRENT collections; re-run after each rebuild. */
 	create: () => T;
 }): T {
@@ -261,7 +261,7 @@ export function withLedgerRecovery<T extends object>(input: {
 				reason,
 				entryAtStart,
 				generationAtStart,
-				trigger: 'coverage',
+				trigger: input.trigger,
 			});
 			return invoke(property, args);
 		}

@@ -189,10 +189,16 @@ const SCHEDULER_TIER_CREATORS: Record<string, CollectionCreator> = {
 	},
 };
 
+/**
+ * Rebuilt as one unit: a refusal in coverage or scheduler state intentionally
+ * drops the cheap query-total bookkeeping too; all five stores are derivable.
+ */
 export const DERIVABLE_METADATA_COLLECTIONS = [
 	'coverageRecords',
 	'coverageLanes',
 	'schedulerTaskStates',
+	'queryTotalRequestStates',
+	'queryTotalCacheEntries',
 ] as const;
 
 /** The full addCollections() argument for one engine scope database. */

@@ -8,13 +8,14 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import type { SyncEvent } from '@wcpos/sync-core';
 
 import { engineCollectionCreators } from '../collections/engine-collections';
+import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
 import { runEngineSchedulerDrain } from '../scheduler/engine-scheduler-drain';
 import { posBootstrapTasks, seedPosBootstrapLanes } from '../scheduler/rx-pos-bootstrap-seeder';
 import { emptyPersistedSchedulerTaskRunnerResult } from '../scheduler/rx-scheduler-task-runner';
 import { RxSchedulerTaskStateRepository } from '../scheduler/rx-scheduler-task-state-repository';
 import { createLocalCoverage } from './local-coverage';
 import { RxCoverageRepository } from './persistence';
-import { isReconciliationRefusalError } from './ledger-storage-recovery';
+import { isReconciliationRefusalError, withLedgerRecovery } from './ledger-storage-recovery';
 
 // The full engine recipe is past the open-core collection cap; the drain tick test
 // opens all of it (ADR 0018 — premium stays host-side, and this harness is the host).
@@ -95,7 +96,13 @@ describe('isReconciliationRefusalError', () => {
 	);
 });
 
-const LEDGER_COLLECTIONS = ['coverageRecords', 'coverageLanes', 'schedulerTaskStates'] as const;
+const LEDGER_COLLECTIONS = [
+	'coverageRecords',
+	'coverageLanes',
+	'schedulerTaskStates',
+	'queryTotalRequestStates',
+	'queryTotalCacheEntries',
+] as const;
 
 let databaseSequence = 0;
 let openDatabase: RxDatabase | undefined;
@@ -138,6 +145,35 @@ function schedulerTaskStateDocument(status: 'queued' | 'completed'): Record<stri
 		updatedAtMs: 1,
 		schemaVersion: 4,
 	};
+}
+
+async function seedQueryTotalStores(db: RxDatabase): Promise<void> {
+	await db.collections.queryTotalRequestStates.insert({
+		queryKey: 'orders:total:test',
+		status: 'failed',
+		ownerId: null,
+		claimedUntilMs: null,
+		attempt: 0,
+		retryAfterMs: 0,
+		updatedAtMs: 1,
+		request: null,
+		schemaVersion: 2,
+	});
+	await db.collections.queryTotalCacheEntries.insert({
+		queryKey: 'orders:total:test',
+		totalMatchingRecords: 42,
+		freshUntilMs: 2_000,
+		updatedAtMs: 1,
+		schemaVersion: 1,
+	});
+}
+
+function queryTotalStateRepository(db: RxDatabase): RxQueryTotalRequestStateRepository {
+	return withLedgerRecovery({
+		database: db,
+		trigger: 'query-total',
+		create: () => new RxQueryTotalRequestStateRepository(db as never),
+	});
 }
 
 /** The FULL engine scope recipe — what a drain tick reads through. */
@@ -186,6 +222,7 @@ describe('coverage ledger recovery', () => {
 			updatedAtMs: 1,
 			schemaVersion: 4,
 		});
+		await seedQueryTotalStores(db);
 		for (const name of LEDGER_COLLECTIONS) {
 			await expect(db.collections[name].count().exec()).resolves.toBe(1);
 		}
@@ -226,6 +263,94 @@ describe('coverage ledger recovery', () => {
 			expect(db.collections[name]).toBe(rebuiltCollections.get(name));
 		}
 		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
+
+	it('rebuilds all five stores from a query-total refusal, retries once, and surfaces a second refusal', async () => {
+		const db = await openLedgerDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		await coverage.recordQueryResult({
+			collection: 'orders',
+			queryKey: 'orders:open',
+			records: [{ id: 'woo-order:1' }],
+			complete: true,
+		});
+		await db.collections.schedulerTaskStates.insert(schedulerTaskStateDocument('completed'));
+		await seedQueryTotalStores(db);
+		const originalCollections = new Map(
+			LEDGER_COLLECTIONS.map((name) => [name, db.collections[name]])
+		);
+		const repository = queryTotalStateRepository(db);
+		const firstError = refusalError(
+			'duplicate-primary-id:queryTotalRequestStates::orders:total:test'
+		);
+		const readRunnable = vi
+			.spyOn(RxQueryTotalRequestStateRepository.prototype, 'readRunnable')
+			.mockRejectedValueOnce(firstError);
+
+		await expect(repository.readRunnable(1_000)).resolves.toEqual([]);
+		expect(readRunnable).toHaveBeenCalledTimes(2);
+		expect(readRunnable.mock.contexts[1]).not.toBe(readRunnable.mock.contexts[0]);
+		for (const name of LEDGER_COLLECTIONS) {
+			expect(db.collections[name]).not.toBe(originalCollections.get(name));
+			await expect(db.collections[name].count().exec()).resolves.toBe(0);
+		}
+		expect(events).toContainEqual({
+			type: 'coverage.ledger-rebuilt',
+			level: 'warn',
+			fields: {
+				reason: 'duplicate-primary-id:queryTotalRequestStates::orders:total:test',
+				trigger: 'query-total',
+			},
+		});
+
+		const rebuiltCollections = new Map(
+			LEDGER_COLLECTIONS.map((name) => [name, db.collections[name]])
+		);
+		const secondError = refusalError('unsorted-primary');
+		readRunnable.mockRejectedValueOnce(secondError);
+		await expect(repository.readRunnable(1_000)).rejects.toBe(secondError);
+		expect(readRunnable).toHaveBeenCalledTimes(3);
+		for (const name of LEDGER_COLLECTIONS) {
+			expect(db.collections[name]).toBe(rebuiltCollections.get(name));
+		}
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
+
+	it.each([
+		['no-divergence', refusalError('no-divergence')],
+		['multi-instance', refusalError('multi-instance')],
+		['worker-wrapped no-divergence', workerWrappedRefusalError('no-divergence')],
+		['worker-wrapped multi-instance', workerWrappedRefusalError('multi-instance')],
+	])('does not spend query-total recovery on %s', async (_label, nonCorruptionError) => {
+		const db = await openLedgerDatabase();
+		const events: SyncEvent[] = [];
+		createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		const repository = queryTotalStateRepository(db);
+		const readRunnable = vi
+			.spyOn(RxQueryTotalRequestStateRepository.prototype, 'readRunnable')
+			.mockRejectedValueOnce(nonCorruptionError)
+			.mockRejectedValueOnce(refusalError('unsorted-primary'));
+
+		await expect(repository.readRunnable(1_000)).rejects.toBe(nonCorruptionError);
+		expect(events).toEqual([]);
+		await expect(repository.readRunnable(1_000)).resolves.toEqual([]);
+		expect(readRunnable).toHaveBeenCalledTimes(3);
+		expect(events).toContainEqual({
+			type: 'coverage.ledger-rebuilt',
+			level: 'warn',
+			fields: { reason: 'unsorted-primary', trigger: 'query-total' },
+		});
 	});
 
 	it('shares one rebuild between concurrent callers instead of leaking the refusal', async () => {
