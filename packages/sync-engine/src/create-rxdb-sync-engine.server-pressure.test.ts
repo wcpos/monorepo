@@ -332,6 +332,36 @@ describe('change-signal server-pressure adaptation', () => {
 		await pressured.engine.dispose();
 	});
 
+	it('widens cadence from valid server-load headers and reports the learned baseline', async () => {
+		const context = await harness();
+		context.diagnostics.length = 0;
+
+		for (const value of [undefined, 'not-json', '[0,0,0]']) {
+			await context.respond(
+				new Response(null, {
+					status: 200,
+					...(value === undefined ? {} : { headers: { 'X-Server-Load': value } }),
+				})
+			);
+		}
+		expect(cadenceEvents(context.diagnostics, 'cadence.backoff')).toHaveLength(0);
+
+		for (const value of ['[0.4,0.3,0.2]', '[1,0.8,0.6]', '[1,0.8,0.6]']) {
+			await context.respond(
+				new Response(null, { status: 200, headers: { 'X-Server-Load': value } })
+			);
+		}
+
+		const [backoff] = cadenceEvents(context.diagnostics, 'cadence.backoff');
+		expect(backoff!.fields).toMatchObject({
+			signal: 'server-pressure',
+			pressureMultiplier: 2,
+			serverLoad1m: 1,
+			serverLoadBaseline1m: expect.any(Number),
+		});
+		await context.engine.dispose();
+	});
+
 	it('does not read the device being offline as the server being in trouble', async () => {
 		const connectivity = scriptedConnectivity('offline');
 		const context = await harness({ connectivity: connectivity.signal });

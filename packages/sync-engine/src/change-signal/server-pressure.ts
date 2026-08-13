@@ -36,6 +36,8 @@ export type ServerPressureTransition = {
 	toMultiplier: number;
 	/** Present when the server named its own pause (Retry-After); absolute epoch ms. */
 	retryAfterUntilMs?: number;
+	serverLoad1m?: number;
+	serverLoadBaseline1m?: number;
 };
 
 export type ServerPressureObservation = {
@@ -47,6 +49,7 @@ export type ServerPressureObservation = {
 	retryAfter?: string | null;
 	/** Server-reported load, absent when an older server did not send the header. */
 	pressure?: ServerPressure;
+	serverLoad1m?: number;
 	/** The engine's connectivity verdict. An offline device's failures are not the server's fault. */
 	offline?: boolean;
 };
@@ -154,6 +157,19 @@ export function parseServerPressure(value: string | null | undefined): ServerPre
 	return undefined;
 }
 
+export function parseServerLoad1m(value: string | null | undefined): number | undefined {
+	try {
+		const parsed: unknown = JSON.parse(value ?? '');
+		if (!Array.isArray(parsed) || parsed.length !== 3) return undefined;
+		const numeric = parsed.every(
+			(sample) => typeof sample === 'number' && Number.isFinite(sample) && sample >= 0
+		);
+		return numeric && parsed.some((sample) => sample !== 0) ? parsed[0] : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 function median(values: number[]): number {
 	const sorted = [...values].sort((left, right) => left - right);
 	const middle = Math.floor(sorted.length / 2);
@@ -166,24 +182,65 @@ export function createServerPressureMonitor(
 	let maxMultiplier = Math.max(1, input.maxMultiplier ?? 1);
 	let multiplier = 1;
 	let retryAfterUntilMs = 0;
+	let serverLoad1m: number | undefined;
+	let serverLoadBaseline1m: number | undefined;
+	let softLoadActive = false;
+	let softLoadStreak = 0;
 	let healthyStreak = 0;
 	let lastBackoffAtMs = Number.NEGATIVE_INFINITY;
 	/** Timestamps of 5xx / transport failures inside the rolling window. */
 	let distressAtMs: number[] = [];
 	let latencySamples: { durationMs: number; pressure?: ServerPressure }[] = [];
+	const effectiveMultiplier = (): number =>
+		Math.max(multiplier, softLoadActive ? Math.min(2, maxMultiplier) : 1);
+	const observeServerLoad = (load1m: number): ServerPressureTransition | null => {
+		serverLoad1m = load1m;
+		if (serverLoadBaseline1m === undefined) {
+			// Zero is a valid learned baseline: the parser only rejects the exact
+			// [0,0,0] error fallback, so a genuinely idle server's 0 must seed —
+			// refusing it would install the first SPIKE as "normal" instead.
+			serverLoadBaseline1m = load1m;
+			return null;
+		}
+		const baseline = serverLoadBaseline1m;
+		const crossesBoundary = softLoadActive
+			? load1m < 1.25 * baseline
+			: load1m >= Math.max(2 * baseline, 1);
+		softLoadStreak = crossesBoundary ? softLoadStreak + 1 : 0;
+		// The baseline only learns OUTSIDE an active spike: recovery means load
+		// returned toward the pre-spike normal, not the monitor acclimatizing
+		// mid-incident (~21 hot samples would re-rate the spike as "usual",
+		// declare recovery at full load, and then be unable to re-enter).
+		// Durable load-profile drift still gets absorbed — during quiet periods.
+		if (!softLoadActive) serverLoadBaseline1m = baseline + 0.05 * (load1m - baseline);
+		if (softLoadStreak < 2) return null;
+		softLoadStreak = 0;
+		const from = effectiveMultiplier();
+		softLoadActive = !softLoadActive;
+		const to = effectiveMultiplier();
+		if (to === from) return null;
+		return {
+			direction: softLoadActive ? 'backoff' : 'recovery',
+			signal: softLoadActive ? 'server-pressure' : 'healthy',
+			fromMultiplier: from,
+			toMultiplier: to,
+			serverLoad1m,
+			serverLoadBaseline1m,
+		};
+	};
 
 	const stepUp = (signal: PressureSignal, atMs: number): ServerPressureTransition | null => {
 		healthyStreak = 0;
 		lastBackoffAtMs = atMs;
-		const from = multiplier;
+		const from = effectiveMultiplier();
 		const to = Math.min(multiplier * 2, maxMultiplier);
-		if (to === from) return null;
 		multiplier = to;
+		if (effectiveMultiplier() === from) return null;
 		return {
 			direction: 'backoff',
 			signal,
 			fromMultiplier: from,
-			toMultiplier: to,
+			toMultiplier: effectiveMultiplier(),
 			...(retryAfterUntilMs > atMs ? { retryAfterUntilMs } : {}),
 		};
 	};
@@ -197,14 +254,14 @@ export function createServerPressureMonitor(
 	const pauseOnly = (signal: PressureSignal): ServerPressureTransition => ({
 		direction: 'backoff',
 		signal,
-		fromMultiplier: multiplier,
-		toMultiplier: multiplier,
+		fromMultiplier: effectiveMultiplier(),
+		toMultiplier: effectiveMultiplier(),
 		retryAfterUntilMs,
 	});
 
 	return {
 		isBackingOff: (atMs) => multiplier > 1 || retryAfterUntilMs > atMs,
-		multiplier: () => multiplier,
+		multiplier: effectiveMultiplier,
 		retryAfterUntilMs: () => retryAfterUntilMs,
 
 		setMaxMultiplier(next) {
@@ -266,6 +323,11 @@ export function createServerPressureMonitor(
 			// not the server's load. It is neither distress nor a clean bill of health.
 			const accepted = status >= 200 && status < 400;
 			if (!accepted) return null;
+			// Every accepted sample feeds the soft-load machine before any hard-
+			// pressure branch can return. Hard transitions take precedence below;
+			// otherwise this pending transition is the effective cadence change.
+			const softTransition =
+				observation.serverLoad1m !== undefined ? observeServerLoad(observation.serverLoad1m) : null;
 
 			latencySamples.push({ durationMs, pressure: observation.pressure });
 			if (latencySamples.length > SLOW_SAMPLE_COUNT) latencySamples.shift();
@@ -285,33 +347,36 @@ export function createServerPressureMonitor(
 				// Drop the window with the step: without this the same ten slow samples
 				// would trip every subsequent request and walk straight to the ceiling.
 				latencySamples = [];
-				return stepUp(signal, atMs);
+				return stepUp(signal, atMs) ?? softTransition;
 			}
 
 			// Reported pressure is neither distress nor evidence that a prior back-off can be undone.
-			if (observation.pressure === 'elevated' || observation.pressure === 'high') return null;
+			if (observation.pressure === 'elevated' || observation.pressure === 'high') {
+				return softTransition;
+			}
 			healthyStreak += 1;
-			if (multiplier === 1 || healthyStreak < RECOVERY_HEALTHY_RESPONSES) return null;
+			if (multiplier === 1 || healthyStreak < RECOVERY_HEALTHY_RESPONSES) return softTransition;
 			// Two brakes on recovery, both anti-flap:
 			//  - the dwell, so ten responses that were already in flight when we backed
 			//    off cannot immediately undo it;
 			//  - the server's own pause, because claiming to have recovered while still
 			//    inside a Retry-After window would write a false "back to normal" row
 			//    into the durable log (#899: the log must not lie about outcomes).
-			if (atMs - lastBackoffAtMs < RECOVERY_MIN_DWELL_MS) return null;
-			if (retryAfterUntilMs > atMs) return null;
+			if (atMs - lastBackoffAtMs < RECOVERY_MIN_DWELL_MS) return softTransition;
+			if (retryAfterUntilMs > atMs) return softTransition;
 			healthyStreak = 0;
 			// A server this healthy makes any surviving strike stale evidence. Without
 			// this, one old 5xx left in the window could complete a burst right after a
 			// recovery and bounce the cadence straight back up.
 			distressAtMs = [];
-			const from = multiplier;
+			const from = effectiveMultiplier();
 			multiplier = Math.max(1, Math.floor(multiplier / 2));
+			if (effectiveMultiplier() === from) return softTransition;
 			return {
 				direction: 'recovery',
 				signal: 'healthy',
 				fromMultiplier: from,
-				toMultiplier: multiplier,
+				toMultiplier: effectiveMultiplier(),
 			};
 		},
 	};
