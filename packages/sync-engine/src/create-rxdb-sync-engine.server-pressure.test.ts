@@ -192,6 +192,64 @@ describe('change-signal server-pressure adaptation', () => {
 		await context.engine.dispose();
 	});
 
+	it('bounds the pressure stand-down with the starvation ceiling: one reduced tick per window (mono#1159)', async () => {
+		const context = await harness({
+			queryTotal: { fetchWooQueryTotal: vi.fn(async () => 0) },
+		});
+		await context.respond(new Response(null, { status: 429 }));
+
+		// (a) Pressure armed, ceiling not reached: the audit stands down exactly as before.
+		await expect(context.engine.sync('existence-reconcile')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+		// (d) A session that STARTS under pressure measures its ceiling from the first
+		// observed tick — an immediate retry is still a stand-down, never a run.
+		await expect(context.engine.sync('existence-reconcile')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+
+		// (b) Past 2x the lane's default interval with pressure STILL armed (no healthy
+		// responses arrived), the lane runs one starvation tick instead of skipping.
+		context.setNow(context.now() + 2 * 17 * 60_000 + 1);
+		context.diagnostics.length = 0;
+		await expect(context.engine.sync('existence-reconcile')).resolves.toMatchObject({
+			lane: 'existence-reconcile',
+			status: 'ran',
+		});
+		expect(context.diagnostics).toContainEqual(
+			expect.objectContaining({
+				type: 'maintenance.lane.tick',
+				fields: expect.objectContaining({ lane: 'existence-reconcile', starvation: true }),
+			})
+		);
+
+		// (c) The starvation run re-arms the ceiling: the very next pressured tick
+		// stands down again — never more than one reduced tick per window.
+		await expect(context.engine.sync('existence-reconcile')).resolves.toMatchObject({
+			status: 'skipped',
+			reason: 'server-pressure',
+		});
+
+		await context.engine.dispose();
+	});
+
+	it('keeps normal (pressure-free) ticks unflagged and full-budget after a starvation run', async () => {
+		const context = await harness();
+		// Never pressured: the lane runs normally and its tick never carries the flag.
+		await expect(context.engine.sync('existence-reconcile')).resolves.toMatchObject({
+			lane: 'existence-reconcile',
+			status: 'ran',
+		});
+		expect(
+			cadenceEvents(context.diagnostics, 'maintenance.lane.tick').some(
+				(event) => (event.fields as { starvation?: boolean }).starvation === true
+			)
+		).toBe(false);
+		await context.engine.dispose();
+	});
+
 	it('honours Retry-After exactly and records the back-off', async () => {
 		const context = await harness();
 		context.diagnostics.length = 0;

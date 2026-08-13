@@ -176,7 +176,7 @@ describe('LocalCoverage interface', () => {
 		});
 	});
 
-	it('primes manifests in pages and filters invalid, stray, existing, and local-only ids through the facade', async () => {
+	it('bounds manifest chunks while filtering invalid, stray, existing, and local-only ids', async () => {
 		const database = coverageDatabase() as ReturnType<typeof coverageDatabase> &
 			Record<string, unknown>;
 		const manifest = memoryCollection('id');
@@ -249,18 +249,22 @@ describe('LocalCoverage interface', () => {
 			},
 		});
 
-		await expect(coverage.primeManifest()).resolves.toEqual({
+		await expect(coverage.primeManifest(undefined, { maxChunks: 1 })).resolves.toEqual({
 			products: 2,
 			customers: 0,
 			orders: 0,
 		});
 		expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.get('include'))).toEqual([
 			'1,3',
-			'4',
 		]);
-		expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.get('status'))).toEqual([
-			'publish',
-			'publish',
+		fetcher.mockClear();
+		await expect(coverage.primeManifest()).resolves.toEqual({
+			products: 0,
+			customers: 0,
+			orders: 0,
+		});
+		expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.get('include'))).toEqual([
+			'4',
 		]);
 		expect(
 			[...manifest.documents.values()].map(({ wooId, digest, objectType }) => ({
@@ -416,6 +420,44 @@ describe('LocalCoverage interface', () => {
 		// tick's spare budget on the still-dirty bucket 0 — per-port wrapping (codex
 		// r3760800575) trades idle budget for continued convergence, always within K=2/tick.
 		expect(fetchedBuckets).toEqual([0, 1, 2, 3, 4, 0]);
+	});
+
+	it('bounds scan pages and drill-downs for a reduced reconcile pass', async () => {
+		const fetchServerScanPage = vi.fn(async () => ({
+			changes: [],
+			nextAfterId: 99,
+			complete: false,
+		}));
+		const fetchServerBucket = vi.fn(async () => []);
+		const coverage = createLocalCoverage({
+			database: coverageDatabase() as never,
+			freshForMs: 1,
+			reconcile: {
+				bucketSize: 100,
+				occupiedBucketIndexes: async () => [0, 1, 2],
+				readManifestRange: async (lo) => [
+					{
+						id: String(lo + 1),
+						wooId: lo + 1,
+						objectType: 'product',
+						digest: '1',
+					},
+				],
+				dirtyWooIds: async () => new Set<number>(),
+				fetchServerScanPage,
+				fetchServerBucket,
+				deleteProducts: vi.fn(async () => undefined),
+				deleteVariations: vi.fn(async () => undefined),
+			},
+		});
+
+		await coverage.reconcilePass(undefined, undefined, undefined, {
+			maxScanPagesPerSpace: 1,
+			maxDrillDowns: 1,
+		});
+
+		expect(fetchServerScanPage).toHaveBeenCalledOnce();
+		expect(fetchServerBucket).toHaveBeenCalledOnce();
 	});
 
 	it('fails closed when a scan page fails', async () => {

@@ -163,11 +163,15 @@ export interface LocalCoverage {
 		leaseTtlMs: number;
 		failureBackoffMs: number;
 	}): Promise<CoverageCompactionMaintenanceResult>;
-	primeManifest(manifest?: LocalCoverageManifestOptions): Promise<LocalCoveragePrimeResult>;
+	primeManifest(
+		manifest?: LocalCoverageManifestOptions,
+		options?: { maxChunks?: number }
+	): Promise<LocalCoveragePrimeResult>;
 	reconcilePass(
 		signal?: AbortSignal,
 		fetcher?: ReconcileRequest['fetcher'],
-		shouldDefer?: () => boolean
+		shouldDefer?: () => boolean,
+		options?: { maxScanPagesPerSpace?: number; maxDrillDowns?: number }
 	): Promise<ReconcileSummary>;
 }
 
@@ -215,14 +219,18 @@ function decodeReconcileCursor(raw: string | null, portCount: number): Reconcile
 	}
 }
 
-function selectDrillDowns(candidates: readonly number[][], cursor: ReconcileCursor) {
+function selectDrillDowns(
+	candidates: readonly number[][],
+	cursor: ReconcileCursor,
+	maxDrillDowns = DRILL_DOWNS_PER_TICK
+) {
 	const selected: { port: number; bucket: number }[] = [];
 	const chosen = candidates.map(() => new Set<number>());
 	const tentative = {
 		nextPort: cursor.nextPort,
 		afterBuckets: [...cursor.afterBuckets],
 	};
-	while (selected.length < DRILL_DOWNS_PER_TICK) {
+	while (selected.length < maxDrillDowns) {
 		let found = false;
 		for (let offset = 0; offset < candidates.length; offset += 1) {
 			const port = (tentative.nextPort + offset) % candidates.length;
@@ -374,11 +382,11 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 				leaseTtlMs: input.leaseTtlMs,
 				failureBackoffMs: input.failureBackoffMs,
 			}),
-		primeManifest: async (manifestOverride) => {
+		primeManifest: async (manifestOverride, primeOptions) => {
 			const manifest = manifestOverride ?? options.manifest;
 			if (!manifest) return { products: 0, customers: 0, orders: 0 };
 			const database = options.database as LocalCoverageDatabase & ExistenceManifestPrimeDatabase;
-			const chunkBudget = { remaining: PRIME_CHUNKS_PER_TICK };
+			const chunkBudget = { remaining: primeOptions?.maxChunks ?? PRIME_CHUNKS_PER_TICK };
 			// Rotation (codex-review P1): both the id order WITHIN a space and the space ORDER
 			// itself rotate on persisted cursors, so ids whose /digests lookup keeps returning
 			// nothing (server-deleted residents) cannot pin the shared budget to one prefix or
@@ -423,7 +431,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			await cursorSet(PRIME_SPACE_CURSOR_KEY, String((start + 1) % spaces.length));
 			return counts;
 		},
-		reconcilePass: async (signal, fetcher, shouldDefer) => {
+		reconcilePass: async (signal, fetcher, shouldDefer, reconcileOptions) => {
 			if (!options.reconcile) return emptyReconcileSummary();
 			const ports = Array.isArray(options.reconcile) ? options.reconcile : [options.reconcile];
 			const request =
@@ -436,7 +444,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 					port.fetchServerBucket(bucket, bucketSize, request),
 				isAborted: () => signal?.aborted === true || port.isAborted?.() === true,
 				shouldDefer,
-				maxScanPages: SCAN_PAGES_PER_SPACE,
+				maxScanPages: reconcileOptions?.maxScanPagesPerSpace ?? SCAN_PAGES_PER_SPACE,
 			}));
 			const scans = await Promise.allSettled(deps.map(scanExistenceCandidates));
 			const scanFailures = scans.flatMap((result) =>
@@ -459,7 +467,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			);
 			const rawCursor = await cursorGet(EXISTENCE_RECONCILE_CURSOR_KEY);
 			const cursor = decodeReconcileCursor(rawCursor, ports.length);
-			const selected = selectDrillDowns(candidates, cursor);
+			const selected = selectDrillDowns(candidates, cursor, reconcileOptions?.maxDrillDowns);
 			const selectedByPort = ports.map((_port, index) =>
 				selected.filter(({ port }) => port === index).map(({ bucket }) => bucket)
 			);

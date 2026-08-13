@@ -138,6 +138,7 @@ type MaintenanceLaneDeps = {
 	emitEvent: (event: QueryTotalCacheEvent) => void;
 	now?: () => number;
 	isServerBackingOff?: (atMs: number) => boolean;
+	isServerRetryAfterActive?: (atMs: number) => boolean;
 };
 
 export type MaintenanceLane = {
@@ -166,6 +167,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		'existence-reconcile',
 		'query-total-retry',
 	]);
+	// Pressure still wins each ordinary tick, but it cannot suppress convergence for an
+	// entire slow-server session (mono#1159, owner ruling 2026-08-12).
+	const lastRanAtMs = new Map<MaintenanceLaneName, number>();
 
 	/** Shared guard/report/error scaffolding — the body runs scope-bound. */
 	function lane(
@@ -174,23 +178,45 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			db: RxDatabase,
 			scopeId: string,
 			signal: AbortSignal,
-			fetcher: MaintenanceLaneDeps['fetcher']
+			fetcher: MaintenanceLaneDeps['fetcher'],
+			tick: { starvation: boolean }
 		) => Promise<MaintenanceLaneBodyReport>
 	): MaintenanceLane {
 		let lastError: string | null = null;
 		return {
 			tick: async (callerSignal) => {
+				let starvation = false;
+				let starvationReservationAtMs: number | null = null;
 				if (callerSignal?.aborted) {
 					return { lane: name, status: 'skipped', reason: 'aborted' };
 				}
 				if (deps.connectivity() === 'offline') {
 					return { lane: name, status: 'skipped', reason: 'offline' };
 				}
-				if (pressureDeferredLanes.has(name) && deps.isServerBackingOff?.(now())) {
-					return { lane: name, status: 'skipped', reason: 'server-pressure' };
+				if (pressureDeferredLanes.has(name)) {
+					const tickAtMs = now();
+					if (deps.isServerBackingOff?.(tickAtMs)) {
+						const previousRunAtMs = lastRanAtMs.get(name);
+						if (previousRunAtMs === undefined) {
+							lastRanAtMs.set(name, tickAtMs);
+							return { lane: name, status: 'skipped', reason: 'server-pressure' };
+						}
+						if (deps.isServerRetryAfterActive?.(tickAtMs)) {
+							return { lane: name, status: 'skipped', reason: 'server-pressure' };
+						}
+						const starvationCeilingMs = 2 * laneRegistryEntry(name).defaultMs;
+						if (tickAtMs - previousRunAtMs < starvationCeilingMs) {
+							return { lane: name, status: 'skipped', reason: 'server-pressure' };
+						}
+						starvation = true;
+						starvationReservationAtMs = tickAtMs;
+					}
 				}
 				if (deps.manager.activeScope === null) {
 					return { lane: name, status: 'skipped', reason: 'no active scope' };
+				}
+				if (starvationReservationAtMs !== null) {
+					lastRanAtMs.set(name, starvationReservationAtMs);
 				}
 				try {
 					const report = await deps.manager.runGuarded<MaintenanceLaneReport>(async (bound) => {
@@ -247,7 +273,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						let wrote;
 						try {
 							wrote = await bound.guardWrite(async () => {
-								bodyReport = await body(db, bound.scopeId, signal, boundFetch);
+								bodyReport = await body(db, bound.scopeId, signal, boundFetch, {
+									starvation,
+								});
+								if (bodyReport.status !== 'skipped' && pressureDeferredLanes.has(name)) {
+									lastRanAtMs.set(name, now());
+								}
 								const { summary, level } = bodyReport;
 								if (summary !== null) {
 									deps.diagnostics({
@@ -258,7 +289,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 										type: 'maintenance.lane.tick',
 										level: level ?? 'info',
 										message: summary,
-										fields: { lane: name },
+										fields: { lane: name, ...(starvation ? { starvation: true } : {}) },
 									});
 								}
 							});
@@ -435,7 +466,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 
 	const queryTotal = deps.queryTotal;
 	const queryTotalRetry = queryTotal
-		? lane('query-total-retry', async (db, _scopeId, signal) => {
+		? lane('query-total-retry', async (db, _scopeId, signal, _fetcher, tick) => {
 				const nowMs = now();
 				const stateRepository = new RxQueryTotalRequestStateRepository(db as never);
 				const cacheRepository = new RxQueryTotalCacheRepository(db as never);
@@ -498,7 +529,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						censusCollectionFromQueryKey(request.queryKey) === null
 							? QUERY_TOTAL_FRESH_FOR_MS
 							: deps.censusFreshForMs,
-					maxRequests: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
+					maxRequests: tick.starvation
+						? 1
+						: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 				});
 				if (result.cacheEntries.length > 0) {
 					deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });
@@ -562,14 +595,17 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		return { summary: null };
 	});
 
-	const existencePrime = lane('existence-prime', async (_db, scopeId, _signal, fetcher) => {
+	const existencePrime = lane('existence-prime', async (_db, scopeId, _signal, fetcher, tick) => {
 		const startedAt = now();
 		const coverage = deps.coverageFor(scopeId);
 		if (!coverage) return { summary: null };
-		const result = await coverage.primeManifest({
-			fetcher: (url, init) => fetcher(url, init?.signal ? { signal: init.signal } : undefined),
-			syncBaseUrl: deps.syncBaseUrl,
-		});
+		const result = await coverage.primeManifest(
+			{
+				fetcher: (url, init) => fetcher(url, init?.signal ? { signal: init.signal } : undefined),
+				syncBaseUrl: deps.syncBaseUrl,
+			},
+			tick.starvation ? { maxChunks: 1 } : undefined
+		);
 		deps.diagnostics({
 			type: 'coverage.existence-prime',
 			level: 'info',
@@ -580,23 +616,29 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 	});
 
-	const existenceReconcile = lane('existence-reconcile', async (_db, scopeId, signal, fetcher) => {
-		const startedAt = now();
-		const coverage = deps.coverageFor(scopeId);
-		if (!coverage) return { summary: null };
-		const result = await coverage.reconcilePass(signal, fetcher, () =>
-			Boolean(deps.isServerBackingOff?.(now()))
-		);
-		deps.diagnostics({
-			type: 'coverage.existence-reconcile',
-			level: 'info',
-			fields: { ...result, durationMs: now() - startedAt },
-		});
-		return {
-			summary: `Existence audit: ${result.buckets} buckets (${result.emptyBuckets} empty skipped), ${result.pruned} pruned, ${result.missing} missing (not fetched), ${result.changed} changed (not fetched), ${result.skippedDirty} dirty skipped`,
-			...(result.deferred ? { status: 'skipped' as const, reason: 'server-pressure' } : {}),
-		};
-	});
+	const existenceReconcile = lane(
+		'existence-reconcile',
+		async (_db, scopeId, signal, fetcher, tick) => {
+			const startedAt = now();
+			const coverage = deps.coverageFor(scopeId);
+			if (!coverage) return { summary: null };
+			const result = await coverage.reconcilePass(
+				signal,
+				fetcher,
+				tick.starvation ? () => false : () => Boolean(deps.isServerBackingOff?.(now())),
+				tick.starvation ? { maxScanPagesPerSpace: 1, maxDrillDowns: 1 } : undefined
+			);
+			deps.diagnostics({
+				type: 'coverage.existence-reconcile',
+				level: 'info',
+				fields: { ...result, durationMs: now() - startedAt },
+			});
+			return {
+				summary: `Existence audit: ${result.buckets} buckets (${result.emptyBuckets} empty skipped), ${result.pruned} pruned, ${result.missing} missing (not fetched), ${result.changed} changed (not fetched), ${result.skippedDirty} dirty skipped`,
+				...(result.deferred ? { status: 'skipped' as const, reason: 'server-pressure' } : {}),
+			};
+		}
+	);
 
 	return {
 		schedulerDrain,
