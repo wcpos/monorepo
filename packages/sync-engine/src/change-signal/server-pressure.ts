@@ -323,6 +323,11 @@ export function createServerPressureMonitor(
 			// not the server's load. It is neither distress nor a clean bill of health.
 			const accepted = status >= 200 && status < 400;
 			if (!accepted) return null;
+			// Every accepted sample feeds the soft-load machine before any hard-
+			// pressure branch can return. Hard transitions take precedence below;
+			// otherwise this pending transition is the effective cadence change.
+			const softTransition =
+				observation.serverLoad1m !== undefined ? observeServerLoad(observation.serverLoad1m) : null;
 
 			latencySamples.push({ durationMs, pressure: observation.pressure });
 			if (latencySamples.length > SLOW_SAMPLE_COUNT) latencySamples.shift();
@@ -342,19 +347,13 @@ export function createServerPressureMonitor(
 				// Drop the window with the step: without this the same ten slow samples
 				// would trip every subsequent request and walk straight to the ceiling.
 				latencySamples = [];
-				return stepUp(signal, atMs);
+				return stepUp(signal, atMs) ?? softTransition;
 			}
 
 			// Reported pressure is neither distress nor evidence that a prior back-off can be undone.
-			if (observation.pressure === 'elevated' || observation.pressure === 'high') return null;
-			// Every accepted sample feeds the soft-load machine, hard back-off or
-			// not — gating on multiplier===1 starved the baseline through exactly
-			// the windows where load is most informative (codex review). Precedence
-			// needs no gate: while hard pressure holds the effective multiplier,
-			// a soft flip computes from==to under the MAX composition and emits
-			// nothing; the widened state simply outlives the hard back-off.
-			const softTransition =
-				observation.serverLoad1m !== undefined ? observeServerLoad(observation.serverLoad1m) : null;
+			if (observation.pressure === 'elevated' || observation.pressure === 'high') {
+				return softTransition;
+			}
 			healthyStreak += 1;
 			if (multiplier === 1 || healthyStreak < RECOVERY_HEALTHY_RESPONSES) return softTransition;
 			// Two brakes on recovery, both anti-flap:
@@ -363,8 +362,8 @@ export function createServerPressureMonitor(
 			//  - the server's own pause, because claiming to have recovered while still
 			//    inside a Retry-After window would write a false "back to normal" row
 			//    into the durable log (#899: the log must not lie about outcomes).
-			if (atMs - lastBackoffAtMs < RECOVERY_MIN_DWELL_MS) return null;
-			if (retryAfterUntilMs > atMs) return null;
+			if (atMs - lastBackoffAtMs < RECOVERY_MIN_DWELL_MS) return softTransition;
+			if (retryAfterUntilMs > atMs) return softTransition;
 			healthyStreak = 0;
 			// A server this healthy makes any surviving strike stale evidence. Without
 			// this, one old 5xx left in the window could complete a burst right after a
@@ -372,7 +371,7 @@ export function createServerPressureMonitor(
 			distressAtMs = [];
 			const from = effectiveMultiplier();
 			multiplier = Math.max(1, Math.floor(multiplier / 2));
-			if (effectiveMultiplier() === from) return null;
+			if (effectiveMultiplier() === from) return softTransition;
 			return {
 				direction: 'recovery',
 				signal: 'healthy',

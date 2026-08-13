@@ -149,6 +149,40 @@ describe('server pressure monitor', () => {
 		expect(monitor.isBackingOff(5)).toBe(true);
 	});
 
+	it('observes load before the accepted high-pressure early return', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, ...OK, pressure: 'high', serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 1, ...OK, pressure: 'high', serverLoad1m: 1.2 });
+		expect(monitor.observe({ atMs: 2, ...OK, pressure: 'high', serverLoad1m: 1.2 })).toMatchObject({
+			direction: 'backoff',
+			signal: 'server-pressure',
+			fromMultiplier: 1,
+			toMultiplier: 2,
+		});
+	});
+
+	it('keeps a load transition when the same response trips the slow window', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 200, durationMs: 2_001, serverLoad1m: 0.4 });
+		for (let sample = 1; sample < 8; sample += 1) {
+			monitor.observe({ atMs: sample, status: 200, durationMs: 2_001 });
+		}
+		monitor.observe({ atMs: 8, status: 200, durationMs: 2_001, serverLoad1m: 1.2 });
+		expect(
+			monitor.observe({ atMs: 9, status: 200, durationMs: 2_001, serverLoad1m: 1.2 })
+		).toMatchObject({
+			direction: 'backoff',
+			signal: 'server-pressure',
+			fromMultiplier: 1,
+			toMultiplier: 2,
+		});
+
+		for (let sample = 0; sample < 10; sample += 1) {
+			expect(monitor.observe({ atMs: 60_000 + sample, ...OK })).toBeNull();
+		}
+		expect(monitor.multiplier()).toBe(2);
+	});
+
 	it('learns zero as a valid first baseline and still triggers via the absolute floor', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		// [0,x,y] passes the parser by design — only the exact [0,0,0] fallback
