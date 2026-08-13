@@ -1,8 +1,13 @@
 import { expect, test } from '@playwright/test';
 
+import {
+	createServerPressureMonitor,
+	parseServerPressure,
+} from '../../../packages/sync-engine/src/change-signal/server-pressure';
 import { authenticateWithStore, navigateToPage } from './fixtures';
 
 import type { Page, Request } from '@playwright/test';
+import type { ServerPressure } from '../../../packages/sync-engine/src/change-signal/server-pressure';
 
 /**
  * #1129 — the existence audit must never flood the store at open.
@@ -33,6 +38,15 @@ import type { Page, Request } from '@playwright/test';
  *
  * Run:
  *   BASE_URL=<client deployment> npx playwright test -c playwright.politeness1129.config.ts
+ *
+ * PRESSURED RUNS SKIP (mono#1159 ruling, 2026-08-12): while the engine's server-pressure
+ * monitor is armed, the existence-audit lanes stand down and their starvation tick is
+ * ~2x the lane interval away — far outside this spec's window. When the run records
+ * active pressure evidence (failure burst, 429, slow median, Retry-After, or pressure
+ * header), the audit-shape assertions skip with that reason; the open-window zero-traffic
+ * invariant is still asserted first.
+ * Verified live 2026-08-13: a load-17 dev-next session correctly produced zero audit
+ * traffic while the browse walk ran exactly once (the #1175 heartbeat proof).
  */
 
 // maxReplayBacklog in packages/sync-core/src/hybridChangeSignal.ts — the forced head
@@ -67,7 +81,87 @@ type SyncRequest = {
 	atMs: number;
 	status: number | null;
 	failed: boolean;
+	durationMs: number | null;
+	settledAtMs: number | null;
+	retryAfter: string | null;
+	pressure?: ServerPressure;
 };
+
+/**
+ * Replay client-visible outcomes through the engine's own server-pressure state machine.
+ * The minimum ladder (x2) is conservative: evidence is accepted only when every cadence
+ * tier the engine permits would still be backing off at the end of the observation window.
+ * Under armed pressure the audit lanes DEFER by ruling (mono#1159, 2026-08-12) and
+ * their starvation tick is ~2x the lane interval out — far past this spec's budget —
+ * so zero audit traffic is the CORRECT outcome, not a broken chain.
+ */
+function pressureEvidence(entries: readonly SyncRequest[], atMs: number): string | null {
+	const monitor = createServerPressureMonitor({ maxMultiplier: 2 });
+	const signals = new Set<string>();
+	const settled = entries
+		.filter(
+			(entry): entry is SyncRequest & { durationMs: number; settledAtMs: number } =>
+				entry.durationMs !== null && entry.settledAtMs !== null
+		)
+		.sort((left, right) => left.settledAtMs - right.settledAtMs);
+	for (const entry of settled) {
+		const transition = monitor.observe({
+			atMs: entry.settledAtMs,
+			status: entry.failed ? 0 : (entry.status ?? 0),
+			durationMs: entry.durationMs,
+			retryAfter: entry.retryAfter,
+			...(entry.pressure === undefined ? {} : { pressure: entry.pressure }),
+		});
+		if (transition?.direction === 'backoff') signals.add(transition.signal);
+	}
+	if (!monitor.isBackingOff(atMs)) return null;
+	const retryAfterRemainingMs = Math.max(0, monitor.retryAfterUntilMs() - atMs);
+	return (
+		`signals=${[...signals].join(',')}, multiplier=x${monitor.multiplier()}, ` +
+		`retry-after=${retryAfterRemainingMs > 0 ? `${retryAfterRemainingMs}ms remaining` : 'none'}`
+	);
+}
+
+const recordedRequest = (input: Partial<SyncRequest> & { settledAtMs: number }): SyncRequest => ({
+	path: '/wcpos/v2/products',
+	atMs: input.settledAtMs - (input.durationMs ?? 10),
+	status: 200,
+	failed: false,
+	durationMs: 10,
+	retryAfter: null,
+	...input,
+});
+
+test.describe('pressure evidence replay', () => {
+	test('rejects failures outside the rolling window and pressure that recovered', () => {
+		const spacedFailures = [0, 61_000, 122_000].map((settledAtMs) =>
+			recordedRequest({ settledAtMs, status: 503 })
+		);
+		expect(pressureEvidence(spacedFailures, 122_001)).toBeNull();
+
+		const recovered = [
+			recordedRequest({ settledAtMs: 0, status: 429 }),
+			...Array.from({ length: 10 }, (_, index) => recordedRequest({ settledAtMs: 60_001 + index })),
+		];
+		expect(pressureEvidence(recovered, 61_000)).toBeNull();
+	});
+
+	test('accepts an active Retry-After window from one 503', () => {
+		const evidence = pressureEvidence(
+			[recordedRequest({ settledAtMs: 1_000, status: 503, retryAfter: '60' })],
+			30_000
+		);
+		expect(evidence).toContain('server-error');
+		expect(evidence).toContain('31000ms remaining');
+	});
+
+	test('accepts a full fast high-pressure header window', () => {
+		const entries = Array.from({ length: 10 }, (_, index) =>
+			recordedRequest({ settledAtMs: index, pressure: parseServerPressure('high') })
+		);
+		expect(pressureEvidence(entries, 10)).toContain('server-pressure');
+	});
+});
 
 /** Anything audit-shaped, sweep or existence audit alike — the open window allows NONE. */
 const isAuditShaped = (path: string) => /\/integrity\/|\/digests(\?|$)/.test(path);
@@ -203,6 +297,9 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 					atMs: Date.now(),
 					status: null,
 					failed: false,
+					durationMs: null,
+					settledAtMs: null,
+					retryAfter: null,
 				};
 				requests.push(entry);
 				byRequest.set(request, entry);
@@ -212,15 +309,24 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		page.on('response', (response) => {
 			const entry = byRequest.get(response.request());
 			if (entry) {
+				const settledAtMs = Date.now();
+				const headers = response.headers();
 				entry.status = response.status();
-				if (isAuditShaped(entry.path)) auditActivity.lastEventAtMs = Date.now();
+				entry.durationMs = settledAtMs - entry.atMs;
+				entry.settledAtMs = settledAtMs;
+				entry.retryAfter = headers['retry-after'] ?? null;
+				entry.pressure = parseServerPressure(headers['x-wcpos-pressure']);
+				if (isAuditShaped(entry.path)) auditActivity.lastEventAtMs = settledAtMs;
 			}
 		});
 		page.on('requestfailed', (request) => {
 			const entry = byRequest.get(request);
 			if (entry) {
+				const settledAtMs = Date.now();
 				entry.failed = true;
-				if (isAuditShaped(entry.path)) auditActivity.lastEventAtMs = Date.now();
+				entry.durationMs = settledAtMs - entry.atMs;
+				entry.settledAtMs = settledAtMs;
+				if (isAuditShaped(entry.path)) auditActivity.lastEventAtMs = settledAtMs;
 			}
 		});
 
@@ -266,13 +372,30 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 					'the tick claimed a huge head but the engine never drained the sequence-log — the tick→drain fall-through changed',
 			})
 			.toBe(true);
-		await expect
-			.poll(() => requests.some((entry) => isAuditScan(entry.path)), {
-				timeout: FIRST_AUDIT_SCAN_TIMEOUT_MS,
-				message:
-					'no existence-audit scan observed after the forced rebaseline — the audit chain did not run',
-			})
-			.toBe(true);
+		// The audit chain's first scan — OR a legitimate pressure deferral. Since the
+		// mono#1159 ruling (2026-08-12), audit lanes stand down while the server-pressure
+		// monitor is armed and their starvation tick sits ~2x the lane interval out, so on
+		// a struggling server this window correctly closes with zero audit traffic. That
+		// is a skip (environment condition), never a pass — and without pressure evidence
+		// a silent chain is still a failure.
+		const auditDeadline = Date.now() + FIRST_AUDIT_SCAN_TIMEOUT_MS;
+		while (!requests.some((entry) => isAuditScan(entry.path)) && Date.now() < auditDeadline) {
+			await page.waitForTimeout(5_000);
+		}
+		if (!requests.some((entry) => isAuditScan(entry.path))) {
+			const evidence = pressureEvidence(requests, Date.now());
+			expect(
+				evidence,
+				'no existence-audit scan observed after the forced rebaseline, and no server-pressure ' +
+					'evidence excuses the silence — the audit chain did not run'
+			).not.toBeNull();
+			test.skip(
+				true,
+				`audit deferred under armed server pressure (${evidence}) — the starvation ceiling ` +
+					'schedules the reduced tick ~30min out (mono#1159 ruling); rerun on a healthy window ' +
+					'for the audit-shape proof'
+			);
+		}
 		// Let the pass settle: quiet for AUDIT_QUIET_MS with no audit request still in
 		// flight — a completed scan can schedule the next drill, so both starts and
 		// completions reset the quiet clock (coderabbit review). Capped so a floody
