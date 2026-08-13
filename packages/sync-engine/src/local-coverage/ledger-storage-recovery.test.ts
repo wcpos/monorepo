@@ -19,6 +19,7 @@ import {
 	PRODUCT_BROWSE_WINDOW_LIMIT,
 	PRODUCT_BROWSE_WINDOW_ORDER,
 	PRODUCT_BROWSE_WINDOW_ORDERBY,
+	type ProductBrowseWindowDescriptor,
 } from '../scheduler/product-browse-window-descriptor';
 import { posBootstrapTasks, seedPosBootstrapLanes } from '../scheduler/rx-pos-bootstrap-seeder';
 import { emptyPersistedSchedulerTaskRunnerResult } from '../scheduler/rx-scheduler-task-runner';
@@ -161,7 +162,7 @@ function schedulerTaskStateDocument(status: 'queued' | 'completed'): Record<stri
 }
 
 function productBrowseWindowTask(): FetchTask {
-	const descriptor = {
+	const descriptor: ProductBrowseWindowDescriptor = {
 		limit: PRODUCT_BROWSE_WINDOW_LIMIT,
 		orderby: PRODUCT_BROWSE_WINDOW_ORDERBY,
 		order: PRODUCT_BROWSE_WINDOW_ORDER,
@@ -532,7 +533,11 @@ describe('coverage ledger recovery', () => {
 
 	it('reaches the query-total cache from an unfiltered publish product drain', async () => {
 		const db = await openEngineDatabase();
-		const coverage = createLocalCoverage({ database: db as never });
+		const coverage = createLocalCoverage({
+			database: db as never,
+			now: () => 1_000,
+			freshForMs: 500,
+		});
 		const task = productBrowseWindowTask();
 		await db.collections.schedulerTaskStates.insert(queuedSchedulerTaskDocument(task));
 		const upsert = vi.spyOn(RxQueryTotalCacheRepository.prototype, 'upsert');
@@ -555,6 +560,8 @@ describe('coverage ledger recovery', () => {
 		const coverage = createLocalCoverage({
 			database: db as never,
 			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
 		});
 		const task = productBrowseWindowTask();
 		await db.collections.schedulerTaskStates.insert(queuedSchedulerTaskDocument(task));
@@ -590,6 +597,8 @@ describe('coverage ledger recovery', () => {
 		const coverage = createLocalCoverage({
 			database: db as never,
 			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
 		});
 		const task = productBrowseWindowTask();
 		const upsert = vi
