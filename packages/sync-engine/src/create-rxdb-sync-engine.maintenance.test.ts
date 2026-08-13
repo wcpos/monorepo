@@ -14,6 +14,7 @@ import {
 	type RxdbSyncEnginePorts,
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
+import { RxCoverageRepository } from './local-coverage/persistence';
 import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
 import { ledgerRebuiltSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
@@ -28,6 +29,8 @@ afterEach(() => {
 
 const SITE = 'https://lab.example.test';
 let uniqueStore = 0;
+
+const refusalError = (reason: string) => new SyntaxError(`index reconciliation refused: ${reason}`);
 
 function freshIdentity(): StoreScopeIdentity {
 	uniqueStore += 1;
@@ -626,6 +629,46 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			lastError: null,
 			lastTick: { status: 'ran' },
 		});
+		await engine.dispose();
+	});
+
+	it('keeps coverage subscribers live after a ledger rebuild replaces their collections', async () => {
+		const diagnostics = vi.fn();
+		const engine = engineWith({ diagnostics, now: () => 1_000_000 });
+		await engine.ready;
+		const verdicts: { source: string; total: number | null }[] = [];
+		const unsubscribe = engine.coverageChanges(
+			{ collection: 'categories', lane: 'reference' },
+			(verdict) => verdicts.push(verdict)
+		);
+		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
+			refusalError('unsorted-primary')
+		);
+
+		await expect(engine.sync('coverage-compaction')).resolves.toMatchObject({ status: 'ran' });
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'coverage.ledger-rebuilt',
+				fields: { reason: 'unsorted-primary', trigger: 'coverage' },
+			})
+		);
+		const emissionsAfterRebuild = verdicts.length;
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		await scope.database.collections.coverageLanes.insert({
+			laneKey: 'categories::categories:all',
+			collectionName: 'categories',
+			queryKey: 'categories:all',
+			complete: true,
+			expectedRecordIds: ['woo-category:1', 'woo-category:2'],
+			freshUntilMs: 1_060_000,
+			updatedAtMs: 1_000_000,
+			schemaVersion: 3,
+		});
+
+		await vi.waitFor(() => expect(verdicts.length).toBeGreaterThan(emissionsAfterRebuild));
+		expect(verdicts.at(-1)).toMatchObject({ source: 'lane', total: 2 });
+		unsubscribe();
 		await engine.dispose();
 	});
 
