@@ -11,7 +11,11 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
+      # repository_dispatch runs the workflow file from the default branch (main),
+      # but version bumps belong on the active development trunk `next`.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: next
 
       - name: Generate app token
         id: app-token
@@ -43,5 +47,5 @@ jobs:
             gh pr create \
               --title "chore: update translation version to ${VERSION}" \
               --body "Automated PR to update translation version to ${VERSION}." \
-              --base main
+              --base next
           fi

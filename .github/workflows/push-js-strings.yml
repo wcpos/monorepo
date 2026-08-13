@@ -2,8 +2,10 @@ name: Push JS Strings to Translations
 
 on:
   push:
+    # `next` is the active development trunk; `main` (1.9.x) is frozen, so
+    # source strings must flow from `next` or they never reach wcpos/translations.
     branches:
-      - main
+      - next
     paths:
       - 'packages/core/src/contexts/translations/locales/en/core.json'
   workflow_dispatch:
