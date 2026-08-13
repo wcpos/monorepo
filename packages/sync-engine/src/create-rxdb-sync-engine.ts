@@ -389,6 +389,14 @@ export type EngineEvent =
 			reason?: string;
 			/** The server's human-readable message; `reason` is the machine code. */
 			serverMessage?: string;
+			/**
+			 * True when the rejected mutation is a CREATE whose resident still
+			 * carries no remote id — the record exists nowhere but this device.
+			 * These are exempt from the #1082 auto-revert (there is no server
+			 * truth to restore; discard would destroy the only copy) and stay
+			 * parked on `conflicts()` like an order's dead letter.
+			 */
+			bornLocalCreate?: boolean;
 	  }
 	// R1 — the save-time mirror check. The server ACKED an order the POS built, but
 	// its money is not the money that was pushed: WooCommerce's calculation is the
@@ -481,7 +489,10 @@ export type RxdbSyncEngine = {
 	 * collection (products/variations/customers/coupons, never orders) is
 	 * auto-discarded moments after the `write-rejected` event, so consumers may
 	 * observe it vanish asynchronously; a row whose auto-discard failed stays
-	 * parked here as before.
+	 * parked here as before. A rejected BORN-LOCAL CREATE (the resident never
+	 * adopted a remote id) is carved out of that exception: there is no server
+	 * truth to restore and discard would destroy the only copy, so it stays
+	 * parked here like an order's dead letter.
 	 */
 	conflicts(): Promise<EngineConflict[]>;
 	/**
@@ -1400,6 +1411,16 @@ export function createRxdbSyncEngine(
 		emitWriteEvent: (event) => {
 			emitEngineEvent(event);
 			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
+				return;
+			}
+			// A refused BORN-LOCAL CREATE never auto-discards: #1082's revert means
+			// "restore server truth", and a record the server refused to create has
+			// none — `discard` would DESTROY the only copy of what the cashier typed
+			// (#832 R7b is scoped to the cashier-confirmed Store health dialog, which
+			// warns before deleting). It dead-letters like an order instead: Store
+			// health lists the rejected row and "Send again" rebuilds the payload
+			// from the kept resident.
+			if (event.bornLocalCreate === true) {
 				return;
 			}
 			// Reactive revert (#1082): a rejected catalog change is settled for the

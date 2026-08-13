@@ -173,6 +173,15 @@ export type WriteOutcomeEvent =
 			reason?: string;
 			/** The server's human-readable message; `reason` is the machine code. */
 			serverMessage?: string;
+			/**
+			 * True when the rejected mutation is a CREATE whose resident still
+			 * carries no remote id: the record exists nowhere but this device.
+			 * The #1082 auto-revert must never `discard` these — discard DESTROYS
+			 * a born-local resident (#832 R7b, designed for the cashier-confirmed
+			 * Store health dialog) and there is no server truth to revert to.
+			 * They dead-letter for Store health instead, like orders.
+			 */
+			bornLocalCreate?: boolean;
 	  }
 	/**
 	 * R1: the server ACKED an order the POS built, but the money it returned is not
@@ -566,6 +575,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							const doc = (await database.collections[dead.collectionName]
 								?.findOne(dead.recordId)
 								.exec()) as {
+								toJSON(): Record<string, unknown>;
 								incrementalModify(
 									fn: (data: Record<string, unknown>) => Record<string, unknown>
 								): Promise<unknown>;
@@ -581,6 +591,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										local: { ...local, pendingMutationIds, dirty: pendingMutationIds.length > 0 },
 									};
 								});
+							// Decided from the resident's remote-id column at rejection time: a
+							// CREATE whose resident never adopted a remote id exists nowhere but
+							// this device, so "restore server truth" is not an option for it —
+							// consumers (the #1082 auto-revert) must dead-letter it instead.
+							const rejectedFacet = writeFacetFor(dead.collectionName);
+							const rejectedRemoteId =
+								doc !== null && rejectedFacet !== null
+									? doc.toJSON()[rejectedFacet.remoteIdField]
+									: undefined;
 							deps.emitWriteEvent({
 								type: 'write-rejected',
 								collection: dead.collectionName,
@@ -589,6 +608,10 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								status,
 								reason,
 								serverMessage,
+								bornLocalCreate:
+									dead.operation === 'create' &&
+									doc !== null &&
+									typeof rejectedRemoteId !== 'number',
 							});
 						}
 						deps.setQueueDepth(stillPending.size);

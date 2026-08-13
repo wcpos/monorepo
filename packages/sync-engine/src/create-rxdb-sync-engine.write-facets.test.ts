@@ -1013,7 +1013,57 @@ describe('write facets beyond orders', () => {
 		await subject.dispose();
 	});
 
-	it('discard removes a rejected born-local create that never existed remotely', async () => {
+	it('a rejected born-local create dead-letters with the resident kept — never auto-discarded', async () => {
+		// The auto-revert (#1082) means "restore server truth", and a record the
+		// server REFUSED to create has none — auto-discarding would destroy the
+		// only copy of what the cashier typed. So the rejection dead-letters like
+		// an order: the row stays on conflicts() for Store health, the resident
+		// keeps the typed data, and "Send again" can rebuild from it.
+		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
+		const route = routedServer(spec, () => null);
+		// Exactly a bad email typed into the new-customer form.
+		route.server.script(() => ({
+			kind: 'invalid_param',
+			code: 'rest_invalid_param',
+			message: 'Invalid parameter(s): email',
+		}));
+		const harness = createEngineHarness({
+			site: SITE,
+			identity: identity(),
+			mode: 'manual',
+			fetch: route.fetch,
+			awaitReady: false,
+		});
+		const subject = harness.engine;
+		await subject.ready;
+		await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'born-local' }));
+		const receipt = await subject.write({
+			collection: spec.collection,
+			operation: 'create',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'born-local'),
+		});
+		expect(await subject.sync('write-drain')).toMatchObject({ rejected: 1 });
+
+		// Dead-lettered: the rejected row is parked for Store health…
+		expect(await subject.conflicts()).toEqual([
+			expect.objectContaining({ mutationId: receipt.mutationId, status: 'rejected' }),
+		]);
+		// …and the resident survives with everything the cashier typed.
+		const resident = await record(subject, spec, UUID_A);
+		expect(resident).not.toBeNull();
+		expect((resident?.payload as { first_name?: string }).first_name).toBe('born-local');
+		// Give the (gated) reactive revert every chance to fire, then prove it
+		// did not: the resident is still there and no auto-revert was logged.
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		expect(await record(subject, spec, UUID_A)).not.toBeNull();
+		expect(harness.diagnostics.some((event) => event.type === 'queue.write.auto-reverted')).toBe(
+			false
+		);
+		await subject.dispose();
+	});
+
+	it('manual discard removes a rejected born-local create that never existed remotely', async () => {
 		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
 		const route = routedServer(spec, () => null);
 		// A refusal that says nothing about server-side existence. This used to be
@@ -1029,13 +1079,18 @@ describe('write facets beyond orders', () => {
 		const subject = engine(route.fetch);
 		await subject.ready;
 		await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'born-local' }));
-		await subject.write({
+		const receipt = await subject.write({
 			collection: spec.collection,
 			operation: 'create',
 			recordId: UUID_A,
 			payload: payload(spec, UUID_A, 'born-local'),
 		});
 		expect(await subject.sync('write-drain')).toMatchObject({ rejected: 1 });
+
+		// The auto path dead-letters (see the test above); destroying a born-local
+		// record stays behind the cashier-confirmed Store health discard, which
+		// warns outright that it DELETES the record (#832 R7b).
+		await subject.resolveConflict(receipt.mutationId, 'discard');
 
 		await vi.waitFor(async () => {
 			expect(await record(subject, spec, UUID_A)).toBeNull();
