@@ -68,6 +68,7 @@ import {
 } from './scheduler';
 import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
+import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 
 import type { SyncCollectionName } from './collections/engine-collections';
 import type { EngineSourceFetcher } from './change-signal/change-signal-source';
@@ -752,9 +753,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					}
 					if (searchCollection === 'products') {
 						const now = deps.now ?? Date.now;
-						const [entry] = await new RxQueryTotalCacheRepository(
-							database as never
-						).readForQueryKeys([censusQueryKey('products')]);
+						const [entry] = await withLedgerRecovery({
+							database,
+							trigger: 'query-total',
+							create: () => new RxQueryTotalCacheRepository(database as never),
+						}).readForQueryKeys([censusQueryKey('products')]);
 						if (
 							entry &&
 							entry.freshUntilMs > now() &&

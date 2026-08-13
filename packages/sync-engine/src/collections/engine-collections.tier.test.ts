@@ -43,11 +43,13 @@ const TIER_COLLECTIONS = [
 ] as const;
 
 describe('engine scope recipe: the scheduler/coverage tier (slice 5a)', () => {
-	it('hard-whitelists only the three derivable ledger collections', async () => {
+	it('hard-whitelists only the five derivable ledger collections', async () => {
 		expect(DERIVABLE_METADATA_COLLECTIONS).toEqual([
 			'coverageRecords',
 			'coverageLanes',
 			'schedulerTaskStates',
+			'queryTotalRequestStates',
+			'queryTotalCacheEntries',
 		]);
 		await expect(
 			resetDerivableMetadataCollection({ name: 'test' } as never, 'products')

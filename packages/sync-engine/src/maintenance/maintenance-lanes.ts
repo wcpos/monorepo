@@ -53,6 +53,7 @@ import {
 import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
+import { withLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { type CustomerTrickleStateStore, tickCustomerTrickle } from './customer-trickle';
 import {
 	laneRegistryEntry,
@@ -468,8 +469,16 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	const queryTotalRetry = queryTotal
 		? lane('query-total-retry', async (db, _scopeId, signal, _fetcher, tick) => {
 				const nowMs = now();
-				const stateRepository = new RxQueryTotalRequestStateRepository(db as never);
-				const cacheRepository = new RxQueryTotalCacheRepository(db as never);
+				const stateRepository = withLedgerRecovery({
+					database: db,
+					trigger: 'query-total',
+					create: () => new RxQueryTotalRequestStateRepository(db as never),
+				});
+				const cacheRepository = withLedgerRecovery({
+					database: db,
+					trigger: 'query-total',
+					create: () => new RxQueryTotalCacheRepository(db as never),
+				});
 				const censusQueryKeys = SUPPORTED_CENSUS_COLLECTIONS.map(censusQueryKey);
 				const [censusCacheEntries, censusRequestStates] = await Promise.all([
 					cacheRepository.readForQueryKeys(censusQueryKeys),

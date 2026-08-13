@@ -107,6 +107,7 @@ import {
 	decodeCustomerTrickleState,
 } from './maintenance/customer-trickle';
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
+import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
 import { createReconcilePorts } from './local-coverage/reconcile-port';
 import {
@@ -1039,7 +1040,11 @@ export function createRxdbSyncEngine(
 				const database = capturedDatabase ?? activeDatabase();
 				return database === null
 					? null
-					: new RxQueryTotalCacheRepository(database as never).readForQueryKeys(keys);
+					: withLedgerRecovery({
+							database,
+							trigger: 'query-total',
+							create: () => new RxQueryTotalCacheRepository(database as never),
+						}).readForQueryKeys(keys);
 			},
 		},
 		now: nowMs,

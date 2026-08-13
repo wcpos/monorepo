@@ -8,7 +8,10 @@ import {
 	type PersistedSchedulerTaskRunnerResult,
 	runPersistedSchedulerTasks,
 } from './rx-scheduler-task-runner';
-import { withSchedulerDrainLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
+import {
+	withLedgerRecovery,
+	withSchedulerDrainLedgerRecovery,
+} from '../local-coverage/ledger-storage-recovery';
 import {
 	RxSchedulerTaskStateRepository,
 	type SchedulerTaskStateDatabase,
@@ -307,7 +310,11 @@ function createEngineSchedulerFetcherRegistry(
 	const nowMs = input.nowMs ?? Date.now();
 	const getNowMs = input.now ?? (input.nowMs === undefined ? Date.now : () => nowMs);
 	const orderRepository = new EngineOrderRepository(db);
-	const queryTotalRepository = new RxQueryTotalCacheRepository(db as never);
+	const queryTotalRepository = withLedgerRecovery({
+		database: db,
+		trigger: 'query-total',
+		create: () => new RxQueryTotalCacheRepository(db as never),
+	});
 	const cacheQueryTotals: CacheQueryTotals = async ({ queryKeys, totalMatchingRecords }) => {
 		const updatedAtMs = getNowMs();
 		for (const queryKey of queryKeys) {
