@@ -16,7 +16,7 @@ export type QueryTotalRequestLifecycleAction =
 	| 'claim-request'
 	| 'take-over-request';
 
-export type QueryTotalRequestStateStatus = 'in-flight' | 'failed';
+export type QueryTotalRequestStateStatus = 'in-flight' | 'failed' | 'idle';
 
 export type QueryTotalRequestOwnerStatus =
 	| 'not-needed'

@@ -54,6 +54,10 @@ import {
 } from './reference-collection-schema';
 import { syncCheckpointMigrationStrategies, syncCheckpointSchema } from './sync-checkpoint-schema';
 import {
+	queryTotalRequestStateMigrationStrategies,
+	queryTotalRequestStateSchema,
+} from '../scheduler/query-total-request-state-schema';
+import {
 	CHANGE_SIGNAL_STATE_ID,
 	changeSignalStateSchema,
 } from '../change-signal/change-signal-state-schema';
@@ -300,7 +304,8 @@ describe('stored documents migrate through every schema version', () => {
 			storage,
 			dbName,
 		});
-		const migrated = await current.collection.findOne(input.oldDocument.id as string).exec();
+		const documentId = (input.oldDocument.id ?? input.oldDocument.queryKey) as string;
+		const migrated = await current.collection.findOne(documentId).exec();
 		expect(migrated).not.toBeNull();
 		const json = migrated!.toJSON() as Record<string, unknown>;
 		await current.db.close();
@@ -335,6 +340,40 @@ describe('stored documents migrate through every schema version', () => {
 		});
 		expect(migrated).toMatchObject(promotedOrderColumns(ORDER_PAYLOAD));
 		expect(migrated.payload).toEqual(ORDER_PAYLOAD); // payload bytes untouched
+	});
+
+	it('query-total request state v2 → v3 preserves the document with the new marker', async () => {
+		const migrated = await migrate({
+			fixtureSchema: {
+				...queryTotalRequestStateSchema,
+				version: 2,
+				properties: {
+					...queryTotalRequestStateSchema.properties,
+					status: { type: 'string', enum: ['in-flight', 'failed'], maxLength: 16 },
+					schemaVersion: { type: 'number', enum: [2] },
+				},
+			},
+			fixtureMigrationStrategies: { 1: (doc) => doc, 2: (doc) => doc },
+			oldDocument: {
+				queryKey: 'census:orders',
+				status: 'failed',
+				ownerId: null,
+				claimedUntilMs: null,
+				attempt: 1,
+				retryAfterMs: 1_000,
+				updatedAtMs: 900,
+				request: null,
+				schemaVersion: 2,
+			},
+			currentSchema: queryTotalRequestStateSchema,
+			migrationStrategies: queryTotalRequestStateMigrationStrategies,
+		});
+		expect(migrated).toMatchObject({
+			queryKey: 'census:orders',
+			status: 'failed',
+			attempt: 1,
+			schemaVersion: 3,
+		});
 	});
 
 	it('products v0 → v2 runs BOTH strategies: promoted columns then decimal stockQuantity', async () => {

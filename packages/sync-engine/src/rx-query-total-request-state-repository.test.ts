@@ -85,7 +85,7 @@ describe('RxQueryTotalRequestStateRepository', () => {
 
 		await repository.upsert(next);
 
-		expect(bulkUpsert).toHaveBeenCalledWith([{ ...next, schemaVersion: 2 }]);
+		expect(bulkUpsert).toHaveBeenCalledWith([{ ...next, schemaVersion: 3 }]);
 	});
 
 	it('claim-inserts a new request state only when the query key is absent', async () => {
@@ -94,8 +94,8 @@ describe('RxQueryTotalRequestStateRepository', () => {
 
 		await expect(repository.claimNew(next)).resolves.toBe(true);
 
-		expect(insert).toHaveBeenCalledWith({ ...next, schemaVersion: 2 });
-		expect(stored.get('orders:status=pending')).toEqual({ ...next, schemaVersion: 2 });
+		expect(insert).toHaveBeenCalledWith({ ...next, schemaVersion: 3 });
+		expect(stored.get('orders:status=pending')).toEqual({ ...next, schemaVersion: 3 });
 	});
 
 	it('does not overwrite an existing request state when claim-insert loses the primary-key race', async () => {
@@ -123,7 +123,7 @@ describe('RxQueryTotalRequestStateRepository', () => {
 
 	it('does not expose the persisted schema marker when reading request states', async () => {
 		const { repository } = repositoryFor([
-			{ ...state({ queryKey: 'orders:a' }), schemaVersion: 2 } as QueryTotalRequestState,
+			{ ...state({ queryKey: 'orders:a' }), schemaVersion: 3 } as QueryTotalRequestState,
 		]);
 
 		await expect(repository.readForQueryKeys(['orders:a'])).resolves.toEqual([
@@ -239,7 +239,7 @@ describe('RxQueryTotalRequestStateRepository', () => {
 
 		await expect(repository.claim(expired, claimed)).resolves.toBe(true);
 
-		expect(stored.get('orders:a')).toEqual({ ...claimed, schemaVersion: 2 });
+		expect(stored.get('orders:a')).toEqual({ ...claimed, schemaVersion: 3 });
 	});
 
 	it('does not claim over a newer request owner attempt', async () => {
@@ -291,7 +291,7 @@ describe('RxQueryTotalRequestStateRepository', () => {
 
 		await expect(repository.markFailed(inFlight, failed)).resolves.toBe(true);
 
-		expect(stored.get('orders:a')).toEqual({ ...failed, schemaVersion: 2 });
+		expect(stored.get('orders:a')).toEqual({ ...failed, schemaVersion: 3 });
 	});
 
 	it('does not mark a newer request owner failed from an older owner attempt', async () => {
