@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	createServerPressureMonitor,
 	parseRetryAfterMs,
+	parseServerLoad1m,
 	type ServerPressureMonitor,
 } from './server-pressure';
 
@@ -31,7 +32,93 @@ describe('parseRetryAfterMs', () => {
 	});
 });
 
+describe('parseServerLoad1m', () => {
+	it('reads the one-minute value from a finite load triple', () => {
+		expect(parseServerLoad1m('[0.5,0.3,0.2]')).toBe(0.5);
+	});
+
+	it.each([
+		undefined,
+		null,
+		'not-json',
+		'{"load":0.5}',
+		'[0.5,0.3]',
+		'["0.5",0.3,0.2]',
+		'[0.5,null,0.2]',
+		'[0.5,0.3,null]',
+		'[0,0,0]',
+	])('ignores an absent, malformed, or unknown load value (%s)', (value) => {
+		expect(parseServerLoad1m(value)).toBeUndefined();
+	});
+});
+
 describe('server pressure monitor', () => {
+	it('uses EWMA ratio and floor thresholds before entering soft pressure', () => {
+		const floorMonitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		floorMonitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.4 });
+		expect(floorMonitor.observe({ atMs: 1, ...OK, serverLoad1m: 0.9 })).toBeNull();
+		expect(floorMonitor.observe({ atMs: 2, ...OK, serverLoad1m: 0.9 })).toBeNull();
+		expect(floorMonitor.observe({ atMs: 3, ...OK, serverLoad1m: 1 })).toBeNull();
+		expect(floorMonitor.observe({ atMs: 4, ...OK, serverLoad1m: 1 })).toMatchObject({
+			direction: 'backoff',
+			signal: 'server-pressure',
+			fromMultiplier: 1,
+			toMultiplier: 2,
+			serverLoad1m: 1,
+			serverLoadBaseline1m: expect.any(Number),
+		});
+
+		const ratioMonitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		ratioMonitor.observe({ atMs: 0, ...OK, serverLoad1m: 1 });
+		expect(ratioMonitor.observe({ atMs: 1, ...OK, serverLoad1m: 1.99 })).toBeNull();
+		expect(ratioMonitor.observe({ atMs: 2, ...OK, serverLoad1m: 2.3 })).toBeNull();
+		expect(ratioMonitor.observe({ atMs: 3, ...OK, serverLoad1m: 2.5 })).toMatchObject({
+			direction: 'backoff',
+			toMultiplier: 2,
+		});
+	});
+
+	it('requires two samples in both hysteresis directions without backing maintenance off', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.5 });
+
+		expect(monitor.observe({ atMs: 1, ...OK, serverLoad1m: 1.2 })).toBeNull();
+		expect(monitor.isBackingOff(1)).toBe(false);
+		expect(monitor.observe({ atMs: 2, ...OK, serverLoad1m: 1.2 })).toMatchObject({
+			direction: 'backoff',
+			toMultiplier: 2,
+		});
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.isBackingOff(2)).toBe(false);
+
+		expect(monitor.observe({ atMs: 3, ...OK, serverLoad1m: 0.5 })).toBeNull();
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.observe({ atMs: 4, ...OK, serverLoad1m: 0.5 })).toMatchObject({
+			direction: 'recovery',
+			fromMultiplier: 2,
+			toMultiplier: 1,
+		});
+		expect(monitor.multiplier()).toBe(1);
+		expect(monitor.isBackingOff(4)).toBe(false);
+	});
+
+	it('keeps simultaneous hard pressure authoritative and does not shorten it', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 1, ...OK, serverLoad1m: 1.1 });
+		expect(
+			monitor.observe({ atMs: 2, status: 429, durationMs: 20, serverLoad1m: 1.1 })
+		).toMatchObject({ signal: 'rate-limited', fromMultiplier: 1, toMultiplier: 2 });
+		expect(monitor.isBackingOff(2)).toBe(true);
+
+		monitor.observe({ atMs: 3, ...OK, serverLoad1m: 1.1 });
+		monitor.observe({ atMs: 4, ...OK, serverLoad1m: 1.1 });
+		monitor.observe({ atMs: 5, ...OK, serverLoad1m: 0.4 });
+		expect(monitor.observe({ atMs: 6, ...OK, serverLoad1m: 0.4 })).toBeNull();
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.isBackingOff(6)).toBe(true);
+	});
+
 	it('reports whether maintenance should defer for a raised cadence or active Retry-After floor', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		expect(monitor.isBackingOff(0)).toBe(false);

@@ -76,6 +76,7 @@ import {
 } from './change-signal/change-signal-lane';
 import {
 	createServerPressureMonitor,
+	parseServerLoad1m,
 	parseServerPressure,
 	type ServerPressure,
 } from './change-signal/server-pressure';
@@ -624,7 +625,8 @@ export function createRxdbSyncEngine(
 		const observe = (
 			status: number,
 			retryAfter?: string | null,
-			pressure?: ServerPressure
+			pressure?: ServerPressure,
+			serverLoad1m?: number
 		): void => {
 			const atMs = nowMs();
 			const transition = serverPressure.observe({
@@ -634,6 +636,7 @@ export function createRxdbSyncEngine(
 				offline: readConnectivity() === 'offline',
 				...(retryAfter === undefined ? {} : { retryAfter }),
 				...(pressure === undefined ? {} : { pressure }),
+				...(serverLoad1m === undefined ? {} : { serverLoad1m }),
 			});
 			if (transition !== null) cadence?.onServerPressureTransition(transition);
 		};
@@ -664,14 +667,16 @@ export function createRxdbSyncEngine(
 		}
 		let retryAfter: string | null = null;
 		let pressure: ServerPressure | undefined;
+		let serverLoad1m: number | undefined;
 		try {
 			retryAfter = response.headers.get('retry-after');
 			pressure = parseServerPressure(response.headers.get('x-wcpos-pressure'));
+			serverLoad1m = parseServerLoad1m(response.headers.get('x-server-load'));
 		} catch {
 			// A host fetch stub may hand back a header-less object; never let
 			// telemetry break a real response.
 		}
-		observe(response.status, retryAfter, pressure);
+		observe(response.status, retryAfter, pressure, serverLoad1m);
 		return response;
 	};
 	const hostTransport: EngineHostTransport = Object.freeze({

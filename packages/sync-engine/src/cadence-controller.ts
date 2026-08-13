@@ -156,6 +156,10 @@ export function createCadenceController(options: {
 				...(transition.retryAfterUntilMs === undefined
 					? {}
 					: { retryAfterMs: Math.max(0, transition.retryAfterUntilMs - options.now()) }),
+				...(transition.serverLoad1m === undefined ? {} : { serverLoad1m: transition.serverLoad1m }),
+				...(transition.serverLoadBaseline1m === undefined
+					? {}
+					: { serverLoadBaseline1m: transition.serverLoadBaseline1m }),
 				...(transition.direction === 'recovery' && transition.toMultiplier === 1
 					? { outcome: 'recovered' as const }
 					: {}),

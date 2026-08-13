@@ -264,6 +264,8 @@ type CadenceFields = {
 	readonly pressureMultiplier?: number;
 	readonly signal?: string;
 	readonly retryAfterMs?: number;
+	readonly serverLoad1m?: number;
+	readonly serverLoadBaseline1m?: number;
 	/** Stamped by a back-off that closed out, so the arc reads as recovered (#899). */
 	readonly outcome?: 'recovered';
 };
