@@ -306,6 +306,32 @@ describe('change-signal server-pressure adaptation', () => {
 		await context.engine.dispose();
 	});
 
+	it('ingests pressure headers case-insensitively and ignores unknown values', async () => {
+		const ignored = await harness();
+		ignored.diagnostics.length = 0;
+		for (let index = 0; index < 10; index += 1) {
+			await ignored.respond(
+				new Response(null, { status: 200, headers: { 'X-WCPOS-Pressure': 'overloaded' } })
+			);
+		}
+		expect(cadenceEvents(ignored.diagnostics, 'cadence.backoff')).toHaveLength(0);
+		await ignored.engine.dispose();
+
+		const pressured = await harness();
+		pressured.diagnostics.length = 0;
+		for (let index = 0; index < 10; index += 1) {
+			await pressured.respond(
+				new Response(null, { status: 200, headers: { 'x-wcpos-pressure': 'HIGH' } })
+			);
+		}
+		const [backoff] = cadenceEvents(pressured.diagnostics, 'cadence.backoff');
+		expect(backoff!.fields).toMatchObject({
+			signal: 'server-pressure',
+			pressureMultiplier: 2,
+		});
+		await pressured.engine.dispose();
+	});
+
 	it('does not read the device being offline as the server being in trouble', async () => {
 		const connectivity = scriptedConnectivity('offline');
 		const context = await harness({ connectivity: connectivity.signal });

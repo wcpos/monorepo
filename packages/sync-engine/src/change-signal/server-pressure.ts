@@ -23,7 +23,10 @@
  */
 
 /** What made us back off. Carried on the cadence log event so support can read it back. */
-export type PressureSignal = 'rate-limited' | 'server-error' | 'timeout' | 'slow';
+export type PressureSignal =
+	'rate-limited' | 'server-error' | 'timeout' | 'slow' | 'server-pressure';
+
+export type ServerPressure = 'low' | 'elevated' | 'high';
 
 export type ServerPressureTransition = {
 	direction: 'backoff' | 'recovery';
@@ -42,6 +45,8 @@ export type ServerPressureObservation = {
 	durationMs: number;
 	/** Raw `Retry-After` header value, when the response carried one. */
 	retryAfter?: string | null;
+	/** Server-reported load, absent when an older server did not send the header. */
+	pressure?: ServerPressure;
 	/** The engine's connectivity verdict. An offline device's failures are not the server's fault. */
 	offline?: boolean;
 };
@@ -83,6 +88,8 @@ const PRESSURE_WINDOW_MS = 60_000;
  * baseline": a baseline learned from live traffic drifts up as the server
  * degrades, so the relative test goes quiet exactly when the server is worst.
  * The median (not the mean) keeps one 30s outlier from tripping it.
+ * Explicit high-pressure readings share this window, so one header can never
+ * trigger back-off by itself.
  */
 const SLOW_SAMPLE_COUNT = 10;
 const SLOW_MEDIAN_MS = 2_000;
@@ -141,6 +148,12 @@ export function parseRetryAfterMs(value: string | null | undefined, atMs: number
 	return Math.min(Math.max(0, Math.round(delayMs)), MAX_RETRY_AFTER_MS);
 }
 
+export function parseServerPressure(value: string | null | undefined): ServerPressure | undefined {
+	const normalized = value?.trim().toLowerCase();
+	if (normalized === 'low' || normalized === 'elevated' || normalized === 'high') return normalized;
+	return undefined;
+}
+
 function median(values: number[]): number {
 	const sorted = [...values].sort((left, right) => left - right);
 	const middle = Math.floor(sorted.length / 2);
@@ -157,7 +170,7 @@ export function createServerPressureMonitor(
 	let lastBackoffAtMs = Number.NEGATIVE_INFINITY;
 	/** Timestamps of 5xx / transport failures inside the rolling window. */
 	let distressAtMs: number[] = [];
-	let latencySamples: number[] = [];
+	let latencySamples: { durationMs: number; pressure?: ServerPressure }[] = [];
 
 	const stepUp = (signal: PressureSignal, atMs: number): ServerPressureTransition | null => {
 		healthyStreak = 0;
@@ -254,15 +267,29 @@ export function createServerPressureMonitor(
 			const accepted = status >= 200 && status < 400;
 			if (!accepted) return null;
 
-			latencySamples.push(durationMs);
+			latencySamples.push({ durationMs, pressure: observation.pressure });
 			if (latencySamples.length > SLOW_SAMPLE_COUNT) latencySamples.shift();
-			if (latencySamples.length === SLOW_SAMPLE_COUNT && median(latencySamples) > SLOW_MEDIAN_MS) {
+			const effectiveLatency = latencySamples.map((sample) =>
+				sample.pressure === 'high'
+					? Math.max(sample.durationMs, SLOW_MEDIAN_MS + 1)
+					: sample.durationMs
+			);
+			if (
+				latencySamples.length === SLOW_SAMPLE_COUNT &&
+				median(effectiveLatency) > SLOW_MEDIAN_MS
+			) {
+				const signal =
+					median(latencySamples.map((sample) => sample.durationMs)) > SLOW_MEDIAN_MS
+						? 'slow'
+						: 'server-pressure';
 				// Drop the window with the step: without this the same ten slow samples
 				// would trip every subsequent request and walk straight to the ceiling.
 				latencySamples = [];
-				return stepUp('slow', atMs);
+				return stepUp(signal, atMs);
 			}
 
+			// Reported pressure is neither distress nor evidence that a prior back-off can be undone.
+			if (observation.pressure === 'elevated' || observation.pressure === 'high') return null;
 			healthyStreak += 1;
 			if (multiplier === 1 || healthyStreak < RECOVERY_HEALTHY_RESPONSES) return null;
 			// Two brakes on recovery, both anti-flap:
