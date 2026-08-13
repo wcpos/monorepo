@@ -19,7 +19,7 @@ describe('createLiveChangeSignalSource — sequence-log checkpoint head', () => 
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url) =>
-				url.endsWith('/changes/tick')
+				new URL(url).pathname.endsWith('/changes/tick')
 					? new Response(null, { status: 404 })
 					: response({ since: 7, head: '42' }),
 		});
@@ -33,7 +33,7 @@ describe('createLiveChangeSignalSource — sequence-log checkpoint head', () => 
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url) =>
-				url.endsWith('/changes/tick')
+				new URL(url).pathname.endsWith('/changes/tick')
 					? new Response(null, { status: 404 })
 					: response({ since: 7 }),
 		});
@@ -51,7 +51,7 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url, init) => {
-				if (url.endsWith('/changes/tick')) {
+				if (new URL(url).pathname.endsWith('/changes/tick')) {
 					return new Response(null, { status: 404 });
 				}
 				requests.push(init);
@@ -102,7 +102,7 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url, init) => {
-				if (url.endsWith('/changes/tick')) {
+				if (new URL(url).pathname.endsWith('/changes/tick')) {
 					return new Response(null, { status: 404 });
 				}
 				requests.push(init);
@@ -135,7 +135,7 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			publishBarcodeSelectors: (collection, selectors) => scope.publish(collection, selectors),
 			fetcher: async (url) =>
-				url.endsWith('/changes/tick')
+				new URL(url).pathname.endsWith('/changes/tick')
 					? new Response(null, { status: 404 })
 					: new Response(
 							JSON.stringify({
@@ -143,7 +143,6 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 								checkpoint: { since: 5, head: 5 },
 								complete: true,
 								config_fingerprint: {
-									candidate: 'config-fingerprint',
 									fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
 									barcode_fields: { products: ['sku'], variations: [], tax_rates: [] },
 									meta: { supported: true },
@@ -179,7 +178,7 @@ describe('createLiveChangeSignalSource — mid-drain continuation pages', () => 
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url, init) => {
-				if (url.endsWith('/changes/tick')) {
+				if (new URL(url).pathname.endsWith('/changes/tick')) {
 					return new Response(null, { status: 404 });
 				}
 				inmHeaders.push(new Headers(init?.headers ?? {}).get('If-None-Match'));
@@ -229,16 +228,18 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url) => {
 				urls.push(url);
-				return url.endsWith('/changes/tick')
-					? new Response(null, { status: 404 })
-					: response({ since: 5, head: 5 });
+				if (new URL(url).pathname.endsWith('/changes/tick')) {
+					expect(new URL(url).searchParams.get('since')).toBe('5');
+					return new Response(null, { status: 404 });
+				}
+				return response({ since: 5, head: 5 });
 			},
 		});
 
 		await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
 		await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
 
-		expect(urls.filter((url) => url.endsWith('/changes/tick'))).toHaveLength(1);
+		expect(urls.filter((url) => new URL(url).pathname.endsWith('/changes/tick'))).toHaveLength(1);
 		expect(urls.filter((url) => url.includes('/changes/sequence-log'))).toHaveLength(2);
 	});
 
@@ -250,6 +251,7 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 			fetcher: async (url, init) => {
 				urls.push(url);
 				tickCall += 1;
+				expect(new URL(url).searchParams.get('since')).toBe('5');
 				if (tickCall === 1) {
 					return Response.json(
 						{
@@ -288,16 +290,18 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url, init) => {
 				requests.push({ url, init });
-				return url.endsWith('/changes/tick')
-					? Response.json({ checkpoint: { head: 6 } }, { headers: { etag: '"tick-6"' } })
-					: new Response(
-							JSON.stringify({
-								changes: [{ sequence: 6, id: 42, type: 'updated', collection: 'products' }],
-								checkpoint: { since: 6, head: 6 },
-								complete: true,
-							}),
-							{ headers: { 'content-type': 'application/json', etag: '"sequence-6"' } }
-						);
+				if (new URL(url).pathname.endsWith('/changes/tick')) {
+					expect(new URL(url).searchParams.get('since')).toBe('5');
+					return Response.json({ checkpoint: { head: 6 } }, { headers: { etag: '"tick-6"' } });
+				}
+				return new Response(
+					JSON.stringify({
+						changes: [{ sequence: 6, id: 42, type: 'updated', collection: 'products' }],
+						checkpoint: { since: 6, head: 6 },
+						complete: true,
+					}),
+					{ headers: { 'content-type': 'application/json', etag: '"sequence-6"' } }
+				);
 			},
 		});
 
@@ -313,10 +317,13 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 	it('rejects an unrequested sequence-log 304 after tick reports a newer head', async () => {
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-			fetcher: async (url) =>
-				url.endsWith('/changes/tick')
-					? Response.json({ checkpoint: { head: 6 } }, { headers: { etag: '"tick-6"' } })
-					: new Response(null, { status: 304 }),
+			fetcher: async (url) => {
+				if (new URL(url).pathname.endsWith('/changes/tick')) {
+					expect(new URL(url).searchParams.get('since')).toBe('5');
+					return Response.json({ checkpoint: { head: 6 } }, { headers: { etag: '"tick-6"' } });
+				}
+				return new Response(null, { status: 304 });
+			},
 		});
 
 		await expect(
@@ -334,6 +341,7 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url) => {
 				urls.push(url);
+				expect(new URL(url).searchParams.get('since')).toBe('5');
 				return Response.json({ checkpoint: { head: '5' } }, { headers: { etag: '"tick-5"' } });
 			},
 		});
@@ -352,9 +360,11 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 
 	it('clears the tick validator when the cursor is reset', async () => {
 		const tickHeaders: (string | null)[] = [];
+		const tickSince: (string | null)[] = [];
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-			fetcher: async (_url, init) => {
+			fetcher: async (url, init) => {
+				tickSince.push(new URL(url).searchParams.get('since'));
 				tickHeaders.push(new Headers(init?.headers).get('if-none-match'));
 				return Response.json(
 					{ checkpoint: { head: tickHeaders.length === 1 ? 5 : 0 } },
@@ -367,13 +377,15 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 		await source.pollSequenceLog({ cursor: { sequence: 0 }, limit: 100 });
 
 		expect(tickHeaders).toEqual([null, null]);
+		expect(tickSince).toEqual(['5', '0']);
 	});
 
 	it('re-probes after a non-JSON tick response throws a poison error', async () => {
 		let calls = 0;
 		const source = createLiveChangeSignalSource({
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-			fetcher: async () => {
+			fetcher: async (url) => {
+				expect(new URL(url).searchParams.get('since')).toBe('5');
 				calls += 1;
 				return calls === 1
 					? new Response('<html>maintenance</html>', {
@@ -398,16 +410,18 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 			fetcher: async (url) => {
 				urls.push(url);
-				return url.endsWith('/changes/tick')
-					? Response.json({ checkpoint: {} })
-					: response({ since: 5, head: 5 });
+				if (new URL(url).pathname.endsWith('/changes/tick')) {
+					expect(new URL(url).searchParams.get('since')).toBe('5');
+					return Response.json({ checkpoint: {} });
+				}
+				return response({ since: 5, head: 5 });
 			},
 		});
 
 		await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
 		await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
 
-		expect(urls.filter((url) => url.endsWith('/changes/tick'))).toHaveLength(1);
+		expect(urls.filter((url) => new URL(url).pathname.endsWith('/changes/tick'))).toHaveLength(1);
 		expect(urls.filter((url) => url.includes('/changes/sequence-log'))).toHaveLength(2);
 	});
 });
