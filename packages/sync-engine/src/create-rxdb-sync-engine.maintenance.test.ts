@@ -15,6 +15,7 @@ import {
 	type StoreScopeIdentity,
 } from './create-rxdb-sync-engine';
 import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
+import { RxQueryTotalRequestStateRepository } from './rx-query-total-request-state-repository';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
 import { ledgerRebuiltSchedulerTaskRunnerResult } from './scheduler/rx-scheduler-task-runner';
 import { createEngineHarness, memoryEngineStorage } from './testing';
@@ -300,7 +301,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 				params: {},
 				totalHeader: 'X-WP-Total',
 			},
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 		const events: EngineEvent[] = [];
 		engine.events((event) => events.push(event));
@@ -317,7 +318,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 	});
 
 	it('seeds supported collection census requests and exposes fresh, stale, and unknown totals', async () => {
-		const nowMs = 1_000_000;
+		let nowMs = 1_000_000;
 		const fetchWooQueryTotal = vi.fn(
 			async ({
 				request,
@@ -370,6 +371,45 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 			freshUntilMs: 1_060_000,
 			fresh: true,
 		});
+
+		const scope = engine.active();
+		if (!scope) throw new Error('no active scope');
+		const stateCollection = scope.database.collections.queryTotalRequestStates as {
+			storageInstance: {
+				findDocumentsById(ids: string[], withDeleted: boolean): Promise<Record<string, unknown>[]>;
+			};
+		};
+		const readOrdersState = async () =>
+			(await stateCollection.storageInstance.findDocumentsById(['census:orders'], true))[0];
+		let ordersState = await readOrdersState();
+		expect(ordersState).toMatchObject({
+			status: 'idle',
+			ownerId: null,
+			claimedUntilMs: null,
+			attempt: 1,
+			retryAfterMs: null,
+		});
+		expect(ordersState?.['_deleted']).not.toBe(true);
+		await expect(
+			new RxQueryTotalRequestStateRepository(scope.database as never).readRunnable(nowMs)
+		).resolves.toEqual([]);
+
+		const freshRevision = ordersState?.['_rev'];
+		await engine.sync('query-total-retry');
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
+		expect((await readOrdersState())?.['_rev']).toBe(freshRevision);
+
+		let previousRevisionHeight = Number(String(freshRevision).split('-')[0]);
+		for (let cycle = 0; cycle < 2; cycle += 1) {
+			nowMs += 60_001;
+			await engine.sync('query-total-retry');
+			ordersState = await readOrdersState();
+			expect(ordersState).toMatchObject({ status: 'idle', attempt: 1, _deleted: false });
+			const revisionHeight = Number(String(ordersState?.['_rev']).split('-')[0]);
+			expect(revisionHeight).toBeGreaterThan(previousRevisionHeight);
+			previousRevisionHeight = revisionHeight;
+		}
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(27);
 
 		unsubscribe();
 		await engine.dispose();
@@ -475,7 +515,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 				params: {},
 				totalHeader: 'X-WP-Total',
 			},
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 
 		const tick = engine.sync('query-total-retry');
@@ -521,7 +561,7 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 				params: {},
 				totalHeader: 'X-WP-Total',
 			},
-			schemaVersion: 2,
+			schemaVersion: 3,
 		});
 		await seed.dispose();
 

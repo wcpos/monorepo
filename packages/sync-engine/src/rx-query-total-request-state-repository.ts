@@ -6,7 +6,7 @@ import {
 import { createRxKeyedRepository, type RxKeyedCollection } from './collections/rx-keyed-repository';
 
 function toDocument(state: QueryTotalRequestState): QueryTotalRequestStateDocument {
-	return { ...state, schemaVersion: 2 };
+	return { ...state, schemaVersion: 3 };
 }
 
 function fromDocument(document: QueryTotalRequestStateDocument): QueryTotalRequestState {
@@ -86,5 +86,19 @@ export class RxQueryTotalRequestStateRepository {
 		failedState: QueryTotalRequestState
 	): Promise<boolean> {
 		return this.keyed.replaceIfCurrent(expectedState, failedState, sameQueryTotalRequestState);
+	}
+
+	async markIdle(
+		expectedState: QueryTotalRequestState,
+		idleState: QueryTotalRequestState
+	): Promise<boolean> {
+		return this.keyed.replaceIfCurrent(expectedState, idleState, sameQueryTotalRequestState);
+	}
+
+	async wake(
+		expectedState: QueryTotalRequestState,
+		wokenState: QueryTotalRequestState
+	): Promise<boolean> {
+		return this.keyed.replaceIfCurrent(expectedState, wokenState, sameQueryTotalRequestState);
 	}
 }

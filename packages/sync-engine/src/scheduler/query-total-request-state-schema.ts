@@ -7,6 +7,8 @@ import { timestampMsSchemaField } from '../collections/timestamp-schema-field';
 import type { QueryTotalRequestState } from './query-total-request-lifecycle';
 
 export type QueryTotalRequestStateDocument = QueryTotalRequestState &
+	PersistedSchedulerSchemaVersionMarker<3>;
+export type QueryTotalRequestStateV2Document = QueryTotalRequestState &
 	PersistedSchedulerSchemaVersionMarker<2>;
 export type QueryTotalRequestStateV1Document = QueryTotalRequestState;
 export type QueryTotalRequestStateV0Document = Omit<QueryTotalRequestState, 'request'>;
@@ -19,31 +21,39 @@ export function migrateQueryTotalRequestStateV1(
 
 export function migrateQueryTotalRequestStateV2(
 	document: QueryTotalRequestStateV1Document
-): QueryTotalRequestStateDocument {
+): QueryTotalRequestStateV2Document {
 	return markPersistedSchedulerDocument(document, 2);
+}
+
+export function migrateQueryTotalRequestStateV3(
+	document: QueryTotalRequestStateV2Document
+): QueryTotalRequestStateDocument {
+	const { schemaVersion: _schemaVersion, ...rest } = document;
+	return markPersistedSchedulerDocument(rest, 3);
 }
 
 export const queryTotalRequestStateMigrationStrategies = {
 	1: migrateQueryTotalRequestStateV1,
 	2: migrateQueryTotalRequestStateV2,
+	3: migrateQueryTotalRequestStateV3,
 };
 
 const maxSafeInteger = 9_007_199_254_740_991;
 
 export const queryTotalRequestStateSchema = {
 	title: 'Woo/RxDB query total request state schema',
-	version: 2,
+	version: 3,
 	primaryKey: 'queryKey',
 	type: 'object',
 	properties: {
 		queryKey: { type: 'string', maxLength: 256 },
-		status: { type: 'string', enum: ['in-flight', 'failed'], maxLength: 16 },
+		status: { type: 'string', enum: ['in-flight', 'failed', 'idle'], maxLength: 16 },
 		ownerId: { type: ['string', 'null'], maxLength: 128 },
 		claimedUntilMs: timestampMsSchemaField(true),
 		attempt: { type: 'number', minimum: 0, maximum: maxSafeInteger, multipleOf: 1 },
 		retryAfterMs: timestampMsSchemaField(true),
 		updatedAtMs: timestampMsSchemaField(),
-		schemaVersion: { type: 'number', enum: [2] },
+		schemaVersion: { type: 'number', enum: [3] },
 		request: {
 			anyOf: [
 				{

@@ -41,6 +41,7 @@ import {
 	QUERY_TOTAL_LEASE_FOR_MS,
 	QUERY_TOTAL_RETRY_AFTER_MS,
 	type QueryTotalCacheEntry,
+	type QueryTotalRequestState,
 	type QueryTotalWooRequest,
 	runEngineSchedulerDrain,
 	type SchedulerDrainDatabase,
@@ -487,14 +488,16 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				const censusCacheByKey = new Map(
 					censusCacheEntries.map((entry) => [entry.queryKey, entry])
 				);
-				const censusStateKeys = new Set(censusRequestStates.map((state) => state.queryKey));
+				const censusStateByKey = new Map(
+					censusRequestStates.map((state) => [state.queryKey, state])
+				);
 				for (const collection of SUPPORTED_CENSUS_COLLECTIONS) {
 					const queryKey = censusQueryKey(collection);
 					const cacheEntry = censusCacheByKey.get(queryKey);
-					if ((cacheEntry && cacheEntry.freshUntilMs > nowMs) || censusStateKeys.has(queryKey)) {
-						continue;
-					}
-					await stateRepository.claimNew({
+					if (cacheEntry && cacheEntry.freshUntilMs > nowMs) continue;
+					const currentState = censusStateByKey.get(queryKey);
+					if (currentState && currentState.status !== 'idle') continue;
+					const runnableState = {
 						queryKey,
 						status: 'failed',
 						ownerId: null,
@@ -517,7 +520,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							},
 							totalHeader: 'X-WP-Total',
 						},
-					});
+					} satisfies QueryTotalRequestState;
+					if (currentState) {
+						await stateRepository.wake(currentState, runnableState);
+					} else {
+						await stateRepository.claimNew(runnableState);
+					}
 				}
 				const result = await runQueryTotalRetryRequests({
 					stateRepository,

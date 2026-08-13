@@ -10,7 +10,10 @@ export type QueryTotalRetryRunnerStateRepository = {
 		expectedState: QueryTotalRequestState,
 		claimedState: QueryTotalRequestState
 	): Promise<boolean>;
-	remove(expectedState: QueryTotalRequestState): Promise<boolean>;
+	markIdle(
+		expectedState: QueryTotalRequestState,
+		idleState: QueryTotalRequestState
+	): Promise<boolean>;
 	markFailed(
 		expectedState: QueryTotalRequestState,
 		failedState: QueryTotalRequestState
@@ -80,6 +83,17 @@ function failedState(
 	};
 }
 
+function idleState(state: QueryTotalRequestState, nowMs: number): QueryTotalRequestState {
+	return {
+		...state,
+		status: 'idle',
+		ownerId: null,
+		claimedUntilMs: null,
+		retryAfterMs: null,
+		updatedAtMs: nowMs,
+	};
+}
+
 export async function runQueryTotalRetryRequests(
 	input: QueryTotalRetryRunnerInput
 ): Promise<QueryTotalRetryRunnerResult> {
@@ -105,7 +119,7 @@ export async function runQueryTotalRetryRequests(
 			break;
 		const freshCacheEntry = freshCacheByQueryKey.get(runnableState.queryKey);
 		if (freshCacheEntry) {
-			await input.stateRepository.remove(runnableState);
+			await input.stateRepository.markIdle(runnableState, idleState(runnableState, input.nowMs));
 			result.cacheEntries.push(freshCacheEntry);
 			result.skippedFreshCache += 1;
 			continue;
@@ -129,7 +143,7 @@ export async function runQueryTotalRetryRequests(
 				...(input.signal !== undefined ? { signal: input.signal } : {}),
 			});
 			if (totalMatchingRecords === null) {
-				await input.stateRepository.remove(claimedState);
+				await input.stateRepository.markIdle(claimedState, idleState(claimedState, input.nowMs));
 				result.unsupported += 1;
 				continue;
 			}
@@ -144,7 +158,7 @@ export async function runQueryTotalRetryRequests(
 				updatedAtMs: input.nowMs,
 			};
 			await input.cacheRepository.upsert(cacheEntry);
-			await input.stateRepository.remove(claimedState);
+			await input.stateRepository.markIdle(claimedState, idleState(claimedState, input.nowMs));
 			result.cacheEntries.push(cacheEntry);
 			result.succeeded += 1;
 		} catch {

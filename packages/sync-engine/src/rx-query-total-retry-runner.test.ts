@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
 	type QueryTotalRetryRunnerCacheRepository,
-	type QueryTotalRetryRunnerStateRepository,
 	runQueryTotalRetryRequests,
 } from './rx-query-total-retry-runner';
 
@@ -32,14 +31,11 @@ function state(overrides: Partial<QueryTotalRequestState> = {}): QueryTotalReque
 	};
 }
 
-function createStateRepository(
-	runnable: QueryTotalRequestState[],
-	claimResult = true
-): QueryTotalRetryRunnerStateRepository {
+function createStateRepository(runnable: QueryTotalRequestState[], claimResult = true) {
 	return {
 		readRunnable: vi.fn(async () => runnable),
 		claim: vi.fn(async () => claimResult),
-		remove: vi.fn(async () => true),
+		markIdle: vi.fn(async () => true),
 		markFailed: vi.fn(async () => true),
 	};
 }
@@ -101,7 +97,7 @@ describe('runQueryTotalRetryRequests', () => {
 		expect(cacheRepository.upsert).not.toHaveBeenCalled();
 	});
 
-	it('claims runnable work, fetches the persisted Woo request, caches the total, and removes the claimed state', async () => {
+	it('claims runnable work, caches the total, and leaves the claimed state idle', async () => {
 		const runnable = state();
 		const stateRepository = createStateRepository([runnable]);
 		const cacheRepository = createCacheRepository();
@@ -130,7 +126,13 @@ describe('runQueryTotalRetryRequests', () => {
 			freshUntilMs: 3_000,
 			updatedAtMs: 1_000,
 		});
-		expect(stateRepository.remove).toHaveBeenCalledWith(claimedState);
+		expect(stateRepository.markIdle).toHaveBeenCalledWith(claimedState, {
+			...claimedState,
+			status: 'idle',
+			ownerId: null,
+			claimedUntilMs: null,
+			retryAfterMs: null,
+		});
 		expect(result.succeeded).toBe(1);
 		expect(result.cacheEntries).toEqual([
 			{
@@ -142,7 +144,7 @@ describe('runQueryTotalRetryRequests', () => {
 		]);
 	});
 
-	it('removes an unsupported request without caching or retrying it', async () => {
+	it('marks an unsupported request idle without caching or retrying it', async () => {
 		const runnable = state();
 		const stateRepository = createStateRepository([runnable]);
 		const cacheRepository = createCacheRepository();
@@ -155,8 +157,9 @@ describe('runQueryTotalRetryRequests', () => {
 			fetchWooQueryTotal,
 		});
 
-		expect(stateRepository.remove).toHaveBeenCalledWith(
-			expect.objectContaining({ status: 'in-flight', ownerId: 'tab-retry' })
+		expect(stateRepository.markIdle).toHaveBeenCalledWith(
+			expect.objectContaining({ status: 'in-flight', ownerId: 'tab-retry' }),
+			expect.objectContaining({ status: 'idle', ownerId: null, claimedUntilMs: null })
 		);
 		expect(cacheRepository.upsert).not.toHaveBeenCalled();
 		expect(stateRepository.markFailed).not.toHaveBeenCalled();
@@ -199,7 +202,7 @@ describe('runQueryTotalRetryRequests', () => {
 		expect(result.claimLost).toBe(1);
 		expect(fetchWooQueryTotal).not.toHaveBeenCalled();
 		expect(cacheRepository.upsert).not.toHaveBeenCalled();
-		expect(stateRepository.remove).not.toHaveBeenCalled();
+		expect(stateRepository.markIdle).not.toHaveBeenCalled();
 	});
 
 	it('uses fresh cache evidence before claiming runnable state', async () => {
@@ -225,7 +228,14 @@ describe('runQueryTotalRetryRequests', () => {
 
 		expect(stateRepository.claim).not.toHaveBeenCalled();
 		expect(fetchWooQueryTotal).not.toHaveBeenCalled();
-		expect(stateRepository.remove).toHaveBeenCalledWith(runnable);
+		expect(stateRepository.markIdle).toHaveBeenCalledWith(runnable, {
+			...runnable,
+			status: 'idle',
+			ownerId: null,
+			claimedUntilMs: null,
+			retryAfterMs: null,
+			updatedAtMs: 1_000,
+		});
 		expect(result.skippedFreshCache).toBe(1);
 		expect(result.cacheEntries).toEqual([
 			{
@@ -276,7 +286,7 @@ describe('runQueryTotalRetryRequests', () => {
 			updatedAtMs: 1_700,
 		});
 		expect(cacheRepository.upsert).not.toHaveBeenCalled();
-		expect(stateRepository.remove).not.toHaveBeenCalled();
+		expect(stateRepository.markIdle).not.toHaveBeenCalled();
 		expect(result.failed).toBe(1);
 	});
 });
