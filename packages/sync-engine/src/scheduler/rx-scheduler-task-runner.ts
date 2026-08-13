@@ -1,4 +1,4 @@
-import { isReconciliationRefusalError } from '../local-coverage/ledger-storage-recovery';
+import { isLedgerReconciliationRefusalError } from '../local-coverage/ledger-storage-recovery';
 
 import type { PersistedSchedulerTaskState } from './persisted-scheduler-state';
 import type { FetchTask, FetchTaskResult, SchedulerFetcher } from './replication-policy';
@@ -448,12 +448,12 @@ export async function runPersistedSchedulerTasks(
 				throw error;
 			}
 
-			// A storage-corruption refusal is not a task failure: the derivable
-			// ledger (including this runner's own claim rows) is about to be
-			// rebuilt, so marking the task failed would write into the store the
-			// rebuild drops. Rethrow so withSchedulerDrainLedgerRecovery aborts
-			// the whole tick cleanly (#956; #1187 review).
-			if (isReconciliationRefusalError(error)) throw error;
+			// A tagged ledger refusal is not a task failure: the derivable ledger
+			// (including this runner's own claim rows) is about to be rebuilt, so
+			// marking the task failed would write into the store the rebuild drops.
+			// Rethrow so withSchedulerDrainLedgerRecovery aborts the whole tick
+			// cleanly (#956; #1187 review).
+			if (isLedgerReconciliationRefusalError(error)) throw error;
 
 			const failedAtMs = currentTime(input);
 			const failed = await input.repository.markFailed(
