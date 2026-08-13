@@ -20,7 +20,7 @@ export type {
 	CompiledSortPart,
 	EngineRxDocument,
 } from './engine-adapter/execute-query';
-export { variationAllMatch } from './engine-adapter/translate-selector';
+export { variationAllMatch, variationAttributesMatch } from './engine-adapter/translate-selector';
 export {
 	FLEXSEARCH_MIN_TERM_LENGTH,
 	observeCoverage,

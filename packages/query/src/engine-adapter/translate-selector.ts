@@ -240,6 +240,24 @@ export function variationAllMatch(actual: unknown, requested: unknown): boolean 
 	});
 }
 
+/**
+ * Match a variation's promoted attributes against an active attribute filter (#811).
+ * 1.9 parity: a variation whose payload has no attributes ARRAY was EXCLUDED under an
+ * active filter (1.9: `if (!variation.attributes) return false`); an empty/absent filter
+ * still matches everything (browse keeps "Any"). An empty attributes ARRAY still means
+ * "Any for every attribute" and matches.
+ */
+export function variationAttributesMatch(document: EngineDocument, requested: unknown): boolean {
+	if (
+		Array.isArray(requested) &&
+		requested.length > 0 &&
+		!Array.isArray(readEnginePath(document, 'payload.attributes'))
+	) {
+		return false;
+	}
+	return variationAllMatch(readEnginePath(document, 'attributes'), requested);
+}
+
 function legacyValue(
 	collection: LegacyCollectionName,
 	document: EngineDocument,
@@ -296,7 +314,7 @@ function matchesLegacySelector(
 				Object.entries(condition).filter(([operator]) => operator !== '$allMatch')
 			);
 			return (
-				variationAllMatch(actual, condition.$allMatch) &&
+				variationAttributesMatch(document, condition.$allMatch) &&
 				(Object.keys(remaining).length === 0 || matchesFieldCondition(actual, remaining))
 			);
 		}

@@ -8,16 +8,9 @@
  * `withVariationColumns` — the exported seam, which is what this suite drives so the
  * guard tests the module's interface rather than a private symbol.
  *
- * WHAT THESE TESTS ARE: a pin of TODAY'S behaviour, not a ratification of it.
- *
- * 1.9 DROPPED entries whose `name`/`option` were not strings. The current code
- * COERCES them (`String(...)`), so `123` survives as `'123'` and `{}` survives as
- * `'[object Object]'` — a live divergence tracked as
- * https://github.com/wcpos/monorepo/issues/811 (milestone v1.11.0, deferred by the
- * owner). The coercion cases below are marked `#811`. They are a TRIPWIRE: when #811
- * lands and restores 1.9's drop semantics, FLIP those cases (assert the malformed
- * entries are filtered out) rather than deleting them. Nothing here should be read as
- * a decision that coercion is correct.
+ * WHAT THESE TESTS ARE: the ratified 1.9-parity behavior for
+ * https://github.com/wcpos/monorepo/issues/811. Malformed entries whose `name` or
+ * `option` are not strings are dropped rather than coerced into garbage strings.
  *
  * The `name === '' || option === ''` drops ARE deliberate and match 1.9: WooCommerce's
  * "Any <attribute>" is modelled as ABSENCE so the variation filter's
@@ -95,34 +88,15 @@ describe('variation attribute normalization', () => {
 		expect(normalize([])).toEqual([]);
 	});
 
-	/**
-	 * #811 TRIPWIRE — pins the CURRENT coercion. 1.9 dropped these entries.
-	 * When https://github.com/wcpos/monorepo/issues/811 lands, flip this case to expect
-	 * `[]` (and the object case below to expect the malformed entry filtered out).
-	 */
-	it('#811: COERCES a non-string name or option instead of dropping the entry (1.9 dropped)', () => {
-		expect(normalize([{ id: 1, name: 123, option: 'Red' }])).toEqual([
-			{ id: 1, name: '123', option: 'Red' },
-		]);
-		expect(normalize([{ id: 2, name: 'Size', option: 456 }])).toEqual([
-			{ id: 2, name: 'Size', option: '456' },
-		]);
-		expect(normalize([{ id: 3, name: 'Flag', option: false }])).toEqual([
-			{ id: 3, name: 'Flag', option: 'false' },
-		]);
+	it('#811: drops entries with a non-string name or option (1.9 parity)', () => {
+		expect(normalize([{ id: 1, name: 123, option: 'Red' }])).toEqual([]);
+		expect(normalize([{ id: 2, name: 'Size', option: 456 }])).toEqual([]);
+		expect(normalize([{ id: 3, name: 'Flag', option: false }])).toEqual([]);
 	});
 
-	/**
-	 * #811 TRIPWIRE — this is the `[object Object]` that reaches cart metadata and the
-	 * variation filter today. Flip when #811 lands.
-	 */
-	it('#811: stringifies an object name or option to "[object Object]" (1.9 dropped)', () => {
-		expect(normalize([{ id: 1, name: { rendered: 'Color' }, option: 'Red' }])).toEqual([
-			{ id: 1, name: '[object Object]', option: 'Red' },
-		]);
-		expect(normalize([{ id: 2, name: 'Color', option: ['Red', 'Blue'] }])).toEqual([
-			{ id: 2, name: 'Color', option: 'Red,Blue' },
-		]);
+	it('#811: drops object names or options instead of stringifying them (1.9 parity)', () => {
+		expect(normalize([{ id: 1, name: { rendered: 'Color' }, option: 'Red' }])).toEqual([]);
+		expect(normalize([{ id: 2, name: 'Color', option: ['Red', 'Blue'] }])).toEqual([]);
 	});
 
 	it('normalizes attributes when the columns are attached to a document', () => {

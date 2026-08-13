@@ -9,7 +9,7 @@ import {
 	sortTiebreakFor,
 	wooOrderbyFor,
 } from '@wcpos/query/collection-map';
-import { FLEXSEARCH_MIN_TERM_LENGTH, variationAllMatch } from '@wcpos/query';
+import { FLEXSEARCH_MIN_TERM_LENGTH, variationAttributesMatch } from '@wcpos/query';
 import type { CompiledQueryRead, CompiledSortPart } from '@wcpos/query';
 import type {
 	EngineRequirement,
@@ -229,8 +229,8 @@ function compileReadFilter(
 	if (operator === 'all-match') {
 		return {
 			complete: false,
-			// Reproduce translate-selector.ts:248's variations enginePath bypass, not its payload path.
-			matches: (document) => variationAllMatch(readEnginePath(document, mapping.enginePath), value),
+			// Share translate-selector's missing-payload exclusion and promoted-column matching (#811).
+			matches: (document) => variationAttributesMatch(document, value),
 		};
 	}
 	const condition =

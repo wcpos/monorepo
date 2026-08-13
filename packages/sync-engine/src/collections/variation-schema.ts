@@ -27,9 +27,9 @@ export type LocalVariationDocument = {
 	};
 };
 
-/** A normalized variation attribute. The WooCommerce "Any <attribute>" case is modeled as ABSENCE
- * (the entry is dropped), so the variation filter's `$not $elemMatch` "any" semantics work uniformly
- * whether the source sent the attribute absent or with an empty option. */
+/** A normalized variation attribute. Malformed non-string entries are dropped for 1.9 parity
+ * (#811). The WooCommerce "Any <attribute>" case is modeled as ABSENCE (the entry is dropped),
+ * so the variation filter's `$not $elemMatch` "any" semantics work uniformly. */
 export type VariationAttribute = { id: number; name: string; option: string };
 
 /** Promoted variation filter/sort columns. `attributes` is promoted out of payload so the variation
@@ -44,18 +44,17 @@ export type PromotedVariationColumns = {
 
 export type StoredVariationDocument = LocalVariationDocument & PromotedVariationColumns;
 
-/** Normalize a variation's `attributes`: coerce each entry and DROP "any" entries (empty option) and
- * nameless entries, so "any" becomes absence (the filter key is `{id,name}`). */
-function normalizeVariationAttributes(value: unknown): VariationAttribute[] {
-	return Array.isArray(value)
-		? value
-				.map((entry) => ({
-					id: Number((entry as { id?: unknown } | null)?.id) || 0,
-					name: String((entry as { name?: unknown } | null)?.name ?? ''),
-					option: String((entry as { option?: unknown } | null)?.option ?? ''),
-				}))
-				.filter((attr) => attr.name !== '' && attr.option !== '')
-		: [];
+/** Normalize a variation's `attributes`: DROP malformed non-string entries for 1.9 parity (#811)
+ * and DROP "any" entries (empty option), so "any" becomes absence. */
+export function normalizeVariationAttributes(value: unknown): VariationAttribute[] {
+	if (!Array.isArray(value)) return [];
+	return value.flatMap((entry) => {
+		if (entry === null || typeof entry !== 'object') return [];
+		const { id, name, option } = entry as Record<string, unknown>;
+		if (typeof name !== 'string' || typeof option !== 'string') return [];
+		if (name === '' || option === '') return [];
+		return [{ id: Number(id) || 0, name, option }];
+	});
 }
 
 /** Project the promoted variation columns from a Woo variation payload. Pure. */

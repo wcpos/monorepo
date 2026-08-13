@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import type { ProductDocument, TaxId } from '@wcpos/database';
+import { wrapEngineDocument } from '@wcpos/query';
 
 import {
 	type CartLine,
@@ -388,6 +389,42 @@ describe('Utilities', () => {
 
 			expect(colorAttr?.value).toBe('Red');
 			expect(sizeAttr?.value).toBe('Large');
+		});
+
+		it('drops malformed variation attributes before creating cart metadata (#811)', () => {
+			const document = {
+				id: 'variation-101',
+				wooId: 101,
+				payload: {
+					id: 101,
+					price: '15',
+					attributes: [
+						{ id: 1, name: { rendered: 'Color' }, option: 'Red' },
+						{ id: 2, name: 'Size', option: 'Large' },
+					],
+				},
+				collection: {},
+				getLatest() {
+					return this;
+				},
+				toJSON() {
+					return this;
+				},
+			} as unknown as Parameters<typeof wrapEngineDocument>[1];
+			const wrapped = wrapEngineDocument('variations', document) as Parameters<
+				typeof convertVariationToLineItemWithoutTax
+			>[0];
+			const result = convertVariationToLineItemWithoutTax(wrapped, parentProduct);
+
+			expect(result.meta_data).toEqual(
+				expect.arrayContaining([expect.objectContaining({ key: 'Size', value: 'Large' })])
+			);
+			for (const item of result.meta_data ?? []) {
+				expect([item.key, item.value, item.display_key, item.display_value]).not.toContain(
+					'[object Object]'
+				);
+			}
+			expect(JSON.stringify(result.meta_data)).not.toContain('[object Object]');
 		});
 
 		it('should use provided metaData for attributes instead of variation attributes', () => {
