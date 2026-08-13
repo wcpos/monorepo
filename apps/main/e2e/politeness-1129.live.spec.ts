@@ -20,10 +20,12 @@ import type { Page, Request } from '@playwright/test';
  * The measured scenario is a populated-manifest REBASELINE — the profile that produced
  * the flood. A rebaseline only happens when the change-signal cursor is more than
  * `maxReplayBacklog` (5,000) entries behind the head, which a quick reload never is, so
- * the spec forces it: the reload's FIRST sequence-log response gets its `checkpoint.head`
- * inflated past the backlog threshold. That flips the engine's own rebaseline branch;
- * every audit endpoint (scan, bucket, digests) stays fully live. Subsequent polls pass
- * through untouched — an over-head cursor just idles until the log catches up.
+ * the spec forces it in two stages (see forceRebaselineOnNextPoll): one `/changes/tick`
+ * response claims a huge head so the engine drains the sequence-log at all, then that
+ * drain's `checkpoint.head` is inflated past the backlog threshold. That flips the
+ * engine's own rebaseline branch; every audit endpoint (scan, bucket, digests) stays
+ * fully live. Subsequent polls pass through untouched — an over-head cursor just idles
+ * until the log catches up.
  *
  * Store-agnostic by construction: it asserts REQUEST-SHAPE ceilings from the politeness
  * invariant (wiki ADR 2026-08-11), never catalog contents or counts. A store with no
@@ -36,6 +38,12 @@ import type { Page, Request } from '@playwright/test';
 // maxReplayBacklog in packages/sync-core/src/hybridChangeSignal.ts — the forced head
 // must clear it for the engine to take the rebaseline branch.
 const REPLAY_BACKLOG = 5_000;
+
+// Injected into the ONE mutated `/changes/tick` response so the engine's gatekeeper
+// (head > cursor → drain the sequence-log) fires on a quiet store. Only has to beat
+// the client's cursor — the rebaseline compare itself happens on the DRAIN envelope's
+// head, which stage 2 inflates relative to the real cursor.
+const TICK_FORCED_HEAD = 1_000_000_000_000;
 
 // Ceilings from the lane registry: 3 id-spaces × 3 gap-skipping scan pages, K=2 drills.
 const MAX_SCAN_REQUESTS = 9;
@@ -73,30 +81,59 @@ const isAuditBucket = (path: string) => path.includes('/integrity/bucket');
 const isSweepScan = (path: string) => path.includes('/integrity/scan') && !isAuditScan(path);
 
 /**
- * Force the engine's own rebaseline branch on the next sequence-log DRAIN poll: rewrite
- * the response's `checkpoint.head` to sit `REPLAY_BACKLOG + 1` past the client's cursor.
- * One-shot — later polls hit the real server untouched. Never throws from the route
- * handler (#997): any surprise falls through to the unmodified live response.
+ * Force the engine's own rebaseline branch — TWO stages since the #1179/#1186
+ * change-signal rework, because the engine now polls a lightweight
+ * `/changes/tick` gatekeeper and only drains the sequence-log when the tick's
+ * `checkpoint.head` exceeds its cursor. On a quiet store no drain ever happens,
+ * so a drain-only rewrite waits forever (the 2026-08-13 run failed exactly
+ * this way — the drift guard, working as designed).
  *
- * A cold engine first fires a head-priming probe (`fetchHeadSequence`, hardcoded
- * `limit=1`) that also matches this URL — mutating THAT one merely moves the initial
- * cursor and wastes the one-shot (first live run failed exactly this way), so only a
- * real drain page (the 100-row `sequenceLogLimit`) is eligible.
+ * Stage 1 (tick): claim an enormous head on ONE tick response so the engine
+ * falls through to a real sequence-log drain. `If-None-Match` is stripped from
+ * the forwarded request — the engine ETags its ticks, and a 304 has no body to
+ * mutate.
  *
- * The rewrite is armed only once the reload's main-frame navigation commits: the route
- * is installed while the pre-reload app instance is still running, and one of ITS polls
- * landing in that window would consume the one-shot before the measured instance ever
- * boots (coderabbit review).
+ * Stage 2 (drain): the rebaseline guard compares the DRAIN envelope's
+ * `checkpoint.head` against the cursor (hybridChangeSignal.ts:623 — the tick's
+ * head value is discarded), so rewrite that head to `since + REPLAY_BACKLOG + 1`
+ * exactly as before. Head-priming probes (`limit=1`) stay excluded — mutating
+ * one merely moves the initial cursor and wastes the one-shot.
+ *
+ * Both one-shot; later polls hit the live server untouched — an over-head
+ * cursor just idles until the log catches up. Never throws from a route
+ * handler (#997). Armed only once the reload's main-frame navigation commits,
+ * so the pre-reload instance's polls can't consume the one-shots (coderabbit
+ * review).
  */
-async function forceRebaselineOnNextPoll(page: Page): Promise<{ fired: () => boolean }> {
-	let fired = false;
+async function forceRebaselineOnNextPoll(
+	page: Page
+): Promise<{ tickFired: () => boolean; fired: () => boolean }> {
+	let tickFired = false;
+	let drainFired = false;
 	let armed = false;
 	page.once('framenavigated', (frame) => {
 		if (frame === page.mainFrame()) armed = true;
 	});
+	await page.route('**/changes/tick*', async (route) => {
+		if (!armed || tickFired) {
+			await route.fallback();
+			return;
+		}
+		try {
+			const headers = { ...route.request().headers() };
+			delete headers['if-none-match'];
+			const response = await route.fetch({ headers });
+			const body = (await response.json()) as { checkpoint?: Record<string, unknown> };
+			body.checkpoint = { ...body.checkpoint, head: TICK_FORCED_HEAD };
+			tickFired = true;
+			await route.fulfill({ response, json: body });
+		} catch {
+			await route.fallback().catch(() => undefined);
+		}
+	});
 	await page.route('**/changes/sequence-log*', async (route) => {
 		const isHeadPriming = new URL(route.request().url()).searchParams.get('limit') === '1';
-		if (!armed || fired || isHeadPriming) {
+		if (!armed || drainFired || isHeadPriming) {
 			await route.fallback();
 			return;
 		}
@@ -110,13 +147,13 @@ async function forceRebaselineOnNextPoll(page: Page): Promise<{ fired: () => boo
 					? body.checkpoint.since
 					: Number(new URL(route.request().url()).searchParams.get('since') ?? 0);
 			body.checkpoint = { ...body.checkpoint, head: since + REPLAY_BACKLOG + 1 };
-			fired = true;
+			drainFired = true;
 			await route.fulfill({ response, json: body });
 		} catch {
 			await route.fallback().catch(() => undefined);
 		}
 	});
-	return { fired: () => fired };
+	return { tickFired: () => tickFired, fired: () => drainFired };
 }
 
 test.describe('#1129 — store-open politeness against the live server', () => {
@@ -216,10 +253,17 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		// tick cadence can hold it back ~5 minutes), then the audit chain's first scan
 		// (seeds + the 60s hold run between the two).
 		await expect
+			.poll(() => rebaseline.tickFired(), {
+				timeout: DRAIN_POLL_TIMEOUT_MS,
+				message:
+					'the engine never issued a /changes/tick poll after reload — no drain could be provoked (tick cadence or endpoint drift?)',
+			})
+			.toBe(true);
+		await expect
 			.poll(() => rebaseline.fired(), {
 				timeout: DRAIN_POLL_TIMEOUT_MS,
 				message:
-					'the engine never issued a sequence-log drain poll after reload — no rebaseline could be forced',
+					'the tick claimed a huge head but the engine never drained the sequence-log — the tick→drain fall-through changed',
 			})
 			.toBe(true);
 		await expect
