@@ -196,7 +196,10 @@ export function createServerPressureMonitor(
 	const observeServerLoad = (load1m: number): ServerPressureTransition | null => {
 		serverLoad1m = load1m;
 		if (serverLoadBaseline1m === undefined) {
-			if (load1m > 0) serverLoadBaseline1m = load1m;
+			// Zero is a valid learned baseline: the parser only rejects the exact
+			// [0,0,0] error fallback, so a genuinely idle server's 0 must seed —
+			// refusing it would install the first SPIKE as "normal" instead.
+			serverLoadBaseline1m = load1m;
 			return null;
 		}
 		const baseline = serverLoadBaseline1m;
@@ -204,7 +207,12 @@ export function createServerPressureMonitor(
 			? load1m < 1.25 * baseline
 			: load1m >= Math.max(2 * baseline, 1);
 		softLoadStreak = crossesBoundary ? softLoadStreak + 1 : 0;
-		serverLoadBaseline1m = baseline + 0.05 * (load1m - baseline);
+		// The baseline only learns OUTSIDE an active spike: recovery means load
+		// returned toward the pre-spike normal, not the monitor acclimatizing
+		// mid-incident (~21 hot samples would re-rate the spike as "usual",
+		// declare recovery at full load, and then be unable to re-enter).
+		// Durable load-profile drift still gets absorbed — during quiet periods.
+		if (!softLoadActive) serverLoadBaseline1m = baseline + 0.05 * (load1m - baseline);
 		if (softLoadStreak < 2) return null;
 		softLoadStreak = 0;
 		const from = effectiveMultiplier();
@@ -339,10 +347,14 @@ export function createServerPressureMonitor(
 
 			// Reported pressure is neither distress nor evidence that a prior back-off can be undone.
 			if (observation.pressure === 'elevated' || observation.pressure === 'high') return null;
+			// Every accepted sample feeds the soft-load machine, hard back-off or
+			// not — gating on multiplier===1 starved the baseline through exactly
+			// the windows where load is most informative (codex review). Precedence
+			// needs no gate: while hard pressure holds the effective multiplier,
+			// a soft flip computes from==to under the MAX composition and emits
+			// nothing; the widened state simply outlives the hard back-off.
 			const softTransition =
-				multiplier === 1 && retryAfterUntilMs <= atMs && observation.serverLoad1m !== undefined
-					? observeServerLoad(observation.serverLoad1m)
-					: null;
+				observation.serverLoad1m !== undefined ? observeServerLoad(observation.serverLoad1m) : null;
 			healthyStreak += 1;
 			if (multiplier === 1 || healthyStreak < RECOVERY_HEALTHY_RESPONSES) return softTransition;
 			// Two brakes on recovery, both anti-flap:

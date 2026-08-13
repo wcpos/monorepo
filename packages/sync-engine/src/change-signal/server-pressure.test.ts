@@ -102,6 +102,65 @@ describe('server pressure monitor', () => {
 		expect(monitor.isBackingOff(4)).toBe(false);
 	});
 
+	it('freezes the baseline during an active spike so sustained load cannot read as recovery', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.5 });
+		monitor.observe({ atMs: 1, ...OK, serverLoad1m: 1.2 });
+		expect(monitor.observe({ atMs: 2, ...OK, serverLoad1m: 1.2 })).toMatchObject({
+			direction: 'backoff',
+		});
+
+		// 30 more hot samples: an unfrozen EWMA would acclimatize (~21 samples)
+		// and declare recovery at full load. Frozen, the spike never reads as over.
+		for (let sample = 0; sample < 30; sample += 1) {
+			expect(monitor.observe({ atMs: 3 + sample, ...OK, serverLoad1m: 1.2 })).toBeNull();
+			expect(monitor.multiplier()).toBe(2);
+		}
+
+		// Actual recovery — load returns toward the pre-spike baseline.
+		monitor.observe({ atMs: 40, ...OK, serverLoad1m: 0.5 });
+		expect(monitor.observe({ atMs: 41, ...OK, serverLoad1m: 0.5 })).toMatchObject({
+			direction: 'recovery',
+			toMultiplier: 1,
+		});
+	});
+
+	it('keeps the soft-load machine running while hard pressure owns the multiplier', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 1, ...OK, serverLoad1m: 1.2 });
+		expect(monitor.observe({ atMs: 2, ...OK, serverLoad1m: 1.2 })).toMatchObject({
+			direction: 'backoff',
+			signal: 'server-pressure',
+		});
+
+		// Hard pressure arrives under an active soft tier: the step to x2 is
+		// real but invisible (MAX composition — from==to), never a shortening.
+		expect(monitor.observe({ atMs: 3, status: 429, durationMs: 20 })).toBeNull();
+		expect(monitor.isBackingOff(3)).toBe(true);
+		expect(monitor.multiplier()).toBe(2);
+
+		// Samples keep feeding the machine during the hard window: the spike
+		// ends silently (from==to again), and the multiplier stays owned by
+		// the hard tier — no false recovery row, no starved baseline.
+		expect(monitor.observe({ atMs: 4, ...OK, serverLoad1m: 0.4 })).toBeNull();
+		expect(monitor.observe({ atMs: 5, ...OK, serverLoad1m: 0.4 })).toBeNull();
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.isBackingOff(5)).toBe(true);
+	});
+
+	it('learns zero as a valid first baseline and still triggers via the absolute floor', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		// [0,x,y] passes the parser by design — only the exact [0,0,0] fallback
+		// is no-signal — so a genuinely idle server seeds baseline 0.
+		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0 });
+		expect(monitor.observe({ atMs: 1, ...OK, serverLoad1m: 1 })).toBeNull();
+		expect(monitor.observe({ atMs: 2, ...OK, serverLoad1m: 1 })).toMatchObject({
+			direction: 'backoff',
+			toMultiplier: 2,
+		});
+	});
+
 	it('keeps simultaneous hard pressure authoritative and does not shorten it', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.4 });
