@@ -217,6 +217,14 @@ async function forceRebaselineOnNextPoll(
 			const headers = { ...route.request().headers() };
 			delete headers['if-none-match'];
 			const response = await route.fetch({ headers });
+			// Only a successful tick consumes the one-shot (codex review on #1188):
+			// a 404 from an older server makes the engine mark tick unsupported and
+			// take the legacy always-drain path — mutating that response would waste
+			// the shot on a body the engine never reads.
+			if (!response.ok()) {
+				await route.fulfill({ response });
+				return;
+			}
 			const body = (await response.json()) as { checkpoint?: Record<string, unknown> };
 			body.checkpoint = { ...body.checkpoint, head: TICK_FORCED_HEAD };
 			tickFired = true;
