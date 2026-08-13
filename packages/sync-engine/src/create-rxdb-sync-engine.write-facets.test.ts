@@ -1063,6 +1063,73 @@ describe('write facets beyond orders', () => {
 		await subject.dispose();
 	});
 
+	it('auto-resolves an identity-ambiguous create without destroying its resident', async () => {
+		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
+		const route = routedServer(spec, () => null);
+		route.server.script(() => ({ kind: 'identity_ambiguous' }));
+		const harness = createEngineHarness({
+			site: SITE,
+			identity: identity(),
+			mode: 'manual',
+			fetch: route.fetch,
+			awaitReady: false,
+		});
+		const subject = harness.engine;
+		await subject.ready;
+		await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'local' }));
+		await subject.write({
+			collection: spec.collection,
+			operation: 'create',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'local'),
+		});
+
+		expect(await subject.sync('write-drain')).toMatchObject({ rejected: 1 });
+		await vi.waitFor(async () => {
+			expect(await subject.conflicts()).toEqual([]);
+			expect(await record(subject, spec, UUID_A)).toMatchObject({
+				payload: { first_name: 'local' },
+			});
+		});
+		expect(harness.diagnostics).toContainEqual(
+			expect.objectContaining({
+				type: 'queue.write.auto-reverted',
+				fields: expect.objectContaining({ reason: 'identity-ambiguous' }),
+			})
+		);
+		await subject.dispose();
+	});
+
+	it('auto-reverts a create whose queued payload already carries a server id', async () => {
+		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
+		const truth = {
+			...payload(spec, UUID_A, 'server', spec.remoteId),
+			_rxdb_revision: 'sha256:server',
+		};
+		const route = routedServer(spec, () => truth);
+		route.server.script(() => ({ kind: 'invalid_param' }));
+		const subject = engine(route.fetch);
+		await subject.ready;
+		await insert(subject, spec, storedDocument({ spec, id: UUID_A, label: 'local' }));
+		await subject.write({
+			collection: spec.collection,
+			operation: 'create',
+			recordId: UUID_A,
+			payload: payload(spec, UUID_A, 'local', spec.remoteId),
+		});
+
+		expect(await subject.sync('write-drain')).toMatchObject({ rejected: 1 });
+		await vi.waitFor(async () => {
+			expect(await subject.conflicts()).toEqual([]);
+			expect(await record(subject, spec, UUID_A)).toMatchObject({
+				[spec.remoteIdField]: spec.remoteId,
+				payload: { first_name: 'server' },
+			});
+		});
+		expect(route.pulls).toEqual([[spec.remoteId]]);
+		await subject.dispose();
+	});
+
 	it('manual discard removes a rejected born-local create that never existed remotely', async () => {
 		const spec = FACETS.find(({ collection }) => collection === 'customers')!;
 		const route = routedServer(spec, () => null);

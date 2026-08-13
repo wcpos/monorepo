@@ -390,8 +390,8 @@ export type EngineEvent =
 			/** The server's human-readable message; `reason` is the machine code. */
 			serverMessage?: string;
 			/**
-			 * True when the rejected mutation is a CREATE whose resident still
-			 * carries no remote id — the record exists nowhere but this device.
+			 * True when the rejected mutation is a CREATE with no local or queued
+			 * remote id and the rejection does not imply a matching server record.
 			 * These are exempt from the #1082 auto-revert (there is no server
 			 * truth to restore; discard would destroy the only copy) and stay
 			 * parked on `conflicts()` like an order's dead letter.

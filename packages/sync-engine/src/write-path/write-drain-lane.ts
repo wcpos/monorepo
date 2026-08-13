@@ -46,6 +46,7 @@ import {
 	type MoneyDivergenceField,
 	type MoneyPrecisionMode,
 } from './order-money-divergence';
+import { rejectionSuggestsServerRecord } from './conflict-resolution';
 import { requeueBornTwiceSnapshot } from './write-intents';
 import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
 import { fetchOrderServerRevision } from './order-server-revision';
@@ -174,8 +175,8 @@ export type WriteOutcomeEvent =
 			/** The server's human-readable message; `reason` is the machine code. */
 			serverMessage?: string;
 			/**
-			 * True when the rejected mutation is a CREATE whose resident still
-			 * carries no remote id: the record exists nowhere but this device.
+			 * True when the rejected mutation is a CREATE with no local or queued
+			 * remote id and the rejection does not imply a matching server record.
 			 * The #1082 auto-revert must never `discard` these — discard DESTROYS
 			 * a born-local resident (#832 R7b, designed for the cashier-confirmed
 			 * Store health dialog) and there is no server truth to revert to.
@@ -591,15 +592,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										local: { ...local, pendingMutationIds, dirty: pendingMutationIds.length > 0 },
 									};
 								});
-							// Decided from the resident's remote-id column at rejection time: a
-							// CREATE whose resident never adopted a remote id exists nowhere but
-							// this device, so "restore server truth" is not an option for it —
-							// consumers (the #1082 auto-revert) must dead-letter it instead.
+							// Use the same server-existence evidence as conflict resolution: a
+							// CREATE is born-local only when neither the resident nor queued payload
+							// has a remote id and the rejection does not indicate a server match.
 							const rejectedFacet = writeFacetFor(dead.collectionName);
 							const rejectedRemoteId =
 								doc !== null && rejectedFacet !== null
 									? doc.toJSON()[rejectedFacet.remoteIdField]
 									: undefined;
+							const rejectedPayloadId = dead.payload.id;
 							deps.emitWriteEvent({
 								type: 'write-rejected',
 								collection: dead.collectionName,
@@ -611,7 +612,9 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								bornLocalCreate:
 									dead.operation === 'create' &&
 									doc !== null &&
-									typeof rejectedRemoteId !== 'number',
+									typeof rejectedRemoteId !== 'number' &&
+									typeof rejectedPayloadId !== 'number' &&
+									!rejectionSuggestsServerRecord(reason),
 							});
 						}
 						deps.setQueueDepth(stillPending.size);
