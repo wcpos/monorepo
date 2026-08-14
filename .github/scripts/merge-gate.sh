@@ -25,6 +25,21 @@ pr_merge_state() {
   gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json mergeStateStatus --jq '.mergeStateStatus'
 }
 
+# A lane-promotion PR merges the whole `next` development lane into `main` —
+# either from `next` itself or from a `promote/*` cut of it carrying
+# promotion-only fixups. Only same-repo branches qualify: a fork can name
+# its branches anything.
+is_lane_promotion_pr() {
+  local refs head base owner
+  refs="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+    --json headRefName,baseRefName,headRepositoryOwner \
+    --jq '[.headRefName, .baseRefName, .headRepositoryOwner.login] | @tsv')" || return 1
+  IFS=$'\t' read -r head base owner <<< "$refs"
+  [[ "$owner" == "${GITHUB_REPOSITORY%%/*}" ]] || return 1
+  [[ "$base" == "main" ]] || return 1
+  [[ "$head" == "next" || "$head" == promote/* ]] || return 1
+}
+
 pr_commits() {
   gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/commits" --paginate \
     --jq '.[] | [.sha, (.author.login // .commit.author.name // "unknown")] | @tsv'
@@ -241,7 +256,14 @@ main() {
     return 1
   fi
 
-  if ! enforce_bot_fix_discipline; then
+  # A lane-promotion PR carries the entire dev cycle's history — every commit
+  # was already gated by the PR that landed it on `next`, and trailers cannot
+  # be added to published history — so the per-commit discipline is skipped
+  # for the promotion shape only. The promotion's content is still gated by
+  # the required checks below.
+  if is_lane_promotion_pr; then
+    log "Lane-promotion PR (next → main); skipping per-commit fix-bot discipline."
+  elif ! enforce_bot_fix_discipline; then
     return 1
   fi
 
