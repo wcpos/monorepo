@@ -47,6 +47,7 @@ function engineWith(input: {
 	diagnostics?: SyncObserver;
 	mode?: 'auto' | 'manual';
 	writeDrainPollMs?: number;
+	barcodeFields?: Record<string, string[]>;
 }): RxdbSyncEngine {
 	return createEngineHarness({
 		site: SITE,
@@ -57,7 +58,12 @@ function engineWith(input: {
 		now: input.now,
 		diagnostics: input.diagnostics,
 		connectivitySignal: input.connectivity,
-		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
+		routes: {
+			'/changes/config-fingerprint': {
+				fingerprints: {},
+				...(input.barcodeFields ? { barcode_fields: input.barcodeFields } : {}),
+			},
+		},
 		ports: {
 			...(input.uuid ? { uuid: input.uuid } : {}),
 		},
@@ -1232,6 +1238,140 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					}),
 				})
 			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('adopts the update ack document so server-derived catalog fields land at ack time', async () => {
+		// The cashier zeroes stock_quantity; WooCommerce recomputes stock_status
+		// server-side and returns it in the push ack envelope. The resident (and
+		// its promoted grid/filter columns) must learn that at ack time — the ack
+		// re-anchors sync.revision, so the pull plane will treat the row as
+		// current and a dropped ack document leaves stock_status stale locally.
+		const ackDocument = {
+			...productPayload(0),
+			stock_status: 'outofstock',
+			date_modified_gmt: '2026-08-14T16:25:08',
+		};
+		const engine = engineWith({
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				return Response.json({
+					document: ackDocument,
+					currentRevision: 'sha256:after-stock-edit',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 1);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { ...productPayload(1), stock_quantity: 0 },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const row = await productJson(engine);
+			expect((row?.payload as Record<string, unknown>).stock_status).toBe('outofstock');
+			expect((row?.payload as Record<string, unknown>).date_modified_gmt).toBe(
+				'2026-08-14T16:25:08'
+			);
+			expect(row?.stockStatus).toBe('outofstock');
+			expect(row?.sync).toMatchObject({ revision: 'sha256:after-stock-edit' });
+			expect(row?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('adopts the update ack document for variations too', async () => {
+		const VARIATION_ID = 601;
+		const variationPayload = (stockQuantity: number): Record<string, unknown> => ({
+			id: VARIATION_ID,
+			parent_id: 50,
+			sku: 'VAR-1',
+			price: '4.20',
+			stock_status: 'instock',
+			stock_quantity: stockQuantity,
+			attributes: [],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_FOLLOW_UP }],
+		});
+		const engine = engineWith({
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				return Response.json({
+					document: { ...variationPayload(0), stock_status: 'outofstock' },
+					currentRevision: 'sha256:variation-after-stock-edit',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const facet = writeFacetFor('variations');
+			if (!facet) throw new Error('no variations write facet');
+			await facet.upsertServerDocument(
+				scope.database,
+				facet.documentFromServerPayload(variationPayload(1))
+			);
+			await engine.write({
+				collection: 'variations',
+				operation: 'update',
+				recordId: UUID_FOLLOW_UP,
+				payload: { ...variationPayload(1), stock_quantity: 0 },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const doc = await scope.database.collections.variations.findOne(UUID_FOLLOW_UP).exec();
+			const row = doc?.toJSON() as Record<string, unknown>;
+			expect((row.payload as Record<string, unknown>).stock_status).toBe('outofstock');
+			expect(row.stockStatus).toBe('outofstock');
+			expect(row.parentId).toBe(50);
+			expect(row.sync).toMatchObject({ revision: 'sha256:variation-after-stock-edit' });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('ack adoption derives payload.barcode by the scope carriers in force', async () => {
+		// The adoption re-materializes the payload; without the scope's live
+		// selectors on the ack that projection would drop the stored barcode.
+		const ackDocument = {
+			...productPayload(0),
+			sku: 'BAR-42',
+			stock_status: 'outofstock',
+		};
+		const engine = engineWith({
+			barcodeFields: { products: ['sku'], variations: ['sku'] },
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				return Response.json({
+					document: ackDocument,
+					currentRevision: 'sha256:barcode-carriers',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 1);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { ...productPayload(1), sku: 'BAR-42', stock_quantity: 0 },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const row = await productJson(engine);
+			expect((row?.payload as Record<string, unknown>).barcode).toBe('BAR-42');
+			expect((row?.payload as Record<string, unknown>).stock_status).toBe('outofstock');
 		} finally {
 			await engine.dispose();
 		}
