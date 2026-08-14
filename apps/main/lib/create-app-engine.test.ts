@@ -58,6 +58,25 @@ function loadCreateAppEngine(
 		writeLeaders.push(leader);
 		return leader;
 	});
+	const writeOutcomeBridges: {
+		moveTo: jest.Mock<void, [string | null]>;
+		close: jest.Mock<void>;
+		publish: jest.Mock<void>;
+		subscribe: jest.Mock;
+	}[] = [];
+	const createWriteOutcomeBridge = jest.fn(() => {
+		const bridge = {
+			moveTo: jest.fn(),
+			close: jest.fn(),
+			publish: jest.fn(),
+			subscribe: jest.fn(() => () => undefined),
+		};
+		writeOutcomeBridges.push(bridge);
+		return bridge;
+	});
+	const writeOutcomeChannelName = jest.fn(
+		(databaseName: string) => `wcpos-write-outcomes:${databaseName}`
+	);
 	const createRxdbSyncEngine = jest.fn(
 		(
 			_ports: {
@@ -77,12 +96,17 @@ function loadCreateAppEngine(
 				diagnostics?: typeof appMetricsObserver;
 				multiInstance?: boolean;
 				writePlaneOwner?: () => boolean;
+				writeOutcomeBridge?: { moveTo: (name: string | null) => void };
 			},
 			_scope: unknown
 		) => createEngine()
 	);
 
-	jest.doMock('@wcpos/sync-engine', () => ({ createRxdbSyncEngine }));
+	jest.doMock('@wcpos/sync-engine', () => ({
+		createRxdbSyncEngine,
+		createWriteOutcomeBridge,
+		writeOutcomeChannelName,
+	}));
 	jest.doMock('@wcpos/hooks', () => ({ reportNetworkResponse }), {
 		virtual: true,
 	});
@@ -133,6 +157,8 @@ function loadCreateAppEngine(
 		getDatabaseEpoch,
 		electWriteLeader,
 		writeLeaders,
+		createWriteOutcomeBridge,
+		writeOutcomeBridges,
 	};
 }
 
@@ -1085,6 +1111,46 @@ describe('createAppSyncEngine scope cache', () => {
 			`wcpos-write-leader:${scopeDatabaseName(targetScope)}`,
 			expect.objectContaining({ onUnavailable: expect.any(Function) })
 		);
+	});
+
+	it('opens the write-outcome channel for the scope and moves it on a switch (#1209)', async () => {
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: { locks: {} },
+		});
+		const { createAppSyncEngine, createRxdbSyncEngine, writeOutcomeBridges } = loadCreateAppEngine(
+			undefined,
+			true
+		);
+		createAppSyncEngine(BASE_OPTIONS);
+
+		// One bridge, injected as the engine port and pointed at this store's channel.
+		expect(writeOutcomeBridges).toHaveLength(1);
+		expect(createRxdbSyncEngine.mock.calls[0]![0].writeOutcomeBridge).toBe(writeOutcomeBridges[0]);
+		expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenLastCalledWith(
+			`wcpos-write-outcomes:${scopeDatabaseName(BASE_OPTIONS.scope)}`
+		);
+
+		const targetScope = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+		createAppSyncEngine({ ...BASE_OPTIONS, scope: targetScope });
+		await Promise.resolve();
+
+		// It follows the lock, or a tab keeps hearing the previous store's outcomes.
+		expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenLastCalledWith(
+			`wcpos-write-outcomes:${scopeDatabaseName(targetScope)}`
+		);
+	});
+
+	it('opens no write-outcome channel off the web (#1209)', () => {
+		const { createAppSyncEngine, createRxdbSyncEngine, createWriteOutcomeBridge } =
+			loadCreateAppEngine(undefined, false);
+
+		createAppSyncEngine(BASE_OPTIONS);
+
+		// Native and Electron are single-window: in-process events already reach
+		// every consumer, so there is no peer to tell.
+		expect(createWriteOutcomeBridge).not.toHaveBeenCalled();
+		expect(createRxdbSyncEngine.mock.calls[0]![0].writeOutcomeBridge).toBeUndefined();
 	});
 
 	it('keeps single-instance behavior and emits diagnostics when Web Locks are unavailable', () => {

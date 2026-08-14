@@ -72,6 +72,7 @@ export const SYNC_EVENT_TYPES = [
 	'queue.write.auto-reverted',
 	'queue.write.born-twice-requeue',
 	'queue.write.coalesce',
+	'queue.write.conflict-recovered',
 	'queue.write.conflict-transition',
 	'queue.write.discard-repull-deferred',
 	'queue.write.drain',
@@ -609,6 +610,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Merged repeated edits into one update',
 		descriptionKey: 'health.logs.event_description.queue_write_coalesce',
 		description: 'Several quick edits to the same record were combined into one send.',
+		introducedIn: '1.10.0',
+	},
+	'queue.write.conflict-recovered': {
+		type: 'queue.write.conflict-recovered',
+		domain: 'SYNC',
+		key: 'health.logs.event.queue_write_conflict_recovered',
+		label: 'A clashing change was re-anchored and saved',
+		descriptionKey: 'health.logs.event_description.queue_write_conflict_recovered',
+		description:
+			"A change clashed with your store's copy, was re-checked against it, and saved successfully.",
 		introducedIn: '1.10.0',
 	},
 	'queue.write.conflict-transition': {

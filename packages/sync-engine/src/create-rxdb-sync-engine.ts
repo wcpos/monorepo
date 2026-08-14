@@ -136,6 +136,7 @@ import {
 } from './maintenance/lane-registry';
 import { type EngineTimers, systemTimers } from './engine-timers';
 
+import type { WriteOutcomeBridge } from './write-path/write-outcome-bridge';
 import type { CoverageTarget, CoverageVerdict } from './local-coverage/coverage-verdicts';
 import type { MoneyDivergenceField, MoneyPrecisionMode } from './write-path/order-money-divergence';
 
@@ -258,6 +259,17 @@ export type RxdbSyncEnginePorts = {
 	/** Web multi-tab: true only while this engine owns the write plane. Followers
 	 * still read, but do not drain or mutate existing queue rows. Default true. */
 	writePlaneOwner?: () => boolean;
+	/**
+	 * Web multi-tab: the cross-tab write-outcome bridge (#1209). Since #1057 only
+	 * the leader drains, and engine events are in-process — so without this a
+	 * FOLLOWER tab's `awaitWriteOutcome` waits on an event that can only fire in
+	 * the leader's window and every outcome-dependent behaviour degrades to
+	 * optimistic-only off-leader. With it, each outcome the leader emits is
+	 * republished to peers and re-emitted there. Feedback plumbing ONLY: the
+	 * leader stays the sole writer. Absent (native, Electron, a degraded
+	 * single-writer web context) ⇒ in-process events exactly as before.
+	 */
+	writeOutcomeBridge?: WriteOutcomeBridge;
 	/** RxDB hashFunction for the engine's scope databases. Default: RxDB's
 	 * WebCrypto-based sha256. apps/main injects its platform hash implementation
 	 * where WebCrypto is unavailable. */
@@ -470,13 +482,38 @@ export type RxdbSyncEngine = {
 	 * LOCAL terminal outcome, write-annihilated (a delete that cancelled a
 	 * never-pushed local chain: the resident row is removed, nothing is sent,
 	 * and the receipt's `annihilated` flag is set). Only collections with a
-	 * write facet (orders today) — anything else throws (invariant 5). */
+	 * write facet (orders today) — anything else throws (invariant 5).
+	 *
+	 * On web these outcomes cross tabs when the host supplies `writeOutcomeBridge`
+	 * (#1209): the LEADER drains, and every peer re-emits what it publishes, so an
+	 * `awaitWriteOutcome` caller in a follower tab settles with the leader's real
+	 * verdict instead of timing out. */
 	write(
 		intent: WriteIntent
 	): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }>;
 	/**
 	 * The terminal write entries awaiting an explicit caller decision — there
-	 * is NO auto-resolution. 'conflicted' rows (a 409 stale-revision push) carry
+	 * is NO auto-resolution, with ONE ruled exception.
+	 *
+	 * THE EXCEPTION (ruled 2026-08-14, #1204): an **orders** push that comes back
+	 * 409 stale-revision gets exactly ONE automatic re-anchor before it lands
+	 * here. The base revision is re-stamped from that 409's own `currentRevision`
+	 * — the reply's, not a fetch, and not the server `current` DOCUMENT, which is
+	 * never adopted over the local record — and the SAME local intent is pushed
+	 * again. Only a SECOND consecutive conflict parks the row, exactly as every
+	 * conflict did before. Nothing else changes: no other collection recovers
+	 * (products/variations/customers/coupons still park on the first 409), a
+	 * 'rejected' or 'needs-revision' row is untouched, and the save-time money
+	 * mirror (`order-money-divergence`, #1033) remains the alarm for a server that
+	 * genuinely disagrees. The carve-out exists because the 409s that reach an
+	 * open order are not competing edits — the till owns its cart and the write
+	 * plane is leader-serialized, so the drift is server-side bookkeeping (#1204:
+	 * a refused delete rewrote `_reduced_stock`) — while the park it triggered
+	 * wedged the order for good: every later write held, resolvable only from
+	 * Store health, which a follower tab refuses. Wired in the write-drain lane
+	 * (`autoRecoverConflict`), implemented in sync-core's drain.
+	 *
+	 * 'conflicted' rows (a 409 stale-revision push) carry
 	 * the server's truth from the 409 (`conflictDocument` + `conflictRevision`);
 	 * 'needs-revision' rows (an unrecoverable 428 — the server demands a
 	 * precondition and no current revision could be determined) carry NO server
@@ -1034,6 +1071,16 @@ export function createRxdbSyncEngine(
 		if (event.type === 'query-total-cache') censusPublisher.publish();
 	};
 
+	// CROSS-TAB WRITE OUTCOMES (#1209). A peer's outcome enters at the subscriber
+	// fan-out, NOT at `emitWriteEvent`: that funnel carries #1082's auto-revert,
+	// which must run once and only in the leader (a follower's `resolveConflict`
+	// refuses outright). Entering here also makes an echo impossible — a received
+	// event is never re-published.
+	const unsubscribeWriteOutcomeBridge = ports.writeOutcomeBridge?.subscribe((event) => {
+		if (disposed) return;
+		emitEngineEvent(event);
+	});
+
 	// `activeDatabase` is read lazily: the hub outlives every scope, and a reset re-emits the
 	// SAME database with fresh collections, so it must resolve through the accessor each time.
 	const coverageChangeHub = createCoverageChangeHub({
@@ -1432,6 +1479,11 @@ export function createRxdbSyncEngine(
 		isWritePlaneOwner: writePlaneOwner,
 		emitWriteEvent: (event) => {
 			emitEngineEvent(event);
+			// #1209: the same outcome, to the other tabs. AFTER the local emit, so a
+			// slow or broken channel can never delay this window's own feedback, and
+			// only for outcomes THIS instance produced — a bridged event never comes
+			// back through here.
+			ports.writeOutcomeBridge?.publish(event);
 			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
 				return;
 			}
@@ -1956,6 +2008,11 @@ export function createRxdbSyncEngine(
 			// each sees the prior outcome), so dispose's turn sees every scope a
 			// pending switch opened.
 			disposed = true;
+			// Detach from the cross-tab bridge synchronously (#1209): the host owns
+			// the channel and may keep it for the successor engine, so a stale
+			// subscription would fan a peer's outcome into a disposed instance's
+			// subscribers.
+			unsubscribeWriteOutcomeBridge?.();
 			cancelPendingRebaselineAudit();
 			for (const collection of SYNC_COLLECTION_NAMES) collectionActivity.set(collection, 0);
 			cadenceController.stop();

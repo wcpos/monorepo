@@ -110,6 +110,27 @@ async function orderJson(
 	return doc ? doc.toJSON() : null;
 }
 
+/**
+ * Make a stale-revision 409 OUTLIVE #1204's one automatic recovery.
+ *
+ * Ruled 2026-08-14: an order push that 409s re-anchors from the 409's own
+ * `currentRevision` and re-pushes ONCE; only a second consecutive conflict parks
+ * the row. So a test about the PARKED surface — conflicts(), resolveConflict,
+ * the frozen-fetch guarantee — has to make the server disagree twice, or it is
+ * quietly testing the recovery instead. After the two refusals the script steps
+ * aside so a later `retry-with-server-base` can land, exactly as before.
+ */
+function conflictPastAutoRecovery(
+	server: ReturnType<typeof createFakeWriteServer>,
+	currentRevision: string,
+	current: Record<string, unknown> | null = { id: 42 }
+): void {
+	let remaining = 2;
+	server.script(() =>
+		remaining-- > 0 ? { kind: 'conflict' as const, current, currentRevision } : undefined
+	);
+}
+
 /** A SERVER-BORN resident order (uuid PK + known Woo id + anchored revision). */
 async function insertServerBornOrder(
 	engine: RxdbSyncEngine,
@@ -1470,6 +1491,7 @@ describe('#507 offline write flows through the public handle', () => {
 		const server = createFakeWriteServer();
 		// Another client advanced the server to r2; this client is anchored at r1.
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r2' });
+		conflictPastAutoRecovery(server, 'sha256:server-r2');
 		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
 		try {
 			await engine.ready;
@@ -1539,6 +1561,7 @@ describe('#507 offline write flows through the public handle', () => {
 	it('regression 3b: discarding a conflict restores server truth via a targeted re-pull and clears dirty', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r2' });
+		conflictPastAutoRecovery(server, 'sha256:server-r2');
 		const { state, fetch } = routedFetch(server, () => ({
 			number: '1042',
 			status: 'refunded', // the server's truth this client must return to
@@ -1837,6 +1860,7 @@ describe('#507 offline write flows through the public handle', () => {
 	it('#832: requeue refuses a non-rejected row, and a dead letter whose record is gone (discard is then the honest answer)', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r2' });
+		conflictPastAutoRecovery(server, 'sha256:server-r2');
 		const { fetch } = routedFetch(server, () => ({
 			number: '1042',
 			status: 'on-hold',
@@ -4262,6 +4286,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 	it('gate2 item 5: the discard re-pull is queued DURABLY before local state clears — a failed pull self-heals on a later scheduler drain', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r2' });
+		conflictPastAutoRecovery(server, 'sha256:server-r2');
 		const { state, fetch } = routedFetch(server, () => ({
 			number: '1042',
 			status: 'refunded', // the server truth the client must eventually reflect

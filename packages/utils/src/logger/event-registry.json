@@ -417,6 +417,13 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "queue.write.conflict-recovered",
+		"domain": "SYNC",
+		"label": "A clashing change was re-anchored and saved",
+		"description": "A change clashed with your store's copy, was re-checked against it, and saved successfully.",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "queue.write.conflict-transition",
 		"domain": "SYNC",
 		"label": "Could not settle a clashing change",

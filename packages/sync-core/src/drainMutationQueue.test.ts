@@ -79,6 +79,7 @@ describe('drainMutationQueue', () => {
 		expect(result).toEqual({
 			pushed: 2,
 			annihilated: 0,
+			annihilatedMutations: [],
 			held: 0,
 			conflicts: [],
 			failed: 0,

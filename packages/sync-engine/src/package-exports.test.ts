@@ -19,6 +19,11 @@ describe('package exports', () => {
 				// The Store health panel must decide "does discard delete this record?"
 				// from the SAME rule the engine enforces (#832 follow-up, R7b).
 				'rejectionSuggestsServerRecord',
+				// The host opens and names the cross-tab write-outcome channel (#1209)
+				// — web-only, scoped per store database, moved on a scope switch — so
+				// the factory and the naming rule are both part of the public door.
+				'createWriteOutcomeBridge',
+				'writeOutcomeChannelName',
 			].sort()
 		);
 	});

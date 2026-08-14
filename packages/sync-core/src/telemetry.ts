@@ -110,6 +110,7 @@ export type SyncEventType =
 	| 'queue.write.auto-reverted'
 	| 'queue.write.born-twice-requeue'
 	| 'queue.write.coalesce'
+	| 'queue.write.conflict-recovered'
 	| 'queue.write.conflict-transition'
 	| 'queue.write.discard-repull-deferred'
 	| 'queue.write.drain'
