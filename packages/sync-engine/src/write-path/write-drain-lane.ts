@@ -203,6 +203,21 @@ export type WriteOutcomeEvent =
 			fields: MoneyDivergenceField[];
 	  };
 
+/**
+ * The one LOCAL terminal outcome: the intent was satisfied without sending
+ * anything. Two producers — the write plane, when an enqueue-time coalesce
+ * cancels a never-pushed create→delete pair (#516 rule 3), and this lane, when
+ * the LEADER-side drain cancels one a follower could not coalesce (#1059).
+ * Declared here, next to the outcome union, so both producers and the cross-tab
+ * bridge share one shape.
+ */
+export type WriteAnnihilatedEvent = {
+	type: 'write-annihilated';
+	collection: string;
+	recordId: string;
+	mutationId: string;
+};
+
 export type WriteDrainReport = {
 	lane: 'write-drain';
 	status: 'ran' | 'skipped' | 'error';
@@ -227,7 +242,7 @@ export type WriteDrainLaneDeps = {
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	diagnostics: SyncObserver;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
-	emitWriteEvent: (event: WriteOutcomeEvent) => void;
+	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
 	mintUuid: () => string;
 	queueFor: (database: RxDatabase) => RecordMutationQueue;
 	drainInstanceIdFor: () => string;
@@ -373,6 +388,15 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									signal
 								);
 							},
+							// ORDER CONFLICT AUTO-RECOVERY (#1204, ruled 2026-08-14) — the
+							// engine's "no auto-resolution" invariant keeps its exactly-one
+							// carve-out HERE, at the wiring, so it is visible where the policy
+							// is chosen rather than buried in the collection-agnostic drain.
+							// Orders only: an open cart is single-writer in practice (the till
+							// owns it, the write plane is leader-serialized), so a 409 on it is
+							// server-side bookkeeping churn — not a competing edit. Every other
+							// collection keeps parking on the first conflict.
+							autoRecoverConflict: (mutation) => mutation.collectionName === 'orders',
 							refreshRevision: async (mutation) => {
 								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) {
@@ -557,6 +581,21 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 								});
 							}
 							deps.emitWriteEvent(ack);
+						}
+						// #1209: a chain the LEADER cancelled at drain (#1059) is terminal
+						// for every intent in it, and the tab that asked for the void is
+						// usually the FOLLOWER that could not coalesce it. Announce each
+						// removed row as the same local terminal outcome the write plane
+						// emits when the coalesce happens at enqueue — otherwise the
+						// follower's awaitWriteOutcome for a voided never-pushed order
+						// simply times out and its fallback never runs.
+						for (const cancelled of result.annihilatedMutations) {
+							deps.emitWriteEvent({
+								type: 'write-annihilated',
+								collection: cancelled.collectionName,
+								recordId: cancelled.recordId,
+								mutationId: cancelled.mutationId,
+							});
 						}
 						for (const conflict of result.conflicts) {
 							deps.emitWriteEvent({

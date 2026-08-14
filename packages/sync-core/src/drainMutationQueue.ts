@@ -38,7 +38,10 @@ import type { PushResult } from './recordPushAdapter';
  *    ONE `queue.write.conflict-transition`, and LEAVES the drain — no retries,
  *    no backoff churn; only an explicit resolution (engine.resolveConflict)
  *    moves it. Later mutations for the same record stay held while one of its
- *    mutations is conflicted;
+ *    mutations is conflicted. ONE carve-out (`autoRecoverConflict`, #1204 —
+ *    the host scopes it to orders): the FIRST 409 re-anchors the base from the
+ *    409's own `currentRevision` and re-pushes the SAME intent once; only a
+ *    SECOND consecutive conflict parks the row. See `autoRecoverConflict`;
  *  - 428 precondition required → ONE targeted `refreshRevision` + re-push with
  *    the observed revision. A born-local CREATE with no refreshable server
  *    identity is permanently rejected; when no update/delete revision can be
@@ -71,6 +74,16 @@ export type DrainResult = {
 	 * whole chains annihilated (one per record), not individual rows removed.
 	 */
 	annihilated: number;
+	/**
+	 * The individual queue rows those chains removed, in seq order (#1209). The
+	 * chain is satisfied LOCALLY — nothing is sent — so every intent in it has a
+	 * terminal outcome the caller may be awaiting, and on web the caller is
+	 * usually a FOLLOWER tab that cannot see this drain at all. Without these the
+	 * follower's `awaitWriteOutcome` for a voided never-pushed order waits out
+	 * both its windows and the void's fallback never runs. The host turns each
+	 * into one `write-annihilated`.
+	 */
+	annihilatedMutations: QueuedMutation[];
 	/** Mutations deliberately left pending by the host's hold policy. */
 	held: number;
 	/** Push results that came back as 409 conflicts (durable 'conflicted' rows) or unrecoverable
@@ -168,7 +181,7 @@ async function annihilateNeverPushedChains(input: {
 	removeResident?: (mutation: QueuedMutation, signal?: AbortSignal) => Promise<void>;
 	signal?: AbortSignal;
 	emit: (event: SyncEvent) => void;
-}): Promise<number> {
+}): Promise<{ chains: number; mutations: QueuedMutation[] }> {
 	const pending = await input.queue.pending();
 	const byRecord = new Map<string, QueuedMutation[]>();
 	for (const row of pending) {
@@ -178,6 +191,7 @@ async function annihilateNeverPushedChains(input: {
 		else byRecord.set(key, [row]);
 	}
 	let annihilated = 0;
+	const annihilatedMutations: QueuedMutation[] = [];
 	for (const rows of byRecord.values()) {
 		if (input.signal?.aborted) break;
 		// `pending()` already excludes 'rejected'; require every remaining row to be
@@ -222,6 +236,7 @@ async function annihilateNeverPushedChains(input: {
 			}
 		}
 		annihilated += 1;
+		annihilatedMutations.push(...orderedRemoved);
 		input.emit({
 			type: 'queue.write.annihilate',
 			level: 'info',
@@ -229,7 +244,7 @@ async function annihilateNeverPushedChains(input: {
 			fields: { recordId: head.recordId, removed: removed.length, drain: true },
 		});
 	}
-	return annihilated;
+	return { chains: annihilated, mutations: annihilatedMutations };
 }
 
 export async function drainMutationQueue(input: {
@@ -275,6 +290,36 @@ export async function drainMutationQueue(input: {
 	 * that revision; a missing revision parks update/delete, while an unrefreshable
 	 * create is permanently rejected. */
 	refreshRevision?: (mutation: RecordMutation) => Promise<string | null | undefined>;
+	/**
+	 * ORDER WRITE-CONFLICT AUTO-RECOVERY (#1204, ruled 2026-08-14). Returns true
+	 * for the mutations allowed ONE automatic recovery attempt before the durable
+	 * 'conflicted' park. The host scopes it — today `collectionName === 'orders'`
+	 * — and every other collection keeps the engine's "no auto-resolution"
+	 * invariant untouched.
+	 *
+	 * WHY. A 409 `woo_rxdb_sync_conflict` parks the row terminally: later writes
+	 * to that record are held forever, the only resolution surface is Store
+	 * health (which a FOLLOWER tab refuses outright), and the cashier gets a bare
+	 * "Failed to save order". The 409s that actually happen to an open order are
+	 * not a competing edit — an open cart is single-writer in practice (the till
+	 * owns it and the write plane is leader-serialized), so the drift is
+	 * server-side bookkeeping churn (see #1204: a refused delete rewrote
+	 * `_reduced_stock` and moved the order's canonical revision). The 409 body
+	 * already carries the server's `currentRevision`, so the client can re-anchor
+	 * without a fetch.
+	 *
+	 * WHAT IT DOES — and, as importantly, does NOT do. The base revision is
+	 * re-stamped from the 409's `currentRevision` and the SAME local intent is
+	 * pushed again. The server's `current` document is NOT adopted over the local
+	 * record: for a POS the local cart is the cashier's live sale, and discarding
+	 * it to take server truth would be a lost sale. Genuine disagreement is still
+	 * surfaced — the save-time money mirror (`order-money-divergence`, #1033)
+	 * fires on the ack exactly as before — and a SECOND consecutive conflict
+	 * parks the row with the fresher server truth, byte-for-byte the pre-#1204
+	 * behaviour. The recovery is bounded per attempt-pair, so a record the server
+	 * conflicts every time still parks on its first drain rather than looping.
+	 */
+	autoRecoverConflict?: (mutation: RecordMutation) => boolean;
 }): Promise<DrainResult> {
 	const emit = (event: SyncEvent): void => {
 		try {
@@ -292,14 +337,15 @@ export async function drainMutationQueue(input: {
 	// chains BEFORE the scan, so an annihilated create is never claimed or pushed
 	// (no phantom server order from a follower create+void). A no-op on
 	// single-tab/Electron, where the pair was already annihilated at enqueue.
-	const annihilated = input.signal?.aborted
-		? 0
+	const annihilation = input.signal?.aborted
+		? { chains: 0, mutations: [] as QueuedMutation[] }
 		: await annihilateNeverPushedChains({
 				queue: input.queue,
 				...(input.removeResident ? { removeResident: input.removeResident } : {}),
 				...(input.signal ? { signal: input.signal } : {}),
 				emit,
 			});
+	const annihilated = annihilation.chains;
 	// Scan the WHOLE pending set, not a pre-sliced page: `limit` bounds the number of push ATTEMPTS
 	// (the network ops), not the scan — otherwise a deferred row at the head would consume a slot and
 	// starve a ready row behind it. 'claimed' rows are INCLUDED: a claim outlives a tick when a crash
@@ -656,25 +702,84 @@ export async function drainMutationQueue(input: {
 		}
 
 		if (result.outcome === 'conflict') {
-			// Stale-revision 409: the terminal-until-resolved transition. Store the
-			// server's truth ON the row (the engine's conflicts() surface), emit ONE
-			// transition event, and leave the drain — no retry, no backoff churn.
-			conflicts.push(result);
-			const current = result.conflict?.current;
-			await input.queue.replace({
-				...draining,
-				status: 'conflicted',
-				...(current !== null && current !== undefined ? { conflictDocument: current } : {}),
-				conflictRevision: result.conflict?.currentRevision ?? result.currentRevision,
-			});
-			emit({
-				type: 'queue.write.conflict-transition',
-				level: 'warn',
-				collection: mutation.collectionName,
-				fields: { recordId: mutation.recordId, mutationId: mutation.mutationId },
-			});
-			blockedRecords.add(mutation.recordId); // hold later edits to this record until it's resolved
-			continue;
+			// ORDER CONFLICT AUTO-RECOVERY (#1204, ruled 2026-08-14) — the ONE
+			// carve-out from "a 409 never retries" (see `autoRecoverConflict`).
+			// Re-anchor the base from the 409's own `currentRevision` and re-push the
+			// SAME intent once. A recovered push falls through to the normal success
+			// path below, so the outcome the caller observes is a single
+			// write-acknowledged — never an intermediate write-conflict (#1209: a
+			// FOLLOWER tab awaiting the outcome must see one final answer).
+			const serverRevision = result.conflict?.currentRevision ?? result.currentRevision;
+			let recovered = false;
+			if (serverRevision && input.autoRecoverConflict?.(draining) === true) {
+				const reanchored = { ...draining, baseRevision: serverRevision };
+				let retry: PushResult;
+				try {
+					retry = await input.push(reanchored);
+				} catch (retryError) {
+					// The re-anchored push THREW: settle it exactly as a first-attempt
+					// throw would have been settled. The row is not parked 'conflicted'
+					// — this is no longer a conflict, it is whatever the server just
+					// said, and pretending otherwise would hide the real verdict.
+					if (input.signal?.aborted) {
+						break;
+					}
+					if (isNonRetryable(retryError)) {
+						await deadLetter(reanchored, retryError);
+					} else {
+						failed += 1;
+						blockedRecords.add(mutation.recordId);
+						await applyBackoff({ ...reanchored, status: 'pending' });
+					}
+					continue;
+				}
+				if (input.signal?.aborted) {
+					break;
+				}
+				// LEASE FENCE again: the re-push is a second network op, so the lease
+				// may have been stolen while it was in flight (same reasoning as the
+				// fence above the outcome recording).
+				if (!(await stillOwnLease(mutation.mutationId))) {
+					continue;
+				}
+				// Park on the SECOND consecutive conflict, carrying the FRESHER server
+				// truth from the retry's 409 — the ruled stopping condition.
+				result = retry;
+				recovered = retry.outcome !== 'conflict';
+				if (recovered) {
+					emit({
+						type: 'queue.write.conflict-recovered',
+						level: 'info',
+						collection: mutation.collectionName,
+						fields: {
+							recordId: mutation.recordId,
+							mutationId: mutation.mutationId,
+							baseRevision: serverRevision,
+						},
+					});
+				}
+			}
+			if (!recovered) {
+				// Stale-revision 409: the terminal-until-resolved transition. Store the
+				// server's truth ON the row (the engine's conflicts() surface), emit ONE
+				// transition event, and leave the drain — no retry, no backoff churn.
+				conflicts.push(result);
+				const current = result.conflict?.current;
+				await input.queue.replace({
+					...draining,
+					status: 'conflicted',
+					...(current !== null && current !== undefined ? { conflictDocument: current } : {}),
+					conflictRevision: result.conflict?.currentRevision ?? result.currentRevision,
+				});
+				emit({
+					type: 'queue.write.conflict-transition',
+					level: 'warn',
+					collection: mutation.collectionName,
+					fields: { recordId: mutation.recordId, mutationId: mutation.mutationId },
+				});
+				blockedRecords.add(mutation.recordId); // hold later edits to this record until it's resolved
+				continue;
+			}
 		}
 
 		// A push that only RESOLVED after the scope was aborted must not write its ack
@@ -727,5 +832,14 @@ export async function drainMutationQueue(input: {
 			rejected: rejected.length,
 		},
 	});
-	return { pushed, annihilated, held, conflicts, failed, deferred, rejected };
+	return {
+		pushed,
+		annihilated,
+		annihilatedMutations: annihilation.mutations,
+		held,
+		conflicts,
+		failed,
+		deferred,
+		rejected,
+	};
 }

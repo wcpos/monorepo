@@ -428,6 +428,17 @@ export const CONFORMANCE_TABLE = {
 		},
 		message: recordMessage('change reverted to server value; see Store health'),
 	},
+	'queue.write.conflict-recovered': {
+		// #1204: the clash SETTLED — the base was re-anchored to the store's own
+		// revision and the same change saved. Nothing for the cashier to do, so no
+		// error code and no toast: this row exists so support can see that an order
+		// took the recovery path rather than sailing through first time.
+		operationType: 'sync.record',
+		outcome: 'recovered',
+		code: null,
+		level: 'info',
+		message: recordMessage('conflict re-anchored and saved'),
+	},
 	'queue.write.conflict-transition': {
 		operationType: 'sync.record',
 		outcome: 'failed',

@@ -148,6 +148,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_write_born_twice_requeue');
 		case 'queue.write.coalesce':
 			return t('health.logs.event.queue_write_coalesce');
+		case 'queue.write.conflict-recovered':
+			return t('health.logs.event.queue_write_conflict_recovered');
 		case 'queue.write.conflict-transition':
 			return t('health.logs.event.queue_write_conflict_transition');
 		case 'queue.write.discard-repull-deferred':
@@ -233,6 +235,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.queue_write_annihilate');
 		case 'queue.write.coalesce':
 			return t('health.logs.event_description.queue_write_coalesce');
+		case 'queue.write.conflict-recovered':
+			return t('health.logs.event_description.queue_write_conflict_recovered');
 		case 'queue.write.drain':
 			return t('health.logs.event_description.queue_write_drain');
 		case 'queue.write.enqueued':

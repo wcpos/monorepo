@@ -9,6 +9,7 @@ import { writeFacetFor } from '../collections/collection-descriptors';
 import { type ConflictResolutionChoice, createConflictResolution } from './conflict-resolution';
 import {
 	createWriteDrainLane,
+	type WriteAnnihilatedEvent,
 	type WriteDrainReport,
 	type WriteOutcomeEvent,
 } from './write-drain-lane';
@@ -41,11 +42,7 @@ type WritePlaneDeps = {
 	onStatusChanged: () => void;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	isWritePlaneOwner: () => boolean;
-	emitWriteEvent: (
-		event:
-			| WriteOutcomeEvent
-			| { type: 'write-annihilated'; collection: string; recordId: string; mutationId: string }
-	) => void;
+	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	persistOrderRepull: (input: {

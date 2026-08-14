@@ -20,8 +20,16 @@ import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-databa
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { reportNetworkResponse } from '@wcpos/hooks';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
-import { createRxdbSyncEngine } from '@wcpos/sync-engine';
-import type { RxdbSyncEngine, StoreScopeIdentity } from '@wcpos/sync-engine';
+import {
+	createRxdbSyncEngine,
+	createWriteOutcomeBridge,
+	writeOutcomeChannelName,
+} from '@wcpos/sync-engine';
+import type {
+	RxdbSyncEngine,
+	ScopedWriteOutcomeBridge,
+	StoreScopeIdentity,
+} from '@wcpos/sync-engine';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
@@ -115,6 +123,9 @@ type CachedEngine = {
 	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
 	clockSkew: { generation: number; evaluated: boolean };
 	writeLeader?: WriteLeaderState;
+	/** Web multi-tab write-outcome feedback (#1209) — re-pointed at the new
+	 * scope's channel on every switch, exactly like the write lock. */
+	writeOutcomeBridge?: ScopedWriteOutcomeBridge;
 };
 
 /** A scope identity the engine is known to have activated. */
@@ -129,6 +140,10 @@ let cachedEngine: CachedEngine | null = null;
 const pendingDisposals = new Map<string, Promise<void>>();
 
 function moveWriteLeader(entry: CachedEngine, databaseName: string): void {
+	// The outcome bridge is namespaced by the same scope database as the lock, so
+	// it moves on the same beat: a tab left listening on the previous store's
+	// channel would hear outcomes for records it no longer holds.
+	entry.writeOutcomeBridge?.moveTo(writeOutcomeChannelName(databaseName));
 	if (!entry.writeLeader) return;
 	const previous = entry.writeLeader.current;
 	entry.writeLeader.current = electWriteLeader(`wcpos-write-leader:${databaseName}`, {
@@ -205,6 +220,7 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	pendingDisposals.set(entry.key, bounded);
 	void bounded.then(() => {
 		entry.writeLeader?.current.dispose();
+		entry.writeOutcomeBridge?.close();
 		if (pendingDisposals.get(entry.key) === bounded) {
 			pendingDisposals.delete(entry.key);
 		}
@@ -459,6 +475,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			message:
 				'Web Locks unavailable; falling back to single-writer (multi-tab coherence disabled for this browser context)',
 		});
+	// #1209: web-only, for the same reason the write lock is — a single-window
+	// host (native, Electron) has no peer to tell, and its engine events already
+	// reach every consumer in-process.
+	const writeOutcomeBridge: ScopedWriteOutcomeBridge | undefined = isWeb
+		? createWriteOutcomeBridge()
+		: undefined;
+	writeOutcomeBridge?.moveTo(writeOutcomeChannelName(scopeDatabaseName(options.scope)));
 	const writeLeader: WriteLeaderState | undefined = isWeb
 		? {
 				current: electWriteLeader(`wcpos-write-leader:${scopeDatabaseName(options.scope)}`, {
@@ -494,6 +517,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			diagnostics: composeObservers(appMetricsObserver, guardedDiagnostics),
 			multiInstance: isWeb ? webLocksAvailable : (options.multiInstance ?? false),
 			...(writeLeader ? { writePlaneOwner: () => writeLeader.current.isLeader() } : {}),
+			...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
 		options.scope
@@ -515,6 +539,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		},
 		clockSkew,
 		...(writeLeader ? { writeLeader } : {}),
+		...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
 	};
 	return engine;
 }
