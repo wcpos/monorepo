@@ -34,8 +34,9 @@ const logger = getLogger(['wcpos', 'health', 'conflicts']);
 /**
  * Store health → Database · "Clashed with an edit in your store".
  *
- * Each row here is a change this device HELD because the server reported a
- * newer copy (a parked 'conflicted'/'needs-revision' queue row). The engine
+ * Each row here is a change this device HELD: either the server reported a
+ * newer copy ('conflicted') or asked for a revision the device could not
+ * refresh ('needs-revision'). The engine
  * deliberately never auto-resolves these (orders' one ruled carve-out aside,
  * #1204) — a human picks a side — but until this panel the pick-a-side surface
  * did not exist: the only rendering was an anonymous count that called every
@@ -46,16 +47,15 @@ const logger = getLogger(['wcpos', 'health', 'conflicts']);
  *    revision and queue the same intent. A delete gets the same explicit
  *    confirm discipline as the dead-letter panel's requeue (#1093 audit, Q2):
  *    winning that conflict destroys the record on the server.
- *  - Use server version: drop the local change; the server's copy is re-pulled
- *    durably (the engine queues the re-pull BEFORE removing the mutation, so a
- *    crash cannot leave the record posing as synced). Destructive to the local
- *    edit, so it sits behind a confirm.
+ *  - Discard: drop the local change. Depending on the held mutation and server
+ *    identity, the engine restores server truth or removes a born-local copy;
+ *    each outcome is described behind a confirm.
  */
 export function ConflictedMutationsPanel() {
 	const t = useT();
 	const router = useRouter();
 	const { engine } = useQueryRuntime();
-	const { sync } = useManualSync();
+	const { syncing, sync } = useManualSync();
 	const { rows, readError } = useUnresolvedConflicts();
 	const nowMs = useNowMs(30_000);
 	const relative = useRelativeTime();
@@ -81,6 +81,7 @@ export function ConflictedMutationsPanel() {
 	}
 
 	if (rows.length === 0) return null;
+	const hasUnverifiedRevision = rows.some((row) => row.status === 'needs-revision');
 
 	const settle = async (
 		row: UnresolvedConflict,
@@ -102,7 +103,9 @@ export function ConflictedMutationsPanel() {
 				text1:
 					resolution === 'retry-with-server-base'
 						? t('health.database.conflicted.resent')
-						: t('health.database.conflicted.server_kept'),
+						: row.destroysRecord
+							? t('health.database.conflicted.destroyed')
+							: t('health.database.conflicted.discarded'),
 			});
 			if (resolution === 'retry-with-server-base') {
 				// The row is back to pending; without a tick it waits for the next
@@ -133,7 +136,7 @@ export function ConflictedMutationsPanel() {
 				type: 'error',
 				text1:
 					resolution === 'discard'
-						? t('health.database.conflicted.server_kept_failed')
+						? t('health.database.conflicted.discard_failed')
 						: t('health.database.conflicted.resend_failed'),
 				text2: message,
 			});
@@ -147,9 +150,14 @@ export function ConflictedMutationsPanel() {
 			<Callout tone="destructive" testID="db-conflicted-callout">
 				<VStack className="gap-0.5">
 					<Text className="text-destructive text-sm font-semibold">
-						{t('health.database.conflicted.title', {
-							count: rows.length,
-						})}
+						{t(
+							hasUnverifiedRevision
+								? 'health.database.conflicted.needs_revision_title'
+								: 'health.database.conflicted.title',
+							{
+								count: rows.length,
+							}
+						)}
 					</Text>
 					<Text className="text-muted-foreground text-xs">
 						{t('health.database.conflicted.body')}
@@ -178,7 +186,11 @@ export function ConflictedMutationsPanel() {
 									) : null}
 								</HStack>
 								<Text className="text-muted-foreground text-xs">
-									{t('health.database.conflicted.reason')}
+									{t(
+										row.status === 'needs-revision'
+											? 'health.database.conflicted.needs_revision_reason'
+											: 'health.database.conflicted.reason'
+									)}
 								</Text>
 								{row.queuedAt ? (
 									<Text className="text-muted-foreground/80 text-xs">
@@ -187,13 +199,18 @@ export function ConflictedMutationsPanel() {
 										})}
 									</Text>
 								) : null}
+								{row.residentUnknown ? (
+									<Text className="text-muted-foreground/80 text-xs">
+										{t('health.database.conflicted.unknown_record')}
+									</Text>
+								) : null}
 							</View>
 							<HStack className="items-center gap-2">
 								<Button
 									variant="outline"
 									size="sm"
 									testID={`db-conflicted-resend-${row.mutationId}`}
-									disabled={busyId !== null}
+									disabled={busyId !== null || syncing}
 									onPress={() =>
 										row.operation === 'delete'
 											? setResendingDelete(row)
@@ -206,11 +223,13 @@ export function ConflictedMutationsPanel() {
 									variant="ghost"
 									size="sm"
 									testID={`db-conflicted-discard-${row.mutationId}`}
-									disabled={busyId !== null}
+									disabled={busyId !== null || row.residentUnknown}
 									onPress={() => setDiscarding(row)}
 								>
 									<ButtonText className="text-destructive">
-										{t('health.database.conflicted.use_server')}
+										{row.destroysRecord || row.mayDestroyRecord || row.status === 'needs-revision'
+											? t('health.database.conflicted.discard_change')
+											: t('health.database.conflicted.use_server')}
 									</ButtonText>
 								</Button>
 								{fixRoute ? (
@@ -278,13 +297,31 @@ export function ConflictedMutationsPanel() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{t('health.database.conflicted.use_server_title')}</AlertDialogTitle>
+						<AlertDialogTitle>
+							{discarding?.destroysRecord
+								? t('health.database.conflicted.discard_destroy_title')
+								: discarding?.mayDestroyRecord || discarding?.status === 'needs-revision'
+									? t('health.database.conflicted.discard_change_title')
+									: t('health.database.conflicted.use_server_title')}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{discarding
-								? t('health.database.conflicted.use_server_body', {
+							{discarding?.destroysRecord
+								? t('health.database.conflicted.discard_destroy_body', {
 										record: describeRecord(discarding, t),
 									})
-								: null}
+								: discarding?.mayDestroyRecord
+									? t('health.database.conflicted.discard_maybe_body', {
+											record: describeRecord(discarding, t),
+										})
+									: discarding?.status === 'needs-revision'
+										? t('health.database.conflicted.discard_change_body', {
+												record: describeRecord(discarding, t),
+											})
+										: discarding
+											? t('health.database.conflicted.use_server_body', {
+													record: describeRecord(discarding, t),
+												})
+											: null}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -300,7 +337,11 @@ export function ConflictedMutationsPanel() {
 							}}
 						>
 							<Text className="text-destructive">
-								{t('health.database.conflicted.use_server_confirm')}
+								{discarding?.destroysRecord
+									? t('health.database.conflicted.delete_local_confirm')
+									: discarding?.mayDestroyRecord || discarding?.status === 'needs-revision'
+										? t('health.database.conflicted.discard_change_confirm')
+										: t('health.database.conflicted.use_server_confirm')}
 							</Text>
 						</AlertDialogAction>
 					</AlertDialogFooter>

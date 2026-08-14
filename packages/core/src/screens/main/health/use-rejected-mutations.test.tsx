@@ -7,6 +7,7 @@ import { useRejectedMutations } from './use-rejected-mutations';
 
 const mockResources: { destroy: jest.Mock }[] = [];
 let mockEngine = {};
+let mockRead = { rows: [], readError: false };
 
 jest.mock('@wcpos/query', () => ({
 	// The real vocabulary + field map: the hook derives each collection's
@@ -22,12 +23,13 @@ jest.mock('observable-hooks', () => ({
 		mockResources.push(resource);
 		return resource;
 	}),
-	useObservableSuspense: () => [],
+	useObservableSuspense: () => mockRead,
 }));
 
 describe('useRejectedMutations', () => {
 	beforeEach(() => {
 		mockEngine = {};
+		mockRead = { rows: [], readError: false };
 		mockResources.length = 0;
 	});
 
@@ -49,6 +51,17 @@ describe('useRejectedMutations', () => {
 
 		mockEngine = {};
 		rerender();
+		expect(mockResources).toHaveLength(2);
+	});
+
+	it('drops a completed error resource so reloading resubscribes with the same engine', () => {
+		mockRead = { rows: [], readError: true };
+		const first = renderHook(() => useRejectedMutations());
+		expect(mockResources).toHaveLength(1);
+		first.unmount();
+
+		mockRead = { rows: [], readError: false };
+		renderHook(() => useRejectedMutations());
 		expect(mockResources).toHaveLength(2);
 	});
 });

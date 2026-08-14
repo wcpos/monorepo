@@ -15,9 +15,14 @@ const mockSync = jest.fn(async () => undefined);
 const mockPush = jest.fn();
 let rows: UnresolvedConflict[] = [];
 let readError = false;
+let syncing = false;
 
 type Kids = { children?: React.ReactNode };
-type PressProps = Kids & { testID?: string; disabled?: boolean; onPress?: () => void };
+type PressProps = Kids & {
+	testID?: string;
+	disabled?: boolean;
+	onPress?: () => void;
+};
 
 jest.mock('@wcpos/components/alert-dialog', () => {
 	function Passthrough({ children }: Kids) {
@@ -35,8 +40,8 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 		AlertDialogCancel: ({ children, testID }: PressProps) => (
 			<button data-testid={testID}>{children}</button>
 		),
-		AlertDialogAction: ({ children, testID, onPress }: PressProps) => (
-			<button data-testid={testID} onClick={onPress}>
+		AlertDialogAction: ({ children, testID, disabled, onPress }: PressProps) => (
+			<button data-testid={testID} disabled={disabled} onClick={onPress}>
 				{children}
 			</button>
 		),
@@ -59,7 +64,9 @@ jest.mock('@wcpos/components/vstack', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: Kids) => <span>{children}</span>,
 }));
-jest.mock('@wcpos/components/toast', () => ({ Toast: { show: (a: unknown) => mockToast(a) } }));
+jest.mock('@wcpos/components/toast', () => ({
+	Toast: { show: (a: unknown) => mockToast(a) },
+}));
 jest.mock('./components', () => ({
 	Callout: ({ children, testID }: PressProps) => <div data-testid={testID}>{children}</div>,
 	Pill: ({ children, testID }: PressProps) => <span data-testid={testID}>{children}</span>,
@@ -72,7 +79,12 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({ engine: { resolveConflict: mockResolveConflict } }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
+	getLogger: () => ({
+		info: jest.fn(),
+		warn: jest.fn(),
+		error: jest.fn(),
+		debug: jest.fn(),
+	}),
 }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
@@ -85,7 +97,7 @@ jest.mock('./use-relative-time', () => ({
 	useRelativeTime: () => () => '2 minutes ago',
 }));
 jest.mock('./use-manual-sync', () => ({
-	useManualSync: () => ({ syncing: false, sync: mockSync }),
+	useManualSync: () => ({ syncing, sync: mockSync }),
 }));
 jest.mock('./use-unresolved-conflicts', () => ({
 	useUnresolvedConflicts: () => ({ rows, readError }),
@@ -100,6 +112,9 @@ function row(over: Partial<UnresolvedConflict> = {}): UnresolvedConflict {
 		label: 'Aether Gym Pant',
 		queuedAt: '2026-08-14T16:30:00.000Z',
 		status: 'conflicted',
+		destroysRecord: false,
+		mayDestroyRecord: false,
+		residentUnknown: false,
 		...over,
 	};
 }
@@ -108,6 +123,7 @@ describe('ConflictedMutationsPanel', () => {
 	beforeEach(() => {
 		rows = [];
 		readError = false;
+		syncing = false;
 		mockResolveConflict.mockReset();
 		mockResolveConflict.mockImplementation(async () => undefined);
 		mockToast.mockReset();
@@ -137,7 +153,10 @@ describe('ConflictedMutationsPanel', () => {
 		);
 		await waitFor(() => expect(mockSync).toHaveBeenCalled());
 		expect(mockToast).toHaveBeenCalledWith(
-			expect.objectContaining({ type: 'success', text1: 'Queued to send again.' })
+			expect.objectContaining({
+				type: 'success',
+				text1: 'Queued to send again.',
+			})
 		);
 	});
 
@@ -153,6 +172,76 @@ describe('ConflictedMutationsPanel', () => {
 		await waitFor(() => expect(mockResolveConflict).toHaveBeenCalledWith('m-1', 'discard'));
 		// Accepting the server's copy queues no push — a drain kick would imply one.
 		expect(mockSync).not.toHaveBeenCalled();
+	});
+
+	it('warns that discarding an unidentified create deletes its only local copy', async () => {
+		rows = [
+			row({
+				collectionName: 'orders',
+				operation: 'create',
+				label: '#1042 · 25.00',
+				destroysRecord: true,
+			}),
+		];
+		const { getByTestId } = render(<ConflictedMutationsPanel />);
+
+		fireEvent.click(getByTestId('db-conflicted-discard-m-1'));
+
+		expect(document.body.textContent).toContain('Delete this local copy?');
+		expect(document.body.textContent).toContain('permanently deletes its local copy');
+		expect(document.body.textContent).not.toContain("your store's version is restored");
+		fireEvent.click(getByTestId('db-conflicted-discard-confirm'));
+		await waitFor(() => expect(mockResolveConflict).toHaveBeenCalledWith('m-1', 'discard'));
+		expect(mockToast).toHaveBeenCalledWith(
+			expect.objectContaining({ text1: 'Deleted the local copy.' })
+		);
+	});
+
+	it('states that a non-order discard may delete the resident after a server 404', () => {
+		rows = [row({ mayDestroyRecord: true })];
+		const { getByTestId } = render(<ConflictedMutationsPanel />);
+
+		fireEvent.click(getByTestId('db-conflicted-discard-m-1'));
+
+		expect(document.body.textContent).toContain('If your store no longer has');
+		expect(document.body.textContent).toContain('also deletes it from this device');
+	});
+
+	it('disables discard when the resident read leaves its outcome unknown', () => {
+		rows = [row({ residentUnknown: true })];
+		const { getByTestId } = render(<ConflictedMutationsPanel />);
+
+		expect((getByTestId('db-conflicted-discard-m-1') as HTMLButtonElement).disabled).toBe(true);
+		expect(getByTestId('db-conflicted-row-m-1').textContent).toContain(
+			'what discarding would do to it is unknown'
+		);
+	});
+
+	it('uses revision-less copy when the server did not report a newer version', () => {
+		rows = [row({ status: 'needs-revision' })];
+		const { getByTestId } = render(<ConflictedMutationsPanel />);
+
+		expect(getByTestId('db-conflicted-callout').textContent).toContain(
+			'your store asked for a current version'
+		);
+		expect(getByTestId('db-conflicted-row-m-1').textContent).toContain(
+			'could not verify which version is newer'
+		);
+		expect(getByTestId('db-conflicted-row-m-1').textContent).toContain('Discard device change');
+		fireEvent.click(getByTestId('db-conflicted-discard-m-1'));
+		expect(document.body.textContent).toContain('does not claim which version is newer');
+		expect(document.body.textContent).not.toContain("your store's version is restored");
+	});
+
+	it('disables Send again while another manual sync is active', () => {
+		syncing = true;
+		rows = [row()];
+		const { getByTestId } = render(<ConflictedMutationsPanel />);
+
+		const resend = getByTestId('db-conflicted-resend-m-1');
+		expect((resend as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(resend);
+		expect(mockResolveConflict).not.toHaveBeenCalled();
 	});
 
 	it('resending a delete demands its own confirm', async () => {

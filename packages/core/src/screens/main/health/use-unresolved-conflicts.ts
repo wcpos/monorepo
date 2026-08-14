@@ -4,8 +4,8 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from, Observable, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
-import { useQueryRuntime } from '@wcpos/query';
-import { MUTATION_QUEUE_RXDB_COLLECTION } from '@wcpos/sync-engine';
+import { COLLECTION_VOCABULARY, resolveLegacyField, useQueryRuntime } from '@wcpos/query';
+import { MUTATION_QUEUE_RXDB_COLLECTION, rejectionSuggestsServerRecord } from '@wcpos/sync-engine';
 import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
 
 /**
@@ -23,7 +23,8 @@ import type { EngineConflict, RxdbSyncEngine } from '@wcpos/sync-engine';
  * Each row carries what the cashier needs to decide: what record it is, what
  * kind it is, when it was queued — and the two honest resolutions the engine
  * offers ('retry-with-server-base' to keep this device's change, 'discard' to
- * keep the server's).
+ * drop it). The discard outcome is derived from the same identity rules the
+ * engine uses so the panel can distinguish restoration from local deletion.
  */
 export type UnresolvedConflict = {
 	mutationId: string;
@@ -36,6 +37,12 @@ export type UnresolvedConflict = {
 	queuedAt: string | null;
 	/** 'conflicted' carries the server's 409 truth; 'needs-revision' parked without it. */
 	status: 'conflicted' | 'needs-revision';
+	/** Discard removes a born-local resident because no server identity can be restored. */
+	destroysRecord: boolean;
+	/** Discard may remove a non-order resident when its server document no longer exists. */
+	mayDestroyRecord: boolean;
+	/** The resident read failed, so the discard outcome cannot be described safely. */
+	residentUnknown: boolean;
 };
 
 type EngineDatabase = NonNullable<ReturnType<RxdbSyncEngine['active']>>['database'];
@@ -47,6 +54,12 @@ type MutationCollection = {
 };
 
 const PARKED_STATUSES = ['conflicted', 'needs-revision'];
+
+const REMOTE_ID_FIELD = Object.fromEntries(
+	Object.entries(COLLECTION_VOCABULARY)
+		.filter(([, row]) => row.writeable)
+		.map(([name, row]) => [name, resolveLegacyField(row.legacyName, 'id').enginePath])
+) as Record<string, string | undefined>;
 
 function toJson(row: MutationRow): EngineConflict {
 	return 'toJSON' in row && typeof row.toJSON === 'function'
@@ -91,14 +104,23 @@ async function describe(
 			// use-rejected-mutations): the label is decoration — degrade to the
 			// queued snapshot rather than blanking the screen.
 			let resident: Record<string, unknown> | null = null;
+			let readFailed = false;
 			try {
 				const doc = await database.collections[entry.collectionName]
 					?.findOne(entry.recordId)
 					.exec();
 				resident = (doc?.toJSON() ?? null) as Record<string, unknown> | null;
 			} catch {
-				// Label degrades; the row stays actionable either way.
+				readFailed = true;
 			}
+			const remoteIdField = REMOTE_ID_FIELD[entry.collectionName];
+			const columnRemoteId = remoteIdField ? resident?.[remoteIdField] : undefined;
+			const queuedRemoteId =
+				entry.collectionName === 'orders'
+					? undefined
+					: ((entry.payload as Record<string, unknown> | undefined)?.id ??
+						(entry.conflictDocument as Record<string, unknown> | undefined)?.id);
+			const remoteId = typeof columnRemoteId === 'number' ? columnRemoteId : queuedRemoteId;
 			return {
 				mutationId: entry.mutationId,
 				collectionName: entry.collectionName,
@@ -107,6 +129,18 @@ async function describe(
 				label: labelFor(resident, entry),
 				queuedAt: entry.queuedAt ?? null,
 				status: entry.status === 'needs-revision' ? 'needs-revision' : 'conflicted',
+				destroysRecord:
+					entry.operation === 'create' &&
+					resident !== null &&
+					!readFailed &&
+					typeof remoteId !== 'number' &&
+					!rejectionSuggestsServerRecord(entry.rejectedReason),
+				mayDestroyRecord:
+					entry.collectionName !== 'orders' &&
+					resident !== null &&
+					!readFailed &&
+					typeof remoteId === 'number',
+				residentUnknown: readFailed,
 			} satisfies UnresolvedConflict;
 		})
 	);
@@ -164,7 +198,9 @@ function conflictedResource(engine: RxdbSyncEngine): ObservableResource<Unresolv
  */
 export function useUnresolvedConflicts(): UnresolvedConflictsRead {
 	const { engine } = useQueryRuntime();
-	return useObservableSuspense(conflictedResource(engine));
+	const result = useObservableSuspense(conflictedResource(engine));
+	if (result.readError) resourceByEngine.delete(engine);
+	return result;
 }
 
 /**
