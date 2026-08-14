@@ -16,6 +16,7 @@ const PRODUCT_SORT_FIELDS = [
 	'name',
 	'sku',
 	'barcode',
+	'type',
 	'sortable_price',
 	'regular_price',
 	'sale_price',

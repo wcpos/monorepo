@@ -62,6 +62,7 @@ const POS_PRODUCT_SORT_FIELDS = [
 	'name',
 	'sku',
 	'barcode',
+	'type',
 	'sortable_price',
 	'date_created_gmt',
 	'date_modified_gmt',

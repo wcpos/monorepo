@@ -277,6 +277,18 @@ describe('POSProducts query-state wiring', () => {
 		expect(latestState().sort).toEqual({ field: 'menu_order', direction: 'asc' });
 	});
 
+	// #947, Paul's ruling 2026-08-14: both product lists sort by type. This grid always let the
+	// cashier click the Type header, but `type` was missing from the persisted-sort surface, so
+	// the choice silently reverted to menu_order asc on the next mount.
+	it('seeds a persisted type sort instead of reverting to catalog order (#947)', () => {
+		mockSortBy = 'type';
+		mockSortDirection = 'desc';
+
+		render(<POSProducts />);
+
+		expect(latestState().sort).toEqual({ field: 'type', direction: 'desc' });
+	});
+
 	it('keeps a user-selected name sort over the catalog-order default (#810)', () => {
 		mockSortBy = 'name';
 		mockSortDirection = 'desc';
