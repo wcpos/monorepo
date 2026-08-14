@@ -75,6 +75,7 @@ import {
 	type SyncCollectionName,
 } from '../collections/engine-collections';
 import { sanitizeOutboundOrderPayload } from '../materialization/sanitize-outbound-order-payload';
+import { sanitizeOutboundProductPayload } from '../materialization/sanitize-outbound-product-payload';
 import { coalescedPayload, decideWritePlacement } from './write-placement';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
@@ -116,6 +117,17 @@ function collectionOf(db: RxDatabase, name: string): RxCollection {
 	return collection;
 }
 
+function sanitizeOutboundPayload(
+	collectionName: string,
+	payload: Record<string, unknown>
+): Record<string, unknown> {
+	if (collectionName === 'orders') return sanitizeOutboundOrderPayload(payload);
+	if (collectionName === 'products' || collectionName === 'variations') {
+		return sanitizeOutboundProductPayload(payload);
+	}
+	return payload;
+}
+
 const queues = new WeakMap<object, RecordMutationQueue>();
 export function queueFor(db: RxDatabase): RecordMutationQueue {
 	const existing = queues.get(db);
@@ -154,10 +166,10 @@ export async function enqueueWriteIntent(input: {
 	canCoalesce?: boolean;
 }): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }> {
 	const intent =
-		input.intent.collection === 'orders' && input.intent.operation !== 'delete'
+		input.intent.operation !== 'delete'
 			? {
 					...input.intent,
-					payload: sanitizeOutboundOrderPayload(input.intent.payload),
+					payload: sanitizeOutboundPayload(input.intent.collection, input.intent.payload),
 				}
 			: input.intent;
 	const deps = { mintUuid: input.mintUuid, now: input.now };
@@ -383,9 +395,7 @@ export async function enqueueWriteIntent(input: {
 			const payload =
 				operation === 'delete'
 					? mutation.payload
-					: mutation.collectionName === 'orders'
-						? sanitizeOutboundOrderPayload(mergedPayload)
-						: mergedPayload;
+					: sanitizeOutboundPayload(mutation.collectionName, mergedPayload);
 			const replacement = {
 				...mutation,
 				operation,
@@ -551,7 +561,7 @@ function fieldsOwnedByLiveRows(sameRecordQueued: readonly QueuedMutation[]): Set
  *
  * Nothing here bypasses sanitization: the result is handed to `enqueueWriteIntent`
  * as an ordinary intent payload, so every outbound sanitizer
- * (`sanitizeOutboundOrderPayload`) still runs over it. That is what keeps this
+ * (`sanitizeOutboundPayload`) still runs over it. That is what keeps this
  * from being the replay #832 exists to avoid — the FIELDS come back, the refused
  * SHAPE does not.
  */
@@ -587,7 +597,7 @@ function rebuiltRecoveryPayload(
  * `billing.email: ''`, wc/v3 answered 400, the CREATE dead-lettered, and the sale
  * has lived only on the cashier's device ever since. The client no longer sends
  * that field — but only because the ENQUEUE path sanitizes it
- * (`sanitizeOutboundOrderPayload`). So recovery routes through
+ * (`sanitizeOutboundPayload`). So recovery routes through
  * `enqueueWriteIntent`: the resident record's stored `payload` is the local
  * truth, and running it through the normal build → sanitize → coalesce → dirty-
  * mark path means every sanitizer that has landed since the rejection applies,
@@ -840,10 +850,10 @@ export async function requeueBornTwiceSnapshot(input: {
 			const replacement: QueuedMutation = {
 				...last,
 				mutationId: followUpId,
-				payload:
-					mutation.collectionName === 'orders'
-						? sanitizeOutboundOrderPayload({ ...mutation.payload, ...last.payload })
-						: { ...mutation.payload, ...last.payload },
+				payload: sanitizeOutboundPayload(mutation.collectionName, {
+					...mutation.payload,
+					...last.payload,
+				}),
 				coalesced: (last.coalesced ?? 0) + 1,
 				...(last.explicit || mutation.explicit ? { explicit: true } : {}),
 				status: 'pending',
@@ -866,10 +876,7 @@ export async function requeueBornTwiceSnapshot(input: {
 			(acc, item) => ({ ...acc, ...item.payload }),
 			{ ...mutation.payload }
 		);
-		const payload =
-			mutation.collectionName === 'orders'
-				? sanitizeOutboundOrderPayload(mergedPayload)
-				: mergedPayload;
+		const payload = sanitizeOutboundPayload(mutation.collectionName, mergedPayload);
 		// CONDITIONAL tail append (#516 review P1): the placement decision was made
 		// on the `rows` read above — prove it still holds INSIDE the queue's
 		// serialized turn. A concurrent write() landing between that read and this

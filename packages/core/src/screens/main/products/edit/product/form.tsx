@@ -171,7 +171,9 @@ export function EditProductForm({ product }: Props) {
 				<FormField
 					control={form.control}
 					name="name"
-					render={({ field }) => <FormInput label={t('common.name')} {...field} />}
+					render={({ field }) => (
+						<FormInput testID="product-edit-name-input" label={t('common.name')} {...field} />
+					)}
 				/>
 				<FormField
 					control={form.control}
@@ -342,8 +344,8 @@ export function EditProductForm({ product }: Props) {
 				</HStack>
 				<MetaDataForm />
 				<ModalFooter className="px-0">
-					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction loading={loading} onPress={onSave}>
+					<ModalClose testID="product-edit-cancel-button">{t('common.cancel')}</ModalClose>
+					<ModalAction testID="product-edit-save-button" loading={loading} onPress={onSave}>
 						{t('common.save')}
 					</ModalAction>
 				</ModalFooter>

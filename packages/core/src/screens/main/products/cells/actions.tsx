@@ -96,6 +96,7 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 				<DropdownMenuContent align="end">
 					<CapabilityTooltip show={!caps.canEditProducts} hint="editProducts">
 						<DropdownMenuItem
+							testID="product-actions-edit"
 							disabled={!caps.canEditProducts}
 							onPress={() => {
 								router.push({
@@ -108,7 +109,7 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 						</DropdownMenuItem>
 					</CapabilityTooltip>
 					{product.id && (
-						<DropdownMenuItem onPress={handleRefresh}>
+						<DropdownMenuItem testID="product-actions-sync" onPress={handleRefresh}>
 							<Icon name="arrowRotateRight" />
 							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
@@ -116,7 +117,11 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 					{caps.canDeleteProducts && (
 						<>
 							<DropdownMenuSeparator />
-							<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+							<DropdownMenuItem
+								testID="product-actions-delete"
+								variant="destructive"
+								onPress={() => setDeleteDialogOpened(true)}
+							>
 								<Icon
 									name="trash"
 									className="fill-destructive web:group-focus:fill-accent-foreground"

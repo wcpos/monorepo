@@ -34,7 +34,7 @@ export function EditProductModal({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="lg">
+			<ModalContent testID="product-edit-modal" size="lg">
 				<ModalHeader>
 					<ModalTitle>{t('common.edit_2', { name: product.name })}</ModalTitle>
 				</ModalHeader>
