@@ -160,5 +160,12 @@ describe('variable product row column visibility', () => {
 		expect(view.queryByText('parent-price-cell')).toBeNull();
 		expect(view.queryByText('variation-name-cell')).toBeTruthy();
 		expect(view.queryByText('variation-price-cell')).toBeNull();
+
+		act(() => {
+			view.rerender(<Harness visibility={{ name: true, price: true }} />);
+		});
+
+		expect(view.queryByText('parent-price-cell')).toBeTruthy();
+		expect(view.queryByText('variation-price-cell')).toBeTruthy();
 	});
 });
