@@ -207,6 +207,7 @@ type QueuedRequirement = {
 	seq: number;
 	subscribers: Set<RequirementSubscriber>;
 	searchDedupeKey: string | null;
+	predecessor?: QueuedRequirement;
 	released: boolean;
 	started: boolean;
 	abortController: AbortController;
@@ -284,14 +285,57 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	let seq = 0;
 	let running = false;
 	const defaultSearchLimit = 25;
-	const searchDedupeKey = (requirement: InternalRequirement): string | null =>
-		requirement.kind === 'search'
-			? `${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.limit ?? defaultSearchLimit}`
-			: null;
+	const searchLimitOf = (requirement: InternalRequirement): number =>
+		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
+	// The limit is deliberately NOT part of the key (#1221): the walk pages to `limit` and
+	// stops on a short page, so the limit is not wire-request identity — a queued entry
+	// coalesces to the widest requested window, and a started entry absorbs any declaration
+	// its walk already covers. Wider-than-started declarations queue a successor instead.
+	// Invalid limits stay outside coalescing so every declaration keeps its own validation
+	// outcome; force-refresh is part of identity because it must never inherit serve-local.
+	const searchDedupeKey = (requirement: InternalRequirement): string | null => {
+		if (requirement.kind !== 'search') return null;
+		const limit = searchLimitOf(requirement);
+		if (!Number.isSafeInteger(limit) || limit <= 0) return null;
+		return `${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
+	};
 	const forgetSearch = (item: QueuedRequirement): void => {
 		if (item.searchDedupeKey && activeSearches.get(item.searchDedupeKey) === item) {
 			activeSearches.delete(item.searchDedupeKey);
 		}
+	};
+	const abandon = (entry: QueuedRequirement): void => {
+		entry.released = true;
+		forgetSearch(entry);
+		entry.abortController.abort(
+			new DOMException('Requirement released during drain', 'AbortError')
+		);
+		if (
+			entry.predecessor &&
+			!entry.predecessor.released &&
+			entry.predecessor.subscribers.size === 0
+		) {
+			abandon(entry.predecessor);
+		}
+	};
+	/**
+	 * The deferred half of `release()` for dedupeable searches (#1221). By the time this
+	 * microtask runs, a same-tick redeclare (React releases the old handles and redeclares
+	 * in one synchronous effect pass) has either rejoined the entry — keep it — or queued a
+	 * wider successor behind it — let the in-flight walk finish, because its pages record
+	 * the coverage lane the successor's serve-local gate reads first, and aborting it is
+	 * exactly the abort-and-refetch churn this exists to prevent.
+	 */
+	const abandonIfUnclaimed = (entry: QueuedRequirement): void => {
+		if (entry.released || entry.subscribers.size > 0) return;
+		if (
+			entry.started &&
+			entry.searchDedupeKey !== null &&
+			activeSearches.get(entry.searchDedupeKey) !== entry
+		) {
+			return;
+		}
+		abandon(entry);
 	};
 	const progressObserver = (requirement: InternalRequirement) => {
 		let documents = 0;
@@ -756,7 +800,23 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						: `${searchCollection}:search:${encodedTerm}`;
 				if (!item.requirement.forceRefresh) {
 					const lane = await coverage.readLane(searchCollection, queryKey);
-					if (lane?.complete && lane.fresh) {
+					const equivalentCustomerLanes =
+						searchCollection === 'customers' && !(lane?.complete && lane.fresh)
+							? await Promise.all(
+									(await coverage.listLanes(searchCollection))
+										.filter(
+											(candidate) =>
+												candidate.complete &&
+												candidate.queryKey !== queryKey &&
+												candidate.queryKey.startsWith(`customers:search=${encodedTerm}:limit=`)
+										)
+										.map((candidate) => coverage.readLane(searchCollection, candidate.queryKey))
+								)
+							: [];
+					if (
+						(lane?.complete && lane.fresh) ||
+						equivalentCustomerLanes.some((candidate) => candidate?.complete && candidate.fresh)
+					) {
 						return {
 							action: 'serve-local',
 							missingRecordIds: [],
@@ -1153,6 +1213,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					: requirement;
 			const dedupeKey = searchDedupeKey(queuedRequirement);
 			let entry = dedupeKey ? activeSearches.get(dedupeKey) : undefined;
+			let predecessor: QueuedRequirement | undefined;
+			// A started walk only absorbs declarations it already covers; a wider request gets
+			// its own successor entry below, queued behind the in-flight one — never aborting it.
+			if (entry?.started && searchLimitOf(queuedRequirement) > searchLimitOf(entry.requirement)) {
+				predecessor = entry;
+				entry = undefined;
+			}
 			let subscriber: RequirementSubscriber;
 			const ready = new Promise<CoverageOutcome>((resolve, reject) => {
 				subscriber = {
@@ -1170,6 +1237,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			if (entry) {
 				entry.subscribers.add(subscriber!);
 				entry.priority = Math.max(entry.priority, requirement.priority ?? 500);
+				// A queued (not-started) search coalesces to the widest requested window — its
+				// FetchTask is built at execution time, so one walk serves every declarer.
+				if (
+					!entry.started &&
+					entry.requirement.kind === 'search' &&
+					searchLimitOf(queuedRequirement) > searchLimitOf(entry.requirement)
+				) {
+					entry.requirement = { ...entry.requirement, limit: searchLimitOf(queuedRequirement) };
+				}
 			} else {
 				entry = {
 					requirement: queuedRequirement,
@@ -1177,6 +1253,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					seq: (seq += 1),
 					subscribers: new Set([subscriber!]),
 					searchDedupeKey: dedupeKey,
+					...(predecessor ? { predecessor } : {}),
 					released: false,
 					started: false,
 					abortController: new AbortController(),
@@ -1200,11 +1277,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						reason: entry.started ? 'released during drain' : 'released before execution',
 					});
 					if (entry.subscribers.size === 0) {
-						entry.released = true;
-						forgetSearch(entry);
-						entry.abortController.abort(
-							new DOMException('Requirement released during drain', 'AbortError')
-						);
+						if (entry.searchDedupeKey !== null) {
+							// Defer one microtask (#1221): React releases the old handles and
+							// redeclares in the same synchronous effect pass, so an identical
+							// redeclare must find this entry still alive and rejoin it instead
+							// of watching it abort and refetching the same wire request.
+							queueMicrotask(() => abandonIfUnclaimed(entry));
+						} else {
+							abandon(entry);
+						}
 					}
 				},
 			};

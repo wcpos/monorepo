@@ -717,6 +717,325 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('rejoins an in-flight search when an identical redeclare follows release in the same tick (#1221)', async () => {
+		const response = Promise.withResolvers<Response>();
+		const started = Promise.withResolvers<AbortSignal>();
+		let searchPulls = 0;
+		const engine = engineWith(async (url, init) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/products')) return json([]);
+			if (parsed.searchParams.has('sku')) return json([]);
+			searchPulls += 1;
+			const signal = init?.signal;
+			if (!signal) throw new Error('search request missing abort signal');
+			started.resolve(signal);
+			return response.promise;
+		});
+		await engine.ready;
+		const first = engine.require({
+			id: 'churn-a',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+		});
+		const signal = await started.promise;
+
+		// Mimic the React demand effect on a recompile: the old handles release and the
+		// identical requirement is redeclared in the same synchronous pass.
+		first.release();
+		const second = engine.require({
+			id: 'churn-b',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+		});
+		await Promise.resolve(); // flush the deferred-abandon microtask
+		expect(signal.aborted).toBe(false);
+
+		response.resolve(json([productPayload(321, 'Keyboard')]));
+		await expect(first.ready).resolves.toMatchObject({ action: 'released' });
+		await expect(second.ready).resolves.toMatchObject({ action: 'fetched' });
+		expect(signal.aborted).toBe(false);
+		expect(searchPulls).toBe(1);
+		await engine.dispose();
+	});
+
+	it('queues a wider redeclare behind the in-flight walk instead of aborting it (#1221)', async () => {
+		const response = Promise.withResolvers<Response>();
+		const started = Promise.withResolvers<AbortSignal>();
+		const state = { searchPulls: 0, skuPulls: 0 };
+		const engine = engineWith(async (url, init) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/products')) return json([]);
+			if (parsed.searchParams.has('sku')) {
+				state.skuPulls += 1;
+				return json([]);
+			}
+			state.searchPulls += 1;
+			const signal = init?.signal;
+			if (!signal) throw new Error('search request missing abort signal');
+			started.resolve(signal);
+			return response.promise;
+		});
+		await engine.ready;
+		const first = engine.require({
+			id: 'grow-a',
+			collection: 'products',
+			kind: 'search',
+			term: 'e2e-probe',
+			limit: 60,
+		});
+		const signal = await started.promise;
+
+		// The end-reached churn shape: limit grows, old handle releases, wider identical
+		// search redeclares — the in-flight walk must finish, not die as a 499.
+		first.release();
+		const second = engine.require({
+			id: 'grow-b',
+			collection: 'products',
+			kind: 'search',
+			term: 'e2e-probe',
+			limit: 70,
+		});
+		await Promise.resolve(); // flush the deferred-abandon microtask
+		expect(signal.aborted).toBe(false);
+
+		// Short page → both legs exhausted → the finished walk records a COMPLETE lane,
+		// which answers the wider successor without another wire request.
+		response.resolve(json([]));
+		await expect(second.ready).resolves.toMatchObject({
+			action: 'serve-local',
+			reason: 'products search fetched within the coverage window',
+			requests: 0,
+		});
+		expect(signal.aborted).toBe(false);
+		expect(state).toEqual({ searchPulls: 1, skuPulls: 1 });
+		await engine.dispose();
+	});
+
+	it('reuses completed customer-search coverage for a wider successor', async () => {
+		const response = Promise.withResolvers<Response>();
+		const started = Promise.withResolvers<AbortSignal>();
+		let customerPulls = 0;
+		const engine = engineWith(async (url, init) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/customers')) return json([]);
+			customerPulls += 1;
+			if (customerPulls > 1) return json([]);
+			const signal = init?.signal;
+			if (!signal) throw new Error('search request missing abort signal');
+			started.resolve(signal);
+			return response.promise;
+		});
+		await engine.ready;
+		const first = engine.require({
+			id: 'customer-grow-a',
+			collection: 'customers',
+			kind: 'search',
+			term: 'ada',
+			limit: 60,
+		});
+		const signal = await started.promise;
+
+		first.release();
+		const second = engine.require({
+			id: 'customer-grow-b',
+			collection: 'customers',
+			kind: 'search',
+			term: 'ada',
+			limit: 70,
+		});
+		await Promise.resolve();
+		expect(signal.aborted).toBe(false);
+
+		response.resolve(json([]));
+		await expect(first.ready).resolves.toMatchObject({ action: 'released' });
+		await expect(second.ready).resolves.toMatchObject({
+			action: 'serve-local',
+			reason: 'customers search fetched within the coverage window',
+			requests: 0,
+		});
+		expect(signal.aborted).toBe(false);
+		expect(customerPulls).toBe(1);
+		await engine.dispose();
+	});
+
+	it('aborts an orphaned in-flight predecessor when its wider successor is released', async () => {
+		const response = Promise.withResolvers<Response>();
+		const started = Promise.withResolvers<AbortSignal>();
+		const engine = engineWith(async (url, init) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/products')) return json([]);
+			if (parsed.searchParams.has('sku')) return json([]);
+			const signal = init?.signal;
+			if (!signal) throw new Error('search request missing abort signal');
+			started.resolve(signal);
+			return response.promise;
+		});
+		await engine.ready;
+		const first = engine.require({
+			id: 'orphan-a',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+			limit: 60,
+		});
+		const signal = await started.promise;
+
+		first.release();
+		const successor = engine.require({
+			id: 'orphan-b',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+			limit: 70,
+		});
+		successor.release();
+		await Promise.resolve();
+
+		expect(signal.aborted).toBe(true);
+		response.resolve(json([]));
+		await expect(first.ready).resolves.toMatchObject({ action: 'released' });
+		await expect(successor.ready).resolves.toMatchObject({
+			action: 'released',
+		});
+		await engine.dispose();
+	});
+
+	it.each([
+		['valid before invalid', ['valid', 'invalid']],
+		['invalid before valid', ['invalid', 'valid']],
+	] as const)(
+		'isolates an invalid search limit from a concurrent %s declaration',
+		async (_case, order) => {
+			const customerGate = Promise.withResolvers<Response>();
+			let productSearchPulls = 0;
+			const engine = engineWith(async (url) => {
+				const parsed = new URL(url);
+				if (parsed.pathname.endsWith('/customers')) return customerGate.promise;
+				if (parsed.pathname.endsWith('/products') && !parsed.searchParams.has('sku')) {
+					productSearchPulls += 1;
+				}
+				return json([]);
+			});
+			await engine.ready;
+			const blocker = engine.require({
+				id: `invalid-limit-blocker-${_case}`,
+				collection: 'customers',
+				kind: 'search',
+				term: 'ada',
+			});
+			const handles = order.map((kind) =>
+				engine.require({
+					id: `${kind}-${_case}`,
+					collection: 'products',
+					kind: 'search',
+					term: 'keyboard',
+					limit: kind === 'valid' ? 10 : 0,
+				})
+			);
+			const valid = handles[order.indexOf('valid')];
+			const invalid = handles[order.indexOf('invalid')];
+			const invalidOutcome = expect(invalid.ready).rejects.toThrow(/positive integer/i);
+			customerGate.resolve(json([]));
+
+			await expect(blocker.ready).resolves.toMatchObject({ action: 'fetched' });
+			await invalidOutcome;
+			await expect(valid.ready).resolves.toMatchObject({ action: 'fetched' });
+			expect(productSearchPulls).toBe(1);
+			await engine.dispose();
+		}
+	);
+
+	it('keeps force-refresh searches separate from queued ordinary searches at unequal limits', async () => {
+		const customerGate = Promise.withResolvers<Response>();
+		let productSearchPulls = 0;
+		const engine = engineWith(async (url) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/customers')) return customerGate.promise;
+			if (parsed.pathname.endsWith('/products') && !parsed.searchParams.has('sku')) {
+				productSearchPulls += 1;
+			}
+			return json([]);
+		});
+		await engine.ready;
+		const blocker = engine.require({
+			id: 'force-identity-blocker',
+			collection: 'customers',
+			kind: 'search',
+			term: 'ada',
+		});
+		const ordinary = engine.require({
+			id: 'ordinary-queued',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+			limit: 100,
+		});
+		const forced = engine.require({
+			id: 'forced-queued',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+			limit: 50,
+			forceRefresh: true,
+		});
+		customerGate.resolve(json([]));
+
+		await expect(blocker.ready).resolves.toMatchObject({ action: 'fetched' });
+		await expect(Promise.all([ordinary.ready, forced.ready])).resolves.toEqual([
+			expect.objectContaining({ action: 'fetched' }),
+			expect.objectContaining({ action: 'fetched' }),
+		]);
+		expect(productSearchPulls).toBe(2);
+		await engine.dispose();
+	});
+
+	it('coalesces queued search declarations to the widest requested window (#1221)', async () => {
+		const customerGate = Promise.withResolvers<Response>();
+		const productPerPage: string[] = [];
+		const engine = engineWith(async (url) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/customers')) return customerGate.promise;
+			if (parsed.pathname.endsWith('/products') && !parsed.searchParams.has('sku')) {
+				productPerPage.push(parsed.searchParams.get('per_page') ?? '');
+			}
+			return json([]);
+		});
+		await engine.ready;
+		// Occupy the serial pump so the products search stays queued while both limits declare.
+		const customers = engine.require({
+			id: 'occupy-pump',
+			collection: 'customers',
+			kind: 'search',
+			term: 'ada',
+		});
+		const narrow = engine.require({
+			id: 'coalesce-narrow',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+			limit: 10,
+		});
+		const wide = engine.require({
+			id: 'coalesce-wide',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+			limit: 40,
+		});
+		customerGate.resolve(json([]));
+
+		await expect(customers.ready).resolves.toMatchObject({ action: 'fetched' });
+		await expect(Promise.all([narrow.ready, wide.ready])).resolves.toEqual([
+			expect.objectContaining({ action: 'fetched' }),
+			expect.objectContaining({ action: 'fetched' }),
+		]);
+		// One walk, sized to the widest declarer.
+		expect(productPerPage).toEqual(['40']);
+		await engine.dispose();
+	});
+
 	it('keeps delimiter characters in a customer term behind the encoded task grammar', async () => {
 		const searches: string[] = [];
 		const engine = engineWith(async (url) => {

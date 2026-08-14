@@ -104,14 +104,15 @@ describe('DataTableFooter binding projections', () => {
 
 		expect(screen.getByTestId('data-table-count').textContent).toBe('common.showing_of:10/27');
 		expect(screen.getByTestId('data-table-loaded-count').textContent).toBe('10');
-		expect(screen.queryByText('common.showing_local_items')).toBeNull();
 		expect(mockUseCollectionReset).toHaveBeenCalledWith('coupons');
 	});
 
-	it('shows the local-items affordance and retains sync/reset actions', () => {
+	it('shows an at-least local total and retains sync/reset actions', () => {
 		renderBindingFooter('local');
 
-		expect(screen.getByText('common.showing_local_items')).toBeTruthy();
+		expect(screen.getByTestId('data-table-count').textContent).toBe(
+			'common.showing_of_at_least:10/27'
+		);
 		fireEvent.click(screen.getByTestId('sync'));
 		fireEvent.click(screen.getByTestId('clear-and-sync'));
 		expect(mockSync).toHaveBeenCalledTimes(1);

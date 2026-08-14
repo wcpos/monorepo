@@ -57,6 +57,18 @@ const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
  *
  */
 export function VariationsTable({ binding, row, hideOutOfStock }: Props) {
+	/**
+	 * React Compiler breaks tanstack/react-table: it caches the
+	 * row.getVisibleCells() JSX keyed on the stable Row object, so subrows keep
+	 * rendering stale columns after a columnVisibility change.
+	 * https://github.com/facebook/react/issues/33057
+	 *
+	 * eslint's react-compiler rule (19.1.0-rc.2) claims this directive is unused,
+	 * but babel-plugin-react-compiler 1.0.0 (the app build) does memoize this
+	 * component — see column-visibility.test.tsx, which compiles it for real.
+	 */
+	// eslint-disable-next-line react-compiler/react-compiler -- directive is load-bearing under babel-plugin-react-compiler 1.0.0
+	'use no memo';
 	const result = useObservableSuspense(binding.resource) as { hits: VariationHit[] };
 	const hits = React.useMemo(
 		() =>

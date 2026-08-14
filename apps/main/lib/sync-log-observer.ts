@@ -313,7 +313,15 @@ export const CONFORMANCE_TABLE = {
 			if (status === 403) return 'AUTH201';
 			if (status === 429) return 'SYNC141';
 			if (status === 0) return 'SYNC121';
-			if (status >= 500) return 'SYNC131';
+			// A response IS reachability — only status 0 (no response at all) may say
+			// "cannot be reached". A 409 is the conflict the record-level events
+			// already narrate (SYNC221); any other 4xx/5xx is the server answering
+			// with an error (SYNC131). The old catch-all sent every unlisted status
+			// to SYNC121, so a slow-but-answered 409 read as an unreachable store
+			// (dev-next 2026-08-14: a 14.8s conflicted push labeled "cannot be
+			// reached" while the server had refused it in plain HTTP).
+			if (status === 409) return 'SYNC221';
+			if (status >= 400) return 'SYNC131';
 			return 'SYNC121';
 		},
 		// Failures only. A successful data-bearing request is a unit of work, but

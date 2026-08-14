@@ -20,6 +20,7 @@ import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { QueryResult } from '@wcpos/query';
 
+import { useGuardedExtendLimit } from '../../../../query';
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { TextCell } from '../../components/text-cell';
 import { useT } from '../../../../contexts/translations';
@@ -132,9 +133,13 @@ function DataTable<TData, TSortField extends string = string>(props: Props<TSort
 		[patchUI, props.actions]
 	);
 
-	const handleEndReached = React.useCallback(() => {
-		props.actions.extendLimit();
-	}, [props.actions]);
+	// Guarded (#1221): a short page is the true end, and an outstanding extension must land
+	// before the next one fires — unguarded end-reached churn recompiled the search demand
+	// per step and abort/re-issued identical wire requests.
+	const handleEndReached = useGuardedExtendLimit(
+		props.actions.extendLimit,
+		deferredResult.hits.length
+	);
 
 	const table = useReactTableWrapper({
 		columns,

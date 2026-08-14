@@ -14,8 +14,10 @@ import { useManualSync } from './use-manual-sync';
 
 import type { StuckRecord } from '../logs/logs-logic';
 
-/** Edit routes per collection — only collections with an edit surface link out. */
-const FIX_ROUTES: Record<string, (uuid: string) => string> = {
+/** Edit routes per collection — only collections with an edit surface link out.
+ * Shared with the conflicted-mutations panel so the two surfaces can never
+ * disagree about where a record is edited. */
+export const FIX_ROUTES: Record<string, (uuid: string) => string> = {
 	products: (uuid) => `/(app)/(drawer)/products/(modals)/edit/product/${uuid}`,
 	variations: (uuid) => `/(app)/(drawer)/products/(modals)/edit/variation/${uuid}`,
 	orders: (uuid) => `/orders/edit/${uuid}`,

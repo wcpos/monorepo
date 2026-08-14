@@ -6,6 +6,7 @@ import { useObservableEagerState, useObservableSuspense } from 'observable-hooks
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 
+import { useGuardedExtendLimit } from '../../../../../query';
 import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 import { useT } from '../../../../../contexts/translations';
@@ -44,6 +45,11 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 
 	const result = useObservableSuspense(binding.resource);
 	const deferredResult = React.useDeferredValue(result);
+
+	// Guarded (#1221): a short page is the true end, and an outstanding extension must land
+	// before the next one fires — unguarded end-reached churn recompiled the search demand
+	// per step and abort/re-issued identical wire requests.
+	const handleEndReached = useGuardedExtendLimit(actions.extendLimit, deferredResult.hits.length);
 
 	/**
 	 * Chunk flat product list into rows of N
@@ -100,7 +106,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					)}
 					estimatedItemSize={200}
 					onEndReachedThreshold={0.1}
-					onEndReached={actions.extendLimit}
+					onEndReached={handleEndReached}
 					ListEmptyComponent={() => (
 						<View className="items-center justify-center p-4">
 							<Text testID="no-data-message">{t('common.no_products_found')}</Text>

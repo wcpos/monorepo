@@ -5,7 +5,14 @@ module.exports = {
 	displayName: '@wcpos/core',
 	preset: 'ts-jest',
 	transform: {
-		'^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
+		// Components whose rendered behavior depends on React Compiler memoization
+		// (the app builds with experiments.reactCompiler) are compiled the same way
+		// here; everything else goes through ts-jest. The patterns are mutually
+		// exclusive so transformer pick order can't matter.
+		'variable-product-row/(index|context|variations/(index|table|filters|footer))\\.tsx$':
+			'<rootDir>/jest/react-compiler-transform.js',
+		'^(?!.*variable-product-row/(index|context|variations/(index|table|filters|footer))\\.tsx$).+\\.(ts|tsx)$':
+			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],

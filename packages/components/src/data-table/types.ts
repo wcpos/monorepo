@@ -19,12 +19,3 @@ declare module '@tanstack/react-table' {
 		show?: (key: string) => boolean;
 	}
 }
-
-/**
- * Base shape that TData must satisfy when used with the built-in
- * DataTable component (which accesses row.id and row.document).
- */
-export interface DataTableRowData {
-	id: string;
-	document: { type: string; [key: string]: unknown };
-}
