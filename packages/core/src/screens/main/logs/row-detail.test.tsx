@@ -35,15 +35,6 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 	ButtonText: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock('@wcpos/components/dialog', () => ({
-	Dialog: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogHeader: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogTitle: ({ children }: React.PropsWithChildren) => <>{children}</>,
-	DialogTrigger: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
@@ -92,13 +83,23 @@ beforeEach(() => {
 });
 
 describe('RowDetail', () => {
-	it('links a coded error row to its docs page', () => {
+	it('links a coded error row straight to its docs page', () => {
 		const codedRow: LogRow = { ...row, code: 'SYNC101', level: 'error' };
 		render(<RowDetail row={codedRow} kind="error" title="Local save failed" />);
 
-		fireEvent.click(screen.getByTestId('logs-learn-more-SYNC101'));
+		fireEvent.click(screen.getByTestId('logs-help-SYNC101'));
 
 		expect(mockOpenURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/SYNC101');
+	});
+
+	it('hides the benign safety and next-step boilerplate on a low-stakes code', () => {
+		const codedRow: LogRow = { ...row, code: 'PRODUCT301', level: 'warn' };
+		render(<RowDetail row={codedRow} kind="warn" title="Barcode scan did not match a product" />);
+
+		expect(screen.getByText('No products matched the current search and filters.')).not.toBeNull();
+		expect(screen.queryByText('No sales or data are affected.')).toBeNull();
+		expect(screen.queryByText('Verify what happened before you retry.')).toBeNull();
+		expect(screen.getByTestId('logs-help-PRODUCT301')).not.toBeNull();
 	});
 
 	it('leads a quiet row with its translated event description', () => {
@@ -130,32 +131,33 @@ describe('RowDetail', () => {
 		expect(screen.queryByTestId('logs-copy-event-log-1')).toBeNull();
 	});
 
-	it('warns SYNC101 users not to clear or reload without suggesting repair or retry', () => {
+	it('keeps the risk and support lines on a data-at-risk code, docs body stays in docs', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC101' }} kind="error" />);
 
 		expect(
-			screen.getAllByText(
+			screen.getByText(
 				'Data on this device may be affected — follow the recovery guidance before clearing or reloading.'
 			)
-		).toHaveLength(2);
+		).not.toBeNull();
+		expect(screen.getByText('Contact support and include this code.')).not.toBeNull();
+		// The registry docs body renders on the linked docs page, not in the app.
 		expect(
-			screen.getByText(
+			screen.queryByText(
 				'Do not clear or reload local data. Export diagnostics and contact support before retrying or repairing anything.'
 			)
-		).not.toBeNull();
-		expect(screen.getAllByText('Contact support and include this code.')).toHaveLength(2);
+		).toBeNull();
 		expect(screen.queryByText('Repair from Store health → Database.')).toBeNull();
 	});
 
 	it('directs SYNC311 users to support without telling them to reset the collection', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC311' }} kind="error" />);
 
+		expect(screen.getByText('Contact support and include this code.')).not.toBeNull();
 		expect(
-			screen.getByText(
+			screen.queryByText(
 				'Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.'
 			)
-		).not.toBeNull();
-		expect(screen.getAllByText('Contact support and include this code.')).toHaveLength(2);
+		).toBeNull();
 		expect(screen.queryByText('Repair from Store health → Database.')).toBeNull();
 	});
 });

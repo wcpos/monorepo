@@ -402,7 +402,7 @@ describe('useBarcode online escalation', () => {
 			description: 'pos_products.scan_not_found_description:{"code":"ABC"}',
 			duration: 6000,
 		});
-		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
+		expect(mockBarcodeLogger.warn).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.not.objectContaining({
 				showToast: expect.anything(),

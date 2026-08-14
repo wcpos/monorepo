@@ -19,7 +19,7 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ error: jest.fn(), info: jest.fn() }),
+	getLogger: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn() }),
 }));
 
 function Harness({ setSearch }: { setSearch: (search: string) => void }) {
