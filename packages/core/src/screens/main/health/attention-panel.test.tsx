@@ -3,16 +3,18 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import { Toast } from '@wcpos/components/toast';
 
 import { AttentionPanel } from './attention-panel';
+import { useCollectionCheck } from './use-manual-sync';
 
 import type { StuckRecord } from '../logs/logs-logic';
 
 const mockExec = jest.fn();
 const mockSync = jest.fn();
+const mockCheckCollection = jest.fn();
 const mockPush = jest.fn();
 const mockEngine = {
 	active: jest.fn(() => ({
@@ -25,6 +27,7 @@ const mockEngine = {
 		},
 	})),
 	sync: mockSync,
+	checkCollection: mockCheckCollection,
 };
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -127,6 +130,30 @@ describe('AttentionPanel', () => {
 		render(<AttentionPanel stuck={[stuck('products', false)]} />);
 
 		expect(screen.queryByTestId('db-attention-retry')).toBeNull();
+	});
+
+	it('disables Retry while a per-collection check is in flight', async () => {
+		mockExec.mockResolvedValue(null);
+		let finish!: (report: unknown) => void;
+		mockCheckCollection.mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+		);
+
+		render(<AttentionPanel stuck={[stuck('products', true)]} />);
+		// The check subjects are module-level, so a hook rendered beside the panel
+		// drives the same in-flight state a Database row's menu item would.
+		const { result } = renderHook(() => useCollectionCheck());
+		act(() => {
+			void result.current.check('products');
+		});
+
+		const retry = () => screen.getByTestId('db-attention-retry') as HTMLButtonElement;
+		await waitFor(() => expect(retry().disabled).toBe(true));
+
+		finish({ collection: 'products', status: 'ran' });
+		await waitFor(() => expect(retry().disabled).toBe(false));
 	});
 
 	it('surfaces a failed sync report from Retry as an error toast', async () => {

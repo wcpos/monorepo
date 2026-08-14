@@ -5,18 +5,48 @@ import { BehaviorSubject } from 'rxjs';
 
 import { Toast } from '@wcpos/components/toast';
 import { useQueryRuntime } from '@wcpos/query';
+import type { SyncCollectionName } from '@wcpos/sync-engine';
 
 import { useT } from '../../../contexts/translations';
 
 /**
- * One in-flight flag shared by EVERY manual-sync control: a manual pass is a single
- * engine-wide operation, so while one runs, all entry points (attention Retry, Check
- * everything now, each row's Sync now) must show it and refuse a duplicate start —
- * per-instance state only guarded re-presses of the same button (codex review).
+ * One in-flight flag shared by every full manual-sync control. Row checks use the
+ * collection subject below, and both operations refuse to start while either is active.
  * Transient by construction (true only while a sync promise is in flight), so it never
  * carries stale state across store switches.
  */
 const manualSyncInFlight$ = new BehaviorSubject(false);
+const collectionCheckInFlight$ = new BehaviorSubject<string | null>(null);
+
+function showReportToast(
+	report: {
+		status: 'ran' | 'skipped' | 'error';
+		reason?: string;
+		error?: string;
+	},
+	t: ReturnType<typeof useT>
+) {
+	if (report.status === 'error') {
+		const detail = report.error ?? report.reason;
+		Toast.show({
+			type: 'error',
+			text1: t('health.database.sync_failed'),
+			...(detail ? { text2: detail } : {}),
+		});
+	} else if (report.status === 'skipped') {
+		const reason =
+			report.reason === 'offline'
+				? t('health.database.sync_skipped_offline')
+				: report.reason === 'lifecycle operation pending'
+					? t('health.database.sync_skipped_busy')
+					: report.reason;
+		Toast.show({
+			type: 'warning',
+			text1: t('health.database.sync_skipped'),
+			...(reason ? { text2: reason } : {}),
+		});
+	}
+}
 
 /**
  * Manual engine sync with cashier-visible feedback: an in-flight flag for the
@@ -29,34 +59,21 @@ export function useManualSync() {
 	const { engine } = useQueryRuntime();
 	const t = useT();
 	const syncing = useObservableState(manualSyncInFlight$, manualSyncInFlight$.getValue());
+	const checking = useObservableState(
+		collectionCheckInFlight$,
+		collectionCheckInFlight$.getValue()
+	);
+	// Any manual pass in flight — full sync OR a row check. Controls outside the
+	// Database screen (attention Retry) disable on this, or a press during a row
+	// check would silently no-op through the duplicate-start guard.
+	const busy = syncing || checking !== null;
 
 	const sync = React.useCallback(async () => {
-		if (manualSyncInFlight$.getValue()) return;
+		if (manualSyncInFlight$.getValue() || collectionCheckInFlight$.getValue() !== null) return;
 		manualSyncInFlight$.next(true);
 		try {
 			const report = await engine.sync();
-			if (report.status === 'error') {
-				const detail = report.error ?? report.reason;
-				Toast.show({
-					type: 'error',
-					text1: t('health.database.sync_failed'),
-					...(detail ? { text2: detail } : {}),
-				});
-			} else if (report.status === 'skipped') {
-				// All-lanes skipped means nothing ran at all (offline, or a lifecycle
-				// op in flight) — ending the spinner silently would read as success.
-				const reason =
-					report.reason === 'offline'
-						? t('health.database.sync_skipped_offline')
-						: report.reason === 'lifecycle operation pending'
-							? t('health.database.sync_skipped_busy')
-							: report.reason;
-				Toast.show({
-					type: 'warning',
-					text1: t('health.database.sync_skipped'),
-					...(reason ? { text2: reason } : {}),
-				});
-			}
+			showReportToast(report, t);
 		} catch (error) {
 			Toast.show({
 				type: 'error',
@@ -68,5 +85,35 @@ export function useManualSync() {
 		}
 	}, [engine, t]);
 
-	return { syncing, sync };
+	return { syncing, busy, sync };
+}
+
+export function useCollectionCheck() {
+	const { engine } = useQueryRuntime();
+	const t = useT();
+	const checking = useObservableState(
+		collectionCheckInFlight$,
+		collectionCheckInFlight$.getValue()
+	);
+
+	const check = React.useCallback(
+		async (name: SyncCollectionName) => {
+			if (manualSyncInFlight$.getValue() || collectionCheckInFlight$.getValue() !== null) return;
+			collectionCheckInFlight$.next(name);
+			try {
+				showReportToast(await engine.checkCollection(name), t);
+			} catch (error) {
+				Toast.show({
+					type: 'error',
+					text1: t('health.database.sync_failed'),
+					text2: error instanceof Error ? error.message : String(error),
+				});
+			} finally {
+				collectionCheckInFlight$.next(null);
+			}
+		},
+		[engine, t]
+	);
+
+	return { checking, check };
 }

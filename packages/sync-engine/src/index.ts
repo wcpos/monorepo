@@ -3,6 +3,7 @@ export {
 	createRxdbSyncEngine,
 	type CensusTotal,
 	type CensusTotals,
+	type CollectionCheckReport,
 	type ConflictResolutionChoice,
 	type CoverageOutcome,
 	type EngineConflict,

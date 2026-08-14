@@ -71,6 +71,140 @@ async function taskRows(engine: RxdbSyncEngine): Promise<Record<string, unknown>
 }
 
 describe('maintenance lanes through the public handle (slice 5d)', () => {
+	it('checks one fresh collection census and ticks change-signal exactly once', async () => {
+		let productTotal = 40;
+		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) =>
+			request.queryKey === 'census:products' ? productTotal : 40
+		);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 1_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		await engine.sync('query-total-retry');
+		fetchWooQueryTotal.mockClear();
+		productTotal = 91;
+
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({
+			collection: 'products',
+			status: 'ran',
+		});
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1);
+		expect(fetchWooQueryTotal.mock.calls[0]?.[0].request).toMatchObject({
+			queryKey: 'census:products',
+			endpoint: 'products',
+			params: { page: 1, per_page: 1, status: 'publish' },
+		});
+		expect(events.filter((event) => event.type === 'query-total-cache')).toHaveLength(1);
+		expect(
+			events.filter((event) => event.type === 'lane-start' && event.lane === 'change-signal')
+		).toHaveLength(1);
+		// The forced probe rides the registered query-total-retry lane, so its
+		// events flow through the standard instrumentation.
+		expect(
+			events.filter((event) => event.type === 'lane-start' && event.lane === 'query-total-retry')
+		).toHaveLength(1);
+		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(91));
+
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('skips a collection check while a lifecycle operation is pending', async () => {
+		const fetchWooQueryTotal = vi.fn(async () => 40);
+		const engine = engineWith({ queryTotal: { fetchWooQueryTotal } });
+		await engine.ready;
+		let enterReset!: () => void;
+		let releaseReset!: () => void;
+		const resetEntered = new Promise<void>((resolve) => {
+			enterReset = resolve;
+		});
+		const resetHeld = new Promise<void>((resolve) => {
+			releaseReset = resolve;
+		});
+		const resetting = engine.scope.resetCollection('products', {
+			beforeDrop: async () => {
+				enterReset();
+				await resetHeld;
+			},
+		});
+		await resetEntered;
+
+		await expect(engine.checkCollection('products')).resolves.toEqual({
+			collection: 'products',
+			status: 'skipped',
+			reason: 'lifecycle operation pending',
+		});
+		expect(fetchWooQueryTotal).not.toHaveBeenCalled();
+
+		releaseReset();
+		await resetting;
+		await engine.dispose();
+	});
+
+	it('rejects an unknown collection check', async () => {
+		const engine = engineWith();
+		await engine.ready;
+
+		await expect(engine.checkCollection('unknown' as never)).rejects.toThrow(
+			'Unknown sync collection "unknown"'
+		);
+		await engine.dispose();
+	});
+
+	it('surfaces a failed forced census on the registered lane and retries it on the next manual check', async () => {
+		let failProbe = true;
+		const fetchWooQueryTotal = vi.fn(async () => {
+			if (failProbe) throw new Error('HTTP 502');
+			return 77;
+		});
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 2_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({
+			collection: 'products',
+			status: 'error',
+		});
+		expect(engine.status().lanes['query-total-retry'].lastError).toContain(
+			'Census refresh failed for products'
+		);
+		expect(
+			events.some(
+				(event) =>
+					event.type === 'lane-finish' &&
+					event.lane === 'query-total-retry' &&
+					event.status === 'error'
+			)
+		).toBe(true);
+
+		// The failure left the request state 'failed' mid-backoff (the fixed clock
+		// never reaches retryAfterMs) — the next manual check must wake it NOW
+		// instead of skipping until the periodic lane's backoff expires.
+		failProbe = false;
+		fetchWooQueryTotal.mockClear();
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({ status: 'ran' });
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(77));
+		expect(engine.status().lanes['query-total-retry'].lastError).toBeNull();
+
+		unsubscribe();
+		await engine.dispose();
+	});
+
 	it('seeds the POS bootstrap lanes once for each opened scope without reseeding a returning scope', async () => {
 		const initialIdentity = freshIdentity();
 		const engine = engineWith(undefined, initialIdentity);

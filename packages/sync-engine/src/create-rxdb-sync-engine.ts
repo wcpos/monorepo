@@ -183,6 +183,13 @@ export type SyncReport = {
 	rebaselined?: boolean;
 };
 
+export type CollectionCheckReport = {
+	collection: SyncCollectionName;
+	status: 'ran' | 'skipped' | 'error';
+	reason?: string;
+	error?: string;
+};
+
 // Versioned sync schemas need the migration
 // plugin at collection-create time. Idempotent — RxDB skips re-adds.
 addRxPlugin(RxDBMigrationSchemaPlugin);
@@ -584,6 +591,11 @@ export type RxdbSyncEngine = {
 	 * periodic-class failures — a failed tick reports { status: 'error' } and
 	 * self-heals next tick (invariant 5); post-dispose calls reject. */
 	sync(lane?: EngineLane, options?: { signal?: AbortSignal }): Promise<SyncReport>;
+	/** Force-refresh one collection census, then tick the shared change cursor once. */
+	checkCollection(
+		name: SyncCollectionName,
+		options?: { signal?: AbortSignal }
+	): Promise<CollectionCheckReport>;
 	events(cb: (e: EngineEvent) => void): Unsubscribe;
 	status(): EngineStatus;
 	/** Emits the current status immediately, then coalesced status snapshots as it changes. */
@@ -1668,14 +1680,20 @@ export function createRxdbSyncEngine(
 	// finish half if that contract is ever broken, then re-raises.
 	const tickLaneWithEvents = async (
 		name: EngineLane,
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		// A variant tick of the SAME registered lane (the scoped census check) — the
+		// override keeps lane events, activity counters, and the census publish on
+		// the standard path instead of minting a parallel uninstrumented lane.
+		tickOverride?: (signal?: AbortSignal) => Promise<SyncReport>
 	): Promise<SyncReport> => {
 		const ownedCollections = laneRegistryEntry(name).collections;
 		for (const collection of ownedCollections) changeCollectionActivity(collection, 1);
 		emitEngineEvent({ type: 'lane-start', lane: name });
 		let report: SyncReport;
 		try {
-			report = await dispatchLaneTick(name, signal);
+			report = await (tickOverride !== undefined
+				? tickOverride(signal)
+				: dispatchLaneTick(name, signal));
 		} catch (error) {
 			emitEngineEvent({
 				type: 'lane-finish',
@@ -1925,6 +1943,58 @@ export function createRxdbSyncEngine(
 		require: (requirement) => {
 			assertNotDisposed();
 			return requirePlane.require(requirement);
+		},
+		checkCollection: async (name, options) => {
+			assertNotDisposed();
+			const startedAt = nowMs();
+			if (!(SYNC_COLLECTION_NAMES as readonly string[]).includes(name)) {
+				throw new Error(`Unknown sync collection "${String(name)}"`);
+			}
+			await readySettledForSync;
+			assertNotDisposed();
+			if (pendingLifecycleOps > 0) {
+				return {
+					collection: name,
+					status: 'skipped',
+					reason: 'lifecycle operation pending',
+				};
+			}
+			// The forced census rides the REGISTERED query-total-retry lane (per-tick
+			// option), so status().lanes lastError, lane events, diagnostics, and the
+			// census publish all flow through the same instrumentation as any tick.
+			const censusReport = recordLaneTick(
+				await tickLaneWithEvents('query-total-retry', options?.signal, (signal) =>
+					maintenanceLanes.queryTotalRetry === null
+						? Promise.resolve<SyncReport>({
+								lane: 'query-total-retry',
+								status: 'skipped',
+								reason: 'no queryTotal port provided',
+							})
+						: maintenanceLanes.queryTotalRetry.tick(signal, { forceCensusCollection: name })
+				),
+				startedAt
+			);
+			const changeStartedAt = nowMs();
+			const changeReport = recordLaneTick(
+				await tickLaneWithEvents('change-signal', options?.signal),
+				changeStartedAt
+			);
+			const reports = [censusReport, changeReport];
+			const worst = reports.some((report) => report.status === 'error')
+				? ('error' as const)
+				: reports.some((report) => report.status === 'ran')
+					? ('ran' as const)
+					: ('skipped' as const);
+			return {
+				collection: name,
+				status: worst,
+				...(reports.find((report) => report.reason)?.reason
+					? { reason: reports.find((report) => report.reason)!.reason }
+					: {}),
+				...(reports.find((report) => report.error)?.error
+					? { error: reports.find((report) => report.error)!.error }
+					: {}),
+			};
 		},
 		sync: async (lane, options) => {
 			assertNotDisposed();
