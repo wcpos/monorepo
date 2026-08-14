@@ -639,6 +639,35 @@ describe('query-state translator', () => {
 		}
 	);
 
+	// #947, Paul's ruling 2026-08-14: both product lists sort by type. `type` is the one
+	// product sort with no wire `orderby` (core Woo's enum rejects it and the WCPOS plugin
+	// adds no extension for it), so the demand stays the DEFAULT browse window while the
+	// ordering is served locally off the promoted `type` column. What must never happen is
+	// the window silently carrying some other column's order under the Type heading — so this
+	// pins both halves: no wire orderby, and a real pushed-down engine sort on `type`.
+	it('serves the product type sort locally off the promoted column (#947)', () => {
+		const compiled = compileQuery(
+			'products',
+			{
+				search: '',
+				filters: { categories: [], tags: [], brands: [] },
+				sort: { field: 'type', direction: 'asc' },
+				limit: 25,
+			} satisfies QueryStateOf<'products'>,
+			{ id: 'products' }
+		);
+
+		expect(compiled.read.sortPushable).toBe(true);
+		expect(compiled.read.sort).toEqual([
+			expect.objectContaining({ direction: 'asc', enginePath: 'type' }),
+		]);
+		expect(compiled.read.sort[0].value({ type: 'variable' } as never)).toBe('variable');
+		// The browse window keeps its default ordering — the bridge declares no `orderby`
+		// rather than inventing one the server would reject.
+		expect(compiled.demand[0]).toMatchObject({ kind: 'product-browse' });
+		expect(compiled.demand[0]).not.toHaveProperty('orderby');
+	});
+
 	it('keeps variation attribute matching entirely residual for wildcard variations', () => {
 		const compiled = compileQuery(
 			'variations',

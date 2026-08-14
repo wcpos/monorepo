@@ -429,6 +429,46 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
+	// #947, Paul's ruling 2026-08-14: both product lists sort by type. `type` has no wire
+	// `orderby` on any surface, so this is the LOCAL sort the grid falls back to — the ordering
+	// the cashier sees has to be genuinely by product type, not the default window's order
+	// wearing the Type heading. `type` is a promoted engine column (and the head of the
+	// ['type','stockStatus'] index), so the sort pushes down rather than paging app-side.
+	it.each([
+		['asc', ['product-e', 'product-g', 'product-s', 'product-v']],
+		['desc', ['product-v', 'product-s', 'product-g', 'product-e']],
+	] as const)('orders the local type sort %s (#947)', async (direction, expected) => {
+		const { database, products } = await openProductsDatabase();
+		const withType = (document: ReturnType<typeof product>, productType: string) => ({
+			...document,
+			type: productType,
+			payload: { ...document.payload, type: productType },
+		});
+		await products.bulkInsert([
+			withType(product('product-s', 30, 'C', '1.00'), 'simple'),
+			withType(product('product-v', 10, 'A', '1.00'), 'variable'),
+			withType(product('product-e', 20, 'B', '1.00'), 'external'),
+			withType(product('product-g', 40, 'D', '1.00'), 'grouped'),
+		]);
+
+		const result = await firstValueFrom(
+			executeAdapterQuery({
+				database: database as unknown as AdapterDatabase,
+				collection: 'products',
+				selector: {},
+				sort: [{ type: direction }],
+			})
+		);
+
+		expect(result.hits.map((document) => document.type)).toEqual(
+			direction === 'asc'
+				? ['external', 'grouped', 'simple', 'variable']
+				: ['variable', 'simple', 'grouped', 'external']
+		);
+		expect(result.hits.map((document) => document.id)).toEqual(expected);
+		await database.close();
+	});
+
 	it('falls back to Woo id order when menu_order is missing (1.9 contract, #810)', async () => {
 		const { database, products } = await openProductsDatabase();
 		await products.bulkInsert([

@@ -200,8 +200,20 @@ describe('ProductsScreen query-state wiring', () => {
 		expect(latestState().sort).toEqual({ field: 'sortable_price', direction: 'desc' });
 		unmount();
 
-		mockSortBy = 'type';
+		mockSortBy = 'not_a_product_field';
+		mockSortDirection = 'asc';
 		render(<ProductsScreen />);
 		expect(latestState().sort).toEqual({ field: 'name', direction: 'asc' });
+	});
+
+	// #947, Paul's ruling 2026-08-14: both product lists sort by type. `type` used to be this
+	// screen's example of a field OUTSIDE the sort surface — the column carried `disableSort`
+	// and a persisted `sortBy: 'type'` silently reverted to name asc on the next mount. It is
+	// a first-class (locally-served) sort now, so the seed has to survive the round trip.
+	it('seeds a persisted type sort instead of reverting it (#947)', () => {
+		mockSortBy = 'type';
+		mockSortDirection = 'desc';
+		render(<ProductsScreen />);
+		expect(latestState().sort).toEqual({ field: 'type', direction: 'desc' });
 	});
 });

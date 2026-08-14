@@ -52,6 +52,10 @@ export interface SortFieldsByCollection {
 		| 'sortable_price'
 		| 'total_sales'
 		| 'menu_order'
+		// The one product sort with no wire `orderby` on any surface (#947, Paul's ruling
+		// 2026-08-14: both product lists sort by type). It sorts local residents only, which
+		// is what 1.9 did too — Woo's REST enum rejected `orderby=type` outright.
+		| 'type'
 		| PriceSort
 		| StockSort
 		| DatedSort;

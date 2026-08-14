@@ -37,8 +37,13 @@ const PRODUCT_GRIDS = ['pos-products', 'products'] as const;
 /**
  * The one product sort with no `orderby` on any surface — neither core Woo's enum nor the
  * WCPOS plugin's extensions accept `type`, so 1.9 could not serve it either (it sent
- * `orderby=type` and the REST enum validator rejected the request). It stays clickable and
- * stays a LOCAL sort over resident rows: that IS 1.9 parity, not a regression from it.
+ * `orderby=type` and Woo's REST enum validator rejected the request outright). It sorts
+ * LOCAL residents, which is exactly what 1.9 ended up doing.
+ *
+ * PAUL'S RULING (2026-08-14): BOTH product lists sort by type. The POS grid always could;
+ * the Products screen carried a `disableSort` inherited from 1.9 and now does too. A local
+ * sort is a legitimate answer for a column the wire cannot express — what #947 forbids is a
+ * sort that SILENTLY returns the default window's ordering under another column's heading.
  *
  * Kept as an explicit allowlist rather than a skipped case so a SECOND unexpressible sort
  * cannot join it quietly — see the "exactly" assertion below.
@@ -76,6 +81,12 @@ describe.each(PRODUCT_GRIDS)('%s sortable columns reach the browse window (#947)
 
 	it('expresses its own default sort on the wire', () => {
 		expect(wireOrderbyForColumn(initialSettings[grid].sortBy)).toBeDefined();
+	});
+
+	// Paul's ruling 2026-08-14. The Products screen used to carry `disableSort` here while the
+	// POS grid did not; both lists now offer the sort, served locally.
+	it('offers the type sort on both product lists', () => {
+		expect(sortableColumns(grid)).toContain('type');
 	});
 });
 

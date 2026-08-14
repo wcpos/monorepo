@@ -241,8 +241,7 @@
       },
       {
         "key": "type",
-        "show": false,
-        "disableSort": true
+        "show": false
       },
       {
         "key": "sku",
