@@ -94,7 +94,7 @@ const generatorScript = path.resolve(__dirname, '../../../../scripts/generate-er
 const generatedDirectory = path.join(__dirname, 'generated');
 const entryFor = (code: string) => {
 	const entry = registry.find((candidate) => candidate.code === code);
-	if (!entry) throw new Error(`Missing registry entry ${code}`);
+	if (!entry?.troubleshooting) throw new Error(`Missing registry entry ${code}`);
 	return entry;
 };
 
