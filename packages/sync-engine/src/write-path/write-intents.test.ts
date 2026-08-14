@@ -73,6 +73,55 @@ function revCollectionOverMap(queued: Map<string, QueuedMutation>): RxRecordMuta
 }
 
 describe('enqueueWriteIntent', () => {
+	it.each(['products', 'variations'] as const)(
+		'sanitizes null COGS from an enqueued %s update while keeping other fields',
+		async (collectionName) => {
+			const mutationCollection = createFakeMutationCollection();
+			let residentData: Record<string, unknown> = {
+				payload: { name: 'Coffee' },
+				sync: { revision: 'sha256:base-r1' },
+				local: { dirty: false, pendingMutationIds: [] },
+			};
+			const resident = {
+				incrementalModify: async (
+					modify: (data: Record<string, unknown>) => Record<string, unknown>
+				) => {
+					residentData = modify(residentData);
+				},
+				remove: async () => undefined,
+				toJSON: () => residentData,
+			};
+			const db = {
+				collections: {
+					[collectionName]: { findOne: () => ({ exec: async () => resident }) },
+					recordMutations: mutationCollection,
+				},
+			} as unknown as RxDatabase;
+
+			await enqueueWriteIntent({
+				db,
+				intent: {
+					collection: collectionName,
+					operation: 'update',
+					recordId: 'product-1',
+					payload: {
+						name: 'Updated coffee',
+						cost_of_goods_sold: {
+							values: [{ defined_value: null, effective_value: 0 }],
+							total_value: 0,
+						},
+					},
+				} as never,
+				mintUuid: () => 'mutation-1',
+				now: () => '2026-08-14T00:00:00.000Z',
+			});
+
+			const queued = mutationCollection.store.get('mutation-1')?.mutation;
+			expect(queued?.payload).toMatchObject({ name: 'Updated coffee' });
+			expect(queued?.payload).not.toHaveProperty('cost_of_goods_sold');
+		}
+	);
+
 	it.each([
 		['explicit create then plain update', true, false],
 		['plain create then explicit update', false, true],
@@ -263,6 +312,43 @@ describe('enqueueWriteIntent', () => {
 		expect([...queued.values()][0]?.payload.meta_data).toEqual([
 			{ key: '_woocommerce_pos_data', value: { price: '45' } },
 		]);
+	});
+
+	it('sanitizes null COGS from a born-twice product follow-up', async () => {
+		const mutationCollection = createFakeMutationCollection();
+		const db = {
+			collections: {
+				products: { findOne: () => ({ exec: async () => null }) },
+				recordMutations: mutationCollection,
+			},
+		} as unknown as RxDatabase;
+
+		await requeueBornTwiceSnapshot({
+			db,
+			mutation: {
+				mutationId: 'create-1',
+				collectionName: 'products',
+				operation: 'create',
+				recordId: 'product-1',
+				origin: 'minted',
+				payload: {
+					name: 'Coffee',
+					cost_of_goods_sold: {
+						values: [{ defined_value: null, effective_value: 0 }],
+						total_value: 0,
+					},
+				},
+				baseRevision: null,
+				queuedAt: '2026-08-14T00:00:00.000Z',
+			} as never,
+			ackRevision: 'sha256:server-r1',
+			mintUuid: () => 'follow-up-1',
+			now: () => '2026-08-14T00:00:01.000Z',
+		});
+
+		const followUp = mutationCollection.store.get('follow-up-1')?.mutation;
+		expect(followUp?.payload).toEqual({ name: 'Coffee' });
+		expect(followUp?.payload).not.toHaveProperty('cost_of_goods_sold');
 	});
 
 	it('preserves explicit when a born-twice snapshot coalesces into a plain successor', async () => {
