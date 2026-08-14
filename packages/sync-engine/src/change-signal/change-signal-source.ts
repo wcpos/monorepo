@@ -255,7 +255,7 @@ export function createLiveChangeSignalSource(
 				const path = '/changes/tick';
 				const validator = tickEtag;
 				const response = await input.fetcher(
-					buildUrl(input.syncBaseUrl, path, {}),
+					buildUrl(input.syncBaseUrl, path, { since: String(cursor.sequence) }),
 					validator === null ? undefined : { headers: { 'If-None-Match': validator } }
 				);
 				if (response.status === 404) {

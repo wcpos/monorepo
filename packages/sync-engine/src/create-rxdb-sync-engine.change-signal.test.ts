@@ -123,7 +123,6 @@ function scriptedServer() {
 		}
 		if (path.endsWith('/changes/config-fingerprint')) {
 			return json({
-				candidate: 'config-fingerprint',
 				fingerprints: { products: 'fp-1', variations: 'fp-1', tax_rates: 'fp-1' },
 				barcode_fields: { products: ['sku'], variations: ['sku'], tax_rates: [] },
 				meta: { supported: true },
