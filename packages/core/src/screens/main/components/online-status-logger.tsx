@@ -7,7 +7,7 @@ import type { OnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { useT } from '../../../contexts/translations';
 
-const logger = getLogger(['wcpos', 'ui', 'header']);
+const logger = getLogger(['wcpos', 'app', 'connectivity']);
 
 export function OnlineStatusLogger() {
 	const { status } = useOnlineStatus();

@@ -329,6 +329,12 @@ export function rowDetailData(row: LogRow): RowDetailData {
 export type DebugInfoInput = {
 	generatedAt: string;
 	appVersion?: string;
+	platform?: string;
+	platformVersion?: string;
+	wpVersion?: string;
+	wcVersion?: string;
+	wcposVersion?: string;
+	wcposProVersion?: string;
 	storeName?: string;
 	connectivity: string;
 	eventsToday: number;
@@ -348,6 +354,14 @@ export function buildDebugInfo(input: DebugInfoInput): string {
 	const lines: string[] = [];
 	lines.push(`WCPOS debug info — ${input.generatedAt}`);
 	if (input.appVersion) lines.push(`App version: ${input.appVersion}`);
+	if (input.platform) {
+		const version = input.platformVersion ? ` (${input.platformVersion})` : '';
+		lines.push(`Platform: ${input.platform}${version}`);
+	}
+	lines.push(`WordPress: ${input.wpVersion || 'unknown'}`);
+	lines.push(`WooCommerce: ${input.wcVersion || 'unknown'}`);
+	lines.push(`WCPOS: ${input.wcposVersion || 'unknown'}`);
+	if (input.wcposProVersion) lines.push(`WCPOS Pro: ${input.wcposProVersion}`);
 	if (input.storeName) lines.push(`Store: ${input.storeName}`);
 	lines.push(`Connectivity: ${input.connectivity}`);
 	lines.push(
