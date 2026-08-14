@@ -75,6 +75,12 @@ describe('createSyncLogObserver', () => {
 		[503, 'SYNC131'],
 		[0, 'SYNC121'],
 		[403, 'AUTH201'],
+		// A response IS reachability: a 409 is the clash the record events narrate
+		// (SYNC221), any other 4xx is the server answering with an error (SYNC131).
+		// The old catch-all labeled both "cannot be reached" (dev-next 2026-08-14).
+		[409, 'SYNC221'],
+		[404, 'SYNC131'],
+		[422, 'SYNC131'],
 	])('resolves transport status %s to %s', (status, errorCode) => {
 		observer.observe(event({ type: 'transport.request', level: 'warn', fields: { status } }));
 
