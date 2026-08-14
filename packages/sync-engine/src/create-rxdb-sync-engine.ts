@@ -110,7 +110,7 @@ import {
 import { createLocalCoverage, type LocalCoverage } from './local-coverage/local-coverage';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
 import { createCoverageChangeHub } from './local-coverage/coverage-changes';
-import { createReconcilePorts } from './local-coverage/reconcile-port';
+import { createReconcilePorts, removeTargeted } from './local-coverage/reconcile-port';
 import {
 	type ConflictResolutionChoice,
 	createWritePlane,
@@ -857,11 +857,27 @@ export function createRxdbSyncEngine(
 			throw error;
 		}
 		try {
+			const pruneTargeted = (
+				manifest: 'existenceManifest' | 'existenceManifestCustomers',
+				collection: 'products' | 'variations' | 'customers',
+				field: string,
+				wooIds: number[]
+			) => removeTargeted(db, db.collections[manifest] as never, collection, field, wooIds);
 			const coverage = createLocalCoverage({
 				database: db as never,
 				manifest: {
 					fetcher: (url, init) => fetcher(url, init?.signal ? { signal: init.signal } : undefined),
 					syncBaseUrl: ports.site.syncBaseUrl,
+					pruneDeleted: {
+						product: (wooIds) =>
+							pruneTargeted('existenceManifest', 'products', 'wooProductId', wooIds),
+						variation: (wooIds) =>
+							pruneTargeted('existenceManifest', 'variations', 'wooId', wooIds),
+						customer: (wooIds) =>
+							pruneTargeted('existenceManifestCustomers', 'customers', 'wooCustomerId', wooIds),
+						order: (wooIds) =>
+							new EngineOrderRepository(db.collections as never).removeDeletedOrders(wooIds),
+					},
 				},
 				reconcile: createReconcilePorts({
 					database: db,

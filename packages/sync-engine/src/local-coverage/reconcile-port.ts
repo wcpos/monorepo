@@ -11,6 +11,7 @@ import {
 
 import type { LocalCoverageReconcilePort, ReconcileRequest } from './local-coverage';
 import type { ExistenceScanBucket, ExistenceScanPage } from './reconcile-existence-pass';
+import type { ManifestCollection } from './rx-existence-manifest-repository';
 import type { RxDatabase } from 'rxdb';
 
 /**
@@ -96,6 +97,39 @@ type ReconcilePortDeps = {
 	ports: { site: { syncBaseUrl: string } };
 };
 
+export async function removeTargeted(
+	db: RxDatabase,
+	manifest: ManifestCollection,
+	name: 'products' | 'variations' | 'customers',
+	field: string,
+	wooIds: number[]
+): Promise<void> {
+	const docs = await db.collections[name]
+		.find({ selector: { [field]: { $in: wooIds } } as never })
+		.exec();
+	const current = await db.collections[name].findByIds(docs.map((doc) => doc.primary)).exec();
+	const protectedWooIds = new Set<number>();
+	const removable: string[] = [];
+	for (const [primary, doc] of current) {
+		const row = doc.toJSON() as Record<string, unknown>;
+		if (!hasPendingLocalWork(row)) {
+			removable.push(primary);
+			continue;
+		}
+		const wooId = row[field];
+		if (typeof wooId === 'number') protectedWooIds.add(wooId);
+	}
+	if (removable.length > 0)
+		assertBulkSuccess(
+			await db.collections[name].bulkRemove(removable),
+			'create-rxdb-sync-engine remove'
+		);
+	await removeManifestByWooIds(
+		manifest,
+		wooIds.filter((wooId) => !protectedWooIds.has(wooId))
+	);
+}
+
 export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReconcilePort[] {
 	const { database: db, fetcher, ports } = deps;
 	const reconcilePort = (
@@ -127,32 +161,6 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 				});
 			}
 			return ids;
-		};
-		const removeTargeted = async (
-			name: 'products' | 'variations' | 'customers',
-			field: string,
-			wooIds: number[]
-		) => {
-			const docs = await db.collections[name]
-				.find({ selector: { [field]: { $in: wooIds } } as never })
-				.exec();
-			const protectedWooIds = new Set<number>();
-			const removable = docs.filter((doc) => {
-				const row = doc.toJSON() as Record<string, unknown>;
-				if (!hasPendingLocalWork(row)) return true;
-				const wooId = row[field];
-				if (typeof wooId === 'number') protectedWooIds.add(wooId);
-				return false;
-			});
-			if (removable.length > 0)
-				assertBulkSuccess(
-					await db.collections[name].bulkRemove(removable.map((doc) => doc.primary)),
-					'create-rxdb-sync-engine remove'
-				);
-			await removeManifestByWooIds(
-				manifest,
-				wooIds.filter((wooId) => !protectedWooIds.has(wooId))
-			);
 		};
 		return {
 			bucketSize: 1000,
@@ -195,12 +203,15 @@ export function createReconcilePorts(deps: ReconcilePortDeps): LocalCoverageReco
 				if (collection === 'orders')
 					return new EngineOrderRepository(db.collections as never).removeDeletedOrders(wooIds);
 				return removeTargeted(
+					db,
+					manifest,
 					collection,
 					collection === 'products' ? 'wooProductId' : 'wooCustomerId',
 					wooIds
 				);
 			},
-			deleteVariations: (wooIds: number[]) => removeTargeted('variations', 'wooId', wooIds),
+			deleteVariations: (wooIds: number[]) =>
+				removeTargeted(db, manifest, 'variations', 'wooId', wooIds),
 		};
 	};
 	return [

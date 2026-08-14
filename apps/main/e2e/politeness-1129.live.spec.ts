@@ -23,14 +23,13 @@ import type { ServerPressure } from '../../../packages/sync-engine/src/change-si
  * point is the live server.
  *
  * The measured scenario is a populated-manifest REBASELINE — the profile that produced
- * the flood. A rebaseline only happens when the change-signal cursor is more than
- * `maxReplayBacklog` (5,000) entries behind the head, which a quick reload never is, so
- * the spec forces it in two stages (see forceRebaselineOnNextPoll): one `/changes/tick`
- * response claims a huge head so the engine drains the sequence-log at all, then that
- * drain's `checkpoint.head` is inflated past the backlog threshold. That flips the
- * engine's own rebaseline branch; every audit endpoint (scan, bucket, digests) stays
- * fully live. Subsequent polls pass through untouched — an over-head cursor just idles
- * until the log catches up.
+ * the flood. A quick reload never rebaselines on its own, so the spec forces it via the
+ * JOURNAL EPOCH (see forceRebaselineViaEpoch): from the reload onward every tick and
+ * sequence-log checkpoint reports one synthetic epoch, so the engine sees a single
+ * epoch change against its persisted value and takes its own rebaseline path — then a
+ * consistent world (no over-head cursor: #1205's cursor-past-head rule made the old
+ * head-inflation force cascade). Every audit endpoint (scan, bucket, digests) stays
+ * fully live.
  *
  * Store-agnostic by construction: it asserts REQUEST-SHAPE ceilings from the politeness
  * invariant (wiki ADR 2026-08-11), never catalog contents or counts. A store with no
@@ -48,16 +47,6 @@ import type { ServerPressure } from '../../../packages/sync-engine/src/change-si
  * Verified live 2026-08-13: a load-17 dev-next session correctly produced zero audit
  * traffic while the browse walk ran exactly once (the #1175 heartbeat proof).
  */
-
-// maxReplayBacklog in packages/sync-core/src/hybridChangeSignal.ts — the forced head
-// must clear it for the engine to take the rebaseline branch.
-const REPLAY_BACKLOG = 5_000;
-
-// Injected into the ONE mutated `/changes/tick` response so the engine's gatekeeper
-// (head > cursor → drain the sequence-log) fires on a quiet store. Only has to beat
-// the client's cursor — the rebaseline compare itself happens on the DRAIN envelope's
-// head, which stage 2 inflates relative to the real cursor.
-const TICK_FORCED_HEAD = 1_000_000_000_000;
 
 // Ceilings from the lane registry: 3 id-spaces × 3 gap-skipping scan pages, K=2 drills.
 const MAX_SCAN_REQUESTS = 9;
@@ -175,41 +164,45 @@ const isAuditBucket = (path: string) => path.includes('/integrity/bucket');
 const isSweepScan = (path: string) => path.includes('/integrity/scan') && !isAuditScan(path);
 
 /**
- * Force the engine's own rebaseline branch — TWO stages since the #1179/#1186
- * change-signal rework, because the engine now polls a lightweight
- * `/changes/tick` gatekeeper and only drains the sequence-log when the tick's
- * `checkpoint.head` exceeds its cursor. On a quiet store no drain ever happens,
- * so a drain-only rewrite waits forever (the 2026-08-13 run failed exactly
- * this way — the drift guard, working as designed).
+ * Force the engine's own rebaseline — via the JOURNAL EPOCH since the #1205
+ * unified-journal client. Head inflation (the pre-#1205 force) is no longer
+ * safe: #1205 added a *same-epoch cursor past head → rebaseline* rule, so the
+ * over-head cursor the old force left behind would trigger a second, unforced
+ * rebaseline inside the measurement window (heads-up posted on #1205).
  *
- * Stage 1 (tick): claim an enormous head on ONE tick response so the engine
- * falls through to a real sequence-log drain. `If-None-Match` is stripped from
- * the forwarded request — the engine ETags its ticks, and a 304 has no body to
- * mutate.
+ * The epoch lever has no such residue: every tick and sequence-log checkpoint
+ * carries `epoch` (a string the client persists; a served value differing from
+ * the persisted one routes through the rebaseline machinery). The rewrite is
+ * PERSISTENT camouflage, not a one-shot: from the reload onward, every
+ * response reports the same synthetic epoch, so the engine sees exactly one
+ * epoch change (persisted real value → forced value) and then a perfectly
+ * consistent world — no cursor mismatch, no cascade.
  *
- * Stage 2 (drain): the rebaseline guard compares the DRAIN envelope's
- * `checkpoint.head` against the cursor (hybridChangeSignal.ts:623 — the tick's
- * head value is discarded), so rewrite that head to `since + REPLAY_BACKLOG + 1`
- * exactly as before. Head-priming probes (`limit=1`) stay excluded — mutating
- * one merely moves the initial cursor and wastes the one-shot.
+ * `If-None-Match` is stripped from tick requests — the engine ETags its
+ * ticks, and a 304 has no body to rewrite. Legacy servers without tick
+ * support still get forced through the sequence-log envelope's epoch. Never
+ * throws from a route handler (#997). Armed only once the reload's main-frame
+ * navigation commits, so the pre-reload instance persists the REAL epoch the
+ * forced value must differ from (coderabbit review, adapted).
  *
- * Both one-shot; later polls hit the live server untouched — an over-head
- * cursor just idles until the log catches up. Never throws from a route
- * handler (#997). Armed only once the reload's main-frame navigation commits,
- * so the pre-reload instance's polls can't consume the one-shots (coderabbit
- * review).
+ * Prerequisite: the live server must serve journal epochs (free#1581+). On an
+ * older deployment no `epoch` reaches the client either way, the first-seen
+ * forced value is silently adopted, and the drift guard below fails loudly.
  */
-async function forceRebaselineOnNextPoll(
-	page: Page
-): Promise<{ tickFired: () => boolean; fired: () => boolean }> {
-	let tickFired = false;
-	let drainFired = false;
+const FORCED_EPOCH = 'politeness-1129-forced-epoch';
+
+async function forceRebaselineViaEpoch(
+	page: Page,
+	requestCount: () => number
+): Promise<{ fired: () => boolean; requestCountAtMutation: () => number }> {
+	let mutatedResponseServed = false;
+	let firstMutationRequestCount = 0;
 	let armed = false;
 	page.once('framenavigated', (frame) => {
 		if (frame === page.mainFrame()) armed = true;
 	});
-	await page.route('**/changes/tick*', async (route) => {
-		if (!armed || tickFired) {
+	const rewriteEpoch = async (route: Parameters<Parameters<Page['route']>[1]>[0]) => {
+		if (!armed) {
 			await route.fallback();
 			return;
 		}
@@ -217,45 +210,25 @@ async function forceRebaselineOnNextPoll(
 			const headers = { ...route.request().headers() };
 			delete headers['if-none-match'];
 			const response = await route.fetch({ headers });
-			// Only a successful tick consumes the one-shot (codex review on #1188):
-			// a 404 from an older server makes the engine mark tick unsupported and
-			// take the legacy always-drain path — mutating that response would waste
-			// the shot on a body the engine never reads.
 			if (!response.ok()) {
 				await route.fulfill({ response });
 				return;
 			}
 			const body = (await response.json()) as { checkpoint?: Record<string, unknown> };
-			body.checkpoint = { ...body.checkpoint, head: TICK_FORCED_HEAD };
-			tickFired = true;
+			body.checkpoint = { ...body.checkpoint, epoch: FORCED_EPOCH };
 			await route.fulfill({ response, json: body });
+			if (!mutatedResponseServed) firstMutationRequestCount = requestCount();
+			mutatedResponseServed = true;
 		} catch {
 			await route.fallback().catch(() => undefined);
 		}
-	});
-	await page.route('**/changes/sequence-log*', async (route) => {
-		const isHeadPriming = new URL(route.request().url()).searchParams.get('limit') === '1';
-		if (!armed || drainFired || isHeadPriming) {
-			await route.fallback();
-			return;
-		}
-		try {
-			const response = await route.fetch();
-			const body = (await response.json()) as {
-				checkpoint?: { since?: number; head?: number };
-			};
-			const since =
-				typeof body.checkpoint?.since === 'number'
-					? body.checkpoint.since
-					: Number(new URL(route.request().url()).searchParams.get('since') ?? 0);
-			body.checkpoint = { ...body.checkpoint, head: since + REPLAY_BACKLOG + 1 };
-			drainFired = true;
-			await route.fulfill({ response, json: body });
-		} catch {
-			await route.fallback().catch(() => undefined);
-		}
-	});
-	return { tickFired: () => tickFired, fired: () => drainFired };
+	};
+	await page.route('**/changes/tick*', rewriteEpoch);
+	await page.route('**/changes/sequence-log*', rewriteEpoch);
+	return {
+		fired: () => mutatedResponseServed,
+		requestCountAtMutation: () => firstMutationRequestCount,
+	};
 }
 
 test.describe('#1129 — store-open politeness against the live server', () => {
@@ -340,7 +313,7 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 
 		// --- Measured scenario: reload with the head forced past the replay backlog =
 		// a populated-manifest rebaseline (the HAR shape) against the live audit stack.
-		const rebaseline = await forceRebaselineOnNextPoll(page);
+		const rebaseline = await forceRebaselineViaEpoch(page, () => requests.length);
 		await page.reload();
 
 		// Render marker: the table-backed count, not the card-header search box — the
@@ -366,24 +339,34 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		// two real events: first the drain poll the forced rebaseline rides on (idle
 		// tick cadence can hold it back ~5 minutes), then the audit chain's first scan
 		// (seeds + the 60s hold run between the two).
-		// Either flag satisfies stage one (codex review on the 404 guard): on a
-		// legacy server the tick 404s permanently, the engine flips to the
-		// always-drain path, and the drain rewrite fires without any tick
-		// mutation — waiting on tickFired alone would time out despite a
-		// healthy force.
-		await expect
-			.poll(() => rebaseline.tickFired() || rebaseline.fired(), {
-				timeout: DRAIN_POLL_TIMEOUT_MS,
-				message:
-					'neither a mutated /changes/tick nor a sequence-log drain was observed after reload — no rebaseline could be provoked (tick cadence or endpoint drift?)',
-			})
-			.toBe(true);
+		// Stage 1: a change-signal poll (tick, or sequence-log on a legacy
+		// server) was served with the forced epoch. Idle tick cadence can hold
+		// the first poll back several minutes.
 		await expect
 			.poll(() => rebaseline.fired(), {
 				timeout: DRAIN_POLL_TIMEOUT_MS,
 				message:
-					'the tick claimed a huge head but the engine never drained the sequence-log — the tick→drain fall-through changed',
+					'no change-signal poll was served with the forced epoch after reload — tick cadence or endpoint drift?',
 			})
+			.toBe(true);
+		// Stage 2: the engine actually took the epoch-change rebaseline — the
+		// network-visible signature is the browse-window seed page. A server
+		// that does not serve journal epochs yet (pre-free#1581 deployment)
+		// fails HERE: the first-seen epoch is silently adopted, no rebaseline.
+		await expect
+			.poll(
+				() =>
+					requests
+						.slice(rebaseline.requestCountAtMutation())
+						.some(
+							(entry) => entry.path.includes('orderby=menu_order') && entry.path.includes('page=1')
+						),
+				{
+					timeout: DRAIN_POLL_TIMEOUT_MS,
+					message:
+						'the forced epoch was served but no browse-window seed followed — the engine did not take the epoch-change rebaseline (is the live server serving journal epochs, free#1581+?)',
+				}
+			)
 			.toBe(true);
 		// The audit chain's first scan — OR a legitimate pressure deferral. Since the
 		// mono#1159 ruling (2026-08-12), audit lanes stand down while the server-pressure
@@ -436,9 +419,9 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		console.log(`[politeness-1129] ${observed}`);
 		test.info().annotations.push({ type: 'observed', description: observed });
 
-		// The trigger must have been exercised: the forced head rewrite fired, and at
+		// The trigger must have been exercised: the forced epoch was served, and at
 		// least one audit scan ran — zero audit traffic can never pass as politeness.
-		expect(rebaseline.fired(), 'sequence-log head rewrite intercepted a poll').toBe(true);
+		expect(rebaseline.fired(), 'forced-epoch rewrite intercepted a change-signal poll').toBe(true);
 		expect(scans.length, 'existence-audit scan pages observed').toBeGreaterThanOrEqual(1);
 
 		// Every counted audit request completed successfully — an erroring endpoint

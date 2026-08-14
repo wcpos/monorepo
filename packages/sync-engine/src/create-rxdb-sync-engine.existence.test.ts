@@ -4,6 +4,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
 import { createEngineHarness, scriptedConnectivity } from './testing';
+import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 setPremiumFlag();
 
@@ -328,6 +329,86 @@ describe('existence maintenance lanes through the public facade', () => {
 		expect(await db.products.findOne(product(81, 'draft').id).exec()).toBeNull();
 		expect(await db.products.findOne(product(82, 'private').id).exec()).toBeNull();
 		expect(await db.products.findOne(product(83, 'draft', true).id).exec()).not.toBeNull();
+		await e.dispose();
+	});
+
+	it('prunes explicit digest absences through the existing guarded removal paths', async () => {
+		const fetcher = vi.fn(async (url: string) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/digests')) throw new Error(`unexpected fetch ${url}`);
+			expect(parsed.searchParams.get('absence')).toBe('explicit');
+			const ids = (parsed.searchParams.get('include') ?? '').split(',').map(Number);
+			return json({
+				digests: [...ids.map((id) => ({ id, deleted: true })), { id: 999, deleted: true }],
+			});
+		});
+		const orderPrune = vi.spyOn(EngineOrderRepository.prototype, 'removeDeletedOrders');
+		const e = engine(fetcher);
+		await e.ready;
+		const db = e.active()!.database.collections;
+		const common = {
+			sync: { revision: 'old', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		const product = (id: number, dirty = false) => ({
+			id: `p${id}`,
+			wooProductId: id,
+			price: id,
+			stockStatus: 'instock',
+			type: 'simple',
+			categoryIds: [],
+			brandIds: [],
+			onSale: false,
+			featured: false,
+			stockQuantity: null,
+			payload: { id, status: 'publish' },
+			sync: common.sync,
+			local: { dirty, pendingMutationIds: dirty ? ['pending'] : [] },
+		});
+		await seed(db.products as never, product(91));
+		await seed(db.products as never, product(92, true));
+		await seed(db.variations as never, {
+			id: 'v93',
+			wooId: 93,
+			parentId: 91,
+			price: 1,
+			stockStatus: 'instock',
+			attributes: [],
+			stockQuantity: null,
+			payload: { id: 93 },
+			...common,
+		});
+		await seed(db.customers as never, {
+			id: 'c94',
+			wooCustomerId: 94,
+			payload: { id: 94 },
+			...common,
+		});
+		await seed(db.orders as never, {
+			id: 'o95',
+			wooOrderId: 95,
+			number: '95',
+			dateCreatedGmt: '2026-01-01T00:00:00',
+			status: 'processing',
+			total: '1',
+			customerId: 0,
+			payload: { id: 95 },
+			...common,
+		});
+
+		await expect(e.sync('existence-prime')).resolves.toMatchObject({ status: 'ran' });
+
+		expect(await db.products.findOne('p91').exec()).toBeNull();
+		expect(await db.products.findOne('p92').exec()).not.toBeNull();
+		expect(await db.variations.findOne('v93').exec()).toBeNull();
+		expect(await db.customers.findOne('c94').exec()).toBeNull();
+		expect(await db.orders.findOne('o95').exec()).toBeNull();
+		expect(await db.existenceManifest.findOne('91').exec()).toBeNull();
+		expect(await db.existenceManifest.findOne('92').exec()).toBeNull();
+		expect(await db.existenceManifest.findOne('93').exec()).toBeNull();
+		expect(await db.existenceManifestCustomers.findOne('94').exec()).toBeNull();
+		expect(await db.existenceManifestOrders.findOne('95').exec()).toBeNull();
+		expect(orderPrune).toHaveBeenCalledWith([95]);
 		await e.dispose();
 	});
 

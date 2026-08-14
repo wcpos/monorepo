@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ExistenceManifestDocument } from '@wcpos/sync-engine/testing';
 
+import { removeTargeted } from './reconcile-port';
 import { partitionActionsByLane, reconcileExistence, resolveDirtyWooIds } from './reconciliation';
 
 import type { ServerDigestEntry } from '../reconcile-bucket-plan';
@@ -38,6 +39,50 @@ describe('resolveDirtyWooIds', () => {
 		);
 		expect([...dirty].sort((a, b) => a - b)).toEqual([10, 20]);
 		expect(lookup).not.toHaveBeenCalledWith('uuid-9', 'orders');
+	});
+});
+
+describe('removeTargeted', () => {
+	it('re-reads candidates before removal and preserves a record that gained local work', async () => {
+		const stale = {
+			primary: 'p-3',
+			toJSON: () => ({
+				wooProductId: 3,
+				local: { dirty: false, pendingMutationIds: [] },
+			}),
+		};
+		const current = {
+			primary: 'p-3',
+			toJSON: () => ({
+				wooProductId: 3,
+				local: { dirty: true, pendingMutationIds: ['late-edit'] },
+			}),
+		};
+		const bulkRemove = vi.fn(async () => []);
+		const findByIds = vi.fn(() => ({
+			exec: async () => new Map([['p-3', current]]),
+		}));
+		const manifestBulkRemove = vi.fn(async () => []);
+
+		await removeTargeted(
+			{
+				collections: {
+					products: {
+						find: () => ({ exec: async () => [stale] }),
+						findByIds,
+						bulkRemove,
+					},
+				},
+			} as never,
+			{ bulkRemove: manifestBulkRemove } as never,
+			'products',
+			'wooProductId',
+			[3]
+		);
+
+		expect(findByIds).toHaveBeenCalledWith(['p-3']);
+		expect(bulkRemove).not.toHaveBeenCalled();
+		expect(manifestBulkRemove).not.toHaveBeenCalled();
 	});
 });
 

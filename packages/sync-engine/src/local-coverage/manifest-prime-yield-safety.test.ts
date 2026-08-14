@@ -5,6 +5,7 @@ import {
 	type ExistenceManifestPrimeDatabase,
 	primeExistenceManifest,
 	runManifestPrimePass,
+	runSingleLanePrimePass,
 } from './manifest';
 
 /**
@@ -219,6 +220,62 @@ describe('primeExistenceManifest removal safety across yields (#949)', () => {
 			100
 		);
 		expect(attempted[1]![0]).toBe(101);
+	});
+
+	it('prunes explicit deletions, ignores stray deleted ids, and advances rotation', async () => {
+		const pruned: number[][] = [];
+		const upserted: { wooId: number }[][] = [];
+		let cursor = -1;
+
+		await expect(
+			runSingleLanePrimePass({
+				wooIds: [10, 11],
+				objectType: 'customer',
+				existingManifestWooIds: new Set(),
+				fetchDigests: async () => [
+					{ id: 10, deleted: true },
+					{ id: 11, digest: 'd-11' },
+					{ id: 999, deleted: true },
+				],
+				upsert: async (rows) => {
+					upserted.push(rows);
+				},
+				pruneDeleted: async (wooIds) => {
+					pruned.push(wooIds);
+				},
+				rotation: {
+					afterWooId: cursor,
+					commit: async (lastAttempted) => {
+						cursor = lastAttempted;
+					},
+				},
+			})
+		).resolves.toBe(1);
+
+		expect(pruned).toEqual([[10]]);
+		expect(upserted).toEqual([[{ id: '11', wooId: 11, objectType: 'customer', digest: 'd-11' }]]);
+		expect(cursor).toBe(11);
+	});
+
+	it('keeps old-server digest-only responses on the existing upsert path', async () => {
+		const pruned = vi.fn();
+		const upsert = vi.fn();
+
+		await expect(
+			runSingleLanePrimePass({
+				wooIds: [20],
+				objectType: 'order',
+				existingManifestWooIds: new Set(),
+				fetchDigests: async () => [{ id: 20, digest: 'old-server' }],
+				upsert,
+				pruneDeleted: pruned,
+			})
+		).resolves.toBe(1);
+
+		expect(pruned).not.toHaveBeenCalled();
+		expect(upsert).toHaveBeenCalledWith([
+			{ id: '20', wooId: 20, objectType: 'order', digest: 'old-server' },
+		]);
 	});
 
 	it('does NOT delete a product that gained local work after it was classified', async () => {
