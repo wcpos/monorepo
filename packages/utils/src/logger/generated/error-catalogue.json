@@ -13,7 +13,7 @@
 			"summary": "This change could not be saved to the local database and remains only on this device.",
 			"docsBody": "Do not clear or reload local data. Export diagnostics and contact support before retrying or repairing anything.",
 			"troubleshooting": [
-				"Note the record named in the log entry — that is the change that has not been saved anywhere else.",
+				"If the log entry names a record, note it — that is the change that has not been saved. Site and credential writes may name only the failed operation and error instead; record those details before continuing.",
 				"Do not clear site data, reset the app, or uninstall: the unsaved change exists only on this device, and clearing local storage deletes it permanently.",
 				"Check the device's free storage — a full disk or an exhausted browser storage quota is the most common reason a local write fails.",
 				"Restart WCPOS once and make a small, harmless edit to confirm whether new changes save.",
@@ -157,9 +157,10 @@
 			"summary": "This record has a field your store will not accept.",
 			"docsBody": "Fix the named field and retry the record; the local copy remains available until it syncs.",
 			"troubleshooting": [
-				"The log entry names the record and the field your store refused.",
-				"Edit that field in the POS — common causes are a value out of range, a format the store rejects, or a required option left empty — then retry.",
-				"If the field looks correct in the POS, compare it with the same record in WP Admin: plugin-added validation on the store can reject values the POS considers fine."
+				"Expand the log entry and check the endpoint and server response first: this code can also represent an HTTP 400 from a settings, authentication or other non-record request.",
+				"If the context names a record or field, edit that field in the POS — common causes are a value out of range, a rejected format or a required option left empty — then retry.",
+				"If it is not a record request, follow the server's message for the named endpoint instead. Use the Network inspector when the response details are not present in the POS log.",
+				"If a named field looks correct in the POS, compare it with the same record in WP Admin: plugin-added validation on the store can reject values the POS considers fine."
 			],
 			"logSources": [
 				"network-inspector"
@@ -313,8 +314,8 @@
 			"docsBody": "Ask the site administrator to check whether a security or proxy plugin is stripping WCPOS request headers.",
 			"troubleshooting": [
 				"Confirm WCPOS is active on the site: WP Admin → Plugins.",
-				"Test the route directly: open your store's /wp-json/ address in a browser — an HTML page or 404 instead of JSON means the REST API itself is blocked.",
-				"Ask the site administrator whether a security plugin, proxy or CDN is stripping WCPOS request headers or blocking /wp-json/ — firewall rules and disable-REST-API hardening options are the usual culprits.",
+				"Test both supported REST forms in a browser: your store's /wp-json/ address and /index.php?rest_route=/. Only diagnose a REST block if neither address returns JSON.",
+				"If neither REST form works, ask the site administrator whether a security plugin, proxy or CDN is stripping WCPOS request headers or blocking REST requests — firewall rules and disable-REST-API hardening options are the usual culprits.",
 				"On some hosts, re-saving permalinks (Settings → Permalinks → Save) restores missing REST routes."
 			],
 			"logSources": [
@@ -874,7 +875,8 @@
 			"summary": "Syncing hit an unexpected problem.",
 			"docsBody": "Your sales are safe on this device. Wait for the automatic retry; if this code keeps appearing, export diagnostics and contact support.",
 			"troubleshooting": [
-				"Wait for the automatic retry — sales are safe on this device.",
+				"Do not assume this code will retry. Expand the log entry first: if it confirms the mutation was already queued, WCPOS retries automatically, so leave it open and let the queue drain.",
+				"If the error says the engine resident is missing or the write failed before a mutation ID was returned, nothing was queued — return to that record or order and save it again.",
 				"Expand the log entry and note the event code and any serverCode: a 999 code means the specific cause has no dedicated code yet, so this context is exactly what support needs.",
 				"If the code keeps appearing, use Copy debug info and contact support — reporting it is how the specific code gets added."
 			],
@@ -964,9 +966,9 @@
 			"summary": "Printing hit an unexpected problem.",
 			"docsBody": "Try printing again. If it keeps failing, reprint from the order screen and contact support with diagnostics.",
 			"troubleshooting": [
-				"Try printing again, then reprint from the order screen if needed — the sale is unaffected.",
-				"Expand the log entry for the event code and context; this generic code means the cause has no dedicated code yet.",
-				"If printing keeps failing, export debug info and contact support."
+				"Expand the log entry first and identify the failed operation — this code also covers receipt-email queue actions and receipt-template sync, not only physical printing.",
+				"Repeat only the operation named in the log. Reprint from the order screen only for a physical print attempt; retry or remove a queued email from Store health, and retry template sync by reopening the receipt screen while connected.",
+				"If that operation keeps failing, export debug info and contact support."
 			],
 			"logSources": [],
 			"evidence": "coverage net (map #1136, A1.1)",
@@ -1253,7 +1255,7 @@
 			"summary": "Your store sent a malformed response that WCPOS had to repair before reading.",
 			"docsBody": "This usually means a plugin or PHP notice is printing extra output into store responses. WCPOS recovered this one, but repairs are not guaranteed — ask the site administrator to check the site's error log.",
 			"troubleshooting": [
-				"Nothing on the till needs fixing — this occurrence was repaired automatically.",
+				"Check whether the related request ultimately succeeded. If it did, WCPOS repaired this occurrence; if it failed, follow that request's error and retry guidance instead.",
 				"The cause is on the site: a plugin or theme is printing warnings or stray output into REST responses. Ask the site administrator to check the site's logs for PHP notices at the failure time.",
 				"The network inspector shows the raw response body — the stray output is visible immediately before or after the JSON.",
 				"Repairs are best-effort: if these warnings become frequent, fix the offending plugin rather than relying on the repair."
@@ -1386,9 +1388,9 @@
 			"summary": "This receipt could not be emailed or downloaded.",
 			"docsBody": "The sale itself is unaffected. Check the email address and the device's connection, then try again from the order's receipt screen.",
 			"troubleshooting": [
-				"Check the email address on the order for typos, and the till's connection.",
-				"Resend from the order's receipt screen.",
-				"If email receipts fail for every order, the store's outgoing email is the usual cause — ask the site administrator whether the site can send email at all; many hosts need an SMTP plugin."
+				"Expand the log entry to identify the delivery path: an email address or server status identifies email delivery; a templateId without an email identifies PDF generation, download, save or sharing.",
+				"For email delivery, check the address and connection, then resend from the order's receipt screen. If every email fails, ask the site administrator to check outgoing email and SMTP configuration.",
+				"For a PDF failure, retry Download PDF, check the device's free storage and download permissions, then choose a writable save location or another available share target."
 			],
 			"logSources": [
 				"wp-admin-pos-logs"
