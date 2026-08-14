@@ -47,6 +47,7 @@ export type ErrorCode =
 	| 'PRODUCT999'
 	| 'LICENSE999'
 	| 'SYNC401'
+	| 'SYNC411'
 	| 'SYNC221'
 	| 'CHECKOUT401'
 	| 'PRODUCT411'
@@ -778,6 +779,22 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		introducedIn: '1.10.0',
 		evidence: 'monorepo#1137 inventory: engine.lane.tick, maintenance.lane.error',
 	},
+	SYNC411: {
+		code: 'SYNC411',
+		symbol: 'DEMAND_REQUEST_FLOOD',
+		domain: 'SYNC',
+		severity: 'warn',
+		safeAction: 'continue',
+		retryPolicy: 'automatic',
+		dataSafety: 'no-impact',
+		escalation: 'support-with-export',
+		summary: 'This device asked the store for data far more often than normal.',
+		docsBody:
+			'Nothing was slowed down or blocked, and no order data is affected — this is a detection-only alarm. Sustained request floods usually indicate an app problem (a screen re-requesting the same data in a loop) rather than anything you did. If this code keeps appearing, export diagnostics and contact support so the loop can be found and fixed.',
+		introducedIn: '1.10.0',
+		evidence:
+			'monorepo#1134 item 2 ruling (2026-08-14): demand path stays uncapped, flood detection only; runaway class monorepo#888',
+	},
 	SYNC221: {
 		code: 'SYNC221',
 		symbol: 'RECORD_CONFLICT',
@@ -1084,6 +1101,7 @@ export const ERROR_CODES = {
 	PRODUCT_UNEXPECTED: 'PRODUCT999',
 	LICENSE_UNEXPECTED: 'LICENSE999',
 	SYNC_TASK_CRASHED: 'SYNC401',
+	DEMAND_REQUEST_FLOOD: 'SYNC411',
 	RECORD_CONFLICT: 'SYNC221',
 	TOTALS_DIVERGED: 'CHECKOUT401',
 	BARCODE_CONFIG_UNAVAILABLE: 'PRODUCT411',

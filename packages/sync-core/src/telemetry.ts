@@ -72,6 +72,7 @@ export type SyncEventType =
 	| 'customer.browse-window.sort-rejected'
 	// demand
 	| 'demand.activity-counter-underflow'
+	| 'demand.flood-detected'
 	// engine
 	| 'engine.barcode-selector-hydrate-failed'
 	| 'engine.collection-reset'
@@ -250,6 +251,15 @@ export type SyncEventFieldsByType = {
 	'cadence.reconfigured': CadenceFields;
 	'cadence.backoff': CadenceFields;
 	'cadence.recovered': CadenceFields;
+	'demand.flood-detected': {
+		/** Demand-path requests observed in the breaching detector tick. */
+		readonly requests: number;
+		readonly threshold: number;
+		readonly windowMs: number;
+		/** How many consecutive ticks had breached when the alarm fired. */
+		readonly consecutiveTicks: number;
+		readonly scopeId: string;
+	};
 };
 
 /** `apply.pull` and `apply.delete` are both emitted by the same count helper. */

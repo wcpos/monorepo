@@ -644,6 +644,20 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "SYNC411",
+		"symbol": "DEMAND_REQUEST_FLOOD",
+		"domain": "SYNC",
+		"severity": "warn",
+		"safeAction": "continue",
+		"retryPolicy": "automatic",
+		"dataSafety": "no-impact",
+		"escalation": "support-with-export",
+		"summary": "This device asked the store for data far more often than normal.",
+		"docsBody": "Nothing was slowed down or blocked, and no order data is affected — this is a detection-only alarm. Sustained request floods usually indicate an app problem (a screen re-requesting the same data in a loop) rather than anything you did. If this code keeps appearing, export diagnostics and contact support so the loop can be found and fixed.",
+		"evidence": "monorepo#1134 item 2 ruling (2026-08-14): demand path stays uncapped, flood detection only; runaway class monorepo#888",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"code": "SYNC221",
 		"symbol": "RECORD_CONFLICT",
 		"domain": "SYNC",

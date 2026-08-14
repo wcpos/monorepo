@@ -1,0 +1,27 @@
+---
+title: "SYNC411: Demand request flood"
+sidebar_label: SYNC411
+description: "This device asked the store for data far more often than normal."
+---
+
+{/* GENERATED PAGE — do not edit. Source of truth: packages/utils/src/logger/error-registry.json in wcpos/monorepo. Regenerate with `pnpm generate:error-codes`. */}
+
+## What this means {#what-this-means}
+
+This device asked the store for data far more often than normal.
+
+Nothing was slowed down or blocked, and no order data is affected — this is a detection-only alarm. Sustained request floods usually indicate an app problem (a screen re-requesting the same data in a loop) rather than anything you did. If this code keeps appearing, export diagnostics and contact support so the loop can be found and fixed.
+
+## What to do {#what-to-do}
+
+You can keep working — WCPOS handles this automatically. WCPOS retries this automatically.
+
+## Your data {#your-data}
+
+No order or product data is affected. If this persists, export diagnostics and contact WCPOS support.
+
+## Details {#details}
+
+- **Code:** `SYNC411` (`DEMAND_REQUEST_FLOOD`)
+- **Severity:** warn
+- **Introduced in:** WCPOS 1.10.0

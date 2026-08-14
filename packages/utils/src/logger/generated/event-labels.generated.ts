@@ -33,6 +33,7 @@ export const SYNC_EVENT_TYPES = [
 	'coverage.require.outcome',
 	'customer.browse-window.sort-rejected',
 	'demand.activity-counter-underflow',
+	'demand.flood-detected',
 	'email.queue.deferred',
 	'email.queue.discarded',
 	'email.queue.failed',
@@ -305,6 +306,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.demand_activity_counter_underflow',
 		label: 'Sync activity tracking corrected itself',
+		introducedIn: '1.10.0',
+	},
+	'demand.flood-detected': {
+		type: 'demand.flood-detected',
+		domain: 'SYNC',
+		key: 'health.logs.event.demand_flood_detected',
+		label: 'Unusually heavy data loading detected',
+		descriptionKey: 'health.logs.event_description.demand_flood_detected',
+		description:
+			'This device requested data from your store far more often than normal for several minutes. Nothing was slowed down or blocked, but this can indicate an app problem worth reporting.',
 		introducedIn: '1.10.0',
 	},
 	'email.queue.deferred': {

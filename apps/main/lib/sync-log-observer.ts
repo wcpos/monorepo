@@ -527,6 +527,18 @@ export const CONFORMANCE_TABLE = {
 	},
 	// decided: invisible — the activity counter self-corrects without changing cashier work.
 	'demand.activity-counter-underflow': INVISIBLE,
+	// decided: visible — a sustained demand-path request flood means something on
+	// this device is asking in a loop (#888 class); Store health is where support
+	// looks first, and the #1134 item-2 ruling makes this detection-only, so the
+	// row is the ENTIRE intervention. Outcome 'unknown' on purpose: the flood is
+	// an anomaly observation, not a failed unit of work — nothing was blocked.
+	'demand.flood-detected': {
+		operationType: 'sync.coverage',
+		outcome: 'unknown',
+		code: 'SYNC411',
+		level: 'warn',
+		didWork: () => true,
+	},
 	// decided: visible — missing barcode settings can degrade product scanning.
 	'engine.barcode-selector-hydrate-failed': {
 		operationType: 'sync.startup',

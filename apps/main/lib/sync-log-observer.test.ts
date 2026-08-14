@@ -589,6 +589,38 @@ describe('createSyncLogObserver', () => {
 		expect(promoteRecorderMock).toHaveBeenCalledWith('maintenance.lane.error');
 	});
 
+	it('renders a demand-path flood as a durable coded warning with its evidence in context', () => {
+		observer.observe(
+			event({
+				type: 'demand.flood-detected',
+				level: 'warn',
+				message:
+					'Demand-path request flood: 450 requests in 60s (threshold 300) for 3 consecutive ticks',
+				fields: {
+					requests: 450,
+					threshold: 300,
+					windowMs: 60_000,
+					consecutiveTicks: 3,
+					scopeId: 'scope-1',
+				},
+			})
+		);
+
+		expect(rows[0]).toMatchObject({
+			level: 'warn',
+			code: 'SYNC411',
+			context: {
+				type: 'demand.flood-detected',
+				requests: 450,
+				threshold: 300,
+				windowMs: 60_000,
+				consecutiveTicks: 3,
+				scopeId: 'scope-1',
+			},
+			terminal: { operationType: 'sync.coverage', outcome: 'unknown' },
+		});
+	});
+
 	it('renders single-tab write leadership as a visible lifecycle warning', () => {
 		observer.observe(event({ type: 'engine.write-leader.degraded', level: 'warn' }));
 
