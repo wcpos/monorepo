@@ -22,6 +22,8 @@ export function sanitizeOutboundProductPayload<T extends Record<string, unknown>
 	}
 
 	const rawValues = (costOfGoodsSold as Record<string, unknown>).values;
+	const definedValueIsAdditive = (costOfGoodsSold as Record<string, unknown>)
+		.defined_value_is_additive;
 	const values: unknown[] = Array.isArray(rawValues) ? rawValues : [];
 	const writableValues = values.flatMap((entry) => {
 		if (typeof entry !== 'object' || entry === null) return [];
@@ -36,5 +38,13 @@ export function sanitizeOutboundProductPayload<T extends Record<string, unknown>
 		return rest as T;
 	}
 
-	return { ...payload, cost_of_goods_sold: { values: writableValues } };
+	return {
+		...payload,
+		cost_of_goods_sold: {
+			values: writableValues,
+			...(typeof definedValueIsAdditive === 'boolean'
+				? { defined_value_is_additive: definedValueIsAdditive }
+				: {}),
+		},
+	};
 }

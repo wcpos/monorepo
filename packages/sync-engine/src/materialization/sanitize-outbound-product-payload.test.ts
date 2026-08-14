@@ -28,6 +28,21 @@ describe('sanitizeOutboundProductPayload', () => {
 		});
 	});
 
+	it.each([true, false])('keeps variation defined_value_is_additive %s', (isAdditive) => {
+		const output = sanitizeOutboundProductPayload({
+			cost_of_goods_sold: {
+				values: [{ defined_value: 8, effective_value: 12 }],
+				total_value: 12,
+				defined_value_is_additive: isAdditive,
+			},
+		});
+
+		expect(output.cost_of_goods_sold).toEqual({
+			values: [{ defined_value: 8 }],
+			defined_value_is_additive: isAdditive,
+		});
+	});
+
 	it('keeps only finite numeric values', () => {
 		const output = sanitizeOutboundProductPayload({
 			cost_of_goods_sold: {
