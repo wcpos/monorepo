@@ -40,7 +40,11 @@ import type {
 	WooOrderPayload,
 } from '@wcpos/sync-core';
 
-import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
+import {
+	type BarcodeSelectors,
+	barcodeSelectorsFor,
+	type BarcodeSelectorsReader,
+} from '../materialization/barcode-selectors';
 import {
 	materializeGreedyPrunable,
 	materializeLocalOnly,
@@ -156,6 +160,16 @@ export type WriteAck = {
 	currentRevision: string | null;
 	document?: Record<string, unknown> | null;
 	/**
+	 * The acking SCOPE's live barcode-carrier READER (see
+	 * materialization/barcode-selectors: anything spanning awaits holds the
+	 * reader and calls it at the point of use — reconcile awaits its resident
+	 * lookup before projecting, so a snapshot taken at ack construction could
+	 * re-materialize `payload.barcode` by carriers a concurrent config poll
+	 * already replaced). Ack-document adoption re-materializes the payload, and
+	 * materializing without the scope's carriers would drop the stored barcode.
+	 */
+	barcodeSelectors?: BarcodeSelectorsReader;
+	/**
 	 * The RAW server document, kept even when `document` is deliberately withheld
 	 * from value adoption (the born-twice arm). Identity-only source for
 	 * `graftAckIdentity` (#818): taking an id off an existing server record is
@@ -267,7 +281,10 @@ function ackBookkeeping(options: {
 	collection: CollectionWriteFacet['collection'];
 	remoteIdField: CollectionWriteFacet['remoteIdField'];
 	createAckSource?: 'woo-rest';
-	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
+	documentPatchFromAckDocument: (
+		document: Record<string, unknown>,
+		barcodeSelectors?: BarcodeSelectors
+	) => Record<string, unknown>;
 	preserveMetaKeys?: string[];
 	graftAckIdentity?: AckIdentityGraft;
 	adoptPayload?: AckPayloadAdoption;
@@ -287,9 +304,11 @@ function ackBookkeeping(options: {
 			const doc = (await db.collections[collection].findOne(ack.recordId).exec()) as AckDoc | null;
 			if (!doc || signal?.aborted) return; // gone, or the scope switched — nothing to reconcile
 			let ackDocumentPatch: Record<string, unknown> | null = null;
-			if (documentPatchFromAckDocument && ack.document && ack.mutation.operation !== 'delete') {
+			if (ack.document && ack.mutation.operation !== 'delete') {
 				try {
-					ackDocumentPatch = documentPatchFromAckDocument(ack.document);
+					// Point-of-use read: the resident lookup above awaited, so only now
+					// are the carriers guaranteed current for this projection.
+					ackDocumentPatch = documentPatchFromAckDocument(ack.document, ack.barcodeSelectors?.());
 				} catch {
 					// The push contract allows a trimmed ack document (a bare `{ id }`,
 					// no uuid meta) the pull materializer cannot key. Adoption is
@@ -406,7 +425,20 @@ function createWriteFacet(input: {
 	parse: (body: unknown) => WooPayload[];
 	project: RecordProjection;
 	createAckSource?: 'woo-rest';
-	documentPatchFromAckDocument?: (document: Record<string, unknown>) => Record<string, unknown>;
+	/**
+	 * REQUIRED (#1231): every writeable collection must declare what the
+	 * resident adopts from a create/update ack document. The ack re-anchors
+	 * sync.revision to the server's post-write value, which blinds all three
+	 * staleness-detection tiers to any divergence — so an ack whose values are
+	 * dropped leaves server-derived fields stale with no layer left to heal
+	 * them. Wholesale projected adoption (catalogAckPatch) is the default
+	 * shape; orders declares trimmed-ack/money-precision rules via
+	 * adoptPayload on top. Opting OUT is not expressible by omission.
+	 */
+	documentPatchFromAckDocument: (
+		document: Record<string, unknown>,
+		barcodeSelectors?: BarcodeSelectors
+	) => Record<string, unknown>;
 	preserveMetaKeys?: string[];
 	graftAckIdentity?: AckIdentityGraft;
 	adoptPayload?: AckPayloadAdoption;
@@ -448,14 +480,42 @@ function createWriteFacet(input: {
 			collection: input.collection,
 			remoteIdField: input.remoteIdField,
 			...(input.createAckSource ? { createAckSource: input.createAckSource } : {}),
-			...(input.documentPatchFromAckDocument
-				? { documentPatchFromAckDocument: input.documentPatchFromAckDocument }
-				: {}),
+			documentPatchFromAckDocument: input.documentPatchFromAckDocument,
 			...(input.preserveMetaKeys ? { preserveMetaKeys: input.preserveMetaKeys } : {}),
 			...(input.graftAckIdentity ? { graftAckIdentity: input.graftAckIdentity } : {}),
 			...(input.adoptPayload ? { adoptPayload: input.adoptPayload } : {}),
 		}),
 	};
+}
+
+/**
+ * Ack adoption for targeted catalog collections (#1231): WooCommerce derives
+ * fields the client cannot compute (stock_status from a stock_quantity edit,
+ * date_modified, price rollups), and the ack re-anchors sync.revision to the
+ * server's post-write value — so a dropped ack document leaves those fields
+ * stale locally with the pull plane believing the row is current. Adopt the
+ * projected server document, minus the identity/bookkeeping keys `reconcile`
+ * owns (it re-stamps remoteId/sync/local itself after the spread; adopting
+ * `id` could collide with the primary key). Wholesale payload replacement is
+ * the documented default for collections without orders' trimmed-ack/money
+ * subtleties; a non-materializable ack document (bare `{ id }`, no uuid meta)
+ * throws in the projection and falls back to the bookkeeping-only ack.
+ */
+function catalogAckPatch(
+	project: RecordProjection,
+	document: Record<string, unknown>,
+	barcodeSelectors?: BarcodeSelectors
+): Record<string, unknown> {
+	const {
+		id: _id,
+		sync: _sync,
+		local: _local,
+		wooProductId: _wooProductId,
+		wooId: _wooId,
+		wooCustomerId: _wooCustomerId,
+		...patch
+	} = project(document as WooPayload, barcodeSelectors);
+	return patch;
 }
 
 const productsWriteFacet = createWriteFacet({
@@ -464,6 +524,8 @@ const productsWriteFacet = createWriteFacet({
 	pullPath: '/products',
 	parse: parseBareArray,
 	project: productDocument,
+	documentPatchFromAckDocument: (document, barcodeSelectors) =>
+		catalogAckPatch(productDocument, document, barcodeSelectors),
 });
 const variationsWriteFacet = createWriteFacet({
 	collection: 'variations',
@@ -471,13 +533,33 @@ const variationsWriteFacet = createWriteFacet({
 	pullPath: '/variations',
 	parse: parseVariationsEnvelope,
 	project: variationDocument,
+	documentPatchFromAckDocument: (document, barcodeSelectors) =>
+		catalogAckPatch(variationDocument, flattenVariationAckDocument(document), barcodeSelectors),
 });
+
+/**
+ * The variation push ack `document` is the SAME wrapper shape the pull
+ * envelope carries — `{ id, parent_id, payload, _rxdb_digest? }` with identity
+ * and the REST fields inside `payload` (Write_Controller::document_for) — so
+ * it must be flattened exactly like parseVariationsEnvelope flattens a pull
+ * row before the flat-payload projection can key it. Passing the wrapper
+ * straight through leaves no top-level meta_data, identifyRecord throws, and
+ * adoption silently degrades to the bookkeeping-only ack. A document that is
+ * already flat (defensive: no nested payload object) passes through untouched.
+ */
+function flattenVariationAckDocument(document: Record<string, unknown>): Record<string, unknown> {
+	if (typeof document.payload !== 'object' || document.payload === null) return document;
+	const [flattened] = parseVariationsEnvelope({ documents: [document] });
+	return flattened ?? document;
+}
 const customersWriteFacet = createWriteFacet({
 	collection: 'customers',
 	remoteIdField: 'wooCustomerId',
 	pullPath: '/customers',
 	parse: parseBareArray,
 	project: customerDocument,
+	documentPatchFromAckDocument: (document, barcodeSelectors) =>
+		catalogAckPatch(customerDocument, document, barcodeSelectors),
 });
 const couponsWriteFacet = createWriteFacet({
 	collection: 'coupons',
@@ -488,6 +570,10 @@ const couponsWriteFacet = createWriteFacet({
 	// Greedy reference pruning recognizes only server-sourced rows. Once Woo
 	// assigns the create's id, the coupon participates in authoritative pruning.
 	createAckSource: 'woo-rest',
+	// Woo normalizes coupon codes to lowercase and derives usage_count/date
+	// fields server-side — the ack document is the only prompt carrier of them.
+	documentPatchFromAckDocument: (document, barcodeSelectors) =>
+		catalogAckPatch(referenceDocument, document, barcodeSelectors),
 });
 /** The order facet retains its repository and pull-side materializer byte-for-byte. */
 const ordersWriteFacet = createWriteFacet({

@@ -47,6 +47,7 @@ function engineWith(input: {
 	diagnostics?: SyncObserver;
 	mode?: 'auto' | 'manual';
 	writeDrainPollMs?: number;
+	barcodeFields?: Record<string, string[]>;
 }): RxdbSyncEngine {
 	return createEngineHarness({
 		site: SITE,
@@ -57,7 +58,12 @@ function engineWith(input: {
 		now: input.now,
 		diagnostics: input.diagnostics,
 		connectivitySignal: input.connectivity,
-		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
+		routes: {
+			'/changes/config-fingerprint': {
+				fingerprints: {},
+				...(input.barcodeFields ? { barcode_fields: input.barcodeFields } : {}),
+			},
+		},
 		ports: {
 			...(input.uuid ? { uuid: input.uuid } : {}),
 		},
@@ -1232,6 +1238,285 @@ describe('write() + sync("write-drain") through the public handle', () => {
 					}),
 				})
 			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('adopts the update ack document so server-derived catalog fields land at ack time', async () => {
+		// The cashier zeroes stock_quantity; WooCommerce recomputes stock_status
+		// server-side and returns it in the push ack envelope. The resident (and
+		// its promoted grid/filter columns) must learn that at ack time — the ack
+		// re-anchors sync.revision, so the pull plane will treat the row as
+		// current and a dropped ack document leaves stock_status stale locally.
+		const ackDocument = {
+			...productPayload(0),
+			stock_status: 'outofstock',
+			date_modified_gmt: '2026-08-14T16:25:08',
+		};
+		const engine = engineWith({
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				return Response.json({
+					document: ackDocument,
+					currentRevision: 'sha256:after-stock-edit',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 1);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { ...productPayload(1), stock_quantity: 0 },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const row = await productJson(engine);
+			expect((row?.payload as Record<string, unknown>).stock_status).toBe('outofstock');
+			expect((row?.payload as Record<string, unknown>).date_modified_gmt).toBe(
+				'2026-08-14T16:25:08'
+			);
+			expect(row?.stockStatus).toBe('outofstock');
+			expect(row?.sync).toMatchObject({ revision: 'sha256:after-stock-edit' });
+			expect(row?.local).toMatchObject({ dirty: false, pendingMutationIds: [] });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('adopts the update ack document for variations too', async () => {
+		const VARIATION_ID = 601;
+		const variationPayload = (stockQuantity: number): Record<string, unknown> => ({
+			id: VARIATION_ID,
+			parent_id: 50,
+			sku: 'VAR-1',
+			price: '4.20',
+			stock_status: 'instock',
+			stock_quantity: stockQuantity,
+			attributes: [],
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_FOLLOW_UP }],
+		});
+		const engine = engineWith({
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				// The REAL wire shape (Write_Controller::document_for): the variation
+				// ack document is the pull-envelope WRAPPER — identity and REST
+				// fields nested under `payload`, id/parent_id on the wrapper.
+				const flat: Record<string, unknown> = {
+					...variationPayload(0),
+					stock_status: 'outofstock',
+				};
+				const { id, parent_id, ...inner } = flat;
+				return Response.json({
+					document: { id, parent_id, payload: inner },
+					currentRevision: 'sha256:variation-after-stock-edit',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const facet = writeFacetFor('variations');
+			if (!facet) throw new Error('no variations write facet');
+			await facet.upsertServerDocument(
+				scope.database,
+				facet.documentFromServerPayload(variationPayload(1))
+			);
+			await engine.write({
+				collection: 'variations',
+				operation: 'update',
+				recordId: UUID_FOLLOW_UP,
+				payload: { ...variationPayload(1), stock_quantity: 0 },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const doc = await scope.database.collections.variations.findOne(UUID_FOLLOW_UP).exec();
+			const row = doc?.toJSON() as Record<string, unknown>;
+			expect((row.payload as Record<string, unknown>).stock_status).toBe('outofstock');
+			expect(row.stockStatus).toBe('outofstock');
+			expect(row.parentId).toBe(50);
+			expect(row.sync).toMatchObject({ revision: 'sha256:variation-after-stock-edit' });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('ack adoption reads barcode carriers at point of use, not ack construction', async () => {
+		// The WriteAck carries the live READER (barcode-selectors contract):
+		// reconcile awaits its resident lookup before projecting, so carriers
+		// swapped by a config poll in that window must win over whatever was
+		// current when the ack was constructed.
+		const engine = engineWith({ fetch: async () => Response.json({}) });
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 1);
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const facet = writeFacetFor('products');
+			if (!facet) throw new Error('no products write facet');
+			let carriers: { products: string[]; variations: string[] } | undefined;
+			const ack = {
+				mutation: { mutationId: 'mut-live-reader', operation: 'update' as const, recordId: UUID_A },
+				recordId: UUID_A,
+				remoteId: PRODUCT_ID,
+				currentRevision: 'sha256:live-reader',
+				document: { ...productPayload(0), sku: 'LIVE-77' },
+				barcodeSelectors: () => carriers,
+			};
+			// The swap lands AFTER the ack exists but BEFORE reconcile runs — a
+			// snapshot taken at construction would materialize no barcode at all.
+			carriers = { products: ['sku'], variations: ['sku'] };
+			await facet.reconcile(scope.database, ack);
+			const row = await productJson(engine);
+			expect((row?.payload as Record<string, unknown>).barcode).toBe('LIVE-77');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('ack adoption derives payload.barcode by the scope carriers in force', async () => {
+		// The adoption re-materializes the payload; without the scope's live
+		// selectors on the ack that projection would drop the stored barcode.
+		const ackDocument = {
+			...productPayload(0),
+			sku: 'BAR-42',
+			stock_status: 'outofstock',
+		};
+		const engine = engineWith({
+			barcodeFields: { products: ['sku'], variations: ['sku'] },
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				return Response.json({
+					document: ackDocument,
+					currentRevision: 'sha256:barcode-carriers',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 1);
+			await engine.write({
+				collection: 'products',
+				operation: 'update',
+				recordId: UUID_A,
+				payload: { ...productPayload(1), sku: 'BAR-42', stock_quantity: 0 },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const row = await productJson(engine);
+			expect((row?.payload as Record<string, unknown>).barcode).toBe('BAR-42');
+			expect((row?.payload as Record<string, unknown>).stock_status).toBe('outofstock');
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('adopts the update ack document for customers', async () => {
+		const CUSTOMER_ID = 701;
+		const customerPayload = (email: string): Record<string, unknown> => ({
+			id: CUSTOMER_ID,
+			email,
+			first_name: 'Pat',
+			last_name: 'Probe',
+			role: 'customer',
+			date_modified_gmt: '2026-08-01T00:00:00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_CLAIM }],
+		});
+		const engine = engineWith({
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				// The server normalizes the email and bumps date_modified.
+				return Response.json({
+					document: {
+						...customerPayload('pat@example.test'),
+						date_modified_gmt: '2026-08-14T17:00:00',
+					},
+					currentRevision: 'sha256:customer-after-edit',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const facet = writeFacetFor('customers');
+			if (!facet) throw new Error('no customers write facet');
+			await facet.upsertServerDocument(
+				scope.database,
+				facet.documentFromServerPayload(customerPayload('old@example.test'))
+			);
+			await engine.write({
+				collection: 'customers',
+				operation: 'update',
+				recordId: UUID_CLAIM,
+				payload: { ...customerPayload('old@example.test'), email: 'PAT@Example.Test' },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const doc = await scope.database.collections.customers.findOne(UUID_CLAIM).exec();
+			const row = doc?.toJSON() as Record<string, unknown>;
+			expect((row.payload as Record<string, unknown>).email).toBe('pat@example.test');
+			expect((row.payload as Record<string, unknown>).date_modified_gmt).toBe(
+				'2026-08-14T17:00:00'
+			);
+			expect(row.wooCustomerId).toBe(CUSTOMER_ID);
+			expect(row.sync).toMatchObject({ revision: 'sha256:customer-after-edit' });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('adopts the update ack document for coupons (server-normalized code, usage_count)', async () => {
+		const COUPON_ID = 801;
+		const couponPayload = (code: string, usageCount: number): Record<string, unknown> => ({
+			id: COUPON_ID,
+			code,
+			amount: '10.00',
+			usage_count: usageCount,
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_MINT }],
+		});
+		const engine = engineWith({
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				// Woo lowercases coupon codes and owns usage_count.
+				return Response.json({
+					document: couponPayload('summer10', 3),
+					currentRevision: 'sha256:coupon-after-edit',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const facet = writeFacetFor('coupons');
+			if (!facet) throw new Error('no coupons write facet');
+			await facet.upsertServerDocument(
+				scope.database,
+				facet.documentFromServerPayload(couponPayload('OLD10', 0))
+			);
+			await engine.write({
+				collection: 'coupons',
+				operation: 'update',
+				recordId: UUID_MINT,
+				payload: { ...couponPayload('SUMMER10', 0) },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const doc = await scope.database.collections.coupons.findOne(UUID_MINT).exec();
+			const row = doc?.toJSON() as Record<string, unknown>;
+			expect((row.payload as Record<string, unknown>).code).toBe('summer10');
+			expect((row.payload as Record<string, unknown>).usage_count).toBe(3);
+			expect(row.sync).toMatchObject({ revision: 'sha256:coupon-after-edit' });
 		} finally {
 			await engine.dispose();
 		}
