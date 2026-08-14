@@ -190,6 +190,34 @@ describe('drainMutationQueue — order conflict auto-recovery (#1204)', () => {
 		expect((await queue.all())[0]).toMatchObject({ status: 'rejected' });
 	});
 
+	it('runs the existing 428 revision recovery after the conflict retry', async () => {
+		const { queue, server, push } = await harness(mut());
+		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });
+		let attempts = 0;
+		server.script(() => {
+			attempts += 1;
+			return attempts === 2 ? { kind: 'precondition_required' } : undefined;
+		});
+		const refreshRevision = vi.fn(async () => 'sha256:server-moved');
+
+		const result = await drainMutationQueue({
+			queue,
+			push,
+			autoRecoverConflict: () => true,
+			refreshRevision,
+		});
+
+		expect(result.pushed).toBe(1);
+		expect(result.rejected).toEqual([]);
+		expect(await queue.all()).toEqual([]);
+		expect(refreshRevision).toHaveBeenCalledOnce();
+		expect(server.received.map((envelope) => envelope.baseRevision)).toEqual([
+			'sha256:stale',
+			'sha256:server-moved',
+			'sha256:server-moved',
+		]);
+	});
+
 	it('does not recover when the host supplies no policy (every legacy caller unchanged)', async () => {
 		const { queue, server, push } = await harness(mut());
 		server.seed('order-A', { id: 900, revision: 'sha256:server-moved', collection: 'orders' });

@@ -584,7 +584,9 @@ export type RxdbSyncEngine = {
 	 * periodic-class failures — a failed tick reports { status: 'error' } and
 	 * self-heals next tick (invariant 5); post-dispose calls reject. */
 	sync(lane?: EngineLane, options?: { signal?: AbortSignal }): Promise<SyncReport>;
-	events(cb: (e: EngineEvent) => void): Unsubscribe;
+	/** Subscribe to engine events. A mutation-specific replay closes the gap
+	 * between `write()` returning its receipt and an outcome waiter subscribing. */
+	events(cb: (e: EngineEvent) => void, options?: { replayWriteOutcomeFor?: string }): Unsubscribe;
 	status(): EngineStatus;
 	/** Emits the current status immediately, then coalesced status snapshots as it changes. */
 	statusChanges(cb: (status: EngineStatus) => void): Unsubscribe;
@@ -728,6 +730,7 @@ export function createRxdbSyncEngine(
 	const localCoverageByScopeId = new Map<string, LocalCoverage>();
 	const dbSubscribers = new Set<(db: RxDatabase | null) => void>();
 	const eventSubscribers = new Set<(e: EngineEvent) => void>();
+	const recentWriteOutcomes = new Map<string, EngineEvent>();
 	const statusSubscribers = new Set<(status: EngineStatus) => void>();
 	let statusNotificationQueued = false;
 	const scheduleStatusChange = (): void => {
@@ -1057,6 +1060,21 @@ export function createRxdbSyncEngine(
 	}
 
 	const emitEngineEvent = (event: EngineEvent): void => {
+		if (
+			(event.type === 'write-acknowledged' ||
+				event.type === 'write-ack-rematerialized' ||
+				event.type === 'write-annihilated' ||
+				event.type === 'write-conflict' ||
+				event.type === 'write-rejected') &&
+			'mutationId' in event
+		) {
+			recentWriteOutcomes.delete(event.mutationId);
+			recentWriteOutcomes.set(event.mutationId, event);
+			if (recentWriteOutcomes.size > 256) {
+				const oldestMutationId = recentWriteOutcomes.keys().next().value;
+				if (oldestMutationId !== undefined) recentWriteOutcomes.delete(oldestMutationId);
+			}
+		}
 		for (const cb of [...eventSubscribers]) {
 			try {
 				cb(event);
@@ -1973,9 +1991,23 @@ export function createRxdbSyncEngine(
 					: {}),
 			});
 		},
-		events: (cb) => {
+		events: (cb, options) => {
 			assertNotDisposed();
 			eventSubscribers.add(cb);
+			const replay = options?.replayWriteOutcomeFor
+				? recentWriteOutcomes.get(options.replayWriteOutcomeFor)
+				: undefined;
+			if (replay) {
+				try {
+					cb(replay);
+				} catch (error) {
+					diagnostics({
+						type: 'engine.listener-error',
+						level: 'error',
+						message: `events() replay listener threw: ${error instanceof Error ? error.message : String(error)}`,
+					});
+				}
+			}
 			return () => {
 				eventSubscribers.delete(cb);
 			};
@@ -2037,6 +2069,7 @@ export function createRxdbSyncEngine(
 				censusPublisher.dispose();
 				dbSubscribers.clear();
 				eventSubscribers.clear();
+				recentWriteOutcomes.clear();
 				// One synchronous, fully settled snapshot (disposed, ungated, zero
 				// scopes) before the set clears — the queued microtask would fire
 				// after the clear and monitors would never see the terminal state.

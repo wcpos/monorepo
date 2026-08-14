@@ -51,6 +51,8 @@ export function awaitWriteOutcome(
 			settle();
 		};
 
+		// Keep the existing event switch readable while supplying the replay selector.
+		// prettier-ignore
 		unsubscribe = engine.events((event) => {
 			if (
 				!TERMINAL_WRITE_EVENTS.has(event.type) ||
@@ -76,7 +78,7 @@ export function awaitWriteOutcome(
 					});
 					break;
 			}
-		});
+		}, { replayWriteOutcomeFor: mutationId });
 		if (settled) unsubscribe();
 
 		void engine.sync('write-drain').catch((error) => finish(() => reject(error)));

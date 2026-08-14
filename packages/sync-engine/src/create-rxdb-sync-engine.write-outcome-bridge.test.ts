@@ -181,6 +181,36 @@ describe('cross-tab write outcomes (#1209)', () => {
 		}
 	});
 
+	it('replays an outcome that reached the follower before its waiter subscribed', async () => {
+		const server = createFakeWriteServer();
+		server.seed(ORDER_ID, { id: 900, revision: 'sha256:client-held', collection: 'orders' });
+		const tabs = twoTabs(server.fetch);
+		try {
+			await insertServerOrder(tabs.leader.engine);
+			const receipt = await tabs.leader.engine.write({
+				collection: 'orders',
+				operation: 'update',
+				recordId: ORDER_ID,
+				payload: { status: 'completed' },
+			});
+			// The leader settles before the follower creates its outcome waiter — the
+			// race the eager subscriptions in the other tests cannot exercise.
+			await tabs.leader.engine.sync('write-drain');
+
+			const heard: EngineEvent[] = [];
+			const unsubscribe = tabs.follower.engine.events((event) => heard.push(event), {
+				replayWriteOutcomeFor: receipt.mutationId,
+			});
+			unsubscribe();
+
+			expect(outcomesFor(heard, receipt.mutationId)).toEqual([
+				expect.objectContaining({ type: 'write-acknowledged', mutationId: receipt.mutationId }),
+			]);
+		} finally {
+			await tabs.dispose();
+		}
+	});
+
 	it('composes with #1204: a 409 that auto-recovers reaches the follower as ONE success', async () => {
 		const server = createFakeWriteServer();
 		// The server moved on without the client — the #1204 wedge, whose 409

@@ -143,4 +143,35 @@ describe('awaitWriteOutcome', () => {
 		);
 		expect(calls).toEqual(['events', 'sync']);
 	});
+
+	it('requests a replay for an outcome that arrived before it subscribed', async () => {
+		const cached: EngineEvent = {
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			status: 403,
+			reason: 'woocommerce_rest_cannot_delete',
+		};
+		const events = jest.fn(
+			(callback: (event: EngineEvent) => void, options?: { replayWriteOutcomeFor?: string }) => {
+				if (options?.replayWriteOutcomeFor === cached.mutationId) callback(cached);
+				return jest.fn();
+			}
+		);
+		const engine = {
+			events,
+			sync: jest.fn().mockResolvedValue({ status: 'ok' }),
+		} as unknown as RxdbSyncEngine;
+
+		await expect(
+			awaitWriteOutcome(engine, cached.mutationId, { timeoutMs: 25 })
+		).rejects.toMatchObject({
+			name: 'WriteOutcomeError',
+			reason: 'woocommerce_rest_cannot_delete',
+		});
+		expect(events).toHaveBeenCalledWith(expect.any(Function), {
+			replayWriteOutcomeFor: cached.mutationId,
+		});
+	});
 });

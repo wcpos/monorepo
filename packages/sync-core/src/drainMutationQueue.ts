@@ -724,14 +724,45 @@ export async function drainMutationQueue(input: {
 					if (input.signal?.aborted) {
 						break;
 					}
-					if (isNonRetryable(retryError)) {
+					if ((retryError as { status?: unknown } | null)?.status === 428) {
+						let revision: string | null | undefined;
+						try {
+							revision = await input.refreshRevision?.(reanchored);
+						} catch {
+							if (input.signal?.aborted) break;
+							failed += 1;
+							blockedRecords.add(mutation.recordId);
+							await applyBackoff({ ...reanchored, status: 'pending' });
+							continue;
+						}
+						if (!revision) {
+							if (reanchored.operation === 'create') await deadLetter(reanchored, retryError);
+							else await parkNeedsRevision(reanchored);
+							continue;
+						}
+						const restamped = { ...reanchored, baseRevision: revision };
+						try {
+							retry = await input.push(restamped);
+						} catch (refreshRetryError) {
+							if (input.signal?.aborted) break;
+							if (isNonRetryable(refreshRetryError)) {
+								await deadLetter(restamped, refreshRetryError);
+							} else {
+								failed += 1;
+								blockedRecords.add(mutation.recordId);
+								await applyBackoff({ ...restamped, status: 'pending' });
+							}
+							continue;
+						}
+					} else if (isNonRetryable(retryError)) {
 						await deadLetter(reanchored, retryError);
+						continue;
 					} else {
 						failed += 1;
 						blockedRecords.add(mutation.recordId);
 						await applyBackoff({ ...reanchored, status: 'pending' });
+						continue;
 					}
-					continue;
 				}
 				if (input.signal?.aborted) {
 					break;
