@@ -70,6 +70,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.customer_browse_window_sort_rejected');
 		case 'demand.activity-counter-underflow':
 			return t('health.logs.event.demand_activity_counter_underflow');
+		case 'demand.flood-detected':
+			return t('health.logs.event.demand_flood_detected');
 		case 'email.queue.deferred':
 			return t('health.logs.event.email_queue_deferred');
 		case 'email.queue.discarded':
@@ -203,6 +205,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.apply_refetch');
 		case 'coverage.require.outcome':
 			return t('health.logs.event_description.coverage_require_outcome');
+		case 'demand.flood-detected':
+			return t('health.logs.event_description.demand_flood_detected');
 		case 'engine.barcode-selector-hydrate-failed':
 			return t('health.logs.event_description.engine_barcode_selector_hydrate_failed');
 		case 'engine.collection-reset':

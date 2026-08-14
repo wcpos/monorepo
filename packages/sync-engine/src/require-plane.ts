@@ -66,6 +66,7 @@ import {
 	seedReferenceLanes,
 	seedTargetedOrderSchedulerTask,
 } from './scheduler';
+import { createDemandFloodDetector } from './demand-flood-detector';
 import { REFERENCE_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
 import { withLedgerRecovery } from './local-coverage/ledger-storage-recovery';
@@ -269,6 +270,15 @@ export type RequirePlane = {
 };
 
 export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
+	// #1134 item 2 (owner ruling 2026-08-14): the demand path stays UNCAPPED —
+	// no request is ever delayed, queued, or dropped here — but a passive
+	// detector counts every request this plane executes and raises a durable
+	// alarm when the sustained volume exceeds what any legitimate burst
+	// produces (a runaway declare/refetch loop, the #888 class).
+	const floodDetector = createDemandFloodDetector({
+		diagnostics: deps.diagnostics,
+		...(deps.now !== undefined ? { now: deps.now } : {}),
+	});
 	const queue: QueuedRequirement[] = [];
 	const activeSearches = new Map<string, QueuedRequirement>();
 	let seq = 0;
@@ -419,6 +429,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			// then absorb helper-provided signals above it. Passing init.signal to a
 			// scope-bound fetcher forces AbortSignal.any, which Hermes lacks.
 			const requirementFetcher: Fetcher = async (url, init) => {
+				// EVERY demand-path request funnels through this fetcher (targeted
+				// pulls, refreshes, searches, and scheduler drains all bind it), so
+				// this is THE counting seam. Count-then-proceed: detection only.
+				floodDetector.countRequest(bound.scopeId);
 				const ticketSignal = init?.signal;
 				const combined = new AbortController();
 				const abort = () => combined.abort();

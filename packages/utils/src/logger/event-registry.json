@@ -168,6 +168,13 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "demand.flood-detected",
+		"domain": "SYNC",
+		"label": "Unusually heavy data loading detected",
+		"description": "This device requested data from your store far more often than normal for several minutes. Nothing was slowed down or blocked, but this can indicate an app problem worth reporting.",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "email.queue.deferred",
 		"domain": "PRINT",
 		"label": "Could not email a receipt yet — will try again",
