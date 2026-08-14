@@ -19,6 +19,8 @@ import { BehaviorSubject } from 'rxjs';
 
 import { TranslationProvider, useT } from './index';
 
+import type { i18n } from 'i18next';
+
 jest.mock('expo-localization', () => ({
 	getLocales: () => [{ languageTag: 'en-US', languageCode: 'en' }],
 }));
@@ -142,6 +144,7 @@ describe('locale change', () => {
 
 	it('keeps the current locale when reverting while another locale is loading', async () => {
 		const locale$ = setupLocale('en_US');
+		const i18nInstances: i18n[] = [];
 		let finishFrenchFetch!: (response: Response) => void;
 		const frenchFetchStarted = new Promise<void>((resolveStarted) => {
 			mockFetch.mockImplementation((url: string) => {
@@ -157,9 +160,17 @@ describe('locale change', () => {
 				} as unknown as Response);
 			});
 		});
+		function Probe() {
+			const instance = React.useContext(I18nContext)!.i18n;
+			React.useEffect(() => {
+				i18nInstances.push(instance);
+			}, [instance]);
+			return null;
+		}
 
 		render(
 			<TranslationProvider>
+				<Probe />
 				<React.Suspense fallback={null}>
 					<Label id="label" />
 				</React.Suspense>
@@ -167,17 +178,30 @@ describe('locale change', () => {
 		);
 
 		await waitFor(() => expect(screen.getByTestId('label').textContent).toBe('Store Name'));
+		await waitFor(() => expect(i18nInstances[0]).toBeDefined());
+		const [i18nInstance] = i18nInstances;
 
 		await act(async () => locale$.next('fr_FR'));
 		await frenchFetchStarted;
 		await act(async () => locale$.next('en_US'));
+		const frenchLoadCompleted = new Promise<void>((resolve) => {
+			const onLoaded = (loaded: Record<string, unknown>) => {
+				if (loaded.fr_FR) {
+					i18nInstance.off('loaded', onLoaded);
+					resolve();
+				}
+			};
+			i18nInstance.on('loaded', onLoaded);
+		});
 		await act(async () => {
 			finishFrenchFetch({
 				ok: true,
 				json: async () => FRENCH,
 			} as unknown as Response);
+			await frenchLoadCompleted;
 		});
 
+		expect(i18nInstance.language).toBe('en_US');
 		expect(screen.getByTestId('label').textContent).toBe('Store Name');
 	});
 });
