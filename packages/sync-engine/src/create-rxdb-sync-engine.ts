@@ -1680,14 +1680,20 @@ export function createRxdbSyncEngine(
 	// finish half if that contract is ever broken, then re-raises.
 	const tickLaneWithEvents = async (
 		name: EngineLane,
-		signal?: AbortSignal
+		signal?: AbortSignal,
+		// A variant tick of the SAME registered lane (the scoped census check) — the
+		// override keeps lane events, activity counters, and the census publish on
+		// the standard path instead of minting a parallel uninstrumented lane.
+		tickOverride?: (signal?: AbortSignal) => Promise<SyncReport>
 	): Promise<SyncReport> => {
 		const ownedCollections = laneRegistryEntry(name).collections;
 		for (const collection of ownedCollections) changeCollectionActivity(collection, 1);
 		emitEngineEvent({ type: 'lane-start', lane: name });
 		let report: SyncReport;
 		try {
-			report = await dispatchLaneTick(name, signal);
+			report = await (tickOverride !== undefined
+				? tickOverride(signal)
+				: dispatchLaneTick(name, signal));
 		} catch (error) {
 			emitEngineEvent({
 				type: 'lane-finish',
@@ -1953,9 +1959,26 @@ export function createRxdbSyncEngine(
 					reason: 'lifecycle operation pending',
 				};
 			}
-			const censusReport = await maintenanceLanes.refreshCensus(name, options?.signal);
-			const changeReport = await tickLaneWithEvents('change-signal', options?.signal);
-			recordLaneTick(changeReport, startedAt);
+			// The forced census rides the REGISTERED query-total-retry lane (per-tick
+			// option), so status().lanes lastError, lane events, diagnostics, and the
+			// census publish all flow through the same instrumentation as any tick.
+			const censusReport = recordLaneTick(
+				await tickLaneWithEvents('query-total-retry', options?.signal, (signal) =>
+					maintenanceLanes.queryTotalRetry === null
+						? Promise.resolve<SyncReport>({
+								lane: 'query-total-retry',
+								status: 'skipped',
+								reason: 'no queryTotal port provided',
+							})
+						: maintenanceLanes.queryTotalRetry.tick(signal, { forceCensusCollection: name })
+				),
+				startedAt
+			);
+			const changeStartedAt = nowMs();
+			const changeReport = recordLaneTick(
+				await tickLaneWithEvents('change-signal', options?.signal),
+				changeStartedAt
+			);
 			const reports = [censusReport, changeReport];
 			const worst = reports.some((report) => report.status === 'error')
 				? ('error' as const)

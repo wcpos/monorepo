@@ -105,6 +105,11 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		expect(
 			events.filter((event) => event.type === 'lane-start' && event.lane === 'change-signal')
 		).toHaveLength(1);
+		// The forced probe rides the registered query-total-retry lane, so its
+		// events flow through the standard instrumentation.
+		expect(
+			events.filter((event) => event.type === 'lane-start' && event.lane === 'query-total-retry')
+		).toHaveLength(1);
 		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(91));
 
 		unsubscribe();
@@ -150,6 +155,53 @@ describe('maintenance lanes through the public handle (slice 5d)', () => {
 		await expect(engine.checkCollection('unknown' as never)).rejects.toThrow(
 			'Unknown sync collection "unknown"'
 		);
+		await engine.dispose();
+	});
+
+	it('surfaces a failed forced census on the registered lane and retries it on the next manual check', async () => {
+		let failProbe = true;
+		const fetchWooQueryTotal = vi.fn(async () => {
+			if (failProbe) throw new Error('HTTP 502');
+			return 77;
+		});
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 2_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({
+			collection: 'products',
+			status: 'error',
+		});
+		expect(engine.status().lanes['query-total-retry'].lastError).toContain(
+			'Census refresh failed for products'
+		);
+		expect(
+			events.some(
+				(event) =>
+					event.type === 'lane-finish' &&
+					event.lane === 'query-total-retry' &&
+					event.status === 'error'
+			)
+		).toBe(true);
+
+		// The failure left the request state 'failed' mid-backoff (the fixed clock
+		// never reaches retryAfterMs) — the next manual check must wake it NOW
+		// instead of skipping until the periodic lane's backoff expires.
+		failProbe = false;
+		fetchWooQueryTotal.mockClear();
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({ status: 'ran' });
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(77));
+		expect(engine.status().lanes['query-total-retry'].lastError).toBeNull();
+
+		unsubscribe();
 		await engine.dispose();
 	});
 

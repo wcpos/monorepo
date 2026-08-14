@@ -143,8 +143,14 @@ type MaintenanceLaneDeps = {
 	isServerRetryAfterActive?: (atMs: number) => boolean;
 };
 
+/** Per-tick options — only the query-total lane reads them (the scoped manual check). */
+export type MaintenanceLaneTickOptions = {
+	/** Probe this one census key now, bypassing its freshness window; skip the full scan. */
+	forceCensusCollection?: SyncCollectionName;
+};
+
 export type MaintenanceLane = {
-	tick(signal?: AbortSignal): Promise<MaintenanceLaneReport>;
+	tick(signal?: AbortSignal, options?: MaintenanceLaneTickOptions): Promise<MaintenanceLaneReport>;
 	lastError(): string | null;
 };
 
@@ -152,11 +158,6 @@ export type MaintenanceLanes = {
 	[
 		Entry in MaintenanceLaneRegistryEntry as Entry['targetKey']
 	]: Entry['laneName'] extends 'query-total-retry' ? MaintenanceLane | null : MaintenanceLane;
-} & {
-	refreshCensus(
-		collection: SyncCollectionName,
-		signal?: AbortSignal
-	): Promise<MaintenanceLaneReport>;
 };
 
 type MaintenanceLaneBodyReport = {
@@ -165,6 +166,36 @@ type MaintenanceLaneBodyReport = {
 	status?: 'skipped';
 	reason?: string;
 };
+
+/** A census request state runnable NOW — shared by the periodic scan's seeding and the forced per-collection check. */
+function censusRunnableState(
+	collection: SyncCollectionName,
+	nowMs: number
+): QueryTotalRequestState {
+	const queryKey = censusQueryKey(collection);
+	return {
+		queryKey,
+		status: 'failed',
+		ownerId: null,
+		claimedUntilMs: null,
+		attempt: 0,
+		retryAfterMs: nowMs,
+		updatedAtMs: nowMs,
+		request: {
+			queryKey,
+			method: 'GET',
+			endpoint: collection,
+			params: {
+				page: 1,
+				per_page: 1,
+				// Count what the till can sell: published products, and their
+				// published variations via the plugin's cross-parent route.
+				...(collection === 'products' || collection === 'variations' ? { status: 'publish' } : {}),
+			},
+			totalHeader: 'X-WP-Total',
+		},
+	};
+}
 
 export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLanes {
 	const now = deps.now ?? (() => Date.now());
@@ -186,12 +217,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			scopeId: string,
 			signal: AbortSignal,
 			fetcher: MaintenanceLaneDeps['fetcher'],
-			tick: { starvation: boolean }
+			tick: { starvation: boolean } & MaintenanceLaneTickOptions
 		) => Promise<MaintenanceLaneBodyReport>
 	): MaintenanceLane {
 		let lastError: string | null = null;
 		return {
-			tick: async (callerSignal) => {
+			tick: async (callerSignal, options) => {
 				let starvation = false;
 				let starvationReservationAtMs: number | null = null;
 				if (callerSignal?.aborted) {
@@ -282,6 +313,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 							wrote = await bound.guardWrite(async () => {
 								bodyReport = await body(db, bound.scopeId, signal, boundFetch, {
 									starvation,
+									...(options?.forceCensusCollection !== undefined
+										? { forceCensusCollection: options.forceCensusCollection }
+										: {}),
 								});
 								if (bodyReport.status !== 'skipped' && pressureDeferredLanes.has(name)) {
 									lastRanAtMs.set(name, now());
@@ -485,51 +519,51 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 					trigger: 'query-total',
 					create: () => new RxQueryTotalCacheRepository(db as never),
 				});
-				const censusQueryKeys = SUPPORTED_CENSUS_COLLECTIONS.map(censusQueryKey);
-				const [censusCacheEntries, censusRequestStates] = await Promise.all([
-					cacheRepository.readForQueryKeys(censusQueryKeys),
-					stateRepository.readForQueryKeys(censusQueryKeys),
-				]);
-				const censusCacheByKey = new Map(
-					censusCacheEntries.map((entry) => [entry.queryKey, entry])
-				);
-				const censusStateByKey = new Map(
-					censusRequestStates.map((state) => [state.queryKey, state])
-				);
-				for (const collection of SUPPORTED_CENSUS_COLLECTIONS) {
-					const queryKey = censusQueryKey(collection);
-					const cacheEntry = censusCacheByKey.get(queryKey);
-					if (cacheEntry && cacheEntry.freshUntilMs > nowMs) continue;
-					const currentState = censusStateByKey.get(queryKey);
-					if (currentState && currentState.status !== 'idle') continue;
-					const runnableState = {
-						queryKey,
-						status: 'failed',
-						ownerId: null,
-						claimedUntilMs: null,
-						attempt: 0,
-						retryAfterMs: nowMs,
-						updatedAtMs: nowMs,
-						request: {
-							queryKey,
-							method: 'GET',
-							endpoint: collection,
-							params: {
-								page: 1,
-								per_page: 1,
-								// Count what the till can sell: published products, and their
-								// published variations via the plugin's cross-parent route.
-								...(collection === 'products' || collection === 'variations'
-									? { status: 'publish' }
-									: {}),
-							},
-							totalHeader: 'X-WP-Total',
-						},
-					} satisfies QueryTotalRequestState;
+				const forced = tick.forceCensusCollection;
+				if (forced !== undefined) {
+					const queryKey = censusQueryKey(forced);
+					const [currentState] = await stateRepository.readForQueryKeys([queryKey]);
+					// Only a live claim blocks the forced probe — that owner's result lands
+					// in the shared cache anyway. A failed state mid-backoff or an expired
+					// in-flight lease is exactly what the manual retry must override.
+					if (
+						currentState &&
+						currentState.status === 'in-flight' &&
+						currentState.claimedUntilMs !== null &&
+						currentState.claimedUntilMs > nowMs
+					) {
+						return { summary: null, status: 'skipped', reason: 'query total request in flight' };
+					}
+					const runnableState = censusRunnableState(forced, nowMs);
 					if (currentState) {
 						await stateRepository.wake(currentState, runnableState);
 					} else {
 						await stateRepository.claimNew(runnableState);
+					}
+				} else {
+					const censusQueryKeys = SUPPORTED_CENSUS_COLLECTIONS.map(censusQueryKey);
+					const [censusCacheEntries, censusRequestStates] = await Promise.all([
+						cacheRepository.readForQueryKeys(censusQueryKeys),
+						stateRepository.readForQueryKeys(censusQueryKeys),
+					]);
+					const censusCacheByKey = new Map(
+						censusCacheEntries.map((entry) => [entry.queryKey, entry])
+					);
+					const censusStateByKey = new Map(
+						censusRequestStates.map((state) => [state.queryKey, state])
+					);
+					for (const collection of SUPPORTED_CENSUS_COLLECTIONS) {
+						const queryKey = censusQueryKey(collection);
+						const cacheEntry = censusCacheByKey.get(queryKey);
+						if (cacheEntry && cacheEntry.freshUntilMs > nowMs) continue;
+						const currentState = censusStateByKey.get(queryKey);
+						if (currentState && currentState.status !== 'idle') continue;
+						const runnableState = censusRunnableState(collection, nowMs);
+						if (currentState) {
+							await stateRepository.wake(currentState, runnableState);
+						} else {
+							await stateRepository.claimNew(runnableState);
+						}
 					}
 				}
 				const result = await runQueryTotalRetryRequests({
@@ -551,12 +585,20 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						censusCollectionFromQueryKey(request.queryKey) === null
 							? QUERY_TOTAL_FRESH_FOR_MS
 							: deps.censusFreshForMs,
-					maxRequests: tick.starvation
-						? 1
-						: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
+					maxRequests:
+						forced !== undefined || tick.starvation
+							? 1
+							: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
+					...(forced !== undefined ? { forceQueryKey: censusQueryKey(forced) } : {}),
 				});
 				if (result.cacheEntries.length > 0) {
 					deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });
+				}
+				// The periodic scan reports failures in its summary and lets backoff retry;
+				// a forced check is a direct user action, so its failure must surface as a
+				// lane error (status + lastError + events), not a healthy-looking count.
+				if (forced !== undefined && result.failed > 0) {
+					throw new Error(`Census refresh failed for ${forced}`);
 				}
 				if (
 					result.succeeded === 0 &&
@@ -572,81 +614,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				};
 			})
 		: null;
-	const refreshCensus: MaintenanceLanes['refreshCensus'] = async (collection, signal) => {
-		if (!queryTotal) {
-			return {
-				lane: 'query-total-retry',
-				status: 'skipped',
-				reason: 'no queryTotal port provided',
-			};
-		}
-		return lane('query-total-retry', async (db, _scopeId, laneSignal) => {
-			const nowMs = now();
-			const queryKey = censusQueryKey(collection);
-			const stateRepository = withLedgerRecovery({
-				database: db,
-				trigger: 'query-total',
-				create: () => new RxQueryTotalRequestStateRepository(db as never),
-			});
-			const cacheRepository = withLedgerRecovery({
-				database: db,
-				trigger: 'query-total',
-				create: () => new RxQueryTotalCacheRepository(db as never),
-			});
-			const [currentState] = await stateRepository.readForQueryKeys([queryKey]);
-			if (currentState && currentState.status !== 'idle') {
-				return { summary: null, status: 'skipped', reason: 'query total request pending' };
-			}
-			const runnableState = {
-				queryKey,
-				status: 'failed',
-				ownerId: null,
-				claimedUntilMs: null,
-				attempt: 0,
-				retryAfterMs: nowMs,
-				updatedAtMs: nowMs,
-				request: {
-					queryKey,
-					method: 'GET',
-					endpoint: collection,
-					params: {
-						page: 1,
-						per_page: 1,
-						...(collection === 'products' || collection === 'variations'
-							? { status: 'publish' }
-							: {}),
-					},
-					totalHeader: 'X-WP-Total',
-				},
-			} satisfies QueryTotalRequestState;
-			if (currentState) await stateRepository.wake(currentState, runnableState);
-			else await stateRepository.claimNew(runnableState);
-			const result = await runQueryTotalRetryRequests({
-				stateRepository,
-				cacheRepository,
-				fetchWooQueryTotal: ({ request, signal: requestSignal }) =>
-					queryTotal.fetchWooQueryTotal({
-						request,
-						...(requestSignal ? { signal: requestSignal } : {}),
-					}),
-				signal: laneSignal,
-				ownerId: deps.ownerId(),
-				nowMs,
-				getNowMs: now,
-				leaseForMs: QUERY_TOTAL_LEASE_FOR_MS,
-				retryAfterMs: QUERY_TOTAL_RETRY_AFTER_MS,
-				freshForMs: deps.censusFreshForMs,
-				maxRequests: 1,
-				forceQueryKey: queryKey,
-			});
-			if (result.cacheEntries.length > 0) {
-				deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });
-			}
-			if (result.failed > 0) throw new Error(`Census refresh failed for ${collection}`);
-			return { summary: null };
-		}).tick(signal);
-	};
-
 	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
 		const result = await tickCustomerTrickle({
 			baseUrl: deps.syncBaseUrl,
@@ -742,7 +709,6 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		productBrowseWindowSeed,
 		referenceSeed,
 		queryTotalRetry,
-		refreshCensus,
 		customerTrickle,
 		coverageCompaction,
 		existencePrime,
