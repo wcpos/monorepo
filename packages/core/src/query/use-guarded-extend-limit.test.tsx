@@ -51,6 +51,16 @@ describe('useGuardedExtendLimit (#1221)', () => {
 		expect(limit).toBe(10);
 	});
 
+	it('extends only once when end-reached fires repeatedly in one React batch', () => {
+		renderProbe(10);
+		act(() => {
+			fire!();
+			fire!();
+			fire!();
+		});
+		expect(limit).toBe(20);
+	});
+
 	it('extends a full page once, then blocks until the extension lands', () => {
 		const view = renderProbe(10);
 		act(() => fire!());

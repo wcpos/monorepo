@@ -813,6 +813,53 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it('reuses completed customer-search coverage for a wider successor', async () => {
+		const response = Promise.withResolvers<Response>();
+		const started = Promise.withResolvers<AbortSignal>();
+		let customerPulls = 0;
+		const engine = engineWith(async (url, init) => {
+			const parsed = new URL(url);
+			if (!parsed.pathname.endsWith('/customers')) return json([]);
+			customerPulls += 1;
+			if (customerPulls > 1) return json([]);
+			const signal = init?.signal;
+			if (!signal) throw new Error('search request missing abort signal');
+			started.resolve(signal);
+			return response.promise;
+		});
+		await engine.ready;
+		const first = engine.require({
+			id: 'customer-grow-a',
+			collection: 'customers',
+			kind: 'search',
+			term: 'ada',
+			limit: 60,
+		});
+		const signal = await started.promise;
+
+		first.release();
+		const second = engine.require({
+			id: 'customer-grow-b',
+			collection: 'customers',
+			kind: 'search',
+			term: 'ada',
+			limit: 70,
+		});
+		await Promise.resolve();
+		expect(signal.aborted).toBe(false);
+
+		response.resolve(json([]));
+		await expect(first.ready).resolves.toMatchObject({ action: 'released' });
+		await expect(second.ready).resolves.toMatchObject({
+			action: 'serve-local',
+			reason: 'customers search fetched within the coverage window',
+			requests: 0,
+		});
+		expect(signal.aborted).toBe(false);
+		expect(customerPulls).toBe(1);
+		await engine.dispose();
+	});
+
 	it('aborts an orphaned in-flight predecessor when its wider successor is released', async () => {
 		const response = Promise.withResolvers<Response>();
 		const started = Promise.withResolvers<AbortSignal>();

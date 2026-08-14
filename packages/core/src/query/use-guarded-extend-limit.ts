@@ -20,8 +20,13 @@ const selectLimit = (state: { limit: number }): number => state.limit;
  */
 export function useGuardedExtendLimit(extendLimit: () => void, resultCount: number): () => void {
 	const limit = useQueryState(selectLimit);
+	const extensionScheduled = React.useRef(false);
+	React.useEffect(() => {
+		extensionScheduled.current = false;
+	}, [limit]);
 	return React.useCallback(() => {
-		if (resultCount < limit) return;
+		if (resultCount < limit || extensionScheduled.current) return;
+		extensionScheduled.current = true;
 		extendLimit();
 	}, [extendLimit, limit, resultCount]);
 }

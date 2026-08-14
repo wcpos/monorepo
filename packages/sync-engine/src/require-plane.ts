@@ -800,7 +800,23 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						: `${searchCollection}:search:${encodedTerm}`;
 				if (!item.requirement.forceRefresh) {
 					const lane = await coverage.readLane(searchCollection, queryKey);
-					if (lane?.complete && lane.fresh) {
+					const equivalentCustomerLanes =
+						searchCollection === 'customers' && !(lane?.complete && lane.fresh)
+							? await Promise.all(
+									(await coverage.listLanes(searchCollection))
+										.filter(
+											(candidate) =>
+												candidate.complete &&
+												candidate.queryKey !== queryKey &&
+												candidate.queryKey.startsWith(`customers:search=${encodedTerm}:limit=`)
+										)
+										.map((candidate) => coverage.readLane(searchCollection, candidate.queryKey))
+								)
+							: [];
+					if (
+						(lane?.complete && lane.fresh) ||
+						equivalentCustomerLanes.some((candidate) => candidate?.complete && candidate.fresh)
+					) {
 						return {
 							action: 'serve-local',
 							missingRecordIds: [],
