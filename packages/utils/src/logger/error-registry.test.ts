@@ -20,6 +20,8 @@ const REQUIRED_FIELDS = [
 	'docsBody',
 	'introducedIn',
 	'evidence',
+	'troubleshooting',
+	'logSources',
 ];
 const SEED_SYMBOLS = [
 	'APP_START_FAILED',
@@ -90,6 +92,11 @@ const SEED_SYMBOLS = [
 
 const generatorScript = path.resolve(__dirname, '../../../../scripts/generate-error-codes.mjs');
 const generatedDirectory = path.join(__dirname, 'generated');
+const entryFor = (code: string) => {
+	const entry = registry.find((candidate) => candidate.code === code);
+	if (!entry?.troubleshooting) throw new Error(`Missing registry entry ${code}`);
+	return entry;
+};
 
 function runGenerator(outputDirectory: string, registryPath?: string) {
 	const args = [generatorScript, '--output-dir', outputDirectory];
@@ -143,6 +150,86 @@ describe('error registry', () => {
 		}
 	});
 
+	it('keeps shared log guidance conditional and safe to reproduce', () => {
+		const outputDirectory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-guidance-'));
+		try {
+			runGenerator(outputDirectory);
+			const cartSafe = readFileSync(
+				path.join(outputDirectory, 'error-docs', 'CHECKOUT101.mdx'),
+				'utf8'
+			);
+			const beforePosLog = readFileSync(
+				path.join(outputDirectory, 'error-docs', 'CLIENT999.mdx'),
+				'utf8'
+			);
+			const outcomeUnknown = readFileSync(
+				path.join(outputDirectory, 'error-docs', 'CHECKOUT201.mdx'),
+				'utf8'
+			);
+			expect(cartSafe).toContain('the fields shown depend on where the failure occurred');
+			expect(beforePosLog).toContain('When WCPOS can save this error');
+			expect(beforePosLog).not.toContain('Every occurrence of this code is recorded');
+			expect(beforePosLog).toContain('before the POS is able to write its own log entry');
+			expect(outcomeUnknown).toContain('reproduce the action only when those steps say it is safe');
+			expect(outcomeUnknown).not.toContain('select the **Network** tab and repeat the action');
+		} finally {
+			rmSync(outputDirectory, { recursive: true, force: true });
+		}
+	});
+
+	it('covers non-record local write failures in SYNC101 guidance', () => {
+		const guidance = entryFor('SYNC101').troubleshooting.join(' ');
+		expect(guidance).toContain('Site and credential writes');
+		expect(guidance).toContain('may name only the failed operation and error');
+	});
+
+	it('distinguishes queued and pre-queue SYNC999 failures', () => {
+		const guidance = entryFor('SYNC999').troubleshooting.join(' ');
+		expect(guidance).toContain('already queued, WCPOS retries automatically');
+		expect(guidance).toContain('nothing was queued');
+		expect(guidance).toContain('save it again');
+	});
+
+	it('checks the endpoint before treating SYNC211 as a record error', () => {
+		const guidance = entryFor('SYNC211').troubleshooting.join(' ');
+		expect(guidance).toContain('settings, authentication or other non-record request');
+		expect(guidance).toContain("If it is not a record request, follow the server's message");
+	});
+
+	it('covers email and PDF paths in PRINT311 guidance', () => {
+		const guidance = entryFor('PRINT311').troubleshooting.join(' ');
+		expect(guidance).toContain('an email address or server status identifies email delivery');
+		expect(guidance).toContain("device's free storage and download permissions");
+	});
+
+	it('keeps PRINT999 guidance specific to the logged operation', () => {
+		const guidance = entryFor('PRINT999').troubleshooting.join(' ');
+		expect(guidance).toContain('receipt-email queue actions and receipt-template sync');
+		expect(guidance).toContain('Reprint from the order screen only for a physical print attempt');
+	});
+
+	it('tests both WordPress REST permalink styles in AUTH311 guidance', () => {
+		const guidance = entryFor('AUTH311').troubleshooting.join(' ');
+		expect(guidance).toContain('/wp-json/');
+		expect(guidance).toContain('/index.php?rest_route=/');
+		expect(guidance).toContain('Only diagnose a REST block if neither address returns JSON');
+	});
+
+	it('does not claim every SYNC151 response was repaired', () => {
+		const guidance = entryFor('SYNC151').troubleshooting.join(' ');
+		expect(guidance).toContain('Check whether the related request ultimately succeeded');
+		expect(guidance).toContain("if it failed, follow that request's error");
+	});
+
+	it('documents the passive SYNC411 flood alarm without implying throttling', () => {
+		const entry = entryFor('SYNC411');
+		const guidance = entry.troubleshooting.join(' ');
+		expect(guidance).toContain('Keep working');
+		expect(guidance).toContain('does not slow, queue or drop any request');
+		expect(guidance).toContain('Copy debug info');
+		expect(entry.logSources).toEqual([]);
+	});
+
 	it('rejects control characters in registry strings — they break MDX frontmatter', () => {
 		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-newline-'));
 		const invalidRegistry = path.join(directory, 'registry.json');
@@ -153,6 +240,40 @@ describe('error registry', () => {
 
 		try {
 			expect(() => runGenerator(directory, invalidRegistry)).toThrow();
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
+	it('rejects an entry whose troubleshooting is missing, empty, or contains control characters', () => {
+		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-troubleshooting-'));
+		const invalidRegistry = path.join(directory, 'registry.json');
+
+		try {
+			for (const troubleshooting of [
+				undefined,
+				[],
+				['ok step', 'line one\nline two'],
+				['ok step', '\u0000'],
+				['ok step', '\u007f'],
+			]) {
+				writeFileSync(invalidRegistry, JSON.stringify([{ ...registry[0], troubleshooting }]));
+				expect(() => runGenerator(directory, invalidRegistry)).toThrow();
+			}
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
+	it('rejects an entry with an unknown or duplicate logSource', () => {
+		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-logsources-'));
+		const invalidRegistry = path.join(directory, 'registry.json');
+
+		try {
+			for (const logSources of [['sentry'], ['woo-status-logs', 'woo-status-logs']]) {
+				writeFileSync(invalidRegistry, JSON.stringify([{ ...registry[0], logSources }]));
+				expect(() => runGenerator(directory, invalidRegistry)).toThrow();
+			}
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}

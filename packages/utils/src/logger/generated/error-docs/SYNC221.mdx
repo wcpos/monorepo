@@ -20,6 +20,16 @@ Check the details below before trying again. Retry after making the change above
 
 The order itself is safe and unchanged.
 
+## Troubleshoot {#troubleshoot}
+
+1. Open the record named in the log entry and compare it with the same record in WP Admin.
+2. Decide which version is right — the till's or the store's — and re-apply the correct values once; the POS keeps both sides safe, and further edits to that record are held until the clash is settled.
+3. Frequent conflicts on the same records usually mean two people edit the same data in parallel; agree on where each kind of edit happens.
+
+## Where to look {#where-to-look}
+
+When WCPOS can save this error, it is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure. For a store request, that context may include the server’s own error code (`serverCode`), the HTTP `status` or the `endpoint`; the fields shown depend on where the failure occurred. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh. Also copy any browser-console error that appeared before the POS was able to write its own log entry.
+
 ## Details {#details}
 
 - **Code:** `SYNC221` (`RECORD_CONFLICT`)

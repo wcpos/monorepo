@@ -20,6 +20,16 @@ Correct the highlighted details, then try again. WCPOS does not retry this by it
 
 No order or product data is affected.
 
+## Troubleshoot {#troubleshoot}
+
+1. Check the address for typos and enter the full URL including https:// — for example https://shop.example.com.
+2. Use the site's WordPress address, not an admin page or a checkout URL.
+3. If the site lives in a subdirectory (for example /shop), include it.
+
+## Where to look {#where-to-look}
+
+When WCPOS can save this error, it is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure. For a store request, that context may include the server’s own error code (`serverCode`), the HTTP `status` or the `endpoint`; the fields shown depend on where the failure occurred. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh. Also copy any browser-console error that appeared before the POS was able to write its own log entry.
+
 ## Details {#details}
 
 - **Code:** `AUTH411` (`STORE_URL_INVALID`)
