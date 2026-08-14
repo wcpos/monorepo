@@ -655,6 +655,25 @@ describe('query-state translator', () => {
 		expect(compiled.read.complete).toBe(false);
 	});
 
+	it('excludes variations missing a payload attributes array under an active filter (#811)', () => {
+		const compiled = compileQuery(
+			'variations',
+			{
+				search: '',
+				filters: { attributeMatches: [{ id: 1, name: 'Color', option: 'Red' }] },
+				sort: { field: 'id', direction: 'asc' },
+				limit: 25,
+			},
+			{ id: 'variations' }
+		);
+		const attributes = [{ id: 1, name: 'Color', option: 'Red' }];
+
+		expect(compiled.read.residual({ id: 'missing', attributes: [], payload: {} })).toBe(false);
+		expect(compiled.read.residual({ id: 'matching', attributes, payload: { attributes } })).toBe(
+			true
+		);
+	});
+
 	it.each([
 		['orders', true, 'orders-browse'],
 		['products', false, 'search'],

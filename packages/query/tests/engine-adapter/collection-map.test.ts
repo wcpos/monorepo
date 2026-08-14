@@ -5,11 +5,63 @@ import {
 	COLLECTION_VOCABULARY,
 	collectionMap,
 	promotedColumnsFor,
+	readLegacyField,
+	readSanitizedFieldsFor,
 	resolveLegacyField,
+	sanitizeVariationAttributesRead,
 	sortAliasFor,
 	sortTiebreakFor,
 	wooOrderbyFor,
 } from '../../src/engine-adapter/collection-map';
+
+describe('variation attribute read boundary (#811)', () => {
+	const read = (attributes?: unknown, present = true) =>
+		readLegacyField(
+			'variations',
+			{
+				id: 'variation-1',
+				payload: present ? { attributes } : {},
+			},
+			'attributes'
+		);
+
+	it('preserves valid payload entries unchanged', () => {
+		const attributes = [
+			{ id: '1', name: 'Color', option: 'Red', anyExtra: true },
+			{ id: 2, name: 'Size', option: '' },
+		];
+		expect(read(attributes)).toEqual(attributes);
+	});
+
+	it('drops entries missing a name or option', () => {
+		expect(read([{ option: 'Red' }, { name: 'Size' }, { name: 'Color', option: 'Blue' }])).toEqual([
+			{ name: 'Color', option: 'Blue' },
+		]);
+	});
+
+	it('drops entries with non-string names or options', () => {
+		expect(
+			read([
+				{ name: 123, option: 'Red' },
+				{ name: 'Size', option: 456 },
+				{ name: { rendered: 'Color' }, option: 'Red' },
+				{ name: 'Material', option: { rendered: 'Cotton' } },
+			])
+		).toEqual([]);
+	});
+
+	it.each(['junk', { name: 'Color', option: 'Red' }, null])(
+		'returns [] for non-array input %#',
+		(value) => expect(read(value)).toEqual([])
+	);
+
+	it('preserves empty and absent input', () => {
+		expect(read([])).toEqual([]);
+		expect(read(undefined, false)).toBeUndefined();
+		expect(sanitizeVariationAttributesRead(undefined)).toBeUndefined();
+		expect(readSanitizedFieldsFor('variations')).toEqual(['attributes']);
+	});
+});
 
 describe('engine adapter collection map', () => {
 	it('pins collection-name facts to the previous hand-written maps', () => {

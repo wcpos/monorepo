@@ -13,6 +13,7 @@ describe('package exports', () => {
 			[
 				'createRxdbSyncEngine',
 				'engineDocumentIdFor',
+				'normalizeVariationAttributes',
 				'SYNC_COLLECTION_NAMES',
 				'MUTATION_QUEUE_RXDB_COLLECTION',
 				// The Store health panel must decide "does discard delete this record?"

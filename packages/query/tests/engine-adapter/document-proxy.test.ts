@@ -196,6 +196,24 @@ describe('wrapEngineDocument', () => {
 		expect((proxy.toJSON().images as { src: string }[])[0].src).toBe('coffee.jpg');
 	});
 
+	it('sanitizes variation attributes for direct and snapshot reads (#811)', () => {
+		const valid = { id: 2, name: 'Size', option: 'Large' };
+		const source = fakeRxDocument({
+			id: 'variation-uuid',
+			wooId: 101,
+			payload: {
+				attributes: [valid, { id: 1, name: { rendered: 'Color' }, option: 'Red' }],
+			},
+		});
+		const proxy = wrapEngineDocument('variations', source.document) as LegacyProxy & {
+			attributes: unknown;
+		};
+
+		expect(proxy.attributes).toEqual([valid]);
+		expect(proxy.toJSON().attributes).toEqual([valid]);
+		expect(proxy.toMutableJSON().attributes).toEqual([valid]);
+	});
+
 	it('creates cloneable snapshots without RxDB property proxies', () => {
 		const source = fakeRxDocument(
 			{
@@ -268,8 +286,9 @@ describe('wrapEngineDocument', () => {
 				if (field.kind === 'computed') {
 					return;
 				}
-				const value =
-					field.legacy === 'uuid'
+				const value = field.read
+					? [{ name: 'Color', option: 'Red' }]
+					: field.legacy === 'uuid'
 						? `${collection}:uuid`
 						: field.legacy === 'id'
 							? 101

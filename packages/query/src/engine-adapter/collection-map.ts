@@ -1,3 +1,4 @@
+import { normalizeVariationAttributes } from '@wcpos/sync-engine';
 import type {
 	CustomerBrowseDimensions,
 	OrderBrowseDimensions,
@@ -125,6 +126,8 @@ export type FieldMapEntry = {
 	/** How a query-state filter reaches the remote lane; absent for non-filter fields. */
 	wireFace?: 'dimension' | 'implied' | 'local-only';
 	readEnginePath?: string;
+	/** Sanitize the value served to legacy readers at the materialization boundary (#811). */
+	read?: (value: unknown) => unknown;
 	write?: (value: unknown) => unknown;
 	adapterDerived?: boolean;
 	numeric?: boolean;
@@ -185,6 +188,26 @@ function couponIsActive(document: EngineDocument): boolean {
 	}
 	const timestamp = Date.parse(expires.endsWith('Z') ? expires : `${expires}Z`);
 	return Number.isNaN(timestamp) || timestamp >= Date.now();
+}
+
+/**
+ * 1.9-parity read guard (#811): drop malformed variation attribute entries before ANY UI
+ * consumer sees them. Reads retain the source payload entries (extra keys, string ids,
+ * empty-string "Any" options are all preserved) — only junk is dropped:
+ * entries that are not objects or whose `name`/`option` are not strings.
+ * Non-array junk becomes []; [] stays []; an absent value stays undefined so
+ * `'attributes' in doc` / `?? []` guards behave as before.
+ */
+export function sanitizeVariationAttributesRead(value: unknown): unknown {
+	if (value === undefined) return undefined;
+	if (!Array.isArray(value)) return [];
+	return value.filter(
+		(entry) =>
+			entry !== null &&
+			typeof entry === 'object' &&
+			typeof (entry as { name?: unknown }).name === 'string' &&
+			typeof (entry as { option?: unknown }).option === 'string'
+	);
 }
 
 /**
@@ -371,17 +394,9 @@ export const collectionMap = {
 				kind: 'promoted',
 				enginePath: 'attributes',
 				readEnginePath: 'payload.attributes',
-				write: (value) =>
-					Array.isArray(value)
-						? value
-								.map((entry) => ({
-									id: Number((entry as { id?: unknown } | null)?.id) || 0,
-									name: String((entry as { name?: unknown } | null)?.name ?? ''),
-									option: String((entry as { option?: unknown } | null)?.option ?? ''),
-								}))
-								.filter(({ name, option }) => name !== '' && option !== '')
-						: [],
-				notes: 'Selectors use normalized attributes; reads retain the source payload.',
+				read: sanitizeVariationAttributesRead,
+				write: normalizeVariationAttributes,
+				notes: 'Selectors normalize attributes; reads preserve valid source payload entries.',
 				wireFace: 'local-only',
 			},
 			status: queryPayloadField('status', 'local-only'),
@@ -725,6 +740,12 @@ export function adapterDerivedFieldsFor(collection: LegacyCollectionName): reado
 		.map((field) => field.legacy);
 }
 
+/** Legacy fields whose reads are sanitized at the materialization boundary (#811). */
+export function readSanitizedFieldsFor(collection: LegacyCollectionName): readonly string[] {
+	const fields = Object.values(collectionMap[collection].fields as Record<string, FieldMapEntry>);
+	return fields.filter((field) => field.read).map((field) => field.legacy);
+}
+
 /** The engine RxDB collection name backing a legacy collection (`taxes` →
  * `taxRates`, `products/categories` → `categories`, …). */
 export function engineCollectionNameFor(collection: LegacyCollectionName): EngineCollectionName {
@@ -740,7 +761,8 @@ export function readLegacyField(
 	if (field.compute) {
 		return field.compute(document);
 	}
-	return valueAtPath(document, field.readEnginePath ?? field.enginePath);
+	const value = valueAtPath(document, field.readEnginePath ?? field.enginePath);
+	return field.read ? field.read(value) : value;
 }
 
 export function readEnginePath(document: EngineDocument, path: string): unknown {

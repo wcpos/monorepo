@@ -1,6 +1,7 @@
 import {
 	EngineAdapterSelectorError,
 	translateSelector,
+	variationAttributesMatch,
 } from '../../src/engine-adapter/translate-selector';
 
 const product = {
@@ -204,6 +205,32 @@ describe('translateSelector', () => {
 				},
 			}).residual(variation)
 		).toBe(true);
+	});
+
+	it('excludes only missing payload attribute arrays under an active filter (#811)', () => {
+		const requested = [{ name: 'Color', option: 'Red' }];
+		const missing = { id: 'variation-missing', attributes: [], payload: {} };
+		const empty = { id: 'variation-empty', attributes: [], payload: { attributes: [] } };
+
+		expect(
+			translateSelector('variations', {
+				attributes: { $allMatch: requested },
+			}).residual(missing)
+		).toBe(false);
+		expect(
+			translateSelector('variations', {
+				attributes: { $allMatch: [] },
+			}).residual(missing)
+		).toBe(true);
+		expect(
+			translateSelector('variations', {
+				attributes: { $allMatch: requested },
+			}).residual(empty)
+		).toBe(true);
+
+		expect(variationAttributesMatch(missing, requested)).toBe(false);
+		expect(variationAttributesMatch(missing, [])).toBe(true);
+		expect(variationAttributesMatch(empty, requested)).toBe(true);
 	});
 
 	it.each([

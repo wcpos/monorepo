@@ -5,6 +5,7 @@ import {
 	type EngineDocument,
 	type LegacyCollectionName,
 	readLegacyField,
+	readSanitizedFieldsFor,
 	resolveLegacyField,
 } from './collection-map';
 
@@ -57,11 +58,16 @@ function legacySnapshot(
 ): Record<string, unknown> {
 	const document = rxDocument.toJSON() as EngineDocument;
 	const payload = document.payload ?? {};
-	return {
+	const snapshot: Record<string, unknown> = {
 		...payload,
 		uuid: readLegacyField(collection, document, 'uuid'),
 		id: readLegacyField(collection, document, 'id'),
 	};
+	// Overlay sanitized boundary reads without adding fields absent from the payload (#811).
+	readSanitizedFieldsFor(collection).forEach((legacy) => {
+		if (legacy in payload) snapshot[legacy] = readLegacyField(collection, document, legacy);
+	});
+	return snapshot;
 }
 
 /** Wrap an engine RxDocument with the legacy read contract. Writes intentionally fail loudly. */
