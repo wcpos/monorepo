@@ -75,6 +75,31 @@ describe('useManualSync', () => {
 		await waitFor(() => expect(result.current.collection.checking).toBeNull());
 	});
 
+	it('reports busy to manual-sync consumers while a collection check runs', async () => {
+		let finish!: (report: unknown) => void;
+		mockCheckCollection.mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+		);
+
+		const { result } = renderHook(() => ({
+			collection: useCollectionCheck(),
+			manual: useManualSync(),
+		}));
+		expect(result.current.manual.busy).toBe(false);
+
+		act(() => {
+			void result.current.collection.check('products');
+		});
+		await waitFor(() => expect(result.current.manual.busy).toBe(true));
+		// The full-sync spinner stays off — only the checked row spins.
+		expect(result.current.manual.syncing).toBe(false);
+
+		finish({ collection: 'products', status: 'ran' });
+		await waitFor(() => expect(result.current.manual.busy).toBe(false));
+	});
+
 	it('shows an error toast for a failed collection check report', async () => {
 		mockCheckCollection.mockResolvedValue({
 			collection: 'products',

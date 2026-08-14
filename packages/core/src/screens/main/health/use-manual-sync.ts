@@ -59,6 +59,14 @@ export function useManualSync() {
 	const { engine } = useQueryRuntime();
 	const t = useT();
 	const syncing = useObservableState(manualSyncInFlight$, manualSyncInFlight$.getValue());
+	const checking = useObservableState(
+		collectionCheckInFlight$,
+		collectionCheckInFlight$.getValue()
+	);
+	// Any manual pass in flight — full sync OR a row check. Controls outside the
+	// Database screen (attention Retry) disable on this, or a press during a row
+	// check would silently no-op through the duplicate-start guard.
+	const busy = syncing || checking !== null;
 
 	const sync = React.useCallback(async () => {
 		if (manualSyncInFlight$.getValue() || collectionCheckInFlight$.getValue() !== null) return;
@@ -77,7 +85,7 @@ export function useManualSync() {
 		}
 	}, [engine, t]);
 
-	return { syncing, sync };
+	return { syncing, busy, sync };
 }
 
 export function useCollectionCheck() {

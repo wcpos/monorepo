@@ -91,7 +91,7 @@ function useStuckRecordLabel(stuck: StuckRecord | undefined): string | null {
 export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 	const t = useT();
 	const router = useRouter();
-	const { syncing, sync } = useManualSync();
+	const { syncing, busy, sync } = useManualSync();
 	const first = stuck[0];
 	const label = useStuckRecordLabel(first);
 
@@ -133,6 +133,7 @@ export function AttentionPanel({ stuck }: { stuck: StuckRecord[] }) {
 							size="sm"
 							testID="db-attention-retry"
 							loading={syncing}
+							disabled={busy}
 							onPress={() => void sync()}
 						>
 							<ButtonText className="text-sm">{t('health.database.attention_retry')}</ButtonText>
