@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
+import { useModal } from '@wcpos/components/modal';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -30,7 +30,7 @@ export function EditCustomerForm({ customer }: Props) {
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
 	const { format } = useCustomerNameFormat();
-	const router = useRouter();
+	const { close } = useModal();
 
 	/**
 	 *
@@ -70,6 +70,7 @@ export function EditCustomerForm({ customer }: Props) {
 								},
 							}
 						);
+						close();
 					}
 				});
 			} catch (error) {
@@ -87,18 +88,11 @@ export function EditCustomerForm({ customer }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, customer, pushDocument, t, format]
+		[localPatch, customer, pushDocument, t, format, close]
 	);
 
 	/**
 	 *
 	 */
-	return (
-		<CustomerForm
-			form={form}
-			onClose={() => router.back()}
-			onSubmit={handleSave}
-			loading={loading}
-		/>
-	);
+	return <CustomerForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
 }

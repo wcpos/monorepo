@@ -18,6 +18,7 @@ const testLogger = getLogger(['test']);
 
 const mockPushDocument = jest.fn();
 const mockLocalPatch = jest.fn();
+const mockModalClose = jest.fn();
 const modalActions = new Map<string, { onPress?: () => unknown; disabled: boolean }>();
 
 type Customer = {
@@ -105,6 +106,7 @@ jest.mock('@wcpos/components/modal', () => ({
 	},
 	ModalClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	ModalFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	useModal: () => ({ close: mockModalClose }),
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -322,5 +324,46 @@ describe('EditOrderForm while storage is degraded', () => {
 		});
 
 		expect(mockPushDocument).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * The edit modal must dismiss itself after a successful save, but a failed
+ * save has to keep the form on screen so the cashier can correct and retry.
+ */
+describe('EditOrderForm save', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		modalActions.clear();
+		customerResources.clear();
+		customerResources.set(0, {
+			valueRef$$: new BehaviorSubject<CustomerValueRef>({ current: null }),
+		});
+	});
+
+	it('closes the modal after a successful save', async () => {
+		mockLocalPatch.mockResolvedValue(undefined);
+		// isRxDocument only checks for this marker property
+		mockPushDocument.mockResolvedValue({ id: 50, number: '50', isInstanceOfRxDocument: true });
+		render(<EditOrderForm order={order} />);
+
+		await act(async () => {
+			await modalActions.get('order-edit-save-button')!.onPress!();
+		});
+
+		expect(mockModalClose).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the modal open when the push fails', async () => {
+		mockLocalPatch.mockResolvedValue(undefined);
+		mockPushDocument.mockRejectedValue(new Error('HTTP 500'));
+		render(<EditOrderForm order={order} />);
+
+		await act(async () => {
+			await modalActions.get('order-edit-save-button')!.onPress!();
+		});
+
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(mockModalClose).not.toHaveBeenCalled();
 	});
 });

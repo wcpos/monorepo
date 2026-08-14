@@ -52,6 +52,7 @@ export function AddCustomerScreen() {
 							customerName: format(savedDoc as any),
 						},
 					});
+					router.back();
 				}
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
@@ -67,7 +68,7 @@ export function AddCustomerScreen() {
 				setLoading(false);
 			}
 		},
-		[create, format, t]
+		[create, format, router, t]
 	);
 
 	/**

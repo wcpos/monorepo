@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
+import { useModal } from '@wcpos/components/modal';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -25,7 +25,7 @@ export function EditCouponForm({ coupon }: Props) {
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
-	const router = useRouter();
+	const { close } = useModal();
 
 	const form = useForm<z.infer<typeof couponFormSchema>>({
 		resolver: zodResolver(couponFormSchema as never) as never,
@@ -56,6 +56,7 @@ export function EditCouponForm({ coupon }: Props) {
 						couponCode: (savedDoc as { code?: string }).code,
 					},
 				});
+				close();
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error('Failed to save coupon', {
@@ -71,10 +72,8 @@ export function EditCouponForm({ coupon }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, coupon, pushDocument, t]
+		[close, localPatch, coupon, pushDocument, t]
 	);
 
-	return (
-		<CouponForm form={form} onClose={() => router.back()} onSubmit={handleSave} loading={loading} />
-	);
+	return <CouponForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
 }

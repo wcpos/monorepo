@@ -30,6 +30,14 @@ const useRootContext = () => {
 	return context;
 };
 
+/**
+ * Programmatic access to the enclosing modal, e.g. to close it after a successful save.
+ */
+function useModal() {
+	const { onClose } = useRootContext();
+	return React.useMemo(() => ({ close: () => onClose(false) }), [onClose]);
+}
+
 function Modal({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
 	return (
 		<Context.Provider value={{ onClose: onClose ? onClose : () => router.back() }}>
@@ -218,4 +226,5 @@ export {
 	ModalBody,
 	ModalClose,
 	ModalAction,
+	useModal,
 };

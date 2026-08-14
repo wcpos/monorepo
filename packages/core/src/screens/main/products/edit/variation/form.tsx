@@ -15,7 +15,7 @@ import {
 	FormSwitch,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -58,6 +58,7 @@ export function EditVariationForm({ variation }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
+	const { close } = useModal();
 
 	if (!variation) {
 		throw new Error('Variation not found');
@@ -107,6 +108,7 @@ export function EditVariationForm({ variation }: Props) {
 								variationName: variation.name,
 							},
 						});
+						close();
 					}
 				});
 			} catch (error) {
@@ -124,7 +126,7 @@ export function EditVariationForm({ variation }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, variation, pushDocument, t]
+		[close, localPatch, variation, pushDocument, t]
 	);
 
 	/**
@@ -257,7 +259,7 @@ export function EditVariationForm({ variation }: Props) {
 				<MetaDataForm />
 				<ModalFooter className="px-0">
 					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction loading={loading} onPress={onSave}>
+					<ModalAction testID="variation-edit-save-button" loading={loading} onPress={onSave}>
 						{t('common.save')}
 					</ModalAction>
 				</ModalFooter>

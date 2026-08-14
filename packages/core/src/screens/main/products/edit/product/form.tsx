@@ -17,7 +17,7 @@ import {
 	FormTreeCombobox,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -69,6 +69,7 @@ export function EditProductForm({ product }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
+	const { close } = useModal();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
 
 	if (!product) {
@@ -136,6 +137,7 @@ export function EditProductForm({ product }: Props) {
 								productName: product.name,
 							},
 						});
+						close();
 					}
 				});
 			} catch (error) {
@@ -153,7 +155,7 @@ export function EditProductForm({ product }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, product, pushDocument, t]
+		[close, localPatch, product, pushDocument, t]
 	);
 
 	/**
