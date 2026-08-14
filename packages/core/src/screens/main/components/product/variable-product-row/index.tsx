@@ -39,6 +39,13 @@ export function VariableProductRow({
 	index: number;
 	table: Table<{ document: ProductDocument }>;
 }) {
+	/**
+	 * React Compiler breaks tanstack/react-table: it caches the
+	 * item.getVisibleCells() JSX keyed on the Row object, whose identity is
+	 * stable across columnVisibility changes, so toggled columns render stale.
+	 * https://github.com/facebook/react/issues/33057
+	 */
+	'use no memo';
 	const meta = table.options.meta as
 		| {
 				expanded$: import('rxjs').Observable<Record<string, boolean>>;
