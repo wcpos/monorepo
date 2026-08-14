@@ -84,19 +84,7 @@ jest.mock('@wcpos/components/button', () => ({
 	),
 	ButtonText: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('@wcpos/components/dialog', () => {
-	function Component({ children }: { children: React.ReactNode }) {
-		return <>{children}</>;
-	}
-	return {
-		Dialog: Component,
-		DialogBody: Component,
-		DialogContent: Component,
-		DialogHeader: Component,
-		DialogTitle: Component,
-		DialogTrigger: Component,
-	};
-});
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('@wcpos/components/dropdown-menu', () => {
 	function Component({ children }: { children: React.ReactNode }) {
 		return <>{children}</>;
@@ -239,6 +227,15 @@ describe('DatabaseScreen coverage', () => {
 			getAllByTestId('db-row-menu-products').every((el) => !(el as HTMLButtonElement).disabled)
 		).toBe(true);
 		expect(mockSync).toHaveBeenCalledTimes(1);
+	});
+
+	it('opens the docs site from the "How syncing works" link', () => {
+		const { openExternalURL } = jest.requireMock('@wcpos/utils/open-external-url');
+		const { getByTestId } = render(<DatabaseScreen />);
+
+		fireEvent.click(getByTestId('db-how-syncing-works'));
+
+		expect(openExternalURL).toHaveBeenCalledWith('https://docs.wcpos.com/products/sync');
 	});
 
 	it('enables press-to-show coverage tooltips on native', () => {

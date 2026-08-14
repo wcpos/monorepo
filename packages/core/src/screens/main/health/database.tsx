@@ -13,14 +13,6 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
-	Dialog,
-	DialogBody,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from '@wcpos/components/dialog';
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -34,6 +26,7 @@ import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { AttentionPanel } from './attention-panel';
 import { useManualSync } from './use-manual-sync';
@@ -482,33 +475,23 @@ function FootprintRow({
 	);
 }
 
-/** The accurate "how syncing works" schedule, straight from the engine's lanes. */
-function HowSyncingWorksDialog() {
+const HOW_SYNCING_WORKS_DOCS_URL = 'https://docs.wcpos.com/products/sync';
+
+/** Explanatory content lives on the docs site, not in the app (owner ruling 2026-08-14). */
+function HowSyncingWorksLink() {
 	const t = useT();
 	return (
-		<Dialog>
-			<DialogTrigger asChild>
-				<Button variant="ghost" size="sm" testID="db-how-syncing-works">
-					<HStack className="items-center gap-1">
-						<Icon name="circleInfo" size="sm" className="text-muted-foreground" />
-						<Text className="text-muted-foreground text-xs">{t('health.database.how_title')}</Text>
-					</HStack>
-				</Button>
-			</DialogTrigger>
-			<DialogContent className="max-w-md">
-				<DialogHeader>
-					<DialogTitle>{t('health.database.how_title')}</DialogTitle>
-				</DialogHeader>
-				<DialogBody>
-					<VStack className="gap-3">
-						<Text className="text-sm">{t('health.database.how_changes')}</Text>
-						<Text className="text-sm">{t('health.database.how_orders')}</Text>
-						<Text className="text-sm">{t('health.database.how_audits')}</Text>
-						<Text className="text-sm">{t('health.database.how_totals')}</Text>
-					</VStack>
-				</DialogBody>
-			</DialogContent>
-		</Dialog>
+		<Button
+			variant="ghost"
+			size="sm"
+			testID="db-how-syncing-works"
+			onPress={() => openExternalURL(HOW_SYNCING_WORKS_DOCS_URL)}
+		>
+			<HStack className="items-center gap-1">
+				<Icon name="circleInfo" size="sm" className="text-muted-foreground" />
+				<Text className="text-muted-foreground text-xs">{t('health.database.how_title')}</Text>
+			</HStack>
+		</Button>
 	);
 }
 
@@ -790,7 +773,7 @@ export function DatabaseScreen() {
 						) : null}
 					</VStack>
 					<HStack className="items-center gap-2">
-						<HowSyncingWorksDialog />
+						<HowSyncingWorksLink />
 						<Button
 							testID="db-check-everything"
 							variant="outline"
