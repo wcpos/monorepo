@@ -24,6 +24,18 @@ interface Props {
  *
  */
 export function Variations({ row, hideOutOfStock }: Props) {
+	/**
+	 * React Compiler caches the <VariationsTable> element on props that are all
+	 * referentially stable across a columnVisibility change, so React bails out
+	 * of re-rendering the subtree and subrows keep their stale columns.
+	 * https://github.com/facebook/react/issues/33057
+	 *
+	 * eslint's react-compiler rule (19.1.0-rc.2) claims this directive is unused,
+	 * but babel-plugin-react-compiler 1.0.0 (the app build) does memoize this
+	 * component — see column-visibility.test.tsx, which compiles it for real.
+	 */
+	// eslint-disable-next-line react-compiler/react-compiler -- directive is load-bearing under babel-plugin-react-compiler 1.0.0
+	'use no memo';
 	const parent = row.original.document;
 	const state = useQueryState<'variations'>();
 	const actions = useQueryStateActions<'variations'>();
