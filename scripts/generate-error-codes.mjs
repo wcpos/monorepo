@@ -65,7 +65,7 @@ const LOG_SOURCES = [
 	'payment-provider',
 ];
 const POS_LOGS_COPY =
-	'Every occurrence of this code is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure. For a store request, that context may include the server’s own error code (`serverCode`), the HTTP `status` or the `endpoint`; the fields shown depend on where the failure occurred. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh.';
+	'When WCPOS can save this error, it is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure. For a store request, that context may include the server’s own error code (`serverCode`), the HTTP `status` or the `endpoint`; the fields shown depend on where the failure occurred. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh. Also copy any browser-console error that appeared before the POS was able to write its own log entry.';
 const LOG_SOURCE_COPY = {
 	'network-inspector':
 		'**Network inspector** (web and desktop): open the developer tools — press F12 in the browser, or **Advanced → Toggle Developer Tools** in the desktop app’s menu — and select the **Network** tab. Follow this page’s retry guidance first; reproduce the action only when those steps say it is safe. A failing request shows the HTTP status and the raw response body, including error pages that never reach the POS log.',
@@ -146,7 +146,7 @@ function validateRegistry(registry) {
 		for (const [field, value] of Object.entries(entry)) {
 			const strings = typeof value === 'string' ? [value] : Array.isArray(value) ? value : [];
 			for (const item of strings) {
-				if (typeof item === 'string' && /[\r\n\t]/.test(item)) {
+				if (typeof item === 'string' && /[\u0000-\u001F\u007F]/.test(item)) {
 					throw new Error(`Entry ${entry.code ?? index} field ${field} contains control characters`);
 				}
 			}

@@ -1049,6 +1049,12 @@
 			"escalation": "support-with-export",
 			"summary": "This device asked the store for data far more often than normal.",
 			"docsBody": "Nothing was slowed down or blocked, and no order data is affected — this is a detection-only alarm. Sustained request floods usually indicate an app problem (a screen re-requesting the same data in a loop) rather than anything you did. If this code keeps appearing, export diagnostics and contact support so the loop can be found and fixed.",
+			"troubleshooting": [
+				"Keep working — this is a detection-only alarm. WCPOS does not slow, queue or drop any request, and no order or product data is affected.",
+				"If the code appears once and stops, no action is needed. If it repeats, note which screen was open and which action you were taking when it appeared.",
+				"Use Copy debug info while the event is still in the 30-day log window and contact WCPOS support; the export lets support trace the request loop."
+			],
+			"logSources": [],
 			"evidence": "monorepo#1134 item 2 ruling (2026-08-14): demand path stays uncapped, flood detection only; runaway class monorepo#888",
 			"introducedIn": "1.10.0"
 		},

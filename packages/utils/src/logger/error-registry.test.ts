@@ -158,11 +158,18 @@ describe('error registry', () => {
 				path.join(outputDirectory, 'error-docs', 'CHECKOUT101.mdx'),
 				'utf8'
 			);
+			const beforePosLog = readFileSync(
+				path.join(outputDirectory, 'error-docs', 'CLIENT999.mdx'),
+				'utf8'
+			);
 			const outcomeUnknown = readFileSync(
 				path.join(outputDirectory, 'error-docs', 'CHECKOUT201.mdx'),
 				'utf8'
 			);
 			expect(cartSafe).toContain('the fields shown depend on where the failure occurred');
+			expect(beforePosLog).toContain('When WCPOS can save this error');
+			expect(beforePosLog).not.toContain('Every occurrence of this code is recorded');
+			expect(beforePosLog).toContain('before the POS is able to write its own log entry');
 			expect(outcomeUnknown).toContain('reproduce the action only when those steps say it is safe');
 			expect(outcomeUnknown).not.toContain('select the **Network** tab and repeat the action');
 		} finally {
@@ -214,6 +221,15 @@ describe('error registry', () => {
 		expect(guidance).toContain("if it failed, follow that request's error");
 	});
 
+	it('documents the passive SYNC411 flood alarm without implying throttling', () => {
+		const entry = entryFor('SYNC411');
+		const guidance = entry.troubleshooting.join(' ');
+		expect(guidance).toContain('Keep working');
+		expect(guidance).toContain('does not slow, queue or drop any request');
+		expect(guidance).toContain('Copy debug info');
+		expect(entry.logSources).toEqual([]);
+	});
+
 	it('rejects control characters in registry strings — they break MDX frontmatter', () => {
 		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-newline-'));
 		const invalidRegistry = path.join(directory, 'registry.json');
@@ -234,7 +250,13 @@ describe('error registry', () => {
 		const invalidRegistry = path.join(directory, 'registry.json');
 
 		try {
-			for (const troubleshooting of [undefined, [], ['ok step', 'line one\nline two']]) {
+			for (const troubleshooting of [
+				undefined,
+				[],
+				['ok step', 'line one\nline two'],
+				['ok step', '\u0000'],
+				['ok step', '\u007f'],
+			]) {
 				writeFileSync(invalidRegistry, JSON.stringify([{ ...registry[0], troubleshooting }]));
 				expect(() => runGenerator(directory, invalidRegistry)).toThrow();
 			}
