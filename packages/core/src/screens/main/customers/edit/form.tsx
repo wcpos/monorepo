@@ -52,10 +52,15 @@ export function EditCustomerForm({ customer }: Props) {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: customer,
 					data: data as Partial<import('@wcpos/database').CustomerDocument>,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				await pushDocument(customer).then((savedDoc: unknown) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(

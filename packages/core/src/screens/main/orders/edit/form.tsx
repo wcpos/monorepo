@@ -153,10 +153,15 @@ export function EditOrderForm({ order }: Props) {
 
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: order,
 					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
 				await pushDocument(order).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {

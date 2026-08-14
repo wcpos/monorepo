@@ -124,10 +124,15 @@ export function EditProductForm({ product }: Props) {
 			} as any;
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: product,
 					data: patchData,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				await pushDocument(product).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(t('common.saved', { name: product.name }), {

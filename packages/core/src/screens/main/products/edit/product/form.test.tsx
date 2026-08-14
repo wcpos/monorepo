@@ -126,7 +126,7 @@ describe('EditProductForm save', () => {
 	});
 
 	it('closes the modal after a successful save', async () => {
-		mockLocalPatch.mockResolvedValue(undefined);
+		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
 		// isRxDocument only checks for this marker property
 		mockPushDocument.mockResolvedValue({ id: 5, isInstanceOfRxDocument: true });
 		render(<EditProductForm product={product} />);
@@ -141,7 +141,7 @@ describe('EditProductForm save', () => {
 	});
 
 	it('keeps the modal open when the push fails', async () => {
-		mockLocalPatch.mockResolvedValue(undefined);
+		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
 		mockPushDocument.mockRejectedValue(new Error('HTTP 500'));
 		render(<EditProductForm product={product} />);
 
@@ -154,7 +154,7 @@ describe('EditProductForm save', () => {
 	});
 
 	it('keeps the modal open when the push does not return a saved document', async () => {
-		mockLocalPatch.mockResolvedValue(undefined);
+		mockLocalPatch.mockResolvedValue({ changes: {}, document: product });
 		mockPushDocument.mockResolvedValue(undefined);
 		render(<EditProductForm product={product} />);
 
@@ -162,6 +162,20 @@ describe('EditProductForm save', () => {
 			await modalActions.get('product-edit-save-button')!.onPress!();
 		});
 
+		expect(mockModalClose).not.toHaveBeenCalled();
+	});
+
+	it('does not push or close when the local patch fails', async () => {
+		// localPatch swallows write errors and resolves undefined
+		mockLocalPatch.mockResolvedValue(undefined);
+		mockPushDocument.mockResolvedValue({ id: 5, isInstanceOfRxDocument: true });
+		render(<EditProductForm product={product} />);
+
+		await act(async () => {
+			await modalActions.get('product-edit-save-button')!.onPress!();
+		});
+
+		expect(mockPushDocument).not.toHaveBeenCalled();
 		expect(mockModalClose).not.toHaveBeenCalled();
 	});
 });
