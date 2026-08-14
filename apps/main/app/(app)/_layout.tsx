@@ -13,7 +13,7 @@ import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
 import { useUserValidation } from '@wcpos/core/hooks/use-user-validation';
-import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status-logger';
+import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-status/online-status-logger';
 import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-changes-bridge';
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';

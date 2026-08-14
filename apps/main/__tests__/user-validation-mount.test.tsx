@@ -55,7 +55,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	OnlineStatusProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	useOnlineStatus: () => ({ status: 'online' }),
 }));
-jest.mock('@wcpos/core/screens/main/components/online-status-logger', () => ({
+jest.mock('@wcpos/core/screens/main/components/online-status/online-status-logger', () => ({
 	OnlineStatusLogger: () => null,
 }));
 jest.mock('@wcpos/core/screens/main/contexts/extra-data', () => ({

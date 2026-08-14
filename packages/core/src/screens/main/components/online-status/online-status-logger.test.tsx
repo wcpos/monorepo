@@ -24,7 +24,7 @@ import { OnlineStatusLogger } from './online-status-logger';
 /* eslint-enable import/first */
 
 jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
-jest.mock('../../../contexts/translations', () => ({
+jest.mock('../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
@@ -55,6 +55,7 @@ describe('OnlineStatusLogger', () => {
 		expect(logger.error).toHaveBeenCalledTimes(1);
 		expect(logger.error).toHaveBeenCalledWith('Device went offline', {
 			code: 'SYNC999',
+			context: { type: 'connectivity.device-offline' },
 			showToast: true,
 			toast: { title: 'common.device_went_offline' },
 		});
@@ -67,8 +68,10 @@ describe('OnlineStatusLogger', () => {
 		rerender(<OnlineStatusLogger />);
 
 		expect(logger.success).toHaveBeenCalledTimes(1);
-		expect(logger.success).toHaveBeenCalledWith('common.connection_restored', {
+		expect(logger.success).toHaveBeenCalledWith('Connection restored', {
+			context: { type: 'connectivity.restored' },
 			showToast: true,
+			toast: { title: 'common.connection_restored' },
 		});
 	});
 

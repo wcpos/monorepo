@@ -558,6 +558,12 @@ describe('buildDebugInfo', () => {
 		const text = buildDebugInfo({
 			generatedAt: '2026-07-31T00:00:00.000Z',
 			appVersion: '1.10.0',
+			platform: 'electron',
+			platformVersion: '42.0.0',
+			wpVersion: '6.8.2',
+			wcVersion: '10.1.0',
+			wcposVersion: '1.9.0',
+			wcposProVersion: '1.9.0',
 			connectivity: 'online',
 			eventsToday: 187,
 			errorsToday: 2,
@@ -588,7 +594,9 @@ describe('buildDebugInfo', () => {
 				}),
 			],
 		});
-		expect(text).toContain('App version: 1.10.0');
+		expect(text).toContain(
+			'App version: 1.10.0\nPlatform: electron (42.0.0)\nWordPress: 6.8.2\nWooCommerce: 10.1.0\nWCPOS: 1.9.0\nWCPOS Pro: 1.9.0'
+		);
 		expect(text).toContain('Errors today: 2');
 		expect(text).toContain('products/812: invalid tax class (×3)');
 		// The raw event code is exported alongside the message: support greps it,
@@ -600,6 +608,10 @@ describe('buildDebugInfo', () => {
 	it('stays readable with nothing to report', () => {
 		const text = buildDebugInfo({
 			generatedAt: 'now',
+			wpVersion: '',
+			wcVersion: '',
+			wcposVersion: '',
+			wcposProVersion: '',
 			connectivity: 'offline',
 			eventsToday: 0,
 			errorsToday: 0,
@@ -609,6 +621,9 @@ describe('buildDebugInfo', () => {
 			lastCheck: null,
 			recentErrors: [],
 		});
+		expect(text).toContain('WordPress: unknown\nWooCommerce: unknown\nWCPOS: unknown');
+		expect(text).not.toContain('Platform:');
+		expect(text).not.toContain('WCPOS Pro:');
 		expect(text).toContain('Last server check: none yet');
 		expect(text).toContain('Recent errors (0):');
 		expect(text).toContain('  none');

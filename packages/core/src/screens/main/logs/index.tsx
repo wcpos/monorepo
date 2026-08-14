@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Platform, ScrollView, Share, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -15,6 +15,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useQueryRuntime } from '@wcpos/query';
 import { isVerboseDiagnostics } from '@wcpos/utils/logger';
 
+import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import {
@@ -114,7 +115,9 @@ function LogsScreenContent() {
 	const status = useEngineStatus();
 	const stats = useLogStats();
 	const mutations = useMutationCounts();
-	const { appVersion } = useAppInfo();
+	const { appVersion, platform, platformVersion, site } = useAppInfo();
+	const { store } = useAppState();
+	const storeName = useObservableEagerState(store.name$) as string;
 	const { verbose, setVerbose } = useVerboseDiagnostics();
 	const [preset, setPreset] = React.useState<LogPreset>('all');
 
@@ -271,6 +274,13 @@ function LogsScreenContent() {
 			const text = buildDebugInfo({
 				generatedAt: new Date().toISOString(),
 				appVersion,
+				platform,
+				platformVersion,
+				wpVersion: site?.wpVersion,
+				wcVersion: site?.wcVersion,
+				wcposVersion: site?.wcposVersion,
+				wcposProVersion: site?.wcposProVersion,
+				storeName,
 				connectivity: status.connectivity,
 				eventsToday: stats.eventsToday,
 				errorsToday: stats.errorsToday,
@@ -296,7 +306,20 @@ function LogsScreenContent() {
 				text1: t('health.logs.debug_copy_failed'),
 			});
 		}
-	}, [appVersion, canShare, logsCollection, mutations.pending, stats, status, t, verbose]);
+	}, [
+		appVersion,
+		canShare,
+		logsCollection,
+		mutations.pending,
+		platform,
+		platformVersion,
+		site,
+		stats,
+		status,
+		storeName,
+		t,
+		verbose,
+	]);
 
 	return (
 		<ScrollView

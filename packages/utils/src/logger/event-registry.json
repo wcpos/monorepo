@@ -101,6 +101,27 @@
 		"introducedIn": "1.11.0"
 	},
 	{
+		"type": "connectivity.device-offline",
+		"domain": "CLIENT",
+		"label": "Device went offline",
+		"description": "This device lost its internet connection. Sync resumes when the connection returns.",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "connectivity.restored",
+		"domain": "CLIENT",
+		"label": "Connection restored",
+		"description": "This device can reach your store's website again.",
+		"introducedIn": "1.10.0"
+	},
+	{
+		"type": "connectivity.website-unreachable",
+		"domain": "CLIENT",
+		"label": "Website is unreachable",
+		"description": "This device is online, but your store's website is not responding.",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "coverage.compacted",
 		"domain": "SYNC",
 		"label": "Tidied up local sync bookkeeping",

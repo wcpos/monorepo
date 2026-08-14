@@ -44,6 +44,19 @@ describe('useEventTitle', () => {
 		}
 	});
 
+	// The store may run in any language: the online-status rows persist forensic
+	// English (#1150) and MUST title through the translation on a Spanish till.
+	it('translates the connectivity rows, not their persisted English message', () => {
+		const title = titleFor(
+			row({
+				message: 'Website is unreachable',
+				context: { type: 'connectivity.website-unreachable' },
+			})
+		);
+
+		expect(title).toBe('[es] health.logs.event.connectivity_website_unreachable');
+	});
+
 	it('prefers the translation over the English string a past build persisted', () => {
 		const title = titleFor(
 			row({
