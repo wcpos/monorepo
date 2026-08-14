@@ -48,6 +48,12 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.cadence_recovered');
 		case 'cadence.start':
 			return t('health.logs.event.cadence_start');
+		case 'connectivity.device-offline':
+			return t('health.logs.event.connectivity_device_offline');
+		case 'connectivity.restored':
+			return t('health.logs.event.connectivity_restored');
+		case 'connectivity.website-unreachable':
+			return t('health.logs.event.connectivity_website_unreachable');
 		case 'coverage.compacted':
 			return t('health.logs.event.coverage_compacted');
 		case 'coverage.existence-prime':
@@ -205,6 +211,12 @@ export function translateEventDescription(
 			return t('health.logs.event_description.apply_rebaseline');
 		case 'apply.refetch':
 			return t('health.logs.event_description.apply_refetch');
+		case 'connectivity.device-offline':
+			return t('health.logs.event_description.connectivity_device_offline');
+		case 'connectivity.restored':
+			return t('health.logs.event_description.connectivity_restored');
+		case 'connectivity.website-unreachable':
+			return t('health.logs.event_description.connectivity_website_unreachable');
 		case 'coverage.require.outcome':
 			return t('health.logs.event_description.coverage_require_outcome');
 		case 'demand.flood-detected':

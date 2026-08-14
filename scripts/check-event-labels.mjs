@@ -35,6 +35,10 @@ export const EVENT_SOURCE_ROOTS = [
 	// packages/core: every event this feature emits lives here by design, so the
 	// gate stays enforcing instead of degrading to an unused-label warning.
 	'packages/core/src/screens/main/receipt/email-queue',
+	// The app-level online-status mount writes `connectivity.*` rows the Logs UI
+	// titles the same way. Scoped to its own directory for the same reason as
+	// the email queue above.
+	'packages/core/src/screens/main/components/online-status',
 ];
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
