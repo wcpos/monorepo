@@ -500,13 +500,12 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										recordId,
 										remoteId,
 										currentRevision: pushResult.currentRevision,
-										// The LIVE selectors, read at ack time (the reader contract in
-										// materialization/barcode-selectors): ack-document adoption
-										// re-materializes the payload and must derive `barcode` by the
-										// carriers in force now, not a pre-await snapshot.
-										...(scopeBarcodeSelectors()
-											? { barcodeSelectors: scopeBarcodeSelectors() }
-											: {}),
+										// The READER itself, never a snapshot (the contract in
+										// materialization/barcode-selectors): reconcile awaits its
+										// resident lookup before projecting the ack, so it must read
+										// the carriers at that point of use — a value captured here
+										// could predate a concurrent config-poll carrier swap.
+										barcodeSelectors: scopeBarcodeSelectors,
 										// A born-twice ack document is the EXISTING server record and
 										// the pushed payload was DISCARDED — adopting it here would
 										// overwrite the resident's local edit before the follow-up

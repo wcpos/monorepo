@@ -1304,8 +1304,16 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			fetch: async (url) => {
 				const parsed = new URL(url);
 				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				// The REAL wire shape (Write_Controller::document_for): the variation
+				// ack document is the pull-envelope WRAPPER — identity and REST
+				// fields nested under `payload`, id/parent_id on the wrapper.
+				const flat: Record<string, unknown> = {
+					...variationPayload(0),
+					stock_status: 'outofstock',
+				};
+				const { id, parent_id, ...inner } = flat;
 				return Response.json({
-					document: { ...variationPayload(0), stock_status: 'outofstock' },
+					document: { id, parent_id, payload: inner },
 					currentRevision: 'sha256:variation-after-stock-edit',
 				});
 			},
@@ -1334,6 +1342,39 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			expect(row.stockStatus).toBe('outofstock');
 			expect(row.parentId).toBe(50);
 			expect(row.sync).toMatchObject({ revision: 'sha256:variation-after-stock-edit' });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('ack adoption reads barcode carriers at point of use, not ack construction', async () => {
+		// The WriteAck carries the live READER (barcode-selectors contract):
+		// reconcile awaits its resident lookup before projecting, so carriers
+		// swapped by a config poll in that window must win over whatever was
+		// current when the ack was constructed.
+		const engine = engineWith({ fetch: async () => Response.json({}) });
+		try {
+			await engine.ready;
+			await insertServerBornProduct(engine, 1);
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const facet = writeFacetFor('products');
+			if (!facet) throw new Error('no products write facet');
+			let carriers: { products: string[]; variations: string[] } | undefined;
+			const ack = {
+				mutation: { mutationId: 'mut-live-reader', operation: 'update' as const, recordId: UUID_A },
+				recordId: UUID_A,
+				remoteId: PRODUCT_ID,
+				currentRevision: 'sha256:live-reader',
+				document: { ...productPayload(0), sku: 'LIVE-77' },
+				barcodeSelectors: () => carriers,
+			};
+			// The swap lands AFTER the ack exists but BEFORE reconcile runs — a
+			// snapshot taken at construction would materialize no barcode at all.
+			carriers = { products: ['sku'], variations: ['sku'] };
+			await facet.reconcile(scope.database, ack);
+			const row = await productJson(engine);
+			expect((row?.payload as Record<string, unknown>).barcode).toBe('LIVE-77');
 		} finally {
 			await engine.dispose();
 		}

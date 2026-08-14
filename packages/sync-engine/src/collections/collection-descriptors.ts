@@ -40,7 +40,11 @@ import type {
 	WooOrderPayload,
 } from '@wcpos/sync-core';
 
-import { type BarcodeSelectors, barcodeSelectorsFor } from '../materialization/barcode-selectors';
+import {
+	type BarcodeSelectors,
+	barcodeSelectorsFor,
+	type BarcodeSelectorsReader,
+} from '../materialization/barcode-selectors';
 import {
 	materializeGreedyPrunable,
 	materializeLocalOnly,
@@ -156,13 +160,15 @@ export type WriteAck = {
 	currentRevision: string | null;
 	document?: Record<string, unknown> | null;
 	/**
-	 * The acking SCOPE's live barcode carriers, read at ack time (see
-	 * materialization/barcode-selectors — the reader is called at the point of
-	 * use, never captured across awaits). Ack-document adoption re-materializes
-	 * the payload, and materializing without the scope's carriers would drop
-	 * the stored `payload.barcode`.
+	 * The acking SCOPE's live barcode-carrier READER (see
+	 * materialization/barcode-selectors: anything spanning awaits holds the
+	 * reader and calls it at the point of use — reconcile awaits its resident
+	 * lookup before projecting, so a snapshot taken at ack construction could
+	 * re-materialize `payload.barcode` by carriers a concurrent config poll
+	 * already replaced). Ack-document adoption re-materializes the payload, and
+	 * materializing without the scope's carriers would drop the stored barcode.
 	 */
-	barcodeSelectors?: BarcodeSelectors;
+	barcodeSelectors?: BarcodeSelectorsReader;
 	/**
 	 * The RAW server document, kept even when `document` is deliberately withheld
 	 * from value adoption (the born-twice arm). Identity-only source for
@@ -300,7 +306,9 @@ function ackBookkeeping(options: {
 			let ackDocumentPatch: Record<string, unknown> | null = null;
 			if (ack.document && ack.mutation.operation !== 'delete') {
 				try {
-					ackDocumentPatch = documentPatchFromAckDocument(ack.document, ack.barcodeSelectors);
+					// Point-of-use read: the resident lookup above awaited, so only now
+					// are the carriers guaranteed current for this projection.
+					ackDocumentPatch = documentPatchFromAckDocument(ack.document, ack.barcodeSelectors?.());
 				} catch {
 					// The push contract allows a trimmed ack document (a bare `{ id }`,
 					// no uuid meta) the pull materializer cannot key. Adoption is
@@ -526,8 +534,24 @@ const variationsWriteFacet = createWriteFacet({
 	parse: parseVariationsEnvelope,
 	project: variationDocument,
 	documentPatchFromAckDocument: (document, barcodeSelectors) =>
-		catalogAckPatch(variationDocument, document, barcodeSelectors),
+		catalogAckPatch(variationDocument, flattenVariationAckDocument(document), barcodeSelectors),
 });
+
+/**
+ * The variation push ack `document` is the SAME wrapper shape the pull
+ * envelope carries — `{ id, parent_id, payload, _rxdb_digest? }` with identity
+ * and the REST fields inside `payload` (Write_Controller::document_for) — so
+ * it must be flattened exactly like parseVariationsEnvelope flattens a pull
+ * row before the flat-payload projection can key it. Passing the wrapper
+ * straight through leaves no top-level meta_data, identifyRecord throws, and
+ * adoption silently degrades to the bookkeeping-only ack. A document that is
+ * already flat (defensive: no nested payload object) passes through untouched.
+ */
+function flattenVariationAckDocument(document: Record<string, unknown>): Record<string, unknown> {
+	if (typeof document.payload !== 'object' || document.payload === null) return document;
+	const [flattened] = parseVariationsEnvelope({ documents: [document] });
+	return flattened ?? document;
+}
 const customersWriteFacet = createWriteFacet({
 	collection: 'customers',
 	remoteIdField: 'wooCustomerId',
