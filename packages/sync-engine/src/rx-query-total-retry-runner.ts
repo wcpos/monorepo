@@ -40,6 +40,8 @@ export type QueryTotalRetryRunnerInput = {
 	retryAfterMs: number;
 	freshForMs: number | ((request: QueryTotalWooRequest) => number);
 	maxRequests?: number;
+	/** Run only this request and ignore its fresh cache entry. */
+	forceQueryKey?: string;
 };
 
 export type QueryTotalRetryRunnerResult = {
@@ -97,10 +99,14 @@ function idleState(state: QueryTotalRequestState, nowMs: number): QueryTotalRequ
 export async function runQueryTotalRetryRequests(
 	input: QueryTotalRetryRunnerInput
 ): Promise<QueryTotalRetryRunnerResult> {
-	const [runnableStates, freshCacheEntries] = await Promise.all([
+	let [runnableStates, freshCacheEntries] = await Promise.all([
 		input.stateRepository.readRunnable(input.nowMs),
 		input.cacheRepository.readFresh(input.nowMs),
 	]);
+	if (input.forceQueryKey !== undefined) {
+		runnableStates = runnableStates.filter((state) => state.queryKey === input.forceQueryKey);
+		freshCacheEntries = freshCacheEntries.filter((entry) => entry.queryKey !== input.forceQueryKey);
+	}
 	const freshCacheByQueryKey = new Map(freshCacheEntries.map((entry) => [entry.queryKey, entry]));
 	const result: QueryTotalRetryRunnerResult = {
 		scanned: runnableStates.length,

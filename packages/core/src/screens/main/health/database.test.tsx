@@ -20,6 +20,7 @@ const mockMutationCounts = {
 };
 const mockDeadLetterStuck: StuckRecord[] = [];
 const mockSync = jest.fn();
+const mockCheckCollection = jest.fn();
 const defaultStorageFootprint = {
 	breakdown: {
 		activeDataBytes: 1_000_000,
@@ -140,7 +141,12 @@ jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	runResetRefill: jest.fn(),
 	useQueryRuntime: () => ({
-		engine: { active: jest.fn(), scope: {}, sync: mockSync },
+		engine: {
+			active: jest.fn(),
+			scope: {},
+			sync: mockSync,
+			checkCollection: mockCheckCollection,
+		},
 	}),
 }));
 jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
@@ -195,6 +201,7 @@ jest.mock('./use-relative-time', () => ({
 describe('DatabaseScreen coverage', () => {
 	afterEach(() => {
 		mockSync.mockReset();
+		mockCheckCollection.mockReset();
 		mockMutationCounts.conflicts = 0;
 		mockMutationCounts.rejected = 0;
 		mockMutationCounts.unresolvedConflicts = 0;
@@ -202,9 +209,9 @@ describe('DatabaseScreen coverage', () => {
 		mockStorageFootprint = { ...defaultStorageFootprint };
 	});
 
-	it('spins and disables the row menu trigger while its manual sync runs', async () => {
+	it('spins only the checked row and disables manual controls while its check runs', async () => {
 		let finish!: (report: unknown) => void;
-		mockSync.mockReturnValue(
+		mockCheckCollection.mockReturnValue(
 			new Promise((resolve) => {
 				finish = resolve;
 			})
@@ -212,7 +219,7 @@ describe('DatabaseScreen coverage', () => {
 
 		// The row renders twice (md+ table row and small-screen card), so assert
 		// on every instance of the trigger.
-		const { getAllByTestId } = render(<DatabaseScreen />);
+		const { getAllByTestId, getByTestId } = render(<DatabaseScreen />);
 		const loadingStates = () =>
 			getAllByTestId('db-row-menu-products').map((el) => el.getAttribute('data-loading'));
 		expect(loadingStates()).not.toContain('true');
@@ -220,13 +227,21 @@ describe('DatabaseScreen coverage', () => {
 		fireEvent.click(getAllByTestId('db-row-sync-now-products')[0]);
 		await waitFor(() => expect(loadingStates()).not.toContain('false'));
 		expect((getAllByTestId('db-row-menu-products')[0] as HTMLButtonElement).disabled).toBe(true);
+		expect(
+			getAllByTestId('db-row-menu-orders').every(
+				(el) => el.getAttribute('data-loading') === 'false'
+			)
+		).toBe(true);
+		expect((getByTestId('db-check-everything') as HTMLButtonElement).disabled).toBe(true);
 
 		finish({ lane: 'all', status: 'ran' });
 		await waitFor(() => expect(loadingStates()).not.toContain('true'));
 		expect(
 			getAllByTestId('db-row-menu-products').every((el) => !(el as HTMLButtonElement).disabled)
 		).toBe(true);
-		expect(mockSync).toHaveBeenCalledTimes(1);
+		expect((getByTestId('db-check-everything') as HTMLButtonElement).disabled).toBe(false);
+		expect(mockCheckCollection).toHaveBeenCalledWith('products');
+		expect(mockSync).not.toHaveBeenCalled();
 	});
 
 	it('opens the docs site from the "How syncing works" link', () => {

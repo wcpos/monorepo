@@ -71,6 +71,88 @@ async function taskRows(engine: RxdbSyncEngine): Promise<Record<string, unknown>
 }
 
 describe('maintenance lanes through the public handle (slice 5d)', () => {
+	it('checks one fresh collection census and ticks change-signal exactly once', async () => {
+		let productTotal = 40;
+		const fetchWooQueryTotal = vi.fn(async ({ request }: { request: { queryKey: string } }) =>
+			request.queryKey === 'census:products' ? productTotal : 40
+		);
+		const engine = engineWith({
+			queryTotal: { fetchWooQueryTotal },
+			now: () => 1_000_000,
+			intervals: { censusFreshForMs: 60_000 },
+		});
+		await engine.ready;
+		await engine.sync('query-total-retry');
+		fetchWooQueryTotal.mockClear();
+		productTotal = 91;
+
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		const emissions: CensusTotals[] = [];
+		const unsubscribe = engine.censusChanges((totals) => emissions.push(totals));
+
+		await expect(engine.checkCollection('products')).resolves.toMatchObject({
+			collection: 'products',
+			status: 'ran',
+		});
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(1);
+		expect(fetchWooQueryTotal.mock.calls[0]?.[0].request).toMatchObject({
+			queryKey: 'census:products',
+			endpoint: 'products',
+			params: { page: 1, per_page: 1, status: 'publish' },
+		});
+		expect(events.filter((event) => event.type === 'query-total-cache')).toHaveLength(1);
+		expect(
+			events.filter((event) => event.type === 'lane-start' && event.lane === 'change-signal')
+		).toHaveLength(1);
+		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(91));
+
+		unsubscribe();
+		await engine.dispose();
+	});
+
+	it('skips a collection check while a lifecycle operation is pending', async () => {
+		const fetchWooQueryTotal = vi.fn(async () => 40);
+		const engine = engineWith({ queryTotal: { fetchWooQueryTotal } });
+		await engine.ready;
+		let enterReset!: () => void;
+		let releaseReset!: () => void;
+		const resetEntered = new Promise<void>((resolve) => {
+			enterReset = resolve;
+		});
+		const resetHeld = new Promise<void>((resolve) => {
+			releaseReset = resolve;
+		});
+		const resetting = engine.scope.resetCollection('products', {
+			beforeDrop: async () => {
+				enterReset();
+				await resetHeld;
+			},
+		});
+		await resetEntered;
+
+		await expect(engine.checkCollection('products')).resolves.toEqual({
+			collection: 'products',
+			status: 'skipped',
+			reason: 'lifecycle operation pending',
+		});
+		expect(fetchWooQueryTotal).not.toHaveBeenCalled();
+
+		releaseReset();
+		await resetting;
+		await engine.dispose();
+	});
+
+	it('rejects an unknown collection check', async () => {
+		const engine = engineWith();
+		await engine.ready;
+
+		await expect(engine.checkCollection('unknown' as never)).rejects.toThrow(
+			'Unknown sync collection "unknown"'
+		);
+		await engine.dispose();
+	});
+
 	it('seeds the POS bootstrap lanes once for each opened scope without reseeding a returning scope', async () => {
 		const initialIdentity = freshIdentity();
 		const engine = engineWith(undefined, initialIdentity);

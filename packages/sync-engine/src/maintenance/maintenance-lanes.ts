@@ -152,6 +152,11 @@ export type MaintenanceLanes = {
 	[
 		Entry in MaintenanceLaneRegistryEntry as Entry['targetKey']
 	]: Entry['laneName'] extends 'query-total-retry' ? MaintenanceLane | null : MaintenanceLane;
+} & {
+	refreshCensus(
+		collection: SyncCollectionName,
+		signal?: AbortSignal
+	): Promise<MaintenanceLaneReport>;
 };
 
 type MaintenanceLaneBodyReport = {
@@ -567,6 +572,80 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				};
 			})
 		: null;
+	const refreshCensus: MaintenanceLanes['refreshCensus'] = async (collection, signal) => {
+		if (!queryTotal) {
+			return {
+				lane: 'query-total-retry',
+				status: 'skipped',
+				reason: 'no queryTotal port provided',
+			};
+		}
+		return lane('query-total-retry', async (db, _scopeId, laneSignal) => {
+			const nowMs = now();
+			const queryKey = censusQueryKey(collection);
+			const stateRepository = withLedgerRecovery({
+				database: db,
+				trigger: 'query-total',
+				create: () => new RxQueryTotalRequestStateRepository(db as never),
+			});
+			const cacheRepository = withLedgerRecovery({
+				database: db,
+				trigger: 'query-total',
+				create: () => new RxQueryTotalCacheRepository(db as never),
+			});
+			const [currentState] = await stateRepository.readForQueryKeys([queryKey]);
+			if (currentState && currentState.status !== 'idle') {
+				return { summary: null, status: 'skipped', reason: 'query total request pending' };
+			}
+			const runnableState = {
+				queryKey,
+				status: 'failed',
+				ownerId: null,
+				claimedUntilMs: null,
+				attempt: 0,
+				retryAfterMs: nowMs,
+				updatedAtMs: nowMs,
+				request: {
+					queryKey,
+					method: 'GET',
+					endpoint: collection,
+					params: {
+						page: 1,
+						per_page: 1,
+						...(collection === 'products' || collection === 'variations'
+							? { status: 'publish' }
+							: {}),
+					},
+					totalHeader: 'X-WP-Total',
+				},
+			} satisfies QueryTotalRequestState;
+			if (currentState) await stateRepository.wake(currentState, runnableState);
+			else await stateRepository.claimNew(runnableState);
+			const result = await runQueryTotalRetryRequests({
+				stateRepository,
+				cacheRepository,
+				fetchWooQueryTotal: ({ request, signal: requestSignal }) =>
+					queryTotal.fetchWooQueryTotal({
+						request,
+						...(requestSignal ? { signal: requestSignal } : {}),
+					}),
+				signal: laneSignal,
+				ownerId: deps.ownerId(),
+				nowMs,
+				getNowMs: now,
+				leaseForMs: QUERY_TOTAL_LEASE_FOR_MS,
+				retryAfterMs: QUERY_TOTAL_RETRY_AFTER_MS,
+				freshForMs: deps.censusFreshForMs,
+				maxRequests: 1,
+				forceQueryKey: queryKey,
+			});
+			if (result.cacheEntries.length > 0) {
+				deps.emitEvent({ type: 'query-total-cache', entries: result.cacheEntries });
+			}
+			if (result.failed > 0) throw new Error(`Census refresh failed for ${collection}`);
+			return { summary: null };
+		}).tick(signal);
+	};
 
 	const customerTrickle = lane('customer-trickle', async (db, scopeId, signal, fetcher) => {
 		const result = await tickCustomerTrickle({
@@ -663,6 +742,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		productBrowseWindowSeed,
 		referenceSeed,
 		queryTotalRetry,
+		refreshCensus,
 		customerTrickle,
 		coverageCompaction,
 		existencePrime,

@@ -29,7 +29,7 @@ import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/q
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { AttentionPanel } from './attention-panel';
-import { useManualSync } from './use-manual-sync';
+import { useCollectionCheck, useManualSync } from './use-manual-sync';
 import { mergeStuckRecords, useDeadLetterStuckRecords } from './use-dead-letter-attention';
 import { useT } from '../../../contexts/translations';
 import { formatSkewMagnitude } from '../logs/logs-logic';
@@ -223,7 +223,8 @@ function CollectionRowView({
 }) {
 	const t = useT();
 	const { engine } = useQueryRuntime();
-	const { syncing, sync } = useManualSync();
+	const { syncing } = useManualSync();
+	const { checking, check } = useCollectionCheck();
 	const [confirming, setConfirming] = React.useState(false);
 	const [phase, setPhase] = React.useState<RowPhase>('idle');
 	const story = useRowStory(row, phase);
@@ -288,14 +289,14 @@ function CollectionRowView({
 					variant="ghost"
 					size="sm"
 					testID={`db-row-menu-${row.key}`}
-					disabled={phase === 'clearing' || syncing}
-					loading={syncing}
+					disabled={phase === 'clearing' || syncing || checking !== null}
+					loading={syncing || checking === row.key}
 				>
 					<Icon name="ellipsisVertical" className="text-muted-foreground" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
-				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void sync()}>
+				<DropdownMenuItem testID={`db-row-sync-now-${row.key}`} onPress={() => void check(row.key)}>
 					<Text>{t('health.database.sync_now')}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuItem onPress={() => setConfirming(true)}>
@@ -504,6 +505,7 @@ function HowSyncingWorksLink() {
 export function DatabaseScreen() {
 	const t = useT();
 	const { syncing, sync } = useManualSync();
+	const { checking } = useCollectionCheck();
 	const status = useEngineStatus();
 	const counts = useCollectionCounts();
 	const census = useCensusTotals();
@@ -779,6 +781,7 @@ export function DatabaseScreen() {
 							variant="outline"
 							size="sm"
 							loading={syncing}
+							disabled={checking !== null}
 							onPress={() => void sync()}
 						>
 							<ButtonText>{t('health.database.check_everything')}</ButtonText>
