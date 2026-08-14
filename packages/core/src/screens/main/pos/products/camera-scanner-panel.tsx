@@ -30,6 +30,10 @@ const MIN_PANEL_HEIGHT = 96;
 const MAX_PANEL_HEIGHT = 480;
 const DEFAULT_PANEL_HEIGHT = 176;
 const PANEL_HEIGHT_STEP = 16;
+// The handle's layout stays slim; hitSlop restores the 44px minimum touch
+// target without reserving 44px of vertical space between camera and grid.
+const RESIZE_HANDLE_HEIGHT = 20;
+const RESIZE_HANDLE_HIT_SLOP = (44 - RESIZE_HANDLE_HEIGHT) / 2;
 
 const clampPanelHeight = (height: number) =>
 	Math.min(MAX_PANEL_HEIGHT, Math.max(MIN_PANEL_HEIGHT, Math.round(height)));
@@ -100,6 +104,7 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 		() =>
 			Gesture.Pan()
 				.runOnJS(true)
+				.hitSlop({ top: RESIZE_HANDLE_HIT_SLOP, bottom: RESIZE_HANDLE_HIT_SLOP })
 				.onUpdate((event) => {
 					setDragHeight(clampPanelHeight(committedHeight + event.translationY));
 				})
@@ -223,8 +228,8 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 			</View>
 			<GestureDetector gesture={resizeGesture}>
 				<View
-					className="web:cursor-ns-resize web:hover:opacity-100 items-center justify-center py-1 opacity-40"
-					style={{ minHeight: 44 }}
+					className="web:cursor-ns-resize web:hover:opacity-100 items-center justify-center opacity-40"
+					style={{ height: RESIZE_HANDLE_HEIGHT }}
 					accessible
 					accessibilityLabel={t('pos_products.camera_resize_handle')}
 					accessibilityRole="adjustable"

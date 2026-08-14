@@ -68,6 +68,7 @@ jest.mock('@wcpos/components/icon', () => ({
 const mockPanCallbacks: {
 	onUpdate?: (event: { translationY: number }) => void;
 	onFinalize?: (event: { translationY: number }) => void;
+	hitSlop?: { top: number; bottom: number };
 } = {};
 jest.mock('react-native-gesture-handler', () => ({
 	GestureDetector: ({ children }: { children?: React.ReactNode }) => {
@@ -80,6 +81,10 @@ jest.mock('react-native-gesture-handler', () => ({
 		Pan: () => {
 			const gesture = {
 				runOnJS: () => gesture,
+				hitSlop: (slop: { top: number; bottom: number }) => {
+					mockPanCallbacks.hitSlop = slop;
+					return gesture;
+				},
 				onUpdate: (callback: (event: { translationY: number }) => void) => {
 					mockPanCallbacks.onUpdate = callback;
 					return gesture;
@@ -359,10 +364,13 @@ describe('CameraScannerPanel', () => {
 		expect(mockPatchUI).toHaveBeenLastCalledWith({ scannerHeight: 96 });
 	});
 
-	it('renders a 44px resize touch target', () => {
+	it('keeps the handle band slim while hitSlop preserves the 44px touch target', () => {
 		render(<CameraScannerPanel onClose={jest.fn()} />);
 
-		expect(screen.getByTestId('camera-scanner-resize-handle').style.minHeight).toBe('44px');
+		const handle = screen.getByTestId('camera-scanner-resize-handle');
+		expect(handle.style.height).toBe('20px');
+		// 20px of layout + 12px slop each side = the 44px minimum touch target.
+		expect(mockPanCallbacks.hitSlop).toEqual({ top: 12, bottom: 12 });
 	});
 
 	it('clamps drag-resize to the min/max bounds', () => {
