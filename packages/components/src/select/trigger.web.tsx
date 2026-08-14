@@ -53,6 +53,7 @@ function Trigger({
 	asChild,
 	onPress: onPressProp,
 	onPointerDown: onPointerDownProp,
+	onKeyDown: onKeyDownProp,
 	role: _role,
 	disabled,
 	ref,
@@ -91,14 +92,19 @@ function Trigger({
 	 *
 	 * `null` means "no pointer gesture in flight", which is the keyboard case:
 	 * Enter/Space reach `onPress` without a preceding `pointerdown`. It is
-	 * reset after every press so a stale touch value can never leak into a
-	 * later keyboard activation.
+	 * reset after every completed press and when keyboard activation begins so
+	 * an aborted touch can never leak into a later keyboard activation.
 	 */
 	const pointerTypeRef = React.useRef<string | null>(null);
 
 	function onPointerDown(ev: React.PointerEvent) {
 		pointerTypeRef.current = ev.pointerType || null;
 		onPointerDownProp?.(ev);
+	}
+
+	function onKeyDown(ev: React.KeyboardEvent) {
+		if (ev.key === 'Enter' || ev.key === ' ') pointerTypeRef.current = null;
+		onKeyDownProp?.(ev);
 	}
 
 	/**
@@ -122,6 +128,7 @@ function Trigger({
 			<Component
 				onPress={onPress}
 				onPointerDown={onPointerDown}
+				onKeyDown={onKeyDown}
 				ref={composedRef}
 				role="button"
 				disabled={disabled}

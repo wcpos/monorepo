@@ -117,6 +117,20 @@ describe('web Select trigger — pointer type gating (#863)', () => {
 		expect(mockOnOpenChange).toHaveBeenCalledTimes(1);
 	});
 
+	it.each(['Enter', ' '])(
+		'does not let an aborted touch leak into a later %j activation',
+		(key) => {
+			const trigger = renderTrigger();
+
+			firePointerEvent(trigger, 'pointerdown', 'touch');
+			fireEvent.keyDown(trigger, { key });
+			fireEvent.keyUp(trigger, { key });
+			firePointerEvent(trigger, 'click', '');
+
+			expect(mockOnOpenChange).not.toHaveBeenCalled();
+		}
+	);
+
 	it('does nothing when disabled', () => {
 		render(<Trigger testID="disabled-trigger" disabled />);
 		const trigger = screen.getByTestId('disabled-trigger');
@@ -134,6 +148,15 @@ describe('web Select trigger — pointer type gating (#863)', () => {
 		firePointerEvent(screen.getByTestId('pd-trigger'), 'pointerdown', 'touch');
 
 		expect(onPointerDown).toHaveBeenCalledTimes(1);
+	});
+
+	it('still calls a caller-supplied onKeyDown', () => {
+		const onKeyDown = jest.fn();
+		render(<Trigger testID="kd-trigger" onKeyDown={onKeyDown} />);
+
+		fireEvent.keyDown(screen.getByTestId('kd-trigger'), { key: 'Enter' });
+
+		expect(onKeyDown).toHaveBeenCalledTimes(1);
 	});
 });
 
