@@ -17,6 +17,7 @@ import {
 type FakeQueue = {
 	count$: BehaviorSubject<number>;
 	execError?: Error;
+	exec?: () => Promise<number>;
 };
 
 function fakeEngine(queue: FakeQueue | null): RxdbSyncEngine {
@@ -29,9 +30,11 @@ function fakeEngine(queue: FakeQueue | null): RxdbSyncEngine {
 							count: () => ({
 								$: queue.count$,
 								exec: () =>
-									queue.execError
-										? Promise.reject(queue.execError)
-										: Promise.resolve(queue.count$.value),
+									queue.exec
+										? queue.exec()
+										: queue.execError
+											? Promise.reject(queue.execError)
+											: Promise.resolve(queue.count$.value),
 							}),
 						},
 					},
@@ -63,10 +66,29 @@ describe('countUnsentChanges', () => {
 		});
 	});
 
-	it('reports an empty queue as "nothing to lose"', () =>
+	it('does not treat an empty active queue as proof that every erased scope is empty', () =>
 		expect(countUnsentChanges(fakeEngine({ count$: new BehaviorSubject(0) }))).resolves.toEqual({
-			status: 'none',
+			status: 'unknown',
 		}));
+
+	it('falls back promptly when the live queue count never settles', async () => {
+		jest.useFakeTimers();
+		rememberUnsentChanges(2);
+		const settled = jest.fn();
+		void countUnsentChanges(
+			fakeEngine({
+				count$: new BehaviorSubject(0),
+				exec: () => new Promise<number>(() => undefined),
+			})
+		).then(settled);
+
+		try {
+			await jest.advanceTimersByTimeAsync(10_000);
+			expect(settled).toHaveBeenCalledWith({ status: 'some', count: 2 });
+		} finally {
+			jest.useRealTimers();
+		}
+	});
 
 	it('falls back to the remembered reading when the queue cannot be read', async () => {
 		rememberUnsentChanges(2);
@@ -116,6 +138,14 @@ describe('subscribeToUnsentChanges', () => {
 	it('records "unknown" rather than a stale zero when there is no database', () => {
 		rememberUnsentChanges(3);
 		const stop = subscribeToUnsentChanges(fakeEngine(null));
+
+		expect(readUnsentChanges()).toEqual({ status: 'unknown' });
+
+		stop();
+	});
+
+	it('records "unknown" rather than trusting an empty active scope', () => {
+		const stop = subscribeToUnsentChanges(fakeEngine({ count$: new BehaviorSubject(0) }));
 
 		expect(readUnsentChanges()).toEqual({ status: 'unknown' });
 

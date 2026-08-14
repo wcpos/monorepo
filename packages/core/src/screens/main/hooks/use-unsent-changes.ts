@@ -40,6 +40,8 @@ type CountCollection = {
 	count(): { $: Observable<number>; exec(): Promise<number> };
 };
 
+const UNSENT_CHANGES_COUNT_TIMEOUT_MS = 1_000;
+
 function queueOf(database: EngineDatabase): CountCollection {
 	return database.collections[MUTATION_QUEUE_RXDB_COLLECTION] as unknown as CountCollection;
 }
@@ -65,7 +67,9 @@ function unsentCount$(engine: RxdbSyncEngine): Observable<number | null> {
  */
 export function subscribeToUnsentChanges(engine: RxdbSyncEngine): () => void {
 	const subscription = unsentCount$(engine).subscribe({
-		next: (count) => rememberUnsentChanges(count),
+		// An empty active queue cannot prove that inactive scope databases erased by
+		// clearAllDB are empty, so it is not safe to remember the reassuring state.
+		next: (count) => rememberUnsentChanges(count === 0 ? null : count),
 		error: () => rememberUnsentChanges(null),
 	});
 	return () => subscription.unsubscribe();
@@ -78,14 +82,24 @@ export function subscribeToUnsentChanges(engine: RxdbSyncEngine): () => void {
  * broken profile removes the only way out of it.
  */
 export async function countUnsentChanges(engine: RxdbSyncEngine): Promise<UnsentChanges> {
+	let deadline: ReturnType<typeof setTimeout> | undefined;
 	try {
 		const database = engine.active()?.database;
 		if (!database) return readUnsentChanges();
-		const count = await queueOf(database).count().exec();
-		rememberUnsentChanges(count);
+		const count = await Promise.race([
+			queueOf(database).count().exec(),
+			new Promise<null>((resolve) => {
+				deadline = setTimeout(() => resolve(null), UNSENT_CHANGES_COUNT_TIMEOUT_MS);
+			}),
+		]);
+		if (count === null) return readUnsentChanges();
+		rememberUnsentChanges(count === 0 ? null : count);
+		if (count === 0) return readUnsentChanges();
 		return classifyUnsentChanges(count);
 	} catch {
 		return readUnsentChanges();
+	} finally {
+		if (deadline !== undefined) clearTimeout(deadline);
 	}
 }
 
