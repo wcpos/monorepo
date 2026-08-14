@@ -72,7 +72,75 @@ function revCollectionOverMap(queued: Map<string, QueuedMutation>): RxRecordMuta
 	};
 }
 
+async function enqueueCatalogPayload(
+	collectionName: 'products' | 'variations',
+	payload: Record<string, unknown>
+) {
+	const mutationCollection = createFakeMutationCollection();
+	let residentData: Record<string, unknown> = {
+		payload: { name: 'Probe' },
+		sync: { revision: 'sha256:server-r1' },
+		local: { dirty: false, pendingMutationIds: [] },
+	};
+	const resident = {
+		incrementalModify: async (
+			modify: (data: Record<string, unknown>) => Record<string, unknown>
+		) => {
+			residentData = modify(residentData);
+		},
+		remove: async () => undefined,
+		toJSON: () => residentData,
+	};
+	const db = {
+		collections: {
+			[collectionName]: { findOne: () => ({ exec: async () => resident }) },
+			recordMutations: mutationCollection,
+		},
+	} as unknown as RxDatabase;
+
+	await enqueueWriteIntent({
+		db,
+		intent: {
+			collection: collectionName,
+			operation: 'update',
+			recordId: 'product-1',
+			payload,
+		},
+		mintUuid: () => 'mutation-1',
+		now: () => '2026-08-14T00:00:00.000Z',
+	});
+
+	return [...mutationCollection.store.values()][0]?.mutation.payload;
+}
+
 describe('enqueueWriteIntent', () => {
+	it.each(['products', 'variations'] as const)(
+		'strips null cost_of_goods_sold values from %s payloads',
+		async (collectionName) => {
+			const payload = await enqueueCatalogPayload(collectionName, {
+				name: 'Renamed probe',
+				cost_of_goods_sold: {
+					values: [{ defined_value: null, effective_value: 0 }],
+					total_value: 0,
+				},
+			});
+
+			expect(payload).not.toHaveProperty('cost_of_goods_sold');
+			expect(payload).toMatchObject({ name: 'Renamed probe' });
+		}
+	);
+
+	it('keeps finite product cost_of_goods_sold values in their writable shape', async () => {
+		const payload = await enqueueCatalogPayload('products', {
+			cost_of_goods_sold: {
+				values: [{ defined_value: 8.5, effective_value: 8.5 }],
+				total_value: 8.5,
+			},
+		});
+
+		expect(payload?.cost_of_goods_sold).toEqual({ values: [{ defined_value: 8.5 }] });
+	});
+
 	it.each([
 		['explicit create then plain update', true, false],
 		['plain create then explicit update', false, true],

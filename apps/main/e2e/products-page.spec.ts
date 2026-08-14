@@ -296,6 +296,89 @@ test.describe('Products Page (Pro)', () => {
 		}
 	});
 
+	test('should rename a product via the edit modal and push the change to the server', async ({
+		posPage: page,
+		request,
+		storeAuthorization,
+	}, testInfo) => {
+		const storeUrl = getStoreUrl(testInfo);
+		const writerAuthorization = await productWriterAuthorization(request, storeUrl);
+		const authorization = writerAuthorization ?? storeAuthorization();
+		const created = await createSearchProbe({
+			request,
+			storeUrl,
+			authorization,
+			collection: 'products',
+			workerIndex: testInfo.workerIndex,
+			writerConfigured: productWriterCredentialsConfigured(),
+		});
+		if (!created.ok) {
+			const hint = writerAuthorization
+				? created.reason
+				: `${created.reason} (set the E2E_PRODUCT_WRITER_USER/_PASS secrets to enable this spec)`;
+			test.skip(true, hint);
+			return;
+		}
+		const rowTestId = created.probe.rowTestId;
+		if (!rowTestId) {
+			throw new Error('Product edit probe is missing its WC response slug-derived row testID');
+		}
+		const { probe } = created;
+		const newName = `Renamed ${probe.token}`;
+
+		try {
+			await navigateToPage(page, 'products');
+			const screen = page.getByTestId('screen-products').filter({ visible: true });
+			const searchInput = screen.getByTestId('search-products');
+			await expect(searchInput).toBeVisible({ timeout: 30_000 });
+			await searchAndWaitForServer(page, searchInput, 'products', probe.token);
+
+			const row = screen.getByTestId(rowTestId);
+			await expect(row).toBeVisible({ timeout: 30_000 });
+			await row.getByTestId('product-actions-button').click();
+			await page.getByTestId('product-actions-edit').click();
+
+			const modal = page.getByTestId('product-edit-modal');
+			await expect(modal).toBeVisible({ timeout: 15_000 });
+			const nameInput = modal.getByTestId('product-edit-name-input');
+			await nameInput.clear();
+			await nameInput.fill(newName);
+
+			const pushResponsePending = page.waitForResponse(isPushProductsResponse, {
+				timeout: 60_000,
+			});
+			pushResponsePending.catch(() => {});
+			await modal.getByTestId('product-edit-save-button').click();
+
+			const pushResponse = await pushResponsePending;
+			if (pushResponse.status() === 403) {
+				test.skip(
+					true,
+					'Store rejects the signed-in cashier catalog push (HTTP 403); grant the E2E cashier product edit capability to enable this spec'
+				);
+			}
+			expect(pushResponse.ok(), `products push failed: HTTP ${pushResponse.status()}`).toBeTruthy();
+
+			await expect
+				.poll(
+					async () => {
+						const record = await fetchProductRecord(request, storeUrl, authorization, probe.id);
+						return record.name;
+					},
+					{ timeout: 30_000 }
+				)
+				.toBe(newName);
+		} finally {
+			await deleteSearchProbe({
+				request,
+				storeUrl,
+				authorization,
+				collection: probe.collection,
+				id: probe.id,
+			});
+		}
+	});
+
 	test('should show red snackbar and auto-revert when the server rejects a stock edit', async ({
 		posPage: page,
 		request,
