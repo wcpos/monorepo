@@ -4,6 +4,7 @@ export {
 	useQueryStateActions,
 	useSearchResetNonce,
 } from './query-state-store';
+export { useGuardedExtendLimit } from './use-guarded-extend-limit';
 export {
 	useCollectionBinding,
 	useLogsBinding,

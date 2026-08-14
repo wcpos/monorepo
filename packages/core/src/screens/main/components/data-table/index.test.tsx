@@ -6,6 +6,7 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { QueryStateProvider } from '../../../../query';
 import { DataTable, DataTableFooter } from './index';
 
 const mockSetSort = jest.fn();
@@ -149,26 +150,32 @@ describe('DataTable binding contract', () => {
 		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
 
 		render(
-			<BindingDataTable
-				id="logs"
-				collectionName="logs"
-				resource={resource}
-				sort={{ field: 'level', direction: 'asc' }}
-				actions={{
-					setSort: mockSetSort,
-					extendLimit: mockExtendLimit,
-					setFilter: mockSetFilter,
-				}}
-				active$={active$}
-				total$={total$}
-				totalSource$={totalSource$}
-				sync={sync}
-				renderItem={({ table }: { table: { options: { meta?: Record<string, unknown> } } }) => {
-					mockTableMeta = table.options.meta;
-					return <div />;
-				}}
-				TableFooterComponent={Footer}
-			/>
+			<QueryStateProvider
+				collection="logs"
+				initialPageSize={1}
+				initialSort={{ field: 'level', direction: 'asc' }}
+			>
+				<BindingDataTable
+					id="logs"
+					collectionName="logs"
+					resource={resource}
+					sort={{ field: 'level', direction: 'asc' }}
+					actions={{
+						setSort: mockSetSort,
+						extendLimit: mockExtendLimit,
+						setFilter: mockSetFilter,
+					}}
+					active$={active$}
+					total$={total$}
+					totalSource$={totalSource$}
+					sync={sync}
+					renderItem={({ table }: { table: { options: { meta?: Record<string, unknown> } } }) => {
+						mockTableMeta = table.options.meta;
+						return <div />;
+					}}
+					TableFooterComponent={Footer}
+				/>
+			</QueryStateProvider>
 		);
 
 		fireEvent.click(screen.getByTestId('sort-level'));
@@ -201,21 +208,27 @@ describe('DataTable binding contract', () => {
 		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
 
 		render(
-			<BindingDataTable
-				id="coupons"
-				collectionName="coupons"
-				resource={resource}
-				sort={{ field: 'code', direction: 'desc' }}
-				actions={{
-					setSort: mockSetSort,
-					extendLimit: mockExtendLimit,
-					setFilter: mockSetFilter,
-				}}
-				active$={active$}
-				total$={total$}
-				totalSource$={totalSource$}
-				sync={sync}
-			/>
+			<QueryStateProvider
+				collection="coupons"
+				initialPageSize={1}
+				initialSort={{ field: 'code', direction: 'desc' }}
+			>
+				<BindingDataTable
+					id="coupons"
+					collectionName="coupons"
+					resource={resource}
+					sort={{ field: 'code', direction: 'desc' }}
+					actions={{
+						setSort: mockSetSort,
+						extendLimit: mockExtendLimit,
+						setFilter: mockSetFilter,
+					}}
+					active$={active$}
+					total$={total$}
+					totalSource$={totalSource$}
+					sync={sync}
+				/>
+			</QueryStateProvider>
 		);
 
 		expect(mockDefaultFooterProps).toMatchObject({
@@ -233,22 +246,28 @@ describe('DataTable binding contract', () => {
 		const BindingDataTable = DataTable as unknown as React.ComponentType<Record<string, unknown>>;
 
 		render(
-			<BindingDataTable
-				id="pos-products"
-				collectionName="products"
-				resource={{ kind: 'resource' }}
-				sort={{ field: 'name', direction: 'asc' }}
-				actions={{
-					setSort: mockSetSort,
-					extendLimit: mockExtendLimit,
-					setFilter: mockSetFilter,
-				}}
-				active$={of(false)}
-				total$={of(27)}
-				totalSource$={of('coverage' as const)}
-				sync={jest.fn(async () => undefined)}
-				TableFooterComponent={TaxFooter}
-			/>
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={1}
+				initialSort={{ field: 'name', direction: 'asc' }}
+			>
+				<BindingDataTable
+					id="pos-products"
+					collectionName="products"
+					resource={{ kind: 'resource' }}
+					sort={{ field: 'name', direction: 'asc' }}
+					actions={{
+						setSort: mockSetSort,
+						extendLimit: mockExtendLimit,
+						setFilter: mockSetFilter,
+					}}
+					active$={of(false)}
+					total$={of(27)}
+					totalSource$={of('coverage' as const)}
+					sync={jest.fn(async () => undefined)}
+					TableFooterComponent={TaxFooter}
+				/>
+			</QueryStateProvider>
 		);
 
 		expect(screen.getByTestId('tax-based-on')).toBeTruthy();
