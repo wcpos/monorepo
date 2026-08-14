@@ -20,6 +20,8 @@ const REQUIRED_FIELDS = [
 	'docsBody',
 	'introducedIn',
 	'evidence',
+	'troubleshooting',
+	'logSources',
 ];
 const SEED_SYMBOLS = [
 	'APP_START_FAILED',
@@ -153,6 +155,34 @@ describe('error registry', () => {
 
 		try {
 			expect(() => runGenerator(directory, invalidRegistry)).toThrow();
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
+	it('rejects an entry whose troubleshooting is missing, empty, or contains control characters', () => {
+		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-troubleshooting-'));
+		const invalidRegistry = path.join(directory, 'registry.json');
+
+		try {
+			for (const troubleshooting of [undefined, [], ['ok step', 'line one\nline two']]) {
+				writeFileSync(invalidRegistry, JSON.stringify([{ ...registry[0], troubleshooting }]));
+				expect(() => runGenerator(directory, invalidRegistry)).toThrow();
+			}
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
+	it('rejects an entry with an unknown or duplicate logSource', () => {
+		const directory = mkdtempSync(path.join(tmpdir(), 'wcpos-error-codes-logsources-'));
+		const invalidRegistry = path.join(directory, 'registry.json');
+
+		try {
+			for (const logSources of [['sentry'], ['woo-status-logs', 'woo-status-logs']]) {
+				writeFileSync(invalidRegistry, JSON.stringify([{ ...registry[0], logSources }]));
+				expect(() => runGenerator(directory, invalidRegistry)).toThrow();
+			}
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}

@@ -10,6 +10,16 @@
 		"escalation": "support-with-export",
 		"summary": "This change could not be saved to the local database and remains only on this device.",
 		"docsBody": "Do not clear or reload local data. Export diagnostics and contact support before retrying or repairing anything.",
+		"troubleshooting": [
+			"Note the record named in the log entry — that is the change that has not been saved anywhere else.",
+			"Do not clear site data, reset the app, or uninstall: the unsaved change exists only on this device, and clearing local storage deletes it permanently.",
+			"Check the device's free storage — a full disk or an exhausted browser storage quota is the most common reason a local write fails.",
+			"Restart WCPOS once and make a small, harmless edit to confirm whether new changes save.",
+			"If writes keep failing, use Copy debug info on the Logs screen and contact support before attempting any repair."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "Sentry 18V/11C; monorepo#163",
 		"introducedIn": "1.10.0"
 	},
@@ -24,6 +34,15 @@
 		"escalation": "support-with-export",
 		"summary": "Local store data is damaged and needs repair before syncing can continue.",
 		"docsBody": "Run the targeted repair for the affected data, and reset that local data only if the problem returns.",
+		"troubleshooting": [
+			"Open Store health → Database and run the targeted repair for the affected data; a full reset discards more than the repair does.",
+			"Retry the action that failed, then watch Store health → Logs for a repeat of this code.",
+			"If the same data is flagged again, reset just that local data so it downloads fresh from your store — but only after any unsent changes have been noted.",
+			"Corruption that keeps returning points at failing device storage: export debug info and contact support."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "Sentry 1RT/2GB",
 		"introducedIn": "1.10.0"
 	},
@@ -38,6 +57,15 @@
 		"escalation": "none",
 		"summary": "Your store cannot be reached right now, so changes will stay on this device.",
 		"docsBody": "Check the connection and keep working offline; syncing will retry automatically when the store is reachable.",
+		"troubleshooting": [
+			"Keep selling — sales are saved on this device and sync resumes automatically once the store answers.",
+			"Check whether the till itself is online: can any other website load from this device?",
+			"Open your store's own website in a browser tab on the same device; if it does not load there either, the site or its hosting is down, not the POS.",
+			"If the site loads but the POS stays offline, something between the two is blocking API requests — a VPN, firewall, ad-blocker or security plugin; the network inspector shows which request fails."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "Sentry QQ",
 		"introducedIn": "1.10.0"
 	},
@@ -52,6 +80,19 @@
 		"escalation": "support-with-export",
 		"summary": "Your store returned an error, so this action did not complete.",
 		"docsBody": "The store was reached but its server failed to handle the request. This is a problem on the website rather than the POS, so retrying alone may not help: check the site's error log or ask the host to, then retry. Nothing was lost on this device.",
+		"troubleshooting": [
+			"Expand the log entry and note the status, endpoint and serverCode — they say what the server was doing when it failed.",
+			"Open WooCommerce → Status → Logs on the site and check the newest fatal-errors log around the failure time; a 500-class response almost always leaves a PHP error there.",
+			"If the failure started after a plugin, theme or PHP update on the site, suspect that change first and roll it back or disable it.",
+			"If WooCommerce's logs show nothing, ask the hosting provider for the server's PHP error log for the same time window.",
+			"Once the server-side cause is fixed, retry from the POS — the change is still saved on this device."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs",
+			"woo-status-logs",
+			"host-error-log"
+		],
 		"evidence": "private mining SY02002+500; woocommerce-pos#572 (critical error on this website); woocommerce-pos#571 (PHP fatal, disk full)",
 		"introducedIn": "1.10.0"
 	},
@@ -66,6 +107,15 @@
 		"escalation": "site-admin",
 		"summary": "Your store is limiting requests temporarily, so this action will retry later.",
 		"docsBody": "Wait before retrying. If rate limits continue, ask the site administrator or host to review the store's request limits.",
+		"troubleshooting": [
+			"Wait — the POS backs off and retries by itself; retrying by hand only extends the throttle.",
+			"Nothing needs to be re-entered: the affected changes stay on the device and go through on a later attempt.",
+			"If the code keeps appearing, ask the site administrator to find which layer returns the 429 — a security plugin, a CDN or firewall rule, or the host's own limits — and to allow the POS's REST traffic.",
+			"The expanded log entry's endpoint and timestamps help the administrator match the throttle in their own dashboards."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "HTTP 429; monorepo#884",
 		"introducedIn": "1.10.0"
 	},
@@ -80,6 +130,16 @@
 		"escalation": "support-with-export",
 		"summary": "This record was rejected by your store and is saved only on this device.",
 		"docsBody": "Correct the reason shown for the named record, then retry it. Export diagnostics if it remains rejected.",
+		"troubleshooting": [
+			"Expand the log entry: it names the rejected record and carries the store's own reason (serverCode) for refusing it.",
+			"Rejected records are listed in Store health — open the record, correct the detail the store refused, and retry it from there.",
+			"If the reason mentions a field the POS does not show, open the same record in WP Admin and check it there — another plugin may have added validation the POS cannot see.",
+			"If it stays rejected after editing, use Copy debug info and contact support, including the serverCode."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
 		"evidence": "monorepo#832",
 		"introducedIn": "1.10.0"
 	},
@@ -94,6 +154,14 @@
 		"escalation": "none",
 		"summary": "This record has a field your store will not accept.",
 		"docsBody": "Fix the named field and retry the record; the local copy remains available until it syncs.",
+		"troubleshooting": [
+			"The log entry names the record and the field your store refused.",
+			"Edit that field in the POS — common causes are a value out of range, a format the store rejects, or a required option left empty — then retry.",
+			"If the field looks correct in the POS, compare it with the same record in WP Admin: plugin-added validation on the store can reject values the POS considers fine."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "pos_data 400 push rejections (B14)",
 		"introducedIn": "1.10.0"
 	},
@@ -108,6 +176,13 @@
 		"escalation": "support-with-export",
 		"summary": "Some older store changes were skipped and must be downloaded again.",
 		"docsBody": "Run a targeted download for the affected data and export diagnostics if the gap remains.",
+		"troubleshooting": [
+			"Expand the log entry — its context records how far behind the till fell and whether changes were skipped.",
+			"Run a targeted download for the affected data so the skipped store changes are fetched again.",
+			"Afterwards, spot-check a few recently-edited records against WP Admin to confirm the gap closed.",
+			"If the gap reappears, export debug info and contact support rather than resetting anything."
+		],
+		"logSources": [],
 		"evidence": "monorepo#804",
 		"introducedIn": "1.10.0"
 	},
@@ -122,6 +197,15 @@
 		"escalation": "support-with-export",
 		"summary": "Local data is from an incompatible version and cannot open yet.",
 		"docsBody": "Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.",
+		"troubleshooting": [
+			"Do not reset or delete the affected collection — if this device holds changes that never reached the store, the local copy is the only copy.",
+			"Check whether the app was recently updated or downgraded on this device; a version mismatch between the app and its stored data is the usual trigger.",
+			"Update WCPOS to the newest version on this device and reopen the store.",
+			"If the collection still will not open, use Copy debug info and contact support for recovery guidance before touching local data."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "plugin#413",
 		"introducedIn": "1.10.0"
 	},
@@ -136,6 +220,12 @@
 		"escalation": "support-with-export",
 		"summary": "Some records synced, but one or more records did not.",
 		"docsBody": "Review the named records and their reasons before retrying only the records that did not sync.",
+		"troubleshooting": [
+			"Expand the log entry to list which records did not sync and the reason each one gives.",
+			"Handle each named record by its own reason — an invalid field needs editing, a conflict needs comparing with the store.",
+			"Retry only the records that failed; the rest are already synced and need nothing."
+		],
+		"logSources": [],
 		"evidence": "spec validation set: 89 of 99",
 		"introducedIn": "1.10.0"
 	},
@@ -150,6 +240,13 @@
 		"escalation": "none",
 		"summary": "Your session ended and you need to sign in again.",
 		"docsBody": "Sign in again and repeat the request; no local data was lost.",
+		"troubleshooting": [
+			"Sign in again when prompted, then repeat the action — nothing on the till was lost.",
+			"Frequent expiries (several per day) usually come from the site: a security plugin shortening session lifetimes or clearing tokens. Ask the site administrator which security plugins run on the store."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "Sentry Y5/XR/18R",
 		"introducedIn": "1.10.0"
 	},
@@ -164,6 +261,15 @@
 		"escalation": "store-admin",
 		"summary": "Your account does not have permission to perform this action.",
 		"docsBody": "Ask a store administrator to grant the required POS capability, then try again.",
+		"troubleshooting": [
+			"Note which action was refused — the log entry records the request and the permission check that failed.",
+			"Ask a store administrator to review the account's role: POS cashiers need the POS capabilities WCPOS registers, and role-editing plugins can strip them.",
+			"After the role is corrected, sign out and back in on the till, then try again."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
 		"evidence": "woocommerce_pos_rest_forbidden; plugin#396",
 		"introducedIn": "1.10.0"
 	},
@@ -178,6 +284,17 @@
 		"escalation": "site-admin",
 		"summary": "Another authentication plugin is preventing WCPOS from connecting.",
 		"docsBody": "Ask the site administrator to resolve the named plugin conflict before signing in again.",
+		"troubleshooting": [
+			"Expand the log entry — it names the conflicting plugin where the store reports it.",
+			"Ask the site administrator to review that plugin's settings: most authentication plugins can exempt the WCPOS REST routes instead of being disabled outright.",
+			"After the change, sign in again from the till.",
+			"If it is unclear which plugin conflicts, test on a staging copy by disabling security and login plugins one at a time."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs",
+			"woo-status-logs"
+		],
 		"evidence": "plugin#743",
 		"introducedIn": "1.10.0"
 	},
@@ -192,6 +309,16 @@
 		"escalation": "site-admin",
 		"summary": "The WCPOS store route is unavailable.",
 		"docsBody": "Ask the site administrator to check whether a security or proxy plugin is stripping WCPOS request headers.",
+		"troubleshooting": [
+			"Confirm WCPOS is active on the site: WP Admin → Plugins.",
+			"Test the route directly: open your store's /wp-json/ address in a browser — an HTML page or 404 instead of JSON means the REST API itself is blocked.",
+			"Ask the site administrator whether a security plugin, proxy or CDN is stripping WCPOS request headers or blocking /wp-json/ — firewall rules and disable-REST-API hardening options are the usual culprits.",
+			"On some hosts, re-saving permalinks (Settings → Permalinks → Save) restores missing REST routes."
+		],
+		"logSources": [
+			"network-inspector",
+			"woo-status-logs"
+		],
 		"evidence": "plugin#1075",
 		"introducedIn": "1.10.0"
 	},
@@ -206,6 +333,15 @@
 		"escalation": "site-admin",
 		"summary": "A secure connection to this store could not be trusted.",
 		"docsBody": "Use the correct store address and ask the site administrator to repair the certificate before reconnecting.",
+		"troubleshooting": [
+			"Open the store address in a browser on the same device — the browser's padlock or warning page shows exactly what is wrong with the certificate (expired, self-signed, or issued for a different domain).",
+			"Check the address the POS uses: https:// and the exact domain the certificate covers — with or without www matters.",
+			"Ask the site administrator or host to renew or fix the certificate; an automatic renewal silently failing is the most common cause.",
+			"Do not work around a certificate warning by disabling security — fix the certificate."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "plugin#371",
 		"introducedIn": "1.10.0"
 	},
@@ -220,6 +356,17 @@
 		"escalation": "none",
 		"summary": "Checkout did not finish, and the cart is still safe to retry.",
 		"docsBody": "Review the cart and retry checkout; the current cart contents have been preserved.",
+		"troubleshooting": [
+			"Review the cart — it is unchanged — and try checkout again.",
+			"If it fails the same way, expand the log entry: the serverCode and status say whether the store refused the order and why.",
+			"A repeated failure with a 500-class status is a site problem — check WooCommerce → Status → Logs for a PHP error at the failure time.",
+			"If the reason names a specific line item, remove it, complete the sale, and investigate that product afterwards."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs",
+			"woo-status-logs"
+		],
 		"evidence": "plugin#572",
 		"introducedIn": "1.10.0"
 	},
@@ -234,6 +381,17 @@
 		"escalation": "support-with-export",
 		"summary": "WCPOS could not confirm whether checkout completed.",
 		"docsBody": "Do not retry blindly. Check the store for the order first, then export diagnostics if its outcome is still unclear.",
+		"troubleshooting": [
+			"Do not retry checkout yet, and do not charge the customer again.",
+			"Open WooCommerce → Orders in WP Admin and look for the order — search by the total and the last few minutes.",
+			"If the order exists, the sale went through — do not create it again; sync the POS so it appears on the till.",
+			"If no order exists after a sync, retry checkout once.",
+			"Still unclear? Export debug info and contact support before another attempt."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
 		"evidence": "email 26/103; Discord corpus",
 		"introducedIn": "1.10.0"
 	},
@@ -248,6 +406,17 @@
 		"escalation": "support-with-export",
 		"summary": "The store returned no checkout result, so the order status is unknown.",
 		"docsBody": "Check whether the order was created before trying checkout again.",
+		"troubleshooting": [
+			"Check WooCommerce → Orders in WP Admin before doing anything else — an empty response often means the order was created but the confirmation never arrived.",
+			"The network inspector shows the checkout request: a success status with an empty or truncated body points at a plugin or server buffer cutting the response short.",
+			"Check WooCommerce → Status → Logs for a fatal error during checkout — a PHP crash after the order is created produces exactly this.",
+			"Only retry checkout once you have confirmed no order was created."
+		],
+		"logSources": [
+			"network-inspector",
+			"woo-status-logs",
+			"host-error-log"
+		],
 		"evidence": "Discord: Empty response from server x15",
 		"introducedIn": "1.10.0"
 	},
@@ -262,6 +431,12 @@
 		"escalation": "none",
 		"summary": "Checkout cannot continue because a product SKU is duplicated or invalid.",
 		"docsBody": "Change or remove the named SKU, then retry with the preserved cart.",
+		"troubleshooting": [
+			"The log entry names the SKU the store refused.",
+			"In WP Admin, search Products for that SKU — two products, or a product and a variation, share it. Give each one a unique SKU.",
+			"Back on the till, retry checkout — the cart is preserved."
+		],
+		"logSources": [],
 		"evidence": "plugin#572",
 		"introducedIn": "1.10.0"
 	},
@@ -276,6 +451,12 @@
 		"escalation": "none",
 		"summary": "Payment succeeded, but WCPOS could not refresh its status afterward.",
 		"docsBody": "The payment completed and should not be charged again; no action is required unless the displayed status stays stale.",
+		"troubleshooting": [
+			"No action is needed — the payment completed; only the follow-up status refresh failed.",
+			"Do not charge the customer again.",
+			"If the order's status looks stale on the till, reopen or sync the order; the store already has the correct status."
+		],
+		"logSources": [],
 		"evidence": "monorepo#509",
 		"introducedIn": "1.10.0"
 	},
@@ -290,6 +471,17 @@
 		"escalation": "payment-provider",
 		"summary": "WCPOS could not confirm whether the terminal charged the payment.",
 		"docsBody": "Check the payment terminal before attempting another charge, and contact the payment provider if the result remains unclear.",
+		"troubleshooting": [
+			"Do not run the card again yet.",
+			"Check the terminal's own screen, then your payment provider's dashboard — the provider's record is the authority on whether the charge went through.",
+			"Check the order in WP Admin: a payment that succeeded may already be recorded there.",
+			"Only take payment again once the provider's dashboard shows no charge.",
+			"If the charge shows as pending or uncertain, contact the payment provider before acting."
+		],
+		"logSources": [
+			"payment-provider",
+			"network-inspector"
+		],
 		"evidence": "email: terminal charged but POS stuck",
 		"introducedIn": "1.10.0"
 	},
@@ -304,6 +496,15 @@
 		"escalation": "site-admin",
 		"summary": "The selected payment gateway is unavailable for this store.",
 		"docsBody": "Ask the site administrator to verify that the gateway is supported, enabled, and correctly configured.",
+		"troubleshooting": [
+			"Ask the site administrator to check the gateway in WooCommerce → Settings → Payments: it must be installed, enabled, and enabled for POS use in the POS settings.",
+			"Complete the sale meanwhile with another method, such as cash.",
+			"If the gateway worked yesterday, check whether it or WooCommerce updated — WooCommerce → Status → Logs records gateway initialization errors."
+		],
+		"logSources": [
+			"wp-admin-pos-logs",
+			"woo-status-logs"
+		],
 		"evidence": "plugin#367",
 		"introducedIn": "1.10.0"
 	},
@@ -318,6 +519,14 @@
 		"escalation": "payment-provider",
 		"summary": "The payment terminal did not finish pairing with WCPOS.",
 		"docsBody": "Retry pairing after checking the terminal settings, and include the trace ID when contacting the payment provider.",
+		"troubleshooting": [
+			"Restart the pairing from the terminal settings, keeping the terminal awake and on the same network as the till.",
+			"Check the basics first: terminal charged, connected to the right network or Bluetooth, and not still paired to another till.",
+			"The log entry carries a trace ID — include it when contacting the payment provider if pairing still will not complete."
+		],
+		"logSources": [
+			"payment-provider"
+		],
 		"evidence": "plugin#535",
 		"introducedIn": "1.10.0"
 	},
@@ -332,6 +541,12 @@
 		"escalation": "none",
 		"summary": "Automatic printing did not start for this receipt.",
 		"docsBody": "Check the selected printer, template, and connection, then use Print now to print the receipt manually.",
+		"troubleshooting": [
+			"Use Print now to print the receipt by hand — the sale is unaffected.",
+			"Check the printing settings: the right printer is selected and a receipt template is chosen.",
+			"If auto-print fails on every sale, note whether manual printing works — manual-works-but-auto-fails is a settings problem; both failing is a printer problem."
+		],
+		"logSources": [],
 		"evidence": "monorepo#121",
 		"introducedIn": "1.10.0"
 	},
@@ -346,6 +561,13 @@
 		"escalation": "support-with-export",
 		"summary": "WCPOS could not confirm that the print job completed.",
 		"docsBody": "Check the printer before retrying so the receipt is not printed twice.",
+		"troubleshooting": [
+			"Look at the printer before retrying — the job may have printed even though no confirmation came back, and a blind retry prints the receipt twice.",
+			"Check paper, covers and error lights on the printer.",
+			"If nothing printed, retry once from the order's receipt screen.",
+			"For repeated failures, power-cycle the printer and check its connection to the till."
+		],
+		"logSources": [],
 		"evidence": "plugin#1362",
 		"introducedIn": "1.10.0"
 	},
@@ -360,6 +582,13 @@
 		"escalation": "none",
 		"summary": "The selected printer cannot be reached.",
 		"docsBody": "Check that the printer is powered on and connected, then try printing again.",
+		"troubleshooting": [
+			"Check the printer is powered on and its cable or network connection is seated.",
+			"For network printers, confirm the till and printer are on the same network and the printer's address has not changed — DHCP renewals can move it.",
+			"Print a self-test from the printer itself to confirm the hardware works, then try again from the POS.",
+			"If the printer's address changed, update it in the POS printing settings."
+		],
+		"logSources": [],
 		"evidence": "email: Waiting for printer",
 		"introducedIn": "1.10.0"
 	},
@@ -374,6 +603,17 @@
 		"escalation": "support-with-export",
 		"summary": "This product could not be saved to your store.",
 		"docsBody": "Review the reported cause before retrying: reconnect for a network error, fix invalid fields, or refresh a conflicting product.",
+		"troubleshooting": [
+			"Expand the log entry — the error text usually shows whether this was a network failure, a field the store rejected, or a conflicting edit made in the store.",
+			"Network failure: check the connection and retry; the edit is kept on this device.",
+			"Rejected field: correct the named field and retry.",
+			"Conflicting edit: open the product in WP Admin, compare versions, and re-apply the correct values.",
+			"If saves keep failing with no clear reason, export debug info and contact support."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
 		"evidence": "monorepo#489",
 		"introducedIn": "1.10.0"
 	},
@@ -388,6 +628,15 @@
 		"escalation": "support-with-export",
 		"summary": "This variation could not be added to the product.",
 		"docsBody": "Review and correct the variation fields, then retry; export diagnostics if it is still rejected.",
+		"troubleshooting": [
+			"Expand the log entry for the store's reason (serverCode) — usually a missing attribute or an invalid option combination.",
+			"Check the parent product's attributes in WP Admin: every attribute the variation uses must exist on the parent and be marked as used for variations.",
+			"Correct the variation's fields and retry.",
+			"Still rejected? Export debug info and contact support."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "plugin#361",
 		"introducedIn": "1.10.0"
 	},
@@ -402,6 +651,14 @@
 		"escalation": "none",
 		"summary": "This product image is unavailable, but the product can still be sold.",
 		"docsBody": "Continue the sale without the image; WCPOS will try to load it again later.",
+		"troubleshooting": [
+			"Sell as normal — the product is unaffected and the image is retried in the background.",
+			"If one product's image never loads, open the product in WP Admin and re-save its image; the file may have been removed from the media library.",
+			"If many images fail at once, the site's media hosting or CDN is the cause — check whether images load on the store website itself."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "Sentry 1QX/1PX",
 		"introducedIn": "1.10.0"
 	},
@@ -416,6 +673,13 @@
 		"escalation": "none",
 		"summary": "No products matched the current search and filters.",
 		"docsBody": "Review spaces, category filters, and whether the local product index has finished syncing before searching again.",
+		"troubleshooting": [
+			"The scanned code is placed in the search box, so start with the filters: a category or stock filter silently narrows every search.",
+			"Look the product up by name — if it appears, its barcode field in the store does not contain the scanned value; add the barcode to the product in WP Admin.",
+			"Check the barcode field in the POS barcode settings — if your store keeps barcodes in a different field, the POS reads the wrong one and every scan misses.",
+			"If the product is brand new, the local index may still be syncing: give the first sync time to finish, then scan again."
+		],
+		"logSources": [],
 		"evidence": "plugin#1114; monorepo#750",
 		"introducedIn": "1.10.0"
 	},
@@ -430,6 +694,14 @@
 		"escalation": "site-admin",
 		"summary": "The displayed stock may be older than the store stock.",
 		"docsBody": "Verify current stock in the store before completing a sale that could oversell the item.",
+		"troubleshooting": [
+			"Before selling a low-stock item, check its live stock in WP Admin — the till's number may be older than the store's.",
+			"Stale stock usually means sync has been failing or paused: look for sync errors in Store health → Logs and fix those first.",
+			"After sync recovers, the stock display catches up on its own."
+		],
+		"logSources": [
+			"wp-admin-pos-logs"
+		],
 		"evidence": "plugin#227; plugin#389",
 		"introducedIn": "1.10.0"
 	},
@@ -444,6 +716,15 @@
 		"escalation": "support-with-export",
 		"summary": "Your WCPOS Pro license is not active for this store or device.",
 		"docsBody": "Check the local, licensing-server, and updater status, then activate the license for the named store.",
+		"troubleshooting": [
+			"Check the license status in the POS settings in WP Admin — it should show active for this store's exact URL.",
+			"A site URL change (http to https, adding or dropping www, a domain move, a staging copy) deactivates the license for the new address — re-activate it for the current one.",
+			"If the license shows active but the POS disagrees, deactivate and re-activate once, then reload the till.",
+			"Still locked? Export debug info and contact support with your license reference."
+		],
+		"logSources": [
+			"wp-admin-pos-logs"
+		],
 		"evidence": "email: active here, inactive there",
 		"introducedIn": "1.10.0"
 	},
@@ -458,6 +739,14 @@
 		"escalation": "site-admin",
 		"summary": "WCPOS Pro is disabled because its version does not match WCPOS.",
 		"docsBody": "Update the named WCPOS or WCPOS Pro component so both versions are compatible.",
+		"troubleshooting": [
+			"Check both plugin versions in WP Admin → Plugins — the log entry names which of WCPOS and WCPOS Pro is behind.",
+			"Update the older one; updating both to the latest versions resolves the skew.",
+			"If Pro updates are not being offered, the updater may not be authorized (see LICENSE301) — fix that first, then update."
+		],
+		"logSources": [
+			"wp-admin-pos-logs"
+		],
 		"evidence": "email: Pro/free version skew",
 		"introducedIn": "1.10.0"
 	},
@@ -472,6 +761,14 @@
 		"escalation": "site-admin",
 		"summary": "The updater is not authorized to download WCPOS Pro updates.",
 		"docsBody": "Re-authorize the updater for this store, then check for updates again.",
+		"troubleshooting": [
+			"Re-enter or re-activate the license key in the POS settings so the updater can authenticate.",
+			"Check for updates again from WP Admin → Dashboard → Updates.",
+			"If authorization keeps failing, the site may be blocking outbound requests to the update server — ask the host whether outbound HTTPS is restricted."
+		],
+		"logSources": [
+			"wp-admin-pos-logs"
+		],
 		"evidence": "email: updater failures",
 		"introducedIn": "1.10.0"
 	},
@@ -486,6 +783,15 @@
 		"escalation": "support-with-export",
 		"summary": "WCPOS could not finish starting.",
 		"docsBody": "Restart once, then export diagnostics with the app version and device engine if startup still fails.",
+		"troubleshooting": [
+			"Restart the app once; on web, fully reload the tab.",
+			"If startup fails again, note the app version and the device — the browser console records the startup error even when the POS cannot show it.",
+			"Do not clear site data or reinstall to fix startup — a till with unsent sales loses them; contact support first.",
+			"Export debug info if the app gets far enough to open the Logs screen; otherwise contact support with the console error."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "Sentry 195; plugin#362",
 		"introducedIn": "1.10.0"
 	},
@@ -500,6 +806,15 @@
 		"escalation": "support-with-export",
 		"summary": "WCPOS ran out of memory and could not finish the operation.",
 		"docsBody": "Restart WCPOS and retry once; export diagnostics if the device runs out of memory again.",
+		"troubleshooting": [
+			"Restart WCPOS and retry the action once.",
+			"Close other apps or browser tabs — the POS shares the device's memory with everything else running on it.",
+			"If a specific action reliably runs out of memory, note what it was and contact support with debug info.",
+			"If this happens daily on the same device, the device may be too small for the catalogue — report it so support can confirm."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "Sentry W8",
 		"introducedIn": "1.10.0"
 	},
@@ -514,6 +829,12 @@
 		"escalation": "support-with-export",
 		"summary": "WCPOS stopped because of a device-level crash.",
 		"docsBody": "Restart WCPOS and export diagnostics if the crash repeats.",
+		"troubleshooting": [
+			"Restart WCPOS — the crash happened at device level, not in your data.",
+			"Install pending updates for the app and the device's operating system; native crashes are often already-fixed bugs.",
+			"If the crash repeats on the same action, export debug info and contact support, noting exactly what was tapped when it crashed."
+		],
+		"logSources": [],
 		"evidence": "Sentry 16K/1F8/2GF",
 		"introducedIn": "1.10.0"
 	},
@@ -528,6 +849,14 @@
 		"escalation": "support-with-export",
 		"summary": "WCPOS encountered an unexpected error.",
 		"docsBody": "Try the action once more, then export diagnostics and contact support if it fails again.",
+		"troubleshooting": [
+			"Try the action once more.",
+			"Expand the log entry and note the event code and context — a 999 code means the failure has no dedicated code yet, and this is the information that identifies it.",
+			"If it repeats, export debug info and contact support — reporting it is how the specific code gets minted."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "spec §3 catch-all; Sentry audit",
 		"introducedIn": "1.10.0"
 	},
@@ -542,6 +871,14 @@
 		"escalation": "support-with-export",
 		"summary": "Syncing hit an unexpected problem.",
 		"docsBody": "Your sales are safe on this device. Wait for the automatic retry; if this code keeps appearing, export diagnostics and contact support.",
+		"troubleshooting": [
+			"Wait for the automatic retry — sales are safe on this device.",
+			"Expand the log entry and note the event code and any serverCode: a 999 code means the specific cause has no dedicated code yet, so this context is exactly what support needs.",
+			"If the code keeps appearing, use Copy debug info and contact support — reporting it is how the specific code gets added."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "coverage net (map #1136, A1.1): generic fallback = registry debt",
 		"introducedIn": "1.10.0"
 	},
@@ -556,6 +893,14 @@
 		"escalation": "support-with-export",
 		"summary": "Signing in or staying signed in hit an unexpected problem.",
 		"docsBody": "Try the action once more. If it repeats, sign out and back in, then export diagnostics and contact support.",
+		"troubleshooting": [
+			"Try the action once more; if it fails again, sign out and back in.",
+			"Expand the log entry and note the event code and any serverCode — a 999 code means the cause has no dedicated code yet, and that context is what identifies it.",
+			"If it recurs, use Copy debug info and contact support."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "coverage net (map #1136, A1.1)",
 		"introducedIn": "1.10.0"
 	},
@@ -570,6 +915,15 @@
 		"escalation": "support-with-export",
 		"summary": "Checkout hit an unexpected problem.",
 		"docsBody": "Check the order in your store admin before charging the customer again. Export diagnostics and contact support if the problem repeats.",
+		"troubleshooting": [
+			"Check WooCommerce → Orders in WP Admin for the order before charging the customer again.",
+			"Expand the log entry and note the event code and any serverCode — this generic code means the cause has no dedicated code yet.",
+			"If it repeats, export debug info and contact support."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
 		"evidence": "coverage net (map #1136, A1.1)",
 		"introducedIn": "1.10.0"
 	},
@@ -584,6 +938,15 @@
 		"escalation": "support-with-export",
 		"summary": "Payment handling hit an unexpected problem.",
 		"docsBody": "Confirm whether the payment went through before retrying. Export diagnostics and contact support if it is unclear.",
+		"troubleshooting": [
+			"Confirm whether the payment went through before retrying: the terminal screen, the provider dashboard, and the order in WP Admin.",
+			"Expand the log entry for the event code and context — this generic code means the cause has no dedicated code yet.",
+			"If the outcome stays unclear or the code recurs, export debug info and contact support."
+		],
+		"logSources": [
+			"payment-provider",
+			"network-inspector"
+		],
 		"evidence": "coverage net (map #1136, A1.1)",
 		"introducedIn": "1.10.0"
 	},
@@ -598,6 +961,12 @@
 		"escalation": "support-with-export",
 		"summary": "Printing hit an unexpected problem.",
 		"docsBody": "Try printing again. If it keeps failing, reprint from the order screen and contact support with diagnostics.",
+		"troubleshooting": [
+			"Try printing again, then reprint from the order screen if needed — the sale is unaffected.",
+			"Expand the log entry for the event code and context; this generic code means the cause has no dedicated code yet.",
+			"If printing keeps failing, export debug info and contact support."
+		],
+		"logSources": [],
 		"evidence": "coverage net (map #1136, A1.1)",
 		"introducedIn": "1.10.0"
 	},
@@ -612,6 +981,14 @@
 		"escalation": "support-with-export",
 		"summary": "Loading or updating products hit an unexpected problem.",
 		"docsBody": "Try again. If product data still looks wrong afterwards, export diagnostics and contact support.",
+		"troubleshooting": [
+			"Try again — most one-off product loading problems clear on retry.",
+			"If product data still looks wrong, expand the log entry for the event code and context; this generic code means the cause has no dedicated code yet.",
+			"Export debug info and contact support if it recurs."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "coverage net (map #1136, A1.1)",
 		"introducedIn": "1.10.0"
 	},
@@ -626,6 +1003,12 @@
 		"escalation": "support-with-export",
 		"summary": "License checking hit an unexpected problem.",
 		"docsBody": "The POS keeps working. If Pro features stay locked, re-enter your license key, then contact support.",
+		"troubleshooting": [
+			"Keep working — the POS does not lock up over license checks.",
+			"If Pro features stay locked, re-enter the license key in the POS settings.",
+			"If that does not clear it, export debug info and contact support."
+		],
+		"logSources": [],
 		"evidence": "coverage net (map #1136, A1.1)",
 		"introducedIn": "1.10.0"
 	},
@@ -640,6 +1023,14 @@
 		"escalation": "support-with-export",
 		"summary": "A background sync task stopped unexpectedly before finishing.",
 		"docsBody": "The POS restarts these tasks automatically and no order data is affected. If this code keeps appearing, export diagnostics and contact support.",
+		"troubleshooting": [
+			"Nothing to do on first sight: the POS restarts the crashed background task automatically and no order data is involved.",
+			"If the code repeats within minutes, reload the app once so the sync engine starts clean.",
+			"If it still repeats, export debug info and contact support — a recurring task crash is an app defect worth reporting, not a store problem."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "monorepo#1137 inventory: engine.lane.tick, maintenance.lane.error",
 		"introducedIn": "1.10.0"
 	},
@@ -668,6 +1059,12 @@
 		"escalation": "none",
 		"summary": "A change on this device clashed with an edit made in your store.",
 		"docsBody": "Open the record and check which version is correct. The POS keeps both sides safe until the clash is settled — nothing is lost.",
+		"troubleshooting": [
+			"Open the record named in the log entry and compare it with the same record in WP Admin.",
+			"Decide which version is right — the till's or the store's — and re-apply the correct values once; the POS keeps both sides safe, and further edits to that record are held until the clash is settled.",
+			"Frequent conflicts on the same records usually mean two people edit the same data in parallel; agree on where each kind of edit happens."
+		],
+		"logSources": [],
 		"evidence": "monorepo#1137 inventory: push.conflict, queue.write.conflict-transition",
 		"introducedIn": "1.10.0"
 	},
@@ -682,6 +1079,17 @@
 		"escalation": "support-with-export",
 		"summary": "Your store calculated different totals for this order than the till showed.",
 		"docsBody": "Check the order in your store admin before taking any further payment — the store's totals are the source of truth. If the difference is unexpected, export diagnostics and contact support.",
+		"troubleshooting": [
+			"Stop before taking any further payment — the store's totals are the source of truth.",
+			"Open the order in WP Admin and compare its totals with what the till showed; the log entry records which amounts diverged.",
+			"The usual causes are tax settings that differ from what the till expected, or a discount or pricing plugin recalculating on the server. If the difference is a tax amount, review the store's tax settings first.",
+			"If money was taken for the till's amount and the store says different, settle the difference (refund or additional charge) through your normal process before the customer leaves.",
+			"If the divergence is unexplained, export debug info and contact support with the order number."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
 		"evidence": "monorepo#1137 inventory: push.money-divergence; server-calc ruling",
 		"introducedIn": "1.10.0"
 	},
@@ -696,6 +1104,14 @@
 		"escalation": "none",
 		"summary": "Barcode scanning settings could not be loaded, so scans may not match products.",
 		"docsBody": "The POS keeps trying to load these settings in the background. If scanning stays unreliable, reload the app once.",
+		"troubleshooting": [
+			"Keep working — the POS retries loading the barcode settings in the background.",
+			"If scans keep matching nothing, reload the app once.",
+			"If it persists after a reload, the settings request itself is failing: check the connection to the store and look for matching errors in Store health → Logs."
+		],
+		"logSources": [
+			"network-inspector"
+		],
 		"evidence": "monorepo#1137 inventory: engine.barcode-selector-hydrate-failed",
 		"introducedIn": "1.10.0"
 	},
@@ -710,6 +1126,12 @@
 		"escalation": "none",
 		"summary": "Syncing is taking longer than expected to start.",
 		"docsBody": "This usually resolves by itself within a minute. If the app stays in this state, reload it once before anything else.",
+		"troubleshooting": [
+			"Give it a minute — the first sync after an update, or on a large store, legitimately takes longer.",
+			"If the app stays in this state, reload it once.",
+			"If slow starts happen daily, check the connection quality to the store and the store's own responsiveness."
+		],
+		"logSources": [],
 		"evidence": "monorepo#1137 inventory: engine.ready-stalled",
 		"introducedIn": "1.10.0"
 	},
@@ -724,6 +1146,11 @@
 		"escalation": "none",
 		"summary": "This browser lets only one tab send changes at a time.",
 		"docsBody": "You can keep using every tab — they all share the same local data. One tab quietly handles the syncing for all of them.",
+		"troubleshooting": [
+			"Keep using every tab normally — they share the same local data, and one tab quietly syncs on behalf of the rest.",
+			"This browser (or a private window) lacks the tab-coordination feature the POS prefers, so it falls back to a single syncing tab. No fix is needed."
+		],
+		"logSources": [],
 		"evidence": "monorepo#1137 inventory: engine.write-leader.degraded",
 		"introducedIn": "1.10.0"
 	},
@@ -738,6 +1165,15 @@
 		"escalation": "none",
 		"summary": "The store did not accept the sign-in credentials.",
 		"docsBody": "Re-enter the username and password, or reset the password in WordPress if it keeps failing. No order data is affected.",
+		"troubleshooting": [
+			"Re-enter the username and password — the store refused this pair.",
+			"Confirm the account works by signing in to WP Admin in a browser with the same credentials; reset the password there if it fails.",
+			"If the credentials work in WP Admin but not in the POS, a login-protection or security plugin may be blocking programmatic sign-in — check its settings or ask the site administrator."
+		],
+		"logSources": [
+			"network-inspector",
+			"wp-admin-pos-logs"
+		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -752,6 +1188,12 @@
 		"escalation": "none",
 		"summary": "The signed-in store account does not match the cashier on this till.",
 		"docsBody": "Each cashier keeps their own till data, so working under another account can misfile orders. Sign out, then sign in with the cashier's own account.",
+		"troubleshooting": [
+			"The POS signs the session out on its own to protect each cashier's data — no order data is mixed between accounts.",
+			"Sign back in with the cashier's own account; working under another account can misfile orders.",
+			"If tills are shared between cashiers, make switching accounts part of the handover routine."
+		],
+		"logSources": [],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -766,6 +1208,14 @@
 		"escalation": "site-admin",
 		"summary": "WooCommerce is not active on this site, so WCPOS cannot connect.",
 		"docsBody": "WCPOS requires the WooCommerce plugin. Ask the site administrator to install or reactivate WooCommerce, then connect again.",
+		"troubleshooting": [
+			"Ask the site administrator to check WP Admin → Plugins: WooCommerce must be installed and active for WCPOS to connect.",
+			"If WooCommerce was deactivated by a failed update, reactivate it and watch for an error banner — WooCommerce → Status → Logs records why it failed.",
+			"Once WooCommerce is active again, reconnect from the till."
+		],
+		"logSources": [
+			"woo-status-logs"
+		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -780,6 +1230,12 @@
 		"escalation": "none",
 		"summary": "The store address is missing or not a valid URL.",
 		"docsBody": "Check the address for typos and include the full https:// URL of the store's WordPress site, then try again.",
+		"troubleshooting": [
+			"Check the address for typos and enter the full URL including https:// — for example https://shop.example.com.",
+			"Use the site's WordPress address, not an admin page or a checkout URL.",
+			"If the site lives in a subdirectory (for example /shop), include it."
+		],
+		"logSources": [],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -794,6 +1250,17 @@
 		"escalation": "site-admin",
 		"summary": "Your store sent a malformed response that WCPOS had to repair before reading.",
 		"docsBody": "This usually means a plugin or PHP notice is printing extra output into store responses. WCPOS recovered this one, but repairs are not guaranteed — ask the site administrator to check the site's error log.",
+		"troubleshooting": [
+			"Nothing on the till needs fixing — this occurrence was repaired automatically.",
+			"The cause is on the site: a plugin or theme is printing warnings or stray output into REST responses. Ask the site administrator to check the site's logs for PHP notices at the failure time.",
+			"The network inspector shows the raw response body — the stray output is visible immediately before or after the JSON.",
+			"Repairs are best-effort: if these warnings become frequent, fix the offending plugin rather than relying on the repair."
+		],
+		"logSources": [
+			"network-inspector",
+			"woo-status-logs",
+			"host-error-log"
+		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -808,6 +1275,15 @@
 		"escalation": "support-with-export",
 		"summary": "The local database on this device stopped responding, so actions that need it are paused.",
 		"docsBody": "Restart WCPOS to reconnect the local database. Unsaved changes on this device may not have been written; check recent orders after restarting. If it keeps happening, export diagnostics and contact support.",
+		"troubleshooting": [
+			"Restart WCPOS — closing and reopening the app (or the browser tab) reconnects the local database in almost all cases.",
+			"After restarting, check the most recent orders: a change made in the seconds before the failure may not have been written.",
+			"On web, avoid private/incognito windows and aggressive storage-cleaning extensions — both can tear down local storage mid-session.",
+			"If this returns regularly on the same device, export debug info and contact support, noting what the device was doing (sleep, tab switch, low memory) when it happened."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -822,6 +1298,15 @@
 		"escalation": "support-with-export",
 		"summary": "A local database on this device could not be created or removed.",
 		"docsBody": "Restart WCPOS and try again. If it keeps failing, the device may be low on storage or the browser profile may be restricting storage; free up space, then contact support if it persists.",
+		"troubleshooting": [
+			"Restart WCPOS and try the same action again — most setup failures are transient.",
+			"Check free storage on the device; creating a local database fails outright when the disk or the browser's storage quota is full.",
+			"On web, check that the browser allows persistent storage for the site — private windows and block-all-data settings do not.",
+			"If it keeps failing, export debug info and contact support."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -836,6 +1321,14 @@
 		"escalation": "support-with-export",
 		"summary": "This change could not be applied to the cart, which is unchanged.",
 		"docsBody": "The item, fee, shipping line, or coupon was not added and nothing was removed. Try the action again; if it keeps failing, export diagnostics and contact support.",
+		"troubleshooting": [
+			"Try adding the item, fee, shipping line or coupon again — the cart itself is unchanged.",
+			"If the same item keeps failing, try a different product once: one failing item points at that record, everything failing points at the device.",
+			"If it keeps failing, restart WCPOS; export debug info and contact support if it continues."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -850,6 +1343,12 @@
 		"escalation": "store-admin",
 		"summary": "More than one product matches this barcode.",
 		"docsBody": "WCPOS cannot pick between them safely, so nothing was added. Search for the product by name, and give each product a unique barcode in the store to fix the clash.",
+		"troubleshooting": [
+			"Search for the product by name to complete this sale — the scan added nothing because the barcode matches more than one product.",
+			"The log entry records the scanned code and how many products matched; searching the POS for the barcode value shows which ones they are.",
+			"In WP Admin, give each of those products its own unique barcode, then rescan to confirm only one match remains."
+		],
+		"logSources": [],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -864,6 +1363,12 @@
 		"escalation": "store-admin",
 		"summary": "This product's variation price data could not be read, so displayed prices may be wrong or missing.",
 		"docsBody": "Re-save the product in WooCommerce to rebuild its price data, or contact support if many products show this.",
+		"troubleshooting": [
+			"Open the product in WP Admin and re-save it — this rebuilds the price data the POS could not read.",
+			"Check that each of the product's variations has a price set; a variation without a price produces unreadable price ranges.",
+			"If many products show this code at once, a pricing plugin is likely writing price data in a format the POS cannot read — note which plugin manages prices and contact support."
+		],
+		"logSources": [],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -878,6 +1383,14 @@
 		"escalation": "none",
 		"summary": "This receipt could not be emailed or downloaded.",
 		"docsBody": "The sale itself is unaffected. Check the email address and the device's connection, then try again from the order's receipt screen.",
+		"troubleshooting": [
+			"Check the email address on the order for typos, and the till's connection.",
+			"Resend from the order's receipt screen.",
+			"If email receipts fail for every order, the store's outgoing email is the usual cause — ask the site administrator whether the site can send email at all; many hosts need an SMTP plugin."
+		],
+		"logSources": [
+			"wp-admin-pos-logs"
+		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	},
@@ -892,6 +1405,14 @@
 		"escalation": "support-with-export",
 		"summary": "WCPOS queued too many requests at once and dropped some.",
 		"docsBody": "This is usually an app defect rather than a store problem. Restart WCPOS; if the code returns, export diagnostics and contact support.",
+		"troubleshooting": [
+			"Pause for a few seconds — the queue drains on its own and stale requests are dropped automatically — then retry the action.",
+			"If it happens again in the same session, restart WCPOS; the queue clears on restart.",
+			"This is usually an app defect rather than a store problem: if it keeps returning, export debug info and contact support — the entry's context tells the developers which requests flooded the queue."
+		],
+		"logSources": [
+			"browser-console"
+		],
 		"evidence": "monorepo#1151 legacy-table migration",
 		"introducedIn": "1.10.0"
 	}

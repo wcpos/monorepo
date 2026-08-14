@@ -20,6 +20,17 @@ Restart WCPOS; if this keeps happening the local data on this device needs repai
 
 Data on this device may be at risk — do not clear local data. If this persists, export diagnostics and contact WCPOS support.
 
+## Troubleshoot {#troubleshoot}
+
+1. Expand the log entry — its context records how far behind the till fell and whether changes were skipped.
+2. Run a targeted download for the affected data so the skipped store changes are fetched again.
+3. Afterwards, spot-check a few recently-edited records against WP Admin to confirm the gap closed.
+4. If the gap reappears, export debug info and contact support rather than resetting anything.
+
+## Where to look {#where-to-look}
+
+Every occurrence of this code is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure — for anything that involved a request to your store this includes the server’s own error code (`serverCode`), the HTTP `status` and the `endpoint`. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh.
+
 ## Details {#details}
 
 - **Code:** `SYNC301` (`SYNC_BEHIND_HEAD`)

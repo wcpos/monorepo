@@ -20,6 +20,20 @@ Export diagnostics and contact support. WCPOS does not retry this by itself — 
 
 No order or product data is affected. If this persists, export diagnostics and contact WCPOS support.
 
+## Troubleshoot {#troubleshoot}
+
+1. Pause for a few seconds — the queue drains on its own and stale requests are dropped automatically — then retry the action.
+2. If it happens again in the same session, restart WCPOS; the queue clears on restart.
+3. This is usually an app defect rather than a store problem: if it keeps returning, export debug info and contact support — the entry's context tells the developers which requests flooded the queue.
+
+## Where to look {#where-to-look}
+
+Every occurrence of this code is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure — for anything that involved a request to your store this includes the server’s own error code (`serverCode`), the HTTP `status` and the `endpoint`. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh.
+
+Beyond the in-app log, this failure can leave evidence in:
+
+- **Console** (web and desktop): the **Console** tab of the same developer tools records client-side errors, including ones that happen before the POS is able to write its own log entry.
+
 ## Details {#details}
 
 - **Code:** `CLIENT131` (`REQUEST_QUEUE_OVERFLOW`)

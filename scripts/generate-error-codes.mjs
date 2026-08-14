@@ -53,6 +53,33 @@ const ESCALATION_COPY = {
 	'payment-provider': 'If this persists, contact your payment provider.',
 	'support-with-export': 'If this persists, export diagnostics and contact WCPOS support.',
 };
+// Docs-only troubleshooting surfaces. `logSources` lists the surfaces beyond the
+// in-app Logs screen (which every code gets); the copy here is the single place
+// that knows where each surface lives, so a UI move is a one-line fix.
+const LOG_SOURCES = [
+	'network-inspector',
+	'browser-console',
+	'wp-admin-pos-logs',
+	'woo-status-logs',
+	'host-error-log',
+	'payment-provider',
+];
+const POS_LOGS_COPY =
+	'Every occurrence of this code is recorded on the device that raised it. Open **Store health → Logs** (the heart-pulse icon at the bottom of the navigation drawer), find the entry marked with this code and expand it: the expanded row shows the plain-language reason and the context captured at the moment of failure — for anything that involved a request to your store this includes the server’s own error code (`serverCode`), the HTTP `status` and the `endpoint`. When reporting a problem, use **Copy debug info** at the top of the Logs screen (**Share debug info** on phones and tablets) rather than screenshots: it bundles the app version, connection state and the most recent errors. Logs are kept for at most 30 days, so collect them while the problem is fresh.';
+const LOG_SOURCE_COPY = {
+	'network-inspector':
+		'**Network inspector** (web and desktop): open the developer tools — press F12 in the browser, or **Advanced → Toggle Developer Tools** in the desktop app’s menu — select the **Network** tab and repeat the action. The failing request shows the HTTP status and the raw response body, including error pages that never reach the POS log.',
+	'browser-console':
+		'**Console** (web and desktop): the **Console** tab of the same developer tools records client-side errors, including ones that happen before the POS is able to write its own log entry.',
+	'wp-admin-pos-logs':
+		'**Server-side POS logs**: in WP Admin, open **POS → Settings → Tools → Logs**. This page records POS-related warnings and errors raised on the server itself, which may never appear inside the app. A red badge on the menu means unread server-side errors.',
+	'woo-status-logs':
+		'**WooCommerce → Status → Logs**: on the WordPress site, check the newest `fatal-errors-*.log` for PHP crashes, plus any log source named after a plugin involved in the failure. A 500-class error from the store almost always leaves its cause here.',
+	'host-error-log':
+		"**The site's PHP error log**: if WooCommerce's log page shows nothing for the failure time, ask the hosting provider for the PHP error log — some fatal errors are captured only at the server level.",
+	'payment-provider':
+		'**Payment provider dashboard**: the terminal provider’s own record (for example Stripe Dashboard → Payments, or the Square Dashboard) is the authority on whether a charge went through — check it before retrying any payment.',
+};
 const FIELDS = {
 	code: 'ErrorCode',
 	symbol: 'string',
@@ -96,9 +123,32 @@ function validateRegistry(registry) {
 		if (!new RegExp(`^${entry.domain}\\d{3}$`).test(entry.code)) {
 			throw new Error(`Code ${entry.code} does not match domain ${entry.domain}`);
 		}
+		if (
+			!Array.isArray(entry.troubleshooting) ||
+			entry.troubleshooting.length === 0 ||
+			entry.troubleshooting.some((step) => typeof step !== 'string' || !step.trim())
+		) {
+			throw new Error(
+				`Entry ${entry.code ?? index} needs troubleshooting: a non-empty array of non-empty strings`
+			);
+		}
+		if (!Array.isArray(entry.logSources)) {
+			throw new Error(`Entry ${entry.code ?? index} needs logSources: an array (may be empty)`);
+		}
+		for (const source of entry.logSources) {
+			if (!LOG_SOURCES.includes(source)) {
+				throw new Error(`Entry ${entry.code} has unknown logSource: ${source}`);
+			}
+		}
+		if (new Set(entry.logSources).size !== entry.logSources.length) {
+			throw new Error(`Entry ${entry.code} has duplicate logSources`);
+		}
 		for (const [field, value] of Object.entries(entry)) {
-			if (typeof value === 'string' && /[\r\n\t]/.test(value)) {
-				throw new Error(`Entry ${entry.code ?? index} field ${field} contains control characters`);
+			const strings = typeof value === 'string' ? [value] : Array.isArray(value) ? value : [];
+			for (const item of strings) {
+				if (typeof item === 'string' && /[\r\n\t]/.test(item)) {
+					throw new Error(`Entry ${entry.code ?? index} field ${field} contains control characters`);
+				}
 			}
 		}
 		if (codes.has(entry.code)) throw new Error(`Duplicate code: ${entry.code}`);
@@ -190,6 +240,14 @@ ${SAFE_ACTION_COPY[entry.safeAction]} ${retryPolicySentence(entry)}
 
 ${DATA_SAFETY_COPY[entry.dataSafety]}${escalation ? ` ${escalation}` : ''}
 
+## Troubleshoot {#troubleshoot}
+
+${entry.troubleshooting.map((step, stepIndex) => `${stepIndex + 1}. ${step}`).join('\n')}
+
+## Where to look {#where-to-look}
+
+${POS_LOGS_COPY}
+${entry.logSources.length ? `\nBeyond the in-app log, this failure can leave evidence in:\n\n${entry.logSources.map((source) => `- ${LOG_SOURCE_COPY[source]}`).join('\n')}\n` : ''}
 ## Details {#details}
 
 - **Code:** \`${entry.code}\` (\`${entry.symbol}\`)
