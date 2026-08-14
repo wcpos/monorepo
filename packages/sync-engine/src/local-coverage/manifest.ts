@@ -56,7 +56,9 @@ export type ExistenceManifestPrimeDatabase = {
  * NOT re-read the catalog once the manifest is primed.
  */
 
-export type DigestFetch = (ids: number[]) => Promise<{ id: number; digest: string }[]>;
+type DigestRow = { id: number; digest?: string; deleted?: boolean };
+export type DigestFetch = (ids: number[]) => Promise<DigestRow[]>;
+type PruneDeleted = (wooIds: number[]) => Promise<void>;
 
 /**
  * Documents per yield in the boot primes' classification passes (#949 tranche 2, ruling R10b).
@@ -129,6 +131,7 @@ export async function runManifestPrimePass(input: {
 	existingManifestWooIds: ReadonlySet<number>;
 	fetchDigests: DigestFetch;
 	upsert: (rows: ExistenceManifestDocument[]) => Promise<void>;
+	pruneDeleted?: PruneDeleted;
 	chunkSize?: number;
 	chunkBudget?: PrimeChunkBudget;
 	rotation?: PrimeRotation;
@@ -161,14 +164,26 @@ export async function runManifestPrimePass(input: {
 		budget: input.chunkBudget ?? { remaining: PRIME_CHUNKS_PER_TICK },
 		rotation: input.rotation,
 		attempt: async (batch) => {
+			const batchSet = new Set(batch);
 			const digests = await input.fetchDigests(batch);
 			const rows: ExistenceManifestDocument[] = [];
-			for (const { id, digest } of digests) {
+			const deletedWooIds: number[] = [];
+			for (const { id, digest, deleted } of digests) {
 				const objectType = laneOf.get(id);
-				if (!objectType || typeof digest !== 'string' || digest === '') {
+				if (!batchSet.has(id) || !objectType) {
+					continue;
+				}
+				if (deleted === true) {
+					deletedWooIds.push(id);
+					continue;
+				}
+				if (typeof digest !== 'string' || digest === '') {
 					continue; // an id we didn't ask about, or a record with no stored digest yet
 				}
 				rows.push(existenceManifestDocument({ wooId: id, objectType, digest }));
+			}
+			if (deletedWooIds.length > 0) {
+				await input.pruneDeleted?.(deletedWooIds);
 			}
 			if (rows.length > 0) {
 				await input.upsert(rows);
@@ -201,6 +216,7 @@ export async function primeExistenceManifest(
 		chunkSize?: number;
 		chunkBudget?: PrimeChunkBudget;
 		rotation?: PrimeRotation;
+		pruneDeleted?: Partial<Record<'product' | 'variation', PruneDeleted>>;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -273,13 +289,13 @@ export async function primeExistenceManifest(
 	});
 
 	const fetchDigests: DigestFetch = async (ids) => {
-		const url = `${input.syncBaseUrl}/digests?include=${ids.join(',')}&status=publish`;
+		const url = `${input.syncBaseUrl}/digests?include=${ids.join(',')}&status=publish&absence=explicit`;
 		const response = await input.fetcher(url);
 		if (!response.ok) {
 			throw new Error(`digests prime fetch failed: ${response.status}`);
 		}
 		const body = (await response.json()) as {
-			digests?: { id: number; digest: string }[];
+			digests?: DigestRow[];
 		};
 		return body.digests ?? [];
 	};
@@ -290,6 +306,13 @@ export async function primeExistenceManifest(
 		existingManifestWooIds,
 		fetchDigests,
 		upsert: (rows) => upsertManifestRows(db.existenceManifest, rows),
+		pruneDeleted: async (wooIds) => {
+			const productIds = new Set(productWooIds);
+			const deletedProducts = wooIds.filter((id) => productIds.has(id));
+			const deletedVariations = wooIds.filter((id) => !productIds.has(id));
+			if (deletedProducts.length > 0) await input.pruneDeleted?.product?.(deletedProducts);
+			if (deletedVariations.length > 0) await input.pruneDeleted?.variation?.(deletedVariations);
+		},
 		chunkSize: input.chunkSize,
 		chunkBudget: input.chunkBudget,
 		rotation: input.rotation,
@@ -308,6 +331,7 @@ export async function runSingleLanePrimePass(input: {
 	existingManifestWooIds: ReadonlySet<number>;
 	fetchDigests: DigestFetch;
 	upsert: (rows: ExistenceManifestDocument[]) => Promise<void>;
+	pruneDeleted?: PruneDeleted;
 	chunkSize?: number;
 	chunkBudget?: PrimeChunkBudget;
 	rotation?: PrimeRotation;
@@ -325,8 +349,16 @@ export async function runSingleLanePrimePass(input: {
 			const batchSet = new Set(batch);
 			const digests = await input.fetchDigests(batch);
 			const rows: ExistenceManifestDocument[] = [];
-			for (const { id, digest } of digests) {
-				if (!batchSet.has(id) || typeof digest !== 'string' || digest === '') {
+			const deletedWooIds: number[] = [];
+			for (const { id, digest, deleted } of digests) {
+				if (!batchSet.has(id)) {
+					continue;
+				}
+				if (deleted === true) {
+					deletedWooIds.push(id);
+					continue;
+				}
+				if (typeof digest !== 'string' || digest === '') {
 					continue;
 				}
 				rows.push(
@@ -336,6 +368,9 @@ export async function runSingleLanePrimePass(input: {
 						digest,
 					})
 				);
+			}
+			if (deletedWooIds.length > 0) {
+				await input.pruneDeleted?.(deletedWooIds);
 			}
 			if (rows.length > 0) {
 				await input.upsert(rows);
@@ -358,6 +393,7 @@ export async function primeExistenceManifestCustomers(
 		chunkSize?: number;
 		chunkBudget?: PrimeChunkBudget;
 		rotation?: PrimeRotation;
+		pruneDeleted?: PruneDeleted;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -387,13 +423,13 @@ export async function primeExistenceManifestCustomers(
 
 	const fetchDigests: DigestFetch = async (ids) => {
 		const response = await input.fetcher(
-			`${input.syncBaseUrl}/digests?include=${ids.join(',')}&collection=customers`
+			`${input.syncBaseUrl}/digests?include=${ids.join(',')}&collection=customers&absence=explicit`
 		);
 		if (!response.ok) {
 			throw new Error(`customer digests prime fetch failed: ${response.status}`);
 		}
 		const body = (await response.json()) as {
-			digests?: { id: number; digest: string }[];
+			digests?: DigestRow[];
 		};
 		return body.digests ?? [];
 	};
@@ -404,6 +440,7 @@ export async function primeExistenceManifestCustomers(
 		existingManifestWooIds,
 		fetchDigests,
 		upsert: (rows) => upsertManifestRows(db.existenceManifestCustomers, rows),
+		pruneDeleted: input.pruneDeleted,
 		chunkSize: input.chunkSize,
 		chunkBudget: input.chunkBudget,
 		rotation: input.rotation,
@@ -423,6 +460,7 @@ export async function primeExistenceManifestOrders(
 		chunkSize?: number;
 		chunkBudget?: PrimeChunkBudget;
 		rotation?: PrimeRotation;
+		pruneDeleted?: PruneDeleted;
 	}
 ): Promise<number> {
 	if (input.chunkBudget?.remaining === 0) return 0;
@@ -452,13 +490,13 @@ export async function primeExistenceManifestOrders(
 
 	const fetchDigests: DigestFetch = async (ids) => {
 		const response = await input.fetcher(
-			`${input.syncBaseUrl}/digests?include=${ids.join(',')}&collection=orders`
+			`${input.syncBaseUrl}/digests?include=${ids.join(',')}&collection=orders&absence=explicit`
 		);
 		if (!response.ok) {
 			throw new Error(`order digests prime fetch failed: ${response.status}`);
 		}
 		const body = (await response.json()) as {
-			digests?: { id: number; digest: string }[];
+			digests?: DigestRow[];
 		};
 		return body.digests ?? [];
 	};
@@ -469,6 +507,7 @@ export async function primeExistenceManifestOrders(
 		existingManifestWooIds,
 		fetchDigests,
 		upsert: (rows) => upsertManifestRows(db.existenceManifestOrders, rows),
+		pruneDeleted: input.pruneDeleted,
 		chunkSize: input.chunkSize,
 		chunkBudget: input.chunkBudget,
 		rotation: input.rotation,

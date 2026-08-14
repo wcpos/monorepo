@@ -92,6 +92,7 @@ export type LocalCoverageReconcilePort = {
 type LocalCoverageDatabase = CoverageDatabase &
 	CoverageCompactionLeaseDatabase &
 	CoverageCompactionFailureDatabase;
+type PruneDeletedCallback = (wooIds: number[]) => Promise<void>;
 type LocalCoverageManifestOptions = {
 	fetcher: (
 		url: string,
@@ -99,6 +100,9 @@ type LocalCoverageManifestOptions = {
 	) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 	syncBaseUrl: string;
 	chunkSize?: number;
+	pruneDeleted?: Partial<
+		Record<'product' | 'variation' | 'customer' | 'order', PruneDeletedCallback>
+	>;
 };
 type LocalCoverageBaseOptions = {
 	now?: () => number;
@@ -384,6 +388,8 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 		primeManifest: async (manifestOverride, primeOptions) => {
 			const manifest = manifestOverride ?? options.manifest;
 			if (!manifest) return { products: 0, customers: 0, orders: 0 };
+			const { pruneDeleted: requestedPrune, ...primeInput } = manifest;
+			const pruneDeleted = requestedPrune ?? options.manifest?.pruneDeleted;
 			const database = options.database as LocalCoverageDatabase & ExistenceManifestPrimeDatabase;
 			const chunkBudget = { remaining: primeOptions?.maxChunks ?? PRIME_CHUNKS_PER_TICK };
 			// Rotation (codex-review P1): both the id order WITHIN a space and the space ORDER
@@ -402,19 +408,22 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 			const runners = {
 				products: async () =>
 					primeExistenceManifest(database, {
-						...manifest,
+						...primeInput,
+						...(pruneDeleted ? { pruneDeleted } : {}),
 						chunkBudget,
 						rotation: await rotationFor('products'),
 					}),
 				customers: async () =>
 					primeExistenceManifestCustomers(database, {
-						...manifest,
+						...primeInput,
+						...(pruneDeleted?.customer ? { pruneDeleted: pruneDeleted.customer } : {}),
 						chunkBudget,
 						rotation: await rotationFor('customers'),
 					}),
 				orders: async () =>
 					primeExistenceManifestOrders(database, {
-						...manifest,
+						...primeInput,
+						...(pruneDeleted?.order ? { pruneDeleted: pruneDeleted.order } : {}),
 						chunkBudget,
 						rotation: await rotationFor('orders'),
 					}),
