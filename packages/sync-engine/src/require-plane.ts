@@ -207,6 +207,7 @@ type QueuedRequirement = {
 	seq: number;
 	subscribers: Set<RequirementSubscriber>;
 	searchDedupeKey: string | null;
+	predecessor?: QueuedRequirement;
 	released: boolean;
 	started: boolean;
 	abortController: AbortController;
@@ -284,16 +285,20 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	let seq = 0;
 	let running = false;
 	const defaultSearchLimit = 25;
+	const searchLimitOf = (requirement: InternalRequirement): number =>
+		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
 	// The limit is deliberately NOT part of the key (#1221): the walk pages to `limit` and
 	// stops on a short page, so the limit is not wire-request identity — a queued entry
 	// coalesces to the widest requested window, and a started entry absorbs any declaration
 	// its walk already covers. Wider-than-started declarations queue a successor instead.
-	const searchDedupeKey = (requirement: InternalRequirement): string | null =>
-		requirement.kind === 'search'
-			? `${requirement.collection}\u0000${(requirement.term ?? '').trim()}`
-			: null;
-	const searchLimitOf = (requirement: InternalRequirement): number =>
-		requirement.kind === 'search' ? (requirement.limit ?? defaultSearchLimit) : 0;
+	// Invalid limits stay outside coalescing so every declaration keeps its own validation
+	// outcome; force-refresh is part of identity because it must never inherit serve-local.
+	const searchDedupeKey = (requirement: InternalRequirement): string | null => {
+		if (requirement.kind !== 'search') return null;
+		const limit = searchLimitOf(requirement);
+		if (!Number.isSafeInteger(limit) || limit <= 0) return null;
+		return `${requirement.collection}\u0000${(requirement.term ?? '').trim()}\u0000${requirement.forceRefresh ? 'force' : 'normal'}`;
+	};
 	const forgetSearch = (item: QueuedRequirement): void => {
 		if (item.searchDedupeKey && activeSearches.get(item.searchDedupeKey) === item) {
 			activeSearches.delete(item.searchDedupeKey);
@@ -305,6 +310,13 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 		entry.abortController.abort(
 			new DOMException('Requirement released during drain', 'AbortError')
 		);
+		if (
+			entry.predecessor &&
+			!entry.predecessor.released &&
+			entry.predecessor.subscribers.size === 0
+		) {
+			abandon(entry.predecessor);
+		}
 	};
 	/**
 	 * The deferred half of `release()` for dedupeable searches (#1221). By the time this
@@ -1185,9 +1197,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					: requirement;
 			const dedupeKey = searchDedupeKey(queuedRequirement);
 			let entry = dedupeKey ? activeSearches.get(dedupeKey) : undefined;
+			let predecessor: QueuedRequirement | undefined;
 			// A started walk only absorbs declarations it already covers; a wider request gets
 			// its own successor entry below, queued behind the in-flight one — never aborting it.
 			if (entry?.started && searchLimitOf(queuedRequirement) > searchLimitOf(entry.requirement)) {
+				predecessor = entry;
 				entry = undefined;
 			}
 			let subscriber: RequirementSubscriber;
@@ -1223,6 +1237,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					seq: (seq += 1),
 					subscribers: new Set([subscriber!]),
 					searchDedupeKey: dedupeKey,
+					...(predecessor ? { predecessor } : {}),
 					released: false,
 					started: false,
 					abortController: new AbortController(),
