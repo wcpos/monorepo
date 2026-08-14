@@ -191,8 +191,12 @@ const isSweepScan = (path: string) => path.includes('/integrity/scan') && !isAud
  */
 const FORCED_EPOCH = 'politeness-1129-forced-epoch';
 
-async function forceRebaselineViaEpoch(page: Page): Promise<{ fired: () => boolean }> {
+async function forceRebaselineViaEpoch(
+	page: Page,
+	requestCount: () => number
+): Promise<{ fired: () => boolean; requestCountAtMutation: () => number }> {
 	let mutatedResponseServed = false;
+	let firstMutationRequestCount = 0;
 	let armed = false;
 	page.once('framenavigated', (frame) => {
 		if (frame === page.mainFrame()) armed = true;
@@ -212,15 +216,19 @@ async function forceRebaselineViaEpoch(page: Page): Promise<{ fired: () => boole
 			}
 			const body = (await response.json()) as { checkpoint?: Record<string, unknown> };
 			body.checkpoint = { ...body.checkpoint, epoch: FORCED_EPOCH };
-			mutatedResponseServed = true;
 			await route.fulfill({ response, json: body });
+			if (!mutatedResponseServed) firstMutationRequestCount = requestCount();
+			mutatedResponseServed = true;
 		} catch {
 			await route.fallback().catch(() => undefined);
 		}
 	};
 	await page.route('**/changes/tick*', rewriteEpoch);
 	await page.route('**/changes/sequence-log*', rewriteEpoch);
-	return { fired: () => mutatedResponseServed };
+	return {
+		fired: () => mutatedResponseServed,
+		requestCountAtMutation: () => firstMutationRequestCount,
+	};
 }
 
 test.describe('#1129 — store-open politeness against the live server', () => {
@@ -305,7 +313,7 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 
 		// --- Measured scenario: reload with the head forced past the replay backlog =
 		// a populated-manifest rebaseline (the HAR shape) against the live audit stack.
-		const rebaseline = await forceRebaselineViaEpoch(page);
+		const rebaseline = await forceRebaselineViaEpoch(page, () => requests.length);
 		await page.reload();
 
 		// Render marker: the table-backed count, not the card-header search box — the
@@ -348,9 +356,11 @@ test.describe('#1129 — store-open politeness against the live server', () => {
 		await expect
 			.poll(
 				() =>
-					requests.some(
-						(entry) => entry.path.includes('orderby=menu_order') && entry.path.includes('page=1')
-					),
+					requests
+						.slice(rebaseline.requestCountAtMutation())
+						.some(
+							(entry) => entry.path.includes('orderby=menu_order') && entry.path.includes('page=1')
+						),
 				{
 					timeout: DRAIN_POLL_TIMEOUT_MS,
 					message:

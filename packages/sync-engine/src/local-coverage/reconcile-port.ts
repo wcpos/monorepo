@@ -107,17 +107,21 @@ export async function removeTargeted(
 	const docs = await db.collections[name]
 		.find({ selector: { [field]: { $in: wooIds } } as never })
 		.exec();
+	const current = await db.collections[name].findByIds(docs.map((doc) => doc.primary)).exec();
 	const protectedWooIds = new Set<number>();
-	const removable = docs.filter((doc) => {
+	const removable: string[] = [];
+	for (const [primary, doc] of current) {
 		const row = doc.toJSON() as Record<string, unknown>;
-		if (!hasPendingLocalWork(row)) return true;
+		if (!hasPendingLocalWork(row)) {
+			removable.push(primary);
+			continue;
+		}
 		const wooId = row[field];
 		if (typeof wooId === 'number') protectedWooIds.add(wooId);
-		return false;
-	});
+	}
 	if (removable.length > 0)
 		assertBulkSuccess(
-			await db.collections[name].bulkRemove(removable.map((doc) => doc.primary)),
+			await db.collections[name].bulkRemove(removable),
 			'create-rxdb-sync-engine remove'
 		);
 	await removeManifestByWooIds(
