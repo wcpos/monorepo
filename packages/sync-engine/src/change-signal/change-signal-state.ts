@@ -20,6 +20,7 @@ type SerializedEngineState = {
 	cursor: EngineState['cursor'];
 	baselineDigests: BaselineEntries;
 	configBaseline?: EngineState['configBaseline'];
+	epoch?: string;
 };
 
 /** What `createHybridChangeSignalEngine` needs to resume where the loop left off. */
@@ -27,6 +28,7 @@ export type RestoredEngineState = {
 	initialCursor: EngineState['cursor'];
 	baselineDigests: EngineState['baselineDigests'];
 	configBaseline?: EngineState['configBaseline'];
+	epoch?: string;
 };
 
 export function serializeChangeSignalState(state: EngineState): string {
@@ -34,6 +36,7 @@ export function serializeChangeSignalState(state: EngineState): string {
 		cursor: state.cursor,
 		baselineDigests: Array.from(state.baselineDigests.entries()) as BaselineEntries,
 		...(state.configBaseline !== undefined ? { configBaseline: state.configBaseline } : {}),
+		...(state.epoch !== undefined ? { epoch: state.epoch } : {}),
 	};
 	return JSON.stringify(serialized);
 }
@@ -98,6 +101,7 @@ export function deserializeChangeSignalState(json: string): RestoredEngineState 
 		if (
 			!parsed ||
 			!Number.isSafeInteger(parsed.cursor?.sequence) ||
+			(parsed.epoch !== undefined && typeof parsed.epoch !== 'string') ||
 			!Array.isArray(parsed.baselineDigests) ||
 			!parsed.baselineDigests.every(isValidBaselineEntry)
 		) {
@@ -111,6 +115,7 @@ export function deserializeChangeSignalState(json: string): RestoredEngineState 
 				)
 			) as EngineState['baselineDigests'],
 			...(parsed.configBaseline !== undefined ? { configBaseline: parsed.configBaseline } : {}),
+			...(parsed.epoch !== undefined ? { epoch: parsed.epoch } : {}),
 		};
 	} catch {
 		return null;

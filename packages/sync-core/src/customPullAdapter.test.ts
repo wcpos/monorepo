@@ -129,7 +129,11 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 		expect(repository.upsertMany).not.toHaveBeenCalled(); // the stale-cursor batch is discarded, not applied
 		expect(store.writeCustomPullCheckpoint).toHaveBeenCalledWith(normalizeCheckpoint(null)); // reset to zero
 		expect(store.writeJournalEpoch).toHaveBeenCalledWith('epoch-NEW'); // adopt the new generation
-		expect(result).toEqual({ documents: 0, hasMore: true, checkpoint: normalizeCheckpoint(null) });
+		expect(result).toEqual({
+			documents: 0,
+			hasMore: true,
+			checkpoint: normalizeCheckpoint(null),
+		});
 	});
 
 	it('reconciles the local collection on reset, using a fresh pending read (Codex P1)', async () => {
@@ -179,6 +183,73 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 		expect(result.checkpoint).toEqual(normalizeCheckpoint(null));
 	});
 
+	it('resyncs from zero when the same-epoch checkpoint is below the server horizon', async () => {
+		const repository = {
+			upsertMany: vi.fn(async (_documents: PullResponse['documents']) => undefined),
+			resetForResync: vi.fn(async () => undefined),
+		};
+		let storedCheckpoint = normalizeCheckpoint({ sequence: 5000 });
+		const store = {
+			readCustomPullCheckpoint: vi.fn(async () => storedCheckpoint),
+			writeCustomPullCheckpoint: vi.fn(async (checkpoint: typeof storedCheckpoint) => {
+				storedCheckpoint = checkpoint;
+			}),
+			readJournalEpoch: vi.fn(async () => 'epoch-A'),
+			writeJournalEpoch: vi.fn(async () => undefined),
+		};
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(
+				response({
+					documents: [],
+					checkpoint: normalizeCheckpoint({ sequence: 5000 }),
+					hasMore: false,
+					epoch: 'epoch-A',
+					head: 6000,
+					horizon: 5001,
+				})
+			)
+			.mockResolvedValueOnce(
+				response({
+					documents: [],
+					checkpoint: normalizeCheckpoint({ sequence: 5001 }),
+					hasMore: false,
+					epoch: 'epoch-A',
+					head: 6000,
+					horizon: 5001,
+				})
+			);
+
+		const result = await syncCustomPullBatchIntoRepository({
+			baseUrl: BASE_URL,
+			limit: 50,
+			repository,
+			fetcher,
+			checkpointStore: store,
+		});
+
+		expect(repository.resetForResync).toHaveBeenCalled();
+		expect(repository.upsertMany).not.toHaveBeenCalled();
+		expect(store.writeCustomPullCheckpoint).toHaveBeenCalledWith(normalizeCheckpoint(null));
+		expect(store.writeJournalEpoch).toHaveBeenCalledWith('epoch-A');
+		expect(result).toEqual({
+			documents: 0,
+			hasMore: true,
+			checkpoint: normalizeCheckpoint(null),
+		});
+
+		const recovered = await syncCustomPullBatchIntoRepository({
+			baseUrl: BASE_URL,
+			limit: 50,
+			repository,
+			fetcher,
+			checkpointStore: store,
+		});
+
+		expect(repository.resetForResync).toHaveBeenCalledTimes(1);
+		expect(recovered.checkpoint).toEqual(normalizeCheckpoint({ sequence: 5001 }));
+	});
+
 	it('advances normally when the epoch matches and the cursor is within the head', async () => {
 		const server = createFakePullServer({ epoch: 'epoch-A' });
 		server.seed({
@@ -201,7 +272,12 @@ describe('syncCustomPullBatchIntoRepository journal epoch (F8)', () => {
 			checkpointStore: store,
 		});
 
-		const next = { updatedAtGmt: '2026-05-20 10:05:00', orderId: 1, revision: 'r', sequence: 5001 };
+		const next = {
+			updatedAtGmt: '2026-05-20 10:05:00',
+			orderId: 1,
+			revision: 'r',
+			sequence: 5001,
+		};
 		expect(
 			repository.upsertMany.mock.calls.map(([documents]) =>
 				documents.map((document) => document.id)
@@ -411,7 +487,11 @@ describe('hostile-envelope poison guards (B7, ADR 0017 family)', () => {
 			checkpointStore: store,
 		});
 
-		expect(result).toEqual({ documents: 0, hasMore: true, checkpoint: normalizeCheckpoint(null) });
+		expect(result).toEqual({
+			documents: 0,
+			hasMore: true,
+			checkpoint: normalizeCheckpoint(null),
+		});
 		expect(repository.upsertMany).toHaveBeenCalledWith([]);
 		expect(store.writeCustomPullCheckpoint).toHaveBeenCalledWith(normalizeCheckpoint(null));
 	});
@@ -499,7 +579,11 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 			)
 		).toEqual([[fakeUuid(12)]]);
 		expect(checkpointStore.writeCustomPullCheckpoint).toHaveBeenCalledWith(advancedCheckpoint);
-		expect(result).toEqual({ documents: 1, hasMore: false, checkpoint: advancedCheckpoint });
+		expect(result).toEqual({
+			documents: 1,
+			hasMore: false,
+			checkpoint: advancedCheckpoint,
+		});
 	});
 
 	it('applies every document when no pending mutation set is provided', async () => {
@@ -536,7 +620,10 @@ describe('syncCustomPullBatchIntoRepository pull guard wiring', () => {
 			repository,
 			fetcher: server.fetch,
 			// Stand-in for the order fetcher's identity assembly — the client owns the document id.
-			assembleDocument: (document) => ({ ...document, id: `assembled:${document.wooOrderId}` }),
+			assembleDocument: (document) => ({
+				...document,
+				id: `assembled:${document.wooOrderId}`,
+			}),
 		});
 
 		expect(

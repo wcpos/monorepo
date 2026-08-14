@@ -36,12 +36,8 @@ function baseOutcome(overrides: Partial<HybridPollOutcome> = {}): HybridPollOutc
 	};
 }
 
-function change(
-	id: number,
-	collection: HybridChange['collection'],
-	type = 'product.updated'
-): HybridChange {
-	return { id, collection, type, source: 'sequence-log' };
+function change(id: number, collection: HybridChange['collection'], deleted = false): HybridChange {
+	return { id, collection, deleted, source: 'sequence-log' };
 }
 
 function repair(
@@ -70,7 +66,7 @@ describe('planReplicationActions — routine TIER 1 changes', () => {
 
 	it('dedupes ids within a collection', () => {
 		const actions = planReplicationActions(
-			baseOutcome({ changes: [change(10, 'products'), change(10, 'products', 'product.created')] })
+			baseOutcome({ changes: [change(10, 'products'), change(10, 'products')] })
 		);
 		expect(actions.targetedPulls).toEqual([{ collection: 'products', ids: [10] }]);
 	});
@@ -99,13 +95,10 @@ describe('planReplicationActions — drill-down ids', () => {
 });
 
 describe('planReplicationActions — delete tombstones', () => {
-	it('routes delete-type changes into deletes, NOT targetedPulls', () => {
+	it('routes deleted changes into deletes, NOT targetedPulls', () => {
 		const actions = planReplicationActions(
 			baseOutcome({
-				changes: [
-					change(50, 'products', 'product.deleted'),
-					change(51, 'products', 'product.trashed'),
-				],
+				changes: [change(50, 'products', true), change(51, 'products', true)],
 			})
 		);
 		expect(actions.deletes).toEqual([{ collection: 'products', ids: [50, 51] }]);
@@ -123,30 +116,11 @@ describe('planReplicationActions — delete tombstones', () => {
 	it('a delete excludes the same id from targetedPulls when both appear', () => {
 		const actions = planReplicationActions(
 			baseOutcome({
-				changes: [
-					change(70, 'products', 'product.updated'),
-					change(70, 'products', 'product.deleted'),
-				],
+				changes: [change(70, 'products'), change(70, 'products', true)],
 			})
 		);
 		expect(actions.deletes).toEqual([{ collection: 'products', ids: [70] }]);
 		expect(actions.targetedPulls).toEqual([]);
-	});
-
-	it('does NOT treat untrash/undelete/restore as a delete (a restore brings a record back)', () => {
-		// The verb merely CONTAINS trash/delete — but it is a restore. It must route
-		// to a targeted pull (fetch the restored record), never to a local delete.
-		const actions = planReplicationActions(
-			baseOutcome({
-				changes: [
-					change(80, 'products', 'product.untrashed'),
-					change(81, 'products', 'product.undeleted'),
-					change(82, 'products', 'product.restored'),
-				],
-			})
-		);
-		expect(actions.deletes).toEqual([]);
-		expect(actions.targetedPulls).toEqual([{ collection: 'products', ids: [80, 81, 82] }]);
 	});
 });
 
@@ -209,11 +183,7 @@ describe('planReplicationActions — multi-collection grouping', () => {
 	it('groups and dedupes across collections from both changes and drill-down', () => {
 		const actions = planReplicationActions(
 			baseOutcome({
-				changes: [
-					change(1, 'products'),
-					change(2, 'variations'),
-					change(3, 'tax_rates', 'tax_rate.updated'),
-				],
+				changes: [change(1, 'products'), change(2, 'variations'), change(3, 'tax_rates')],
 				idsToPull: [
 					repair(2, 'variations'),
 					repair(4, 'products'),
@@ -230,18 +200,19 @@ describe('planReplicationActions — multi-collection grouping', () => {
 });
 
 describe('planReplicationActions — nextState threads through', () => {
-	it('carries cursor, baselineDigests, and configBaseline straight through', () => {
+	it('carries cursor, baselineDigests, configBaseline, and epoch straight through', () => {
 		const baselineDigests: BaselineDigests = new Map([
 			['hash-checksum:0', { detector: 'hash-checksum', count: 1, digest: '99', match: true }],
 		]);
 		const cursor: SequenceCursor = { sequence: 42 };
 		const configBaseline = { products: 'abc' };
 		const actions = planReplicationActions(
-			baseOutcome({ cursor, baselineDigests, configBaseline })
+			baseOutcome({ cursor, baselineDigests, configBaseline, epoch: 'epoch-A' })
 		);
 		expect(actions.nextState.cursor).toEqual(cursor);
 		expect(actions.nextState.baselineDigests).toBe(baselineDigests);
 		expect(actions.nextState.configBaseline).toEqual(configBaseline);
+		expect(actions.nextState.epoch).toBe('epoch-A');
 	});
 
 	it('omits configBaseline when the outcome had none', () => {

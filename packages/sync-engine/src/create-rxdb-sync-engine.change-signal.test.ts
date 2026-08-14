@@ -38,7 +38,8 @@ let uniqueScope = 0;
 type SequenceRow = {
 	sequence: number;
 	id: number;
-	type: string;
+	deleted: number;
+	revision?: string;
 	collection: string;
 	modified_gmt: string;
 };
@@ -313,14 +314,14 @@ describe('sync("change-signal") through the public handle', () => {
 			{
 				sequence: 6,
 				id: 31,
-				type: 'update',
+				deleted: 0,
 				collection: 'variations',
 				modified_gmt: '2026-07-10T00:00:01',
 			},
 			{
 				sequence: 7,
 				id: 32,
-				type: 'update',
+				deleted: 0,
 				collection: 'variations',
 				modified_gmt: '2026-07-10T00:00:02',
 			}
@@ -347,7 +348,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 1,
-			type: 'update',
+			deleted: 0,
 			collection: 'categories',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -362,7 +363,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 7,
 			id: 2,
-			type: 'update',
+			deleted: 0,
 			collection: 'categories',
 			modified_gmt: '2026-07-10T00:00:02',
 		});
@@ -390,7 +391,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -433,21 +434,21 @@ describe('sync("change-signal") through the public handle', () => {
 			{
 				sequence: 6,
 				id: 9,
-				type: 'update',
+				deleted: 0,
 				collection: 'products',
 				modified_gmt: '2026-07-10T00:00:01',
 			},
 			{
 				sequence: 7,
 				id: 20,
-				type: 'update',
+				deleted: 0,
 				collection: 'variations',
 				modified_gmt: '2026-07-10T00:00:02',
 			},
 			{
 				sequence: 8,
 				id: 30,
-				type: 'update',
+				deleted: 0,
 				collection: 'customers',
 				modified_gmt: '2026-07-10T00:00:03',
 			}
@@ -515,7 +516,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -728,7 +729,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -767,7 +768,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -801,7 +802,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -861,7 +862,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -916,7 +917,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -1004,7 +1005,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -1098,7 +1099,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -1135,7 +1136,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 6,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:01',
 		});
@@ -1149,7 +1150,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.rows.push({
 			sequence: 7,
 			id: 9,
-			type: 'update',
+			deleted: 0,
 			collection: 'products',
 			modified_gmt: '2026-07-10T00:00:02',
 		});

@@ -153,6 +153,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					deps.barcodeSelectorsFor?.(scopeId)?.publish(collection, selectors),
 			}),
 			initialCursor: initial.initialCursor,
+			...(restored?.epoch !== undefined ? { initialEpoch: restored.epoch } : {}),
 			...(initial.baselineDigests !== undefined
 				? { baselineDigests: initial.baselineDigests }
 				: {}),

@@ -34,6 +34,8 @@ type SequencePage = {
 	cursor: { sequence: number };
 	hasMore: boolean;
 	head?: number;
+	horizon?: number;
+	epoch?: string;
 };
 
 type FakeSourceConfig = {
@@ -54,7 +56,11 @@ type FakeSourceConfig = {
 
 type Calls = {
 	pollSequenceLog: { cursor: { sequence: number }; limit: number }[];
-	hashChecksumScan: { bucketSize: number; afterId: number; limitBuckets: number }[];
+	hashChecksumScan: {
+		bucketSize: number;
+		afterId: number;
+		limitBuckets: number;
+	}[];
 	rangeChecksumScan: { collection: string; bucketSize: number }[];
 	drillDownBucket: {
 		collection?: string;
@@ -62,7 +68,11 @@ type Calls = {
 		bucketSize: number;
 		bucket: number;
 	}[];
-	revisionHashForIds: { ids: number[]; collection?: string; detector?: string }[];
+	revisionHashForIds: {
+		ids: number[];
+		collection?: string;
+		detector?: string;
+	}[];
 };
 
 function makeFakeSource(config: FakeSourceConfig) {
@@ -112,13 +122,19 @@ function makeFakeSource(config: FakeSourceConfig) {
 			return { buckets, complete: true, nextAfterId: 0 };
 		},
 		async rangeChecksumScan(input) {
-			calls.rangeChecksumScan.push({ collection: input.collection, bucketSize: input.bucketSize });
+			calls.rangeChecksumScan.push({
+				collection: input.collection,
+				bucketSize: input.bucketSize,
+			});
 			const buckets = at(config.rangeScansBySweep ?? [], rangeSweepIndex);
 			rangeSweepIndex += 1;
 			return { buckets };
 		},
 		async drillDownBucket(input) {
-			const request = input as typeof input & { collection?: string; detector?: string };
+			const request = input as typeof input & {
+				collection?: string;
+				detector?: string;
+			};
 			calls.drillDownBucket.push(request);
 			return {
 				driftedIds:
@@ -146,7 +162,10 @@ function hashBucket(
 	overrides: Partial<HashChecksumBucket> & { bucket: number }
 ): HashChecksumBucket {
 	return {
-		range: { start: overrides.bucket * 1000, end: overrides.bucket * 1000 + 999 },
+		range: {
+			start: overrides.bucket * 1000,
+			end: overrides.bucket * 1000 + 999,
+		},
 		stored_count: 10,
 		current_count: 10,
 		stored_digest: '111',
@@ -200,7 +219,7 @@ describe('TIER 1 — routine sequence-log poll', () => {
 							sequence: 7,
 							id: 42,
 							collection: 'products' as const,
-							type: 'update',
+							deleted: false,
 							modified_gmt: '2026-06-17 00:00:00',
 						},
 					],
@@ -222,7 +241,12 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		const outcome = await engine.poll();
 
 		expect(outcome.changes).toEqual([
-			{ id: 42, type: 'update', collection: 'products', source: 'sequence-log' },
+			{
+				id: 42,
+				deleted: false,
+				collection: 'products',
+				source: 'sequence-log',
+			},
 		]);
 		expect(outcome.previousCursor).toEqual({ sequence: 3 });
 		expect(outcome.cursor).toEqual({ sequence: 7 });
@@ -240,12 +264,26 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		const { source, calls } = makeFakeSource({
 			sequencePages: [
 				{
-					rows: [{ sequence: 3, id: 1, collection: 'products' as const, type: 'update' }],
+					rows: [
+						{
+							sequence: 3,
+							id: 1,
+							collection: 'products' as const,
+							deleted: false,
+						},
+					],
 					cursor: { sequence: 3 },
 					hasMore: false,
 				},
 				{
-					rows: [{ sequence: 9, id: 2, collection: 'products' as const, type: 'update' }],
+					rows: [
+						{
+							sequence: 9,
+							id: 2,
+							collection: 'products' as const,
+							deleted: false,
+						},
+					],
 					cursor: { sequence: 9 },
 					hasMore: false,
 				},
@@ -270,7 +308,7 @@ describe('TIER 1 — routine sequence-log poll', () => {
 				sequence: from + i,
 				id: from + i,
 				collection: 'products' as const,
-				type: 'update',
+				deleted: false,
 			}));
 		const { source: base } = makeFakeSource({});
 		const cursorsSeen: number[] = [];
@@ -314,17 +352,38 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		const { source, calls } = makeFakeSource({
 			sequencePages: [
 				{
-					rows: [{ sequence: 1, id: 1, collection: 'products' as const, type: 'update' }],
+					rows: [
+						{
+							sequence: 1,
+							id: 1,
+							collection: 'products' as const,
+							deleted: false,
+						},
+					],
 					cursor: { sequence: 1 },
 					hasMore: true,
 				},
 				{
-					rows: [{ sequence: 2, id: 2, collection: 'products' as const, type: 'update' }],
+					rows: [
+						{
+							sequence: 2,
+							id: 2,
+							collection: 'products' as const,
+							deleted: false,
+						},
+					],
 					cursor: { sequence: 2 },
 					hasMore: true,
 				},
 				{
-					rows: [{ sequence: 3, id: 3, collection: 'products' as const, type: 'update' }],
+					rows: [
+						{
+							sequence: 3,
+							id: 3,
+							collection: 'products' as const,
+							deleted: false,
+						},
+					],
 					cursor: { sequence: 3 },
 					hasMore: false,
 				},
@@ -346,7 +405,12 @@ describe('TIER 1 — routine sequence-log poll', () => {
 			sequencePages: [
 				{
 					rows: [
-						{ sequence: 4, id: 900, collection: 'tax_rates' as const, type: 'tax_rate.update' },
+						{
+							sequence: 4,
+							id: 900,
+							collection: 'tax_rates' as const,
+							deleted: false,
+						},
 					],
 					cursor: { sequence: 4 },
 					hasMore: false,
@@ -358,7 +422,12 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		const outcome = await engine.poll();
 
 		expect(outcome.changes).toEqual([
-			{ id: 900, type: 'tax_rate.update', collection: 'tax_rates', source: 'sequence-log' },
+			{
+				id: 900,
+				deleted: false,
+				collection: 'tax_rates',
+				source: 'sequence-log',
+			},
 		]);
 	});
 
@@ -366,7 +435,14 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		const { source } = makeFakeSource({
 			sequencePages: [
 				{
-					rows: [{ sequence: 5, id: 77, collection: 'products' as const, type: 'delete' }],
+					rows: [
+						{
+							sequence: 5,
+							id: 77,
+							collection: 'products' as const,
+							deleted: true,
+						},
+					],
 					cursor: { sequence: 5 },
 					hasMore: false,
 				},
@@ -377,7 +453,7 @@ describe('TIER 1 — routine sequence-log poll', () => {
 		const outcome = await engine.poll();
 
 		expect(outcome.changes).toEqual([
-			{ id: 77, type: 'delete', collection: 'products', source: 'sequence-log' },
+			{ id: 77, deleted: true, collection: 'products', source: 'sequence-log' },
 		]);
 	});
 
@@ -389,7 +465,14 @@ describe('TIER 1 — routine sequence-log poll', () => {
 			async pollSequenceLog({ cursor }) {
 				pages += 1;
 				return {
-					rows: [{ sequence: pages, id: pages, collection: 'products' as const, type: 'update' }],
+					rows: [
+						{
+							sequence: pages,
+							id: pages,
+							collection: 'products' as const,
+							deleted: false,
+						},
+					],
 					cursor: { sequence: cursor.sequence + 1 },
 					hasMore: true,
 				};
@@ -424,7 +507,7 @@ describe('TIER 1 — sequence-log backlog guard', () => {
 		sequence,
 		id: sequence,
 		collection: 'products',
-		type: 'update',
+		deleted: false,
 	});
 
 	it('re-baselines to head from the first page and discards the historical rows', async () => {
@@ -450,6 +533,46 @@ describe('TIER 1 — sequence-log backlog guard', () => {
 			sweepRan: false,
 		});
 		expect(calls.pollSequenceLog).toHaveLength(1);
+	});
+
+	it('re-baselines again when a forced-backlog cursor is above the next reported head', async () => {
+		const { source, calls } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [row(1)],
+					cursor: { sequence: 1 },
+					hasMore: false,
+					head: 100,
+					epoch: 'epoch-A',
+				},
+				{
+					rows: [],
+					cursor: { sequence: 20 },
+					hasMore: false,
+					head: 20,
+					epoch: 'epoch-A',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialEpoch: 'epoch-A',
+			policy: { maxReplayBacklog: 50, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+			now: () => 0,
+		});
+
+		const backlogReset = await engine.poll();
+		const headReset = await engine.poll();
+
+		expect(backlogReset).toMatchObject({
+			cursor: { sequence: 100 },
+			rebaseline: true,
+		});
+		expect(headReset).toMatchObject({
+			cursor: { sequence: 20 },
+			rebaseline: true,
+		});
+		expect(calls.pollSequenceLog.map(({ cursor }) => cursor.sequence)).toEqual([0, 100]);
 	});
 
 	it('does not fire at the exact backlog threshold', async () => {
@@ -535,6 +658,227 @@ describe('TIER 1 — sequence-log backlog guard', () => {
 	});
 });
 
+describe('TIER 1 — journal generation guards', () => {
+	const baseline: BaselineDigests = new Map([
+		['hash-checksum:0', { detector: 'hash-checksum', count: 1, digest: 'old', match: true }],
+	]);
+
+	it('re-baselines to head, resets baselines, and adopts a changed epoch', async () => {
+		const { source } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [{ sequence: 11, id: 11, collection: 'products', deleted: false }],
+					cursor: { sequence: 11 },
+					hasMore: false,
+					head: 20,
+					horizon: 0,
+					epoch: 'epoch-NEW',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialCursor: { sequence: 10 },
+			initialEpoch: 'epoch-OLD',
+			baselineDigests: baseline,
+			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome).toMatchObject({
+			changes: [],
+			cursor: { sequence: 20 },
+			epoch: 'epoch-NEW',
+			rebaseline: true,
+		});
+		expect(outcome.baselineDigests).toEqual(new Map());
+	});
+
+	it('adopts a first-seen epoch without re-baselining', async () => {
+		const { source } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [
+						{
+							sequence: 11,
+							id: 11,
+							collection: 'products',
+							deleted: false,
+							revision: 'sha256:abc',
+						},
+					],
+					cursor: { sequence: 11 },
+					hasMore: false,
+					head: 11,
+					horizon: 9,
+					epoch: 'epoch-FIRST',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialCursor: { sequence: 10 },
+			baselineDigests: baseline,
+			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+		});
+
+		const outcome = await engine.poll();
+
+		expect(outcome).toMatchObject({
+			changes: [
+				{
+					id: 11,
+					collection: 'products',
+					deleted: false,
+					revision: 'sha256:abc',
+					source: 'sequence-log',
+				},
+			],
+			cursor: { sequence: 11 },
+			epoch: 'epoch-FIRST',
+			rebaseline: false,
+		});
+		expect(outcome.baselineDigests).toEqual(baseline);
+	});
+
+	it('re-baselines an epoch-less cursor that is below the first served horizon', async () => {
+		const { source } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [],
+					cursor: { sequence: 5 },
+					hasMore: false,
+					head: 20,
+					horizon: 6,
+					epoch: 'epoch-FIRST',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialCursor: { sequence: 5 },
+			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+		});
+
+		await expect(engine.poll()).resolves.toMatchObject({
+			cursor: { sequence: 20 },
+			epoch: 'epoch-FIRST',
+			rebaseline: true,
+		});
+	});
+
+	it('re-baselines when the epoch changes during a first multi-page drain', async () => {
+		const { source } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [{ sequence: 11, id: 11, collection: 'products', deleted: false }],
+					cursor: { sequence: 11 },
+					hasMore: true,
+					head: 20,
+					epoch: 'epoch-A',
+				},
+				{
+					rows: [{ sequence: 12, id: 12, collection: 'products', deleted: false }],
+					cursor: { sequence: 12 },
+					hasMore: false,
+					head: 30,
+					epoch: 'epoch-B',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialCursor: { sequence: 10 },
+			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+		});
+
+		await expect(engine.poll()).resolves.toMatchObject({
+			changes: [],
+			cursor: { sequence: 30 },
+			epoch: 'epoch-B',
+			rebaseline: true,
+		});
+	});
+
+	it('rejects an epoch change without a finite rebaseline head and preserves the cursor', async () => {
+		const { source, calls } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [{ sequence: 11, id: 11, collection: 'products', deleted: false }],
+					cursor: { sequence: 11 },
+					hasMore: false,
+					epoch: 'epoch-NEW',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialCursor: { sequence: 10 },
+			initialEpoch: 'epoch-OLD',
+			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+		});
+
+		await expect(engine.poll()).rejects.toThrow('Sequence-log rebaseline requires a finite head');
+		await expect(engine.poll()).rejects.toThrow('Sequence-log rebaseline requires a finite head');
+		expect(calls.pollSequenceLog.map(({ cursor }) => cursor.sequence)).toEqual([10, 10]);
+	});
+
+	it('re-baselines when a same-epoch cursor is below the served horizon', async () => {
+		const { source } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [],
+					cursor: { sequence: 5 },
+					hasMore: false,
+					head: 20,
+					horizon: 6,
+					epoch: 'epoch-A',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialCursor: { sequence: 5 },
+			initialEpoch: 'epoch-A',
+			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+		});
+
+		await expect(engine.poll()).resolves.toMatchObject({
+			cursor: { sequence: 20 },
+			epoch: 'epoch-A',
+			rebaseline: true,
+		});
+	});
+
+	it('re-baselines when a same-epoch cursor is past the served head', async () => {
+		const { source } = makeFakeSource({
+			sequencePages: [
+				{
+					rows: [],
+					cursor: { sequence: 25 },
+					hasMore: false,
+					head: 20,
+					horizon: 0,
+					epoch: 'epoch-A',
+				},
+			],
+		});
+		const engine = createHybridChangeSignalEngine({
+			source,
+			initialCursor: { sequence: 25 },
+			initialEpoch: 'epoch-A',
+			policy: { maxReplayBacklog: 0, sweepEveryNPolls: 2, sweepIntervalMs: 0 },
+		});
+
+		await expect(engine.poll()).resolves.toMatchObject({
+			cursor: { sequence: 20 },
+			epoch: 'epoch-A',
+			rebaseline: true,
+		});
+	});
+});
+
 // --- Cursor atomicity: a failed poll must not advance the committed cursor ----
 
 describe('cursor atomicity (codex review P1)', () => {
@@ -551,7 +895,7 @@ describe('cursor atomicity (codex review P1)', () => {
 							sequence: cursor.sequence + 1,
 							id: cursor.sequence + 1,
 							collection: 'products' as const,
-							type: 'update',
+							deleted: false,
 						},
 					],
 					cursor: { sequence: cursor.sequence + 1 },
@@ -588,7 +932,7 @@ describe('cursor atomicity (codex review P1)', () => {
 		const outcome = await engine.poll();
 		expect(seen[1]).toEqual({ sequence: 0 });
 		expect(outcome.changes).toEqual([
-			{ id: 1, type: 'update', collection: 'products', source: 'sequence-log' },
+			{ id: 1, deleted: false, collection: 'products', source: 'sequence-log' },
 		]);
 		expect(outcome.cursor).toEqual({ sequence: 1 });
 	});
@@ -748,7 +1092,12 @@ describe('TIER 2 — integrity sweep robustness', () => {
 				// Page 1: a flagged bucket, complete=false, nextAfterId stays 0 → stall.
 				return {
 					buckets: [
-						hashBucket({ bucket: 0, match: false, current_count: 3, current_digest: '999' }),
+						hashBucket({
+							bucket: 0,
+							match: false,
+							current_count: 3,
+							current_digest: '999',
+						}),
 					],
 					complete: false,
 					nextAfterId: 0,
@@ -831,7 +1180,12 @@ describe('TIER 2 — integrity sweep robustness', () => {
 		expect(calls.rangeChecksumScan).toHaveLength(1);
 		expect(calls.rangeChecksumScan[0].bucketSize).toBe(500);
 		expect(calls.drillDownBucket).toEqual([
-			{ bucketSize: 500, bucket: 0, collection: 'tax_rates', detector: 'range-checksum' },
+			{
+				bucketSize: 500,
+				bucket: 0,
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			},
 		]);
 		expect(outcome.idsToPull).toEqual([
 			repairTarget(10, { collection: 'tax_rates', detector: 'range-checksum' }),
@@ -848,7 +1202,7 @@ describe('TIER 2 — integrity sweep robustness', () => {
 							sequence: cursor.sequence + 10,
 							id: 42,
 							collection: 'products' as const,
-							type: 'update',
+							deleted: false,
 						},
 					],
 					cursor: { sequence: cursor.sequence + 10 },
@@ -890,7 +1244,12 @@ describe('TIER 2 — integrity sweep robustness', () => {
 		expect(hashCalls).toBe(2);
 		expect(retry.cursor).toEqual({ sequence: 10 });
 		expect(retry.changes).toEqual([
-			{ id: 42, type: 'update', collection: 'products', source: 'sequence-log' },
+			{
+				id: 42,
+				deleted: false,
+				collection: 'products',
+				source: 'sequence-log',
+			},
 		]);
 	});
 
@@ -999,7 +1358,10 @@ describe('TIER 2 — integrity sweep robustness', () => {
 		expect(first.integrityMismatches).toEqual([{ bucket: 0, detector: 'range-checksum' }]);
 		expect(second.integrityMismatches).toEqual([{ bucket: 0, detector: 'range-checksum' }]);
 		expect(second.idsToPull).toEqual([
-			repairTarget(903, { collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(903, {
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 	});
 
@@ -1023,7 +1385,11 @@ describe('TIER 2 — integrity sweep robustness', () => {
 		const outcome = await engine.poll();
 
 		expect(outcome.idsToPull).toEqual([
-			repairTarget(904, { status: 'deleted', collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(904, {
+				status: 'deleted',
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 	});
 
@@ -1041,7 +1407,14 @@ describe('TIER 2 — integrity sweep robustness', () => {
 				}
 				sequence = cursor.sequence + 1;
 				return {
-					rows: [{ sequence, id: sequence, collection: 'products' as const, type: 'update' }],
+					rows: [
+						{
+							sequence,
+							id: sequence,
+							collection: 'products' as const,
+							deleted: false,
+						},
+					],
 					cursor: { sequence },
 					hasMore: false,
 				};
@@ -1068,7 +1441,7 @@ describe('TIER 2 — integrity sweep robustness', () => {
 
 		expect(calls).toEqual([{ cursor: { sequence: 0 } }]);
 		releaseFirst?.({
-			rows: [{ sequence: 1, id: 1, collection: 'products' as const, type: 'update' }],
+			rows: [{ sequence: 1, id: 1, collection: 'products' as const, deleted: false }],
 			cursor: { sequence: 1 },
 			hasMore: false,
 		});
@@ -1194,7 +1567,12 @@ describe('TIER 2 + TIER 3 — hook-bypassing PRODUCT write (sql-bypass)', () => 
 		// TIER 3 drilled the exact drifted id into the targeted pull set.
 		expect(outcome.idsToPull).toEqual([repairTarget(5005)]);
 		expect(calls.drillDownBucket).toEqual([
-			{ bucketSize: 1000, bucket: 0, collection: 'products', detector: 'hash-checksum' },
+			{
+				bucketSize: 1000,
+				bucket: 0,
+				collection: 'products',
+				detector: 'hash-checksum',
+			},
 		]);
 		// No escalation on the first post-pull mismatch.
 		expect(outcome.escalatedIds).toEqual([]);
@@ -1207,7 +1585,14 @@ describe('TIER 2 + TIER 3 — hook-bypassing PRODUCT write (sql-bypass)', () => 
 		const { source } = makeFakeSource({
 			sequencePages: [{ rows: [], cursor: { sequence: 0 }, hasMore: false }],
 			hashScansBySweep: [
-				[hashBucket({ bucket: 2, current_count: 7, current_digest: '333', match: false })],
+				[
+					hashBucket({
+						bucket: 2,
+						current_count: 7,
+						current_digest: '333',
+						match: false,
+					}),
+				],
 			],
 			drillDowns: { '1000:2': [{ id: 2042, status: 'deleted' }] },
 		});
@@ -1281,7 +1666,12 @@ describe('TIER 2 + TIER 3 — hook-bypassing PRODUCT write (sql-bypass)', () => 
 		expect(outcome.integrityMismatches).toEqual([{ bucket: 0, detector: 'hash-checksum' }]);
 		expect(outcome.idsToPull).toEqual([repairTarget(5005)]);
 		expect(calls.drillDownBucket).toEqual([
-			{ bucketSize: 1000, bucket: 0, collection: 'products', detector: 'hash-checksum' },
+			{
+				bucketSize: 1000,
+				bucket: 0,
+				collection: 'products',
+				detector: 'hash-checksum',
+			},
 		]);
 	});
 
@@ -1301,7 +1691,11 @@ describe('TIER 2 + TIER 3 — hook-bypassing PRODUCT write (sql-bypass)', () => 
 		});
 		const engine = createHybridChangeSignalEngine({
 			source,
-			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0, escalateToRevisionHashAfter: 2 },
+			policy: {
+				sweepEveryNPolls: 1,
+				sweepIntervalMs: 0,
+				escalateToRevisionHashAfter: 2,
+			},
 			now: () => 0,
 		});
 
@@ -1325,7 +1719,12 @@ describe('TIER 2 + TIER 3 — tax-rate writes split by id-space', () => {
 			sequencePages: [
 				{
 					rows: [
-						{ sequence: 1, id: 901, collection: 'tax_rates' as const, type: 'tax_rate.update' },
+						{
+							sequence: 1,
+							id: 901,
+							collection: 'tax_rates' as const,
+							deleted: false,
+						},
 					],
 					cursor: { sequence: 1 },
 					hasMore: false,
@@ -1339,7 +1738,12 @@ describe('TIER 2 + TIER 3 — tax-rate writes split by id-space', () => {
 		});
 		const outcome = await engine.poll();
 		expect(outcome.changes).toEqual([
-			{ id: 901, type: 'tax_rate.update', collection: 'tax_rates', source: 'sequence-log' },
+			{
+				id: 901,
+				deleted: false,
+				collection: 'tax_rates',
+				source: 'sequence-log',
+			},
 		]);
 		expect(outcome.sweepRan).toBe(false);
 	});
@@ -1369,7 +1773,10 @@ describe('TIER 2 + TIER 3 — tax-rate writes split by id-space', () => {
 		expect(outcome.changes).toEqual([]);
 		expect(outcome.integrityMismatches).toEqual([{ bucket: 0, detector: 'range-checksum' }]);
 		expect(outcome.idsToPull).toEqual([
-			repairTarget(903, { collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(903, {
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 		// The drill-down used the range-checksum detector + bucket size.
 		expect(calls.drillDownBucket).toEqual([
@@ -1403,7 +1810,11 @@ describe('TIER 2 + TIER 3 — tax-rate writes split by id-space', () => {
 
 		expect(outcome.integrityMismatches).toEqual([{ bucket: 0, detector: 'range-checksum' }]);
 		expect(outcome.idsToPull).toEqual([
-			repairTarget(904, { status: 'deleted', collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(904, {
+				status: 'deleted',
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 	});
 
@@ -1446,21 +1857,41 @@ describe('TIER 2 + TIER 3 — tax-rate writes split by id-space', () => {
 		expect(third.integrityMismatches).toEqual([{ bucket: 0, detector: 'range-checksum' }]);
 		// Targeted pull every sweep.
 		expect(first.idsToPull).toEqual([
-			repairTarget(904, { status: 'deleted', collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(904, {
+				status: 'deleted',
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 		expect(second.idsToPull).toEqual([
-			repairTarget(904, { status: 'deleted', collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(904, {
+				status: 'deleted',
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 		expect(third.idsToPull).toEqual([
-			repairTarget(904, { status: 'deleted', collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(904, {
+				status: 'deleted',
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 		// Builds the streak and escalates from sweep 2 onward.
 		expect(first.escalatedIds).toEqual([]);
 		expect(second.escalatedIds).toEqual([
-			repairTarget(904, { status: 'deleted', collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(904, {
+				status: 'deleted',
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 		expect(third.escalatedIds).toEqual([
-			repairTarget(904, { status: 'deleted', collection: 'tax_rates', detector: 'range-checksum' }),
+			repairTarget(904, {
+				status: 'deleted',
+				collection: 'tax_rates',
+				detector: 'range-checksum',
+			}),
 		]);
 		expect(calls.revisionHashForIds.length).toBeGreaterThanOrEqual(1);
 	});
@@ -1528,7 +1959,11 @@ describe('TIER 3 — escalation to revision-hash', () => {
 		const engine = createHybridChangeSignalEngine({
 			source,
 			baselineDigests: baseline,
-			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0, escalateToRevisionHashAfter: 2 },
+			policy: {
+				sweepEveryNPolls: 1,
+				sweepIntervalMs: 0,
+				escalateToRevisionHashAfter: 2,
+			},
 			now: () => 0,
 		});
 
@@ -1566,7 +2001,11 @@ describe('TIER 3 — escalation to revision-hash', () => {
 		const engine = createHybridChangeSignalEngine({
 			source,
 			baselineDigests: baseline,
-			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0, escalateToRevisionHashAfter: 2 },
+			policy: {
+				sweepEveryNPolls: 1,
+				sweepIntervalMs: 0,
+				escalateToRevisionHashAfter: 2,
+			},
 			now: () => 0,
 		});
 
@@ -1599,7 +2038,11 @@ describe('TIER 3 — escalation to revision-hash', () => {
 		const engine = createHybridChangeSignalEngine({
 			source,
 			baselineDigests: baseline,
-			policy: { sweepEveryNPolls: 1, sweepIntervalMs: 0, escalateToRevisionHashAfter: 2 },
+			policy: {
+				sweepEveryNPolls: 1,
+				sweepIntervalMs: 0,
+				escalateToRevisionHashAfter: 2,
+			},
 			now: () => 0,
 		});
 
@@ -1622,7 +2065,14 @@ describe('provenance + policy', () => {
 		const { source } = makeFakeSource({
 			sequencePages: [
 				{
-					rows: [{ sequence: 1, id: 1, collection: 'products' as const, type: 'update' }],
+					rows: [
+						{
+							sequence: 1,
+							id: 1,
+							collection: 'products' as const,
+							deleted: false,
+						},
+					],
 					cursor: { sequence: 1 },
 					hasMore: false,
 				},
@@ -1689,40 +2139,100 @@ describe('provenance + policy', () => {
 describe('digestsDiffer', () => {
 	it('treats an unseen bucket as a mismatch', () => {
 		expect(
-			digestsDiffer(undefined, { detector: 'hash-checksum', count: 1, digest: '1', match: true })
+			digestsDiffer(undefined, {
+				detector: 'hash-checksum',
+				count: 1,
+				digest: '1',
+				match: true,
+			})
 		).toBe(true);
 	});
 
 	it('flags a hash bucket whose scan match is false even if digest is unchanged', () => {
-		const prev = { detector: 'hash-checksum', count: 1, digest: '1', match: true } as const;
+		const prev = {
+			detector: 'hash-checksum',
+			count: 1,
+			digest: '1',
+			match: true,
+		} as const;
 		expect(
-			digestsDiffer(prev, { detector: 'hash-checksum', count: 1, digest: '1', match: false })
+			digestsDiffer(prev, {
+				detector: 'hash-checksum',
+				count: 1,
+				digest: '1',
+				match: false,
+			})
 		).toBe(true);
 	});
 
 	it('flags a hash bucket whose digest or count moved', () => {
-		const prev = { detector: 'hash-checksum', count: 1, digest: '1', match: true } as const;
+		const prev = {
+			detector: 'hash-checksum',
+			count: 1,
+			digest: '1',
+			match: true,
+		} as const;
 		expect(
-			digestsDiffer(prev, { detector: 'hash-checksum', count: 1, digest: '2', match: true })
+			digestsDiffer(prev, {
+				detector: 'hash-checksum',
+				count: 1,
+				digest: '2',
+				match: true,
+			})
 		).toBe(true);
 		expect(
-			digestsDiffer(prev, { detector: 'hash-checksum', count: 2, digest: '1', match: true })
+			digestsDiffer(prev, {
+				detector: 'hash-checksum',
+				count: 2,
+				digest: '1',
+				match: true,
+			})
 		).toBe(true);
 	});
 
 	it('does not flag a stable matching hash bucket', () => {
-		const prev = { detector: 'hash-checksum', count: 1, digest: '1', match: true } as const;
+		const prev = {
+			detector: 'hash-checksum',
+			count: 1,
+			digest: '1',
+			match: true,
+		} as const;
 		expect(
-			digestsDiffer(prev, { detector: 'hash-checksum', count: 1, digest: '1', match: true })
+			digestsDiffer(prev, {
+				detector: 'hash-checksum',
+				count: 1,
+				digest: '1',
+				match: true,
+			})
 		).toBe(false);
 	});
 
 	it('flags a range bucket whose checksum or count moved, not a stable one', () => {
-		const prev = { detector: 'range-checksum', count: 1, checksum: 'a' } as const;
-		expect(digestsDiffer(prev, { detector: 'range-checksum', count: 1, checksum: 'b' })).toBe(true);
-		expect(digestsDiffer(prev, { detector: 'range-checksum', count: 2, checksum: 'a' })).toBe(true);
-		expect(digestsDiffer(prev, { detector: 'range-checksum', count: 1, checksum: 'a' })).toBe(
-			false
-		);
+		const prev = {
+			detector: 'range-checksum',
+			count: 1,
+			checksum: 'a',
+		} as const;
+		expect(
+			digestsDiffer(prev, {
+				detector: 'range-checksum',
+				count: 1,
+				checksum: 'b',
+			})
+		).toBe(true);
+		expect(
+			digestsDiffer(prev, {
+				detector: 'range-checksum',
+				count: 2,
+				checksum: 'a',
+			})
+		).toBe(true);
+		expect(
+			digestsDiffer(prev, {
+				detector: 'range-checksum',
+				count: 1,
+				checksum: 'a',
+			})
+		).toBe(false);
 	});
 });
