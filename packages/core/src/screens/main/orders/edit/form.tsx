@@ -18,7 +18,7 @@ import {
 	FormTextarea,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
@@ -69,6 +69,7 @@ export function EditOrderForm({ order }: Props) {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
+	const { close } = useModal();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 	const { format } = useCustomerNameFormat();
 	const [customerIdToLoad, setCustomerIdToLoad] = React.useState<number | null>(null);
@@ -152,10 +153,15 @@ export function EditOrderForm({ order }: Props) {
 
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: order,
 					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				if (blockIfDegraded('save-order', { orderId: order.uuid ?? order.id })) return;
 				await pushDocument(order).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
@@ -167,6 +173,7 @@ export function EditOrderForm({ order }: Props) {
 								orderNumber: doc.number,
 							},
 						});
+						close();
 					}
 				});
 			} catch (error) {
@@ -184,7 +191,7 @@ export function EditOrderForm({ order }: Props) {
 				setLoading(false);
 			}
 		},
-		[blockIfDegraded, localPatch, order, pushDocument, t]
+		[blockIfDegraded, close, localPatch, order, pushDocument, t]
 	);
 
 	/**

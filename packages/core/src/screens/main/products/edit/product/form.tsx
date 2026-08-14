@@ -17,7 +17,7 @@ import {
 	FormTreeCombobox,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -69,6 +69,7 @@ export function EditProductForm({ product }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
+	const { close } = useModal();
 	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
 
 	if (!product) {
@@ -123,10 +124,15 @@ export function EditProductForm({ product }: Props) {
 			} as any;
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: product,
 					data: patchData,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				await pushDocument(product).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(t('common.saved', { name: product.name }), {
@@ -136,6 +142,7 @@ export function EditProductForm({ product }: Props) {
 								productName: product.name,
 							},
 						});
+						close();
 					}
 				});
 			} catch (error) {
@@ -153,7 +160,7 @@ export function EditProductForm({ product }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, product, pushDocument, t]
+		[close, localPatch, product, pushDocument, t]
 	);
 
 	/**

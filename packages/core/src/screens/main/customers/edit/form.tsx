@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
+import { useModal } from '@wcpos/components/modal';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -30,7 +30,7 @@ export function EditCustomerForm({ customer }: Props) {
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
 	const { format } = useCustomerNameFormat();
-	const router = useRouter();
+	const { close } = useModal();
 
 	/**
 	 *
@@ -52,10 +52,15 @@ export function EditCustomerForm({ customer }: Props) {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: customer,
 					data: data as Partial<import('@wcpos/database').CustomerDocument>,
 				});
+				// localPatch swallows write errors and resolves undefined - pushing
+				// anyway would sync the unchanged resident and report success
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
 				await pushDocument(customer).then((savedDoc: unknown) => {
 					if (isRxDocument(savedDoc)) {
 						mutationLogger.success(
@@ -70,6 +75,7 @@ export function EditCustomerForm({ customer }: Props) {
 								},
 							}
 						);
+						close();
 					}
 				});
 			} catch (error) {
@@ -87,18 +93,11 @@ export function EditCustomerForm({ customer }: Props) {
 				setLoading(false);
 			}
 		},
-		[localPatch, customer, pushDocument, t, format]
+		[localPatch, customer, pushDocument, t, format, close]
 	);
 
 	/**
 	 *
 	 */
-	return (
-		<CustomerForm
-			form={form}
-			onClose={() => router.back()}
-			onSubmit={handleSave}
-			loading={loading}
-		/>
-	);
+	return <CustomerForm form={form} onClose={close} onSubmit={handleSave} loading={loading} />;
 }
