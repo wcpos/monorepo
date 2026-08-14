@@ -195,7 +195,8 @@ function toHybridCollection(value: string | undefined): HybridCollection | undef
 type RawSequenceLogRow = {
 	sequence: number;
 	id: number;
-	type: string;
+	deleted: number;
+	revision?: string;
 	collection?: string;
 	modified_gmt?: string;
 };
@@ -215,7 +216,11 @@ type RawHashDrillRow = {
 	stored_digest: string | null;
 	current_digest: string | null;
 };
-type RawRangeChecksumRow = { bucket: number; record_count: number; checksum: string };
+type RawRangeChecksumRow = {
+	bucket: number;
+	record_count: number;
+	checksum: string;
+};
 type RawRangeDrillRow = { id: number };
 type RawRevisionHashRow = { id: number; revision: string };
 
@@ -230,6 +235,8 @@ export function createLiveChangeSignalSource(
 	let sequenceLogEtag: string | null = null;
 	let sequenceLogCursor: number | null = null;
 	let sequenceLogConfigFingerprint: ConfigFingerprintEnvelope | undefined;
+	let sequenceLogEpoch: string | undefined;
+	let sequenceLogHorizon: number | undefined;
 	let tickSupport: 'unknown' | 'supported' | 'unsupported' = 'unknown';
 	let tickEtag: string | null = null;
 	// True while the previous page was capped (complete=false). Continuation pages
@@ -237,6 +244,12 @@ export function createLiveChangeSignalSource(
 	// sending If-None-Match there is pure downside: a buggy/intermediary 304 would
 	// map to the empty at-head page and silently drop the remaining rows.
 	let sequenceLogDrainInProgress = false;
+	const atHeadCheckpoint = (since: number, head: number): Record<string, unknown> => ({
+		since,
+		head,
+		...(sequenceLogEpoch !== undefined ? { epoch: sequenceLogEpoch } : {}),
+		...(sequenceLogHorizon !== undefined ? { horizon: sequenceLogHorizon } : {}),
+	});
 
 	return {
 		// TIER 1 — GET /changes/sequence-log?since=<cursor.sequence>&limit=<limit>.
@@ -264,7 +277,7 @@ export function createLiveChangeSignalSource(
 					tickSupport = 'supported';
 					envelope = {
 						changes: [],
-						checkpoint: { since: cursor.sequence, head: cursor.sequence },
+						checkpoint: atHeadCheckpoint(cursor.sequence, cursor.sequence),
 						complete: true,
 						config_fingerprint: sequenceLogConfigFingerprint,
 					};
@@ -298,18 +311,22 @@ export function createLiveChangeSignalSource(
 					const tick =
 						typeof parsed === 'object' && parsed !== null ? (parsed as TickEnvelope) : {};
 					const head = checkpointNumber(tick as ChangesEnvelope<unknown>, 'head', Number.NaN);
+					const horizon = checkpointNumber(tick as ChangesEnvelope<unknown>, 'horizon', Number.NaN);
+					const servedEpoch = tick.checkpoint?.['epoch'];
 					if (!Number.isFinite(head)) {
 						tickSupport = 'unsupported';
 					} else {
 						tickSupport = 'supported';
 						tickEtag = response.headers.get('etag');
+						if (typeof servedEpoch === 'string') sequenceLogEpoch = servedEpoch;
+						if (Number.isFinite(horizon)) sequenceLogHorizon = horizon;
 						if (tick.config_fingerprint !== undefined) {
 							sequenceLogConfigFingerprint = tick.config_fingerprint;
 						}
 						if (head <= cursor.sequence) {
 							envelope = {
 								changes: [],
-								checkpoint: { since: cursor.sequence, head },
+								checkpoint: atHeadCheckpoint(cursor.sequence, head),
 								complete: true,
 								config_fingerprint: sequenceLogConfigFingerprint,
 							};
@@ -343,7 +360,7 @@ export function createLiveChangeSignalSource(
 						: {
 								notModified: {
 									changes: [],
-									checkpoint: { since: cursor.sequence, head: cursor.sequence },
+									checkpoint: atHeadCheckpoint(cursor.sequence, cursor.sequence),
 									complete: true,
 									config_fingerprint: sequenceLogConfigFingerprint,
 								},
@@ -356,6 +373,10 @@ export function createLiveChangeSignalSource(
 			if (envelope.config_fingerprint !== undefined || tickSupport !== 'supported') {
 				sequenceLogConfigFingerprint = envelope.config_fingerprint;
 			}
+			const servedEpoch = envelope.checkpoint?.['epoch'];
+			const horizon = checkpointNumber(envelope, 'horizon', Number.NaN);
+			if (typeof servedEpoch === 'string') sequenceLogEpoch = servedEpoch;
+			if (Number.isFinite(horizon)) sequenceLogHorizon = horizon;
 			sequenceLogDrainInProgress = envelope.complete === false;
 			// THE boundary mapping: the server tags every unified-stream row with a
 			// `collection` derived from its internal object_type
@@ -377,7 +398,8 @@ export function createLiveChangeSignalSource(
 				rows.push({
 					sequence: row.sequence,
 					id: row.id,
-					type: row.type,
+					deleted: row.deleted === 1,
+					...(row.revision !== undefined ? { revision: row.revision } : {}),
 					collection,
 					modified_gmt: row.modified_gmt,
 				});
@@ -397,6 +419,8 @@ export function createLiveChangeSignalSource(
 				reportedCursor: { sequence: echoed },
 				hasMore: envelope.complete === false,
 				...(Number.isFinite(head) ? { head } : {}),
+				...(Number.isFinite(horizon) ? { horizon } : {}),
+				...(typeof servedEpoch === 'string' ? { epoch: servedEpoch } : {}),
 				...(configFingerprint === undefined ? {} : { configFingerprint }),
 			};
 			sequenceLogCursor = page.cursor.sequence;

@@ -21,12 +21,68 @@ describe('createLiveChangeSignalSource — sequence-log checkpoint head', () => 
 			fetcher: async (url) =>
 				new URL(url).pathname.endsWith('/changes/tick')
 					? new Response(null, { status: 404 })
-					: response({ since: 7, head: '42' }),
+					: response({ since: 7, head: '42', horizon: '3', epoch: 'epoch-A' }),
 		});
 
 		await expect(
 			source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 })
-		).resolves.toMatchObject({ cursor: { sequence: 7 }, head: 42 });
+		).resolves.toMatchObject({
+			cursor: { sequence: 7 },
+			head: 42,
+			horizon: 3,
+			epoch: 'epoch-A',
+		});
+	});
+
+	it('carries revisions and treats only numeric one as deleted', async () => {
+		const source = createLiveChangeSignalSource({
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			fetcher: async (url) =>
+				new URL(url).pathname.endsWith('/changes/tick')
+					? new Response(null, { status: 404 })
+					: Response.json({
+							changes: [
+								{
+									sequence: 7,
+									id: 42,
+									deleted: 1,
+									revision: 'sha256:abc',
+									collection: 'products',
+								},
+								{
+									sequence: 8,
+									id: 43,
+									deleted: '0',
+									collection: 'products',
+								},
+							],
+							checkpoint: { since: 8, head: 8 },
+							complete: true,
+						}),
+		});
+
+		const page = await source.pollSequenceLog({
+			cursor: { sequence: 6 },
+			limit: 100,
+		});
+
+		expect(page.rows).toEqual([
+			{
+				sequence: 7,
+				id: 42,
+				deleted: true,
+				revision: 'sha256:abc',
+				collection: 'products',
+				modified_gmt: undefined,
+			},
+			{
+				sequence: 8,
+				id: 43,
+				deleted: false,
+				collection: 'products',
+				modified_gmt: undefined,
+			},
+		]);
 	});
 
 	it('leaves head undefined when the checkpoint omits it', async () => {
@@ -38,7 +94,10 @@ describe('createLiveChangeSignalSource — sequence-log checkpoint head', () => 
 					: response({ since: 7 }),
 		});
 
-		const page = await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
+		const page = await source.pollSequenceLog({
+			cursor: { sequence: 5 },
+			limit: 100,
+		});
 
 		expect(page.head).toBeUndefined();
 	});
@@ -63,15 +122,25 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 								checkpoint: { since: 5, head: 5 },
 								complete: true,
 								config_fingerprint: {
-									fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
+									fingerprints: {
+										products: 'p1',
+										variations: 'v1',
+										tax_rates: 't1',
+									},
 								},
 							}),
 							{
 								status: 200,
-								headers: { 'content-type': 'application/json', etag: '"sequence-5"' },
+								headers: {
+									'content-type': 'application/json',
+									etag: '"sequence-5"',
+								},
 							}
 						)
-					: new Response(null, { status: 304, headers: { etag: '"sequence-5"' } });
+					: new Response(null, {
+							status: 304,
+							headers: { etag: '"sequence-5"' },
+						});
 			},
 		});
 
@@ -115,7 +184,10 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 					}),
 					{
 						status: 200,
-						headers: { 'content-type': 'application/json', etag: `"sequence-${since}"` },
+						headers: {
+							'content-type': 'application/json',
+							etag: `"sequence-${since}"`,
+						},
 					}
 				);
 			},
@@ -143,8 +215,16 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 								checkpoint: { since: 5, head: 5 },
 								complete: true,
 								config_fingerprint: {
-									fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
-									barcode_fields: { products: ['sku'], variations: [], tax_rates: [] },
+									fingerprints: {
+										products: 'p1',
+										variations: 'v1',
+										tax_rates: 't1',
+									},
+									barcode_fields: {
+										products: ['sku'],
+										variations: [],
+										tax_rates: [],
+									},
 									meta: { supported: true },
 								},
 							}),
@@ -161,7 +241,10 @@ describe('createLiveChangeSignalSource — sequence-log conditional requests', (
 			},
 		});
 		// Published onto the polled SCOPE; an empty list never clobbers a live carrier.
-		expect(scope.current()).toEqual({ products: ['sku'], variations: ['existing-variation'] });
+		expect(scope.current()).toEqual({
+			products: ['sku'],
+			variations: ['existing-variation'],
+		});
 	});
 });
 
@@ -193,7 +276,7 @@ describe('createLiveChangeSignalSource — mid-drain continuation pages', () => 
 				}
 				if (call === 2) {
 					return new Response(
-						pageBody([{ sequence: 15, collection: 'products', id: 1 }], 15, false),
+						pageBody([{ sequence: 15, collection: 'products', id: 1, deleted: 0 }], 15, false),
 						{
 							status: 200,
 							headers: { 'content-type': 'application/json', etag: '"20:aa"' },
@@ -208,7 +291,10 @@ describe('createLiveChangeSignalSource — mid-drain continuation pages', () => 
 		});
 
 		await source.pollSequenceLog({ cursor: { sequence: 10 }, limit: 100 }); // primes ETag
-		const capped = await source.pollSequenceLog({ cursor: { sequence: 10 }, limit: 1 });
+		const capped = await source.pollSequenceLog({
+			cursor: { sequence: 10 },
+			limit: 1,
+		});
 		expect(capped.hasMore).toBe(true);
 		await source.pollSequenceLog({ cursor: capped.cursor, limit: 1 }); // continuation
 		await source.pollSequenceLog({ cursor: { sequence: 20 }, limit: 100 }); // idle re-poll
@@ -257,7 +343,11 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 						{
 							checkpoint: { head: 5 },
 							config_fingerprint: {
-								fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
+								fingerprints: {
+									products: 'p1',
+									variations: 'v1',
+									tax_rates: 't1',
+								},
 							},
 						},
 						{ headers: { etag: '"tick-5"' } }
@@ -269,7 +359,10 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 		});
 
 		await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
-		const page = await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
+		const page = await source.pollSequenceLog({
+			cursor: { sequence: 5 },
+			limit: 100,
+		});
 
 		expect(page).toEqual({
 			rows: [],
@@ -296,19 +389,33 @@ describe('createLiveChangeSignalSource — combined tick endpoint', () => {
 				}
 				return new Response(
 					JSON.stringify({
-						changes: [{ sequence: 6, id: 42, type: 'updated', collection: 'products' }],
+						changes: [{ sequence: 6, id: 42, deleted: 0, collection: 'products' }],
 						checkpoint: { since: 6, head: 6 },
 						complete: true,
 					}),
-					{ headers: { 'content-type': 'application/json', etag: '"sequence-6"' } }
+					{
+						headers: {
+							'content-type': 'application/json',
+							etag: '"sequence-6"',
+						},
+					}
 				);
 			},
 		});
 
-		const page = await source.pollSequenceLog({ cursor: { sequence: 5 }, limit: 100 });
+		const page = await source.pollSequenceLog({
+			cursor: { sequence: 5 },
+			limit: 100,
+		});
 
 		expect(page.rows).toEqual([
-			{ sequence: 6, id: 42, type: 'updated', collection: 'products', modified_gmt: undefined },
+			{
+				sequence: 6,
+				id: 42,
+				deleted: false,
+				collection: 'products',
+				modified_gmt: undefined,
+			},
 		]);
 		const sequenceRequest = requests.find(({ url }) => url.includes('/changes/sequence-log'));
 		expect(new Headers(sequenceRequest?.init?.headers).get('if-none-match')).toBeNull();

@@ -94,8 +94,8 @@ export type BarcodeConfigCollection = 'products' | 'variations' | 'tax_rates';
 /**
  * One row from the hook-fed change log (TIER 1). Mirrors the bench's
  * SequenceLogRow: a global `sequence` cursor, the object `id`, the change
- * `type` (hooked deletes/trashes arrive as explicit tombstone rows, NOT
- * absences), and an optional `modified_gmt` (tax rates carry none).
+ * `deleted` tombstone flag, optional server revision, and an optional
+ * `modified_gmt` (tax rates carry none).
  *
  * `collection` is REQUIRED and is the row's single source of truth for "which
  * collection changed". The server tags every unified-stream row (its internal
@@ -108,7 +108,8 @@ export type SequenceLogRow = {
 	sequence: number;
 	id: number;
 	collection: HybridCollection;
-	type: string;
+	deleted: boolean;
+	revision?: string;
 	modified_gmt?: string;
 };
 
@@ -198,6 +199,8 @@ export type ChangeSignalSource = {
 		reportedCursor?: SequenceCursor;
 		hasMore: boolean;
 		head?: number;
+		horizon?: number;
+		epoch?: string;
 		configFingerprint?: ConfigFingerprintSnapshot;
 	}>;
 
@@ -206,11 +209,11 @@ export type ChangeSignalSource = {
 	 * buckets. Catches hook-BYPASSING writes (sql-bypass) that TIER 1 is blind
 	 * to. Paginate `afterId` until `complete`.
 	 */
-	hashChecksumScan(input: {
-		bucketSize: number;
-		afterId: number;
-		limitBuckets: number;
-	}): Promise<{ buckets: HashChecksumBucket[]; complete: boolean; nextAfterId: number }>;
+	hashChecksumScan(input: { bucketSize: number; afterId: number; limitBuckets: number }): Promise<{
+		buckets: HashChecksumBucket[];
+		complete: boolean;
+		nextAfterId: number;
+	}>;
 
 	/**
 	 * TIER 2 — tax rates. They live OUTSIDE the wp_posts id space hash-checksum
@@ -370,7 +373,8 @@ export const DEFAULT_HYBRID_POLICY: HybridChangeSignalPolicy = {
 export type HybridChange = {
 	id: number;
 	collection: HybridCollection;
-	type: string;
+	deleted: boolean;
+	revision?: string;
 	source: 'sequence-log';
 };
 
@@ -394,6 +398,8 @@ export type HybridPollOutcome = {
 	rebaseline: boolean;
 	/** Server-reported head sequence, when the source reported one this poll. */
 	head?: number;
+	/** Adopted journal generation, when the server has surfaced one. */
+	epoch?: string;
 	/** The committed cursor as it stood BEFORE this poll drained. */
 	previousCursor?: SequenceCursor;
 	/** Raw server checkpoint observed this poll, before any host safety clamp. */
@@ -460,7 +466,12 @@ export type HybridPollOutcome = {
  */
 export type BucketDigest =
 	| { detector: 'hash-checksum'; count: number; digest: string; match: boolean }
-	| { detector: 'range-checksum'; count: number; checksum: string; ids?: number[] };
+	| {
+			detector: 'range-checksum';
+			count: number;
+			checksum: string;
+			ids?: number[];
+	  };
 
 /** Keyed `${detector}:${bucket}` so the two id-spaces never collide. */
 export type BaselineDigests = Map<string, BucketDigest>;
@@ -500,6 +511,8 @@ export function createHybridChangeSignalEngine(input: {
 	policy?: Partial<HybridChangeSignalPolicy>;
 	/** Cursor the engine starts the TIER 1 drain from. Defaults to sequence 0. */
 	initialCursor?: SequenceCursor;
+	/** Persisted journal generation; absent means this client has never seen one. */
+	initialEpoch?: string;
 	/**
 	 * Retained per-bucket baseline the sweep diffs against. A host that persists
 	 * digests across restarts seeds them here; otherwise the FIRST sweep adopts
@@ -527,7 +540,10 @@ export function createHybridChangeSignalEngine(input: {
 		snapshot: ConfigFingerprintSnapshot
 	) => readonly BarcodeConfigCollection[];
 }): HybridChangeSignalEngine {
-	const policy: HybridChangeSignalPolicy = { ...DEFAULT_HYBRID_POLICY, ...input.policy };
+	const policy: HybridChangeSignalPolicy = {
+		...DEFAULT_HYBRID_POLICY,
+		...input.policy,
+	};
 	const now = input.now ?? (() => Date.now());
 	const { source } = input;
 
@@ -543,6 +559,7 @@ export function createHybridChangeSignalEngine(input: {
 		: null;
 
 	let cursor: SequenceCursor = input.initialCursor ?? { sequence: 0 };
+	let epoch = input.initialEpoch;
 	// The retained baseline; cloned so the caller's map is never mutated.
 	// range-checksum detection is PER-BUCKET cold-start: a bucket with no baseline
 	// entry is adopted on first sight, never flagged (see runSweep). hash-checksum
@@ -587,6 +604,7 @@ export function createHybridChangeSignalEngine(input: {
 		rebaseline: boolean;
 		/** Server-reported head sequence from the last page that reported one. */
 		head?: number;
+		epoch?: string;
 		/** Lowest raw server checkpoint reported while draining. */
 		reportedCursor?: SequenceCursor;
 		configFingerprint?: ConfigFingerprintSnapshot;
@@ -596,6 +614,7 @@ export function createHybridChangeSignalEngine(input: {
 		let head: number | undefined;
 		let reportedCursor: SequenceCursor | undefined;
 		let configFingerprint: ConfigFingerprintSnapshot | undefined;
+		let observedEpoch: string | undefined;
 		let pages = 0;
 		for (;;) {
 			if (pages >= policy.maxSequenceLogPages) {
@@ -612,6 +631,16 @@ export function createHybridChangeSignalEngine(input: {
 			if (typeof page.head === 'number' && Number.isFinite(page.head)) {
 				head = page.head;
 			}
+			const effectiveEpoch = observedEpoch ?? epoch;
+			const sameEpoch =
+				page.epoch !== undefined && (effectiveEpoch === undefined || effectiveEpoch === page.epoch);
+			const epochMismatch =
+				effectiveEpoch !== undefined && page.epoch !== undefined && effectiveEpoch !== page.epoch;
+			const belowHorizon =
+				sameEpoch && page.horizon !== undefined && nextCursor.sequence < page.horizon;
+			const cursorPastHead =
+				sameEpoch && page.head !== undefined && nextCursor.sequence > page.head;
+			observedEpoch = page.epoch ?? observedEpoch;
 			if (
 				page.reportedCursor !== undefined &&
 				Number.isFinite(page.reportedCursor.sequence) &&
@@ -620,6 +649,20 @@ export function createHybridChangeSignalEngine(input: {
 				reportedCursor = page.reportedCursor;
 			}
 			configFingerprint = page.configFingerprint ?? configFingerprint;
+			if (epochMismatch || belowHorizon || cursorPastHead) {
+				if (typeof page.head !== 'number' || !Number.isFinite(page.head)) {
+					throw new Error('Sequence-log rebaseline requires a finite head');
+				}
+				return {
+					changes: [],
+					nextCursor: { sequence: page.head },
+					rebaseline: true,
+					head: page.head,
+					epoch: observedEpoch ?? epoch,
+					...(reportedCursor !== undefined ? { reportedCursor } : {}),
+					configFingerprint,
+				};
+			}
 			if (
 				pages === 1 &&
 				policy.maxReplayBacklog > 0 &&
@@ -632,6 +675,7 @@ export function createHybridChangeSignalEngine(input: {
 					nextCursor: { sequence: page.head },
 					rebaseline: true,
 					head: page.head,
+					epoch: observedEpoch ?? epoch,
 					...(reportedCursor !== undefined ? { reportedCursor } : {}),
 					configFingerprint,
 				};
@@ -641,7 +685,8 @@ export function createHybridChangeSignalEngine(input: {
 				changes.push({
 					id: row.id,
 					collection: row.collection,
-					type: row.type,
+					deleted: row.deleted,
+					...(row.revision !== undefined ? { revision: row.revision } : {}),
 					source: 'sequence-log',
 				});
 			}
@@ -653,6 +698,7 @@ export function createHybridChangeSignalEngine(input: {
 			changes,
 			nextCursor,
 			rebaseline: false,
+			epoch: observedEpoch ?? epoch,
 			...(head !== undefined ? { head } : {}),
 			...(reportedCursor !== undefined ? { reportedCursor } : {}),
 			configFingerprint,
@@ -747,7 +793,10 @@ export function createHybridChangeSignalEngine(input: {
 				// first-seen tax bucket would otherwise diff against `undefined` and
 				// emit a false mismatch (codex review).
 				if (baselines.has(key) && digestsDiffer(baselines.get(key), digest)) {
-					mismatches.push({ bucket: bucket.bucket, detector: 'range-checksum' });
+					mismatches.push({
+						bucket: bucket.bucket,
+						detector: 'range-checksum',
+					});
 				}
 			}
 			// A range-checksum bucket present in the baseline but gone from the scan
@@ -758,7 +807,10 @@ export function createHybridChangeSignalEngine(input: {
 			{
 				for (const [key, previous] of baselines) {
 					if (previous.detector === 'range-checksum' && !scanned.has(key)) {
-						mismatches.push({ bucket: bucketOfKey(key), detector: 'range-checksum' });
+						mismatches.push({
+							bucket: bucketOfKey(key),
+							detector: 'range-checksum',
+						});
 					}
 				}
 			}
@@ -771,7 +823,10 @@ export function createHybridChangeSignalEngine(input: {
 	async function resolveMismatches(
 		mismatches: IntegrityMismatch[],
 		scanned: Map<string, BucketDigest>
-	): Promise<{ idsToPull: HybridRepairTarget[]; escalatedIds: HybridRepairTarget[] }> {
+	): Promise<{
+		idsToPull: HybridRepairTarget[];
+		escalatedIds: HybridRepairTarget[];
+	}> {
 		const idsToPull = new Map<string, HybridRepairTarget>();
 		const escalatedIds = new Map<string, HybridRepairTarget>();
 		// Track which bucket keys were mismatched THIS sweep so we can reset the
@@ -834,7 +889,10 @@ export function createHybridChangeSignalEngine(input: {
 		adoptScannedBaselines(scanned, stillMismatchedKeys, baselines);
 		evictVanishedBaselines(scanned, stillMismatchedKeys, baselines);
 
-		return { idsToPull: [...idsToPull.values()], escalatedIds: [...escalatedIds.values()] };
+		return {
+			idsToPull: [...idsToPull.values()],
+			escalatedIds: [...escalatedIds.values()],
+		};
 	}
 
 	// OPTIONAL TIER (ADR 0006): compute the config diff and shape the fields the
@@ -898,8 +956,8 @@ export function createHybridChangeSignalEngine(input: {
 			// TIER 1 — always. Drained into a local cursor; not committed until the
 			// whole poll succeeds (see drainSequenceLog).
 			const previousCursor = cursor;
-			const { changes, nextCursor, rebaseline, head, reportedCursor, configFingerprint } =
-				await drainSequenceLog(cursor);
+			const drained = await drainSequenceLog(cursor);
+			const { changes, nextCursor, rebaseline, head, reportedCursor, configFingerprint } = drained;
 
 			// OPTIONAL TIER (ADR 0006) — embedded snapshot, with the old-server fetch
 			// as fallback. Commit still happens below with the cursor; the no-config
@@ -909,6 +967,9 @@ export function createHybridChangeSignalEngine(input: {
 
 			if (rebaseline) {
 				cursor = nextCursor;
+				epoch = drained.epoch;
+				baselines.clear();
+				consecutiveMismatches.clear();
 				if (due) {
 					sweepRetryPending = true;
 				}
@@ -918,6 +979,7 @@ export function createHybridChangeSignalEngine(input: {
 					cursor,
 					rebaseline: true,
 					...(head !== undefined ? { head } : {}),
+					...(epoch !== undefined ? { epoch } : {}),
 					previousCursor,
 					...(reportedCursor !== undefined ? { reportedCursor } : {}),
 					sweepRan: false,
@@ -933,12 +995,14 @@ export function createHybridChangeSignalEngine(input: {
 			// TIER 2 — on cadence. A sweep does NOT advance the sequence cursor.
 			if (!due) {
 				cursor = nextCursor; // commit — nothing else can fail past here
+				epoch = drained.epoch;
 				config?.commit(); // advance the config baseline together with the cursor
 				return {
 					changes,
 					cursor,
 					rebaseline: false,
 					...(head !== undefined ? { head } : {}),
+					...(epoch !== undefined ? { epoch } : {}),
 					previousCursor,
 					...(reportedCursor !== undefined ? { reportedCursor } : {}),
 					sweepRan: false,
@@ -959,6 +1023,7 @@ export function createHybridChangeSignalEngine(input: {
 			// Everything succeeded — commit the cursor and the sweep clock together,
 			// and clear any pending retry.
 			cursor = nextCursor;
+			epoch = drained.epoch;
 			lastSweepAtMs = currentMs;
 			sweepRetryPending = false;
 			config?.commit(); // advance the config baseline together with the cursor
@@ -968,6 +1033,7 @@ export function createHybridChangeSignalEngine(input: {
 				cursor,
 				rebaseline: false,
 				...(head !== undefined ? { head } : {}),
+				...(epoch !== undefined ? { epoch } : {}),
 				previousCursor,
 				...(reportedCursor !== undefined ? { reportedCursor } : {}),
 				sweepRan: true,

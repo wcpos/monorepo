@@ -194,8 +194,14 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	// discard it, reset the checkpoint to zero, adopt the new epoch, and signal a re-pull from scratch.
 	const storedEpoch = await input.checkpointStore?.readJournalEpoch?.();
 	const epochMismatch = Boolean(storedEpoch && result.epoch && storedEpoch !== result.epoch);
+	const sameEpoch = Boolean(storedEpoch && result.epoch && storedEpoch === result.epoch);
+	const cursorBelowHorizon =
+		sameEpoch &&
+		checkpoint.sequence > 0 &&
+		typeof result.horizon === 'number' &&
+		checkpoint.sequence < result.horizon;
 	const cursorPastHead = typeof result.head === 'number' && checkpoint.sequence > result.head;
-	if (epochMismatch || cursorPastHead) {
+	if (epochMismatch || cursorBelowHorizon || cursorPastHead) {
 		const zero = normalizeCheckpoint(null);
 		// Reconcile the local collection before the re-pull so an order absent from the new generation
 		// doesn't linger as a phantom — the fresh pending set keeps a mutation queued mid-pull.
@@ -252,7 +258,10 @@ export async function syncCustomPullBatchIntoRepository(input: {
 	if (result.deletes && result.deletes.length > 0) {
 		await input.repository.removeDeletedOrders?.(result.deletes, effectivePending);
 	}
-	await input.afterUpsert?.(documents, { hasMore: result.hasMore, checkpoint: nextCheckpoint });
+	await input.afterUpsert?.(documents, {
+		hasMore: result.hasMore,
+		checkpoint: nextCheckpoint,
+	});
 	await input.checkpointStore?.writeCustomPullCheckpoint(nextCheckpoint);
 	// Adopt the server's epoch (F8) — first-seen on a fresh client, idempotent thereafter — so a later
 	// change of generation is detectable as a mismatch against what we stored here.

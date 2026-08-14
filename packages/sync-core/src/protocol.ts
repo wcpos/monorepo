@@ -173,6 +173,8 @@ export type PullResponse = {
 	 * and the client must resync from zero. Sibling of the checkpoint, NOT baked into the sequence.
 	 */
 	epoch?: string;
+	/** Oldest retained journal sequence. A same-generation cursor below it must resync. */
+	horizon?: number;
 	/**
 	 * Journal head (F8) — the server's highest emitted sequence (MAX). A client whose checkpoint
 	 * sequence exceeds this has a cursor past the head (the AUTO_INCREMENT space reset beneath it)

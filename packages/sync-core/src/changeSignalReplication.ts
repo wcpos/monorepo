@@ -34,7 +34,6 @@ import type { ConfigFingerprintBaseline } from './configChangeSignal';
 import type {
 	BarcodeConfigCollection,
 	BaselineDigests,
-	HybridChange,
 	HybridCollection,
 	HybridPollOutcome,
 	HybridRepairTarget,
@@ -44,7 +43,7 @@ import type {
 export type ReplicationActions = {
 	/** changed/missing ids to fetch, grouped + deduped by collection (deletes excluded). */
 	targetedPulls: { collection: HybridCollection; ids: number[] }[];
-	/** tombstones (delete/trash-type changes + idsToPull status 'deleted') → local delete, NOT a fetch. */
+	/** tombstones (deleted changes + idsToPull status 'deleted') → local delete, NOT a fetch. */
 	deletes: { collection: HybridCollection; ids: number[] }[];
 	/** All collections to refresh after abandoning an excessive sequence-log replay. */
 	rebaselineCollections: HybridCollection[];
@@ -59,6 +58,7 @@ export type ReplicationActions = {
 		cursor: SequenceCursor;
 		baselineDigests: BaselineDigests;
 		configBaseline?: ConfigFingerprintBaseline;
+		epoch?: string;
 	};
 };
 
@@ -72,28 +72,6 @@ const REBASELINE_COLLECTIONS: readonly HybridCollection[] = [
 	'tags',
 	'coupons',
 ];
-
-/**
- * A TIER 1 change `type` is a tombstone when its VERB names a delete or trash.
- * The sequence-log emits hooked deletes/trashes as explicit rows (e.g.
- * `product.deleted`, `product.trashed`, `variation.deleted`, `tax_rate.deleted`),
- * NOT as a record quietly vanishing — so we match the verb (the segment after the
- * last `.`) across every collection's `<object>.<verb>` type string.
- *
- * RESTORE verbs that merely CONTAIN delete/trash as a substring are NOT deletes:
- * `product.untrashed` / `product.undeleted` / `product.restored` bring a record
- * BACK, so a naive `includes('trash')` would wrongly tombstone a restore and
- * suppress its pull (codex review). Verbs starting with `un` or containing
- * `restore` are explicitly excluded.
- */
-function isDeleteChange(change: HybridChange): boolean {
-	const type = change.type.toLowerCase();
-	const verb = type.includes('.') ? type.slice(type.lastIndexOf('.') + 1) : type;
-	if (verb.startsWith('un') || verb.includes('restore')) {
-		return false;
-	}
-	return verb.includes('delete') || verb.includes('trash');
-}
 
 /**
  * Collection-keyed id accumulator that preserves first-seen collection order and
@@ -133,7 +111,7 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 	// First pass — collect deletes so a delete always WINS over a pull for the
 	// same (collection, id): a tombstone'd record must not be re-fetched.
 	for (const change of outcome.changes) {
-		if (isDeleteChange(change)) {
+		if (change.deleted) {
 			deletes.add(change.collection, change.id);
 		}
 	}
@@ -151,7 +129,7 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 		}
 	};
 	for (const change of outcome.changes) {
-		if (!isDeleteChange(change)) {
+		if (!change.deleted) {
 			addPull(change.collection, change.id);
 		}
 	}
@@ -176,6 +154,7 @@ export function planReplicationActions(outcome: HybridPollOutcome): ReplicationA
 		cursor: outcome.cursor,
 		baselineDigests: outcome.baselineDigests,
 		...(outcome.configBaseline !== undefined ? { configBaseline: outcome.configBaseline } : {}),
+		...(outcome.epoch !== undefined ? { epoch: outcome.epoch } : {}),
 	};
 
 	return {
