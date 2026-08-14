@@ -29,7 +29,9 @@ export const useBarcode = (setSearch: (search: string) => void) => {
 		}
 
 		if (isError) {
-			barcodeLogger.error(text1, {
+			// Zero/many matches is a workflow miss, not a system failure — warn
+			// matches the registry severity of both codes.
+			barcodeLogger.warn(text1, {
 				showToast: true,
 				toast: {
 					text2,

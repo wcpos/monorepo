@@ -307,10 +307,13 @@ export function rowDetailData(row: LogRow): RowDetailData {
 	].filter((part): part is string => typeof part === 'string' && part.length > 0);
 	if (requestParts.length > 0) detail.request = requestParts.join(' · ');
 
+	// context.errorCode is the row's own client registry code (the transport
+	// merges it since #1184) — only surface it as "Server code" when it is
+	// genuinely something else, otherwise the KV just repeats the status chip.
 	const serverCode =
 		typeof context.serverCode === 'string'
 			? context.serverCode
-			: typeof context.errorCode === 'string'
+			: typeof context.errorCode === 'string' && context.errorCode !== row.code
 				? context.errorCode
 				: undefined;
 	if (serverCode) detail.serverCode = serverCode;

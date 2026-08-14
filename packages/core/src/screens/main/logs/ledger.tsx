@@ -248,7 +248,7 @@ function LedgerRow({
 					<Text className="text-muted-foreground w-16 text-right font-mono text-xs tabular-nums">
 						{formatDurationMs(row.durationMs) ?? '—'}
 					</Text>
-					<View pointerEvents="box-none" className="z-20 w-24">
+					<View pointerEvents="box-none" className="z-20 w-32">
 						<StatusCell row={row} kind={kind} expanded={expanded} onPress={onToggle} />
 					</View>
 				</HStack>
@@ -271,7 +271,7 @@ function LedgerRow({
 					onPress={onToggle}
 					className="gap-0.5 py-2"
 				>
-					<HStack className="items-center gap-2 pr-24">
+					<HStack className="items-center gap-2 pr-32">
 						<Text className="text-muted-foreground font-mono text-xs tabular-nums">{timeText}</Text>
 						{/* Dot-only for space, but the kind still reads to assistive tech. */}
 						<LevelIndicator kind={kind} accessibilityLabel={levelLabel} />
@@ -356,7 +356,7 @@ export function Ledger({
 				<HairlineHeaderCell testID="logs-heading-took" className="w-16 text-right">
 					{t('health.logs.col_took')}
 				</HairlineHeaderCell>
-				<HairlineHeaderCell testID="logs-heading-status" className="w-24 text-right">
+				<HairlineHeaderCell testID="logs-heading-status" className="w-32 text-right">
 					{t('health.logs.col_status')}
 				</HairlineHeaderCell>
 			</HairlineHeaderRow>

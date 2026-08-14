@@ -2,15 +2,6 @@ import * as React from 'react';
 import { Linking, Platform, Share, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import {
-	Dialog,
-	DialogBody,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from '@wcpos/components/dialog';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -124,55 +115,42 @@ function EventCode({ eventType, logId }: { eventType: string; logId: string }) {
 }
 
 /**
- * In-app error catalogue entry (spec §5, offline layer). The docs body is
- * registry English until the registry workstream generates i18n keys.
+ * "Help — CODE ›" goes straight to the code's docs page — no in-app modal
+ * (owner ruling 2026-08-14: link to docs, never verbose in-app copy; the docs
+ * carry the registry body and troubleshooting).
  */
-function HelpDialog({ code, entry }: { code: string; entry: CatalogueEntry }) {
+function HelpLink({ code }: { code: string }) {
 	const t = useT();
-	const dataSafety = useDataSafetyText(entry.dataSafety);
-	const safeAction = useSafeActionText(entry.safeAction);
 	return (
-		<Dialog>
-			<DialogTrigger asChild>
-				<Button variant="ghost" size="sm" testID={`logs-help-${code}`} className="self-start px-0">
-					<Text className="text-muted-foreground text-xs font-semibold">
-						{t('health.logs.help_code', { code })}
-					</Text>
-				</Button>
-			</DialogTrigger>
-			<DialogContent className="max-w-md">
-				<DialogHeader>
-					<DialogTitle>{code}</DialogTitle>
-				</DialogHeader>
-				<DialogBody>
-					<VStack className="gap-3">
-						<Text className="font-medium">{entry.summary}</Text>
-						{dataSafety ? <Text className="text-sm">{dataSafety}</Text> : null}
-						{safeAction ? (
-							<Text className="text-success text-sm font-medium">{safeAction}</Text>
-						) : null}
-						{entry.docsBody
-							.split('\n\n')
-							.filter((paragraph) => paragraph.trim().length > 0)
-							.map((paragraph) => (
-								<Text key={paragraph.slice(0, 32)} className="text-muted-foreground text-sm">
-									{paragraph.trim()}
-								</Text>
-							))}
-					</VStack>
-				</DialogBody>
-				<DialogFooter>
-					<Button
-						variant="outline"
-						testID={`logs-learn-more-${code}`}
-						onPress={() => Linking.openURL(getErrorCodeDocURL(code))}
-					>
-						<ButtonText>{t('common.learn_more')}</ButtonText>
-					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+		<Button
+			variant="ghost"
+			size="sm"
+			testID={`logs-help-${code}`}
+			className="self-start px-0"
+			onPress={() => Linking.openURL(getErrorCodeDocURL(code))}
+		>
+			<ButtonText className="text-muted-foreground text-xs font-semibold">
+				{t('health.logs.help_code', { code })}
+			</ButtonText>
+		</Button>
 	);
+}
+
+/**
+ * The benign registry states are noise in an expanded row ("No sales or data
+ * are affected", "Verify what happened before you retry") — the row only earns
+ * an extra line when it changes what the cashier should do next.
+ */
+function showDataSafety(dataSafety: CatalogueEntry['dataSafety'] | undefined): boolean {
+	return (
+		dataSafety === 'money-moved' ||
+		dataSafety === 'outcome-unknown' ||
+		dataSafety === 'data-at-risk'
+	);
+}
+
+function showSafeAction(safeAction: CatalogueEntry['safeAction'] | undefined): boolean {
+	return safeAction !== undefined && safeAction !== 'verify-first' && safeAction !== 'continue';
 }
 
 /**
@@ -267,13 +245,13 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 				<View className="flex-col gap-x-8 gap-y-2 md:flex-row">
 					<VStack className="flex-1 gap-1">
 						<Text className="font-medium">{explanation}</Text>
-						{dataSafety ? (
+						{dataSafety && showDataSafety(entry?.dataSafety) ? (
 							<Text className="text-muted-foreground text-sm">{dataSafety}</Text>
 						) : null}
-						{safeAction ? (
+						{safeAction && showSafeAction(entry?.safeAction) ? (
 							<Text className="text-success text-sm font-medium">{safeAction}</Text>
 						) : null}
-						{entry && row.code ? <HelpDialog code={row.code} entry={entry} /> : null}
+						{entry && row.code ? <HelpLink code={row.code} /> : null}
 					</VStack>
 					{eventType || entries.length > 0 ? (
 						<View className="md:w-72">

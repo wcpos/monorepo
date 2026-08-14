@@ -132,9 +132,12 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 		// later failure can replace it with terminal feedback instead of leaving it up.
 		let searchingOnlineShown = false;
 
+		// A scan that resolves to zero or many products is a cashier-workflow miss,
+		// not a system failure — warn keeps the ledger's error lane for real faults
+		// (and matches the registry severity of both codes).
 		const showAmbiguousResults = (count: number) => {
 			scan.ambiguous(count, barcodeStr);
-			barcodeLogger.error('Barcode scan matched multiple products', {
+			barcodeLogger.warn('Barcode scan matched multiple products', {
 				code: ERROR_CODES.BARCODE_AMBIGUOUS,
 				context: {
 					barcode: barcodeStr,
@@ -146,7 +149,7 @@ export const useBarcode = (setSearch: (search: string) => void, clearSearch: () 
 
 		const showNotFound = () => {
 			scan.notFound(barcodeStr);
-			barcodeLogger.error('Barcode scan did not match a product', {
+			barcodeLogger.warn('Barcode scan did not match a product', {
 				code: ERROR_CODES.SEARCH_NO_RESULTS_REASON,
 				context: {
 					barcode: barcodeStr,

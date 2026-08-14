@@ -546,6 +546,11 @@ describe('rowDetailData', () => {
 		expect(detail.request).toBeUndefined();
 		expect(detail.attempts).toBeUndefined();
 	});
+
+	it('does not repeat the row’s own registry code as a server code', () => {
+		const detail = rowDetailData(row({ code: 'PRODUCT301', context: { errorCode: 'PRODUCT301' } }));
+		expect(detail.serverCode).toBeUndefined();
+	});
 });
 
 describe('buildDebugInfo', () => {
