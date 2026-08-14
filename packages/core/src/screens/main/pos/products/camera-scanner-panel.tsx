@@ -104,7 +104,6 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 		() =>
 			Gesture.Pan()
 				.runOnJS(true)
-				.hitSlop({ top: RESIZE_HANDLE_HIT_SLOP, bottom: RESIZE_HANDLE_HIT_SLOP })
 				.onUpdate((event) => {
 					setDragHeight(clampPanelHeight(committedHeight + event.translationY));
 				})
@@ -230,6 +229,7 @@ export function CameraScannerPanel({ onClose }: CameraScannerPanelProps) {
 				<View
 					className="web:cursor-ns-resize web:hover:opacity-100 items-center justify-center opacity-40"
 					style={{ height: RESIZE_HANDLE_HEIGHT }}
+					hitSlop={{ top: RESIZE_HANDLE_HIT_SLOP, bottom: RESIZE_HANDLE_HIT_SLOP }}
 					accessible
 					accessibilityLabel={t('pos_products.camera_resize_handle')}
 					accessibilityRole="adjustable"
