@@ -19,6 +19,9 @@ const mockMutationCounts = {
 	unresolvedConflicts: 0,
 };
 const mockDeadLetterStuck: StuckRecord[] = [];
+let mockConflictedKeys = new Set<string>();
+let lastAttentionStuck: StuckRecord[] = [];
+let mockLogStats: { stuck: StuckRecord[] } = { stuck: [] };
 const mockSync = jest.fn();
 const defaultStorageFootprint = {
 	breakdown: {
@@ -143,8 +146,21 @@ jest.mock('@wcpos/query', () => ({
 		engine: { active: jest.fn(), scope: {}, sync: mockSync },
 	}),
 }));
-jest.mock('./attention-panel', () => ({ AttentionPanel: () => null }));
+jest.mock('./attention-panel', () => ({
+	// Record the deduped stuck rows the screen hands over, so the
+	// one-framing-per-record filter is assertable without rendering the banner.
+	AttentionPanel: ({ stuck }: { stuck: StuckRecord[] }) => {
+		lastAttentionStuck = stuck;
+		return null;
+	},
+}));
 jest.mock('./rejected-mutations', () => ({ RejectedMutationsPanel: () => null }));
+jest.mock('./conflicted-mutations', () => ({
+	ConflictedMutationsPanel: () => <div data-testid="conflicted-panel-stub" />,
+}));
+jest.mock('./use-unresolved-conflicts', () => ({
+	useUnresolvedConflictKeys: () => mockConflictedKeys,
+}));
 jest.mock('./queued-emails', () => ({ QueuedEmailsPanel: () => null }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
@@ -153,7 +169,7 @@ jest.mock('../../../contexts/translations', () => {
 	return { useT: () => createTestT() };
 });
 jest.mock('../logs/use-log-stats', () => ({
-	useLogStats: () => ({ stuck: [] }),
+	useLogStats: () => mockLogStats,
 }));
 jest.mock('./use-dead-letter-attention', () => ({
 	...jest.requireActual('./use-dead-letter-attention'),
@@ -199,6 +215,9 @@ describe('DatabaseScreen coverage', () => {
 		mockMutationCounts.rejected = 0;
 		mockMutationCounts.unresolvedConflicts = 0;
 		mockDeadLetterStuck.length = 0;
+		mockConflictedKeys = new Set();
+		lastAttentionStuck = [];
+		mockLogStats = { stuck: [] };
 		mockStorageFootprint = { ...defaultStorageFootprint };
 	});
 
@@ -300,16 +319,49 @@ describe('DatabaseScreen coverage', () => {
 		);
 	});
 
-	it('renders the independently observed unresolved-conflict count', () => {
+	it('mounts the conflicted panel when parked conflicts exist, instead of the old anonymous count', () => {
 		mockMutationCounts.conflicts = 1;
 		mockMutationCounts.rejected = 2;
 		mockMutationCounts.unresolvedConflicts = 1;
 
-		const { getByText } = render(<DatabaseScreen />);
+		const { getByTestId, queryByText } = render(<DatabaseScreen />);
 
-		expect(
-			getByText('1 sale(s) need attention — changed on the server while a till was editing.')
-		).toBeTruthy();
+		expect(getByTestId('conflicted-panel-stub')).toBeTruthy();
+		// The anonymous "sale(s)" callout is gone for good: it miscalled every
+		// collection a sale and named no record (dev-next 2026-08-14).
+		expect(queryByText(/sale\(s\) need attention/)).toBeNull();
+	});
+
+	it('does not mount the conflicted panel when there are no parked conflicts', () => {
+		const { queryByTestId } = render(<DatabaseScreen />);
+
+		expect(queryByTestId('conflicted-panel-stub')).toBeNull();
+	});
+
+	it('keeps one framing per record: a session-stuck row listed in the conflicted panel leaves the attention banner', () => {
+		const parked: StuckRecord = {
+			key: 'products:8752430f-d36b-4e81-ac7e-36df56a71d1d',
+			collection: 'products',
+			recordId: '8752430f-d36b-4e81-ac7e-36df56a71d1d',
+			reason: 'conflict transition',
+			lastSeen: 2,
+			attempts: 1,
+			eventType: 'queue.write.conflict-transition',
+			direction: 'push',
+			retryable: false,
+		};
+		const other: StuckRecord = { ...parked, key: 'products:other', recordId: 'other' };
+		mockLogStats = { stuck: [parked, other] };
+		mockConflictedKeys = new Set([parked.key]);
+		mockMutationCounts.unresolvedConflicts = 1;
+
+		render(<DatabaseScreen />);
+
+		const keys = lastAttentionStuck.map((row) => row.key);
+		// The unrelated stuck row still reaches the banner — dedupe filters, it
+		// doesn't blank the feed.
+		expect(keys).toContain(other.key);
+		expect(keys).not.toContain(parked.key);
 	});
 
 	it('counts durable dead letters in their collection row', () => {

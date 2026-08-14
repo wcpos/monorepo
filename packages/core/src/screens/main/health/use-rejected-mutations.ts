@@ -259,5 +259,7 @@ function rejectedResource(engine: RxdbSyncEngine): ObservableResource<RejectedMu
  */
 export function useRejectedMutations(): RejectedMutationsRead {
 	const { engine } = useQueryRuntime();
-	return useObservableSuspense(rejectedResource(engine));
+	const result = useObservableSuspense(rejectedResource(engine));
+	if (result.readError) resourceByEngine.delete(engine);
+	return result;
 }

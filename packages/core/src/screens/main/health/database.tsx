@@ -29,8 +29,10 @@ import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/q
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { AttentionPanel } from './attention-panel';
+import { ConflictedMutationsPanel } from './conflicted-mutations';
 import { useManualSync } from './use-manual-sync';
 import { mergeStuckRecords, useDeadLetterStuckRecords } from './use-dead-letter-attention';
+import { useUnresolvedConflictKeys } from './use-unresolved-conflicts';
 import { useT } from '../../../contexts/translations';
 import { formatSkewMagnitude } from '../logs/logs-logic';
 import { useLogStats } from '../logs/use-log-stats';
@@ -516,6 +518,8 @@ export function DatabaseScreen() {
 	const stats = useLogStats();
 	// Durable, so it survives the restart that clears `stats` (#832 follow-up).
 	const deadLetterStuck = useDeadLetterStuckRecords();
+	// Durable for the same reason: the parked queue rows outlive the session log.
+	const conflictedKeys = useUnresolvedConflictKeys();
 
 	const rows = deriveRows(ROW_ORDER, counts, census);
 	const totalRecords = totalLocalRecords(counts);
@@ -528,11 +532,16 @@ export function DatabaseScreen() {
 	const stuck = mergeStuckRecords(deadLetterStuck, stats.stuck);
 	const stuckByRow = stuckCountsByRow(stuck);
 	// One attention zone, one framing per record: dead letters render in the
-	// rejected panel (Send again / Discard), so the stuck banner keeps only the
-	// session-log records the panel does NOT list — the same refused sale must
-	// never appear as two differently-worded problems (Paul, 2026-08-08).
+	// rejected panel (Send again / Discard) and parked conflicts in the
+	// conflicted panel (Send again / Use server version), so the stuck banner
+	// keeps only the session-log records neither panel lists — the same refused
+	// sale must never appear as two differently-worded problems (Paul,
+	// 2026-08-08; the anonymous "sale(s)" count violating this is why the
+	// conflicted panel exists).
 	const deadLetterKeys = new Set(deadLetterStuck.map((row) => row.key));
-	const attentionStuck = stuck.filter((row) => !deadLetterKeys.has(row.key));
+	const attentionStuck = stuck.filter(
+		(row) => !deadLetterKeys.has(row.key) && !conflictedKeys.has(row.key)
+	);
 	const readyToSell = isReadyToSell({
 		connectivity: status.connectivity,
 		gatedBy: status.gatedBy,
@@ -593,6 +602,14 @@ export function DatabaseScreen() {
 				{mutations.rejected > 0 ? (
 					<React.Suspense fallback={<Loader size="sm" />}>
 						<RejectedMutationsPanel />
+					</React.Suspense>
+				) : null}
+				{/* Parked 409/428 conflicts — every row named and resolvable (Send
+				    again / Use server version). Replaces the anonymous count callout
+				    that called each one a "sale" and offered nothing (2026-08-14). */}
+				{mutations.unresolvedConflicts > 0 ? (
+					<React.Suspense fallback={<Loader size="sm" />}>
+						<ConflictedMutationsPanel />
 					</React.Suspense>
 				) : null}
 
@@ -709,18 +726,6 @@ export function DatabaseScreen() {
 						</>
 					) : null}
 				</VStack>
-
-				{/* Conflicts — 409s only. Dead letters are a different failure with a
-				    different fix, and they get their own actionable list below (#832). */}
-				{mutations.unresolvedConflicts > 0 ? (
-					<Callout tone="destructive">
-						<Text className="text-destructive text-sm">
-							{t('health.database.conflicts', {
-								n: mutations.unresolvedConflicts,
-							})}
-						</Text>
-					</Callout>
-				) : null}
 
 				{/* Receipt emails that have not gone out yet (#165). Unlike the dead
 				    letters above there is no cheap precomputed count to gate on, so the
