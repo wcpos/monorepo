@@ -42,12 +42,11 @@ export function TaxRatesFooter({
 
 	return (
 		<HStack className="border-border bg-footer justify-end gap-0 border-t p-2">
-			<Text className="text-xs">{t('common.showing_of', { shown: count, total })}</Text>
-			{totalSource === 'local' ? (
-				<Text className="text-muted-foreground ml-1 text-[10px]">
-					{t('common.showing_local_items')}
-				</Text>
-			) : null}
+			<Text className="text-xs">
+				{totalSource === 'local'
+					? t('common.showing_of_at_least', { shown: count, total })
+					: t('common.showing_of', { shown: count, total })}
+			</Text>
 			<SyncButton sync={sync} clearAndSync={resetQueryAndCollection} active={active} />
 		</HStack>
 	);

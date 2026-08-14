@@ -100,7 +100,6 @@ describe('TaxRatesFooter binding projections', () => {
 		renderFooter('coverage');
 
 		expect(screen.getByText('common.showing_of:3/5')).toBeTruthy();
-		expect(screen.queryByText('common.showing_local_items')).toBeNull();
 		fireEvent.click(screen.getByTestId('sync'));
 		expect(mockSync).toHaveBeenCalledTimes(1);
 	});
@@ -110,7 +109,7 @@ describe('TaxRatesFooter binding projections', () => {
 		fireEvent.click(screen.getByTestId('activate-query'));
 		expect(currentState()).toMatchObject({ search: 'not-a-screen-feature', limit: 20 });
 
-		expect(screen.getByText('common.showing_local_items')).toBeTruthy();
+		expect(screen.getByText('common.showing_of_at_least:3/5')).toBeTruthy();
 		fireEvent.click(screen.getByTestId('clear-and-sync'));
 		expect(currentState()).toEqual({
 			search: '',

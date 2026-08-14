@@ -53,16 +53,13 @@ function FooterContent({
 			<HStack className="flex-1 justify-start *:flex-1">{children}</HStack>
 			<HStack className="justify-end gap-0">
 				<Text testID="data-table-count" className="text-xs">
-					{t('common.showing_of', { shown: count, total })}
+					{totalSource === 'local'
+						? t('common.showing_of_at_least', { shown: count, total })
+						: t('common.showing_of', { shown: count, total })}
 				</Text>
 				<Text testID="data-table-loaded-count" className="hidden">
 					{count}
 				</Text>
-				{totalSource === 'local' ? (
-					<Text className="text-muted-foreground ml-1 text-[10px]">
-						{t('common.showing_local_items')}
-					</Text>
-				) : null}
 				<SyncButton sync={sync} clearAndSync={clearAndSync} active={loading} />
 			</HStack>
 		</HStack>
