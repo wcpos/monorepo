@@ -18,6 +18,19 @@ export default defineConfig({
 			),
 		},
 	},
+	// The ipc-channels registry is a .cts file (CJS for the Electron preload build);
+	// the default TS transform misses the .cts extension, so tag it explicitly.
+	plugins: [
+		{
+			name: 'treat-cts-as-ts',
+			async transform(code, id) {
+				if (/\.cts(\?.*)?$/.test(id)) {
+					const { transformWithOxc } = await import('vite');
+					return transformWithOxc(code, id.replace(/\.cts(\?.*)?$/, '.ts'));
+				}
+			},
+		},
+	],
 	test: {
 		globals: true,
 		environment: 'jsdom',

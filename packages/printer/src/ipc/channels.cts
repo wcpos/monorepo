@@ -53,6 +53,40 @@ export interface AuthResult {
 }
 
 /**
+ * Novu notification bridge. Electron main owns the @novu/js client (wcpos/electron#329);
+ * the renderer drives it over the 'novu' invoke channel and receives the notification
+ * stream / counts / session-ready on 'novu:event'. Payloads cross IPC JSON-flattened,
+ * so the notification stays structural here — this module must not import @novu/js.
+ */
+export type NovuBridgeRequest =
+	| {
+			type: 'init';
+			subscriberId: string;
+			locale?: string;
+			applicationIdentifier: string;
+			apiUrl: string;
+			socketUrl: string;
+	  }
+	| { type: 'disconnect' }
+	| { type: 'waitReady'; timeoutMs?: number }
+	| { type: 'fetchNotifications'; limit?: number }
+	| { type: 'markAsRead'; notificationId: string }
+	| { type: 'markAllAsRead' }
+	| { type: 'markAsSeen'; notificationId: string }
+	| { type: 'markAllAsSeen' }
+	| { type: 'getUnreadCount' };
+
+export type NovuBridgeResponse =
+	| { success: true; result: unknown }
+	| { success: false; message: string };
+
+export type NovuBridgeEvent =
+	| { kind: 'notification_received'; notification: unknown }
+	| { kind: 'unread_count_changed'; count: number }
+	| { kind: 'unseen_count_changed'; count: number }
+	| { kind: 'session_ready' };
+
+/**
  * invoke = render→main→render (Promise); send = render→main (fire-and-forget);
  * on = main→render push (renderer subscribes).
  */
@@ -68,6 +102,7 @@ export interface IpcInvokeChannels {
 	'serial-discovery': { req: Record<string, never>; res: DiscoveredSerialPrinter[] };
 	'axios': { req: unknown; res: unknown };
 	'auth:prompt': { req: AuthPromptParams; res: AuthResult };
+	'novu': { req: NovuBridgeRequest; res: NovuBridgeResponse };
 	'storage:measure': {
 		req: undefined;
 		res: {
@@ -90,6 +125,7 @@ export interface IpcOnChannels {
 	'bluetooth-devices': [Array<{ id: string; name: string }>];
 	'serial-ports': [Array<{ id: string; name: string }>];
 	'hid-devices': [Array<{ id: string; name: string }>];
+	'novu:event': [NovuBridgeEvent];
 }
 
 export const INVOKE_CHANNELS = [
@@ -101,6 +137,7 @@ export const INVOKE_CHANNELS = [
 	'serial-discovery',
 	'axios',
 	'auth:prompt',
+	'novu',
 	'storage:measure',
 ] as const satisfies readonly (keyof IpcInvokeChannels)[];
 
@@ -118,6 +155,7 @@ export const ON_CHANNELS = [
 	'bluetooth-devices',
 	'serial-ports',
 	'hid-devices',
+	'novu:event',
 ] as const satisfies readonly (keyof IpcOnChannels)[];
 
 type ExactChannelKeys<RegistryKeys extends string, ArrayKeys extends string> =
