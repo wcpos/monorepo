@@ -74,12 +74,14 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 			);
 		return instance;
 	});
+	const requestedLocale = React.useRef(locale);
 
 	/**
-	 * Handle locale changes.
+	 * Handle locale changes, including reverting while another locale is loading.
 	 */
 	React.useEffect(() => {
-		if (i18nInstance.language !== locale) {
+		if (i18nInstance.language !== locale || requestedLocale.current !== locale) {
+			requestedLocale.current = locale;
 			void i18nInstance.changeLanguage(locale).catch((error) =>
 				translationLogger.error('Failed to change language', {
 					code: ERROR_CODES.UNEXPECTED_ERROR,

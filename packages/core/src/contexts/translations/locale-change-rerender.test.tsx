@@ -13,7 +13,7 @@
  */
 import * as React from 'react';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { I18nContext } from 'react-i18next';
 import { BehaviorSubject } from 'rxjs';
 
@@ -138,5 +138,46 @@ describe('locale change', () => {
 		// behind holding the old language (and no leaked listeners or backend).
 		expect(new Set(seen).size).toBe(1);
 		expect((seen[0] as { language: string }).language).toBe('fr_FR');
+	});
+
+	it('keeps the current locale when reverting while another locale is loading', async () => {
+		const locale$ = setupLocale('en_US');
+		let finishFrenchFetch!: (response: Response) => void;
+		const frenchFetchStarted = new Promise<void>((resolveStarted) => {
+			mockFetch.mockImplementation((url: string) => {
+				if (String(url).includes('/fr_FR/')) {
+					return new Promise<Response>((resolveResponse) => {
+						finishFrenchFetch = resolveResponse;
+						resolveStarted();
+					});
+				}
+				return Promise.resolve({
+					ok: true,
+					json: async () => ({}),
+				} as unknown as Response);
+			});
+		});
+
+		render(
+			<TranslationProvider>
+				<React.Suspense fallback={null}>
+					<Label id="label" />
+				</React.Suspense>
+			</TranslationProvider>
+		);
+
+		await waitFor(() => expect(screen.getByTestId('label').textContent).toBe('Store Name'));
+
+		await act(async () => locale$.next('fr_FR'));
+		await frenchFetchStarted;
+		await act(async () => locale$.next('en_US'));
+		await act(async () => {
+			finishFrenchFetch({
+				ok: true,
+				json: async () => FRENCH,
+			} as unknown as Response);
+		});
+
+		expect(screen.getByTestId('label').textContent).toBe('Store Name');
 	});
 });
