@@ -275,7 +275,7 @@ function ackBookkeeping(options: {
 	collection: CollectionWriteFacet['collection'];
 	remoteIdField: CollectionWriteFacet['remoteIdField'];
 	createAckSource?: 'woo-rest';
-	documentPatchFromAckDocument?: (
+	documentPatchFromAckDocument: (
 		document: Record<string, unknown>,
 		barcodeSelectors?: BarcodeSelectors
 	) => Record<string, unknown>;
@@ -298,7 +298,7 @@ function ackBookkeeping(options: {
 			const doc = (await db.collections[collection].findOne(ack.recordId).exec()) as AckDoc | null;
 			if (!doc || signal?.aborted) return; // gone, or the scope switched — nothing to reconcile
 			let ackDocumentPatch: Record<string, unknown> | null = null;
-			if (documentPatchFromAckDocument && ack.document && ack.mutation.operation !== 'delete') {
+			if (ack.document && ack.mutation.operation !== 'delete') {
 				try {
 					ackDocumentPatch = documentPatchFromAckDocument(ack.document, ack.barcodeSelectors);
 				} catch {
@@ -417,7 +417,17 @@ function createWriteFacet(input: {
 	parse: (body: unknown) => WooPayload[];
 	project: RecordProjection;
 	createAckSource?: 'woo-rest';
-	documentPatchFromAckDocument?: (
+	/**
+	 * REQUIRED (#1231): every writeable collection must declare what the
+	 * resident adopts from a create/update ack document. The ack re-anchors
+	 * sync.revision to the server's post-write value, which blinds all three
+	 * staleness-detection tiers to any divergence — so an ack whose values are
+	 * dropped leaves server-derived fields stale with no layer left to heal
+	 * them. Wholesale projected adoption (catalogAckPatch) is the default
+	 * shape; orders declares trimmed-ack/money-precision rules via
+	 * adoptPayload on top. Opting OUT is not expressible by omission.
+	 */
+	documentPatchFromAckDocument: (
 		document: Record<string, unknown>,
 		barcodeSelectors?: BarcodeSelectors
 	) => Record<string, unknown>;
@@ -462,9 +472,7 @@ function createWriteFacet(input: {
 			collection: input.collection,
 			remoteIdField: input.remoteIdField,
 			...(input.createAckSource ? { createAckSource: input.createAckSource } : {}),
-			...(input.documentPatchFromAckDocument
-				? { documentPatchFromAckDocument: input.documentPatchFromAckDocument }
-				: {}),
+			documentPatchFromAckDocument: input.documentPatchFromAckDocument,
 			...(input.preserveMetaKeys ? { preserveMetaKeys: input.preserveMetaKeys } : {}),
 			...(input.graftAckIdentity ? { graftAckIdentity: input.graftAckIdentity } : {}),
 			...(input.adoptPayload ? { adoptPayload: input.adoptPayload } : {}),
@@ -496,6 +504,7 @@ function catalogAckPatch(
 		local: _local,
 		wooProductId: _wooProductId,
 		wooId: _wooId,
+		wooCustomerId: _wooCustomerId,
 		...patch
 	} = project(document as WooPayload, barcodeSelectors);
 	return patch;
@@ -525,6 +534,8 @@ const customersWriteFacet = createWriteFacet({
 	pullPath: '/customers',
 	parse: parseBareArray,
 	project: customerDocument,
+	documentPatchFromAckDocument: (document, barcodeSelectors) =>
+		catalogAckPatch(customerDocument, document, barcodeSelectors),
 });
 const couponsWriteFacet = createWriteFacet({
 	collection: 'coupons',
@@ -535,6 +546,10 @@ const couponsWriteFacet = createWriteFacet({
 	// Greedy reference pruning recognizes only server-sourced rows. Once Woo
 	// assigns the create's id, the coupon participates in authoritative pruning.
 	createAckSource: 'woo-rest',
+	// Woo normalizes coupon codes to lowercase and derives usage_count/date
+	// fields server-side — the ack document is the only prompt carrier of them.
+	documentPatchFromAckDocument: (document, barcodeSelectors) =>
+		catalogAckPatch(referenceDocument, document, barcodeSelectors),
 });
 /** The order facet retains its repository and pull-side materializer byte-for-byte. */
 const ordersWriteFacet = createWriteFacet({

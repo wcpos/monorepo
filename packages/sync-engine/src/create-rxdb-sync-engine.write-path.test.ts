@@ -1377,6 +1377,110 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it('adopts the update ack document for customers', async () => {
+		const CUSTOMER_ID = 701;
+		const customerPayload = (email: string): Record<string, unknown> => ({
+			id: CUSTOMER_ID,
+			email,
+			first_name: 'Pat',
+			last_name: 'Probe',
+			role: 'customer',
+			date_modified_gmt: '2026-08-01T00:00:00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_CLAIM }],
+		});
+		const engine = engineWith({
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				// The server normalizes the email and bumps date_modified.
+				return Response.json({
+					document: {
+						...customerPayload('pat@example.test'),
+						date_modified_gmt: '2026-08-14T17:00:00',
+					},
+					currentRevision: 'sha256:customer-after-edit',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const facet = writeFacetFor('customers');
+			if (!facet) throw new Error('no customers write facet');
+			await facet.upsertServerDocument(
+				scope.database,
+				facet.documentFromServerPayload(customerPayload('old@example.test'))
+			);
+			await engine.write({
+				collection: 'customers',
+				operation: 'update',
+				recordId: UUID_CLAIM,
+				payload: { ...customerPayload('old@example.test'), email: 'PAT@Example.Test' },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const doc = await scope.database.collections.customers.findOne(UUID_CLAIM).exec();
+			const row = doc?.toJSON() as Record<string, unknown>;
+			expect((row.payload as Record<string, unknown>).email).toBe('pat@example.test');
+			expect((row.payload as Record<string, unknown>).date_modified_gmt).toBe(
+				'2026-08-14T17:00:00'
+			);
+			expect(row.wooCustomerId).toBe(CUSTOMER_ID);
+			expect(row.sync).toMatchObject({ revision: 'sha256:customer-after-edit' });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('adopts the update ack document for coupons (server-normalized code, usage_count)', async () => {
+		const COUPON_ID = 801;
+		const couponPayload = (code: string, usageCount: number): Record<string, unknown> => ({
+			id: COUPON_ID,
+			code,
+			amount: '10.00',
+			usage_count: usageCount,
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_MINT }],
+		});
+		const engine = engineWith({
+			fetch: async (url) => {
+				const parsed = new URL(url);
+				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
+				// Woo lowercases coupon codes and owns usage_count.
+				return Response.json({
+					document: couponPayload('summer10', 3),
+					currentRevision: 'sha256:coupon-after-edit',
+				});
+			},
+		});
+		try {
+			await engine.ready;
+			const scope = engine.active();
+			if (!scope) throw new Error('no active scope');
+			const facet = writeFacetFor('coupons');
+			if (!facet) throw new Error('no coupons write facet');
+			await facet.upsertServerDocument(
+				scope.database,
+				facet.documentFromServerPayload(couponPayload('OLD10', 0))
+			);
+			await engine.write({
+				collection: 'coupons',
+				operation: 'update',
+				recordId: UUID_MINT,
+				payload: { ...couponPayload('SUMMER10', 0) },
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({ pushed: 1, rejected: 0 });
+			const doc = await scope.database.collections.coupons.findOne(UUID_MINT).exec();
+			const row = doc?.toJSON() as Record<string, unknown>;
+			expect((row.payload as Record<string, unknown>).code).toBe('summer10');
+			expect((row.payload as Record<string, unknown>).usage_count).toBe(3);
+			expect(row.sync).toMatchObject({ revision: 'sha256:coupon-after-edit' });
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('never auto-reverts a rejected order mutation', async () => {
 		const server = createFakeWriteServer();
 		server.seed(UUID_A, { id: 42, revision: 'sha256:server-r1' });
