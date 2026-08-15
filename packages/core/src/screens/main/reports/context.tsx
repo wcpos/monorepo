@@ -16,22 +16,72 @@ export interface DateRange {
 	end: Date;
 }
 
-interface ReportsContextType {
+/** The query binding. Changes only when the provider is handed a new one. */
+export interface ReportsBinding {
 	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
-	allOrders: OrderDocument[];
-	selectedOrders: OrderDocument[];
+}
+
+/** Row selection state. Changes when the cashier ticks a row. */
+export interface ReportsSelection {
 	unselectedRowIds: RowSelectionState;
 	setUnselectedRowIds: React.Dispatch<React.SetStateAction<RowSelectionState>>;
+}
+
+/** The orders themselves. Rebuilt on every query emission. */
+export interface ReportsData {
+	allOrders: OrderDocument[];
+	selectedOrders: OrderDocument[];
 	dateRange: DateRange;
 }
 
+interface ReportsContextType extends ReportsBinding, ReportsSelection, ReportsData {}
+
 /**
+ * Split three ways along how often each part changes.
  *
+ * `allOrders` and `selectedOrders` are rebuilt on every order-query emission, and the whole
+ * bundle was republished with them — so `ReportsSyncProgress`, which reads nothing but
+ * `binding`, re-rendered on every emission and on every row the cashier ticked.
+ */
+const ReportsBindingContext = React.createContext<ReportsBinding | undefined>(undefined);
+const ReportsSelectionContext = React.createContext<ReportsSelection | undefined>(undefined);
+const ReportsDataContext = React.createContext<ReportsData | undefined>(undefined);
+/**
+ * The combined view, published by the provider rather than composed per consumer so that
+ * `useReports()` callers keep sharing one object identity.
  */
 const ReportsContext = React.createContext<ReportsContextType | undefined>(undefined);
 
+/** Just the binding — stable across order emissions and selection changes. */
+export const useReportsBinding = (): ReportsBinding => {
+	const context = React.useContext(ReportsBindingContext);
+	if (!context) {
+		throw new Error('useReportsBinding must be used within a ReportsContext');
+	}
+	return context;
+};
+
+/** Just the row selection. */
+export const useReportsSelection = (): ReportsSelection => {
+	const context = React.useContext(ReportsSelectionContext);
+	if (!context) {
+		throw new Error('useReportsSelection must be used within a ReportsContext');
+	}
+	return context;
+};
+
+/** The orders and the date range they were filtered by. */
+export const useReportsData = (): ReportsData => {
+	const context = React.useContext(ReportsDataContext);
+	if (!context) {
+		throw new Error('useReportsData must be used within a ReportsContext');
+	}
+	return context;
+};
+
 /**
- *
+ * Everything. Subscribes to all three halves, so it re-renders on any of them — prefer the
+ * narrower hooks above.
  */
 export const useReports = () => {
 	const context = React.useContext(ReportsContext);
@@ -96,18 +146,30 @@ export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 		return allOrders.filter((order) => order.uuid && !unselectedRowIds[order.uuid]);
 	}, [allOrders, unselectedRowIds]);
 
+	const bindingValue = React.useMemo<ReportsBinding>(() => ({ binding }), [binding]);
+
+	const selectionValue = React.useMemo<ReportsSelection>(
+		() => ({ unselectedRowIds, setUnselectedRowIds }),
+		[unselectedRowIds]
+	);
+
+	const dataValue = React.useMemo<ReportsData>(
+		() => ({ allOrders, selectedOrders, dateRange }),
+		[allOrders, selectedOrders, dateRange]
+	);
+
+	const combined = React.useMemo<ReportsContextType>(
+		() => ({ ...bindingValue, ...selectionValue, ...dataValue }),
+		[bindingValue, selectionValue, dataValue]
+	);
+
 	return (
-		<ReportsContext.Provider
-			value={{
-				binding,
-				allOrders,
-				selectedOrders,
-				unselectedRowIds,
-				setUnselectedRowIds,
-				dateRange,
-			}}
-		>
-			{children}
-		</ReportsContext.Provider>
+		<ReportsBindingContext.Provider value={bindingValue}>
+			<ReportsSelectionContext.Provider value={selectionValue}>
+				<ReportsDataContext.Provider value={dataValue}>
+					<ReportsContext.Provider value={combined}>{children}</ReportsContext.Provider>
+				</ReportsDataContext.Provider>
+			</ReportsSelectionContext.Provider>
+		</ReportsBindingContext.Provider>
 	);
 }

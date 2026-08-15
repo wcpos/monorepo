@@ -86,7 +86,7 @@ jest.mock('../../hooks/use-print', () => ({
 	usePrint: () => ({ print: jest.fn(), isPrinting: false }),
 }));
 jest.mock('../context', () => ({
-	useReports: () => ({ selectedOrders: [] }),
+	useReportsData: () => ({ selectedOrders: [] }),
 }));
 
 describe('Report query-state dates', () => {
