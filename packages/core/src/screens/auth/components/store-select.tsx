@@ -13,6 +13,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { storeListsEqual } from './store-select.helpers';
 import { useT } from '../../../contexts/translations';
 import { useUserValidation } from '../../../hooks/use-user-validation';
 
@@ -93,8 +94,6 @@ export function StoreSelect({
 
 		const idsEqual = (a: string[], b: string[]) =>
 			a.length === b.length && a.every((v, i) => v === b[i]);
-		const storesEqual = (a: StoreDocument[], b: StoreDocument[]) =>
-			a.length === b.length && a.every((v, i) => v.localID === b[i].localID);
 
 		return ids$.pipe(
 			tap((ids) => {
@@ -113,7 +112,7 @@ export function StoreSelect({
 					.$ as import('rxjs').Observable<StoreDocument[]>;
 			}),
 			map(sortStores),
-			distinctUntilChanged(storesEqual),
+			distinctUntilChanged(storeListsEqual),
 			tap((resolved: StoreDocument[]) => {
 				storeLogger.debug('[stores] StoreSelect stores resolved', {
 					context: {
